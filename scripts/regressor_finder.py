@@ -4,11 +4,9 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import concurrent.futures
 import os
 import subprocess
 import threading
-import time
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -302,8 +300,8 @@ class RegressorFinder(object):
         db.upload(BUG_FIXING_COMMITS_DB)
 
     def find_bug_introducing_commits(self, repo_dir, tokenized):
-        from pydriller import GitRepository
-        from pydriller.domain.commit import ModificationType
+        # from pydriller import GitRepository
+        # from pydriller.domain.commit import ModificationType
 
         logger.info("Download commits to ignore...")
         assert db.download(IGNORED_COMMITS_DB)
@@ -392,137 +390,137 @@ class RegressorFinder(object):
                 len(bug_fixing_commits),
             )
 
-        git_init_lock = threading.Lock()
+        # git_init_lock = threading.Lock()
 
-        def _init(git_repo_dir):
-            with git_init_lock:
-                thread_local.git = GitRepository(git_repo_dir)
-                # Call get_head in order to make pydriller initialize the repository.
-                thread_local.git.get_head()
+        # def _init(git_repo_dir):
+        #     with git_init_lock:
+        #         thread_local.git = GitRepository(git_repo_dir)
+        #         # Call get_head in order to make pydriller initialize the repository.
+        #         thread_local.git.get_head()
 
-        def find_bic(bug_fixing_commit):
-            logger.info("Analyzing %s...", bug_fixing_commit["rev"])
+        # def find_bic(bug_fixing_commit):
+        #     logger.info("Analyzing %s...", bug_fixing_commit["rev"])
 
-            git_fix_revision = tuple(mercurial_to_git([bug_fixing_commit["rev"]]))[0]
+        #     git_fix_revision = tuple(mercurial_to_git([bug_fixing_commit["rev"]]))[0]
 
-            commit = thread_local.git.get_commit(git_fix_revision)
+        #     commit = thread_local.git.get_commit(git_fix_revision)
 
-            # Skip huge changes, we'll likely be wrong with them.
-            if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
-                logger.info(
-                    "Skipping {} as it is too big".format(bug_fixing_commit["rev"])
-                )
-                return None
+        #     # Skip huge changes, we'll likely be wrong with them.
+        #     if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
+        #         logger.info(
+        #             "Skipping {} as it is too big".format(bug_fixing_commit["rev"])
+        #         )
+        #         return None
 
-            def get_modification_path(mod):
-                path = mod.new_path
-                if (
-                    mod.change_type == ModificationType.RENAME
-                    or mod.change_type == ModificationType.DELETE
-                ):
-                    path = mod.old_path
-                return path
+        #     def get_modification_path(mod):
+        #         path = mod.new_path
+        #         if (
+        #             mod.change_type == ModificationType.RENAME
+        #             or mod.change_type == ModificationType.DELETE
+        #         ):
+        #             path = mod.old_path
+        #         return path
 
-            bug_introducing_modifications = {}
-            for modification in commit.modifications:
-                path = get_modification_path(modification)
+        #     bug_introducing_modifications = {}
+        #     for modification in commit.modifications:
+        #         path = get_modification_path(modification)
 
-                if path == "testing/web-platform/meta/MANIFEST.json":
-                    continue
+        #         if path == "testing/web-platform/meta/MANIFEST.json":
+        #             continue
 
-                # Don't try to find the bug-introducing commit for modifications
-                # in the bug-fixing commit to non-source code files.
-                if repository.get_type(path) not in repository.SOURCE_CODE_TYPES_TO_EXT:
-                    continue
+        #         # Don't try to find the bug-introducing commit for modifications
+        #         # in the bug-fixing commit to non-source code files.
+        #         if repository.get_type(path) not in repository.SOURCE_CODE_TYPES_TO_EXT:
+        #             continue
 
-                bug_introducing_modifications.update(
-                    thread_local.git.get_commits_last_modified_lines(
-                        commit,
-                        modification=modification,
-                        hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore"),
-                    )
-                )
+        #         bug_introducing_modifications.update(
+        #             thread_local.git.get_commits_last_modified_lines(
+        #                 commit,
+        #                 modification=modification,
+        #                 hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore"),
+        #             )
+        #         )
 
-            logger.info(
-                "Found {} for {}".format(
-                    bug_introducing_modifications, bug_fixing_commit["rev"]
-                )
-            )
+        #     logger.info(
+        #         "Found {} for {}".format(
+        #             bug_introducing_modifications, bug_fixing_commit["rev"]
+        #         )
+        #     )
 
-            bug_introducing_commits = []
-            for bug_introducing_hashes in bug_introducing_modifications.values():
-                for bug_introducing_hash in bug_introducing_hashes:
-                    try:
-                        bug_introducing_commits.append(
-                            {
-                                "bug_fixing_rev": bug_fixing_commit["rev"],
-                                "bug_introducing_rev": tuple(
-                                    git_to_mercurial([bug_introducing_hash])
-                                )[0],
-                            }
-                        )
-                    except Exception as e:
-                        # Skip commits that are in git but not in mercurial, as they are too old (older than "Free the lizard").
-                        if not str(e).startswith("Missing git commit in the VCS map"):
-                            raise
+        #     bug_introducing_commits = []
+        #     for bug_introducing_hashes in bug_introducing_modifications.values():
+        #         for bug_introducing_hash in bug_introducing_hashes:
+        #             try:
+        #                 bug_introducing_commits.append(
+        #                     {
+        #                         "bug_fixing_rev": bug_fixing_commit["rev"],
+        #                         "bug_introducing_rev": tuple(
+        #                             git_to_mercurial([bug_introducing_hash])
+        #                         )[0],
+        #                     }
+        #                 )
+        #             except Exception as e:
+        #                 # Skip commits that are in git but not in mercurial, as they are too old (older than "Free the lizard").
+        #                 if not str(e).startswith("Missing git commit in the VCS map"):
+        #                     raise
 
-            # Add an empty result, just so that we don't reanalyze this again.
-            if len(bug_introducing_commits) == 0:
-                bug_introducing_commits.append(
-                    {
-                        "bug_fixing_rev": bug_fixing_commit["rev"],
-                        "bug_introducing_rev": "",
-                    }
-                )
+        #     # Add an empty result, just so that we don't reanalyze this again.
+        #     if len(bug_introducing_commits) == 0:
+        #         bug_introducing_commits.append(
+        #             {
+        #                 "bug_fixing_rev": bug_fixing_commit["rev"],
+        #                 "bug_introducing_rev": "",
+        #             }
+        #         )
 
-            return bug_introducing_commits
+        #     return bug_introducing_commits
 
         def compress_and_upload():
             zstd_compress(db_path)
             db.upload(db_path)
 
-        workers = os.cpu_count() + 1
-        logger.info(
-            "Analyzing %d commits using %d workers...",
-            len(bug_fixing_commits),
-            len(bug_fixing_commits),
-        )
+        # workers = os.cpu_count() + 1
+        # logger.info(
+        #     "Analyzing %d commits using %d workers...",
+        #     len(bug_fixing_commits),
+        #     len(bug_fixing_commits),
+        # )
 
-        with concurrent.futures.ThreadPoolExecutor(
-            initializer=_init, initargs=(repo_dir,), max_workers=workers
-        ) as executor:
+        # with concurrent.futures.ThreadPoolExecutor(
+        #     initializer=_init, initargs=(repo_dir,), max_workers=workers
+        # ) as executor:
 
-            def results():
-                start_time = time.monotonic()
+        #     def results():
+        #         start_time = time.monotonic()
 
-                futures = {
-                    executor.submit(find_bic, bug_fixing_commit): bug_fixing_commit[
-                        "rev"
-                    ]
-                    for bug_fixing_commit in bug_fixing_commits
-                }
+        #         futures = {
+        #             executor.submit(find_bic, bug_fixing_commit): bug_fixing_commit[
+        #                 "rev"
+        #             ]
+        #             for bug_fixing_commit in bug_fixing_commits
+        #         }
 
-                for future in tqdm(
-                    concurrent.futures.as_completed(futures),
-                    total=len(futures),
-                ):
-                    exc = future.exception()
-                    if exc is not None:
-                        logger.info(
-                            "Exception %s while analyzing %s", exc, futures[future]
-                        )
-                        for f in futures:
-                            f.cancel()
+        #         for future in tqdm(
+        #             concurrent.futures.as_completed(futures),
+        #             total=len(futures),
+        #         ):
+        #             exc = future.exception()
+        #             if exc is not None:
+        #                 logger.info(
+        #                     "Exception %s while analyzing %s", exc, futures[future]
+        #                 )
+        #                 for f in futures:
+        #                     f.cancel()
 
-                    result = future.result()
-                    if result is not None:
-                        yield from result
+        #             result = future.result()
+        #             if result is not None:
+        #                 yield from result
 
-                    if time.monotonic() - start_time >= 3600:
-                        compress_and_upload()
-                        start_time = time.monotonic()
+        #             if time.monotonic() - start_time >= 3600:
+        #                 compress_and_upload()
+        #                 start_time = time.monotonic()
 
-            db.append(db_path, results())
+        #     db.append(db_path, results())
 
         compress_and_upload()
 
