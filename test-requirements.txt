@@ -6,4 +6,4 @@ pre-commit==4.3.0
 pytest==8.4.2
 pytest-cov==6.3.0
 pytest-responses==0.5.1
-responses==0.21.0
+responses==0.25.8
