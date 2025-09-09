@@ -20,9 +20,9 @@ class FunctionSearchMozilla(FunctionSearch):
         self, commit_hash, path, function_name=None, line=None, fast=False
     ):
         # FIXME: we should use commit_hash. However, since not all stages support
-        # retrieving data based on commit_hash, we are using "tip" as a
+        # retrieving data based on commit_hash, we are using "default" as a
         # workaround to guarantee the integrity of the data.
-        commit_hash = "tip"
+        commit_hash = "default"
 
         # In fast mode, only use Searchfox website.
         # In slow mode (for historical data), try Searchfox first and fallback on parsing with rust-code-analysis.

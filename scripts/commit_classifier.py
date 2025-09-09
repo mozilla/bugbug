@@ -315,13 +315,13 @@ class CommitClassifier(object):
         hg_base = needed_stack[0].base_revision
         if not self.has_revision(hg, hg_base):
             logger.warning("Missing base revision {} from Phabricator".format(hg_base))
-            hg_base = "tip"
+            hg_base = "default"
 
         if hg_base:
             hg.update(rev=hg_base, clean=True)
             logger.info("Updated repo to %s", hg_base)
 
-            if self.git_repo_dir and hg_base != "tip":
+            if self.git_repo_dir and hg_base != "default":
                 try:
                     self.git_base = tuple(
                         vcs_map.mercurial_to_git(self.git_repo_dir, [hg_base])

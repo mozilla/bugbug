@@ -230,7 +230,7 @@ class FunctionSearchSearchfoxAPI(FunctionSearch):
                 else definition["end"],
                 read_mc_path=lambda path: io.StringIO(
                     self.get_file(
-                        commit_hash or "tip",
+                        commit_hash or "default",
                         path,
                     )
                 ),
@@ -250,7 +250,7 @@ class FunctionSearchSearchfoxAPI(FunctionSearch):
         self, commit_hash: str, path: str, line: int
     ) -> list[Function]:
         definition = find_function_for_line(
-            commit_hash or "tip",
+            commit_hash or "default",
             path,
             line,
         )
@@ -264,7 +264,7 @@ class FunctionSearchSearchfoxAPI(FunctionSearch):
         self, commit_hash: str, path: str, function_name: str
     ) -> list[Function]:
         definitions = search(
-            commit_hash or "tip",
+            commit_hash or "default",
             function_name,
         )
 
@@ -298,7 +298,7 @@ if __name__ == "__main__":
             definition["end"] + 1
             if definition["end"] != definition["start"]
             else definition["end"],
-            read_mc_path=lambda path: io.StringIO(get_file("tip", path)),
+            read_mc_path=lambda path: io.StringIO(get_file("default", path)),
         )
         result.append(
             {
@@ -322,14 +322,15 @@ if __name__ == "__main__":
             func["end"] + 1 if func["end"] != func["start"] else func["end"],
             read_mc_path=lambda path: io.StringIO(
                 get_file(
-                    "tip", "browser/components/asrouter/modules/CFRPageActions.sys.mjs"
+                    "default",
+                    "browser/components/asrouter/modules/CFRPageActions.sys.mjs",
                 )
             ),
         )
     )
 
     print("RESULT5")
-    print(search("tip", "ShouldNotProcessUpdatesReasonAsString"))
+    print(search("default", "ShouldNotProcessUpdatesReasonAsString"))
 
     print("RESULT6")
-    print(search("tip", "range"))
+    print(search("default", "range"))

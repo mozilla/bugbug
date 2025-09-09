@@ -254,11 +254,11 @@ def schedule_tests(branch: str, rev: str) -> str:
     )
 
     # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
-    # On other repos, only consider "tip" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
+    # On other repos, only consider "default" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
     if branch == "try":
         repo_branch = None
     else:
-        repo_branch = "tip"
+        repo_branch = "default"
 
     # Analyze patches.
     commits = repository.download_commits(
