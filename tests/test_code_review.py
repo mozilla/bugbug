@@ -1,18 +1,15 @@
-import requests
-import responses
+import os
+
 from unidiff import PatchSet
 
 from bugbug.tools.code_review import find_comment_scope
 
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures/phabricator")
+
 
 def test_find_comment_scope():
-    responses.add_passthru("https://phabricator.services.mozilla.com/")
-    responses.add_passthru(
-        "https://mozphab-phabhost-cdn.devsvcprod.mozaws.net/file/data/"
-    )
-
     test_data = {
-        "https://phabricator.services.mozilla.com/D233024?id=964198": {
+        (233024, 964198): {
             "browser/components/newtab/test/browser/browser.toml": {
                 79: {
                     "line_start": 78,
@@ -28,7 +25,7 @@ def test_find_comment_scope():
                 },
             },
         },
-        "https://phabricator.services.mozilla.com/D240754?id=995999": {
+        (240754, 995999): {
             "dom/canvas/WebGLShaderValidator.cpp": {
                 39: {
                     "line_start": 37,
@@ -44,8 +41,10 @@ def test_find_comment_scope():
         },
     }
 
-    for revision_url, patch_files in test_data.items():
-        raw_diff = requests.get(revision_url + "&download=true", timeout=5).text
+    for (revision_id, diff_id), patch_files in test_data.items():
+        with open(os.path.join(FIXTURES_DIR, f"D{revision_id}-{diff_id}.diff")) as f:
+            raw_diff = f.read()
+
         patch_set = PatchSet.from_string(raw_diff)
 
         for file_name, target_hunks in patch_files.items():
