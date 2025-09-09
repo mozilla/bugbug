@@ -1335,7 +1335,11 @@ def hg_log_multi(
 @lru_cache(maxsize=None)
 def get_first_pushdate(repo_dir):
     with hglib.open(repo_dir) as hg:
-        return hg_log(hg, [b"0"])[0].pushdate
+        commits = hg_log(hg, [b"0"])
+        assert len(commits) == 1, (
+            f"There should be exactly one commit corresponding to revision 0: {commits}"
+        )
+        return commits[0].pushdate
 
 
 def download_commits(
