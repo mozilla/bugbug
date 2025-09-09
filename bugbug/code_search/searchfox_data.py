@@ -398,7 +398,7 @@ class FunctionSearchSearchfoxData(FunctionSearch):
                 definition["target_end_line"],
                 read_mc_path=lambda path: io.StringIO(
                     get_file(
-                        commit_hash or "tip",
+                        commit_hash or "default",
                         path,
                     )
                 ),
@@ -445,7 +445,7 @@ class FunctionSearchSearchfoxData(FunctionSearch):
         # If it wasn't found, try with entire file next
         if not result:
             if commit_hash is None:
-                mc_file = get_file("tip", path)
+                mc_file = get_file("default", path)
             else:
                 mc_file = get_file(commit_hash, path)
 
@@ -462,7 +462,7 @@ class FunctionSearchSearchfoxData(FunctionSearch):
                 searchfox_path,
                 read_mc_path=lambda path: io.StringIO(
                     get_file(
-                        commit_hash or "tip",
+                        commit_hash or "default",
                         path,
                     )
                 ),
@@ -488,7 +488,7 @@ class FunctionSearchSearchfoxData(FunctionSearch):
                     definition["target_end_line"],
                     read_mc_path=lambda path: io.StringIO(
                         get_file(
-                            commit_hash or "tip",
+                            commit_hash or "default",
                             path,
                         )
                     ),
@@ -586,7 +586,7 @@ if __name__ == "__main__":
             caller_function_obj,
             "",
             searchfox_path,
-            read_mc_path=lambda path: io.StringIO(get_file("tip", path)),
+            read_mc_path=lambda path: io.StringIO(get_file("default", path)),
         )
     )
     print("\n\nfind_symbol_definition1")
@@ -617,7 +617,7 @@ if __name__ == "__main__":
             definition_path,
             definition["target_line"],
             definition["target_end_line"],
-            read_mc_path=lambda path: io.StringIO(get_file("tip", path)),
+            read_mc_path=lambda path: io.StringIO(get_file("default", path)),
         )
         result.append(
             {

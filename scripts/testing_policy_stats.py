@@ -24,7 +24,7 @@ class TestingPolicyStatsGenerator(object):
         if not os.path.exists(repo_dir):
             repository.clone(repo_dir)
         else:
-            repository.pull(repo_dir, "mozilla-central", "tip")
+            repository.pull(repo_dir, "mozilla-central", "default")
 
         logger.info("Downloading commits database...")
         assert db.download(repository.COMMITS_DB, support_files_too=True)

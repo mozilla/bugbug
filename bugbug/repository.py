@@ -360,7 +360,7 @@ def hg_modified_files(hg, commit):
         template=template,
         no_merges=True,
         rev=commit.node.encode("ascii"),
-        branch="tip",
+        branch="default",
     )
     x = hg.rawcommand(args)
     files_str, file_copies_str = x.split(b"\x00")[:-1]
@@ -872,7 +872,7 @@ def _transform(commit):
 
 
 def hg_log(
-    hg: hglib.client, revs: list[bytes], branch: str | None = "tip"
+    hg: hglib.client, revs: list[bytes], branch: str | None = "default"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -959,18 +959,18 @@ def hg_log(
     return tuple(commits)
 
 
-def _hg_log(revs: list[bytes], branch: str = "tip") -> tuple[Commit, ...]:
+def _hg_log(revs: list[bytes], branch: str = "default") -> tuple[Commit, ...]:
     return hg_log(thread_local.hg, revs, branch)
 
 
-def get_revs(hg, rev_start=0, rev_end="tip"):
+def get_revs(hg, rev_start=0, rev_end="default"):
     logger.info("Getting revs from %s to %s...", rev_start, rev_end)
 
     args = hglib.util.cmdbuilder(
         b"log",
         template="{node}\n",
         no_merges=True,
-        branch="tip",
+        branch="default",
         rev=f"{rev_start}:{rev_end}",
     )
     x = hg.rawcommand(args)
@@ -1307,7 +1307,7 @@ def close_component_mapping():
 
 
 def hg_log_multi(
-    repo_dir: str, revs: list[bytes], branch: str | None = "tip"
+    repo_dir: str, revs: list[bytes], branch: str | None = "default"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -1335,14 +1335,18 @@ def hg_log_multi(
 @lru_cache(maxsize=None)
 def get_first_pushdate(repo_dir):
     with hglib.open(repo_dir) as hg:
-        return hg_log(hg, [b"0"])[0].pushdate
+        commits = hg_log(hg, [b"0"])
+        assert len(commits) == 1, (
+            f"There should be exactly one commit corresponding to revision 0: {commits}"
+        )
+        return commits[0].pushdate
 
 
 def download_commits(
     repo_dir: str,
     rev_start: str | None = None,
     revs: list[bytes] | None = None,
-    branch: str | None = "tip",
+    branch: str | None = "default",
     save: bool = True,
     use_single_process: bool = False,
     include_no_bug: bool = False,
@@ -1505,7 +1509,7 @@ def clone(
         purge=True,
         sharebase=repo_dir + "-shared",
         networkattempts=7,
-        branch=b"tip",
+        branch=b"default",
         noupdate=not update,
     )
     subprocess.run(cmd, check=True)
