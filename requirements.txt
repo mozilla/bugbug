@@ -40,4 +40,4 @@ tenacity==9.1.2
 tqdm==4.67.1
 unidiff==0.7.5
 xgboost==2.1.4
-zstandard==0.24.0
+zstandard==0.25.0
