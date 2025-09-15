@@ -10,4 +10,4 @@ marshmallow==3.26.1
 requests==2.32.5
 rq==2.6.0
 rq-dashboard==0.8.5
-sentry-sdk[flask]==2.37.0
+sentry-sdk[flask]==2.37.1
