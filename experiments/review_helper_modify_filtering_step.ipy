@@ -47,7 +47,7 @@ review_data: code_review.ReviewData = code_review.review_data_classes[review_pla
 
 # %%
 tool = code_review.CodeReviewTool(
-    comment_gen_llms=[llm],
+    llm=llm,
     # function_search=function_search,
     review_comments_db=review_comments_db,
     suggestions_feedback_db=suggestions_feedback_db,

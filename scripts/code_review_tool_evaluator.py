@@ -275,7 +275,7 @@ def get_tool_variants(
             (
                 "RAG",
                 code_review.CodeReviewTool(
-                    comment_gen_llms=[llm],
+                    llm=llm,
                     function_search=None,
                     review_comments_db=review_comments_db,
                     verbose=VERBOSE_CODE_REVIEW,
@@ -288,7 +288,7 @@ def get_tool_variants(
             (
                 "CONTEXT",
                 code_review.CodeReviewTool(
-                    comment_gen_llms=[llm],
+                    llm=llm,
                     function_search=function_search,
                     review_comments_db=None,
                     verbose=VERBOSE_CODE_REVIEW,
@@ -301,7 +301,7 @@ def get_tool_variants(
             (
                 "RAG and CONTEXT",
                 code_review.CodeReviewTool(
-                    comment_gen_llms=[llm],
+                    llm=llm,
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                     verbose=VERBOSE_CODE_REVIEW,
@@ -314,7 +314,7 @@ def get_tool_variants(
             (
                 "RAG and CONTEXT and REJECTED_COMMENTS",
                 code_review.CodeReviewTool(
-                    comment_gen_llms=[llm],
+                    llm=llm,
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                     suggestions_feedback_db=suggestions_feedback_db,
@@ -328,11 +328,9 @@ def get_tool_variants(
             (
                 "with-order",
                 code_review.CodeReviewTool(
-                    comment_gen_llms=[
-                        generative_model_tool.create_openai_llm(
-                            model_name="gpt-4.1-2025-04-14"
-                        )
-                    ],
+                    llm=generative_model_tool.create_openai_llm(
+                        model_name="gpt-4.1-2025-04-14"
+                    ),
                     # function_search=function_search,
                     review_comments_db=review_comments_db,
                     suggestions_feedback_db=suggestions_feedback_db,

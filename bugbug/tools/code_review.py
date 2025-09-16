@@ -20,6 +20,7 @@ import tenacity
 from langchain.chains import ConversationChain, LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
+from langchain_core.language_models import BaseLanguageModel
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import ConduitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt
@@ -195,25 +196,6 @@ DEFAULT_REJECTED_EXAMPLES = """Please note that these are minor improvements and
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct.
     - This is a good addition to the code."""
-
-
-PROMPT_TEMPLATE_DEDUPLICATE = """Please, double check the code review comments below.
-Just report the comments that are not redundant and not duplicating each other.
-
-Do not change the contents of the comments and the report format.
-Adopt the template below as the report format:
-[
-    {{
-        "file": "com/br/main/Pressure.java",
-        "code_line": 458,
-        "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
-        "explanation": "THE JUSTIFICATION GOES HERE"
-    }}
-]
-Do not report any explanation about your choice. Only return a valid JSON list.
-
-Review:
-{review}"""
 
 
 PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you don't know and need to look up for reviewing the patch.
@@ -1206,8 +1188,7 @@ class CodeReviewTool(GenerativeModelTool):
 
     def __init__(
         self,
-        comment_gen_llms,
-        llm=None,
+        llm: BaseLanguageModel,
         function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
@@ -1218,12 +1199,10 @@ class CodeReviewTool(GenerativeModelTool):
         super().__init__()
 
         self.target_software = target_software or TARGET_SOFTWARE
-        self.comment_gen_llms = comment_gen_llms
-        self.llm = llm if llm is not None else comment_gen_llms[0]
+
+        self.llm = llm
         self._tokenizer = get_tokenizer(
-            comment_gen_llms[0].model_name
-            if hasattr(comment_gen_llms[0], "model_name")
-            else ""
+            self.llm.model_name if hasattr(self.llm, "model_name") else ""
         )
         self.is_experiment_env = os.getenv("EXPERIMENT_ENV", "no").lower() in (
             "1",
@@ -1262,11 +1241,7 @@ class CodeReviewTool(GenerativeModelTool):
             llm=self.llm,
             verbose=verbose,
         )
-        self.deduplicating_chain = LLMChain(
-            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_DEDUPLICATE),
-            llm=self.llm,
-            verbose=verbose,
-        )
+
         self.further_context_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_CONTEXT_LINES),
             llm=self.llm,
@@ -1340,93 +1315,79 @@ class CodeReviewTool(GenerativeModelTool):
                 patch.patch_set,
             )
 
-        output = ""
-        for comment_gen_llm in self.comment_gen_llms:
-            memory = ConversationBufferMemory()
-            conversation_chain = ConversationChain(
-                llm=comment_gen_llm,
-                memory=memory,
-                verbose=self.verbose,
+        memory = ConversationBufferMemory()
+        conversation_chain = ConversationChain(
+            llm=self.llm,
+            memory=memory,
+            verbose=self.verbose,
+        )
+
+        experience_scope = (
+            f"the {self.target_software} source code"
+            if self.target_software
+            else "a software project"
+        )
+        memory.save_context(
+            {
+                "input": f"You are an expert reviewer for {experience_scope}, with experience on source code reviews."
+            },
+            {
+                "output": f"Sure, I'm aware of source code practices in {self.target_software or 'the development community'}."
+            },
+        )
+        memory.save_context(
+            {
+                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+".\n'
+                + patch.raw_diff
+            },
+            {"output": output_summarization},
+        )
+
+        if self.function_search is not None and len(requested_functions) > 0:
+            function_declaration_text = get_structured_functions(
+                "Function Name", requested_functions
             )
 
-            experience_scope = (
-                f"the {self.target_software} source code"
-                if self.target_software
-                else "a software project"
-            )
             memory.save_context(
                 {
-                    "input": f"You are an expert reviewer for {experience_scope}, with experience on source code reviews."
+                    "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you to have more context about the code under analysis. These functions already exist in the codebase before the patch, and can't be modified. "
+                    + function_declaration_text
                 },
                 {
-                    "output": f"Sure, I'm aware of source code practices in {self.target_software or 'the development community'}."
+                    "output": "Okay, I will consider the provided function definitions as additional context to the given patch."
                 },
             )
+
+        if self.function_search is not None and len(requested_context_lines) > 0:
+            context_text = get_structured_functions(
+                "Requested Context for Line", requested_context_lines
+            )
+
             memory.save_context(
                 {
-                    "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+".\n'
-                    + patch.raw_diff
+                    "input": "Attached, you can also have more context of the target code under analysis."
+                    + context_text
                 },
-                {"output": output_summarization},
+                {
+                    "output": "Okay, I will also consider the code as additional context to the given patch."
+                },
             )
 
-            if self.function_search is not None and len(requested_functions) > 0:
-                function_declaration_text = get_structured_functions(
-                    "Function Name", requested_functions
-                )
+        created_before = patch.date_created if self.is_experiment_env else None
 
-                memory.save_context(
-                    {
-                        "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you to have more context about the code under analysis. These functions already exist in the codebase before the patch, and can't be modified. "
-                        + function_declaration_text
-                    },
-                    {
-                        "output": "Okay, I will consider the provided function definitions as additional context to the given patch."
-                    },
-                )
-
-            if self.function_search is not None and len(requested_context_lines) > 0:
-                context_text = get_structured_functions(
-                    "Requested Context for Line", requested_context_lines
-                )
-
-                memory.save_context(
-                    {
-                        "input": "Attached, you can also have more context of the target code under analysis."
-                        + context_text
-                    },
-                    {
-                        "output": "Okay, I will also consider the code as additional context to the given patch."
-                    },
-                )
-
-            created_before = patch.date_created if self.is_experiment_env else None
-
-            cur_output = conversation_chain.predict(
-                input=PROMPT_TEMPLATE_REVIEW.format(
-                    patch=formatted_patch,
-                    comment_examples=self._get_comment_examples(patch, created_before),
-                    approved_examples=self._get_generated_examples(
-                        patch, created_before
-                    ),
-                    target_code_consistency=self.target_software or "rest of the",
-                )
+        output = conversation_chain.predict(
+            input=PROMPT_TEMPLATE_REVIEW.format(
+                patch=formatted_patch,
+                comment_examples=self._get_comment_examples(patch, created_before),
+                approved_examples=self._get_generated_examples(patch, created_before),
+                target_code_consistency=self.target_software or "rest of the",
             )
-            output += cur_output
+        )
 
-            if self.verbose:
-                GenerativeModelTool._print_answer(cur_output)
+        if self.verbose:
+            GenerativeModelTool._print_answer(output)
 
-            memory.clear()
-
-        if len(self.comment_gen_llms) > 1:
-            output = self.deduplicating_chain.invoke(
-                {"review": output},
-                return_only_outputs=True,
-            )["text"]
-
-            if self.verbose:
-                GenerativeModelTool._print_answer(output)
+        memory.clear()
 
         return output
 
