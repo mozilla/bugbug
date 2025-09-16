@@ -17,11 +17,12 @@ from logging import INFO, basicConfig, getLogger
 from typing import Iterable, Literal, Optional
 
 import tenacity
-from langchain.chains import ConversationChain, LLMChain
-from langchain.memory import ConversationBufferMemory
+from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_core.language_models import BaseLanguageModel
 from langchain_openai import OpenAIEmbeddings
+from langgraph.errors import GraphRecursionError
+from langgraph.prebuilt import create_react_agent
 from libmozdata.phabricator import ConduitError
 from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
@@ -29,7 +30,15 @@ from unidiff.errors import UnidiffParseError
 
 from bugbug import bugzilla, db, phabricator, utils
 from bugbug.code_search.function_search import FunctionSearch
-from bugbug.generative_model_tool import GenerativeModelTool, get_tokenizer
+from bugbug.generative_model_tool import (
+    GenerativeModelTool,
+    get_tokenizer,
+)
+from bugbug.tools.agent_tools import (
+    CodeReviewContext,
+    create_find_function_definition_tool,
+    expand_context,
+)
 from bugbug.utils import get_secret
 from bugbug.vectordb import PayloadScore, QueryFilter, VectorDB, VectorPoint
 
@@ -124,6 +133,10 @@ Generate high-quality code review comments for the patch provided below.
    * Avoid hedging language (e.g., don’t use “maybe”, “might want to”, or form questions).
    * Avoid repeating what the code is doing unless it supports your critique.
 
+5. **Use available tools**:
+    * Consider using available tools to better understand the context of the code changes you are reviewing.
+    * Limit the use of tools to only when you need more context to analyze the code changes.
+
 **Avoid Comments That**:
 
 * Refer to unmodified code (lines without a `+` prefix).
@@ -149,6 +162,12 @@ Respond only with a **JSON list**. Each object must contain the following fields
 
 {comment_examples}
 {approved_examples}
+
+---
+
+**Patch Summary**:
+
+{patch_summarization}
 
 ---
 
@@ -195,23 +214,6 @@ DEFAULT_REJECTED_EXAMPLES = """Please note that these are minor improvements and
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct.
     - This is a good addition to the code."""
-
-
-PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you don't know and need to look up for reviewing the patch.
-List the names of these functions, providing only the function names, with each name on a separate line.
-Avoid using list indicators such as hyphens or numbers.
-If no function declaration is required, just return "".
-{patch}
-{summarization}"""
-
-PROMPT_TEMPLATE_FURTHER_CONTEXT_LINES = """Based on the patch provided below and its related summarization, report the code lines more context is required.
-For that, list the lines with the their associated line numbers, grouping each one on a separated line.
-Avoid using list indicators such as hyphens or numbers. If no code line is required, just return "".
-Examples of valid code lines:
-- '152    const selector = notification.getDescription();'
-- '56        file.getElement(this.targetElement());'
-{patch}
-{summarization}"""
 
 
 STATIC_COMMENT_EXAMPLES = [
@@ -360,12 +362,53 @@ class Patch(ABC):
         """Return the title of the patch."""
         ...
 
+    @abstractmethod
+    def get_old_file(self, file_path: str) -> str:
+        """Return the contents of a file before the patch was applied."""
+        ...
+
 
 class PhabricatorPatch(Patch):
     def __init__(self, patch_id: str) -> None:
         super().__init__(patch_id)
 
         self.diff_id = int(patch_id)
+
+    def _get_file(self, file_path: str, is_before_patch: bool) -> str:
+        for changeset in self._changesets:
+            if changeset["fields"]["path"]["displayPath"] == file_path:
+                break
+        else:
+            raise FileNotFoundError(f"File {file_path} not found in changesets")
+
+        changeset_id = changeset["id"]
+
+        view = "old" if is_before_patch else "new"
+        r = utils.get_session("phabricator_web").get(
+            f"https://phabricator.services.mozilla.com/differential/changeset/?view={view}&ref={changeset_id}",
+            headers={
+                "User-Agent": utils.get_user_agent(),
+            },
+        )
+        r.raise_for_status()
+
+        return r.text
+
+    def get_old_file(self, file_path: str) -> str:
+        return self._get_file(file_path, is_before_patch=True)
+
+    @cached_property
+    def _changesets(self) -> list[dict]:
+        assert phabricator.PHABRICATOR_API is not None
+
+        diff = self._diff_metadata
+
+        changesets = phabricator.PHABRICATOR_API.request(
+            "differential.changeset.search",
+            constraints={"diffPHIDs": [diff["phid"]]},
+        )["data"]
+
+        return changesets
 
     @cached_property
     def raw_diff(self) -> str:
@@ -770,6 +813,9 @@ class SwarmPatch(Patch):
 
     @cached_property
     def bug_title(self) -> str:
+        raise NotImplementedError
+
+    def get_old_file(self, file_path: str) -> str:
         raise NotImplementedError
 
 
@@ -1204,9 +1250,8 @@ class CodeReviewTool(GenerativeModelTool):
 
         self.target_software = target_software or TARGET_SOFTWARE
 
-        self.llm = llm
         self._tokenizer = get_tokenizer(
-            self.llm.model_name if hasattr(self.llm, "model_name") else ""
+            llm.model_name if hasattr(llm, "model_name") else ""
         )
         self.is_experiment_env = os.getenv("EXPERIMENT_ENV", "no").lower() in (
             "1",
@@ -1221,18 +1266,18 @@ class CodeReviewTool(GenerativeModelTool):
                 "----------------------------------------------------"
             )
 
+        experience_scope = (
+            f"the {self.target_software} source code"
+            if self.target_software
+            else "a software project"
+        )
+
         self.summarization_chain = LLMChain(
             prompt=PromptTemplate.from_template(
                 PROMPT_TEMPLATE_SUMMARIZATION,
-                partial_variables={
-                    "experience_scope": (
-                        f"the {self.target_software} source code"
-                        if self.target_software
-                        else "a software project"
-                    )
-                },
+                partial_variables={"experience_scope": experience_scope},
             ),
-            llm=self.llm,
+            llm=llm,
             verbose=verbose,
         )
         self.filtering_chain = LLMChain(
@@ -1242,22 +1287,19 @@ class CodeReviewTool(GenerativeModelTool):
                     "target_code_consistency": self.target_software or "rest of the"
                 },
             ),
-            llm=self.llm,
+            llm=llm,
             verbose=verbose,
         )
 
-        self.further_context_chain = LLMChain(
-            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_CONTEXT_LINES),
-            llm=self.llm,
-            verbose=verbose,
-        )
-        self.further_info_chain = LLMChain(
-            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_INFO),
-            llm=self.llm,
-            verbose=verbose,
-        )
+        tools = [expand_context]
+        if function_search:
+            tools.append(create_find_function_definition_tool(function_search))
 
-        self.function_search = function_search
+        self.agent = create_react_agent(
+            llm,
+            tools,
+            prompt=f"You are an expert reviewer for {experience_scope}, with experience on source code reviews.",
+        )
 
         self.review_comments_db = review_comments_db
 
@@ -1287,113 +1329,26 @@ class CodeReviewTool(GenerativeModelTool):
         if self.verbose:
             GenerativeModelTool._print_answer(output_summarization)
 
-        if self.function_search is not None:
-            line_code_list = self.further_context_chain.run(
-                patch=formatted_patch, summarization=output_summarization
-            ).split("\n")
-
-            if self.verbose:
-                GenerativeModelTool._print_answer(line_code_list)
-
-            requested_context_lines = request_for_context_lines(
-                self.function_search,
-                patch.base_commit_hash,
-                line_code_list,
-                formatted_patch,
-            )
-
-            function_list = [
-                function_name.strip()
-                for function_name in self.further_info_chain.run(
-                    patch=formatted_patch, summarization=output_summarization
-                ).split("\n")
-            ]
-
-            if self.verbose:
-                GenerativeModelTool._print_answer(function_list)
-
-            requested_functions = request_for_function_declarations(
-                self.function_search,
-                patch.base_commit_hash,
-                function_list,
-                patch.patch_set,
-            )
-
-        memory = ConversationBufferMemory()
-        conversation_chain = ConversationChain(
-            llm=self.llm,
-            memory=memory,
-            verbose=self.verbose,
-        )
-
-        experience_scope = (
-            f"the {self.target_software} source code"
-            if self.target_software
-            else "a software project"
-        )
-        memory.save_context(
-            {
-                "input": f"You are an expert reviewer for {experience_scope}, with experience on source code reviews."
-            },
-            {
-                "output": f"Sure, I'm aware of source code practices in {self.target_software or 'the development community'}."
-            },
-        )
-        memory.save_context(
-            {
-                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+".\n'
-                + patch.raw_diff
-            },
-            {"output": output_summarization},
-        )
-
-        if self.function_search is not None and len(requested_functions) > 0:
-            function_declaration_text = get_structured_functions(
-                "Function Name", requested_functions
-            )
-
-            memory.save_context(
-                {
-                    "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you to have more context about the code under analysis. These functions already exist in the codebase before the patch, and can't be modified. "
-                    + function_declaration_text
-                },
-                {
-                    "output": "Okay, I will consider the provided function definitions as additional context to the given patch."
-                },
-            )
-
-        if self.function_search is not None and len(requested_context_lines) > 0:
-            context_text = get_structured_functions(
-                "Requested Context for Line", requested_context_lines
-            )
-
-            memory.save_context(
-                {
-                    "input": "Attached, you can also have more context of the target code under analysis."
-                    + context_text
-                },
-                {
-                    "output": "Okay, I will also consider the code as additional context to the given patch."
-                },
-            )
-
         created_before = patch.date_created if self.is_experiment_env else None
-
-        output = conversation_chain.predict(
-            input=PROMPT_TEMPLATE_REVIEW.format(
-                patch=formatted_patch,
-                comment_examples=self._get_comment_examples(patch, created_before),
-                approved_examples=self._get_generated_examples(patch, created_before),
-                target_code_consistency=self.target_software or "rest of the",
-            )
+        message = PROMPT_TEMPLATE_REVIEW.format(
+            patch=patch.raw_diff,
+            patch_summarization=output_summarization,
+            comment_examples=self._get_comment_examples(patch, created_before),
+            approved_examples=self._get_generated_examples(patch, created_before),
+            target_code_consistency=self.target_software or "rest of the",
         )
 
-        if self.verbose:
-            GenerativeModelTool._print_answer(output)
+        try:
+            for chunk in self.agent.stream(
+                {"messages": [{"role": "user", "content": message}]},
+                context=CodeReviewContext(patch=patch),
+                stream_mode="values",
+            ):
+                result = chunk
+        except GraphRecursionError as e:
+            raise ModelResultError("The model could not complete the review") from e
 
-        memory.clear()
-
-        return output
+        return result["messages"][-1].content
 
     def run(self, patch: Patch) -> list[InlineComment] | None:
         if self.count_tokens(patch.raw_diff) > 21000:
