@@ -219,125 +219,64 @@ class FeedbackEvaluator:
         )
 
 
-def get_tool_variants(
-    llm,
-    variants: list[str] | None = None,
-) -> list[tuple[str, code_review.CodeReviewTool]]:
+def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
     """Returns a list of tool variants to evaluate.
 
     Returns:
         List of tuples, where each tuple contains the name of the variant and
         and instance of the code review tool to evaluate.
     """
-
-    def is_variant_selected(*target_variants):
-        return variants is None or any(
-            target_variant in variants for target_variant in target_variants
-        )
-
     # Step 1: we start with instantiating the dependencies based on the selected
     # variants.
+    repo_dir = "../mozilla-unified"
 
-    if is_variant_selected(
-        "CONTEXT", "RAG and CONTEXT", "RAG and CONTEXT and REJECTED_COMMENTS"
-    ):
-
-        def get_file(commit_hash, path):
-            r = utils.get_session("hgmo").get(
-                f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
-                headers={
-                    "User-Agent": utils.get_user_agent(),
-                },
-            )
-            r.raise_for_status()
-            return r.text
-
-        repo_dir = "../mozilla-unified"
-        function_search = FunctionSearchMozilla(repo_dir, get_file, True)
-
-    if is_variant_selected(
-        "RAG", "RAG and CONTEXT", "RAG and CONTEXT and REJECTED_COMMENTS", "llm-gpt-4.1"
-    ):
-        review_comments_db = code_review.ReviewCommentsDB(
-            QdrantVectorDB("diff_comments")
+    def get_file(commit_hash, path):
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
+            headers={
+                "User-Agent": utils.get_user_agent(),
+            },
         )
+        r.raise_for_status()
+        return r.text
 
-    if is_variant_selected("RAG and CONTEXT and REJECTED_COMMENTS", "llm-gpt-4.1"):
-        suggestions_feedback_db = code_review.SuggestionsFeedbackDB(
-            QdrantVectorDB("suggestions_feedback")
-        )
+    function_search = FunctionSearchMozilla(repo_dir, get_file, True)
+
+    review_comments_db = code_review.ReviewCommentsDB(QdrantVectorDB("diff_comments"))
+
+    suggestions_feedback_db = code_review.SuggestionsFeedbackDB(
+        QdrantVectorDB("suggestions_feedback")
+    )
 
     # Step 2: we create the selected tool variants.
 
     tool_variants = []
-    if is_variant_selected("RAG"):
-        tool_variants.append(
-            (
-                "RAG",
-                code_review.CodeReviewTool(
-                    llm=llm,
-                    function_search=None,
-                    review_comments_db=review_comments_db,
-                    verbose=VERBOSE_CODE_REVIEW,
-                ),
-            )
-        )
 
-    if is_variant_selected("CONTEXT"):
-        tool_variants.append(
-            (
-                "CONTEXT",
-                code_review.CodeReviewTool(
-                    llm=llm,
-                    function_search=function_search,
-                    review_comments_db=None,
-                    verbose=VERBOSE_CODE_REVIEW,
-                ),
-            )
-        )
-
-    if is_variant_selected("RAG and CONTEXT"):
-        tool_variants.append(
-            (
-                "RAG and CONTEXT",
-                code_review.CodeReviewTool(
-                    llm=llm,
-                    function_search=function_search,
-                    review_comments_db=review_comments_db,
-                    verbose=VERBOSE_CODE_REVIEW,
-                ),
-            )
-        )
-
-    if is_variant_selected("RAG and CONTEXT and REJECTED_COMMENTS"):
-        tool_variants.append(
-            (
-                "RAG and CONTEXT and REJECTED_COMMENTS",
-                code_review.CodeReviewTool(
-                    llm=llm,
-                    function_search=function_search,
-                    review_comments_db=review_comments_db,
-                    suggestions_feedback_db=suggestions_feedback_db,
-                    verbose=VERBOSE_CODE_REVIEW,
-                ),
+    tool_variants.append(
+        (
+            "Claude",
+            code_review.CodeReviewTool(
+                llm=generative_model_tool.create_anthropic_llm(),
+                function_search=function_search,
+                review_comments_db=review_comments_db,
+                suggestions_feedback_db=suggestions_feedback_db,
+                verbose=VERBOSE_CODE_REVIEW,
             ),
         )
+    )
 
-    if is_variant_selected("llm-gpt-4.1"):
-        tool_variants.append(
-            (
-                "with-order",
-                code_review.CodeReviewTool(
-                    llm=generative_model_tool.create_openai_llm(
-                        model_name="gpt-4.1-2025-04-14"
-                    ),
-                    # function_search=function_search,
-                    review_comments_db=review_comments_db,
-                    suggestions_feedback_db=suggestions_feedback_db,
-                    verbose=VERBOSE_CODE_REVIEW,
-                ),
-            )
+    tool_variants.append(
+        (
+            "GPT",
+            code_review.CodeReviewTool(
+                llm=generative_model_tool.create_openai_llm(),
+                function_search=function_search,
+                review_comments_db=review_comments_db,
+                suggestions_feedback_db=suggestions_feedback_db,
+                verbose=VERBOSE_CODE_REVIEW,
+            ),
         )
+    )
 
     return tool_variants
 
@@ -413,9 +352,7 @@ def main(args):
         review_platform
     ]()
 
-    tool_variants = get_tool_variants(
-        generative_model_tool.create_llm_from_args(args), args.variants
-    )
+    tool_variants = get_tool_variants()
 
     evaluator = FeedbackEvaluator(args.evaluation_dataset)
 
@@ -570,15 +507,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    generative_model_tool.create_llm_to_args(parser)
-    parser.add_argument(
-        "-v",
-        "--variant",
-        dest="variants",
-        action="append",
-        help="if specified, run only the selected variant(s)",
-        metavar="VARIANT",
     )
     parser.add_argument(
         "-r",
