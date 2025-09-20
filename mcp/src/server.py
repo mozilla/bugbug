@@ -181,8 +181,6 @@ Source URL: {patch_url}
         + context_section
     )
 
-    print(final_prompt)
-
     return final_prompt
 
 
