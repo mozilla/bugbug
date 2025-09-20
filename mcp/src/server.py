@@ -8,7 +8,8 @@ from urllib.parse import urlparse
 
 from fastmcp import FastMCP
 
-from bugbug import phabricator
+from bugbug import phabricator, utils
+from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.tools.code_review import PhabricatorPatch
 from bugbug.utils import get_secret
 
@@ -141,6 +142,45 @@ Source URL: {patch_url}
 """
 
     return PATCH_REVIEW_PROMPT + OUTPUT_FORMAT_TEXT + context_section
+
+
+def get_file(commit_hash, path):
+    if commit_hash == "main":
+        commit_hash = "refs/heads/main"
+
+    r = utils.get_session("githubusercontent").get(
+        f"https://raw.githubusercontent.com/mozilla-firefox/firefox/{commit_hash}/{path}",
+        headers={
+            "User-Agent": utils.get_user_agent(),
+        },
+    )
+    r.raise_for_status()
+    return r.text
+
+
+function_search = FunctionSearchSearchfoxAPI(get_file)
+
+
+@mcp.tool(name="find_function_definition")
+def find_function_definition(function_name: str) -> str:
+    """Find the definition of a function in the Firefox codebase using Searchfox.
+
+    Args:
+        function_name: The name of the function to find its definition.
+
+    Returns:
+        The function definition.
+    """
+    functions = function_search.get_function_by_name(
+        "main",
+        "n/a",  # The file path is not used
+        function_name,
+    )
+
+    if not functions:
+        return "Function definition not found."
+
+    return functions[0].source
 
 
 def main():
