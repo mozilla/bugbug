@@ -3,15 +3,15 @@
 Provides contexts for reviewing patches from Phabricator.
 """
 
+import functools
 import os
 from urllib.parse import urlparse
 
 from fastmcp import FastMCP
-from langchain_core.runnables import RunnablePassthrough
 
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
-from bugbug.tools.code_review import CodeReviewTool, PhabricatorPatch
+from bugbug.tools.code_review import PhabricatorPatch
 from bugbug.utils import get_secret
 
 mcp = FastMCP("BugBug Code Review MCP Server")
@@ -96,6 +96,23 @@ EXAMPLES = """
 """
 
 
+@functools.cache
+def get_code_review_tool():
+    from langchain_core.runnables import RunnablePassthrough
+
+    from bugbug.tools.code_review import CodeReviewTool, ReviewCommentsDB
+    from bugbug.vectordb import QdrantVectorDB
+
+    review_comments_db = ReviewCommentsDB(QdrantVectorDB("diff_comments"))
+
+    tool = CodeReviewTool(
+        [RunnablePassthrough()],
+        review_comments_db=review_comments_db,
+    )
+
+    return tool
+
+
 async def fetch_patch_data(patch_url: str) -> dict[str, str]:
     """Fetch patch data from the provided URL."""
     # parse the url e.g., https://phabricator.services.mozilla.com/D37960
@@ -107,7 +124,7 @@ async def fetch_patch_data(patch_url: str) -> dict[str, str]:
         assert len(revisions) == 1
 
         patch = PhabricatorPatch(revisions[0]["fields"]["diffID"])
-        review_tool = CodeReviewTool([RunnablePassthrough()])
+        review_tool = get_code_review_tool()
 
         return {
             "patch": patch.raw_diff,
