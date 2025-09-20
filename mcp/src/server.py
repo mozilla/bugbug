@@ -7,10 +7,11 @@ import os
 from urllib.parse import urlparse
 
 from fastmcp import FastMCP
+from langchain_core.runnables import RunnablePassthrough
 
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
-from bugbug.tools.code_review import PhabricatorPatch
+from bugbug.tools.code_review import CodeReviewTool, PhabricatorPatch
 from bugbug.utils import get_secret
 
 mcp = FastMCP("BugBug Code Review MCP Server")
@@ -84,6 +85,16 @@ Respond only with a **plain text list** with the following details:
 The format should be: filename:line_number "comment"
 """
 
+EXAMPLES = """
+---
+
+**Examples**:
+
+{comment_examples}
+{approved_examples}
+
+"""
+
 
 async def fetch_patch_data(patch_url: str) -> dict[str, str]:
     """Fetch patch data from the provided URL."""
@@ -96,12 +107,17 @@ async def fetch_patch_data(patch_url: str) -> dict[str, str]:
         assert len(revisions) == 1
 
         patch = PhabricatorPatch(revisions[0]["fields"]["diffID"])
+        review_tool = CodeReviewTool([RunnablePassthrough()])
 
         return {
             "patch": patch.raw_diff,
             "bug_title": patch.bug_title,
             "patch_title": patch.patch_title,
             "target_software": "Mozilla Firefox",
+            "examples": EXAMPLES.format(
+                comment_examples=review_tool._get_comment_examples(patch),
+                approved_examples=review_tool._get_generated_examples(patch),
+            ),
         }
 
     else:
@@ -141,7 +157,16 @@ Source URL: {patch_url}
 {patch_data["patch"]}
 """
 
-    return PATCH_REVIEW_PROMPT + OUTPUT_FORMAT_TEXT + context_section
+    final_prompt = (
+        PATCH_REVIEW_PROMPT
+        + OUTPUT_FORMAT_TEXT
+        + patch_data["examples"]
+        + context_section
+    )
+
+    print(final_prompt)
+
+    return final_prompt
 
 
 def get_file(commit_hash, path):
