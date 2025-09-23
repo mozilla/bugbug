@@ -52,7 +52,7 @@ class InlineComment:
     hunk_end_line: int | None = None
     is_generated: bool | None = None
     explanation: str | None = None
-    order: int | None = None
+    severity: int | None = None
 
 
 class ModelResultError(Exception):
@@ -108,13 +108,15 @@ Generate high-quality code review comments for the patch provided below.
    * Detect bugs, logical errors, performance concerns, security issues, or violations of the `{target_code_consistency}` coding standards.
    * Focus only on **new or changed lines** (lines beginning with `+`).
 
-3. **Assess Confidence and Order**:
+3. **Comment severity**:
 
-   * **Sort the comments by descending confidence and importance**:
-     * Start with issues you are **certain are valid**.
-     * Also, prioritize important issues that you are **confident about**.
-     * Follow with issues that are **plausible but uncertain** (possible false positives).
-   * Assign each comment a numeric `order`, starting at 1.
+   * For each comment, assign a severity level:
+        - `1`: Critical issues that must be fixed before merging.
+        - `2`: Important issues that should be addressed.
+        - `3`: Minor issues that can be fixed later or are stylistic.
+    * If you are unsure about the severity, use `3` as a default.
+
+
 
 4. **Write Clear, Constructive Comments**:
 
@@ -141,7 +143,7 @@ Respond only with a **JSON list**. Each object must contain the following fields
 * `"code_line"`: The number of the specific changed line of code that the comment refers to.
 * `"comment"`: A concise review comment.
 * `"explanation"`: A brief rationale for the comment, including how confident you are and why.
-* `"order"`: An integer indicating the comment’s priority (1 = highest confidence/importance).
+* `"severity"`: An integer from 1 to 3 indicating the severity of the issue.
 
 ---
 
@@ -1197,7 +1199,7 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
             content=comment["comment"],
             on_removed_code=not scope["has_added_lines"],
             explanation=comment["explanation"],
-            order=comment["order"],
+            severity=comment["severity"],
         )
 
 
