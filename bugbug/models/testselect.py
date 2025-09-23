@@ -831,8 +831,12 @@ class TestSelectModel(Model):
                 )
                 percentage_caught_one_config_group = (
                     100
-                    * num_caught_one_config_group
-                    / num_failing_pushes_with_config_group
+                    * (
+                        num_caught_one_config_group
+                        / num_failing_pushes_with_config_group
+                    )
+                    if num_failing_pushes_with_config_group > 0
+                    else 1
                 )
                 average_caught_percentage_config_group = 100 * statistics.mean(
                     result["caught_percentage_config_group"]
