@@ -1124,12 +1124,17 @@ def get_structured_functions(target, functions_declaration):
 
 
 def parse_model_output(output: str) -> list[dict]:
-    output = output.strip()
-    if output.startswith("Review:"):
-        output = output[len("Review:") :].strip()
+    # TODO: This function should raise an exception when the output is not valid
+    # JSON. The caller can then decide how to handle the error.
+    # For now, we just log the error and return an empty list.
 
-    if output.startswith("```json") and output.endswith("```"):
-        output = output[7:-3]
+    json_opening_tag = output.find("```json")
+    if json_opening_tag != -1:
+        json_closing_tag = output.rfind("```")
+        if json_closing_tag == -1:
+            logger.error("No closing ``` found for JSON in model output: %s", output)
+            return []
+        output = output[json_opening_tag + len("```json") : json_closing_tag]
 
     try:
         comments = json.loads(output)
