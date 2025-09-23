@@ -53,6 +53,8 @@ class InlineComment:
     is_generated: bool | None = None
     explanation: str | None = None
     order: int | None = None
+    type: str | None = None
+    type_justification: str | None = None
 
 
 class ModelResultError(Exception):
@@ -336,6 +338,85 @@ TEMPLATE_PATCH_FROM_HUNK = """diff --git a/{filename} b/{filename}
 --- a/{filename}
 +++ b/{filename}
 {raw_hunk}
+"""
+
+
+PROMPT_TEMPLATE_LABELLING = """You are an expert in source code reviews.
+
+Your task is to review each comment in the "Review Comments List" and assign it one of the following five categories, along with a justification based on its subcategory.
+
+Categories and Subcategories
+1. Readability:
+Focus: Making the code easier to read and understand.
+Subcategories include:
+    * Refactoring - Consistency: Uniform coding styles and practices.
+    * Refactoring - Naming Convention: Clear, descriptive identifiers.
+    * Refactoring - Readability: General clarity improvements.
+    * Refactoring - Simplification: Reducing unnecessary complexity.
+    * Refactoring - Visual Representation: Improving code layout and formatting.
+
+2. Design and Maintainability:
+Focus: Improving structure and long-term upkeep.
+Subcategories include:
+    * Discussion - Design discussion: Architectural or structural decisions.
+    * Functional - Support: Adding or enhancing support functionality.
+    * Refactoring - Alternate Output: Changing what the code returns or prints.
+    * Refactoring - Code Duplication: Removing repeated code.
+    * Refactoring - Code Simplification: Streamlining logic.
+    * Refactoring - Magic Numbers: Replacing hard-coded values with named constants.
+    * Refactoring - Organization of the code: Logical structuring of code.
+    * Refactoring - Solution approach: Rethinking problem-solving approaches.
+    * Refactoring - Unused Variables: Removing variables not in use.
+    * Refactoring - Variable Declarations: Improving how variables are declared or initialized.
+
+3. Performance:
+Focus: Making the code faster or more efficient.
+Subcategories include:
+    * Functional - Performance: General performance improvements.
+    * Functional - Performance Optimization: Specific performance-focused refactoring.
+    * Functional - Performance and Safety: Balancing speed and reliability.
+    * Functional - Resource: Efficient use of memory, CPU, etc.
+    * Refactoring - Performance Optimization: Improving performance through code changes.
+
+4. Defect:
+Focus: Fixing bugs and potential issues.
+Subcategories include:
+    * Functional - Conditional Compilation
+    * Functional - Consistency and Thread Safety
+    * Functional - Error Handling
+    * Functional - Exception Handling
+    * Functional - Initialization
+    * Functional - Interface
+    * Functional - Lambda Usage
+    * Functional - Logical
+    * Functional - Null Handling
+    * Functional - Security
+    * Functional - Serialization
+    * Functional - Syntax
+    * Functional - Timing
+    * Functional - Type Safety
+    * Functional - Validation
+
+5. Other:
+Use only if none of the above apply:
+Subcategories include:
+    * None of the above
+    * Does not apply
+
+Format:
+Use the following JSON format to label and justify each comment. Do not modify the comment content—only append the "label" and "label_subcategory" fields.
+[
+    {{
+        "file": "com/br/main/Pressure.java",
+        "code_line": 458,
+        "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
+        "label": "Performance",
+        "label_subcategory": "Functional - Performance Optimization: Specific performance-focused refactoring."
+    }}
+]
+
+Review Comments List:
+{comments}
 """
 
 
@@ -1198,6 +1279,8 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
             on_removed_code=not scope["has_added_lines"],
             explanation=comment["explanation"],
             order=comment["order"],
+            type=comment.get("type"),
+            type_justification=comment.get("type_justification"),
         )
 
 
@@ -1274,6 +1357,12 @@ class CodeReviewTool(GenerativeModelTool):
         )
         self.further_info_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_INFO),
+            llm=self.llm,
+            verbose=verbose,
+        )
+
+        self.type_labelling_chain = LLMChain(
+            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_LABELLING),
             llm=self.llm,
             verbose=verbose,
         )
@@ -1430,6 +1519,29 @@ class CodeReviewTool(GenerativeModelTool):
 
         return output
 
+    def _get_comment_type(self, comments):
+        output = self.com_type_labelling.invoke(
+            {
+                "comments": json.dumps(comments),
+            },
+            return_only_outputs=True,
+        )["text"]
+        labelling = parse_model_output(output)
+        dir_labels = {
+            (lab["file"], lab["code_line"], lab["comment"]): {
+                "type": lab["label"],
+                "label_subcategory": lab["label_subcategory"],
+            }
+            for lab in labelling
+        }
+
+        for com in comments:
+            label_info = dir_labels.get((com["file"], com["code_line"], com["comment"]))
+            if label_info:
+                com.update(label_info)
+
+        return comments
+
     @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
         if self.count_tokens(patch.raw_diff) > 21000:
@@ -1456,10 +1568,14 @@ class CodeReviewTool(GenerativeModelTool):
             return_only_outputs=True,
         )["text"]
 
-        if self.verbose:
-            GenerativeModelTool._print_answer(raw_output)
+        processed_output = list(generate_processed_output(raw_output, patch.patch_set))
 
-        return list(generate_processed_output(raw_output, patch.patch_set))
+        typed_output = self._get_comment_type(processed_output)
+
+        if self.verbose:
+            GenerativeModelTool._print_answer(typed_output)
+
+        return typed_output
 
     def _get_generated_examples(self, patch, created_before: datetime | None = None):
         """Get examples of comments that were generated by an LLM.
