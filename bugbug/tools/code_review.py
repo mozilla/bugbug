@@ -23,7 +23,6 @@ from langchain.prompts import PromptTemplate
 from langchain_core.language_models import BaseLanguageModel
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import ConduitError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt
 from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
@@ -1396,7 +1395,6 @@ class CodeReviewTool(GenerativeModelTool):
 
         return output
 
-    @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
