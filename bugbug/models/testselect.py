@@ -56,8 +56,10 @@ def _get_cost(config: str) -> int:
         (("build", "opt"), 1),
         (("build", "debug"), 2),
         (("build", "plain"), 3),
-        (("linux1804-64", "opt"), 2),
-        (("linux1804-64", "debug"), 3),
+        (("linux2404-64", "opt"), 2),
+        (("linux2404-64", "debug"), 3),
+        (("linux1804-64", "opt"), 4),
+        (("linux1804-64", "debug"), 5),
         (("linux2204-64", "opt"), 4),
         (("linux2204-64", "debug"), 5),
         (("windows11", "opt"), 6),
@@ -829,8 +831,12 @@ class TestSelectModel(Model):
                 )
                 percentage_caught_one_config_group = (
                     100
-                    * num_caught_one_config_group
-                    / num_failing_pushes_with_config_group
+                    * (
+                        num_caught_one_config_group
+                        / num_failing_pushes_with_config_group
+                    )
+                    if num_failing_pushes_with_config_group > 0
+                    else 1
                 )
                 average_caught_percentage_config_group = 100 * statistics.mean(
                     result["caught_percentage_config_group"]

@@ -1207,7 +1207,8 @@ def set_commits_to_ignore(
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
     ignore_revs_content = hg.cat(
-        [os.path.join(repo_dir, ".hg-annotate-ignore-revs").encode("ascii")], rev=b"-1"
+        [os.path.join(repo_dir, ".hg-annotate-ignore-revs").encode("ascii")],
+        rev=b"default",
     ).decode("utf-8")
     ignore_revs = set(line[:40] for line in ignore_revs_content.splitlines())
 
