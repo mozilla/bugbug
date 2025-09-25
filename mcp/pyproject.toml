@@ -1,0 +1,9 @@
+[project]
+name = "bugbug-mcp"
+version = "0.1.0"
+description = "BugBug MCP Server"
+requires-python = ">=3.12"
+dependencies = [
+    "bugbug>=0.0.590",
+    "fastmcp>=2.12.0",
+]

@@ -23,3 +23,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 99
+  - package-ecosystem: docker
+    directory: "/mcp"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 99
+  - package-ecosystem: uv
+    directory: "/mcp"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 99
