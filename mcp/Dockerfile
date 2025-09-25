@@ -23,4 +23,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Enable unbuffered mode will ensure real-time logging
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "-m", "server"]
+CMD ["python", "-m", "bugbug_mcp.server"]
