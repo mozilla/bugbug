@@ -7,3 +7,6 @@ dependencies = [
     "bugbug>=0.0.590",
     "fastmcp>=2.12.0",
 ]
+
+[tool.uv.sources]
+bugbug = { path = "..", editable = true }

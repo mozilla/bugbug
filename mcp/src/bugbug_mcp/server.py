@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
-from bugbug.tools.code_review import PhabricatorPatch
+from bugbug.tools.code_review import Bug, PhabricatorPatch
 from bugbug.utils import get_secret
 
 mcp = FastMCP("BugBug Code Review MCP Server")
@@ -221,6 +221,12 @@ def find_function_definition(function_name: str) -> str:
         return "Function definition not found."
 
     return functions[0].source
+
+
+@mcp.resource("bugzilla://bug/{bug_id}")
+def handle_bug_view_resource(bug_id: int) -> str:
+    """Retrieve a bug from Bugzilla along side with its change history and comments."""
+    return Bug.get(bug_id).to_md()
 
 
 def main():
