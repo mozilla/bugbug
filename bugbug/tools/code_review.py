@@ -544,7 +544,6 @@ def create_bug_timeline(comments: list[dict], history: list[dict]) -> list[str]:
 
     # Add comments
     for comment in comments:
-        print(comment)
         events.append(
             {
                 "time": comment["time"],
