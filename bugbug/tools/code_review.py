@@ -701,7 +701,7 @@ class Bug:
             bugdata=bugs,
         ).get_data().wait()
 
-        if len(bugs) == 0:
+        if not bugs:
             raise ValueError(f"Bug {bug_id} not found")
 
         bug_data = bugs[0]
