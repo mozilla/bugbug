@@ -103,10 +103,15 @@ def get_code_review_tool():
     from bugbug.tools.code_review import CodeReviewTool, ReviewCommentsDB
     from bugbug.vectordb import QdrantVectorDB
 
+    # FIXME: This is a workaround, we should refactor CodeReviewTool to not avoid this.
+    class MockLLM(RunnablePassthrough):
+        def bind_tools(self, *args, **kwargs):
+            return self
+
     review_comments_db = ReviewCommentsDB(QdrantVectorDB("diff_comments"))
 
     tool = CodeReviewTool(
-        [RunnablePassthrough()],
+        MockLLM(),
         review_comments_db=review_comments_db,
     )
 
