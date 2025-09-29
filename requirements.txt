@@ -1,5 +1,5 @@
 amqp==5.3.1
-beautifulsoup4==4.13.5
+beautifulsoup4==4.14.0
 boto3==1.40.38
 imbalanced-learn==0.13.0
 langchain==0.3.27
