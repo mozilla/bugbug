@@ -5,9 +5,11 @@ Provides contexts for reviewing patches from Phabricator.
 
 import functools
 import os
+from typing import Annotated
 from urllib.parse import urlparse
 
 from fastmcp import FastMCP
+from pydantic import Field
 
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
@@ -141,19 +143,11 @@ async def fetch_patch_data(patch_url: str) -> dict[str, str]:
         raise ValueError(f"Unsupported patch URL: {patch_url}")
 
 
-@mcp.prompt(
-    name="patch_review",
-    description="Review a code patch from Phabricator - provide the Phabricator URL as patch_url parameter",
-)
-async def handle_patch_review(patch_url: str) -> str:
-    """Review a patch from the provided URL.
-
-    Args:
-        patch_url: The URL of the patch to review
-
-    Returns:
-        A formatted prompt for patch review
-    """
+@mcp.prompt()
+async def patch_review(
+    patch_url: str = Field(description="URL to the Phabricator patch to review."),
+) -> str:
+    """Review a code patch from Phabricator."""
     try:
         patch_data = await fetch_patch_data(patch_url)
     except Exception as e:
@@ -201,16 +195,11 @@ def get_file(commit_hash, path):
 function_search = FunctionSearchSearchfoxAPI(get_file)
 
 
-@mcp.tool(name="find_function_definition")
-def find_function_definition(function_name: str) -> str:
-    """Find the definition of a function in the Firefox codebase using Searchfox.
-
-    Args:
-        function_name: The name of the function to find its definition.
-
-    Returns:
-        The function definition.
-    """
+@mcp.tool()
+def find_function_definition(
+    function_name: Annotated[str, "The name of the function to find its definition."],
+) -> str:
+    """Find the definition of a function in the Firefox codebase using Searchfox."""
     functions = function_search.get_function_by_name(
         "main",
         "n/a",  # The file path is not used
