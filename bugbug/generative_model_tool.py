@@ -46,7 +46,7 @@ def create_azureopenai_llm(temperature=0.2, top_p=None):
 
 
 def create_anthropic_llm(
-    temperature=0.2, top_p=None, model_name="claude-opus-4-1-20250805"
+    temperature=0.2, top_p=None, model_name="claude-sonnet-4-5-20250929"
 ):
     from langchain_anthropic import ChatAnthropic
 
