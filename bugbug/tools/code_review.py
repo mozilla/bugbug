@@ -602,7 +602,6 @@ def bug_dict_to_markdown(bug):
     md_lines.append("## Basic Information")
     md_lines.append(f"- **Status**: {bug.get('status', 'Unknown')}")
     md_lines.append(f"- **Severity**: {bug.get('severity', 'Unknown')}")
-    md_lines.append(f"- **Priority**: {bug.get('priority', 'Unknown')}")
     md_lines.append(f"- **Product**: {bug.get('product', 'Unknown')}")
     md_lines.append(f"- **Component**: {bug.get('component', 'Unknown')}")
     md_lines.append(f"- **Version**: {bug.get('version', 'Unknown')}")
