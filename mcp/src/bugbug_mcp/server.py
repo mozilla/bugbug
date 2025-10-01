@@ -13,7 +13,7 @@ from pydantic import Field
 
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
-from bugbug.tools.code_review import PhabricatorPatch
+from bugbug.tools.code_review import Bug, PhabricatorPatch
 from bugbug.utils import get_secret
 
 mcp = FastMCP("BugBug Code Review MCP Server")
@@ -105,10 +105,15 @@ def get_code_review_tool():
     from bugbug.tools.code_review import CodeReviewTool, ReviewCommentsDB
     from bugbug.vectordb import QdrantVectorDB
 
+    # FIXME: This is a workaround, we should refactor CodeReviewTool to avoid this.
+    class MockLLM(RunnablePassthrough):
+        def bind_tools(self, *args, **kwargs):
+            return self
+
     review_comments_db = ReviewCommentsDB(QdrantVectorDB("diff_comments"))
 
     tool = CodeReviewTool(
-        [RunnablePassthrough()],
+        MockLLM(),
         review_comments_db=review_comments_db,
     )
 
@@ -210,6 +215,16 @@ def find_function_definition(
         return "Function definition not found."
 
     return functions[0].source
+
+
+@mcp.resource(
+    uri="bugzilla://bug/{bug_id}",
+    name="Bugzilla Bug Content",
+    mime_type="text/markdown",
+)
+def handle_bug_view_resource(bug_id: int) -> str:
+    """Retrieve a bug from Bugzilla alongside its change history and comments."""
+    return Bug.get(bug_id).to_md()
 
 
 def main():
