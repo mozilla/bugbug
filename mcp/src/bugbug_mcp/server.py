@@ -103,7 +103,7 @@ def get_code_review_tool():
     from bugbug.tools.code_review import CodeReviewTool, ReviewCommentsDB
     from bugbug.vectordb import QdrantVectorDB
 
-    # FIXME: This is a workaround, we should refactor CodeReviewTool to not avoid this.
+    # FIXME: This is a workaround, we should refactor CodeReviewTool to avoid this.
     class MockLLM(RunnablePassthrough):
         def bind_tools(self, *args, **kwargs):
             return self
