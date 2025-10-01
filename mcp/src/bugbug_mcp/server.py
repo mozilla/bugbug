@@ -228,7 +228,11 @@ def find_function_definition(function_name: str) -> str:
     return functions[0].source
 
 
-@mcp.resource("bugzilla://bug/{bug_id}")
+@mcp.resource(
+    uri="bugzilla://bug/{bug_id}",
+    name="Bugzilla Bug Content",
+    mime_type="text/markdown",
+)
 def handle_bug_view_resource(bug_id: int) -> str:
     """Retrieve a bug from Bugzilla alongside its change history and comments."""
     return Bug.get(bug_id).to_md()
