@@ -648,6 +648,166 @@ class PhabricatorPatch(Patch):
             if comment:
                 yield comment
 
+    def to_md(self) -> str:
+        """Generate a comprehensive, LLM-friendly markdown representation of the patch.
+
+        Returns a well-structured markdown document that includes revision metadata,
+        diff information, stack information, code changes, and comments.
+        """
+        # TODO: print authors' names instead of PHIDs
+
+        date_format = "%Y-%m-%d %H:%M:%S"
+        md_lines = []
+
+        revision = self._revision_metadata
+        md_lines.append(f"# Revision D{revision['id']}: {revision['fields']['title']}")
+        md_lines.append("")
+        md_lines.append("")
+
+        md_lines.append("## Basic Information")
+        md_lines.append("")
+        md_lines.append(f"- **URI**: {revision['fields']['uri']}")
+        md_lines.append(f"- **Revision Author**: {revision['fields']['authorPHID']}")
+        md_lines.append(f"- **Title**: {revision['fields']['title']}")
+        md_lines.append(f"- **Status**: {revision['fields']['status']['name']}")
+        md_lines.append(f"- **Created**: {self.date_created.strftime(date_format)}")
+        md_lines.append(f"- **Modified**: {self.date_modified.strftime(date_format)}")
+        bug_id = revision["fields"].get("bugzilla.bug-id") or "N/A"
+        md_lines.append(f"- **Bugzilla Bug**: {bug_id}")
+        md_lines.append("")
+        md_lines.append("")
+
+        summary = revision["fields"].get("summary")
+        if summary:
+            md_lines.append("## Summary")
+            md_lines.append("")
+            md_lines.append(summary)
+            md_lines.append("")
+            md_lines.append("")
+
+        test_plan = revision["fields"].get("testPlan")
+        if test_plan:
+            md_lines.append("## Test Plan")
+            md_lines.append("")
+            md_lines.append(test_plan)
+            md_lines.append("")
+            md_lines.append("")
+
+        md_lines.append("## Diff Information")
+        diff = self._diff_metadata
+        md_lines.append(f"- **Diff ID**: {diff['id']}")
+        md_lines.append(f"- **Base Revision**: `{diff['baseRevision']}`")
+        if revision["fields"]["authorPHID"] != diff["authorPHID"]:
+            md_lines.append(f"- **Diff Author**: {diff['authorPHID']}")
+        md_lines.append("")
+        md_lines.append("")
+
+        stack_graph = revision["fields"].get("stackGraph")
+        if len(stack_graph) > 1:
+            md_lines.append("## Stack Information")
+            md_lines.append("")
+            md_lines.append("**Dependency Graph**:")
+            md_lines.append("")
+            md_lines.append("```mermaid")
+            md_lines.append("graph TD")
+
+            current_phid = revision["phid"]
+            patch_map = {
+                phid: (
+                    self
+                    if phid == current_phid
+                    else PhabricatorPatch(revision_phid=phid)
+                )
+                for phid in stack_graph.keys()
+            }
+
+            for phid, dependencies in stack_graph.items():
+                from_patch = patch_map[phid]
+                from_id = f"D{from_patch.revision_id}"
+                if phid == current_phid:
+                    md_lines.append(
+                        f"    {from_id}[{from_patch.patch_title} - CURRENT]"
+                    )
+                    md_lines.append(f"    style {from_id} fill:#105823")
+                else:
+                    md_lines.append(f"    {from_id}[{from_patch.patch_title}]")
+
+                for dep_phid in dependencies:
+                    dep_id = f"D{patch_map[dep_phid].revision_id}"
+                    md_lines.append(f"    {from_id} --> {dep_id}")
+
+            md_lines.append("```")
+            md_lines.append("")
+            md_lines.append("")
+
+        md_lines.append("## Code Changes")
+        md_lines.append("")
+
+        try:
+            md_lines.append("```diff")
+            md_lines.append(self.raw_diff)
+            md_lines.append("```")
+        except Exception:
+            logger.exception("Error while preparing the diff")
+            md_lines.append("*Error while preparing the diff*")
+
+        md_lines.append("")
+        md_lines.append("")
+
+        md_lines.append("## Comments Timeline")
+        md_lines.append("")
+
+        sorted_comments = sorted(
+            # Ignore empty comments
+            (comment for comment in self.get_comments() if comment.content.strip()),
+            key=lambda c: c.date_created,
+        )
+        for comment in sorted_comments:
+            date = datetime.fromtimestamp(comment.date_created)
+            date_str = date.strftime(date_format)
+
+            if isinstance(comment, PhabricatorInlineComment):
+                line_info = (
+                    f"Line {comment.start_line}"
+                    if comment.line_length == 1
+                    else f"Lines {comment.start_line}-{comment.end_line}"
+                )
+                done_status = " [RESOLVED]" if comment.is_done else ""
+                generated_status = " [AI-GENERATED]" if comment.is_generated else ""
+
+                md_lines.append(
+                    f"**{date_str}** - **Inline Comment** by {comment.author_phid} on `{comment.filename}` "
+                    f"at {line_info}{done_status}{generated_status}"
+                )
+            else:
+                md_lines.append(
+                    f"**{date_str}** - **General Comment** by {comment.author_phid}"
+                )
+
+            final_comment_content = comment.content
+            divider_index = final_comment_content.find("---")
+            if divider_index != -1:
+                # Remove footer notes that usually added by reviewbot
+                final_comment_content = final_comment_content[:divider_index].strip()
+
+            # Truncate very long comments to avoid overloading the LLM
+            if len(final_comment_content) > 2000:
+                final_comment_content = (
+                    final_comment_content[:2000] + "...\n\n*[Content truncated]*"
+                )
+
+            md_lines.append("")
+            md_lines.append(final_comment_content)
+            md_lines.append("")
+            md_lines.append("---")
+            md_lines.append("")
+
+        if not sorted_comments:
+            md_lines.append("*No comments*")
+            md_lines.append("")
+
+        return "\n".join(md_lines)
+
 
 def create_bug_timeline(comments: list[dict], history: list[dict]) -> list[str]:
     """Create a unified timeline from bug history and comments."""
