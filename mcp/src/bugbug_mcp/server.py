@@ -227,6 +227,16 @@ def handle_bug_view_resource(bug_id: int) -> str:
     return Bug.get(bug_id).to_md()
 
 
+@mcp.resource(
+    uri="phabricator://revision/D{revision_id}",
+    name="Phabricator Revision Content",
+    mime_type="text/markdown",
+)
+def handle_revision_view_resource(revision_id: int) -> str:
+    """Retrieve a revision from Phabricator alongside its comments."""
+    return PhabricatorPatch(revision_id=revision_id).to_md()
+
+
 def main():
     phabricator.set_api_key(
         get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
