@@ -1798,7 +1798,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         created_before = patch.date_created if self.is_experiment_env else None
         message = PROMPT_TEMPLATE_REVIEW.format(
-            patch=patch.raw_diff,
+            patch=formatted_patch,
             patch_summarization=output_summarization,
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
