@@ -838,11 +838,16 @@ class TestSelectModel(Model):
                     if num_failing_pushes_with_config_group > 0
                     else 1
                 )
-                average_caught_percentage_config_group = 100 * statistics.mean(
-                    result["caught_percentage_config_group"]
-                    for result in test_pushes.values()
-                    if "caught_percentage_config_group" in result
-                    and result["caught_percentage_config_group"] is not None
+                average_caught_percentage_config_group = (
+                    100
+                    * statistics.mean(
+                        result["caught_percentage_config_group"]
+                        for result in test_pushes.values()
+                        if "caught_percentage_config_group" in result
+                        and result["caught_percentage_config_group"] is not None
+                    )
+                    if num_failing_pushes_with_config_group > 0
+                    else 1
                 )
 
                 message += f" In {percentage_caught_one_config_group}% of pushes we caught at least one config/group failure. On average, we caught {average_caught_percentage_config_group}% of all seen config/group failures."
