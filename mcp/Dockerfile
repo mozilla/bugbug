@@ -9,12 +9,21 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv sync --locked --no-dev
 
+# Resource generation stage
+FROM builder AS resource-generator
+
+COPY scripts/llms-txt.py ./scripts/
+
+RUN mkdir static && uv run --extra llms-txt scripts/llms-txt.py
+
+
 # Runtime stage
 FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=resource-generator /app/static/llms.txt /app/static/llms.txt
 
 COPY src .
 
