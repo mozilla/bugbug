@@ -5,10 +5,13 @@ Provides contexts for reviewing patches from Phabricator.
 
 import functools
 import os
+from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 
+import httpx
 from fastmcp import FastMCP
+from fastmcp.resources import FileResource
 from pydantic import Field
 
 from bugbug import phabricator, utils
@@ -247,6 +250,31 @@ def handle_revision_view_resource(revision_id: int) -> str:
 def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
     return PhabricatorPatch(revision_id=revision_id).to_md()
+
+
+llms_txt = FileResource(
+    uri="docs://llms.txt",
+    path=Path("./static/llms.txt").resolve(),
+    name="llms.txt for Firefox Source Tree Documentation",
+    description="This resource provides the knowledge to help with Firefox related workflows and troubleshooting. You must use it to understand questions about Firefox development, architecture, and best practices before trying to search anywhere else. You need to read the relevant sections to get enough context to perform your task.",
+    mime_type="text/markdown",
+)
+mcp.add_resource(llms_txt)
+
+
+@mcp.resource(
+    uri="docs://{doc_path*}",
+    name="Content from Documentation",
+    mime_type="text/markdown",
+)
+async def handle_doc_view_resource(doc_path: str) -> str:
+    """Retrieve the content of a section from Firefox Source Tree Documentation."""
+    url = f"https://firefox-source-docs.mozilla.org/_sources/{doc_path}.txt"
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
 
 
 def main():
