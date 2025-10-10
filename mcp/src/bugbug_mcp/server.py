@@ -227,12 +227,24 @@ def handle_bug_view_resource(bug_id: int) -> str:
     return Bug.get(bug_id).to_md()
 
 
+@mcp.tool()
+def get_bugzilla_bug(bug_id: int) -> str:
+    """Retrieve a bug from Bugzilla alongside its change history and comments."""
+    return Bug.get(bug_id).to_md()
+
+
 @mcp.resource(
     uri="phabricator://revision/D{revision_id}",
     name="Phabricator Revision Content",
     mime_type="text/markdown",
 )
 def handle_revision_view_resource(revision_id: int) -> str:
+    """Retrieve a revision from Phabricator alongside its comments."""
+    return PhabricatorPatch(revision_id=revision_id).to_md()
+
+
+@mcp.tool()
+def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
     return PhabricatorPatch(revision_id=revision_id).to_md()
 
