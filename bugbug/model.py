@@ -415,7 +415,8 @@ class Model:
         logger.info(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
         self.clf.fit(X_train, self.le.transform(y_train))
-        logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
+        if hasattr(self.clf.steps[-1][1], "n_features_in_"):
+            logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
 
         logger.info("Model trained")
 
