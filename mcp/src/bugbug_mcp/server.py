@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import httpx
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
 from pydantic import Field
 
@@ -262,18 +263,30 @@ llms_txt = FileResource(
 mcp.add_resource(llms_txt)
 
 
-@mcp.resource(
-    uri="docs://{doc_path*}",
-    name="Content from Documentation",
-    mime_type="text/markdown",
-)
-async def handle_doc_view_resource(doc_path: str) -> str:
+@mcp.tool()
+async def read_fx_doc_section(
+    doc_path: Annotated[
+        str,
+        "The path to a documentation section to read as listed in the docs://llms.txt resource on this MCP",
+    ],
+) -> str:
     """Retrieve the content of a section from Firefox Source Tree Documentation."""
+    if not doc_path.endswith(".md") and not doc_path.endswith(".rst"):
+        raise ToolError(
+            f"Invalid path: {doc_path}. Path must end with `.rst` or `.md`. Use the docs://llms.txt resource on this MCP to find valid paths."
+        )
+
     url = f"https://firefox-source-docs.mozilla.org/_sources/{doc_path}.txt"
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
+        if response.status_code == 404:
+            raise ToolError(
+                f"Invalid path: {doc_path}. Use the docs://llms.txt resource on this MCP to find valid paths."
+            )
+
         response.raise_for_status()
+
         return response.text
 
 
