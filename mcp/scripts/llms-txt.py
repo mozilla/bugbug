@@ -324,7 +324,7 @@ def generate_llms_txt():
     output_lines.append("> Comprehensive documentation for Firefox development")
     output_lines.append("")
     output_lines.append(
-        "To read any document below, use the `docs://` URI scheme to retrieve it as a resource from this MCP server."
+        "To read any document below, use the `read_fx_doc_section` tool from this MCP server."
     )
     output_lines.append("")
 
