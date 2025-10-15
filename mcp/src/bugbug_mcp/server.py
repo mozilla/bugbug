@@ -256,7 +256,7 @@ llms_txt = FileResource(
     uri="docs://llms.txt",
     path=Path("./static/llms.txt").resolve(),
     name="Firefox Source Docs (llms.txt)",
-    description="Firefox Source Tree Documentation which help with Firefox related workflows and troubleshooting. You must use it to understand questions about Firefox development, architecture, and best practices before trying to search anywhere else. You need to read the relevant sections to get enough context to perform your task.",
+    description="Firefox Source Tree Documentation which helps with Firefox related workflows and troubleshooting. You must use it to understand questions about Firefox development, architecture, and best practices before trying to search anywhere else. You need to read the relevant sections to get enough context to perform your task.",
     mime_type="text/markdown",
 )
 mcp.add_resource(llms_txt)
