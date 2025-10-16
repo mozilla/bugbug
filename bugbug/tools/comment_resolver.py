@@ -1,676 +1,382 @@
-import csv
-import json
 import logging
-import re
-from types import SimpleNamespace
 
-from langchain_openai import OpenAIEmbeddings
-from libmozdata.phabricator import PhabricatorAPI
-from qdrant_client import QdrantClient
+import requests
+from langchain.chains import LLMChain
+from langchain.prompts import (
+    PromptTemplate,
+)
 
-from bugbug.generative_model_tool import GenerativeModelTool
-from bugbug.phabricator import fetch_diff_from_url
+from bugbug.phabricator import get, set_api_key
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret
-from bugbug.vectordb import QdrantVectorDB, VectorPoint
 
 review_data = PhabricatorReviewData()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
+PHABRICATOR_API_URL = "https://phabricator.services.mozilla.com/api/"
+PHABRICATOR_API_TOKEN = get_secret("PHABRICATOR_TOKEN")
 
 
-class LocalQdrantVectorDB(QdrantVectorDB):
-    def __init__(self, collection_name: str, location: str = "http://localhost:6333"):
-        self.collection_name = collection_name
-        self.client = QdrantClient(location=location)
-
-    def setup(self):
-        super().setup()
-
-    def delete_collection(self):
-        self.client.delete_collection(self.collection_name)
-
-
-class FixCommentDB:
-    def __init__(self, db: LocalQdrantVectorDB):
-        self.db = db
-        self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
-        )
-
-    def line_to_vector_point(self, line: str):
-        data = json.loads(line)
-        comment_content = data["comment"]["content"]
-
-        embedding = self.embeddings.embed_query(comment_content)
-
-        vector_point = VectorPoint(
-            id=data["comment"]["id"],
-            vector=embedding,
-            payload={"comment": comment_content, "fix_info": data},
-        )
-        return vector_point
-
-    def upload_dataset(self, dataset_file: str):
-        with open(dataset_file, "r") as f:
-            points = []
-            for line in f:
-                vector_point = self.line_to_vector_point(line)
-                points.append(vector_point)
-            self.db.insert(points)
-
-    def search_similar_comments(
-        self, comment_content: str, revision_id: int, diff_length_limit: int, top_n: int
-    ):
-        query_embedding = self.embeddings.embed_query(comment_content)
-        results = self.db.search(query_embedding)
-        similar_comments = []
-
-        for result in results:
-            if (
-                result.payload["fix_info"]["revision_id"] != revision_id
-                and len(result.payload["fix_info"]["fix_patch_diff"])
-                < diff_length_limit
-            ):
-                similar_comments.append(
-                    (result.payload["comment"], result.payload["fix_info"])
-                )
-
-                if len(similar_comments) >= top_n:
-                    break
-
-        return similar_comments if similar_comments else None
-
-
-class CodeGeneratorTool(GenerativeModelTool):
-    version = "0.0.1"
-
+class CodeGeneratorTool:
     def __init__(
         self,
+        client,
+        model,
+        hunk_size,
         llm,
-        db: FixCommentDB,
     ) -> None:
-        self.db = db
+        self.client = client
+        self.model = model
+        self.hunk_size = hunk_size
+        self.default_hunk_size = hunk_size
         self.llm = llm
+        self.actionability_prompt_template = PromptTemplate(
+            input_variables=["comment", "code"],
+            template="""Given the following code and a reviewer comment, determine if the comment is actionable.
+An actionable comment is one that:
+- Clearly requests a change in the code.
+- Does not require external actions (e.g. filing a bug).
+- Is not just pointing something out without asking for changes.
+- Is not too vague or unclear to act on.
+Respond with only YES or NO.
+Comment:
+{comment}
+Code:
+{code}
+""",
+        )
 
-    def run(self, prompt: str):
-        messages = [("system", "You are a code review bot."), ("user", prompt)]
-        response = self.llm.invoke(messages)
-        return response.content
+        self.actionability_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.actionability_prompt_template,
+        )
+
+        self.generate_fix_prompt_template = PromptTemplate(
+            input_variables=[
+                "comment_start_line",
+                "comment_end_line",
+                "filepath",
+                "comment_content",
+                "numbered_snippet",
+            ],
+            template="""You are an expert Firefox software engineer who must modify a Code Snippet based on a given Code Review Comment. The section of the code that the comment refers to is explicitly marked with `>>> START COMMENT <<<` and `>>> END COMMENT <<<` within the snippet.
+Instructions:
+- The new code changes must be presented in valid Git diff format.
+- Lines added should have a `+` prefix.
+- Lines removed should have a `-` prefix.
+- Lines that are modified should have two lines, one with `-` and one with `+` prefix.
+- Remove the line number prefix and the comment markers in your final diff output. They are only there for your reference.
+- You are not limited to modifying only the marked section; make any necessary changes to improve the code according to the review comment.
+- If the comment is suggesting to either delete or modify a code comment, settle with deleting it unless more context suggests modification.
+- Your response must contain changes—do not return an empty diff.
+- If the comment spans a singular line, it is most likely referring to the first line (e.g. line 10 to 11, it is most likely referring to line 10).
+- Do NOT repeat the prompt or add any extra text.
+- Do NOT call functions that don't exist.
+Input Details:
+Comment Start Line: {comment_start_line}
+Comment End Line: {comment_end_line}
+Comment File: {filepath}
+Code Review Comment: {comment_content}
+Code Snippet (with Inline Comment Markers):
+{numbered_snippet}
+Example Output Format:
+--- a/File.cpp
++++ b/File.cpp
+@@ -10,7 +10,7 @@
+- old line
++ new line
+Expected Output Format:
+Your response must only contain the following, with no extra text:
+(diff output here)
+""",
+        )
+        self.generate_fix_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.generate_fix_prompt_template,
+        )
+
+        self.more_context_prompt_template = PromptTemplate(
+            input_variables=["comment_content", "snippet_preview"],
+            template="""We have the following Code Review Comment:
+{comment_content}
+Below is a snippet of code we believe might need changes (short hunk):
+{snippet_preview}
+Question: With this snippet, can you confidently fix the code review comment,
+or do you need a larger snippet for more context? You need to be 100% sure you
+have ALL the code necessary to fix the comment.
+Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
+""",
+        )
+        self.more_context_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.more_context_prompt_template,
+        )
+
+        self.clarify_comment_prompt_template = PromptTemplate(
+            input_variables=["raw_comment", "code_snippet"],
+            template="""You are helping a tool understand a code review comment more precisely.
+Here is the raw reviewer comment:
+{raw_comment}
+Here is the code being reviewed:
+{code_snippet}
+Rephrase the comment so it can be clearly understood and acted upon by an LLM.
+Be specific about what to do in the code (e.g. "change this to that" or "add this here"). Rephrase the reviewer comment so that it's precise and does not overgeneralize.
+Output only the rephrased, actionable version of the comment, without any explanation.
+""",
+        )
+
+        self.clarify_comment_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.clarify_comment_prompt_template,
+        )
+
+    def get_comment_transaction_from_revision(self, revision_id, comment_id):
+        set_api_key(PHABRICATOR_API_URL, PHABRICATOR_API_TOKEN)
+
+        revisions = get(rev_ids=[revision_id])
+
+        if not revisions:
+            return None
+
+        for revision in revisions:
+            for transaction in revision.get("transactions", []):
+                if transaction["type"] == "inline":
+                    for comment in transaction.get("comments", []):
+                        if comment["id"] == comment_id:
+                            return transaction
+
+    def get_changeset_id_for_file(self, diff_id, file_path):
+        url = f"{PHABRICATOR_API_URL}differential.diff.search"
+        payload = {"api.token": PHABRICATOR_API_TOKEN, "constraints[ids][0]": diff_id}
+
+        response = requests.post(url, data=payload)
+        data = response.json()
+
+        if data.get("error_info"):
+            raise Exception(f"Error retrieving diff PHID: {data['error_info']}")
+
+        results = data.get("result", {}).get("data", [])
+        if not results:
+            raise Exception(f"No results found for Diff ID {diff_id}")
+
+        diff_phid = results[0]["phid"]
+
+        url = f"{PHABRICATOR_API_URL}differential.changeset.search"
+        changesets = []
+        after_cursor = None
+
+        while True:
+            payload = {
+                "api.token": PHABRICATOR_API_TOKEN,
+                "constraints[diffPHIDs][0]": diff_phid,
+            }
+            if after_cursor:
+                payload["after"] = after_cursor
+
+            response = requests.post(url, data=payload)
+            data = response.json()
+
+            if data.get("error_info"):
+                raise Exception(f"Error retrieving changesets: {data['error_info']}")
+
+            results = data.get("result", {}).get("data", [])
+            changesets.extend(results)
+
+            after_cursor = data.get("result", {}).get("cursor", {}).get("after")
+            if not after_cursor:
+                break
+
+        for changeset in changesets:
+            if changeset["fields"]["path"]["displayPath"] == file_path:
+                return changeset["id"]
+
+        raise Exception(f"File '{file_path}' not found in Diff {diff_id}")
+
+    def fetch_file_content_from_url(self, changeset_id):
+        url = f"https://phabricator.services.mozilla.com/differential/changeset/?view=new&ref={changeset_id}"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.text
+
+    def create_numbered_snippet(
+        self,
+        comment_start_line,
+        comment_end_line,
+        raw_file_content,
+        hunk_size,
+    ):
+        lines = raw_file_content.splitlines()
+        total_lines = len(lines)
+
+        start_line = max(comment_start_line - hunk_size, 1)
+        end_line = min(comment_end_line + hunk_size, total_lines)
+
+        snippet_lines = []
+        for i in range(start_line, end_line + 1):
+            prefix = ""
+
+            if i == comment_start_line:
+                prefix = ">>> START COMMENT <<<\n"
+            if i == comment_end_line:
+                snippet_lines.append(f"{prefix}{i} {lines[i - 1]}\n>>> END COMMENT <<<")
+                continue
+
+            snippet_lines.append(f"{prefix}{i} {lines[i - 1]}")
+
+        numbered_snippet = "\n".join(snippet_lines)
+        return numbered_snippet
+
+    def ask_llm_if_needs_more_context(
+        self,
+        comment_content,
+        snippet_preview,
+    ):
+        answer = self.more_context_chain.run(
+            {"comment_content": comment_content, "snippet_preview": snippet_preview}
+        )
+        return answer
+
+    def clarify_comment(self, raw_comment, snippet_preview):
+        return self.clarify_comment_chain.run(
+            {
+                "raw_comment": raw_comment,
+                "code_snippet": snippet_preview,
+            }
+        )
 
     def generate_fix(
         self,
-        comment,
-        relevant_diff,
-        prompt_type,
-        hunk_size,
-        similar_comments_and_fix_infos,
-        evaluation,
-        generated_fix,
+        revision_id,
+        diff_id,
+        comment_id,
     ):
-        if not evaluation:
-            prompt = generate_prompt(
-                comment.content,
-                relevant_diff,
-                comment.start_line,
-                comment.end_line,
-                similar_comments_and_fix_infos,
-                prompt_type,
-                hunk_size,
+        self.hunk_size = self.default_hunk_size
+        transaction = self.get_comment_transaction_from_revision(
+            revision_id, comment_id
+        )
+
+        filepath = transaction["fields"]["path"]
+        comment_start_line = transaction["fields"]["line"]
+        comment_end_line = comment_start_line + transaction["fields"]["length"]
+
+        for comment in transaction["comments"]:
+            if comment["id"] == comment_id:
+                comment_content = comment["content"]["raw"]
+                break
+
+        changeset_id = self.get_changeset_id_for_file(diff_id, filepath)
+        raw_file_content = self.fetch_file_content_from_url(changeset_id)
+        step_size = 10
+        max_hunk_size = 30
+
+        initial_snippet = "\n".join(
+            raw_file_content.splitlines()[
+                max(0, comment_start_line - 5) : comment_end_line + 5
+            ]
+        )
+        actionability = (
+            self.actionability_chain.run(
+                {
+                    "comment": comment_content,
+                    "code": initial_snippet,
+                }
             )
-        else:
-            prompt = f"""
-            Comment: {comment.content}
-            Diff (before fix): {relevant_diff}
-            Generated Fix: {generated_fix}
+            .strip()
+            .upper()
+        )
 
-            Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-            """
+        if actionability != "YES":
+            logger.info("Comment is not actionable. Skipping.")
+            return "Not Actionable"
 
-        generated_fix = self.run(prompt=prompt)
+        while self.hunk_size <= max_hunk_size:
+            lines = raw_file_content.splitlines()
+            total_lines = len(lines)
+            snippet_start = max(comment_start_line - self.hunk_size, 1)
+            snippet_end = min(comment_end_line + self.hunk_size, total_lines)
+            snippet_preview_lines = lines[snippet_start - 1 : snippet_end]
+            snippet_preview = "\n".join(snippet_preview_lines)
+
+            answer = self.ask_llm_if_needs_more_context(
+                comment_content=comment_content,
+                snippet_preview=snippet_preview,
+            ).lower()
+
+            if answer == "yes i can fix":
+                break
+            elif answer == "no i need more context":
+                self.hunk_size += step_size
+            else:
+                break
+
+        clarified_comment = self.clarify_comment(
+            raw_comment=comment_content, snippet_preview=snippet_preview
+        )
+
+        numbered_snippet = self.create_numbered_snippet(
+            comment_start_line=comment_start_line,
+            comment_end_line=comment_end_line,
+            raw_file_content=raw_file_content,
+            hunk_size=self.hunk_size,
+        )
+
+        generated_fix = self.generate_fix_chain.run(
+            {
+                "comment_start_line": comment_start_line,
+                "comment_end_line": comment_end_line,
+                "filepath": filepath,
+                "comment_content": clarified_comment,
+                "numbered_snippet": numbered_snippet,
+            }
+        )
         return generated_fix
 
+    def generate_fixes_for_all_comments(self, revision_id):
+        set_api_key(PHABRICATOR_API_URL, PHABRICATOR_API_TOKEN)
 
-class CodeGeneratorEvaluatorTool(GenerativeModelTool):
-    version = "0.0.1"
+        revisions = get(rev_ids=[int(revision_id)])
+        if not revisions:
+            raise Exception(f"No revision found for ID {revision_id}")
 
-    def __init__(self, llm, db) -> None:
-        self.db = db
-        self.llm = llm
+        revision = revisions[0]
+        latest_diff_id = int(revision["fields"]["diffID"])
+        comment_map = {}
 
-    def run(self, prompt: str):
-        messages = [
-            (
-                "system",
-                "You are an evaluator of code generation to address review comments.",
-            ),
-            ("user", prompt),
-        ]
-        response = self.llm.invoke(messages)
-        return response.content
+        reviewer_phids = {
+            reviewer["reviewerPHID"]
+            for reviewer in revision.get("attachments", {})
+            .get("reviewers", {})
+            .get("reviewers", [])
+        }
 
-    def generate_fix(self, comment, relevant_diff, generated_fix):
-        prompt = f"""
-        Comment: {comment}
-        Diff (before fix): {relevant_diff}
-        Generated Fix: {generated_fix}
-
-        Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-        """
-        qualitative_feedback = self.run(prompt=prompt)
-        return qualitative_feedback
-
-
-def fetch_patch_diff(patch_id):
-    diffs = api.search_diffs(diff_id=patch_id)
-    if diffs:
-        return diffs
-    else:
-        logger.error(f"No diffs found for patch ID: {patch_id}")
-        return None
-
-
-def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size):
-    file_diff_pattern = rf"diff --git a/{re.escape(filename)} b/{re.escape(filename)}\n.*?(?=\ndiff --git|$)"
-    match = re.search(file_diff_pattern, patch_diff, re.DOTALL)
-
-    if match:
-        hunk_header_pattern = r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@"
-        match2 = re.finditer(hunk_header_pattern, match.group(0))
-        first_index = None
-        last_index = None
-
-        for m in match2:
-            diff_lines = match.group(0).split("\n")
-
-            deletion_start_line = int(m.group(1))
-            deletion_num_lines = int(m.group(2))
-            addition_start_line = int(m.group(3))
-            addition_num_lines = int(m.group(4))
-
-            if (
-                start_line < deletion_start_line and start_line < addition_start_line
-            ) or (
-                start_line > (deletion_start_line + deletion_num_lines)
-                and start_line > (addition_start_line + addition_num_lines)
-            ):
+        for transaction in revision.get("transactions", []):
+            if transaction["type"] != "inline":
                 continue
 
-            added_lines = []
-            deleted_lines = []
-
-            for line in diff_lines[diff_lines.index(m.group()) + 1 :]:
-                if line.startswith("-"):
-                    deleted_lines.append(line)
-                elif line.startswith("+"):
-                    added_lines.append(line)
-
-            if not deleted_lines or not added_lines:
-                logger.error(f"No deleted or added lines found for file: {filename}")
-                return None
-
-            deletion_start_diff_line = deleted_lines[
-                min(
-                    len(deleted_lines) - 1,
-                    max(0, start_line - deletion_start_line - hunk_size),
-                )
-            ]
-            deletion_end_diff_line = deleted_lines[
-                max(
-                    0,
-                    min(
-                        len(deleted_lines) - 1,
-                        end_line - deletion_start_line + hunk_size,
-                    ),
-                )
-            ]
-
-            addition_start_diff_line = added_lines[
-                min(
-                    len(added_lines) - 1,
-                    max(0, start_line - addition_start_line - hunk_size),
-                )
-            ]
-            addition_end_diff_line = added_lines[
-                max(
-                    0,
-                    min(
-                        len(added_lines) - 1, end_line - addition_start_line + hunk_size
-                    ),
-                )
-            ]
-
-            first_index = None
-            last_index = None
-
-            diff_lines = match.group(0).split("\n")
-
-            for i, line in enumerate(diff_lines):
-                if line in [
-                    deletion_start_diff_line,
-                    deletion_end_diff_line,
-                    addition_start_diff_line,
-                    addition_end_diff_line,
-                ]:
-                    if first_index is None:
-                        first_index = i
-                    last_index = i
-
-        if first_index is not None and last_index is not None:
-            relevant_diff = "\n".join(diff_lines[first_index : last_index + 1])
-            return relevant_diff
-        else:
-            logger.error(f"No relevant diff found for lines: {start_line}-{end_line}")
-            return None
-    else:
-        logger.error(f"No diff found for file: {filename}")
-        return None
-
-
-def get_revision_id_from_patch(patch_id):
-    diffs = api.search_diffs(diff_id=patch_id)
-
-    if diffs:
-        revision_phid = diffs[0]["revisionPHID"]
-
-        revision = api.load_revision(rev_phid=revision_phid)
-
-        return revision["id"]
-    else:
-        logger.error(f"No diffs found for patch ID: {patch_id}")
-        return None
-
-
-def generate_prompt(
-    comment_content,
-    relevant_diff,
-    start_line,
-    end_line,
-    similar_comments_and_fix_infos,
-    prompt_type,
-    hunk_size,
-):
-    if prompt_type == "zero-shot":
-        prompt = f"""
-        CONTEXT:
-        You are a code review bot that generates fixes in code given an inline review comment.
-        You will be provided with the COMMENT, the LINE NUMBERS the comment is referring to,
-        and the relevant DIFF for the file affected. Your goal is to generate a code fix based
-        on the COMMENT, LINE NUMBERS, and DIFF provided, and nothing more. Generate ONLY the
-        lines you are adding/deleting, indicated by + and -. For example, if you are modifying
-        a single line, show that you are deleting (-) the line from the original diff and adding
-        (+) the fixed line. The line numbers help to contextualize the changes within the diff.
-        ONLY address the comment. Do not make any other changes.
-
-        COMMENT:
-        "{comment_content}"
-
-        LINE NUMBERS:
-        {start_line}-{end_line}
-
-        DIFF:
-        ```
-        {relevant_diff}
-        ```
-
-        FIX:
-        """
-    if prompt_type == "single-shot":
-        similar_comment, fix_info = similar_comments_and_fix_infos[0]
-
-        example_initial_diff = fetch_diff_from_url(
-            fix_info["revision_id"], fix_info["initial_patch_id"], single_patch=True
-        )
-        example_relevant_initial_diff = extract_relevant_diff(
-            example_initial_diff,
-            fix_info["comment"]["filename"],
-            fix_info["comment"]["start_line"],
-            fix_info["comment"]["end_line"],
-            hunk_size,
-        )
-
-        example_relevant_fix_diff = extract_relevant_diff(
-            fix_info["fix_patch_diff"],
-            fix_info["comment"]["filename"],
-            fix_info["comment"]["start_line"],
-            fix_info["comment"]["end_line"],
-            hunk_size,
-        )
-
-        prompt = f"""
-        CONTEXT:
-        You are a code review bot that generates fixes in code given an inline review comment.
-        You will be provided with the COMMENT, the LINE NUMBERS the comment is referring to,
-        and the relevant DIFF for the file affected. Your goal is to generate a code fix based
-        on the COMMENT, LINE NUMBERS, and DIFF provided, and nothing more. Generate ONLY the
-        lines you are adding/deleting, indicated by + and -. For example, if you are modifying
-        a single line, show that you are deleting (-) the line from the original diff and adding
-        (+) the fixed line. The line numbers help to contextualize the changes within the diff.
-        An EXAMPLE has been provided for your reference. ONLY address the comment. Do not make
-        any other changes.
-
-        EXAMPLE:
-        COMMENT:
-        "{similar_comment}"
-
-        LINE NUMBERS:
-        {fix_info["comment"]["start_line"]}-{fix_info["comment"]["end_line"]}
-
-        DIFF:
-        ```
-        {example_relevant_initial_diff}
-        ```
-
-        FIX:
-        ```
-        {example_relevant_fix_diff}
-        ```
-
-        YOUR TURN:
-        COMMENT:
-        "{comment_content}"
-
-        LINE NUMBERS:
-        {start_line}-{end_line}
-
-        DIFF:
-        ```
-        {relevant_diff}
-        ```
-
-        FIX:
-        """
-    if prompt_type == "chain-of-thought":
-        prompt = f"""
-        CONTEXT:
-        You are a code review bot that generates fixes in code based on an inline review comment.
-        You will be provided with the COMMENT, the LINE NUMBERS the comment is referring to,
-        and the relevant DIFF for the affected file. Your goal is to carefully analyze the COMMENT,
-        LINE NUMBERS, and DIFF provided, and generate a code fix accordingly. Only make changes
-        directly relevant to the feedback.
-
-        THINKING PROCESS:
-        1. **Understand the COMMENT**: Carefully read the comment to grasp the reviewer’s intention.
-        2. **Locate the Relevant Lines**: Use the provided LINE NUMBERS to pinpoint the exact lines
-           in the DIFF that need modification.
-        3. **Analyze the DIFF**: Review the current state of the code in the DIFF to understand
-           what is currently implemented.
-        4. **Determine Necessary Changes**: Based on the COMMENT, decide what needs to be added,
-           modified, or removed in the code. Focus on addressing the feedback without introducing
-           unnecessary changes.
-        5. **Generate the FIX**: Output the exact lines you are adding or deleting, using + and -
-           symbols to indicate modifications. For example, if a line is being modified, show it as
-           being removed (-) and then the corrected line as being added (+). ONLY address the comment.
-           Do not make any other changes.
-
-        COMMENT:
-        "{comment_content}"
-
-        LINE NUMBERS:
-        {start_line}-{end_line}
-
-        DIFF:
-        ```
-        {relevant_diff}
-        ```
-
-        FIX:
-        """
-
-    if prompt_type == "multi-shot":
-        examples = ""
-        for similar_comment, fix_info in similar_comments_and_fix_infos:
-            example_initial_diff = fetch_diff_from_url(
-                fix_info["revision_id"], fix_info["initial_patch_id"], single_patch=True
-            )
-            example_relevant_initial_diff = extract_relevant_diff(
-                example_initial_diff,
-                fix_info["comment"]["filename"],
-                fix_info["comment"]["start_line"],
-                fix_info["comment"]["end_line"],
-                hunk_size,
-            )
-            example_relevant_fix_diff = extract_relevant_diff(
-                fix_info["fix_patch_diff"],
-                fix_info["comment"]["filename"],
-                fix_info["comment"]["start_line"],
-                fix_info["comment"]["end_line"],
-                hunk_size,
-            )
-            examples += f"""
-            EXAMPLE:
-            COMMENT:
-            "{similar_comment}"
-
-            LINE NUMBERS:
-            {fix_info["comment"]["start_line"]}-{fix_info["comment"]["end_line"]}
-
-            DIFF:
-            ```
-            {example_relevant_initial_diff}
-            ```
-
-
-            FIX:
-            {example_relevant_fix_diff}
-            """
-
-        prompt = f"""
-        CONTEXT:
-        You are a code review bot that generates fixes in code given an inline review comment.
-        You will be provided with the COMMENT, the LINE NUMBERS the comment is referring to,
-        and the relevant DIFF for the file affected. Your goal is to generate a code fix based
-        on the COMMENT, LINE NUMBERS, and DIFF provided, and nothing more. Generate ONLY the
-        lines you are adding/deleting, indicated by + and -. For example, if you are modifying
-        a single line, show that you are deleting (-) the line from the original diff and adding
-        (+) the fixed line. The line numbers help to contextualize the changes within the diff.
-        Two EXAMPLES has been provided for your reference. ONLY address the comment. Do not make
-        any other changes.
-
-        EXAMPLES:
-        {examples}
-
-        YOUR TURN:
-        COMMENT:
-        "{comment_content}"
-
-        LINE NUMBERS:
-        {start_line}-{end_line}
-
-        DIFF:
-        ```
-        {relevant_diff}
-        ```
-
-        FIX:
-        """
-
-    return prompt
-
-
-def generate_fixes(
-    llm_tool,
-    db,
-    generation_limit,
-    diff_length_limits,
-    prompt_types,
-    hunk_sizes,
-    output_csv,
-):
-    counter = 0
-    revision_ids = extract_revision_id_list_from_dataset("data/fixed_comments.json")
-
-    with open(output_csv, mode="w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(
-            [
-                "Revision ID",
-                "Patch ID",
-                "Prompt Type",
-                "Length Limit",
-                "Hunk Size",
-                "Comment Length",
-                "Generated Code Length",
-                "File Path",
-                "Comment",
-                "Start Line",
-                "End Line",
-                "Relevant Diff",
-                "Generated Fix",
-            ]
-        )
-
-        for i, (patch_id, comments) in enumerate(
-            review_data.get_all_inline_comments(lambda c: True)
-        ):
-            revision_id = get_revision_id_from_patch(patch_id)
-
-            if not revision_id:
-                logger.error(f"Skipping Patch ID {patch_id} as no revision ID found.")
+            author_phid = transaction["authorPHID"]
+            if author_phid not in reviewer_phids:
                 continue
 
-            if revision_id not in revision_ids:
-                logger.error(
-                    f"Skipping Patch ID {patch_id} as revision ID {revision_id} not in dataset."
-                )
-                continue
-
-            diff = fetch_diff_from_url(revision_id, patch_id, single_patch=True)
-
-            if not diff:
-                logger.error(f"Skipping Patch ID {patch_id} as no diff found.")
-                continue
-
-            for comment in comments:
-                if counter >= generation_limit:
-                    return
-
-                for hunk_size in hunk_sizes:
-                    if counter >= generation_limit:
-                        break
-
-                    filename = comment.filename
-                    relevant_diff = extract_relevant_diff(
-                        diff, filename, comment.start_line, comment.end_line, hunk_size
+            for comment in transaction.get("comments", []):
+                comment_id = comment["id"]
+                try:
+                    fix = self.generate_fix(
+                        revision_id=revision_id,
+                        diff_id=latest_diff_id,
+                        comment_id=comment_id,
                     )
-
-                    if relevant_diff:
-                        for prompt_type in prompt_types:
-                            if counter >= generation_limit:
-                                break
-
-                            for diff_length_limit in diff_length_limits:
-                                if counter >= generation_limit:
-                                    break
-
-                                similar_comments_and_fix_infos = (
-                                    db.search_similar_comments(
-                                        comment.content,
-                                        revision_id,
-                                        diff_length_limit,
-                                        2,
-                                    )
-                                )
-
-                                if similar_comments_and_fix_infos is None:
-                                    logger.info(
-                                        f"No similar comment found for comment: {comment.content}"
-                                    )
-                                    continue
-
-                                generated_fix = llm_tool.generate_fix(
-                                    comment,
-                                    relevant_diff,
-                                    prompt_type,
-                                    hunk_size,
-                                    similar_comments_and_fix_infos,
-                                    False,
-                                    None,
-                                )
-
-                                comment_length = len(comment.content)
-                                generated_code_length = len(generated_fix)
-                                file_path = filename
-
-                                writer.writerow(
-                                    [
-                                        revision_id,
-                                        patch_id,
-                                        prompt_type,
-                                        diff_length_limit,
-                                        hunk_size,
-                                        comment_length,
-                                        generated_code_length,
-                                        file_path,
-                                        comment.content,
-                                        comment.start_line,
-                                        comment.end_line,
-                                        relevant_diff,
-                                        generated_fix,
-                                    ]
-                                )
-
-                                counter += 1
-
-                    else:
-                        print(f"No relevant diff found for Comment ID {comment.id}.\n")
-
-
-def extract_revision_id_list_from_dataset(dataset_file):
-    revision_ids = []
-
-    with open(dataset_file, "r") as f:
-        for line in f:
-            data = json.loads(line)
-            revision_ids.append(data["revision_id"])
-
-    return revision_ids
-
-
-def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
-    revision_details = api.load_revision(rev_id=revision_id)
-    revision_phid = revision_details["phid"]
-    transactions = api.request("transaction.search", objectIdentifier=revision_phid)
-
-    target_comment = {}
-
-    found = False
-
-    for transaction in transactions["data"]:
-        if transaction["type"] == "inline":
-            for comment in transaction["comments"]:
-                if comment["id"] == comment_id:
-                    target_comment["filepath"] = transaction["fields"]["path"]
-                    target_comment["content"] = comment["content"]
-                    target_comment["start_line"] = transaction["fields"]["line"]
-                    target_comment["end_line"] = (
-                        transaction["fields"]["line"] + transaction["fields"]["length"]
+                    is_actionable = fix != "Not Actionable"
+                    comment_map[comment_id] = {
+                        "fix": fix,
+                        "is_actionable": is_actionable,
+                    }
+                except Exception as e:
+                    logger.warning(
+                        f"Error generating fix for comment {comment_id}: {e}"
                     )
-                    found = True
-                    break
-        if found:
-            break
+                    comment_map[comment_id] = {
+                        "fix": f"Error: {e}",
+                        "is_actionable": False,
+                    }
 
-    target_comment = SimpleNamespace(**target_comment)
-
-    diff = fetch_diff_from_url(revision_id, diff_id, single_patch=True)
-    relevant_diff = extract_relevant_diff(
-        diff,
-        target_comment.filepath,
-        target_comment.start_line,
-        target_comment.end_line,
-        hunk_size=100,
-    )
-
-    generated_fix = llm_tool.generate_fix(
-        target_comment,
-        relevant_diff,
-        prompt_type="zero-shot",
-        hunk_size=100,
-        similar_comments_and_fix_infos=None,
-        evaluation=False,
-        generated_fix=None,
-    )
-
-    print(generated_fix)
+        return comment_map
