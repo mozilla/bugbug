@@ -3,22 +3,32 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Backward-compatible exports for bugbug.tools.
+"""Code review agent and related modules.
 
-This module provides backward compatibility by re-exporting commonly used
-classes from the new modular structure.
+This package provides:
+- Agent: CodeReviewTool for automated code review
+- Database: Vector database for review comments and feedback
+- Prompts: Templates for code review
+- LangChain Tools: Tools for the review agent
+
+For backward compatibility, also exports platform classes and utilities.
 """
 
-# Core data types
-# Code review
+# Agent
 from bugbug.tools.code_review.agent import TARGET_SOFTWARE, CodeReviewTool
-from bugbug.tools.code_review.database import ReviewCommentsDB, SuggestionsFeedbackDB
 
-# Comment resolution
-from bugbug.tools.comment_resolution.agent import CodeGeneratorTool
+# Databases
+from bugbug.tools.code_review.database import (
+    EvaluationAction,
+    ReviewCommentsDB,
+    SuggestionFeedback,
+    SuggestionsFeedbackDB,
+)
+
+# Data types (backward compatibility)
 from bugbug.tools.core.data_types import InlineComment, ReviewRequest
 
-# Core exceptions
+# Exceptions (backward compatibility)
 from bugbug.tools.core.exceptions import (
     FileNotInPatchError,
     HunkNotInPatchError,
@@ -26,16 +36,22 @@ from bugbug.tools.core.exceptions import (
     ModelResultError,
 )
 
-# Platform implementations
+# Base classes (backward compatibility)
 from bugbug.tools.core.platforms.base import Patch, ReviewData
+
+# Platforms (backward compatibility)
 from bugbug.tools.core.platforms.bugzilla import Bug
 from bugbug.tools.core.platforms.phabricator import (
+    PhabricatorComment,
+    PhabricatorGeneralComment,
+    PhabricatorInlineComment,
     PhabricatorPatch,
     PhabricatorReviewData,
+    phabricator_transaction_to_comment,
 )
 from bugbug.tools.core.platforms.swarm import SwarmPatch, SwarmReviewData
 
-# Utilities
+# Utilities (backward compatibility)
 from bugbug.tools.core.utils.formatting import (
     find_comment_scope,
     format_patch_set,
@@ -43,13 +59,21 @@ from bugbug.tools.core.utils.formatting import (
     parse_model_output,
 )
 
-# For backward compatibility - keep the review_data_classes dict
+# Legacy compatibility
 review_data_classes = {
     "phabricator": PhabricatorReviewData,
     "swarm": SwarmReviewData,
 }
 
 __all__ = [
+    # Agent
+    "CodeReviewTool",
+    "TARGET_SOFTWARE",
+    # Databases
+    "EvaluationAction",
+    "ReviewCommentsDB",
+    "SuggestionFeedback",
+    "SuggestionsFeedbackDB",
     # Data types
     "InlineComment",
     "ReviewRequest",
@@ -61,25 +85,23 @@ __all__ = [
     # Base classes
     "Patch",
     "ReviewData",
-    # Platforms
-    "Bug",
+    # Phabricator
+    "PhabricatorComment",
+    "PhabricatorGeneralComment",
+    "PhabricatorInlineComment",
     "PhabricatorPatch",
     "PhabricatorReviewData",
+    "phabricator_transaction_to_comment",
+    # Swarm
     "SwarmPatch",
     "SwarmReviewData",
+    # Bugzilla
+    "Bug",
     # Utilities
     "find_comment_scope",
     "format_patch_set",
     "parse_model_output",
     "generate_processed_output",
-    # Agents
-    "CodeReviewTool",
-    "CodeGeneratorTool",
-    # Databases
-    "ReviewCommentsDB",
-    "SuggestionsFeedbackDB",
-    # Constants
-    "TARGET_SOFTWARE",
     # Legacy
     "review_data_classes",
 ]
