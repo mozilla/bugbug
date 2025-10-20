@@ -5,13 +5,14 @@
 
 import logging
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import lru_cache
-from typing import Sequence
+from typing import Any, Iterable, Sequence
 from urllib.parse import urlparse
 
 import orjson
 import requests
+import rs_parsepatch
 import zstandard
 from redis import Redis
 
@@ -19,6 +20,7 @@ from bugbug import bugzilla, repository, test_scheduling
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testselect
+from bugbug.repository import CommitDict
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -249,10 +251,6 @@ def schedule_tests(branch: str, rev: str) -> str:
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"
 
-    test_selection_threshold = float(
-        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
-    )
-
     # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
     # On other repos, only consider "default" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
     if branch == "try":
@@ -270,37 +268,19 @@ def schedule_tests(branch: str, rev: str) -> str:
         include_no_bug=True,
     )
 
-    if len(commits) > 0:
-        testlabelselect_model = MODEL_CACHE.get("testlabelselect")
-        testgroupselect_model = MODEL_CACHE.get("testgroupselect")
+    data = (
+        analyze_patch(commits)
+        if commits
+        else {
+            "tasks": {},
+            "groups": {},
+            "config_groups": {},
+            "reduced_tasks": {},
+            "reduced_tasks_higher": {},
+            "known_tasks": get_known_tasks(),
+        }
+    )
 
-        tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
-
-        reduced = testselect.reduce_configs(
-            set(t for t, c in tasks.items() if c >= 0.8), 1.0
-        )
-
-        reduced_higher = testselect.reduce_configs(
-            set(t for t, c in tasks.items() if c >= 0.9), 1.0
-        )
-
-        groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
-
-        config_groups = testselect.select_configs(groups.keys(), 0.9)
-    else:
-        tasks = {}
-        reduced = set()
-        groups = {}
-        config_groups = {}
-
-    data = {
-        "tasks": tasks,
-        "groups": groups,
-        "config_groups": config_groups,
-        "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
-        "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
-        "known_tasks": get_known_tasks(),
-    }
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
     return "OK"
@@ -332,3 +312,100 @@ def get_config_specific_groups(config: str) -> str:
     )
 
     return "OK"
+
+
+def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
+    from bugbug_http.app import JobInfo
+
+    job = JobInfo(schedule_tests_from_patch, base_rev, patch_hash)
+    LOGGER.info("Processing %s...", job)
+
+    # Retrieve the patch from Redis
+    patch_key = f"bugbug:patch:{patch_hash}"
+    patch_data_raw = redis.get(patch_key)
+
+    if not patch_data_raw:
+        LOGGER.error(f"Patch not found in Redis for hash {patch_hash}")
+        return "NOK"
+
+    patch = patch_data_raw.decode("utf-8")
+
+    # Parse the patch to extract file information
+    LOGGER.info("Parsing patch...")
+    try:
+        patch_data = rs_parsepatch.get_lines(patch.encode("utf-8"))
+    except Exception as e:
+        LOGGER.error(f"Exception while parsing patch: {e}")
+        return "NOK"
+
+    # Extract list of files from patch
+    files = []
+    for stats in patch_data:
+        if "filename" in stats:
+            files.append(stats["filename"])
+
+    if not files:
+        LOGGER.warning("No files found in patch")
+        return "NOK"
+
+    LOGGER.info(f"Found {len(files)} files in patch")
+
+    # Create a minimal Commit object
+    commit = repository.Commit(
+        node=patch_hash,
+        author="patch-user",
+        desc="Patch-based test selection",
+        pushdate=datetime.utcnow(),
+        bug_id=None,
+        backsout=[],
+        backedoutby="",
+        author_email="patch-user@example.com",
+        reviewers=[],
+        ignored=False,
+    )
+
+    # Set files on the commit
+    commit.set_files(files, {})
+
+    # Convert to CommitDict format expected by test selection models
+    commit_dict = commit.to_dict()
+
+    data = analyze_patch([commit_dict])
+
+    setkey(job.result_key, orjson.dumps(data), compress=True)
+
+    return "OK"
+
+
+def analyze_patch(commits: Iterable[CommitDict]) -> dict[str, Any]:
+    test_selection_threshold = float(
+        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
+    )
+
+    testlabelselect_model = MODEL_CACHE.get("testlabelselect")
+    testgroupselect_model = MODEL_CACHE.get("testgroupselect")
+
+    tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+
+    reduced = testselect.reduce_configs(
+        set(t for t, c in tasks.items() if c >= 0.8), 1.0
+    )
+
+    reduced_higher = testselect.reduce_configs(
+        set(t for t, c in tasks.items() if c >= 0.9), 1.0
+    )
+
+    groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+
+    config_groups = testselect.select_configs(groups.keys(), 0.9)
+
+    data = {
+        "tasks": tasks,
+        "groups": groups,
+        "config_groups": config_groups,
+        "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
+        "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
+        "known_tasks": get_known_tasks(),
+    }
+
+    return data
