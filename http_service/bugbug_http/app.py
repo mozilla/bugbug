@@ -36,6 +36,7 @@ from bugbug_http.models import (
     classify_issue,
     get_config_specific_groups,
     schedule_tests,
+    schedule_tests_from_patch,
 )
 from bugbug_http.sentry import setup_sentry
 
@@ -994,6 +995,116 @@ def push_schedules(branch, rev):
 
     if not is_pending(job):
         schedule_job(job)
+    return jsonify({"ready": False}), 202
+
+
+@application.route("/patch/<base_rev>/<patch_hash>/schedules", methods=["GET", "POST"])
+@cross_origin()
+def patch_schedules(base_rev, patch_hash):
+    """
+    ---
+    get:
+      description: Get results of patch-based test selection.
+      summary: Get test selection results for a previously submitted patch.
+      parameters:
+      - name: base_rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+        description: The base commit hash that the patch is based on
+      - name: patch_hash
+        in: path
+        schema:
+          type: str
+          example: abc123def456
+        description: Hash of the patch content for unique identification
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    post:
+      description: Submit a patch for test selection analysis.
+      summary: Determine which tests and tasks should run for a patch.
+      parameters:
+      - name: base_rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+        description: The base commit hash that the patch is based on
+      - name: patch_hash
+        in: path
+        schema:
+          type: str
+          example: abc123def456
+        description: Hash of the patch content for unique identification
+      requestBody:
+        description: The patch content in git diff format
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    job = JobInfo(schedule_tests_from_patch, base_rev, patch_hash)
+    data = get_result(job)
+    if data:
+        return compress_response(data, 200)
+
+    if not is_pending(job):
+        if request.method != "POST":
+            return jsonify({"error": "Patch not submitted yet"}), 404
+
+        patch = request.data.decode("utf-8")
+        if not patch:
+            return jsonify({"error": "Empty patch"}), 400
+
+        patch_key = f"bugbug:patch:{patch_hash}"
+        redis_conn.set(patch_key, patch)
+        redis_conn.expire(patch_key, 7 * 24 * 3600)  # 7 days expiration
+
+        LOGGER.info(f"Stored patch with hash {patch_hash}")
+
+        schedule_job(job)
+
     return jsonify({"ready": False}), 202
 
 

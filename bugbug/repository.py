@@ -6,6 +6,7 @@
 import argparse
 import concurrent.futures
 import copy
+import io
 import itertools
 import json
 import logging
@@ -1550,6 +1551,37 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
             )
 
     trigger_pull()
+
+
+def generate_commit_from_raw_patch(
+    repo_dir, base_rev: str, patch: bytes, commit_msg: str
+):
+    # Open the hg repository with minimal extensions to avoid compatibility issues
+    configs = [
+        b"extensions.evolve=!",  # Disable evolve extension
+        b"extensions.mozext=!",  # Disable mozext extension
+    ]
+    with hglib.open(repo_dir, configs=configs) as hg:
+        logger.info("Updating to base revision %s...", base_rev)
+        hg.update(base_rev.encode("utf-8"), clean=True)
+
+        logger.info("Applying the patch ...")
+        hg.import_(
+            patches=io.BytesIO(patch),
+            message=commit_msg.encode("utf-8"),
+            user="bugbot <bugbug@mozilla.tld>".encode("utf-8"),
+        )
+
+        logger.info("Retrieving commit information...")
+        commits = hg_log(hg, [b"."])
+
+        if not commits:
+            raise Exception("Failed to retrieve commit after applying patch")
+
+        commit = commits[0]
+        logger.info("Successfully created commit %s", commit.node)
+
+        return commit
 
 
 if __name__ == "__main__":
