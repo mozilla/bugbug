@@ -2,7 +2,7 @@ import argparse
 import sys
 
 from bugbug.generative_model_tool import create_openai_llm
-from bugbug.tools.comment_resolver import CodeGeneratorTool
+from bugbug.tools.comment_resolution.agent import CodeGeneratorTool
 
 
 def run(args) -> None:

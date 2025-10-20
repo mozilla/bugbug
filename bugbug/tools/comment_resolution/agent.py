@@ -17,24 +17,11 @@ from bugbug.phabricator import get, set_api_key
 from bugbug.tools.core.platforms.phabricator import PhabricatorReviewData
 from bugbug.utils import get_secret
 
-# Lazy instantiation to avoid requiring secrets at import time
-review_data = None
-
-
-def _get_review_data():
-    global review_data
-    if review_data is None:
-        review_data = PhabricatorReviewData()
-    return review_data
-
-
+review_data = PhabricatorReviewData()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 PHABRICATOR_API_URL = "https://phabricator.services.mozilla.com/api/"
-
-
-def _get_phabricator_token():
-    return get_secret("PHABRICATOR_TOKEN")
+PHABRICATOR_API_TOKEN = get_secret("PHABRICATOR_TOKEN")
 
 
 class CodeGeneratorTool:
@@ -151,7 +138,7 @@ Output only the rephrased, actionable version of the comment, without any explan
         )
 
     def get_comment_transaction_from_revision(self, revision_id, comment_id):
-        set_api_key(PHABRICATOR_API_URL, _get_phabricator_token())
+        set_api_key(PHABRICATOR_API_URL, PHABRICATOR_API_TOKEN)
 
         revisions = get(rev_ids=[revision_id])
 
@@ -167,10 +154,7 @@ Output only the rephrased, actionable version of the comment, without any explan
 
     def get_changeset_id_for_file(self, diff_id, file_path):
         url = f"{PHABRICATOR_API_URL}differential.diff.search"
-        payload = {
-            "api.token": _get_phabricator_token(),
-            "constraints[ids][0]": diff_id,
-        }
+        payload = {"api.token": PHABRICATOR_API_TOKEN, "constraints[ids][0]": diff_id}
 
         response = requests.post(url, data=payload)
         data = response.json()
@@ -190,7 +174,7 @@ Output only the rephrased, actionable version of the comment, without any explan
 
         while True:
             payload = {
-                "api.token": _get_phabricator_token(),
+                "api.token": PHABRICATOR_API_TOKEN,
                 "constraints[diffPHIDs][0]": diff_phid,
             }
             if after_cursor:
@@ -355,7 +339,7 @@ Output only the rephrased, actionable version of the comment, without any explan
         return generated_fix
 
     def generate_fixes_for_all_comments(self, revision_id):
-        set_api_key(PHABRICATOR_API_URL, _get_phabricator_token())
+        set_api_key(PHABRICATOR_API_URL, PHABRICATOR_API_TOKEN)
 
         revisions = get(rev_ids=[int(revision_id)])
         if not revisions:
