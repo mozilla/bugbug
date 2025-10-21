@@ -6,18 +6,17 @@
 """LangGraph tools for code review agent."""
 
 from dataclasses import dataclass
-from typing import Any
 
 from langchain_core.tools import tool
 from langgraph.runtime import get_runtime
 
 from bugbug.code_search.function_search import FunctionSearch
+from bugbug.tools.core.platforms.base import Patch
 
 
 @dataclass
 class CodeReviewContext:
-    # TODO: Move the Patch class out of `code_review` to avoid circular imports. Then use it here.
-    patch: Any
+    patch: Patch
 
 
 @tool
