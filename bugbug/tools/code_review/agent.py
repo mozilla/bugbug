@@ -19,7 +19,6 @@ from langgraph.prebuilt import create_react_agent
 from unidiff import PatchSet
 
 from bugbug.code_search.function_search import FunctionSearch
-from bugbug.generative_model_tool import get_tokenizer
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.database import ReviewCommentsDB, SuggestionsFeedbackDB
 from bugbug.tools.code_review.langchain_tools import (
@@ -43,6 +42,7 @@ from bugbug.tools.code_review.utils import (
 )
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
+from bugbug.tools.core.llms import get_tokenizer
 from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)

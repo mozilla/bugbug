@@ -1,8 +1,8 @@
 import argparse
 import sys
 
-from bugbug.generative_model_tool import create_openai_llm
 from bugbug.tools.comment_resolution.agent import CodeGeneratorTool
+from bugbug.tools.core.llms import create_openai_llm
 
 
 def run(args) -> None:

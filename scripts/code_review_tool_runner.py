@@ -6,14 +6,14 @@
 import argparse
 import sys
 
-from bugbug import generative_model_tool
 from bugbug.code_search.function_search import function_search_classes
 from bugbug.tools import code_review
+from bugbug.tools.core import llms
 from bugbug.vectordb import QdrantVectorDB
 
 
 def run(args) -> None:
-    llm = generative_model_tool.create_llm_from_args(args)
+    llm = llms.create_llm_from_args(args)
 
     function_search = (
         function_search_classes[args.function_search_type]()
@@ -52,7 +52,7 @@ def parse_args(args):
         "--review_request_id",
         help="Review request ID",
     )
-    generative_model_tool.create_llm_to_args(parser)
+    llms.create_llm_to_args(parser)
     parser.add_argument(
         "--function_search_type",
         help="Function search tool",
