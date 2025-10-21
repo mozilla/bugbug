@@ -17,7 +17,8 @@ from pydantic import Field
 
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
-from bugbug.tools.code_review import Bug, PhabricatorPatch
+from bugbug.tools.core.platforms.bugzilla import Bug
+from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 from bugbug.utils import get_secret
 
 mcp = FastMCP("BugBug Code Review MCP Server")

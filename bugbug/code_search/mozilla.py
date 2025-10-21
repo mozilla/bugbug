@@ -6,7 +6,7 @@ from bugbug.code_search.function_search import (
 from bugbug.code_search.parser import FunctionSearchParser
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.code_search.searchfox_data import FunctionSearchSearchfoxData
-from bugbug.tools.code_review import PhabricatorPatch
+from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
 
 class FunctionSearchMozilla(FunctionSearch):

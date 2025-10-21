@@ -37,19 +37,13 @@ from bugbug.tools.core.exceptions import (
 )
 
 # Base classes (backward compatibility)
-from bugbug.tools.core.platforms.base import Patch, ReviewData
+from bugbug.tools.core.platforms.base import ReviewData
 
 # Platforms (backward compatibility)
-from bugbug.tools.core.platforms.bugzilla import Bug
 from bugbug.tools.core.platforms.phabricator import (
-    PhabricatorComment,
-    PhabricatorGeneralComment,
-    PhabricatorInlineComment,
-    PhabricatorPatch,
     PhabricatorReviewData,
-    phabricator_transaction_to_comment,
 )
-from bugbug.tools.core.platforms.swarm import SwarmPatch, SwarmReviewData
+from bugbug.tools.core.platforms.swarm import SwarmReviewData
 
 # Legacy compatibility
 review_data_classes = {
@@ -75,25 +69,9 @@ __all__ = [
     "LargeDiffError",
     "ModelResultError",
     # Base classes
-    "Patch",
     "ReviewData",
     # Phabricator
-    "PhabricatorComment",
-    "PhabricatorGeneralComment",
-    "PhabricatorInlineComment",
-    "PhabricatorPatch",
     "PhabricatorReviewData",
-    "phabricator_transaction_to_comment",
-    # Swarm
-    "SwarmPatch",
-    "SwarmReviewData",
-    # Bugzilla
-    "Bug",
-    # Utilities
-    "find_comment_scope",
-    "format_patch_set",
-    "parse_model_output",
-    "generate_processed_output",
     # Legacy
     "review_data_classes",
 ]
