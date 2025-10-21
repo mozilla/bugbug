@@ -1,16 +1,22 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""LangGraph tools for code review agent."""
+
 from dataclasses import dataclass
-from typing import Any
 
 from langchain_core.tools import tool
 from langgraph.runtime import get_runtime
 
 from bugbug.code_search.function_search import FunctionSearch
+from bugbug.tools.core.platforms.base import Patch
 
 
 @dataclass
 class CodeReviewContext:
-    # TODO: Move the Patch class out of `code_review` to avoid circular imports. Then use it here.
-    patch: Any
+    patch: Patch
 
 
 @tool

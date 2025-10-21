@@ -4,6 +4,7 @@
 # %%
 from bugbug import utils
 from bugbug.code_search.mozilla import FunctionSearchMozilla
+from bugbug.tools.code_review.utils import generate_processed_output, parse_model_output
 
 
 def get_file(commit_hash, path):
@@ -135,7 +136,7 @@ def common_step():
             print("Skipping the patch because it is too large.")
             continue
 
-        unfiltered_suggestions = code_review.parse_model_output(output)
+        unfiltered_suggestions = parse_model_output(output)
         if not unfiltered_suggestions:
             print("No suggestions were generated")
             continue
@@ -157,7 +158,7 @@ def common_step():
 
         try:
             comments = list(
-                code_review.generate_processed_output(raw_output, patch.patch_set)
+                generate_processed_output(raw_output, patch.patch_set)
             )
         except code_review.FileNotInPatchError as e:
             print("Error while running the tool:", e)
@@ -258,7 +259,7 @@ for (
         return_only_outputs=True,
     )["text"]
 
-    comments = list(code_review.generate_processed_output(raw_output, patch.patch_set))
+    comments = list(generate_processed_output(raw_output, patch.patch_set))
 
     # print_prettified_comments(comments)
     evaluation = evaluator.evaluate_diff_comments(review_request.patch_id, comments)

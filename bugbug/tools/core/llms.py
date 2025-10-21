@@ -5,9 +5,7 @@
 
 import inspect
 import re
-from abc import ABC, abstractmethod
 from logging import INFO, basicConfig, getLogger
-from typing import Any
 
 from bugbug.utils import get_secret
 
@@ -131,9 +129,11 @@ def create_llm_to_args(parser):
         for llm_argument in llm_arguments.values():
             group.add_argument(
                 f"--{llm_name}-{llm_argument.name}",
-                default=llm_argument.default
-                if llm_argument.default is not llm_argument.empty
-                else None,
+                default=(
+                    llm_argument.default
+                    if llm_argument.default is not llm_argument.empty
+                    else None
+                ),
                 help=llm_argument.name,
             )
 
@@ -162,16 +162,3 @@ def get_tokenizer(model_name):
             FALLBACK_ENCODING,
         )
         return tiktoken.get_encoding(FALLBACK_ENCODING)
-
-
-class GenerativeModelTool(ABC):
-    @property
-    @abstractmethod
-    def version(self) -> str: ...
-
-    @abstractmethod
-    def run(self, *args, **kwargs) -> Any: ...
-
-    @staticmethod
-    def _print_answer(answer):
-        print(f"\u001b[33;1m\033[1;3m{answer}\u001b[0m")

@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""Comment resolution agent."""
+
 import logging
 
 import requests
@@ -7,7 +14,7 @@ from langchain.prompts import (
 )
 
 from bugbug.phabricator import get, set_api_key
-from bugbug.tools.code_review import PhabricatorReviewData
+from bugbug.tools.core.platforms.phabricator import PhabricatorReviewData
 from bugbug.utils import get_secret
 
 review_data = PhabricatorReviewData()

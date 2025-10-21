@@ -27,9 +27,11 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableSequence
 from tabulate import tabulate
 
-from bugbug import db, generative_model_tool, phabricator, utils
+from bugbug import db, phabricator, utils
 from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
+from bugbug.tools.code_review.utils import parse_model_output
+from bugbug.tools.core import llms
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
@@ -86,7 +88,7 @@ class FeedbackEvaluator:
     def __init__(self, evaluation_dataset: str):
         self.evaluated_comments = pd.read_csv(evaluation_dataset)
 
-        llm = generative_model_tool.create_openai_llm()
+        llm = llms.create_openai_llm()
         evaluate_comments_prompt = PromptTemplate.from_template(EVALUATION_TEMPLATE)
         self.evaluation_chain = RunnableSequence(evaluate_comments_prompt, llm)
 
@@ -125,7 +127,7 @@ class FeedbackEvaluator:
             }
         )
 
-        matches = code_review.parse_model_output(output.content)
+        matches = parse_model_output(output.content)
 
         results = [
             {
@@ -256,7 +258,7 @@ def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
         (
             "Claude",
             code_review.CodeReviewTool(
-                llm=generative_model_tool.create_anthropic_llm(),
+                llm=llms.create_anthropic_llm(),
                 function_search=function_search,
                 review_comments_db=review_comments_db,
                 suggestions_feedback_db=suggestions_feedback_db,
@@ -269,7 +271,7 @@ def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
         (
             "GPT",
             code_review.CodeReviewTool(
-                llm=generative_model_tool.create_openai_llm(),
+                llm=llms.create_openai_llm(),
                 function_search=function_search,
                 review_comments_db=review_comments_db,
                 suggestions_feedback_db=suggestions_feedback_db,

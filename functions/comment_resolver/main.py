@@ -3,8 +3,8 @@ import logging
 import flask
 import functions_framework
 
-from bugbug.generative_model_tool import create_openai_llm
 from bugbug.tools.comment_resolver import CodeGeneratorTool
+from bugbug.tools.core.llms import create_openai_llm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
