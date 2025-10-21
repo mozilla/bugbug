@@ -30,6 +30,7 @@ from tabulate import tabulate
 from bugbug import db, generative_model_tool, phabricator, utils
 from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
+from bugbug.tools.code_review.utils import parse_model_output
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
@@ -125,7 +126,7 @@ class FeedbackEvaluator:
             }
         )
 
-        matches = code_review.parse_model_output(output.content)
+        matches = parse_model_output(output.content)
 
         results = [
             {

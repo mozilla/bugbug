@@ -51,14 +51,6 @@ from bugbug.tools.core.platforms.phabricator import (
 )
 from bugbug.tools.core.platforms.swarm import SwarmPatch, SwarmReviewData
 
-# Utilities (backward compatibility)
-from bugbug.tools.core.utils.formatting import (
-    find_comment_scope,
-    format_patch_set,
-    generate_processed_output,
-    parse_model_output,
-)
-
 # Legacy compatibility
 review_data_classes = {
     "phabricator": PhabricatorReviewData,

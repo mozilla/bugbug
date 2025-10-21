@@ -35,14 +35,14 @@ from bugbug.tools.code_review.prompts import (
     TEMPLATE_COMMENT_EXAMPLE,
     TEMPLATE_PATCH_FROM_HUNK,
 )
-from bugbug.tools.core.data_types import InlineComment
-from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
-from bugbug.tools.core.platforms.base import Patch
-from bugbug.tools.core.utils.formatting import (
+from bugbug.tools.code_review.utils import (
     format_patch_set,
     generate_processed_output,
     parse_model_output,
 )
+from bugbug.tools.core.data_types import InlineComment
+from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
+from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
 

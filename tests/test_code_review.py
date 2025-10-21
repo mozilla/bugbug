@@ -2,7 +2,7 @@ import os
 
 from unidiff import PatchSet
 
-from bugbug.tools.code_review import find_comment_scope
+from bugbug.tools.code_review.utils import find_comment_scope
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures/phabricator")
 
