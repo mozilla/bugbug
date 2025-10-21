@@ -19,7 +19,8 @@ from langgraph.prebuilt import create_react_agent
 from unidiff import PatchSet
 
 from bugbug.code_search.function_search import FunctionSearch
-from bugbug.generative_model_tool import GenerativeModelTool, get_tokenizer
+from bugbug.generative_model_tool import get_tokenizer
+from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.database import ReviewCommentsDB, SuggestionsFeedbackDB
 from bugbug.tools.code_review.langchain_tools import (
     CodeReviewContext,
