@@ -3,6 +3,13 @@ services:
   bugbug-http-service:
     build:
       context: .
+    develop:
+      watch:
+        - action: sync+restart
+          path: .
+          target: /code/http_service
+          initial_sync: true
+
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
