@@ -11,11 +11,11 @@ from datetime import datetime
 from logging import getLogger
 from typing import Iterable, Optional
 
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain_core.language_models import BaseLanguageModel
+from langchain.agents import create_agent
+from langchain.chat_models import BaseChatModel
+from langchain_classic.chains import LLMChain
+from langchain_classic.prompts import PromptTemplate
 from langgraph.errors import GraphRecursionError
-from langgraph.prebuilt import create_react_agent
 from unidiff import PatchSet
 
 from bugbug.code_search.function_search import FunctionSearch
@@ -56,7 +56,7 @@ class CodeReviewTool(GenerativeModelTool):
 
     def __init__(
         self,
-        llm: BaseLanguageModel,
+        llm: BaseChatModel,
         function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
@@ -113,10 +113,10 @@ class CodeReviewTool(GenerativeModelTool):
         if function_search:
             tools.append(create_find_function_definition_tool(function_search))
 
-        self.agent = create_react_agent(
+        self.agent = create_agent(
             llm,
             tools,
-            prompt=f"You are an expert reviewer for {experience_scope}, with experience on source code reviews.",
+            system_prompt=f"You are an expert reviewer for {experience_scope}, with experience on source code reviews.",
         )
 
         self.review_comments_db = review_comments_db
