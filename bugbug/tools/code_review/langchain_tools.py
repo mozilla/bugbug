@@ -7,7 +7,7 @@
 
 from dataclasses import dataclass
 
-from langchain_core.tools import tool
+from langchain.tools import tool
 from langgraph.runtime import get_runtime
 
 from bugbug.code_search.function_search import FunctionSearch

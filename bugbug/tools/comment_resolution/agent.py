@@ -8,10 +8,8 @@
 import logging
 
 import requests
-from langchain.chains import LLMChain
-from langchain.prompts import (
-    PromptTemplate,
-)
+from langchain_classic.chains import LLMChain
+from langchain_classic.prompts import PromptTemplate
 
 from bugbug.phabricator import get, set_api_key
 from bugbug.tools.core.platforms.phabricator import PhabricatorReviewData

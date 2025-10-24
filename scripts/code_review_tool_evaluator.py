@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
-from langchain_core.prompts import PromptTemplate
+from langchain_classic.prompts import PromptTemplate
 from langchain_core.runnables import RunnableSequence
 from tabulate import tabulate
 
