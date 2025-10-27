@@ -7,7 +7,7 @@ Call this script like:
   export PULSE_USER=generated_username
   export PULSE_PASSWORD=generated_username
   # In case you want to hit the live server
-  export BUGBUG_HTTP_SERVER=https://bugbug.herokuapp.com
+  export BUGBUG_HTTP_SERVER=https://bugbug.moz.tools
   cd http_service && docker-compose run bugbug-http-service
 """
 
