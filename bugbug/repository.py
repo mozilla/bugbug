@@ -1407,7 +1407,7 @@ def download_commits(
 
             get_component_mapping()
 
-            commits = tuple(transform(hg, repo_dir, c) for c in commits)
+            commits = tuple(transform(hg, repo_dir, c) for c in tqdm(commits))
 
             close_component_mapping()
 
