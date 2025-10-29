@@ -11,6 +11,7 @@ import os
 import hglib
 import requests
 import tenacity
+from tqdm import tqdm
 
 from bugbug import repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
@@ -161,7 +162,8 @@ def boot_worker() -> None:
             # Update the commits DB.
             logger.info("Browsing all commits...")
             nodes = collections.deque(
-                (commit["node"] for commit in repository.get_commits()), maxlen=4096
+                (commit["node"] for commit in tqdm(repository.get_commits())),
+                maxlen=4096,
             )
             nodes.reverse()
             logger.info("All commits browsed.")
