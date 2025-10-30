@@ -217,8 +217,7 @@ def read(path):
         return ()
 
     with _db_open(path, "rb") as store:
-        for elem in store.read():
-            yield elem
+        yield from store.read()
 
 
 def write(path, elems):
