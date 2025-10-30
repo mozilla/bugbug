@@ -1,6 +1,6 @@
 amqp==5.3.1
 beautifulsoup4==4.14.2
-boto3==1.40.55
+boto3==1.40.59
 imbalanced-learn==0.14.0
 langchain==1.0.2
 langchain-anthropic==1.0.0
