@@ -485,8 +485,9 @@ class PhabricatorReviewData(ReviewData):
     ) -> Iterable[tuple[int, list[InlineComment]]]:
         db.download(phabricator.REVISIONS_DB)
 
-        revision_count = sum(1 for _ in phabricator.get_revisions())
-        for revision in tqdm(phabricator.get_revisions(), total=revision_count):
+        for revision in tqdm(
+            phabricator.get_revisions(), total=phabricator.count_revisions()
+        ):
             diff_comments: dict[int, list[InlineComment]] = defaultdict(list)
 
             for transaction in revision["transactions"]:
