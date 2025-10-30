@@ -6,6 +6,7 @@
 import gzip
 import io
 import logging
+import mmap
 import os
 import pickle
 from contextlib import contextmanager
@@ -137,8 +138,9 @@ def last_modified(path):
 
 
 class Store:
-    def __init__(self, fh):
+    def __init__(self, fh, use_mmap=True):
         self.fh = fh
+        self.use_mmap = use_mmap
 
 
 class JSONStore(Store):
@@ -147,8 +149,23 @@ class JSONStore(Store):
             self.fh.write(orjson.dumps(elem) + b"\n")
 
     def read(self):
-        for line in io.TextIOWrapper(self.fh, encoding="utf-8"):
-            yield orjson.loads(line)
+        if self.use_mmap:
+            with mmap.mmap(self.fh.fileno(), 0, prot=mmap.PROT_READ) as buf:
+                while line := buf.readline():
+                    yield orjson.loads(line)
+        else:
+            for line in io.TextIOWrapper(self.fh, encoding="utf-8"):
+                yield orjson.loads(line)
+
+    def size(self):
+        if self.use_mmap:
+            with mmap.mmap(self.fh.fileno(), 0, prot=mmap.PROT_READ) as buf:
+                count = 0
+                while buf.readline():
+                    count += 1
+                return count
+        else:
+            return sum(1 for _ in io.TextIOWrapper(self.fh, encoding="utf-8"))
 
 
 class PickleStore(Store):
@@ -162,6 +179,9 @@ class PickleStore(Store):
                 yield pickle.load(self.fh)
         except EOFError:
             pass
+
+    def size(self):
+        return sum(1 for _ in self.read())
 
 
 COMPRESSION_FORMATS = ["gz", "zstd"]
@@ -186,21 +206,21 @@ def _db_open(path, mode):
 
     if compression == "gz":
         with gzip.GzipFile(path, mode) as f:
-            yield store_constructor(f)
+            yield store_constructor(f, use_mmap=False)
     elif compression == "zstd":
         if "w" in mode or "a" in mode:
             cctx = zstandard.ZstdCompressor()
             with open(path, mode) as f:
                 with cctx.stream_writer(f) as writer:
-                    yield store_constructor(writer)
+                    yield store_constructor(writer, use_mmap=False)
         else:
             dctx = zstandard.ZstdDecompressor()
             with open(path, mode) as f:
                 with dctx.stream_reader(f) as reader:
-                    yield store_constructor(reader)
+                    yield store_constructor(reader, use_mmap=False)
     else:
         with open(path, mode) as f:
-            yield store_constructor(f)
+            yield store_constructor(f, use_mmap=True)
 
 
 def read(path):
@@ -210,8 +230,17 @@ def read(path):
         return ()
 
     with _db_open(path, "rb") as store:
-        for elem in store.read():
-            yield elem
+        yield from store.read()
+
+
+def size(path):
+    assert path in DATABASES
+
+    if not os.path.exists(path):
+        return ()
+
+    with _db_open(path, "rb") as store:
+        return store.size()
 
 
 def write(path, elems):

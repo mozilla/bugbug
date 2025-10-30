@@ -52,6 +52,10 @@ def get_revisions() -> Iterator[RevisionDict]:
     yield from db.read(REVISIONS_DB)
 
 
+def count_revisions() -> Iterator[RevisionDict]:
+    return db.size(REVISIONS_DB)
+
+
 def set_api_key(url: str, api_key: str) -> None:
     global PHABRICATOR_API
     PHABRICATOR_API = PhabricatorAPI(api_key, url)
