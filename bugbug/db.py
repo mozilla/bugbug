@@ -157,6 +157,16 @@ class JSONStore(Store):
             for line in io.TextIOWrapper(self.fh, encoding="utf-8"):
                 yield orjson.loads(line)
 
+    def size(self):
+        if self.use_mmap:
+            with mmap.mmap(self.fh.fileno(), 0, prot=mmap.PROT_READ) as buf:
+                count = 0
+                while buf.readline():
+                    count += 1
+                return count
+        else:
+            return sum(1 for _ in io.TextIOWrapper(self.fh, encoding="utf-8"))
+
 
 class PickleStore(Store):
     def write(self, elems):
@@ -169,6 +179,9 @@ class PickleStore(Store):
                 yield pickle.load(self.fh)
         except EOFError:
             pass
+
+    def size(self):
+        return sum(1 for _ in self.read())
 
 
 COMPRESSION_FORMATS = ["gz", "zstd"]
@@ -218,6 +231,16 @@ def read(path):
 
     with _db_open(path, "rb") as store:
         yield from store.read()
+
+
+def size(path):
+    assert path in DATABASES
+
+    if not os.path.exists(path):
+        return ()
+
+    with _db_open(path, "rb") as store:
+        return store.size()
 
 
 def write(path, elems):

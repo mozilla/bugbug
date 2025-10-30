@@ -31,12 +31,13 @@ def mock_db(tmp_path):
 
 @pytest.mark.parametrize("db_format", ["json", "pickle"])
 @pytest.mark.parametrize("db_compression", [None, "gz", "zstd"])
-def test_write_read(mock_db, db_format, db_compression):
+def test_write_read_size(mock_db, db_format, db_compression):
     db_path = mock_db(db_format, db_compression)
 
     db.write(db_path, range(1, 8))
 
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
+    assert db.size(db_path) == 7
 
 
 @pytest.mark.parametrize("db_format", ["json", "pickle"])
