@@ -3,7 +3,6 @@ import logging
 import os
 import re
 
-import orjson
 from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, phabricator
@@ -85,7 +84,14 @@ def process_comments(limit, diff_length_limit):
     patch_count = 0
     diff_id_to_revisions_map, diff_phid_to_id = load_revisions_maps()
 
+    already_done_patches = {
+        data["initial_patch_id"] for data in db.read(phabricator.FIXED_COMMENTS_DB)
+    }
+
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
+        if patch_id in already_done_patches:
+            continue
+
         revision_info = diff_id_to_revisions_map[patch_id]
         transactions = revision_info["transactions"]
 
@@ -183,12 +189,15 @@ def main():
 
     assert db.download(phabricator.REVISIONS_DB)
 
-    with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
-        for data in process_comments(
+    db.download(phabricator.FIXED_COMMENTS_DB)
+
+    db.append(
+        phabricator.FIXED_COMMENTS_DB,
+        process_comments(
             limit=limit,
             diff_length_limit=diff_length_limit,
-        ):
-            dataset_file_handle.write(orjson.dumps(data) + b"\n")
+        ),
+    )
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)
 
