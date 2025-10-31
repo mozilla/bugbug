@@ -109,7 +109,7 @@ def get_fixed_by_commit_pushes():
                 multiple_backouts.add(bug_id)
 
     logger.info(
-        f"{len(multiple_backouts)} cases removed because there were multiple backouts in the same bug."
+        f"{len(multiple_backouts)} cases to be removed because there were multiple backouts in the same bug."
     )
 
     for multiple_backout in multiple_backouts:
@@ -126,7 +126,7 @@ def get_fixed_by_commit_pushes():
             no_backouts.add(bug_id)
 
     logger.info(
-        f"{len(no_backouts)} cases removed because there were no backouts in the bug."
+        f"{len(no_backouts)} cases to be removed because there were no backouts in the bug."
     )
 
     for no_backout in no_backouts:
@@ -241,32 +241,32 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         if upload and utils.exists_s3(diff_path):
             continue
 
-        with open(diff_path, "wb") as f:
-            diff = diff_failure_vs_fix(
-                repo_path,
-                [
-                    utils.hg2git(commit["node"])
-                    for commit in obj["commits"]
-                    if commit["backedoutby"]
-                ],
-                [
-                    utils.hg2git(commit["node"])
-                    for commit in obj["commits"]
-                    if not commit["backedoutby"] and not commit["backsout"]
-                ],
-            )
+        diff = diff_failure_vs_fix(
+            repo_path,
+            [
+                utils.hg2git(commit["node"])
+                for commit in obj["commits"]
+                if commit["backedoutby"]
+            ],
+            [
+                utils.hg2git(commit["node"])
+                for commit in obj["commits"]
+                if not commit["backedoutby"] and not commit["backsout"]
+            ],
+        )
 
-            if diff is not None and len(diff) > 0:
+        if diff is not None and len(diff) > 0:
+            with open(diff_path, "wb") as f:
                 f.write(diff)
-            else:
-                diff_errors += 1
 
-        utils.zstd_compress(diff_path)
+            utils.zstd_compress(diff_path)
 
-        os.remove(diff_path)
+            os.remove(diff_path)
 
-        if upload:
-            utils.upload_s3([diff_path])
+            if upload:
+                utils.upload_s3([diff_path])
+        else:
+            diff_errors += 1
 
     logger.info(f"Failed generating {diff_errors} diffs")
 
