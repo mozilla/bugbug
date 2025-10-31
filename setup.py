@@ -63,6 +63,7 @@ setup(
             "bugbug-shadow-scheduler-stats = scripts.shadow_scheduler_stats:main",
             "bugbug-data-github = scripts.github_issue_retriever:main",
             "bugbug-fixed-comments = scripts.inline_comments_data_collection:main",
+            "bugbug-ci-failures-retriever = scripts.retrieve_ci_failures:main",
         ]
     },
     classifiers=[
