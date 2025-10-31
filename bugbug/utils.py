@@ -21,6 +21,7 @@ from importlib.metadata import PackageNotFoundError
 from typing import Any, Iterator
 
 import boto3
+import botocore
 import dateutil.parser
 import libmozdata
 import lmdb
@@ -186,6 +187,25 @@ def upload_s3(paths: str) -> None:
     for path in paths:
         assert path.startswith("data/")
         transfer.upload_file(path, "communitytc-bugbug", path)
+
+
+def exists_s3(path: str) -> bool:
+    credentials = get_s3_credentials()
+
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=credentials["accessKeyId"],
+        aws_secret_access_key=credentials["secretAccessKey"],
+        aws_session_token=credentials["sessionToken"],
+    )
+
+    try:
+        client.head_object(Bucket="communitytc-bugbug", Key=path)
+        return True
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] == "404":
+            return False
+        raise
 
 
 def download_check_etag(url, path=None):
@@ -598,3 +618,8 @@ def escape_markdown(text: str) -> str:
 def keep_as_is(x):
     """A tokenizer that does nothing."""
     return x
+
+
+def hg2git(hash):
+    r = requests.get(f"https://lando.moz.tools/api/hg2git/firefox/{hash}")
+    return r.json()["git_hash"]
