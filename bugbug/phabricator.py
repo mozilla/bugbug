@@ -7,7 +7,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import Collection, Iterator, NewType
 
-import requests
 import tenacity
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
@@ -308,7 +307,12 @@ def fetch_diff_from_url(
     else:
         url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={first_patch}&id={second_patch}&download=true"
 
-    response = requests.get(url)
+    response = utils.get_session("phabricator").get(
+        url,
+        headers={
+            "User-Agent": utils.get_user_agent(),
+        },
+    )
     response.raise_for_status()
 
     return response.text
