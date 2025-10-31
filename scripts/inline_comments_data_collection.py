@@ -181,7 +181,7 @@ def main():
 
     os.makedirs("patches", exist_ok=True)
 
-    db.download(phabricator.REVISIONS_DB)
+    assert db.download(phabricator.REVISIONS_DB)
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
         for data in process_comments(
