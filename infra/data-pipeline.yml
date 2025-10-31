@@ -273,6 +273,45 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: ci-failures-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "1 day" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      dependencies:
+        - commit-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-ci-failures-retriever
+          - https://github.com/mozilla-firefox/firefox
+          - /firefox
+          - --upload
+
+        artifacts:
+          public/ci_failures.json.zst:
+            path: /data/ci_failures.json.zst
+            type: file
+          public/ci_failures.json.version:
+            path: /data/ci_failures.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug_annotate.ci_failures_retriever.latest
+      metadata:
+        name: bugbug CI failures retriever
+        description: bugbug CI failures retriever
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: issues-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
