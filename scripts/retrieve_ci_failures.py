@@ -72,7 +72,7 @@ def get_fixed_by_commit_pushes():
             }
         )
 
-    print(f"Analyzing {len(fixed_by_commit_pushes)} 'fixed by commit' pushes.")
+    logger.info(f"Analyzing {len(fixed_by_commit_pushes)} 'fixed by commit' pushes.")
 
     backouts_by_bug_id = defaultdict(int)
     for commit in repository.get_commits(include_backouts=True):
@@ -90,12 +90,16 @@ def get_fixed_by_commit_pushes():
         if not any(not commit["backedoutby"] for commit in obj["commits"]):
             no_relanding_bugs.add(bug_id)
 
-    print(f"{len(no_relanding_bugs)} cases removed because there was no relanding.")
+    logger.info(
+        f"{len(no_relanding_bugs)} cases removed because there was no relanding."
+    )
 
     for bug_id in no_relanding_bugs:
         del fixed_by_commit_pushes[bug_id]
 
-    print(f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze.")
+    logger.info(
+        f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze."
+    )
 
     # Skip cases where there are multiple backouts associated to the same bug ID.
     multiple_backouts = set()
@@ -104,30 +108,33 @@ def get_fixed_by_commit_pushes():
             if bug_id in fixed_by_commit_pushes:
                 multiple_backouts.add(bug_id)
 
-    print(
+    logger.info(
         f"{len(multiple_backouts)} cases removed because there were multiple backouts in the same bug."
     )
 
     for multiple_backout in multiple_backouts:
         del fixed_by_commit_pushes[multiple_backout]
 
-    print(f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze.")
+    logger.info(
+        f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze."
+    )
 
     # Skip cases where there is no backout (and so the fix was a bustage fix).
     no_backouts = set()
     for bug_id in fixed_by_commit_pushes.keys():
         if bug_id not in backouts_by_bug_id:
-            print(f"No backouts on {bug_id}")
             no_backouts.add(bug_id)
 
-    print(
+    logger.info(
         f"{len(no_backouts)} cases removed because there were no backouts in the bug."
     )
 
     for no_backout in no_backouts:
         del fixed_by_commit_pushes[no_backout]
 
-    print(f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze.")
+    logger.info(
+        f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze."
+    )
 
     # TODO: skip cases where a single push contains multiple backouts?
 
@@ -205,7 +212,7 @@ def diff_failure_vs_fix(repo, failure_commits, fix_commits):
             ["git", "-C", repo, "diff", "-w", failure_commits[-1], tree_fixed]
         )
     except subprocess.CalledProcessError as e:
-        print(e)
+        logger.error(e)
         return None
 
 
@@ -261,7 +268,7 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         if upload:
             utils.upload_s3([diff_path])
 
-    print(f"Failed generating {diff_errors} diffs")
+    logger.info(f"Failed generating {diff_errors} diffs")
 
 
 def write_results(fixed_by_commit_pushes):
