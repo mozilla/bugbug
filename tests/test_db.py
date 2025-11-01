@@ -42,6 +42,15 @@ def test_write_read_size(mock_db, db_format, db_compression):
 
 @pytest.mark.parametrize("db_format", ["json", "pickle"])
 @pytest.mark.parametrize("db_compression", [None, "gz", "zstd"])
+def test_read_empty(mock_db, db_format, db_compression):
+    db_path = mock_db(db_format, db_compression)
+
+    assert list(db.read(db_path)) == []
+    assert db.size(db_path) == 0
+
+
+@pytest.mark.parametrize("db_format", ["json", "pickle"])
+@pytest.mark.parametrize("db_compression", [None, "gz", "zstd"])
 def test_append(mock_db, db_format, db_compression):
     db_path = mock_db(db_format, db_compression)
 
