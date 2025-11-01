@@ -237,7 +237,7 @@ def size(path):
     assert path in DATABASES
 
     if not os.path.exists(path):
-        return ()
+        return 0
 
     with _db_open(path, "rb") as store:
         return store.size()
