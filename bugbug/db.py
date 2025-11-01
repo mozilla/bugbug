@@ -150,6 +150,9 @@ class JSONStore(Store):
 
     def read(self):
         if self.use_mmap:
+            if os.stat(self.fh.fileno()).st_size == 0:
+                return
+
             with mmap.mmap(self.fh.fileno(), 0, prot=mmap.PROT_READ) as buf:
                 while line := buf.readline():
                     yield orjson.loads(line)
@@ -159,6 +162,9 @@ class JSONStore(Store):
 
     def size(self):
         if self.use_mmap:
+            if os.stat(self.fh.fileno()).st_size == 0:
+                return 0
+
             with mmap.mmap(self.fh.fileno(), 0, prot=mmap.PROT_READ) as buf:
                 count = 0
                 while buf.readline():
