@@ -142,7 +142,7 @@ def get_fixed_by_commit_pushes():
 
 
 def retrieve_logs(fixed_by_commit_pushes, upload):
-    os.makedirs("ci_failures_logs", exist_ok=True)
+    os.makedirs(os.path.join("data", "ci_failures_logs"), exist_ok=True)
 
     for push in tqdm(
         fixed_by_commit_pushes.values(), total=len(fixed_by_commit_pushes)
@@ -151,7 +151,9 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
             task_id = failure["task_id"]
             retry_id = failure["retry_id"]
 
-            log_path = os.path.join("ci_failures_logs", f"{task_id}.{retry_id}.log")
+            log_path = os.path.join(
+                "data", "ci_failures_logs", f"{task_id}.{retry_id}.log"
+            )
             if os.path.exists(log_path) or os.path.exists(f"{log_path}.zst"):
                 continue
 
@@ -228,13 +230,13 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
             )
         )()
 
-    os.makedirs("ci_failures_diffs", exist_ok=True)
+    os.makedirs(os.path.join("data", "ci_failures_diffs"), exist_ok=True)
 
     diff_errors = 0
     for bug_id, obj in tqdm(
         fixed_by_commit_pushes.items(), total=len(fixed_by_commit_pushes)
     ):
-        diff_path = os.path.join("ci_failures_diffs", f"{bug_id}.diff")
+        diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
         if os.path.exists(diff_path) or os.path.exists(f"{diff_path}.zst"):
             continue
 
