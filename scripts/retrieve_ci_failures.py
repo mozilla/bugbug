@@ -291,18 +291,7 @@ def write_results(fixed_by_commit_pushes):
     utils.zstd_compress(CI_FAILURES_DB)
 
 
-def main(repo_url, repo_path, upload):
-    download_dbs()
-
-    fixed_by_commit_pushes = get_fixed_by_commit_pushes()
-    retrieve_logs(fixed_by_commit_pushes, upload)
-
-    generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload)
-
-    write_results(fixed_by_commit_pushes)
-
-
-if __name__ == "__main__":
+def main() -> None:
     description = (
         "Retrieve CI failures, their logs and generate the diffs that fixed them"
     )
@@ -311,4 +300,16 @@ if __name__ == "__main__":
     parser.add_argument("repo_url", help="Repository URL.")
     parser.add_argument("--upload", help="Upload logs and diffs.", action="store_true")
     args = parser.parse_args()
-    main(args.repo_path, args.repo_url, args.upload)
+
+    download_dbs()
+
+    fixed_by_commit_pushes = get_fixed_by_commit_pushes()
+    retrieve_logs(fixed_by_commit_pushes, args.upload)
+
+    generate_diffs(args.repo_url, args.repo_path, fixed_by_commit_pushes, args.upload)
+
+    write_results(fixed_by_commit_pushes)
+
+
+if __name__ == "__main__":
+    main()
