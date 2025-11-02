@@ -266,7 +266,6 @@ def schedule_tests(branch: str, rev: str) -> str:
         revs=revs,
         branch=repo_branch,
         save=False,
-        use_single_process=True,
         include_no_bug=True,
     )
 
