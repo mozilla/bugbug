@@ -282,6 +282,8 @@ tasks:
       dependencies:
         - commit-retrieval
       payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
         command:
@@ -301,6 +303,7 @@ tasks:
         features:
           taskclusterProxy: true
       scopes:
+        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
