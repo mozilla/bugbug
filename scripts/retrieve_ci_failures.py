@@ -154,7 +154,8 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
             log_path = os.path.join(
                 "data", "ci_failures_logs", f"{task_id}.{retry_id}.log"
             )
-            if os.path.exists(log_path) or os.path.exists(f"{log_path}.zst"):
+            log_zst_path = f"{log_path}.zst"
+            if os.path.exists(log_path) or os.path.exists(log_zst_path):
                 continue
 
             if upload and utils.exists_s3(log_path):
@@ -171,7 +172,7 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
                 os.remove(log_path)
 
                 if upload:
-                    utils.upload_s3([log_path])
+                    utils.upload_s3([log_zst_path])
             except requests.exceptions.HTTPError:
                 pass
 
@@ -237,7 +238,8 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         fixed_by_commit_pushes.items(), total=len(fixed_by_commit_pushes)
     ):
         diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
-        if os.path.exists(diff_path) or os.path.exists(f"{diff_path}.zst"):
+        diff_zst_path = f"{diff_path}.zst"
+        if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
             continue
 
         if upload and utils.exists_s3(diff_path):
@@ -266,7 +268,7 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
             os.remove(diff_path)
 
             if upload:
-                utils.upload_s3([diff_path])
+                utils.upload_s3([diff_zst_path])
         else:
             diff_errors += 1
 
