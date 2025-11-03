@@ -35,12 +35,6 @@ class NoTransactionsFoundException(Exception):
         self.patch_id = patch_id
 
 
-class NoDiffFoundForPHIDException(Exception):
-    def __init__(self, phid):
-        super().__init__(f"No diff found for PHID {phid}")
-        self.phid = phid
-
-
 def load_revisions_maps():
     diff_id_to_revision = {}
     diff_phid_to_id = {}
@@ -111,9 +105,13 @@ def process_comments(limit, diff_length_limit):
             except KeyError:
                 diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["new"])
                 if not diffs:
-                    raise NoDiffFoundForPHIDException(
-                        most_recent_update["fields"]["new"]
+                    logger.error(
+                        "No diff found for fix patch, PHID {}, revision {}".format(
+                            most_recent_update["fields"]["new"], revision_info["id"]
+                        )
                     )
+                    continue
+
                 fix_patch_id = diffs[0]["id"]
 
             # If the most recent patch is the original patch itself, skip it
@@ -129,9 +127,13 @@ def process_comments(limit, diff_length_limit):
             except Exception:
                 diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["old"])
                 if not diffs:
-                    raise NoDiffFoundForPHIDException(
-                        most_recent_update["fields"]["old"]
+                    logger.error(
+                        "No diff found for previous patch, PHID {}, revision {}".format(
+                            most_recent_update["fields"]["old"], revision_info["id"]
+                        )
                     )
+                    continue
+
                 previous_patch_id = diffs[0]["id"]
 
             try:
