@@ -300,8 +300,8 @@ def main() -> None:
         "Retrieve CI failures, their logs and generate the diffs that fixed them"
     )
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("repo_path", help="Path to git repository.")
     parser.add_argument("repo_url", help="Repository URL.")
+    parser.add_argument("repo_path", help="Path to git repository.")
     parser.add_argument("--upload", help="Upload logs and diffs.", action="store_true")
     args = parser.parse_args()
 
