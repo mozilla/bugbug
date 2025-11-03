@@ -285,7 +285,7 @@ tasks:
         env:
           TC_SECRET_ID: project/bugbug/production
         maxRunTime: 25200
-        image: mozilla/bugbug-base:${version}
+        image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-ci-failures-retriever
           - https://github.com/mozilla-firefox/firefox
