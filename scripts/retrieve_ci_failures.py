@@ -8,6 +8,7 @@ import os
 import subprocess
 import tempfile
 from collections import defaultdict
+from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from logging import INFO, basicConfig, getLogger
 
 import requests
@@ -308,9 +309,26 @@ def main() -> None:
     download_dbs()
 
     fixed_by_commit_pushes = get_fixed_by_commit_pushes()
-    retrieve_logs(fixed_by_commit_pushes, args.upload)
 
-    generate_diffs(args.repo_url, args.repo_path, fixed_by_commit_pushes, args.upload)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = (
+            executor.submit(retrieve_logs, fixed_by_commit_pushes, args.upload),
+            executor.submit(
+                generate_diffs,
+                args.repo_url,
+                args.repo_path,
+                fixed_by_commit_pushes,
+                args.upload,
+            ),
+        )
+
+        done, _ = wait(futures, return_when=ALL_COMPLETED)
+
+        for task in done:
+            try:
+                _ = task.result()
+            except Exception as e:
+                logger.error(f"Task failed with exception {e}")
 
     write_results(fixed_by_commit_pushes)
 
