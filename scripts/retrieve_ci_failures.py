@@ -72,7 +72,7 @@ def get_fixed_by_commit_pushes():
 
     end = today = datetime.today()
     # Treeherder stores 120 days of data.
-    start = end - timedelta(days=21)
+    start = end - timedelta(days=120)
 
     while start < today:
         end = min(start + timedelta(days=7), today)
