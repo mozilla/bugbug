@@ -308,6 +308,7 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug_annotate.ci_failures_retriever.${version}
         - index.project.bugbug_annotate.ci_failures_retriever.latest
       metadata:
         name: bugbug CI failures retriever
