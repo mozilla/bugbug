@@ -87,6 +87,9 @@ def get_fixed_by_commit_pushes():
     ]
 
     for element in fixed_by_commit_elements:
+        if "bug_id" not in element:
+            continue
+
         bug_id = int(element["bug_id"])
 
         if bug_id not in fixed_by_commit_pushes:
