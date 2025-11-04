@@ -363,7 +363,7 @@ def main() -> None:
             try:
                 _ = task.result()
             except Exception as e:
-                logger.error(f"Task failed with exception {e}")
+                raise e
 
     write_results(fixed_by_commit_pushes)
 
