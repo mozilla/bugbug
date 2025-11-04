@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 from collections import defaultdict
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
+from datetime import datetime, timedelta
 from logging import INFO, basicConfig, getLogger
 
 import requests
@@ -33,6 +34,32 @@ def download_dbs():
     db.download(CI_FAILURES_DB)
 
 
+@tenacity.retry(
+    wait=tenacity.wait_exponential(multiplier=2, min=2),
+    stop=tenacity.stop_after_attempt(7),
+    reraise=True,
+)
+def query_redash(start_date, end_date):
+    r = utils.get_session("redash").post(
+        "https://sql.telemetry.mozilla.org/api/queries/111789/results",
+        json={
+            "parameters": {
+                "startdate": start_date.strftime("%Y-%m-%d"),
+                "enddate": end_date.strftime("%Y-%m-%d"),
+            },
+            "max_age": 1800,
+        },
+        headers={"Authorization": f"Key {utils.get_secret('REDASH_API_KEY')}"},
+    )
+    r.raise_for_status()
+
+    result = r.json()
+    if "query_result" not in result:
+        raise tenacity.TryAgain
+
+    return result["query_result"]["data"]["rows"]
+
+
 def get_fixed_by_commit_pushes():
     logger.info("Get previously found failures...")
     fixed_by_commit_pushes = {}
@@ -42,12 +69,17 @@ def get_fixed_by_commit_pushes():
             "commits": [],
         }
 
-    r = requests.get(
-        "https://sql.telemetry.mozilla.org/api/queries/111789/results.json?api_key={}".format(
-            utils.get_secret("REDASH_API_KEY")
-        )
-    )
-    fixed_by_commit_elements = r.json()["query_result"]["data"]["rows"]
+    fixed_by_commit_elements = []
+
+    end = today = datetime.today()
+    # Treeherder stores 120 days of data.
+    start = end - timedelta(days=21)
+
+    while start < today:
+        end = min(start + timedelta(days=7), today)
+        logger.info(f"Retrieving 'fixed by commit' data between {start} and {end}...")
+        fixed_by_commit_elements += query_redash(start, end)
+        start = end
 
     fixed_by_commit_elements = [
         element
@@ -56,6 +88,9 @@ def get_fixed_by_commit_pushes():
     ]
 
     for element in fixed_by_commit_elements:
+        if element["bug_id"] is None:
+            continue
+
         bug_id = int(element["bug_id"])
 
         if bug_id not in fixed_by_commit_pushes:

@@ -620,6 +620,7 @@ def keep_as_is(x):
     return x
 
 
-def hg2git(hash):
-    r = requests.get(f"https://lando.moz.tools/api/hg2git/firefox/{hash}")
+def hg2git(hash: str) -> str:
+    r = get_session("lando").get(f"https://lando.moz.tools/api/hg2git/firefox/{hash}")
+    r.raise_for_status()
     return r.json()["git_hash"]
