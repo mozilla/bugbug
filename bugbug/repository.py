@@ -1554,7 +1554,7 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
 
 
 def generate_commit_from_raw_patch(
-    repo_dir, base_rev: str, patch: bytes, commit_msg: str
+    repo_dir: str, base_rev: str, patch: bytes, commit_msg: str
 ):
     # Open the hg repository with minimal extensions to avoid compatibility issues
     configs = [
