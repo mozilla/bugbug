@@ -185,9 +185,7 @@ def boot_worker() -> None:
 
             logger.info("Updating commits DB...")
             try:
-                commits = repository.download_commits(
-                    REPO_DIR, revs=revs, use_single_process=True
-                )
+                commits = repository.download_commits(REPO_DIR, revs=revs)
                 logger.info("Commits DB updated.")
 
                 logger.info("Updating touched together DB...")
