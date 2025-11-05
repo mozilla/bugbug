@@ -194,7 +194,7 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
             if os.path.exists(log_path) or os.path.exists(log_zst_path):
                 continue
 
-            if upload and utils.exists_s3(log_path):
+            if upload and utils.exists_s3(log_zst_path):
                 continue
 
             try:
@@ -278,7 +278,7 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
             continue
 
-        if upload and utils.exists_s3(diff_path):
+        if upload and utils.exists_s3(diff_zst_path):
             continue
 
         diff = diff_failure_vs_fix(
