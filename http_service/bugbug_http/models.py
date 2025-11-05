@@ -318,7 +318,10 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
         LOGGER.error(f"Patch not found in Redis for hash {patch_hash}")
         return "NOK"
 
-    hg_base_rev = next(vcs_map.git_to_mercurial(REPO_DIR, [base_rev]))
+    hg_base_rev = next(vcs_map.git_to_mercurial(REPO_DIR, [base_rev]), None)
+    if hg_base_rev is None:
+        LOGGER.error(f"Could not map git base rev {base_rev} to a mercurial revision")
+        return "NOK"
     LOGGER.info(f"Mapped git base rev {base_rev} to hg rev {hg_base_rev}")
 
     # Pull the base revision to the local repository
