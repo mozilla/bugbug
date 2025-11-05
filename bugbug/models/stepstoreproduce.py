@@ -23,6 +23,9 @@ class StepsToReproduceModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
+        # TODO: Re-enable once https://github.com/mozilla/bugbug/issues/5424 is fixed.
+        self.calculate_importance = False
+
         feature_extractors = [
             bug_features.HasRegressionRange(),
             bug_features.Severity(),

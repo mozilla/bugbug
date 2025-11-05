@@ -24,6 +24,9 @@ class TestFailureModel(CommitModel):
     def __init__(self, lemmatization=False):
         CommitModel.__init__(self, lemmatization)
 
+        # TODO: Re-enable once https://github.com/mozilla/bugbug/issues/5424 is fixed.
+        self.calculate_importance = False
+
         self.training_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
 
         feature_extractors = [
