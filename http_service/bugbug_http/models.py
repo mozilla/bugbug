@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import timedelta
 from functools import lru_cache
-from typing import Iterable, Sequence
+from typing import Sequence
 from urllib.parse import urlparse
 
 import orjson
@@ -353,7 +353,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     return "OK"
 
 
-def _analyze_patch(commits: Iterable[repository.CommitDict]):
+def _analyze_patch(commits: Sequence[repository.CommitDict]):
     if not commits:
         return {
             "tasks": {},
