@@ -339,7 +339,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     # Analyze the patch.
     commits = repository.download_commits(
         REPO_DIR,
-        revs=[commit.node.encode('ascii')],
+        revs=[commit.node.encode("ascii")],
         branch="default",
         save=False,
         use_single_process=True,
