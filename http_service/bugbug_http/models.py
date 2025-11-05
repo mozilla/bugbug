@@ -15,7 +15,7 @@ import requests
 import zstandard
 from redis import Redis
 
-from bugbug import bugzilla, repository, test_scheduling
+from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testselect
@@ -302,8 +302,6 @@ def get_config_specific_groups(config: str) -> str:
 
 
 def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
-    from libmozdata import vcs_map
-
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
 
@@ -318,10 +316,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
         LOGGER.error(f"Patch not found in Redis for hash {patch_hash}")
         return "NOK"
 
-    hg_base_rev = next(vcs_map.git_to_mercurial(REPO_DIR, [base_rev]), None)
-    if hg_base_rev is None:
-        LOGGER.error(f"Could not map git base rev {base_rev} to a mercurial revision")
-        return "NOK"
+    hg_base_rev = utils.git2hg(base_rev)
     LOGGER.info(f"Mapped git base rev {base_rev} to hg rev {hg_base_rev}")
 
     # Pull the base revision to the local repository

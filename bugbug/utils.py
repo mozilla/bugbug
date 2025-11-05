@@ -624,3 +624,9 @@ def hg2git(hash: str) -> str:
     r = get_session("lando").get(f"https://lando.moz.tools/api/hg2git/firefox/{hash}")
     r.raise_for_status()
     return r.json()["git_hash"]
+
+
+def git2hg(hash: str) -> str:
+    r = get_session("lando").get(f"https://lando.moz.tools/api/git2hg/firefox/{hash}")
+    r.raise_for_status()
+    return r.json()["hg_hash"]
