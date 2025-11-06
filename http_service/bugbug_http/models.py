@@ -15,7 +15,7 @@ import requests
 import zstandard
 from redis import Redis
 
-from bugbug import bugzilla, repository, test_scheduling
+from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testselect
@@ -249,10 +249,6 @@ def schedule_tests(branch: str, rev: str) -> str:
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"
 
-    test_selection_threshold = float(
-        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
-    )
-
     # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
     # On other repos, only consider "default" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
     if branch == "try":
@@ -260,47 +256,8 @@ def schedule_tests(branch: str, rev: str) -> str:
     else:
         repo_branch = "default"
 
-    # Analyze patches.
-    commits = repository.download_commits(
-        REPO_DIR,
-        revs=revs,
-        branch=repo_branch,
-        save=False,
-        use_single_process=True,
-        include_no_bug=True,
-    )
+    data = _analyze_patch(revs, repo_branch)
 
-    if len(commits) > 0:
-        testlabelselect_model = MODEL_CACHE.get("testlabelselect")
-        testgroupselect_model = MODEL_CACHE.get("testgroupselect")
-
-        tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
-
-        reduced = testselect.reduce_configs(
-            set(t for t, c in tasks.items() if c >= 0.8), 1.0
-        )
-
-        reduced_higher = testselect.reduce_configs(
-            set(t for t, c in tasks.items() if c >= 0.9), 1.0
-        )
-
-        groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
-
-        config_groups = testselect.select_configs(groups.keys(), 0.9)
-    else:
-        tasks = {}
-        reduced = set()
-        groups = {}
-        config_groups = {}
-
-    data = {
-        "tasks": tasks,
-        "groups": groups,
-        "config_groups": config_groups,
-        "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
-        "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
-        "known_tasks": get_known_tasks(),
-    }
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
     return "OK"
@@ -332,3 +289,94 @@ def get_config_specific_groups(config: str) -> str:
     )
 
     return "OK"
+
+
+def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
+    from bugbug_http import REPO_DIR
+    from bugbug_http.app import JobInfo
+
+    job = JobInfo(schedule_tests_from_patch, base_rev, patch_hash)
+    LOGGER.info("Processing %s...", job)
+
+    # Retrieve the patch from Redis
+    patch_key = f"bugbug:patch:{patch_hash}"
+    patch_data_raw = redis.get(patch_key)
+
+    if not patch_data_raw:
+        LOGGER.error(f"Patch not found in Redis for hash {patch_hash}")
+        return "NOK"
+
+    hg_base_rev = utils.git2hg(base_rev)
+    LOGGER.info(f"Mapped git base rev {base_rev} to hg rev {hg_base_rev}")
+
+    # Pull the base revision to the local repository
+    LOGGER.info("Pulling base revision from the remote repository...")
+    repository.pull(REPO_DIR, "autoland", hg_base_rev)
+
+    LOGGER.info("Generating commit from patch...")
+    commit = repository.generate_commit_from_raw_patch(
+        REPO_DIR,
+        hg_base_rev,
+        patch=patch_data_raw,
+    )
+
+    data = _analyze_patch([commit.node.encode("ascii")], "default")
+
+    setkey(job.result_key, orjson.dumps(data), compress=True)
+
+    return "OK"
+
+
+def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
+    from bugbug_http import REPO_DIR
+
+    commits = repository.download_commits(
+        REPO_DIR,
+        revs=revs,
+        branch=branch,
+        save=False,
+        use_single_process=True,
+        include_no_bug=True,
+    )
+
+    if not commits:
+        return {
+            "tasks": {},
+            "groups": {},
+            "config_groups": {},
+            "reduced_tasks": {},
+            "reduced_tasks_higher": {},
+            "known_tasks": get_known_tasks(),
+        }
+
+    test_selection_threshold = float(
+        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
+    )
+
+    testlabelselect_model = MODEL_CACHE.get("testlabelselect")
+    testgroupselect_model = MODEL_CACHE.get("testgroupselect")
+
+    tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+
+    reduced = testselect.reduce_configs(
+        set(t for t, c in tasks.items() if c >= 0.8), 1.0
+    )
+
+    reduced_higher = testselect.reduce_configs(
+        set(t for t, c in tasks.items() if c >= 0.9), 1.0
+    )
+
+    groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+
+    config_groups = testselect.select_configs(groups.keys(), 0.9)
+
+    data = {
+        "tasks": tasks,
+        "groups": groups,
+        "config_groups": config_groups,
+        "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
+        "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
+        "known_tasks": get_known_tasks(),
+    }
+
+    return data
