@@ -318,7 +318,6 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
         REPO_DIR,
         hg_base_rev,
         patch=patch_data_raw,
-        commit_msg="Applied patch for test selection",
     )
 
     data = _analyze_patch([commit.node.encode("ascii")], "default")
