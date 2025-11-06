@@ -328,7 +328,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     return "OK"
 
 
-def _analyze_patch(revs: list[bytes], branch: str | None):
+def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     from bugbug_http import REPO_DIR
 
     commits = repository.download_commits(
