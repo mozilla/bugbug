@@ -1564,7 +1564,6 @@ def generate_commit_from_raw_patch(
         hg.import_(
             patches=io.BytesIO(patch),
             message=commit_msg.encode("utf-8"),
-            user="bugbot <bugbug@mozilla.tld>".encode("utf-8"),
         )
 
         logger.info("Retrieving commit information...")
