@@ -256,17 +256,7 @@ def schedule_tests(branch: str, rev: str) -> str:
     else:
         repo_branch = "default"
 
-    # Analyze patches.
-    commits = repository.download_commits(
-        REPO_DIR,
-        revs=revs,
-        branch=repo_branch,
-        save=False,
-        use_single_process=True,
-        include_no_bug=True,
-    )
-
-    data = _analyze_patch(commits)
+    data = _analyze_patch(revs, repo_branch)
 
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
@@ -331,24 +321,25 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
         commit_msg="Applied patch for test selection",
     )
 
-    # Analyze the patch.
-    commits = repository.download_commits(
-        REPO_DIR,
-        revs=[commit.node.encode("ascii")],
-        branch="default",
-        save=False,
-        use_single_process=True,
-        include_no_bug=True,
-    )
-
-    data = _analyze_patch(commits)
+    data = _analyze_patch([commit.node.encode("ascii")], "default")
 
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
     return "OK"
 
 
-def _analyze_patch(commits: Sequence[repository.CommitDict]):
+def _analyze_patch(revs: list[bytes], branch: str | None):
+    from bugbug_http import REPO_DIR
+
+    commits = repository.download_commits(
+        REPO_DIR,
+        revs=revs,
+        branch=branch,
+        save=False,
+        use_single_process=True,
+        include_no_bug=True,
+    )
+
     if not commits:
         return {
             "tasks": {},
