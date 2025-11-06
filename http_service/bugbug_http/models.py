@@ -321,7 +321,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
 
     # Pull the base revision to the local repository
     LOGGER.info("Pulling base revision from the remote repository...")
-    repository.pull(REPO_DIR, "mozilla-central", hg_base_rev)
+    repository.pull(REPO_DIR, "autoland", hg_base_rev)
 
     LOGGER.info("Generating commit from patch...")
     commit = repository.generate_commit_from_raw_patch(
