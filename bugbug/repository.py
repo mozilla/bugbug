@@ -1555,7 +1555,7 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
 
 def generate_commit_from_raw_patch(
     repo_dir: str, base_rev: str, patch: bytes, commit_msg: str
-):
+) -> Commit:
     with hglib.open(repo_dir) as hg:
         logger.info("Updating to base revision %s...", base_rev)
         hg.update(base_rev.encode("utf-8"), clean=True)
