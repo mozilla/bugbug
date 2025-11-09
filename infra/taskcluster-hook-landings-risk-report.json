@@ -41,10 +41,7 @@
     "priority": "normal",
     "provisionerId": "proj-bugbug",
     "retries": 5,
-    "routes": [
-      "notify.email.bugbug-team@mozilla.com.on-failed",
-      "notify.irc-channel.#bugbug.on-failed"
-    ],
+    "routes": ["notify.email.bugbug-team@mozilla.com.on-failed"],
     "schedulerId": "-",
     "scopes": ["assume:hook-id:project-bugbug/bugbug-landings-risk-report"],
     "tags": {},

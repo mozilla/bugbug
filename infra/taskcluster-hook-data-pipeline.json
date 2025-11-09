@@ -43,7 +43,6 @@
     "retries": 5,
     "routes": [
       "notify.email.bugbug-team@mozilla.com.on-failed",
-      "notify.irc-channel.#bugbug.on-failed",
       "index.project.bugbug.data-pipeline-start"
     ],
     "schedulerId": "-",
