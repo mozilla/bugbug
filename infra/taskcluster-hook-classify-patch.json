@@ -63,7 +63,6 @@
     "retries": 5,
     "routes": [
       "notify.email.mcastelluccio@mozilla.com.on-failed",
-      "notify.irc-channel.#bugbug.on-failed",
       "index.project.bugbug.classify_patch.latest",
       "index.project.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
     ],

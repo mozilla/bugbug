@@ -45,7 +45,6 @@ tasks:
         - secrets:get:project/bugbug/production
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.landings_risk_report.latest
       metadata:
         name: BugBug landings risk report
@@ -79,7 +78,6 @@ tasks:
             type: directory
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.landings_risk_report_ui.latest
       metadata:
         name: bugbug ui build

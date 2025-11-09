@@ -37,7 +37,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.microannotate_gecko-dev-wordified.${version}
         - index.project.bugbug.microannotate_gecko-dev-wordified.latest
       metadata:
@@ -73,7 +72,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.microannotate_gecko-dev-comments-removed.${version}
         - index.project.bugbug.microannotate_gecko-dev-comments-removed.latest
       metadata:
@@ -110,7 +108,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.${version}
         - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.latest
       metadata:
@@ -146,7 +143,6 @@ tasks:
         - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_commits.${version}
         - index.project.bugbug.data_commits.latest
       metadata:
@@ -185,7 +181,6 @@ tasks:
         - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_bugs.${version}
         - index.project.bugbug.data_bugs.latest
       metadata:
@@ -225,7 +220,6 @@ tasks:
         - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_revisions.${version}
         - index.project.bugbug.data_revisions.latest
       metadata:
@@ -264,7 +258,6 @@ tasks:
         - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.fixed_comments.${version}
         - index.project.bugbug.fixed_comments.latest
       metadata:
@@ -307,7 +300,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.ci_failures_retriever.${version}
         - index.project.bugbug_annotate.ci_failures_retriever.latest
       metadata:
@@ -348,7 +340,6 @@ tasks:
         - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_github_webcompat_web-bugs_issues.${version}
         - index.project.bugbug.data_github_webcompat_web-bugs_issues.latest
       metadata:
@@ -387,7 +378,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_label_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_label_scheduling_history_push_data.latest
       metadata:
@@ -426,7 +416,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_group_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_group_scheduling_history_push_data.latest
       metadata:
@@ -465,7 +454,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_config_group_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_config_group_scheduling_history_push_data.latest
       metadata:
@@ -514,7 +502,6 @@ tasks:
         - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_label_scheduling_history.${version}
         - index.project.bugbug.data_test_label_scheduling_history.latest
       metadata:
@@ -563,7 +550,6 @@ tasks:
         - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_group_scheduling_history.${version}
         - index.project.bugbug.data_test_group_scheduling_history.latest
       metadata:
@@ -605,7 +591,6 @@ tasks:
         - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_config_group_scheduling_history.${version}
         - index.project.bugbug.data_test_config_group_scheduling_history.latest
       metadata:
@@ -632,7 +617,6 @@ tasks:
             python -m bugbug.bug_snapshot --verbose"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug rollback test
         description: bugbug rollback test
@@ -664,7 +648,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_component.${version}
         - index.project.bugbug.train_component.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_component.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -700,7 +683,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_defectenhancementtask.${version}
         - index.project.bugbug.train_defectenhancementtask.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_defectenhancementtask.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -736,7 +718,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_regression.${version}
         - index.project.bugbug.train_regression.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_regression.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -767,7 +748,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.regressor_finder_commits_to_ignore.latest
       metadata:
         name: bugbug regressor finder (commits to ignore)
@@ -798,7 +778,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_fixing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-fixing commits)
@@ -835,7 +814,6 @@ tasks:
     #        - "auth:aws-s3:read-write:communitytc-bugbug/*"
     #      routes:
     #        - notify.email.bugbug-team@mozilla.com.on-failed
-    #        - notify.irc-channel.#bugbug.on-failed
     #        - index.project.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
     #      metadata:
     #        name: bugbug regressor finder (tokenized bug-introducing commits)
@@ -868,7 +846,6 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-introducing commits)
@@ -943,7 +920,6 @@ tasks:
             type: file
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.past_bugs_by_unit.${version}
         - index.project.bugbug.past_bugs_by_unit.latest
       metadata:
@@ -984,7 +960,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_regressor.${version}
         - index.project.bugbug.train_regressor.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_regressor.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1023,7 +998,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_stepstoreproduce.${version}
         - index.project.bugbug.train_stepstoreproduce.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_stepstoreproduce.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1059,7 +1033,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_spambug.${version}
         - index.project.bugbug.train_spambug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_spambug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1095,7 +1068,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_accessibility.${version}
         - index.project.bugbug.train_accessibility.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_accessibility.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1133,7 +1105,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_testlabelselect.${version}
         - index.project.bugbug.train_testlabelselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_testlabelselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1172,7 +1143,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_testgroupselect.${version}
         - index.project.bugbug.train_testgroupselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_testgroupselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1209,7 +1179,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_testfailure.${version}
         - index.project.bugbug.train_testfailure.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_testfailure.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1245,7 +1214,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_needsdiagnosis.${version}
         - index.project.bugbug.train_needsdiagnosis.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_needsdiagnosis.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1281,7 +1249,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_invalidcompatibilityreport.${version}
         - index.project.bugbug.train_invalidcompatibilityreport.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_invalidcompatibilityreport.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1317,7 +1284,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_performancebug.${version}
         - index.project.bugbug.train_performancebug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_performancebug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1353,7 +1319,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_worksforme.${version}
         - index.project.bugbug.train_worksforme.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_worksforme.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1389,7 +1354,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_fenixcomponent.${version}
         - index.project.bugbug.train_fenixcomponent.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_fenixcomponent.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1482,7 +1446,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http build
         description: bugbug docker http build
@@ -1678,7 +1641,6 @@ tasks:
             taskboot github-workflow-dispatch mozilla/bugbug docker-push.yml ${version} --inputs ''{"image_tag": "${version}"}'''
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http push
         description: bugbug docker http push
@@ -1710,7 +1672,6 @@ tasks:
 
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http service deploy
         description: bugbug docker http service deploy
