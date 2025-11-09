@@ -36,14 +36,14 @@ tasks:
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.microannotate_gecko-dev-wordified.${version}
         - index.project.bugbug.microannotate_gecko-dev-wordified.latest
       metadata:
         name: bugbug microannotate tokenized repository generator
         description: bugbug microannotate tokenized repository generator
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: microannotate-generate-remove-comments
@@ -72,14 +72,14 @@ tasks:
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.microannotate_gecko-dev-comments-removed.${version}
         - index.project.bugbug.microannotate_gecko-dev-comments-removed.latest
       metadata:
         name: bugbug microannotate repository with comments removed generator
         description: bugbug microannotate repository with comments removed generator
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: microannotate-generate-tokenize-and-remove-comments
@@ -109,14 +109,14 @@ tasks:
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.${version}
         - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.latest
       metadata:
         name: bugbug microannotate tokenized repository with comments removed generator
         description: bugbug microannotate tokenized repository with comments removed generator
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: commit-retrieval
@@ -145,14 +145,14 @@ tasks:
         - "docker-worker:cache:bugbug-mercurial-repository"
         - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_commits.${version}
         - index.project.bugbug.data_commits.latest
       metadata:
         name: bugbug commit retrieval
         description: bugbug commit retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: bugs-retrieval
@@ -184,14 +184,14 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_bugs.${version}
         - index.project.bugbug.data_bugs.latest
       metadata:
         name: bugbug bugs retrieval
         description: bugbug bugs retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: revisions-retrieval
@@ -224,14 +224,14 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_revisions.${version}
         - index.project.bugbug.data_revisions.latest
       metadata:
         name: bugbug revisions retrieval
         description: bugbug revisions retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: fixed-comments-retrieval
@@ -263,14 +263,14 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.fixed_comments.${version}
         - index.project.bugbug.fixed_comments.latest
       metadata:
         name: bugbug fixed comments retrieval
         description: bugbug fixed comments retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: ci-failures-retrieval
@@ -306,14 +306,14 @@ tasks:
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.ci_failures_retriever.${version}
         - index.project.bugbug_annotate.ci_failures_retriever.latest
       metadata:
         name: bugbug CI failures retriever
         description: bugbug CI failures retriever
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: issues-retrieval
@@ -347,14 +347,14 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_github_webcompat_web-bugs_issues.${version}
         - index.project.bugbug.data_github_webcompat_web-bugs_issues.latest
       metadata:
         name: bugbug webcompat issues retrieval
         description: bugbug webcompat issues retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-label-scheduling-history-push_data-retrieval
@@ -386,14 +386,14 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_label_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_label_scheduling_history_push_data.latest
       metadata:
         name: bugbug test label scheduling history push data retrieval
         description: bugbug test label scheduling history push data retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-group-scheduling-history-push_data-retrieval
@@ -425,14 +425,14 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_group_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_group_scheduling_history_push_data.latest
       metadata:
         name: bugbug test group scheduling history push data retrieval
         description: bugbug test group scheduling history push data retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-config_group-scheduling-history-push_data-retrieval
@@ -464,14 +464,14 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_config_group_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_config_group_scheduling_history_push_data.latest
       metadata:
         name: bugbug test config_group scheduling history push data retrieval
         description: bugbug test config_group scheduling history push data retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-label-scheduling-history-generator
@@ -513,14 +513,14 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_label_scheduling_history.${version}
         - index.project.bugbug.data_test_label_scheduling_history.latest
       metadata:
         name: bugbug test label scheduling history retrieval
         description: bugbug test label scheduling history retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-group-scheduling-history-generator
@@ -562,14 +562,14 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_group_scheduling_history.${version}
         - index.project.bugbug.data_test_group_scheduling_history.latest
       metadata:
         name: bugbug test group scheduling history retrieval
         description: bugbug test group scheduling history retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-config_group-scheduling-history-generator
@@ -604,14 +604,14 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.data_test_config_group_scheduling_history.${version}
         - index.project.bugbug.data_test_config_group_scheduling_history.latest
       metadata:
         name: bugbug test config_group scheduling history retrieval
         description: bugbug test config_group scheduling history retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: rollback-test-task
@@ -631,12 +631,12 @@ tasks:
           - "python -c 'from bugbug import bugzilla, db; db.download(bugzilla.BUGS_DB)' &&
             python -m bugbug.bug_snapshot --verbose"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug rollback test
         description: bugbug rollback test
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-component
@@ -663,7 +663,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_component.${version}
         - index.project.bugbug.train_component.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -672,7 +672,7 @@ tasks:
       metadata:
         name: bugbug train component model
         description: bugbug train component model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-defectenhancementtask
@@ -699,7 +699,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_defectenhancementtask.${version}
         - index.project.bugbug.train_defectenhancementtask.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -708,7 +708,7 @@ tasks:
       metadata:
         name: bugbug train defect/enhancement/task model
         description: bugbug train defect/enhancement/task model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-regression
@@ -735,7 +735,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_regression.${version}
         - index.project.bugbug.train_regression.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -744,7 +744,7 @@ tasks:
       metadata:
         name: bugbug train regression model
         description: bugbug train regression model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: regressor-finder-commits-to-ignore
@@ -766,13 +766,13 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.regressor_finder_commits_to_ignore.latest
       metadata:
         name: bugbug regressor finder (commits to ignore)
         description: bugbug regressor finder (commits to ignore)
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: regressor-finder-bug-fixing-commits
@@ -797,13 +797,13 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_fixing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-fixing commits)
         description: bugbug regressor finder (bug-fixing commits)
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     #    - ID: regressor-finder-tokenized-bug-introducing
@@ -834,13 +834,13 @@ tasks:
     #      scopes:
     #        - "auth:aws-s3:read-write:communitytc-bugbug/*"
     #      routes:
-    #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+    #        - notify.email.bugbug-team@mozilla.com.on-failed
     #        - notify.irc-channel.#bugbug.on-failed
     #        - index.project.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
     #      metadata:
     #        name: bugbug regressor finder (tokenized bug-introducing commits)
     #        description: bugbug regressor finder (tokenized bug-introducing commits)
-    #        owner: release-mgmt-analysis@mozilla.com
+    #        owner: bugbug-team@mozilla.com
     #        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: regressor-finder-bug-introducing
@@ -867,13 +867,13 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-introducing commits)
         description: bugbug regressor finder (bug-introducing commits)
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: past-bugs-by-unit
@@ -942,14 +942,14 @@ tasks:
             path: /data/past_fixed_bug_blocked_bugs_by_function.json.zst
             type: file
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.past_bugs_by_unit.${version}
         - index.project.bugbug.past_bugs_by_unit.latest
       metadata:
         name: bugbug past bugs by function
         description: bugbug past bugs by function
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-regressor
@@ -983,7 +983,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_regressor.${version}
         - index.project.bugbug.train_regressor.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -992,7 +992,7 @@ tasks:
       metadata:
         name: bugbug train regressor model
         description: bugbug train regressor model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-stepstoreproduce
@@ -1022,7 +1022,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_stepstoreproduce.${version}
         - index.project.bugbug.train_stepstoreproduce.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1031,7 +1031,7 @@ tasks:
       metadata:
         name: bugbug train stepstoreproduce model
         description: bugbug train stepstoreproduce model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-spambug
@@ -1058,7 +1058,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_spambug.${version}
         - index.project.bugbug.train_spambug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1067,7 +1067,7 @@ tasks:
       metadata:
         name: bugbug train spambug model
         description: bugbug train spambug model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-accessibility
@@ -1094,7 +1094,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_accessibility.${version}
         - index.project.bugbug.train_accessibility.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1103,7 +1103,7 @@ tasks:
       metadata:
         name: bugbug train accessibility model
         description: bugbug train accessibility model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-label-select
@@ -1132,7 +1132,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_testlabelselect.${version}
         - index.project.bugbug.train_testlabelselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1141,7 +1141,7 @@ tasks:
       metadata:
         name: bugbug train test label selection model
         description: bugbug train test label selection model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-group-select
@@ -1171,7 +1171,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_testgroupselect.${version}
         - index.project.bugbug.train_testgroupselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1180,7 +1180,7 @@ tasks:
       metadata:
         name: bugbug train test group selection model
         description: bugbug train test group selection model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-failure
@@ -1208,7 +1208,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_testfailure.${version}
         - index.project.bugbug.train_testfailure.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1217,7 +1217,7 @@ tasks:
       metadata:
         name: bugbug train test failure model
         description: bugbug train test failure model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-needsdiagnosis
@@ -1244,7 +1244,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_needsdiagnosis.${version}
         - index.project.bugbug.train_needsdiagnosis.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1253,7 +1253,7 @@ tasks:
       metadata:
         name: bugbug train needsdiagnosis model
         description: bugbug train needsdiagnosis model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-invalidcompatibilityreport
@@ -1280,7 +1280,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_invalidcompatibilityreport.${version}
         - index.project.bugbug.train_invalidcompatibilityreport.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1289,7 +1289,7 @@ tasks:
       metadata:
         name: bugbug train invalidcompatibilityreport model
         description: bugbug train invalidcompatibilityreport model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-performancebug
@@ -1316,7 +1316,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_performancebug.${version}
         - index.project.bugbug.train_performancebug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1325,7 +1325,7 @@ tasks:
       metadata:
         name: bugbug train performancebug model
         description: bugbug train performancebug model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-worksforme
@@ -1352,7 +1352,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_worksforme.${version}
         - index.project.bugbug.train_worksforme.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1361,7 +1361,7 @@ tasks:
       metadata:
         name: bugbug train worksforme model
         description: bugbug train worksforme model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-fenixcomponent
@@ -1388,7 +1388,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.bugbug.train_fenixcomponent.${version}
         - index.project.bugbug.train_fenixcomponent.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -1397,7 +1397,7 @@ tasks:
       metadata:
         name: bugbug train fenixcomponent model
         description: bugbug train fenixcomponent model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: check_metrics
@@ -1437,7 +1437,7 @@ tasks:
       metadata:
         name: bugbug check_metrics
         description: bugbug check_metrics
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: docker-build
@@ -1481,12 +1481,12 @@ tasks:
         - docker-worker:capability:privileged
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http build
         description: bugbug docker http build
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     # It's the same task integration_test as in .taskcluster.yml
@@ -1525,7 +1525,7 @@ tasks:
       metadata:
         name: bugbug integration test
         description: bugbug integration test
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: update_hook_check_pipeline
@@ -1677,12 +1677,12 @@ tasks:
           - 'taskboot push-artifact &&
             taskboot github-workflow-dispatch mozilla/bugbug docker-push.yml ${version} --inputs ''{"image_tag": "${version}"}'''
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http push
         description: bugbug docker http push
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: http-deploy
@@ -1709,10 +1709,10 @@ tasks:
           - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar.zst' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar.zst'"
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http service deploy
         description: bugbug docker http service deploy
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
