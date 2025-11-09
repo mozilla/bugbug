@@ -60,7 +60,7 @@
     "provisionerId": "proj-bugbug",
     "retries": 5,
     "routes": [
-      "notify.email.mcastelluccio@mozilla.com.on-failed",
+      "notify.email.bugbug-team@mozilla.com.on-failed",
       "index.project.bugbug.test_select.latest",
       "index.project.bugbug.test_select.diff.${payload['DIFF_ID']}",
       "project.bugbug.test_select"

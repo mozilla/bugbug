@@ -62,7 +62,7 @@
     "provisionerId": "proj-bugbug",
     "retries": 5,
     "routes": [
-      "notify.email.mcastelluccio@mozilla.com.on-failed",
+      "notify.email.bugbug-team@mozilla.com.on-failed",
       "index.project.bugbug.classify_patch.latest",
       "index.project.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
     ],
