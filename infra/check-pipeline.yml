@@ -14,12 +14,12 @@ tasks:
         - component
 
     routes:
-      - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+      - notify.email.bugbug-team@mozilla.com.on-failed
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug check component
       description: bugbug check component
-      owner: release-mgmt-analysis@mozilla.com
+      owner: bugbug-team@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/infra/check-pipeline.yml
 
   - ID: shadow-scheduler-stats
@@ -60,11 +60,11 @@ tasks:
     scopes:
       - auth:aws-s3:read-write:communitytc-bugbug/*
     routes:
-      - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+      - notify.email.bugbug-team@mozilla.com.on-failed
       - notify.irc-channel.#bugbug.on-failed
       - index.project.bugbug.shadow_scheduler_stats.latest
     metadata:
       name: bugbug shadow scheduler stats
       description: bugbug shadow scheduler stats
-      owner: release-mgmt-analysis@mozilla.com
+      owner: bugbug-team@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/infra/check-pipeline.yml
