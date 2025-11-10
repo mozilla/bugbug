@@ -87,7 +87,7 @@ def process_comments(limit, diff_length_limit):
     except FileNotFoundError:
         already_done_patches = set()
 
-    logger.info(f"{len(already_done_patches)} were already analyzed.")
+    logger.info("%d were already analyzed.", len(already_done_patches))
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
         revision_info = diff_id_to_revisions_map[patch_id]
