@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import pickle
 import re
 
 from libmozdata.phabricator import PhabricatorAPI
@@ -78,15 +79,22 @@ def process_comments(limit, diff_length_limit):
     patch_count = 0
     diff_id_to_revisions_map, diff_phid_to_id = load_revisions_maps()
 
-    already_done_patches = {
-        data["initial_patch_id"] for data in db.read(phabricator.FIXED_COMMENTS_DB)
-    }
+    try:
+        with open(
+            os.path.join("data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB), "rb"
+        ) as f:
+            already_done_patches = pickle.load(f)
+    except FileNotFoundError:
+        already_done_patches = set()
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
+        revision_info = diff_id_to_revisions_map[patch_id]
+
         if patch_id in already_done_patches:
             continue
+        elif revision_info["fields"]["status"]["closed"]:
+            already_done_patches.add(patch_id)
 
-        revision_info = diff_id_to_revisions_map[patch_id]
         transactions = revision_info["transactions"]
 
         resolved_comments = [comment for comment in comments if comment.is_done]
@@ -166,6 +174,13 @@ def process_comments(limit, diff_length_limit):
         if patch_count >= limit:
             break
 
+    with open(
+        os.path.join("data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB), "wb"
+    ) as f:
+        pickle.dump(already_done_patches, f)
+
+    zstd_compress(os.path.join("data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB))
+
 
 def main():
     parser = argparse.ArgumentParser(description="Process patch reviews.")
@@ -191,7 +206,7 @@ def main():
 
     assert db.download(phabricator.REVISIONS_DB)
 
-    db.download(phabricator.FIXED_COMMENTS_DB)
+    db.download(phabricator.FIXED_COMMENTS_DB, support_files_too=True)
 
     db.append(
         phabricator.FIXED_COMMENTS_DB,

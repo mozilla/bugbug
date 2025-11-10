@@ -30,10 +30,12 @@ db.register(
 )
 
 FIXED_COMMENTS_DB = "data/fixed_comments.json"
+FIXED_COMMENTS_ALREADY_ANALYZED_DB = "fixed_comments_already_analyzed.pickle"
 db.register(
     FIXED_COMMENTS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.fixed_comments.latest/artifacts/public/fixed_comments.json.zst",
     1,
+    [FIXED_COMMENTS_ALREADY_ANALYZED_DB],
 )
 
 PHABRICATOR_API = None
