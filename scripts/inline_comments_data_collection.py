@@ -94,7 +94,8 @@ def process_comments(limit, diff_length_limit):
 
         if patch_id in already_done_patches:
             continue
-        elif revision_info["fields"]["status"]["closed"]:
+
+        if revision_info["fields"]["status"]["closed"]:
             already_done_patches.add(patch_id)
 
         transactions = revision_info["transactions"]
