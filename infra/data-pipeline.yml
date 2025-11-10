@@ -251,6 +251,9 @@ tasks:
           public/fixed_comments.json.version:
             path: /data/fixed_comments.json.version
             type: file
+          public/fixed_comments_already_analyzed.pickle.zst:
+            path: /data/fixed_comments_already_analyzed.pickle.zst
+            type: file
 
         features:
           taskclusterProxy: true
