@@ -37,9 +37,9 @@ def main():
     qs = sys.argv[1:] or ["default"]
     w = Worker(qs, connection=redis_conn)
 
-    # Write readiness probe file for Kubernetes
+    # Write readiness probe file.
     with open("/tmp/ready", "w") as f:
-        f.write("ready\n")
+        pass
 
     w.work()
 
