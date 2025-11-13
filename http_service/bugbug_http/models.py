@@ -314,13 +314,9 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     repository.pull(REPO_DIR, "integration/autoland", hg_base_rev)
 
     LOGGER.info("Generating commit(s) from patch...")
-    commits = repository.generate_commit_from_raw_patch(
-        REPO_DIR,
-        hg_base_rev,
-        patch=patch_data_raw,
-    )
+    revs = repository.import_commits(REPO_DIR, hg_base_rev, patch=patch_data_raw)
 
-    data = _analyze_patch([c.node.encode("ascii") for c in commits], "default")
+    data = _analyze_patch(revs, "default")
 
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
