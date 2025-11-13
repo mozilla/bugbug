@@ -38,8 +38,7 @@ def main():
     w = Worker(qs, connection=redis_conn)
 
     # Write readiness probe file.
-    with open("/tmp/ready", "w") as f:
-        pass
+    open("/tmp/ready", "w").close()
 
     w.work()
 
