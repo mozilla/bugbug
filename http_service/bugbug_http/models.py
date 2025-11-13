@@ -313,14 +313,14 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     LOGGER.info("Pulling base revision from the remote repository...")
     repository.pull(REPO_DIR, "integration/autoland", hg_base_rev)
 
-    LOGGER.info("Generating commit from patch...")
-    commit = repository.generate_commit_from_raw_patch(
+    LOGGER.info("Generating commit(s) from patch...")
+    commits = repository.generate_commit_from_raw_patch(
         REPO_DIR,
         hg_base_rev,
         patch=patch_data_raw,
     )
 
-    data = _analyze_patch([commit.node.encode("ascii")], "default")
+    data = _analyze_patch([c.node.encode("ascii") for c in commits], "default")
 
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
