@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
-import json
 import time
 
 import orjson
@@ -124,7 +123,7 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     def do_request():
         return client.post(
             "/component/predict/batch",
-            data=json.dumps({"bugs": bug_ids}),
+            json={"bugs": bug_ids},
             headers={API_TOKEN: "test"},
         )
 
@@ -182,7 +181,7 @@ def test_model_predict_batch_broken_site_reports(client, jobs, add_result):
     def do_request():
         return client.post(
             "/invalidcompatibilityreport/predict/broken_site_report/batch",
-            data=json.dumps({"reports": reports}),
+            json={"reports": reports},
             headers={API_TOKEN: "test"},
         )
 
@@ -234,7 +233,7 @@ def test_for_missing_bugs(client, responses):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": all_bug_ids}),
+        json={"bugs": all_bug_ids},
         headers={API_TOKEN: "test"},
     )
     assert rv.status_code == 202
@@ -249,7 +248,7 @@ def test_empty_batch(client):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": []}),
+        json={"bugs": []},
         headers={API_TOKEN: "test"},
     )
 
@@ -264,7 +263,7 @@ def test_non_int_batch(client):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": bugs}),
+        json={"bugs": bugs},
         headers={API_TOKEN: "test"},
     )
 
@@ -289,7 +288,7 @@ def test_unknown_model(client):
 
     rv = client.post(
         f"/{unknown_model}/predict/batch",
-        data=json.dumps({"bugs": bugs}),
+        json={"bugs": bugs},
         headers={API_TOKEN: "test"},
     )
 
@@ -304,7 +303,7 @@ def test_no_api_key(client):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": bugs}),
+        json={"bugs": bugs},
         headers={},
     )
 
