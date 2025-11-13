@@ -57,6 +57,10 @@ class SwarmPatch(Patch):
     def bug_title(self) -> str:
         raise NotImplementedError
 
+    @property
+    def patch_url(self) -> str:
+        raise NotImplementedError
+
     def get_old_file(self, file_path: str) -> str:
         raise NotImplementedError
 

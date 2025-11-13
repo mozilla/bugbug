@@ -73,13 +73,7 @@ Generate high-quality code review comments for the patch provided below.
 
 **Output Format**:
 
-Respond only with a **JSON list**. Each object must contain the following fields:
-
-* `"file"`: The relative path to the file the comment applies to.
-* `"code_line"`: The number of the specific changed line of code that the comment refers to.
-* `"comment"`: A concise review comment.
-* `"explanation"`: A brief rationale for the comment, including how confident you are and why.
-* `"order"`: An integer indicating the comment’s priority (1 = highest confidence/importance).
+{output_instructions}
 
 ---
 
@@ -96,9 +90,37 @@ Respond only with a **JSON list**. Each object must contain the following fields
 
 ---
 
+**Review Context**:
+
+Target Software: {target_software}
+Bug Title: {bug_title}
+Patch Title: {patch_title}
+Source URL: {patch_url}
+
+---
+
 **Patch to Review**:
 
 {patch}
+"""
+
+OUTPUT_FORMAT_JSON = """
+Respond only with a **JSON list**. Each object must contain the following fields:
+
+* `"file"`: The relative path to the file the comment applies to.
+* `"code_line"`: The number of the specific changed line of code that the comment refers to.
+* `"comment"`: A concise review comment.
+* `"explanation"`: A brief rationale for the comment, including how confident you are and why.
+"""
+
+OUTPUT_FORMAT_TEXT = """
+Respond only with a **plain text list** with the following details:
+
+* `"filename"`: The relative path to the file the comment applies to.
+* `"line_number"`: The number of the specific changed line of code that the comment refers to.
+* `"comment"`: A concise review comment.
+
+The format should be: filename:line_number "comment"
 """
 
 
