@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
+from unittest.mock import patch
 
 import orjson
 
@@ -19,13 +20,18 @@ def retrieve_compressed_reponse(response):
 
 
 def test_patch_schedules_post_with_cache(client, add_result, jobs):
-    """Test that POST requests with cached results still work correctly.
+    """Test that POST requests with cached results consume the request body.
 
     This test verifies the fix for the issue where sending a POST request
     with a patch body to a previously cached endpoint would fail with
     IncompleteRead error because the response was sent before consuming
     the request body.
+
+    The test verifies that request.data is accessed before compress_response
+    is called when there's cached data for a POST request.
     """
+    from bugbug_http import app
+
     base_rev = "abc123"
     patch_hash = "def456"
     patch_content = """diff --git a/test.txt b/test.txt
@@ -54,16 +60,43 @@ def test_patch_schedules_post_with_cache(client, add_result, jobs):
     keys = next(iter(jobs.values()))
     add_result(keys[0], result)
 
-    # Second POST request with same parameters - should return cached result
-    # This is where the bug would occur - sending response before reading body
-    rv = client.post(
-        f"/patch/{base_rev}/{patch_hash}/schedules",
-        data=patch_content.encode("utf-8"),
-        headers={API_TOKEN: "test"},
-    )
+    # Wrap compress_response to track if request.data was accessed before it
+    original_compress_response = app.compress_response
+    request_data_accessed_before_compress = False
 
-    assert rv.status_code == 200
-    assert retrieve_compressed_reponse(rv) == result
+    def tracking_compress_response(*args, **kwargs):
+        nonlocal request_data_accessed_before_compress
+        # Check if we're in a request context and if data was accessed
+        try:
+            from flask import has_request_context, request
+
+            if has_request_context() and request.method == "POST":
+                # Access the internal Flask request object to check if body was consumed
+                # The _cached_data attribute is set when request.data is accessed
+                if hasattr(request, "_cached_data"):
+                    request_data_accessed_before_compress = True
+        except Exception:
+            pass
+        return original_compress_response(*args, **kwargs)
+
+    with patch(
+        "bugbug_http.app.compress_response", side_effect=tracking_compress_response
+    ):
+        # Second POST request with same parameters - should return cached result
+        # This is where the bug would occur - sending response before reading body
+        rv = client.post(
+            f"/patch/{base_rev}/{patch_hash}/schedules",
+            data=patch_content.encode("utf-8"),
+            headers={API_TOKEN: "test"},
+        )
+
+        assert rv.status_code == 200
+        assert retrieve_compressed_reponse(rv) == result
+
+        # Verify that request.data was accessed before compress_response was called
+        assert request_data_accessed_before_compress, (
+            "request.data was not accessed before compress_response for POST request with cached result"
+        )
 
 
 def test_patch_schedules_get_with_cache(client, add_result, jobs):
