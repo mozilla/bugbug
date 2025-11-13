@@ -1087,6 +1087,12 @@ def patch_schedules(base_rev, patch_hash):
     job = JobInfo(schedule_tests_from_patch, base_rev, patch_hash)
     data = get_result(job)
     if data:
+        # We don't need to read the POST data to find the response in the cache
+        # because the hash of the data is in the URL. However, we must consume
+        # the request body for POST requests before returning the cached response
+        # to avoid the client receiving a response before finishing sending the body.
+        if request.method == "POST":
+            _ = request.data
         return compress_response(data, 200)
 
     if not is_pending(job):
