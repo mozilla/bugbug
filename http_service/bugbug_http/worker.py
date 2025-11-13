@@ -23,6 +23,10 @@ def main():
     # Bootstrap the worker assets
     bugbug_http.boot.boot_worker()
 
+    # Write readiness probe file for Kubernetes
+    with open("/tmp/ready", "w") as f:
+        f.write("ready\n")
+
     # Provide queue names to listen to as arguments to this script,
     # similar to rq worker
     url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))

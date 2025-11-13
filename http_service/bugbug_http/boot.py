@@ -213,7 +213,3 @@ def boot_worker() -> None:
         retrieve_schedulable_tasks_future.result()
 
     logger.info("Worker boot done")
-
-    # Write readiness probe file for Kubernetes
-    with open("/tmp/ready", "w") as f:
-        f.write("ready\n")
