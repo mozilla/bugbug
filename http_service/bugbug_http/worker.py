@@ -36,6 +36,10 @@ def main():
     )
     qs = sys.argv[1:] or ["default"]
     w = Worker(qs, connection=redis_conn)
+
+    # Write readiness probe file.
+    open("/tmp/ready", "w").close()
+
     w.work()
 
 
