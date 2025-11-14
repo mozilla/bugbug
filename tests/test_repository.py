@@ -2865,8 +2865,9 @@ def test_import_commits_single_commit(fake_hg_repo):
     """Test that a patch with a single commit returns one commit."""
     hg, local, _ = fake_hg_repo
 
-    # Get the base revision
-    base_rev = hg.log(limit=1)[0][1].decode("ascii")
+    # Create an initial commit to serve as the base revision
+    add_file(hg, local, "initial.txt", "initial content\n")
+    base_rev = commit(hg, "Initial commit")
 
     # Create a patch with a single commit
     patch = b"""# HG changeset patch
@@ -2883,10 +2884,12 @@ new file mode 100644
 """
 
     # Apply the patch
-    commits = repository.import_commits(local, base_rev, patch)
+    revs = repository.import_commits(local, base_rev, patch)
 
     # Verify we got exactly one commit
-    assert len(commits) == 1
+    assert len(revs) == 1
+
+    commits = repository.hg_log(hg, revs)
     assert commits[0].desc == "Single commit message"
 
 
@@ -2894,8 +2897,9 @@ def test_import_commits_multiple_commits(fake_hg_repo):
     """Test that a patch with multiple commits returns all commits."""
     hg, local, _ = fake_hg_repo
 
-    # Get the base revision
-    base_rev = hg.log(limit=1)[0][1].decode("ascii")
+    # Create an initial commit to serve as the base revision
+    add_file(hg, local, "initial.txt", "initial content\n")
+    base_rev = commit(hg, "Initial commit")
 
     # Create a patch with multiple commits
     patch = b"""# HG changeset patch
@@ -2936,15 +2940,13 @@ new file mode 100644
 """
 
     # Apply the patch
-    commits = repository.import_commits(local, base_rev, patch)
+    revs = repository.import_commits(local, base_rev, patch)
 
     # Verify we got all three commits
-    assert len(commits) == 3
+    assert len(revs) == 3
+
+    # Verify the commits are in order (oldest to newest)
+    commits = repository.hg_log(hg, revs)
     assert commits[0].desc == "First commit message"
     assert commits[1].desc == "Second commit message"
     assert commits[2].desc == "Third commit message"
-
-    # Verify the commits are in order (oldest to newest)
-    assert commits[0].node != base_rev
-    assert commits[1].node != base_rev
-    assert commits[2].node != base_rev
