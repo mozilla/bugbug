@@ -2859,3 +2859,94 @@ void main() {
             }
         ]
     }
+
+
+def test_import_commits_single_commit(fake_hg_repo):
+    """Test that a patch with a single commit returns one commit."""
+    hg, local, _ = fake_hg_repo
+
+    # Create an initial commit to serve as the base revision
+    add_file(hg, local, "initial.txt", "initial content\n")
+    base_rev = commit(hg, "Initial commit")
+
+    # Create a patch with a single commit
+    patch = b"""# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Single commit message
+
+diff --git a/file1.txt b/file1.txt
+new file mode 100644
+--- /dev/null
++++ b/file1.txt
+@@ -0,0 +1,1 @@
++line1
+"""
+
+    # Apply the patch
+    revs = repository.import_commits(local, base_rev, patch)
+
+    # Verify we got exactly one commit
+    assert len(revs) == 1
+
+    commits = repository.hg_log(hg, revs)
+    assert commits[0].desc == "Single commit message"
+
+
+def test_import_commits_multiple_commits(fake_hg_repo):
+    """Test that a patch with multiple commits returns all commits."""
+    hg, local, _ = fake_hg_repo
+
+    # Create an initial commit to serve as the base revision
+    add_file(hg, local, "initial.txt", "initial content\n")
+    base_rev = commit(hg, "Initial commit")
+
+    # Create a patch with multiple commits
+    patch = b"""# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+First commit message
+
+diff --git a/file1.txt b/file1.txt
+new file mode 100644
+--- /dev/null
++++ b/file1.txt
+@@ -0,0 +1,1 @@
++line1
+
+# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Second commit message
+
+diff --git a/file2.txt b/file2.txt
+new file mode 100644
+--- /dev/null
++++ b/file2.txt
+@@ -0,0 +1,1 @@
++line2
+
+# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Third commit message
+
+diff --git a/file3.txt b/file3.txt
+new file mode 100644
+--- /dev/null
++++ b/file3.txt
+@@ -0,0 +1,1 @@
++line3
+"""
+
+    # Apply the patch
+    revs = repository.import_commits(local, base_rev, patch)
+
+    # Verify we got all three commits
+    assert len(revs) == 3
+
+    # Verify the commits are in order (oldest to newest)
+    commits = repository.hg_log(hg, revs)
+    assert commits[0].desc == "First commit message"
+    assert commits[1].desc == "Second commit message"
+    assert commits[2].desc == "Third commit message"

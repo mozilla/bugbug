@@ -1553,9 +1553,8 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
     trigger_pull()
 
 
-def generate_commit_from_raw_patch(
-    repo_dir: str, base_rev: str, patch: bytes
-) -> Commit:
+def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
+    """Import commits from a git format-patch style patches into a Mercurial repository."""
     with hglib.open(repo_dir) as hg:
         logger.info("Updating to base revision %s...", base_rev)
         hg.update(base_rev.encode("utf-8"), clean=True)
@@ -1563,16 +1562,11 @@ def generate_commit_from_raw_patch(
         logger.info("Applying the patch ...")
         hg.import_(patches=io.BytesIO(patch))
 
-        logger.info("Retrieving commit information...")
-        commits = hg_log(hg, [b"."])
+        revs = get_revs(hg, rev_start=f"children({base_rev})::.")
+        if not revs:
+            raise Exception("Failed to retrieve commits after applying patch")
 
-        if not commits:
-            raise Exception("Failed to retrieve commit after applying patch")
-
-        commit = commits[0]
-        logger.info("Successfully created commit %s", commit.node)
-
-        return commit
+        return revs
 
 
 if __name__ == "__main__":
