@@ -41,33 +41,42 @@ Generate high-quality code review comments for the patch provided below.
 
    * Detect bugs, logical errors, performance concerns, security issues, or violations of the `{target_code_consistency}` coding standards.
    * Focus only on **new or changed lines** (lines beginning with `+`).
+   * **Prioritize**: Security vulnerabilities > Functional bugs > Performance issues > Style/readability concerns.
 
 3. **Assess Confidence and Order**:
 
+   * **Only include comments where you are at least 80% confident the issue is valid**.
    * **Sort the comments by descending confidence and importance**:
      * Start with issues you are **certain are valid**.
      * Also, prioritize important issues that you are **confident about**.
      * Follow with issues that are **plausible but uncertain** (possible false positives).
+   * **When uncertain, use available tools to verify before commenting**.
    * Assign each comment a numeric `order`, starting at 1.
 
 4. **Write Clear, Constructive Comments**:
 
-   * Use **direct, declarative language**.
+   * Use **direct, declarative language**. State the problem definitively, then suggest the fix.
    * Keep comments **short and specific**.
    * Focus strictly on code-related concerns.
-   * Avoid hedging language (e.g., don’t use “maybe”, “might want to”, or form questions).
+   * **Banned phrases**: "maybe", "might want to", "consider", "possibly", "could be", "you may want to".
+   * **Use directive language**: "Fix", "Remove", "Change", "Add", "Validate", "Check" (not "Consider checking").
    * Avoid repeating what the code is doing unless it supports your critique.
 
-5. **Use available tools**:
-    * Consider using available tools to better understand the context of the code changes you are reviewing.
-    * Limit the use of tools to only when you need more context to analyze the code changes.
+5. **Use available tools to verify concerns**:
+    * Use tools to gather context when you suspect an issue but need verification.
+    * Use `find_function_definition` to check if error handling or validation exists elsewhere.
+    * Use `expand_context` to see if edge cases are handled in surrounding code.
+    * **Do not suggest issues you cannot verify with available context and tools**.
 
 **Avoid Comments That**:
 
 * Refer to unmodified code (lines without a `+` prefix).
-* Ask for verification or confirmation (e.g., “Check if…”).
+* Ask for verification or confirmation (e.g., "Check if…", "Ensure that…").
 * Provide praise or restate obvious facts.
 * Focus on testing.
+* Point out issues that are already handled in the visible code.
+* Suggest problems based on assumptions without verifying the context.
+* Flag style preferences without clear `{target_code_consistency}` standard violations.
 
 ---
 
