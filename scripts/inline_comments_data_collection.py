@@ -81,7 +81,10 @@ def process_comments(limit, diff_length_limit):
 
     try:
         with open(
-            os.path.join("data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB), "rb"
+            os.path.join(
+                "data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB[: -len(".zst")]
+            ),
+            "rb",
         ) as f:
             already_done_patches = pickle.load(f)
     except FileNotFoundError:
@@ -178,11 +181,18 @@ def process_comments(limit, diff_length_limit):
             break
 
     with open(
-        os.path.join("data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB), "wb"
+        os.path.join(
+            "data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB[: -len(".zst")]
+        ),
+        "wb",
     ) as f:
         pickle.dump(already_done_patches, f)
 
-    zstd_compress(os.path.join("data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB))
+    zstd_compress(
+        os.path.join(
+            "data", phabricator.FIXED_COMMENTS_ALREADY_ANALYZED_DB[: -len(".zst")]
+        )
+    )
 
 
 def main():
