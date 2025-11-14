@@ -69,14 +69,18 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
     data = []
 
     while after is not None:
-        out = tenacity.retry(
+        for attempt in tenacity.Retrying(
             wait=tenacity.wait_exponential(multiplier=2, min=2),
             stop=tenacity.stop_after_attempt(9),
-        )(
-            lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
-                "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
-            )
-        )()
+        ):
+            with attempt:
+                out = PHABRICATOR_API.request(
+                    "transaction.search",
+                    objectIdentifier=rev_phid,
+                    limit=1000,
+                    after=after,
+                )
+
         data += out["data"]
         after = out["cursor"]["after"]
 
@@ -101,17 +105,18 @@ def get(
     data = []
 
     while after is not None:
-        out = tenacity.retry(
+        for attempt in tenacity.Retrying(
             wait=tenacity.wait_exponential(multiplier=2, min=2),
             stop=tenacity.stop_after_attempt(9),
-        )(
-            lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
-                "differential.revision.search",
-                constraints=constraints,
-                attachments={"projects": True, "reviewers": True},
-                after=after,
-            )
-        )()
+        ):
+            with attempt:
+                out = PHABRICATOR_API.request(
+                    "differential.revision.search",
+                    constraints=constraints,
+                    attachments={"projects": True, "reviewers": True},
+                    after=after,
+                )
+
         data += out["data"]
         after = out["cursor"]["after"]
 

@@ -257,15 +257,15 @@ def diff_failure_vs_fix(repo, failure_commits, fix_commits):
 
 def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
     if not os.path.exists(repo_path):
-        tenacity.retry(
+        for attempt in tenacity.Retrying(
             wait=tenacity.wait_exponential(multiplier=2, min=2),
             stop=tenacity.stop_after_attempt(7),
-        )(
-            lambda: subprocess.run(
-                ["git", "clone", repo_url, repo_path],
-                check=True,
-            )
-        )()
+        ):
+            with attempt:
+                subprocess.run(
+                    ["git", "clone", repo_url, repo_path],
+                    check=True,
+                )
 
     os.makedirs(os.path.join("data", "ci_failures_diffs"), exist_ok=True)
 

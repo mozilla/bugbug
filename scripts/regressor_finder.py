@@ -84,30 +84,31 @@ class RegressorFinder(object):
 
     def clone_git_repo(self, repo_url, repo_dir):
         if not os.path.exists(repo_dir):
-            tenacity.retry(
+            for attempt in tenacity.Retrying(
                 wait=tenacity.wait_exponential(multiplier=2, min=2),
                 stop=tenacity.stop_after_attempt(7),
-            )(
-                lambda: subprocess.run(
-                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                )
-            )()
+            ):
+                with attempt:
+                    subprocess.run(
+                        ["git", "clone", "--quiet", repo_url, repo_dir],
+                        check=True,
+                    )
 
             logger.info("%s cloned", repo_dir)
 
         logger.info("Fetching %s", repo_dir)
 
-        tenacity.retry(
+        for attempt in tenacity.Retrying(
             wait=tenacity.wait_exponential(multiplier=2, min=2),
             stop=tenacity.stop_after_attempt(7),
-        )(
-            lambda: subprocess.run(
-                ["git", "fetch", "--quiet"],
-                cwd=repo_dir,
-                capture_output=True,
-                check=True,
-            )
-        )()
+        ):
+            with attempt:
+                subprocess.run(
+                    ["git", "fetch", "--quiet"],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    check=True,
+                )
 
         logger.info("%s fetched", repo_dir)
 
