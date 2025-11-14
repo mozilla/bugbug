@@ -34,7 +34,7 @@ def get_code_review_tool():
     from bugbug.vectordb import QdrantVectorDB
 
     return CodeReviewTool(
-        llm=init_chat_model("gpt-4.1"),
+        llm=init_chat_model("gpt-5.1"),
         review_comments_db=ReviewCommentsDB(QdrantVectorDB("diff_comments")),
     )
 
