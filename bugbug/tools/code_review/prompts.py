@@ -26,50 +26,55 @@ Do not include any code in the summarization, only a description of the changes.
 **Diff**:
 {patch}"""
 
-PROMPT_TEMPLATE_REVIEW = """**Task**:
-
+PROMPT_TEMPLATE_REVIEW = """<task>
 Generate high-quality code review comments for the patch provided below.
+</task>
 
-**Instructions**:
+<instructions>
+<analyze_changes>
+**Analyze the Changes**:
+* Understand the intent and structure of the changes in the patch.
+* Use the provided summarization for context, but prioritize what's visible in the diff.
+</analyze_changes>
 
-1. **Analyze the Changes**:
+<identify_issues>
+**Identify Issues**:
+* Detect bugs, logical errors, performance concerns, security issues, or violations of the `{target_code_consistency}` coding standards.
+* Focus only on **new or changed lines** (lines beginning with `+`).
+* **Prioritize**: Security vulnerabilities > Functional bugs > Performance issues > Style/readability concerns.
+</identify_issues>
 
-   * Understand the intent and structure of the changes in the patch.
-   * Use the provided summarization for context, but prioritize what's visible in the diff.
+<assess_confidence>
+**Assess Confidence and Order**:
+* **Only include comments where you are at least 80% confident the issue is valid**.
+* **Sort the comments by descending confidence and importance**:
+  * Start with issues you are **certain are valid**.
+  * Also, prioritize important issues that you are **confident about**.
+  * Follow with issues that are **plausible but uncertain** (possible false positives).
+* **When uncertain, use available tools to verify before commenting**.
+* Assign each comment a numeric `order`, starting at 1.
+</assess_confidence>
 
-2. **Identify Issues**:
+<write_comments>
+**Write Clear, Constructive Comments**:
+* Use **direct, declarative language**. State the problem definitively, then suggest the fix.
+* Keep comments **short and specific**.
+* Focus strictly on code-related concerns.
+* **Banned phrases**: "maybe", "might want to", "consider", "possibly", "could be", "you may want to".
+* **Use directive language**: "Fix", "Remove", "Change", "Add", "Validate", "Check" (not "Consider checking").
+* Avoid repeating what the code is doing unless it supports your critique.
+</write_comments>
 
-   * Detect bugs, logical errors, performance concerns, security issues, or violations of the `{target_code_consistency}` coding standards.
-   * Focus only on **new or changed lines** (lines beginning with `+`).
-   * **Prioritize**: Security vulnerabilities > Functional bugs > Performance issues > Style/readability concerns.
+<use_tools>
+**Use available tools to verify concerns**:
+* Use tools to gather context when you suspect an issue but need verification.
+* Use `find_function_definition` to check if error handling or validation exists elsewhere.
+* Use `expand_context` to see if edge cases are handled in surrounding code.
+* **Do not suggest issues you cannot verify with available context and tools**.
+</use_tools>
 
-3. **Assess Confidence and Order**:
-
-   * **Only include comments where you are at least 80% confident the issue is valid**.
-   * **Sort the comments by descending confidence and importance**:
-     * Start with issues you are **certain are valid**.
-     * Also, prioritize important issues that you are **confident about**.
-     * Follow with issues that are **plausible but uncertain** (possible false positives).
-   * **When uncertain, use available tools to verify before commenting**.
-   * Assign each comment a numeric `order`, starting at 1.
-
-4. **Write Clear, Constructive Comments**:
-
-   * Use **direct, declarative language**. State the problem definitively, then suggest the fix.
-   * Keep comments **short and specific**.
-   * Focus strictly on code-related concerns.
-   * **Banned phrases**: "maybe", "might want to", "consider", "possibly", "could be", "you may want to".
-   * **Use directive language**: "Fix", "Remove", "Change", "Add", "Validate", "Check" (not "Consider checking").
-   * Avoid repeating what the code is doing unless it supports your critique.
-
-5. **Use available tools to verify concerns**:
-    * Use tools to gather context when you suspect an issue but need verification.
-    * Use `find_function_definition` to check if error handling or validation exists elsewhere.
-    * Use `expand_context` to see if edge cases are handled in surrounding code.
-    * **Do not suggest issues you cannot verify with available context and tools**.
-
+<avoid>
 **Avoid Comments That**:
-
 * Refer to unmodified code (lines without a `+` prefix).
 * Ask for verification or confirmation (e.g., "Check if…", "Ensure that…").
 * Provide praise or restate obvious facts.
@@ -77,40 +82,33 @@ Generate high-quality code review comments for the patch provided below.
 * Point out issues that are already handled in the visible code.
 * Suggest problems based on assumptions without verifying the context.
 * Flag style preferences without clear `{target_code_consistency}` standard violations.
+</avoid>
+</instructions>
 
----
-
-**Output Format**:
-
+<output_format>
 {output_instructions}
+</output_format>
 
----
-
-**Examples**:
-
+<examples>
 {comment_examples}
 {approved_examples}
+</examples>
 
----
-
-**Patch Summary**:
-
-{patch_summarization}
-
----
-
+<context>
 **Review Context**:
-
 Target Software: {target_software}
 Bug Title: {bug_title}
 Patch Title: {patch_title}
 Source URL: {patch_url}
+</context>
 
----
+<patch_summary>
+{patch_summarization}
+</patch_summary>
 
-**Patch to Review**:
-
+<patch>
 {patch}
+</patch>
 """
 
 OUTPUT_FORMAT_JSON = """
