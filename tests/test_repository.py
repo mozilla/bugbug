@@ -2859,3 +2859,92 @@ void main() {
             }
         ]
     }
+
+
+def test_import_commits_single_commit(fake_hg_repo):
+    """Test that a patch with a single commit returns one commit."""
+    hg, local, _ = fake_hg_repo
+
+    # Get the base revision
+    base_rev = hg.log(limit=1)[0][1].decode("ascii")
+
+    # Create a patch with a single commit
+    patch = b"""# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Single commit message
+
+diff --git a/file1.txt b/file1.txt
+new file mode 100644
+--- /dev/null
++++ b/file1.txt
+@@ -0,0 +1,1 @@
++line1
+"""
+
+    # Apply the patch
+    commits = repository.import_commits(local, base_rev, patch)
+
+    # Verify we got exactly one commit
+    assert len(commits) == 1
+    assert commits[0].desc == "Single commit message"
+
+
+def test_import_commits_multiple_commits(fake_hg_repo):
+    """Test that a patch with multiple commits returns all commits."""
+    hg, local, _ = fake_hg_repo
+
+    # Get the base revision
+    base_rev = hg.log(limit=1)[0][1].decode("ascii")
+
+    # Create a patch with multiple commits
+    patch = b"""# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+First commit message
+
+diff --git a/file1.txt b/file1.txt
+new file mode 100644
+--- /dev/null
++++ b/file1.txt
+@@ -0,0 +1,1 @@
++line1
+
+# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Second commit message
+
+diff --git a/file2.txt b/file2.txt
+new file mode 100644
+--- /dev/null
++++ b/file2.txt
+@@ -0,0 +1,1 @@
++line2
+
+# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Third commit message
+
+diff --git a/file3.txt b/file3.txt
+new file mode 100644
+--- /dev/null
++++ b/file3.txt
+@@ -0,0 +1,1 @@
++line3
+"""
+
+    # Apply the patch
+    commits = repository.import_commits(local, base_rev, patch)
+
+    # Verify we got all three commits
+    assert len(commits) == 3
+    assert commits[0].desc == "First commit message"
+    assert commits[1].desc == "Second commit message"
+    assert commits[2].desc == "Third commit message"
+
+    # Verify the commits are in order (oldest to newest)
+    assert commits[0].node != base_rev
+    assert commits[1].node != base_rev
+    assert commits[2].node != base_rev
