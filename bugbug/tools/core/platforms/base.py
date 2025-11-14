@@ -51,6 +51,12 @@ class Patch(ABC):
         """Return the title of the patch."""
         ...
 
+    @property
+    @abstractmethod
+    def patch_url(self) -> str:
+        """Return the URL of the patch."""
+        ...
+
     @abstractmethod
     def get_old_file(self, file_path: str) -> str:
         """Return the contents of a file before the patch was applied."""

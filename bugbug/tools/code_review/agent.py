@@ -9,10 +9,11 @@ import json
 import os
 from datetime import datetime
 from logging import getLogger
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional
 
 from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
+from langchain.messages import HumanMessage
 from langchain_classic.chains import LLMChain
 from langchain_classic.prompts import PromptTemplate
 from langgraph.errors import GraphRecursionError
@@ -28,6 +29,8 @@ from bugbug.tools.code_review.langchain_tools import (
 )
 from bugbug.tools.code_review.prompts import (
     DEFAULT_REJECTED_EXAMPLES,
+    OUTPUT_FORMAT_JSON,
+    OUTPUT_FORMAT_TEXT,
     PROMPT_TEMPLATE_FILTERING_ANALYSIS,
     PROMPT_TEMPLATE_REVIEW,
     PROMPT_TEMPLATE_SUMMARIZATION,
@@ -130,10 +133,10 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    def _generate_suggestions(self, patch: Patch):
+    def generate_initial_prompt(
+        self, patch: Patch, output_format: Literal["JSON", "TEXT"] = "JSON"
+    ) -> str:
         formatted_patch = format_patch_set(patch.patch_set)
-        if formatted_patch == "":
-            return None
 
         output_summarization = self.summarization_chain.invoke(
             {
@@ -147,18 +150,37 @@ class CodeReviewTool(GenerativeModelTool):
         if self.verbose:
             GenerativeModelTool._print_answer(output_summarization)
 
+        if output_format == "JSON":
+            output_instructions = OUTPUT_FORMAT_JSON
+        elif output_format == "TEXT":
+            output_instructions = OUTPUT_FORMAT_TEXT
+        else:
+            raise ValueError(
+                f"Unsupported output format: {output_format}, choose JSON or TEXT"
+            )
+
         created_before = patch.date_created if self.is_experiment_env else None
-        message = PROMPT_TEMPLATE_REVIEW.format(
+        return PROMPT_TEMPLATE_REVIEW.format(
             patch=formatted_patch,
             patch_summarization=output_summarization,
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
             target_code_consistency=self.target_software or "rest of the",
+            output_instructions=output_instructions,
+            bug_title=patch.bug_title,
+            patch_title=patch.patch_title,
+            patch_url=patch.patch_url,
+            target_software=self.target_software,
         )
 
+    def _generate_suggestions(self, patch: Patch):
         try:
             for chunk in self.agent.stream(
-                {"messages": [{"role": "user", "content": message}]},
+                {
+                    "messages": [
+                        HumanMessage(self.generate_initial_prompt(patch)),
+                    ]
+                },
                 context=CodeReviewContext(patch=patch),
                 stream_mode="values",
             ):

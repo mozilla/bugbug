@@ -100,6 +100,10 @@ class PhabricatorPatch(Patch):
         self._revision_id = revision_id
 
     @property
+    def patch_url(self) -> str:
+        return f"https://phabricator.services.mozilla.com/D{self.revision_id}"
+
+    @property
     def diff_id(self) -> int:
         if self._diff_id:
             return int(self._diff_id)
