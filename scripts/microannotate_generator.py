@@ -78,10 +78,12 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            tenacity.retry(
+            for attempt in tenacity.Retrying(
                 wait=tenacity.wait_exponential(multiplier=2, min=2),
                 stop=tenacity.stop_after_attempt(7),
-            )(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))()
+            ):
+                with attempt:
+                    subprocess.run(push_args, cwd=self.git_repo_path, check=True)
 
             # We are not using db.upload as we don't need to upload the git repo.
             upload_s3([f"{db_path}.version"])
@@ -96,33 +98,33 @@ class MicroannotateGenerator(object):
         )
 
     def clone_git_repo(self):
-        tenacity.retry(
+        for attempt in tenacity.Retrying(
             wait=tenacity.wait_exponential(multiplier=2, min=2),
             stop=tenacity.stop_after_attempt(7),
-        )(
-            lambda: subprocess.run(
-                ["git", "clone", self.repo_url, self.git_repo_path],
-                check=True,
-            )
-        )()
+        ):
+            with attempt:
+                subprocess.run(
+                    ["git", "clone", self.repo_url, self.git_repo_path],
+                    check=True,
+                )
 
         subprocess.run(
             ["git", "checkout", "master"], cwd=self.git_repo_path, check=True
         )
 
         try:
-            tenacity.retry(
+            for attempt in tenacity.Retrying(
                 wait=tenacity.wait_exponential(multiplier=2, min=2),
                 stop=tenacity.stop_after_attempt(7),
                 reraise=True,
-            )(
-                lambda: subprocess.run(
-                    ["git", "pull", "origin", "master"],
-                    cwd=self.git_repo_path,
-                    capture_output=True,
-                    check=True,
-                )
-            )()
+            ):
+                with attempt:
+                    subprocess.run(
+                        ["git", "pull", "origin", "master"],
+                        cwd=self.git_repo_path,
+                        capture_output=True,
+                        check=True,
+                    )
         except subprocess.CalledProcessError as e:
             # When the repo is empty.
             if b"Couldn't find remote ref master" in e.stdout:

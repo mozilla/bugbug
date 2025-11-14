@@ -221,26 +221,27 @@ class CommitClassifier(object):
         logger.info("Cloning %s...", repo_url)
 
         if not os.path.exists(repo_dir):
-            tenacity.retry(
+            for attempt in tenacity.Retrying(
                 wait=tenacity.wait_exponential(multiplier=2, min=2),
                 stop=tenacity.stop_after_attempt(7),
-            )(
-                lambda: subprocess.run(
-                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                )
-            )()
+            ):
+                with attempt:
+                    subprocess.run(
+                        ["git", "clone", "--quiet", repo_url, repo_dir],
+                        check=True,
+                    )
 
-        tenacity.retry(
+        for attempt in tenacity.Retrying(
             wait=tenacity.wait_exponential(multiplier=2, min=2),
             stop=tenacity.stop_after_attempt(7),
-        )(
-            lambda: subprocess.run(
-                ["git", "fetch"],
-                cwd=repo_dir,
-                capture_output=True,
-                check=True,
-            )
-        )()
+        ):
+            with attempt:
+                subprocess.run(
+                    ["git", "fetch"],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    check=True,
+                )
 
         subprocess.run(
             ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
