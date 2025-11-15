@@ -39,6 +39,7 @@ def get_lock_for_file(path: str) -> Lock:
             file_locks[path] = Lock()
         return file_locks[path]
 
+
 def download_dbs():
     assert db.download(repository.COMMITS_DB)
     db.download(CI_FAILURES_DB)
