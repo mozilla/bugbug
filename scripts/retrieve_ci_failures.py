@@ -8,9 +8,10 @@ import os
 import subprocess
 import tempfile
 from collections import defaultdict
-from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from datetime import datetime, timedelta
 from logging import INFO, basicConfig, getLogger
+from threading import Lock
 
 import requests
 import tenacity
@@ -28,6 +29,15 @@ db.register(
     1,
 )
 
+file_locks = {}
+primary_lock = Lock()
+
+
+def get_lock_for_file(path: str) -> Lock:
+    with primary_lock:
+        if path not in file_locks:
+            file_locks[path] = Lock()
+        return file_locks[path]
 
 def download_dbs():
     assert db.download(repository.COMMITS_DB)
@@ -180,37 +190,49 @@ def get_fixed_by_commit_pushes():
 def retrieve_logs(fixed_by_commit_pushes, upload):
     os.makedirs(os.path.join("data", "ci_failures_logs"), exist_ok=True)
 
-    for push in tqdm(
-        fixed_by_commit_pushes.values(), total=len(fixed_by_commit_pushes)
-    ):
-        for failure in push["failures"]:
-            task_id = failure["task_id"]
-            retry_id = failure["retry_id"]
+    all_failures = [
+        failure
+        for push in fixed_by_commit_pushes.values()
+        for failure in push["failures"]
+    ]
 
-            log_path = os.path.join(
-                "data", "ci_failures_logs", f"{task_id}.{retry_id}.log"
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [
+            executor.submit(process_logs, failure, upload) for failure in all_failures
+        ]
+
+        for _ in tqdm(as_completed(futures), total=len(futures)):
+            pass
+
+
+def process_logs(failure, upload):
+    task_id = failure["task_id"]
+    retry_id = failure["retry_id"]
+
+    log_path = os.path.join("data", "ci_failures_logs", f"{task_id}.{retry_id}.log")
+    log_zst_path = f"{log_path}.zst"
+
+    with get_lock_for_file(log_zst_path):
+        if os.path.exists(log_path) or os.path.exists(log_zst_path):
+            return
+
+        if upload and utils.exists_s3(log_zst_path):
+            return
+
+        try:
+            utils.download_check_etag(
+                f"https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{task_id}/runs/{retry_id}/artifacts/public/logs/live.log",
+                log_path,
             )
-            log_zst_path = f"{log_path}.zst"
-            if os.path.exists(log_path) or os.path.exists(log_zst_path):
-                continue
 
-            if upload and utils.exists_s3(log_zst_path):
-                continue
+            utils.zstd_compress(log_path)
 
-            try:
-                utils.download_check_etag(
-                    f"https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{task_id}/runs/{retry_id}/artifacts/public/logs/live.log",
-                    log_path,
-                )
+            os.remove(log_path)
 
-                utils.zstd_compress(log_path)
-
-                os.remove(log_path)
-
-                if upload:
-                    utils.upload_s3([log_zst_path])
-            except requests.exceptions.HTTPError:
-                pass
+            if upload:
+                utils.upload_s3([log_zst_path])
+        except requests.exceptions.HTTPError:
+            pass
 
 
 def diff_failure_vs_fix(repo, failure_commits, fix_commits):
