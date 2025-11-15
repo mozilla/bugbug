@@ -118,6 +118,7 @@ Respond only with a **JSON list**. Each object must contain the following fields
 * `"code_line"`: The number of the specific changed line of code that the comment refers to.
 * `"comment"`: A concise review comment.
 * `"explanation"`: A brief rationale for the comment, including how confident you are and why.
+* `"order"`: An integer representing the priority of the comment, with 1 being the highest confidence/importance.
 """
 
 OUTPUT_FORMAT_TEXT = """
