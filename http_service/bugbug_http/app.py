@@ -444,8 +444,8 @@ def has_diff_content(patch: str) -> bool:
     :rtype: bool
     """
     # Check for Git diff markers that indicate actual changes
-    has_diff_header = "diff --git" in patch
-    has_hunk = "@@" in patch
+    has_diff_header = "\ndiff --git" in patch
+    has_hunk = "\n@@" in patch
 
     # A valid patch needs both a diff header and at least one hunk
     return has_diff_header and has_hunk
