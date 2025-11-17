@@ -34,7 +34,14 @@ def test_patch_schedules_post_with_cache(client, add_result, jobs):
 
     base_rev = "abc123"
     patch_hash = "def456"
-    patch_content = """diff --git a/test.txt b/test.txt
+    patch_content = """
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Test User <test@example.com>
+Date: Mon Nov 17 14:58:22 2025
+Subject: [PATCH] Uncommitted changes
+---
+
+diff --git a/test.txt b/test.txt
 --- a/test.txt
 +++ b/test.txt
 @@ -1,1 +1,2 @@
@@ -103,7 +110,14 @@ def test_patch_schedules_get_with_cache(client, add_result, jobs):
     """Test that GET requests work correctly with cached results."""
     base_rev = "abc123"
     patch_hash = "def456"
-    patch_content = """diff --git a/test.txt b/test.txt
+    patch_content = """
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Test User <test@example.com>
+Date: Mon Nov 17 14:58:22 2025
+Subject: [PATCH] Uncommitted changes
+---
+
+diff --git a/test.txt b/test.txt
 --- a/test.txt
 +++ b/test.txt
 @@ -1,1 +1,2 @@
@@ -179,7 +193,7 @@ def test_patch_schedules_patch_without_diffs(client):
     patch_content = """
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Test User <test@example.com>
-Date: Mon Nov 17 14:58:22 2025 
+Date: Mon Nov 17 14:58:22 2025
 Subject: [PATCH] Uncommitted changes
 ---
 
