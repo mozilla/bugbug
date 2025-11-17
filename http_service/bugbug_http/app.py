@@ -443,22 +443,9 @@ def has_diff_content(patch: str) -> bool:
     :return: True if the patch has diff content, False otherwise
     :rtype: bool
     """
-    # Check for common diff markers that indicate actual changes
-    # Git format: "diff --git", "--- a/", "+++ b/", "@@ ... @@"
-    # Mercurial format: "diff -r", "--- a/", "+++ b/", "@@ ... @@"
-    lines = patch.split("\n")
-
-    has_diff_header = False
-    has_hunk = False
-
-    for line in lines:
-        # Check for diff headers
-        if line.startswith("diff --git") or line.startswith("diff -r"):
-            has_diff_header = True
-        # Check for hunk markers (actual changes)
-        elif line.startswith("@@") and line.endswith("@@"):
-            has_hunk = True
-            break
+    # Check for Git diff markers that indicate actual changes
+    has_diff_header = "diff --git" in patch
+    has_hunk = "@@" in patch
 
     # A valid patch needs both a diff header and at least one hunk
     return has_diff_header and has_hunk
