@@ -152,3 +152,46 @@ def test_patch_schedules_get_without_cache(client):
 
     assert rv.status_code == 404
     assert rv.json == {"error": "Patch not submitted yet"}
+
+
+def test_patch_schedules_empty_patch(client):
+    """Test that POST requests with truly empty patches return 400."""
+    base_rev = "abc123"
+    patch_hash = "empty123"
+
+    # POST request with empty string should return 400
+    rv = client.post(
+        f"/patch/{base_rev}/{patch_hash}/schedules",
+        data=b"",
+        headers={API_TOKEN: "test"},
+    )
+
+    assert rv.status_code == 400
+    assert rv.json == {"error": "Empty patch"}
+
+
+def test_patch_schedules_patch_without_diffs(client):
+    """Test that POST requests with patches containing no diff content return 400."""
+    base_rev = "abc123"
+    patch_hash = "nodiff123"
+
+    # Patch with headers but no actual diff content (like the example in the issue)
+    patch_content = """
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Test User <test@example.com>
+Date: Mon Nov 17 14:58:22 2025 
+Subject: [PATCH] Uncommitted changes
+---
+
+
+"""
+
+    # POST request with patch that has no diffs should return 400
+    rv = client.post(
+        f"/patch/{base_rev}/{patch_hash}/schedules",
+        data=patch_content.encode("utf-8"),
+        headers={API_TOKEN: "test"},
+    )
+
+    assert rv.status_code == 400
+    assert rv.json == {"error": "Patch contains no diff content"}
