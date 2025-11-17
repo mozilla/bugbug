@@ -197,11 +197,13 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
         for failure in push["failures"]
     ]
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor() as executor:
         futures = [
             executor.submit(process_logs, failure, upload) for failure in all_failures
         ]
 
+        # We loop over the futures as they finish so tqdm can update the progress bar.
+        # The loop body is empty because we’re only using it to show progress.
         for _ in tqdm(as_completed(futures), total=len(futures)):
             pass
 
