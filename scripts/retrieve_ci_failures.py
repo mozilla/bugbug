@@ -204,8 +204,7 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
 
         # We loop over the futures as they finish so tqdm can update the progress bar.
         # The loop body is empty because we’re only using it to show progress.
-        for _ in tqdm(as_completed(futures), total=len(futures)):
-            pass
+        all(tqdm(as_completed(futures), total=len(futures)))
 
 
 def process_logs(failure, upload):
