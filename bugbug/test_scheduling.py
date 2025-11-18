@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import collections
+import glob
 import itertools
 import logging
 import os
@@ -13,6 +14,7 @@ import shelve
 import shutil
 import struct
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Callable,
@@ -26,6 +28,7 @@ from typing import (
     cast,
 )
 
+import tomllib
 from tqdm import tqdm
 
 from bugbug import db, repository
@@ -895,3 +898,109 @@ def get_test_info(date: datetime) -> dict[str, Any]:
     )
     r.raise_for_status()
     return r.json()
+
+
+manifest_by_path: dict[str, set[str]] | None = None
+
+
+def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
+    global manifest_by_path
+
+    repo_dir = Path(repo_dir_str)
+
+    manifests = set()
+
+    if manifest_by_path is None:
+        manifest_by_path = collections.defaultdict(set)
+
+        for toml_path in repo_dir.rglob("*.toml"):
+            # HACK: These are not test manifests, skip them.
+            if (
+                toml_path.name == "Cargo.toml"
+                or toml_path.parent.name == "test-manifest-toml"
+                or "third_party" in toml_path.parts
+            ):
+                continue
+
+            with open(toml_path, "rb") as toml_f:
+                data = tomllib.load(toml_f)
+
+            # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
+            if "DEFAULT" not in data and not any(
+                key.startswith("test") for key in data.values()
+            ):
+                continue
+
+            toml_rel = toml_path.relative_to(repo_dir)
+            toml_dir = toml_path.parent
+
+            # The manifest path itself, so we schedule it when it is touched.
+            manifest_by_path[str(toml_rel)].add(str(toml_rel))
+
+            # Collect head files.
+            head_files = data.get("DEFAULT", {}).get("head", "").split(" ")
+            for head_file in head_files:
+                if not head_file.strip():
+                    continue
+
+                manifest_by_path[
+                    str((toml_dir / head_file).resolve().relative_to(repo_dir))
+                ].add(str(toml_rel))
+
+            # Collect support files.
+            def collect_support_files(value):
+                support_files = value.get("support-files", [])
+                if isinstance(support_files, str):
+                    support_files = [support_files]
+
+                for support_file in support_files:
+                    if not support_file.strip():
+                        continue
+
+                    if support_file.startswith("!"):
+                        support_file = support_file[1:]
+
+                    if support_file.startswith("/"):
+                        support_file_path = (repo_dir / support_file[1:]).resolve()
+                    else:
+                        support_file_path = (toml_dir / support_file).resolve()
+
+                    if "*" in support_file:
+                        files = [
+                            Path(f)
+                            for f in glob.glob(str(support_file_path), recursive=True)
+                        ]
+                    else:
+                        files = [support_file_path]
+
+                    for f in files:
+                        manifest_by_path[str(f.relative_to(repo_dir))].add(
+                            str(toml_rel)
+                        )
+
+            collect_support_files(data.get("DEFAULT", {}))
+
+            # Collect test files.
+            for key, val in data.items():
+                if key != "DEFAULT" and isinstance(val, dict):
+                    collect_support_files(val)
+
+                    manifest_by_path[
+                        str((toml_dir / key).resolve().relative_to(repo_dir))
+                    ].add(str(toml_rel))
+
+    for path in paths:
+        # If a manifest, a test, or a support file is modified, run the manifest that includes it.
+        if path in manifest_by_path:
+            manifests.update(manifest_by_path[path])
+        else:
+            # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
+            for sibling in (repo_dir / path).parent.rglob("*"):
+                if sibling.is_dir() and repository.is_test(f"{str(sibling)}/"):
+                    manifests.update(
+                        str(f.relative_to(repo_dir))
+                        for f in sibling.rglob("*.toml")
+                        if f.is_file()
+                    )
+
+    return manifests

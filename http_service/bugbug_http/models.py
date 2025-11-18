@@ -363,6 +363,10 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     )
 
     groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+    for group in test_scheduling.find_manifests_for_paths(
+        REPO_DIR, list(set(path for commit in commits for path in commit["files"]))
+    ):
+        groups[group] = 1.0
 
     config_groups = testselect.select_configs(groups.keys(), 0.9)
 
