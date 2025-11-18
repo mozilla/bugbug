@@ -432,6 +432,25 @@ def compress_response(data: dict, status_code: int):
     return response
 
 
+def has_diff_content(patch: str) -> bool:
+    """Check if a patch contains actual diff content.
+
+    A valid patch should have at least one diff block with hunks.
+    Empty patches may have headers (From, Date, Subject) but no actual diffs.
+
+    :param patch: The patch content as a string
+    :type patch: str
+    :return: True if the patch has diff content, False otherwise
+    :rtype: bool
+    """
+    # Check for Git diff markers that indicate actual changes
+    has_diff_header = "\ndiff --git" in patch
+    has_hunk = "\n@@" in patch
+
+    # A valid patch needs both a diff header and at least one hunk
+    return has_diff_header and has_hunk
+
+
 @application.route("/<model_name>/predict/<int:bug_id>")
 @cross_origin()
 def model_prediction(model_name, bug_id):
@@ -1102,6 +1121,9 @@ def patch_schedules(base_rev, patch_hash):
         patch = request.data.decode("utf-8")
         if not patch:
             return jsonify({"error": "Empty patch"}), 400
+
+        if not has_diff_content(patch):
+            return jsonify({"error": "Patch contains no diff content"}), 400
 
         patch_key = f"bugbug:patch:{patch_hash}"
         redis_conn.set(patch_key, patch)
