@@ -1023,3 +1023,94 @@ def test_fallback_on_ini() -> None:
     past_failures.set("browser.toml", ExpQueue(0, 1, 22))
     assert_val("browser.toml", 22)
     assert_val("browser.ini", 42)
+
+
+def test_find_manifests_for_paths(tmp_path) -> None:
+    (tmp_path / "dom" / "battery" / "test").mkdir(parents=True)
+    (tmp_path / "dom" / "battery" / "test" / "mochitest.toml").touch()
+    (tmp_path / "dom" / "battery" / "test" / "chrome.toml").touch()
+
+    manifest = """[DEFAULT]
+head = "../prova.js"
+support-files = [
+  "!/absolute_path_with_glob/*.js",
+  "!/absolute_path_with_subdirglob/**",
+  "relative/path.png"
+]
+
+["test_resolve_uris_ipc.js"]
+"""
+
+    manifest2 = """[DEFAULT]
+head = ""
+support-files = ""
+
+["test_resolve_uris_ipc.js"]
+"""
+
+    (tmp_path / "test").mkdir(parents=True)
+    (tmp_path / "test" / "chrome.toml").write_text(manifest)
+    (tmp_path / "test" / "mochitest.toml").write_text(manifest2)
+    (tmp_path / "absolute_path_with_glob" / "subdir").mkdir(parents=True)
+    (tmp_path / "absolute_path_with_glob" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_glob" / "asd.png").touch()
+    (tmp_path / "absolute_path_with_glob" / "subdir" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_subdirglob" / "subdir").mkdir(parents=True)
+    (tmp_path / "absolute_path_with_subdirglob" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_subdirglob" / "subdir" / "asd.js").touch()
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["dom/battery/BatteryManager.cpp"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["dom/battery/BatteryManager.cpp", "test/chrome.toml"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+        "test/chrome.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["prova.js"]) == {
+        "test/chrome.toml"
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["test/test_resolve_uris_ipc.js"]
+    ) == {
+        "test/chrome.toml",
+        "test/mochitest.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["test/relative/path.png"]
+    ) == {"test/chrome.toml"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_glob/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["absolute_path_with_glob/asd.png"]
+        )
+        == set()
+    )
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["absolute_path_with_glob/subdir/asd.js"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_subdirglob/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_subdirglob/subdir/asd.js"]
+    ) == {"test/chrome.toml"}
