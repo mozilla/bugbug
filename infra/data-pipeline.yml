@@ -271,7 +271,7 @@ tasks:
 
     - ID: ci-failures-retrieval
       created: { $fromNow: "" }
-      deadline: { $fromNow: "1 day" }
+      deadline: { $fromNow: "2 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
@@ -280,7 +280,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/bugbug/production
-        maxRunTime: 25200
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-ci-failures-retriever
