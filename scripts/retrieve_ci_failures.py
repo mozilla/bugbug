@@ -173,7 +173,7 @@ def get_fixed_by_commit_pushes():
             no_backouts.add(bug_id)
 
         # This is needed because sometimes v-c-t fails to identify backouts.
-        if not any(commit["backedoutby"] for commit in obj["commits"]):
+        elif not any(commit["backedoutby"] for commit in obj["commits"]):
             no_backouts.add(bug_id)
 
     logger.info(
