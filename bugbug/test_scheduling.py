@@ -916,7 +916,7 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
         for toml_path in repo_dir.rglob("*.toml"):
             # HACK: These are not test manifests, skip them.
             if (
-                toml_path.name == "Cargo.toml"
+                toml_path.name in ("Cargo.toml", "pyproject.toml")
                 or toml_path.parent.name == "test-manifest-toml"
                 or "third_party" in toml_path.parts
             ):
