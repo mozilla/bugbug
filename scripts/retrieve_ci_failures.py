@@ -168,8 +168,12 @@ def get_fixed_by_commit_pushes():
 
     # Skip cases where there is no backout (and so the fix was a bustage fix).
     no_backouts = set()
-    for bug_id in fixed_by_commit_pushes.keys():
+    for bug_id, obj in fixed_by_commit_pushes.items():
         if bug_id not in backouts_by_bug_id:
+            no_backouts.add(bug_id)
+
+        # This is needed because sometimes v-c-t fails to identify backouts.
+        if not any(commit["backedoutby"] for commit in obj["commits"]):
             no_backouts.add(bug_id)
 
     logger.info(
