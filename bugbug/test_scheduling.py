@@ -927,7 +927,7 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
 
             # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
             if "DEFAULT" not in data and not any(
-                key.startswith("test") for key in data.values()
+                key.startswith("test") for key in data.keys()
             ):
                 continue
 
