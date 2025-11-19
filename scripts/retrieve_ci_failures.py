@@ -293,6 +293,7 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
     os.makedirs(os.path.join("data", "ci_failures_diffs"), exist_ok=True)
 
     diff_errors = 0
+    mapping_errors = 0
     for bug_id, obj in tqdm(
         fixed_by_commit_pushes.items(), total=len(fixed_by_commit_pushes)
     ):
@@ -304,19 +305,24 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         if upload and utils.exists_s3(diff_zst_path):
             continue
 
-        diff = diff_failure_vs_fix(
-            repo_path,
-            [
-                utils.hg2git(commit["node"])
-                for commit in obj["commits"]
-                if commit["backedoutby"]
-            ],
-            [
-                utils.hg2git(commit["node"])
-                for commit in obj["commits"]
-                if not commit["backedoutby"] and not commit["backsout"]
-            ],
-        )
+        try:
+            diff = diff_failure_vs_fix(
+                repo_path,
+                [
+                    utils.hg2git(commit["node"])
+                    for commit in obj["commits"]
+                    if commit["backedoutby"]
+                ],
+                [
+                    utils.hg2git(commit["node"])
+                    for commit in obj["commits"]
+                    if not commit["backedoutby"] and not commit["backsout"]
+                ],
+            )
+        except requests.exceptions.HTTPError as e:
+            logger.error("Failure mapping hg commit hash to git commit hash %s", e)
+            mapping_errors += 1
+            continue
 
         if diff is not None and len(diff) > 0:
             with open(diff_path, "wb") as f:
@@ -331,6 +337,7 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         else:
             diff_errors += 1
 
+    logger.info(f"Failed mapping {mapping_errors} hashes")
     logger.info(f"Failed generating {diff_errors} diffs")
 
 
