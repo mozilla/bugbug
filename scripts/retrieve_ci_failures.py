@@ -134,7 +134,7 @@ def get_fixed_by_commit_pushes():
     # Skip cases where there is no relanding.
     no_relanding_bugs = set()
     for bug_id, obj in fixed_by_commit_pushes.items():
-        if not any(not commit["backedoutby"] for commit in obj["commits"]):
+        if sum(1 for commit in obj["commits"] if commit["backedoutby"]) == 0:
             no_relanding_bugs.add(bug_id)
 
     logger.info(
