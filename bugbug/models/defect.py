@@ -104,9 +104,9 @@ class DefectModel(BugModel):
             assert category in ["True", "False"], f"unexpected category {category}"
             if kind == "bug":
                 classes[int(bug_id)] = 1 if category == "True" else 0
+            # do not include nobug in regression classifier training data 
             elif kind == "regression":
-                if category == "False":
-                    classes[int(bug_id)] = 0
+                continue
             elif kind == "defect_enhancement_task":
                 if category == "True":
                     classes[int(bug_id)] = "defect"
@@ -121,9 +121,9 @@ class DefectModel(BugModel):
             if kind == "bug":
                 classes[int(bug_id)] = 1 if category != "nobug" else 0
             elif kind == "regression":
-                if category == "bug_unknown_regression":
+                # regression classifier to classify between regression and bug_no_regression only
+                if category == "bug_unknown_regression" or category == "nobug":
                     continue
-
                 classes[int(bug_id)] = 1 if category == "regression" else 0
             elif kind == "defect_enhancement_task":
                 if category != "nobug":
