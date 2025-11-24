@@ -25,6 +25,30 @@ jobs:
           service_account: artifact-writer@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
           workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
 
+      - name: Generate versioned tag
+        id: versioned-tag
+        run: |
+          base_tag="${{ github.event.inputs.image_tag }}"
+          registry="${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}"
+
+          # Configure gcloud auth using the token
+          echo "${{ steps.gcp-auth.outputs.access_token }}" | docker login -u oauth2accesstoken --password-stdin ${{ vars.GAR_LOCATION }}-docker.pkg.dev
+
+          # Find the highest version number for this base tag
+          version_number=1
+          while true; do
+            versioned_tag="${base_tag}-${version_number}"
+
+            # Check if image exists in registry
+            if gcloud container images describe "${registry}/bugbug-http-service:${versioned_tag}" --quiet >/dev/null 2>&1; then
+              version_number=$((version_number + 1))
+            else
+              break
+            fi
+          done
+
+          echo "versioned_tag=$versioned_tag" >> $GITHUB_OUTPUT
+
       - name: Pull web image
         run: docker pull mozilla/bugbug-http-service:${{ github.event.inputs.image_tag }}
 
@@ -39,13 +63,13 @@ jobs:
           password: ${{ steps.gcp-auth.outputs.access_token }}
 
       - name: Tag web image
-        run: docker tag mozilla/bugbug-http-service:${{ github.event.inputs.image_tag }} ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ github.event.inputs.image_tag }}
+        run: docker tag mozilla/bugbug-http-service:${{ github.event.inputs.image_tag }} ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ steps.versioned-tag.outputs.versioned_tag }}
 
       - name: Push web image
-        run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ github.event.inputs.image_tag }}
+        run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ steps.versioned-tag.outputs.versioned_tag }}
 
       - name: Tag worker image
-        run: docker tag mozilla/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }} ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }}
+        run: docker tag mozilla/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }} ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ steps.versioned-tag.outputs.versioned_tag }}
 
       - name: Push worker image
-        run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }}
+        run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ steps.versioned-tag.outputs.versioned_tag }}
