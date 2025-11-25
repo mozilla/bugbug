@@ -1003,4 +1003,38 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                         if f.is_file()
                     )
 
+        # If a web-platform test or meta is modified, run the relevant web-platform folder.
+        if not any(path.endswith(ignore) for ignore in ("/META.yml", "/README.md")):
+            for base in ("testing/web-platform/mozilla", "testing/web-platform"):
+                if path.startswith(f"{base}/meta/") or path.startswith(
+                    f"{base}/tests/"
+                ):
+                    sub = "meta" if "/meta/" in path else "tests"
+
+                    relative = Path(path).relative_to(f"{base}/{sub}")
+
+                    test_root = repo_dir / base / "tests"
+                    cur_dir = test_root / relative.parent
+
+                    def is_wpt_file(p: Path) -> bool:
+                        return any(
+                            str(p).endswith(suffix)
+                            for suffix in (".html", ".any.js", ".worker.js")
+                        )
+
+                    def has_wpt_files(d: Path) -> bool:
+                        return any(is_wpt_file(p) for p in d.iterdir())
+
+                    while cur_dir != test_root and not has_wpt_files(cur_dir):
+                        cur_dir = cur_dir.parent
+
+                    # Ignore files in top level "meta" or "tests".
+                    if len(cur_dir.parts) == 1:
+                        break
+
+                    if has_wpt_files(cur_dir):
+                        manifests.add(str(cur_dir.relative_to(repo_dir)))
+
+                    break
+
     return manifests

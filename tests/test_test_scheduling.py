@@ -1114,3 +1114,78 @@ support-files = ""
     assert test_scheduling.find_manifests_for_paths(
         str(tmp_path), ["absolute_path_with_subdirglob/subdir/asd.js"]
     ) == {"test/chrome.toml"}
+
+    (tmp_path / "testing/web-platform/tests/html/semantics").mkdir(parents=True)
+    (tmp_path / "testing/web-platform/tests/.gitignore").touch()
+    (
+        tmp_path
+        / "testing/web-platform/tests/html/semantics/rellist-feature-detection.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/tests/html/semantics/META.yml").touch()
+    (tmp_path / "testing/web-platform/tests/html/semantics/interactive-elements").mkdir(
+        parents=True
+    )
+    (
+        tmp_path
+        / "testing/web-platform/tests/html/semantics/interactive-elements"
+        / "contextmenu-historical.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/mozilla/meta/pointerevents").mkdir(parents=True)
+    (
+        tmp_path
+        / "testing/web-platform/mozilla/meta/pointerevents/pointerevent_click_during_parent_capture.html.ini"
+    ).touch()
+    (tmp_path / "testing/web-platform/mozilla/tests/pointerevents").mkdir(parents=True)
+    (
+        tmp_path
+        / "testing/web-platform/mozilla/tests/pointerevents/pointerevent_click_during_parent_capture.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/tests/encrypted-media/content").mkdir(
+        parents=True
+    )
+    (
+        tmp_path
+        / "testing/web-platform/tests/encrypted-media/clearkey-events.https.html"
+    ).touch()
+    (
+        tmp_path
+        / "testing/web-platform/tests/encrypted-media/content/content-metadata.js"
+    ).touch()
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["testing/web-platform/tests/.gitignore"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        ["testing/web-platform/tests/html/semantics/rellist-feature-detection.html"],
+    ) == {"testing/web-platform/tests/html/semantics"}
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["testing/web-platform/tests/html/semantics/META.yml"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        [
+            "testing/web-platform/tests/html/semantics/interactive-elements/contextmenu-historical.html"
+        ],
+    ) == {"testing/web-platform/tests/html/semantics/interactive-elements"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        [
+            "testing/web-platform/mozilla/meta/pointerevents/pointerevent_click_during_parent_capture.html.ini"
+        ],
+    ) == {"testing/web-platform/mozilla/tests/pointerevents"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        ["testing/web-platform/tests/encrypted-media/content/content-metadata.js"],
+    ) == {"testing/web-platform/tests/encrypted-media"}
