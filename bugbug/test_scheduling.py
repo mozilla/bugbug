@@ -1016,17 +1016,23 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                     test_root = repo_dir / base / "tests"
                     cur_dir = test_root / relative.parent
 
-                    def has_html_files(d: Path) -> bool:
-                        return any(p.suffix.lower() == ".html" for p in d.iterdir())
+                    def is_wpt_file(p: Path) -> bool:
+                        return any(
+                            str(p).endswith(suffix)
+                            for suffix in (".html", ".any.js", ".worker.js")
+                        )
 
-                    while cur_dir != test_root and not has_html_files(cur_dir):
+                    def has_wpt_files(d: Path) -> bool:
+                        return any(is_wpt_file(p) for p in d.iterdir())
+
+                    while cur_dir != test_root and not has_wpt_files(cur_dir):
                         cur_dir = cur_dir.parent
 
                     # Ignore files in top level "meta" or "tests".
                     if len(cur_dir.parts) == 1:
                         break
 
-                    if has_html_files(cur_dir):
+                    if has_wpt_files(cur_dir):
                         manifests.add(str(cur_dir.relative_to(repo_dir)))
 
                     break
