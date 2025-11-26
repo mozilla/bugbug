@@ -1,7 +1,4 @@
-"""MCP server for code review functionality.
-
-Provides contexts for reviewing patches from Phabricator.
-"""
+"""MCP server for Firefox Development."""
 
 import functools
 import os
@@ -23,7 +20,7 @@ from bugbug.utils import get_secret
 
 os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
 
-mcp = FastMCP("BugBug Code Review MCP Server")
+mcp = FastMCP("Firefox Development MCP Server")
 
 
 @functools.cache
