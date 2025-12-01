@@ -33,6 +33,7 @@ def get_code_review_tool():
     return CodeReviewTool(
         llm=init_chat_model("gpt-5.1"),
         review_comments_db=ReviewCommentsDB(QdrantVectorDB("diff_comments")),
+        output_format="TEXT",
     )
 
 
@@ -55,7 +56,8 @@ async def patch_review(
     else:
         raise ValueError(f"Unsupported patch URL: {patch_url}")
 
-    return get_code_review_tool().generate_initial_prompt(patch, "TEXT")
+    # FIXME: add the system prompt as well
+    return get_code_review_tool().generate_initial_prompt(patch)
 
 
 def get_file(commit_hash, path):
