@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "prettier": "^3.6.2",
+    "prettier": "^3.7.3",
     "snowpack": "^3.8.8"
   },
   "dependencies": {
