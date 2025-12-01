@@ -29,12 +29,13 @@ from bugbug.tools.code_review.langchain_tools import (
 )
 from bugbug.tools.code_review.prompts import (
     DEFAULT_REJECTED_EXAMPLES,
+    FIRST_MESSAGE_TEMPLATE,
     OUTPUT_FORMAT_JSON,
     OUTPUT_FORMAT_TEXT,
     PROMPT_TEMPLATE_FILTERING_ANALYSIS,
-    PROMPT_TEMPLATE_REVIEW,
     PROMPT_TEMPLATE_SUMMARIZATION,
     STATIC_COMMENT_EXAMPLES,
+    SYSTEM_PROMPT_TEMPLATE,
     TEMPLATE_COMMENT_EXAMPLE,
     TEMPLATE_PATCH_FROM_HUNK,
 )
@@ -63,6 +64,7 @@ class CodeReviewTool(GenerativeModelTool):
         verbose: bool = True,
         suggestions_feedback_db: Optional["SuggestionsFeedbackDB"] = None,
         target_software: str = "Mozilla Firefox",
+        output_format: Literal["JSON", "TEXT"] = "JSON",
     ) -> None:
         super().__init__()
 
@@ -110,7 +112,10 @@ class CodeReviewTool(GenerativeModelTool):
         self.agent = create_agent(
             llm,
             tools,
-            system_prompt=f"You are an expert {self.target_software} engineer tasked with analyzing a pull request and providing high-quality review comments. You will examine a code patch and generate constructive feedback focusing on potential issues in the changed code.",
+            system_prompt=SYSTEM_PROMPT_TEMPLATE.format(
+                target_software=self.target_software,
+                output_instructions=self._get_output_instructions(output_format),
+            ),
         )
 
         self.review_comments_db = review_comments_db
@@ -124,9 +129,7 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    def generate_initial_prompt(
-        self, patch: Patch, output_format: Literal["JSON", "TEXT"] = "JSON"
-    ) -> str:
+    def generate_initial_prompt(self, patch: Patch) -> str:
         formatted_patch = format_patch_set(patch.patch_set)
 
         output_summarization = self.summarization_chain.invoke(
@@ -141,27 +144,23 @@ class CodeReviewTool(GenerativeModelTool):
         if self.verbose:
             GenerativeModelTool._print_answer(output_summarization)
 
-        if output_format == "JSON":
-            output_instructions = OUTPUT_FORMAT_JSON
-        elif output_format == "TEXT":
-            output_instructions = OUTPUT_FORMAT_TEXT
-        else:
-            raise ValueError(
-                f"Unsupported output format: {output_format}, choose JSON or TEXT"
-            )
-
         created_before = patch.date_created if self.is_experiment_env else None
-        return PROMPT_TEMPLATE_REVIEW.format(
+        return FIRST_MESSAGE_TEMPLATE.format(
             patch=formatted_patch,
             patch_summarization=output_summarization,
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
-            target_code_consistency=self.target_software or "rest of the",
-            output_instructions=output_instructions,
-            bug_title=patch.bug_title,
-            patch_title=patch.patch_title,
-            patch_url=patch.patch_url,
-            target_software=self.target_software,
+        )
+
+    def _get_output_instructions(self, output_format: Literal["JSON", "TEXT"]) -> str:
+        if output_format == "JSON":
+            return OUTPUT_FORMAT_JSON
+
+        if output_format == "TEXT":
+            return OUTPUT_FORMAT_TEXT
+
+        raise ValueError(
+            f"Unsupported output format: {output_format}, choose JSON or TEXT"
         )
 
     def _generate_suggestions(self, patch: Patch):
