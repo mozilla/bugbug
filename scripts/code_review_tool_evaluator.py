@@ -348,6 +348,26 @@ def get_latest_evaluation_results_file(results_dir: str | None):
     return latests_files
 
 
+def get_ongoing_evaluation_results_file(results_dir: str | None):
+    import glob
+    import os
+
+    base_file = get_latest_evaluation_results_file(results_dir)
+    files = [
+        file
+        for file in glob.glob("evaluation_results_*.csv", root_dir=results_dir)
+        if "#" not in file and file > base_file
+    ]
+    if not files:
+        raise FileNotFoundError("No ongoing evaluation results file found.")
+
+    latests_file = max(files)
+    if results_dir:
+        return os.path.join(results_dir, latests_file)
+
+    return latests_file
+
+
 def main(args):
     review_platform = "phabricator"
     review_data: code_review.ReviewData = code_review.review_data_classes[
@@ -358,15 +378,22 @@ def main(args):
 
     evaluator = FeedbackEvaluator(args.evaluation_dataset)
 
-    is_first_result = True
     result_file = os.path.join(
         args.results_dir,
         "code_review_tool_evaluator.csv",
     )
-    evaluation_results_file = os.path.join(
-        args.results_dir,
-        f"evaluation_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
-    )
+    is_first_result = not os.path.exists(result_file)
+
+    if is_first_result:
+        evaluation_results_file = os.path.join(
+            args.results_dir,
+            f"evaluation_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
+        )
+        seen_patches = set()
+    else:
+        evaluation_results_file = get_ongoing_evaluation_results_file(args.results_dir)
+        seen_patches = set(pd.read_csv(evaluation_results_file)["diff_id"].to_list())
+
     result_unique_columns = ["Review Request ID", "File", "Line", "Comment Number"]
     result_all_columns = result_unique_columns + [
         f"{title} ({variant_name})"
@@ -421,6 +448,18 @@ def main(args):
         )
 
     for review_request_id, review_request in selected_review_requests:
+        if review_request_id in [227266, 233414]:
+            print(
+                f"Skipping Review Request ID {review_request_id} because it is known to cause issues."
+            )
+            continue
+
+        if review_request.patch_id in seen_patches:
+            print(
+                f"Skipping Review Request ID {review_request_id} (Diff ID {review_request.patch_id}) because it was already evaluated."
+            )
+            continue
+
         print("---------------------------------------------------------")
         print(f"Review Request ID: {review_request_id}")
         print(f"Patch ID: {review_request.patch_id}")
