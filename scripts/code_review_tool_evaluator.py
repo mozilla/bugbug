@@ -32,6 +32,7 @@ from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
 from bugbug.tools.code_review.utils import parse_model_output
 from bugbug.tools.core import llms
+from bugbug.tools.core.exceptions import ModelResultError
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
@@ -481,6 +482,9 @@ def main(args):
                 continue
             except code_review.LargeDiffError:
                 print("Skipping the patch because it is too large.")
+                continue
+            except ModelResultError as e:
+                print("Error while running the tool:", e)
                 continue
 
             print_prettified_comments(comments)
