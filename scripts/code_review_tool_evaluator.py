@@ -222,7 +222,9 @@ class FeedbackEvaluator:
         )
 
 
-def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
+def get_tool_variants(
+    variants: list[str],
+) -> list[tuple[str, code_review.CodeReviewTool]]:
     """Returns a list of tool variants to evaluate.
 
     Returns:
@@ -255,31 +257,33 @@ def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
 
     tool_variants = []
 
-    tool_variants.append(
-        (
-            "Claude",
-            code_review.CodeReviewTool(
-                llm=llms.create_anthropic_llm(),
-                function_search=function_search,
-                review_comments_db=review_comments_db,
-                suggestions_feedback_db=suggestions_feedback_db,
-                verbose=VERBOSE_CODE_REVIEW,
-            ),
+    if "claude" in variants:
+        tool_variants.append(
+            (
+                "Claude",
+                code_review.CodeReviewTool(
+                    llm=llms.create_anthropic_llm(),
+                    function_search=function_search,
+                    review_comments_db=review_comments_db,
+                    suggestions_feedback_db=suggestions_feedback_db,
+                    verbose=VERBOSE_CODE_REVIEW,
+                ),
+            )
         )
-    )
 
-    tool_variants.append(
-        (
-            "GPT",
-            code_review.CodeReviewTool(
-                llm=llms.create_openai_llm(),
-                function_search=function_search,
-                review_comments_db=review_comments_db,
-                suggestions_feedback_db=suggestions_feedback_db,
-                verbose=VERBOSE_CODE_REVIEW,
-            ),
+    if "gpt" in variants:
+        tool_variants.append(
+            (
+                "GPT",
+                code_review.CodeReviewTool(
+                    llm=llms.create_openai_llm(),
+                    function_search=function_search,
+                    review_comments_db=review_comments_db,
+                    suggestions_feedback_db=suggestions_feedback_db,
+                    verbose=VERBOSE_CODE_REVIEW,
+                ),
+            )
         )
-    )
 
     return tool_variants
 
@@ -375,7 +379,7 @@ def main(args):
         review_platform
     ]()
 
-    tool_variants = get_tool_variants()
+    tool_variants = get_tool_variants(args.variants)
 
     evaluator = FeedbackEvaluator(args.evaluation_dataset)
 
@@ -590,6 +594,14 @@ if __name__ == "__main__":
         dest="evaluation_strategy",
         action="store",
         help="the evaluation strategy to use",
+    )
+    parser.add_argument(
+        "--variant",
+        dest="variants",
+        action="append",
+        help="the variants to use, use multiple times for multiple variants",
+        choices=["claude", "gpt"],
+        required=True,
     )
 
     args = parser.parse_args()
