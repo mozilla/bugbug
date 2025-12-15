@@ -14,9 +14,10 @@ from typing import Iterable, Optional
 import tenacity
 from tqdm import tqdm
 
-from bugbug import bugzilla, db, phabricator, utils
+from bugbug import db, phabricator, utils
 from bugbug.tools.core.data_types import InlineComment, ReviewRequest
 from bugbug.tools.core.platforms.base import Patch, ReviewData
+from bugbug.tools.core.platforms.bugzilla import Bug
 from bugbug.utils import get_secret
 
 logger = getLogger(__name__)
@@ -275,29 +276,16 @@ class PhabricatorPatch(Patch):
         return revision
 
     @cached_property
-    def _bug_metadata(self) -> dict | None:
-        id = self.bug_id
-        bugs = bugzilla.get(id)
-
-        if id not in bugs:
-            logger.warning(
-                "Bug %d not found in Bugzilla. This might be a private bug.", id
-            )
-            return None
-
-        return bugs[id]
+    def bug(self) -> Bug:
+        return Bug.get(self.bug_id)
 
     @property
     def bug_id(self) -> int:
         return int(self._revision_metadata["fields"]["bugzilla.bug-id"])
 
-    @cached_property
+    @property
     def bug_title(self) -> str:
-        if not self._bug_metadata:
-            # Use a placeholder when the bug metadata is not available
-            return "--"
-
-        return self._bug_metadata["summary"]
+        return self.bug.summary
 
     @cached_property
     def patch_title(self) -> str:
