@@ -6,7 +6,7 @@ langchain==1.0.8
 langchain-anthropic==1.2.0
 langchain-classic==1.0.0
 langchain-community==0.4.1
-langchain-google-genai==3.1.0
+langchain-google-genai==4.0.0
 langchain-mistralai==1.0.1
 langchain-openai==1.0.3
 langgraph==1.0.4
