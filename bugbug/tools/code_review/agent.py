@@ -137,6 +137,7 @@ class CodeReviewTool(GenerativeModelTool):
                 "patch": formatted_patch,
                 "bug_title": patch.bug_title,
                 "patch_title": patch.patch_title,
+                "patch_description": patch.patch_description,
             },
             return_only_outputs=True,
         )["text"]

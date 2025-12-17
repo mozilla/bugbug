@@ -53,6 +53,10 @@ class SwarmPatch(Patch):
     def patch_title(self) -> str:
         raise NotImplementedError
 
+    @property
+    def patch_description(self) -> str:
+        raise NotImplementedError
+
     @cached_property
     def bug_title(self) -> str:
         raise NotImplementedError

@@ -292,6 +292,10 @@ class PhabricatorPatch(Patch):
         return self._revision_metadata["fields"]["title"]
 
     @property
+    def patch_description(self) -> str:
+        return self._revision_metadata["fields"].get("summary", "")
+
+    @property
     def revision_id(self) -> int:
         return self._revision_metadata["id"]
 

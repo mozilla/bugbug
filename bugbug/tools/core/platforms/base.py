@@ -53,6 +53,12 @@ class Patch(ABC):
 
     @property
     @abstractmethod
+    def patch_description(self) -> str:
+        """Return the description of the patch."""
+        ...
+
+    @property
+    @abstractmethod
     def patch_url(self) -> str:
         """Return the URL of the patch."""
         ...
