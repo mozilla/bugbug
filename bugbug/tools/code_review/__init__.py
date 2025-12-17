@@ -15,7 +15,7 @@ For backward compatibility, also exports platform classes and utilities.
 """
 
 # Agent
-from bugbug.tools.code_review.agent import TARGET_SOFTWARE, CodeReviewTool
+from bugbug.tools.code_review.agent import CodeReviewTool
 
 # Databases
 from bugbug.tools.code_review.database import (
@@ -54,7 +54,6 @@ review_data_classes = {
 __all__ = [
     # Agent
     "CodeReviewTool",
-    "TARGET_SOFTWARE",
     # Databases
     "EvaluationAction",
     "ReviewCommentsDB",
