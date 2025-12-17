@@ -35,7 +35,6 @@ from bugbug.tools.core import llms
 from bugbug.tools.core.exceptions import ModelResultError
 from bugbug.vectordb import QdrantVectorDB
 
-code_review.TARGET_SOFTWARE = "Mozilla Firefox"
 VERBOSE_CODE_REVIEW = False
 
 

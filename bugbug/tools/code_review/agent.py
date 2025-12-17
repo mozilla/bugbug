@@ -50,9 +50,6 @@ from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
 
-# Global variable for target software
-TARGET_SOFTWARE: str | None = None
-
 
 class CodeReviewTool(GenerativeModelTool):
     version = "0.0.1"
@@ -65,11 +62,11 @@ class CodeReviewTool(GenerativeModelTool):
         show_patch_example: bool = False,
         verbose: bool = True,
         suggestions_feedback_db: Optional["SuggestionsFeedbackDB"] = None,
-        target_software: Optional[str] = None,
+        target_software: str = "Mozilla Firefox",
     ) -> None:
         super().__init__()
 
-        self.target_software = target_software or TARGET_SOFTWARE
+        self.target_software = target_software
 
         self._tokenizer = get_tokenizer(
             llm.model_name if hasattr(llm, "model_name") else ""
@@ -87,16 +84,12 @@ class CodeReviewTool(GenerativeModelTool):
                 "----------------------------------------------------"
             )
 
-        experience_scope = (
-            f"the {self.target_software} source code"
-            if self.target_software
-            else "a software project"
-        )
-
         self.summarization_chain = LLMChain(
             prompt=PromptTemplate.from_template(
                 PROMPT_TEMPLATE_SUMMARIZATION,
-                partial_variables={"experience_scope": experience_scope},
+                partial_variables={
+                    "experience_scope": f"the {self.target_software} source code"
+                },
             ),
             llm=llm,
             verbose=verbose,
@@ -104,9 +97,7 @@ class CodeReviewTool(GenerativeModelTool):
         self.filtering_chain = LLMChain(
             prompt=PromptTemplate.from_template(
                 PROMPT_TEMPLATE_FILTERING_ANALYSIS,
-                partial_variables={
-                    "target_code_consistency": self.target_software or "rest of the"
-                },
+                partial_variables={"target_code_consistency": self.target_software},
             ),
             llm=llm,
             verbose=verbose,
@@ -119,7 +110,7 @@ class CodeReviewTool(GenerativeModelTool):
         self.agent = create_agent(
             llm,
             tools,
-            system_prompt=f"You are an expert reviewer for {experience_scope}, with experience on source code reviews.",
+            system_prompt=f"You are an expert {self.target_software} engineer tasked with analyzing a pull request and providing high-quality review comments. You will examine a code patch and generate constructive feedback focusing on potential issues in the changed code.",
         )
 
         self.review_comments_db = review_comments_db
