@@ -79,6 +79,8 @@ class CodeReviewTool(GenerativeModelTool):
     def __init__(
         self,
         llm: BaseChatModel,
+        summarization_llm: BaseChatModel,
+        filtering_llm: BaseChatModel,
         function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
@@ -113,7 +115,7 @@ class CodeReviewTool(GenerativeModelTool):
                     "experience_scope": f"the {self.target_software} source code"
                 },
             ),
-            llm=llm,
+            llm=summarization_llm,
             verbose=verbose,
         )
         self.filtering_chain = LLMChain(
@@ -121,7 +123,7 @@ class CodeReviewTool(GenerativeModelTool):
                 PROMPT_TEMPLATE_FILTERING_ANALYSIS,
                 partial_variables={"target_code_consistency": self.target_software},
             ),
-            llm=llm,
+            llm=filtering_llm,
             verbose=verbose,
         )
 
@@ -145,6 +147,25 @@ class CodeReviewTool(GenerativeModelTool):
         self.verbose = verbose
 
         self.suggestions_feedback_db = suggestions_feedback_db
+
+    @staticmethod
+    def create(
+        llm=None, summarization_llm=None, filtering_llm=None, **kwargs
+    ) -> "CodeReviewTool":
+        from bugbug.tools.core.llms import create_anthropic_llm
+
+        return CodeReviewTool(
+            llm=llm
+            or create_anthropic_llm(
+                model_name="claude-opus-4-5-20251101",
+                max_tokens=40_000,
+                temperature=None,
+                thinking={"type": "enabled", "budget_tokens": 10_000},
+            ),
+            summarization_llm=summarization_llm or create_anthropic_llm(),
+            filtering_llm=filtering_llm or create_anthropic_llm(),
+            **kwargs,
+        )
 
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))

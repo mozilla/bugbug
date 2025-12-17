@@ -260,8 +260,7 @@ def get_tool_variants(
         tool_variants.append(
             (
                 "Claude",
-                code_review.CodeReviewTool(
-                    llm=llms.create_anthropic_llm(),
+                code_review.CodeReviewTool.create(
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                     suggestions_feedback_db=suggestions_feedback_db,
@@ -271,11 +270,14 @@ def get_tool_variants(
         )
 
     if "gpt" in variants:
+        llm = llms.create_openai_llm()
         tool_variants.append(
             (
                 "GPT",
-                code_review.CodeReviewTool(
-                    llm=llms.create_openai_llm(),
+                code_review.CodeReviewTool.create(
+                    llm=llm,
+                    summarization_llm=llm,
+                    filtering_llm=llm,
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                     suggestions_feedback_db=suggestions_feedback_db,
