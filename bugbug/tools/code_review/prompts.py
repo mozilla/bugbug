@@ -13,18 +13,25 @@ Please, analyze the code provided and report a summarization about the new chang
 
 The summarization should have two parts:
     1. **Intent**: Describe the intent of the changes, what they are trying to achieve, and how they relate to the bug or feature request.
-    2. **Structure**: Describe the structure of the changes, including any new functions, classes, or modules introduced, and how they fit into the existing codebase.
+    2. **Solution**: Describe the solution implemented in the code changes, focusing on how the changes address the intent.
 
 Do not include any code in the summarization, only a description of the changes.
 
 **Bug title**:
+<bug_title>
 {bug_title}
+</bug_title>
 
 **Commit message**:
+<commit_message>
 {patch_title}
+{patch_description}
+</commit_message>
 
 **Diff**:
-{patch}"""
+<patch>
+{patch}
+</patch>"""
 
 SYSTEM_PROMPT_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing a pull request and providing high-quality review comments. You will examine a code patch and generate constructive feedback focusing on potential issues in the changed code.
 
