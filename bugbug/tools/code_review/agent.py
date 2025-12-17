@@ -183,6 +183,7 @@ class CodeReviewTool(GenerativeModelTool):
                 },
                 context=CodeReviewContext(patch=patch),
                 stream_mode="values",
+                config={"recursion_limit": 50},
             ):
                 result = chunk
         except GraphRecursionError as e:

@@ -20,24 +20,31 @@ class CodeReviewContext:
 
 
 @tool
-def expand_context(file_path: str, line_number: int) -> str:
-    """Expand the context around a specific line in a file diff.
+def expand_context(file_path: str, start_line: int, end_line: int) -> str:
+    """Show the content of a file between specified line numbers as it is before the patch.
+
+    Be careful to not fill your context window with too much data. Request the
+    minimum amount of context necessary to understand the code, but do not split
+    what you really need into multiple requests if the line range is continuous.
 
     Args:
         file_path: The path to the file.
-        line_number: The line number to expand context around. It should be based on the original file, not the patch.
+        start_line: The starting line number in the original file. Minimum is 1.
+        end_line: The ending line number in the original file. Maximum is the total number of lines in the file.
 
     Returns:
-        Lines of code around the specified line number.
+        The content of the file between the specified line numbers.
     """
     runtime = get_runtime(CodeReviewContext)
-    file_content = runtime.context.patch.get_old_file(file_path)
 
-    # TODO: Expanding the context using an AST parser like tree-sitter to
-    # include the whole function or class when it is relatively small.
+    try:
+        file_content = runtime.context.patch.get_old_file(file_path)
+    except FileNotFoundError:
+        return "File not found in the repository before the patch."
+
     lines = file_content.splitlines()
-    start = max(0, line_number - 20)
-    end = min(len(lines), line_number + 20)
+    start = max(1, start_line) - 1
+    end = min(len(lines), end_line)
 
     # Format the output with line numbers that match the original file.
     line_number_width = len(str(end))
