@@ -177,7 +177,7 @@ class Bug:
     """Represents a Bugzilla bug from bugzilla.mozilla.org."""
 
     def __init__(self, data: dict):
-        self.metadata = data
+        self._metadata = data
 
     @staticmethod
     def get(bug_id: int) -> "Bug":
@@ -197,6 +197,10 @@ class Bug:
 
         return Bug(bug_data)
 
+    @property
+    def summary(self) -> str:
+        return self._metadata["summary"]
+
     def to_md(self) -> str:
         """Return a markdown representation of the bug."""
-        return bug_dict_to_markdown(self.metadata)
+        return bug_dict_to_markdown(self._metadata)

@@ -14,9 +14,10 @@ from typing import Iterable, Optional
 import tenacity
 from tqdm import tqdm
 
-from bugbug import bugzilla, db, phabricator, utils
+from bugbug import db, phabricator, utils
 from bugbug.tools.core.data_types import InlineComment, ReviewRequest
 from bugbug.tools.core.platforms.base import Patch, ReviewData
+from bugbug.tools.core.platforms.bugzilla import Bug
 from bugbug.utils import get_secret
 
 logger = getLogger(__name__)
@@ -130,7 +131,7 @@ class PhabricatorPatch(Patch):
 
         raise ValueError("Cannot determine revision PHID")
 
-    def _get_file(self, file_path: str, is_before_patch: bool) -> str:
+    def _get_file_from_patch(self, file_path: str, is_before_patch: bool) -> str:
         for changeset in self._changesets:
             if changeset["fields"]["path"]["displayPath"] == file_path:
                 break
@@ -150,8 +151,32 @@ class PhabricatorPatch(Patch):
 
         return r.text
 
+    def _get_file_from_repo(self, file_path: str, commit_hash: str) -> str:
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{file_path}",
+            headers={
+                "User-Agent": utils.get_user_agent(),
+            },
+        )
+
+        if r.status_code == 404:
+            raise FileNotFoundError(
+                f"File {file_path} not found in commit {commit_hash}"
+            )
+
+        r.raise_for_status()
+        return r.text
+
     def get_old_file(self, file_path: str) -> str:
-        return self._get_file(file_path, is_before_patch=True)
+        if file_path.startswith("b/") or file_path.startswith("a/"):
+            file_path = file_path[2:]
+
+        try:
+            return self._get_file_from_patch(file_path, is_before_patch=True)
+        except FileNotFoundError:
+            return self._get_file_from_repo(
+                file_path, commit_hash=self.base_commit_hash
+            )
 
     @cached_property
     def _changesets(self) -> list[dict]:
@@ -251,29 +276,16 @@ class PhabricatorPatch(Patch):
         return revision
 
     @cached_property
-    def _bug_metadata(self) -> dict | None:
-        id = self.bug_id
-        bugs = bugzilla.get(id)
-
-        if id not in bugs:
-            logger.warning(
-                "Bug %d not found in Bugzilla. This might be a private bug.", id
-            )
-            return None
-
-        return bugs[id]
+    def bug(self) -> Bug:
+        return Bug.get(self.bug_id)
 
     @property
     def bug_id(self) -> int:
         return int(self._revision_metadata["fields"]["bugzilla.bug-id"])
 
-    @cached_property
+    @property
     def bug_title(self) -> str:
-        if not self._bug_metadata:
-            # Use a placeholder when the bug metadata is not available
-            return "--"
-
-        return self._bug_metadata["summary"]
+        return self.bug.summary
 
     @cached_property
     def patch_title(self) -> str:
