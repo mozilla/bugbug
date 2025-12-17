@@ -235,6 +235,13 @@ class FunctionSearchSearchfoxAPI(FunctionSearch):
                     )
                 ),
             )
+            if source is None:
+                logger.warning(
+                    "Could not extract source for %s:%d",
+                    definition["path"],
+                    definition["start"],
+                )
+                continue
             result.append(
                 Function(
                     definition["name"],

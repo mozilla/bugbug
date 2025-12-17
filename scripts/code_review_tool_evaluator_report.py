@@ -2,10 +2,11 @@
 
 import pandas as pd
 
-from scripts.code_review_tool_evaluator import get_latest_evaluation_results_file
+import scripts.code_review_tool_evaluator as evaluator_script
 
 evaluation_results = pd.read_csv(
-    get_latest_evaluation_results_file("../evaluation_results")
+    # evaluator_script.get_latest_evaluation_results_file("../evaluation_results")
+    evaluator_script.get_ongoing_evaluation_results_file("../evaluation_results")
 )
 
 # %%

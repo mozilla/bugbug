@@ -32,6 +32,7 @@ from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
 from bugbug.tools.code_review.utils import parse_model_output
 from bugbug.tools.core import llms
+from bugbug.tools.core.exceptions import ModelResultError
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
@@ -221,7 +222,9 @@ class FeedbackEvaluator:
         )
 
 
-def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
+def get_tool_variants(
+    variants: list[str],
+) -> list[tuple[str, code_review.CodeReviewTool]]:
     """Returns a list of tool variants to evaluate.
 
     Returns:
@@ -254,31 +257,33 @@ def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
 
     tool_variants = []
 
-    tool_variants.append(
-        (
-            "Claude",
-            code_review.CodeReviewTool(
-                llm=llms.create_anthropic_llm(),
-                function_search=function_search,
-                review_comments_db=review_comments_db,
-                suggestions_feedback_db=suggestions_feedback_db,
-                verbose=VERBOSE_CODE_REVIEW,
-            ),
+    if "claude" in variants:
+        tool_variants.append(
+            (
+                "Claude",
+                code_review.CodeReviewTool(
+                    llm=llms.create_anthropic_llm(),
+                    function_search=function_search,
+                    review_comments_db=review_comments_db,
+                    suggestions_feedback_db=suggestions_feedback_db,
+                    verbose=VERBOSE_CODE_REVIEW,
+                ),
+            )
         )
-    )
 
-    tool_variants.append(
-        (
-            "GPT",
-            code_review.CodeReviewTool(
-                llm=llms.create_openai_llm(),
-                function_search=function_search,
-                review_comments_db=review_comments_db,
-                suggestions_feedback_db=suggestions_feedback_db,
-                verbose=VERBOSE_CODE_REVIEW,
-            ),
+    if "gpt" in variants:
+        tool_variants.append(
+            (
+                "GPT",
+                code_review.CodeReviewTool(
+                    llm=llms.create_openai_llm(),
+                    function_search=function_search,
+                    review_comments_db=review_comments_db,
+                    suggestions_feedback_db=suggestions_feedback_db,
+                    verbose=VERBOSE_CODE_REVIEW,
+                ),
+            )
         )
-    )
 
     return tool_variants
 
@@ -348,25 +353,52 @@ def get_latest_evaluation_results_file(results_dir: str | None):
     return latests_files
 
 
+def get_ongoing_evaluation_results_file(results_dir: str | None):
+    import glob
+    import os
+
+    base_file = get_latest_evaluation_results_file(results_dir)
+    files = [
+        file
+        for file in glob.glob("evaluation_results_*.csv", root_dir=results_dir)
+        if "#" not in file and file > base_file
+    ]
+    if not files:
+        raise FileNotFoundError("No ongoing evaluation results file found.")
+
+    latests_file = max(files)
+    if results_dir:
+        return os.path.join(results_dir, latests_file)
+
+    return latests_file
+
+
 def main(args):
     review_platform = "phabricator"
     review_data: code_review.ReviewData = code_review.review_data_classes[
         review_platform
     ]()
 
-    tool_variants = get_tool_variants()
+    tool_variants = get_tool_variants(args.variants)
 
     evaluator = FeedbackEvaluator(args.evaluation_dataset)
 
-    is_first_result = True
     result_file = os.path.join(
         args.results_dir,
         "code_review_tool_evaluator.csv",
     )
-    evaluation_results_file = os.path.join(
-        args.results_dir,
-        f"evaluation_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
-    )
+    is_first_result = not os.path.exists(result_file)
+
+    if is_first_result:
+        evaluation_results_file = os.path.join(
+            args.results_dir,
+            f"evaluation_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
+        )
+        seen_patches = set()
+    else:
+        evaluation_results_file = get_ongoing_evaluation_results_file(args.results_dir)
+        seen_patches = set(pd.read_csv(evaluation_results_file)["diff_id"].to_list())
+
     result_unique_columns = ["Review Request ID", "File", "Line", "Comment Number"]
     result_all_columns = result_unique_columns + [
         f"{title} ({variant_name})"
@@ -421,6 +453,18 @@ def main(args):
         )
 
     for review_request_id, review_request in selected_review_requests:
+        if review_request_id in [227266, 233414]:
+            print(
+                f"Skipping Review Request ID {review_request_id} because it is known to cause issues."
+            )
+            continue
+
+        if review_request.patch_id in seen_patches:
+            print(
+                f"Skipping Review Request ID {review_request_id} (Diff ID {review_request.patch_id}) because it was already evaluated."
+            )
+            continue
+
         print("---------------------------------------------------------")
         print(f"Review Request ID: {review_request_id}")
         print(f"Patch ID: {review_request.patch_id}")
@@ -442,6 +486,9 @@ def main(args):
                 continue
             except code_review.LargeDiffError:
                 print("Skipping the patch because it is too large.")
+                continue
+            except ModelResultError as e:
+                print("Error while running the tool:", e)
                 continue
 
             print_prettified_comments(comments)
@@ -547,6 +594,14 @@ if __name__ == "__main__":
         dest="evaluation_strategy",
         action="store",
         help="the evaluation strategy to use",
+    )
+    parser.add_argument(
+        "--variant",
+        dest="variants",
+        action="append",
+        help="the variants to use, use multiple times for multiple variants",
+        choices=["claude", "gpt"],
+        required=True,
     )
 
     args = parser.parse_args()
