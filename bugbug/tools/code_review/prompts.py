@@ -78,16 +78,7 @@ Do not write comments that:
 - Point out issues that are already handled in the visible code
 - Suggest problems based on assumptions without verifying the context
 - Flag style preferences without clear coding standard violations
-
-## Output Format
-
-Your final output should consist only of the review comments in the specified format. Do not include any analysis or reasoning in your response.
-
-Your output should follow this format:
-
-<output_format>
-{output_instructions}
-</output_format>"""
+"""
 
 
 FIRST_MESSAGE_TEMPLATE = """Here is a summary of the patch:
@@ -110,26 +101,6 @@ Here is the patch you need to review:
 <patch>
 {patch}
 </patch>
-"""
-
-OUTPUT_FORMAT_JSON = """
-Respond only with a **JSON list**. Each object must contain the following fields:
-
-* `"file"`: The relative path to the file the comment applies to.
-* `"code_line"`: The number of the specific changed line of code that the comment refers to.
-* `"comment"`: A concise review comment.
-* `"explanation"`: A brief rationale for the comment, including how confident you are and why.
-* `"order"`: An integer representing the priority of the comment, with 1 being the highest confidence/importance.
-"""
-
-OUTPUT_FORMAT_TEXT = """
-Respond only with a **plain text list** with the following details:
-
-* `"filename"`: The relative path to the file the comment applies to.
-* `"line_number"`: The number of the specific changed line of code that the comment refers to.
-* `"comment"`: A concise review comment.
-
-The format should be: filename:line_number "comment"
 """
 
 

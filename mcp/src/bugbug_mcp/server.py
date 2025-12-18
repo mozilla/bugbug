@@ -33,7 +33,6 @@ def get_code_review_tool():
     return CodeReviewTool(
         llm=init_chat_model("gpt-5.1"),
         review_comments_db=ReviewCommentsDB(QdrantVectorDB("diff_comments")),
-        output_format="TEXT",
     )
 
 
