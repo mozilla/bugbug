@@ -938,7 +938,10 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
             manifest_by_path[str(toml_rel)].add(str(toml_rel))
 
             # Collect head files.
-            head_files = data.get("DEFAULT", {}).get("head", "").split(" ")
+            head_value = data.get("DEFAULT", {}).get("head", [])
+            head_files = (
+                head_value if isinstance(head_value, list) else head_value.split(" ")
+            )
             for head_file in head_files:
                 if not head_file.strip():
                     continue
