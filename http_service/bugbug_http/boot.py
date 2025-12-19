@@ -23,7 +23,9 @@ def boot_worker() -> None:
     # Clone autoland
     def clone_autoland() -> None:
         logger.info("Cloning autoland in %s...", REPO_DIR)
-        repository.clone(REPO_DIR, "https://hg.mozilla.org/integration/autoland")
+        repository.clone(
+            REPO_DIR, "https://hg.mozilla.org/integration/autoland", update=True
+        )
 
     def extract_past_failures_label() -> None:
         try:
