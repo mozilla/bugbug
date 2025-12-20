@@ -1,4 +1,10 @@
 {
+  "bindings": [
+    {
+      "exchange": "exchange/taskcluster-queue/v1/task-completed",
+      "routingKeyPattern": "route.project.bugbug.deploy_ending"
+    }
+  ],
   "schedule": ["0 0 1,16 * *"],
   "metadata": {
     "description": "",
