@@ -214,9 +214,18 @@ def search(commit_hash, symbol_name):
 
 
 class FunctionSearchSearchfoxAPI(FunctionSearch):
-    def __init__(self, get_file):
+    def __init__(self, get_file=None):
         super().__init__()
-        self.get_file = get_file
+        self.get_file = get_file or self._get_file
+
+    @staticmethod
+    def _get_file(commit_hash, path):
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
+            headers={"User-Agent": utils.get_user_agent()},
+        )
+        r.raise_for_status()
+        return r.text
 
     def definitions_to_results(self, commit_hash, definitions):
         result = []

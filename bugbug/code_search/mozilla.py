@@ -10,10 +10,10 @@ from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
 
 class FunctionSearchMozilla(FunctionSearch):
-    def __init__(self, repo_dir, get_file, fast=False):
+    def __init__(self, repo_dir, get_file=None, fast=False):
         super().__init__()
         self.repo_dir = repo_dir
-        self.get_file = get_file
+        self.get_file = get_file or FunctionSearchSearchfoxAPI._get_file
         self.fast = fast
 
     def get_function(
