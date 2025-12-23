@@ -919,6 +919,7 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                 toml_path.name in ("Cargo.toml", "pyproject.toml")
                 or toml_path.parent.name == "test-manifest-toml"
                 or "third_party" in toml_path.parts
+                or "manifestparser" in toml_path.parts
             ):
                 continue
 
