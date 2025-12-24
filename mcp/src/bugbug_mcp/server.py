@@ -1,6 +1,7 @@
 """MCP server for Firefox Development."""
 
 import functools
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
@@ -18,7 +19,16 @@ from bugbug.tools.core.platforms.bugzilla import Bug
 from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 from bugbug.utils import get_secret
 
-os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
+logger = logging.getLogger(__name__)
+
+# Set OPENAI_API_KEY if available (optional for most MCP tools)
+try:
+    os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
+except ValueError:
+    # API key not found, will skip code review features
+    logger.warning(
+        "OPENAI_API_KEY not found. Code review features will be unavailable."
+    )
 
 mcp = FastMCP("Firefox Development MCP Server")
 
@@ -109,6 +119,75 @@ def get_bugzilla_bug(bug_id: int) -> str:
     return Bug.get(bug_id).to_md()
 
 
+@mcp.tool()
+def bugzilla_quick_search(
+    search_query: Annotated[
+        str,
+        "A quick search string to find bugs. Can include bug numbers, keywords, status, product, component, etc. Examples: 'firefox crash', 'FIXED', 'status:NEW product:Core'",
+    ],
+    limit: Annotated[int, "Maximum number of bugs to return (default: 20)"] = 20,
+) -> str:
+    """Search for bugs in Bugzilla using quick search syntax.
+
+    Quick search allows natural language searches and supports various shortcuts:
+    - Bug numbers: "12345" or "bug 12345"
+    - Keywords: "crash", "regression"
+    - Status: "NEW", "FIXED", "ASSIGNED"
+    - Products/Components: "Firefox", "Core::DOM"
+    - Combinations: "firefox crash NEW"
+
+    Returns a formatted list of matching bugs with their ID, status, summary, and link.
+    """
+    from libmozdata.bugzilla import Bugzilla
+
+    bugs = []
+
+    def bughandler(bug):
+        bugs.append(bug)
+
+    # Use Bugzilla quicksearch API
+    params = {
+        "quicksearch": search_query,
+        "limit": limit,
+    }
+
+    Bugzilla(
+        params,
+        include_fields=[
+            "id",
+            "status",
+            "summary",
+            "product",
+            "component",
+            "priority",
+            "severity",
+        ],
+        bughandler=bughandler,
+    ).get_data().wait()
+
+    if not bugs:
+        return f"No bugs found matching: {search_query}"
+
+    # Format results concisely for LLM consumption
+    result = f"Found {len(bugs)} bug(s) matching '{search_query}':\n\n"
+
+    for bug in bugs:
+        bug_id = bug["id"]
+        status = bug.get("status", "N/A")
+        summary = bug.get("summary", "N/A")
+        product = bug.get("product", "N/A")
+        component = bug.get("component", "N/A")
+        priority = bug.get("priority", "N/A")
+        severity = bug.get("severity", "N/A")
+
+        result += f"Bug {bug_id} [{status}] - {summary}\n"
+        result += f"  Product: {product}::{component}\n"
+        result += f"  Priority: {priority} | Severity: {severity}\n"
+        result += f"  URL: https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}\n\n"
+
+    return result
+
+
 @mcp.resource(
     uri="phabricator://revision/D{revision_id}",
     name="Phabricator Revision Content",
@@ -163,9 +242,17 @@ async def read_fx_doc_section(
 
 
 def main():
-    phabricator.set_api_key(
-        get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
-    )
+    # Set Phabricator API key if available (optional)
+    try:
+        phabricator.set_api_key(
+            get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
+        )
+    except ValueError:
+        # Phabricator secrets not available, will skip Phabricator features
+        logger.warning(
+            "PHABRICATOR_URL or PHABRICATOR_TOKEN not found. "
+            "Phabricator features will be unavailable."
+        )
 
     mcp.run(
         transport="streamable-http",
