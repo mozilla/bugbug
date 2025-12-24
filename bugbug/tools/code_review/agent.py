@@ -149,23 +149,58 @@ class CodeReviewTool(GenerativeModelTool):
         self.suggestions_feedback_db = suggestions_feedback_db
 
     @staticmethod
-    def create(
-        llm=None, summarization_llm=None, filtering_llm=None, **kwargs
-    ) -> "CodeReviewTool":
-        from bugbug.tools.core.llms import create_anthropic_llm
+    def create(**kwargs):
+        """Factory method to instantiate the tool with default dependencies.
 
-        return CodeReviewTool(
-            llm=llm
-            or create_anthropic_llm(
+        This method takes the same parameters as the constructor, but all
+        parameters are optional. If a parameter is not provided, a default
+        component will be created and used.
+        """
+        if "function_search" not in kwargs:
+            from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
+
+            kwargs["function_search"] = FunctionSearchSearchfoxAPI()
+
+        if "suggestions_feedback_db" not in kwargs:
+            from bugbug.tools.code_review.database import SuggestionsFeedbackDB
+            from bugbug.vectordb import QdrantVectorDB
+
+            kwargs["suggestions_feedback_db"] = SuggestionsFeedbackDB(
+                QdrantVectorDB("suggestions_feedback")
+            )
+
+        if "review_comments_db" not in kwargs:
+            from bugbug.tools.code_review.database import ReviewCommentsDB
+            from bugbug.vectordb import QdrantVectorDB
+
+            kwargs["review_comments_db"] = ReviewCommentsDB(
+                QdrantVectorDB("diff_comments")
+            )
+
+        if "review_data" not in kwargs:
+            from bugbug.tools.core.platforms.phabricator import PhabricatorReviewData
+
+            kwargs["review_data"] = PhabricatorReviewData()
+
+        if "llm" not in kwargs:
+            from bugbug.tools.core.llms import create_anthropic_llm
+
+            kwargs["llm"] = create_anthropic_llm(
                 model_name="claude-opus-4-5-20251101",
                 max_tokens=40_000,
                 temperature=None,
                 thinking={"type": "enabled", "budget_tokens": 10_000},
-            ),
-            summarization_llm=summarization_llm or create_anthropic_llm(),
-            filtering_llm=filtering_llm or create_anthropic_llm(),
-            **kwargs,
-        )
+            )
+
+        if "filtering_llm" not in kwargs:
+            from bugbug.tools.core.llms import create_anthropic_llm
+
+            kwargs["filtering_llm"] = create_anthropic_llm()
+
+        if "summarization_llm" not in kwargs:
+            kwargs["summarization_llm"] = kwargs["filtering_llm"]
+
+        return CodeReviewTool(**kwargs)
 
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
