@@ -183,9 +183,6 @@ class CodeReviewTool(GenerativeModelTool):
             return_only_outputs=True,
         )["text"]
 
-        if self.verbose:
-            GenerativeModelTool._print_answer(output_summarization)
-
         created_before = patch.date_created if self.is_experiment_env else None
         return FIRST_MESSAGE_TEMPLATE.format(
             patch=formatted_patch,
@@ -236,9 +233,6 @@ class CodeReviewTool(GenerativeModelTool):
             },
             return_only_outputs=True,
         )["text"]
-
-        if self.verbose:
-            GenerativeModelTool._print_answer(raw_output)
 
         return list(generate_processed_output(raw_output, patch.patch_set))
 
