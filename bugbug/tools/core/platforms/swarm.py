@@ -81,8 +81,8 @@ class SwarmReviewData(ReviewData):
     def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
         return ReviewRequest(revision_id)
 
-    def get_patch_by_id(self, patch_id: str) -> Patch:
-        return SwarmPatch(patch_id, self.auth)
+    def get_patch_by_id(self, patch_id: str | int) -> Patch:
+        return SwarmPatch(str(patch_id), self.auth)
 
     def get_all_inline_comments(
         self, comment_filter

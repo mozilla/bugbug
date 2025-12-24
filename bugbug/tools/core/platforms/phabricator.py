@@ -497,7 +497,7 @@ class PhabricatorReviewData(ReviewData):
         wait=tenacity.wait_exponential(multiplier=2, min=2),
         reraise=True,
     )
-    def get_patch_by_id(self, patch_id: str) -> Patch:
+    def get_patch_by_id(self, patch_id: str | int) -> Patch:
         return PhabricatorPatch(patch_id)
 
     def get_all_inline_comments(

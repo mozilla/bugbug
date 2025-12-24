@@ -79,7 +79,7 @@ class ReviewData(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_patch_by_id(self, patch_id: str) -> Patch:
+    def get_patch_by_id(self, patch_id: str | int) -> Patch:
         raise NotImplementedError
 
     @abstractmethod
