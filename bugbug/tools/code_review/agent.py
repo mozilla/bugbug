@@ -208,33 +208,26 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    def generate_initial_prompt(self, patch: Patch) -> str:
-        formatted_patch = format_patch_set(patch.patch_set)
-
-        output_summarization = self.summarization_chain.invoke(
-            {
-                "patch": formatted_patch,
-                "bug_title": patch.bug_title,
-                "patch_title": patch.patch_title,
-                "patch_description": patch.patch_description,
-            },
-            return_only_outputs=True,
-        )["text"]
-
+    def generate_initial_prompt(self, patch: Patch, patch_summary: str) -> str:
         created_before = patch.date_created if self.is_experiment_env else None
+
         return FIRST_MESSAGE_TEMPLATE.format(
-            patch=formatted_patch,
-            patch_summarization=output_summarization,
+            patch=format_patch_set(patch.patch_set),
+            patch_summarization=patch_summary,
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
         )
 
-    def _generate_suggestions(self, patch: Patch) -> list[GeneratedReviewComment]:
+    def generate_review_comments(
+        self, patch: Patch, patch_summary: str
+    ) -> list[GeneratedReviewComment]:
         try:
             for chunk in self.agent.stream(
                 {
                     "messages": [
-                        HumanMessage(self.generate_initial_prompt(patch)),
+                        HumanMessage(
+                            self.generate_initial_prompt(patch, patch_summary)
+                        ),
                     ]
                 },
                 context=CodeReviewContext(patch=patch),
@@ -255,7 +248,17 @@ class CodeReviewTool(GenerativeModelTool):
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
-        unfiltered_suggestions = self._generate_suggestions(patch)
+        patch_summary = self.summarization_chain.invoke(
+            {
+                "patch": format_patch_set(patch.patch_set),
+                "bug_title": patch.bug_title,
+                "patch_title": patch.patch_title,
+                "patch_description": patch.patch_description,
+            },
+            return_only_outputs=True,
+        )["text"]
+
+        unfiltered_suggestions = self.generate_review_comments(patch, patch_summary)
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
             return []
