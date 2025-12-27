@@ -8,9 +8,5 @@ from typing import Any
 
 
 class GenerativeModelTool(ABC):
-    @property
-    @abstractmethod
-    def version(self) -> str: ...
-
     @abstractmethod
     def run(self, *args, **kwargs) -> Any: ...
