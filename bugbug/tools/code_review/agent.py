@@ -9,7 +9,7 @@ import json
 import os
 from datetime import datetime
 from logging import getLogger
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Protocol
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
@@ -33,7 +33,6 @@ from bugbug.tools.code_review.prompts import (
     DEFAULT_REJECTED_EXAMPLES,
     FIRST_MESSAGE_TEMPLATE,
     PROMPT_TEMPLATE_FILTERING_ANALYSIS,
-    PROMPT_TEMPLATE_SUMMARIZATION,
     STATIC_COMMENT_EXAMPLES,
     SYSTEM_PROMPT_TEMPLATE,
     TEMPLATE_COMMENT_EXAMPLE,
@@ -73,12 +72,15 @@ class AgentResponse(BaseModel):
     )
 
 
-class CodeReviewTool(GenerativeModelTool):
+class PatchSummarizer(Protocol):
+    def run(self, patch: Patch) -> str: ...
 
+
+class CodeReviewTool(GenerativeModelTool):
     def __init__(
         self,
         llm: BaseChatModel,
-        summarization_llm: BaseChatModel,
+        patch_summarizer: PatchSummarizer,
         filtering_llm: BaseChatModel,
         review_data: ReviewData,
         function_search: Optional[FunctionSearch] = None,
@@ -110,16 +112,7 @@ class CodeReviewTool(GenerativeModelTool):
                 "----------------------------------------------------"
             )
 
-        self.summarization_chain = LLMChain(
-            prompt=PromptTemplate.from_template(
-                PROMPT_TEMPLATE_SUMMARIZATION,
-                partial_variables={
-                    "experience_scope": f"the {self.target_software} source code"
-                },
-            ),
-            llm=summarization_llm,
-            verbose=verbose,
-        )
+        self.patch_summarizer = patch_summarizer
         self.filtering_chain = LLMChain(
             prompt=PromptTemplate.from_template(
                 PROMPT_TEMPLATE_FILTERING_ANALYSIS,
@@ -199,8 +192,10 @@ class CodeReviewTool(GenerativeModelTool):
 
             kwargs["filtering_llm"] = create_anthropic_llm()
 
-        if "summarization_llm" not in kwargs:
-            kwargs["summarization_llm"] = kwargs["filtering_llm"]
+        if "patch_summarizer" not in kwargs:
+            from bugbug.tools.patch_summarization.agent import PatchSummarizationTool
+
+            kwargs["patch_summarizer"] = PatchSummarizationTool.create()
 
         return CodeReviewTool(**kwargs)
 
@@ -247,15 +242,7 @@ class CodeReviewTool(GenerativeModelTool):
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
-        patch_summary = self.summarization_chain.invoke(
-            {
-                "patch": format_patch_set(patch.patch_set),
-                "bug_title": patch.bug_title,
-                "patch_title": patch.patch_title,
-                "patch_description": patch.patch_description,
-            },
-            return_only_outputs=True,
-        )["text"]
+        patch_summary = self.patch_summarizer.run(patch)
 
         unfiltered_suggestions = self.generate_review_comments(patch, patch_summary)
         if not unfiltered_suggestions:
