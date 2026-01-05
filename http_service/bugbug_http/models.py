@@ -279,7 +279,8 @@ def get_config_specific_groups(config: str) -> str:
             [
                 {"name": group}
                 for group in past_failures_data.all_runnables
-                if any(
+                if group in equivalence_sets
+                and any(
                     equivalence_set == {config}
                     for equivalence_set in equivalence_sets[group]
                 )

@@ -311,6 +311,35 @@ def select_configs(
         # Create constraints to ensure at least one task from each set of equivalent
         # groups is selected.
 
+        # Generate equivalence sets for groups that don't exist in the precomputed sets
+        if group not in equivalence_sets:
+            logger.warning(
+                f"Group {group} not found in equivalence sets, generating on-the-fly"
+            )
+            key = test_scheduling.failing_together_key(group)
+            try:
+                failing_together_stats = pickle.loads(failing_together[key])
+            except KeyError:
+                failing_together_stats = {}
+
+            def load_failing_together(
+                config: str,
+            ) -> dict[str, tuple[float, float]]:
+                try:
+                    return failing_together_stats[config]
+                except KeyError:
+                    return {}
+
+            configs = (
+                all_configs_by_group[group]
+                if group in all_configs_by_group
+                else all_configs
+            )
+
+            equivalence_sets[group] = _generate_equivalence_sets(
+                configs, min_redundancy_confidence, load_failing_together, True
+            )
+
         mutually_exclusive = True
         seen = set()
         for equivalence_set in equivalence_sets[group]:
