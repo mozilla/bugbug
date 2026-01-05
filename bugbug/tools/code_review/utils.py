@@ -406,3 +406,55 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
             explanation=comment["explanation"],
             order=comment["order"],
         )
+
+
+def convert_generated_comments_to_inline(
+    comments, patch: PatchSet
+) -> Iterable[InlineComment]:
+    """Convert GeneratedReviewComment objects to InlineComment objects.
+
+    Args:
+        comments: List of GeneratedReviewComment objects.
+        patch: The PatchSet to validate file paths against.
+
+    Yields:
+        InlineComment objects with proper scope information.
+    """
+    patched_files_map = {
+        patched_file.target_file: patched_file for patched_file in patch
+    }
+
+    for comment in comments:
+        file_path = comment.file
+        if not file_path.startswith("b/") and not file_path.startswith("a/"):
+            file_path = "b/" + file_path
+
+        # FIXME: currently, we do not handle renamed files
+
+        patched_file = patched_files_map.get(file_path)
+        if patched_file is None:
+            raise FileNotInPatchError(
+                f"The file `{file_path}` is not part of the patch: {list(patched_files_map)}"
+            )
+
+        line_number = comment.code_line
+        if not isinstance(line_number, int):
+            raise ModelResultError("Line number must be an integer")
+
+        scope = find_comment_scope(patched_file, line_number)
+
+        yield InlineComment(
+            filename=(
+                patched_file.target_file[2:]
+                if scope["has_added_lines"]
+                else patched_file.source_file[2:]
+            ),
+            start_line=line_number,
+            end_line=line_number,
+            hunk_start_line=scope["line_start"],
+            hunk_end_line=scope["line_end"],
+            content=comment.comment,
+            on_removed_code=not scope["has_added_lines"],
+            explanation=comment.explanation,
+            order=comment.order,
+        )

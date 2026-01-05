@@ -9,38 +9,34 @@ import json
 import os
 from datetime import datetime
 from logging import getLogger
-from typing import Iterable, Optional, Protocol
+from typing import Optional, Protocol
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
 from langchain.chat_models import BaseChatModel
 from langchain.messages import HumanMessage
-from langchain_classic.chains import LLMChain
-from langchain_classic.prompts import PromptTemplate
 from langgraph.errors import GraphRecursionError
 from pydantic import BaseModel, Field
 from unidiff import PatchSet
 
 from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.base import GenerativeModelTool
-from bugbug.tools.code_review.database import ReviewCommentsDB, SuggestionsFeedbackDB
+from bugbug.tools.code_review.database import ReviewCommentsDB
 from bugbug.tools.code_review.langchain_tools import (
     CodeReviewContext,
     create_find_function_definition_tool,
     expand_context,
 )
 from bugbug.tools.code_review.prompts import (
-    DEFAULT_REJECTED_EXAMPLES,
     FIRST_MESSAGE_TEMPLATE,
-    PROMPT_TEMPLATE_FILTERING_ANALYSIS,
     STATIC_COMMENT_EXAMPLES,
     SYSTEM_PROMPT_TEMPLATE,
     TEMPLATE_COMMENT_EXAMPLE,
     TEMPLATE_PATCH_FROM_HUNK,
 )
 from bugbug.tools.code_review.utils import (
+    convert_generated_comments_to_inline,
     format_patch_set,
-    generate_processed_output,
 )
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
@@ -76,18 +72,23 @@ class PatchSummarizer(Protocol):
     def run(self, patch: Patch) -> str: ...
 
 
+class SuggestionFilterer(Protocol):
+    def run(
+        self, suggestions: list[GeneratedReviewComment]
+    ) -> list[GeneratedReviewComment]: ...
+
+
 class CodeReviewTool(GenerativeModelTool):
     def __init__(
         self,
         llm: BaseChatModel,
         patch_summarizer: PatchSummarizer,
-        filtering_llm: BaseChatModel,
+        suggestion_filterer: SuggestionFilterer,
         review_data: ReviewData,
         function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
         verbose: bool = True,
-        suggestions_feedback_db: Optional["SuggestionsFeedbackDB"] = None,
         target_software: str = "Mozilla Firefox",
     ) -> None:
         super().__init__()
@@ -113,14 +114,7 @@ class CodeReviewTool(GenerativeModelTool):
             )
 
         self.patch_summarizer = patch_summarizer
-        self.filtering_chain = LLMChain(
-            prompt=PromptTemplate.from_template(
-                PROMPT_TEMPLATE_FILTERING_ANALYSIS,
-                partial_variables={"target_code_consistency": self.target_software},
-            ),
-            llm=filtering_llm,
-            verbose=verbose,
-        )
+        self.suggestion_filterer = suggestion_filterer
 
         tools = [expand_context]
         if function_search:
@@ -141,8 +135,6 @@ class CodeReviewTool(GenerativeModelTool):
 
         self.verbose = verbose
 
-        self.suggestions_feedback_db = suggestions_feedback_db
-
     @staticmethod
     def create(**kwargs):
         """Factory method to instantiate the tool with default dependencies.
@@ -155,14 +147,6 @@ class CodeReviewTool(GenerativeModelTool):
             from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 
             kwargs["function_search"] = FunctionSearchSearchfoxAPI()
-
-        if "suggestions_feedback_db" not in kwargs:
-            from bugbug.tools.code_review.database import SuggestionsFeedbackDB
-            from bugbug.vectordb import QdrantVectorDB
-
-            kwargs["suggestions_feedback_db"] = SuggestionsFeedbackDB(
-                QdrantVectorDB("suggestions_feedback")
-            )
 
         if "review_comments_db" not in kwargs:
             from bugbug.tools.code_review.database import ReviewCommentsDB
@@ -187,15 +171,15 @@ class CodeReviewTool(GenerativeModelTool):
                 thinking={"type": "enabled", "budget_tokens": 10_000},
             )
 
-        if "filtering_llm" not in kwargs:
-            from bugbug.tools.core.llms import create_anthropic_llm
-
-            kwargs["filtering_llm"] = create_anthropic_llm()
-
         if "patch_summarizer" not in kwargs:
             from bugbug.tools.patch_summarization.agent import PatchSummarizationTool
 
             kwargs["patch_summarizer"] = PatchSummarizationTool.create()
+
+        if "suggestion_filterer" not in kwargs:
+            from bugbug.tools.suggestion_filtering.agent import SuggestionFilteringTool
+
+            kwargs["suggestion_filterer"] = SuggestionFilteringTool.create()
 
         return CodeReviewTool(**kwargs)
 
@@ -249,23 +233,11 @@ class CodeReviewTool(GenerativeModelTool):
             logger.info("No suggestions were generated")
             return []
 
-        rejected_examples = (
-            "\n    - ".join(self.get_similar_rejected_comments(unfiltered_suggestions))
-            if self.suggestions_feedback_db
-            else DEFAULT_REJECTED_EXAMPLES
+        filtered_suggestions = self.suggestion_filterer.run(unfiltered_suggestions)
+
+        return list(
+            convert_generated_comments_to_inline(filtered_suggestions, patch.patch_set)
         )
-
-        raw_output = self.filtering_chain.invoke(
-            {
-                "comments": str(
-                    [comment.model_dump() for comment in unfiltered_suggestions]
-                ),
-                "rejected_examples": rejected_examples,
-            },
-            return_only_outputs=True,
-        )["text"]
-
-        return list(generate_processed_output(raw_output, patch.patch_set))
 
     def _get_generated_examples(self, patch, created_before: datetime | None = None):
         """Get examples of comments that were generated by an LLM.
@@ -345,24 +317,3 @@ class CodeReviewTool(GenerativeModelTool):
             )
             for num, example in enumerate(comment_examples)
         )
-
-    def get_similar_rejected_comments(
-        self, suggestions: list[GeneratedReviewComment]
-    ) -> Iterable[str]:
-        if not self.suggestions_feedback_db:
-            raise Exception("Suggestions feedback database is not available")
-
-        num_examples_per_suggestion = 10 // len(suggestions) or 1
-        seen_ids: set[int] = set()
-
-        for suggestion in suggestions:
-            similar_rejected_suggestions = (
-                self.suggestions_feedback_db.find_similar_rejected_suggestions(
-                    suggestion.comment,
-                    limit=num_examples_per_suggestion,
-                    excluded_ids=seen_ids,
-                )
-            )
-            for rejected_suggestion in similar_rejected_suggestions:
-                seen_ids.add(rejected_suggestion.id)
-                yield rejected_suggestion.comment
