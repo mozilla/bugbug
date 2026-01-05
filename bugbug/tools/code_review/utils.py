@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-import json
 import re
 from itertools import chain
 from logging import getLogger
@@ -341,71 +340,6 @@ def get_structured_functions(target, functions_declaration):
             continue
 
     return function_declaration_text
-
-
-def parse_model_output(output: str) -> list[dict]:
-    # TODO: This function should raise an exception when the output is not valid
-    # JSON. The caller can then decide how to handle the error.
-    # For now, we just log the error and return an empty list.
-
-    json_opening_tag = output.find("```json")
-    if json_opening_tag != -1:
-        json_closing_tag = output.rfind("```")
-        if json_closing_tag == -1:
-            logger.error("No closing ``` found for JSON in model output: %s", output)
-            return []
-        output = output[json_opening_tag + len("```json") : json_closing_tag]
-
-    try:
-        comments = json.loads(output)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse JSON from model output: %s", output)
-        return []
-
-    return comments
-
-
-def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineComment]:
-    comments = parse_model_output(output)
-
-    patched_files_map = {
-        patched_file.target_file: patched_file for patched_file in patch
-    }
-
-    for comment in comments:
-        file_path = comment["file"]
-        if not file_path.startswith("b/") and not file_path.startswith("a/"):
-            file_path = "b/" + file_path
-
-        # FIXME: currently, we do not handle renamed files
-
-        patched_file = patched_files_map.get(file_path)
-        if patched_file is None:
-            raise FileNotInPatchError(
-                f"The file `{file_path}` is not part of the patch: {list(patched_files_map)}"
-            )
-
-        line_number = comment["code_line"]
-        if not isinstance(line_number, int):
-            raise ModelResultError("Line number must be an integer")
-
-        scope = find_comment_scope(patched_file, line_number)
-
-        yield InlineComment(
-            filename=(
-                patched_file.target_file[2:]
-                if scope["has_added_lines"]
-                else patched_file.source_file[2:]
-            ),
-            start_line=line_number,
-            end_line=line_number,
-            hunk_start_line=scope["line_start"],
-            hunk_end_line=scope["line_end"],
-            content=comment["comment"],
-            on_removed_code=not scope["has_added_lines"],
-            explanation=comment["explanation"],
-            order=comment["order"],
-        )
 
 
 def convert_generated_comments_to_inline(
