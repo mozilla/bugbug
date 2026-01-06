@@ -308,6 +308,9 @@ def select_configs(
     equivalence_sets = _get_equivalence_sets(min_redundancy_confidence)
 
     for group in groups:
+        if group not in equivalence_sets:
+            logger.warning(f"No equivalence sets for group {group}")
+            continue
         # Create constraints to ensure at least one task from each set of equivalent
         # groups is selected.
 
