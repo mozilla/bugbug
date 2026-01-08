@@ -119,6 +119,7 @@ def get_component_team_mapping() -> dict[str, dict[str, str]]:
 
 def get_crash_signatures(channel: str) -> dict:
     r = requests.get(f"https://mozilla.github.io/stab-crashes/{channel}.json")
+    r.raise_for_status()
     response = r.json()
     return response["signatures"]
 
