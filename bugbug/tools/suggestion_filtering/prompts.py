@@ -19,10 +19,14 @@ Exclude comments that:
 Only return a valid JSON list. Do not drop any key from the JSON objects.
 
 Comments:
+<comments-to-filter>
 {comments}
+</comments-to-filter>
 
 As examples of not expected comments, not related to the current patch, please, check some below:
+<rejected-examples>
     - {rejected_examples}
+</rejected-examples>
 """
 
 
