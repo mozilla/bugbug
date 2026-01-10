@@ -16,8 +16,6 @@ Exclude comments that:
 - include praising;
 - ask if changes are intentional or ask to ensure things exist.
 
-Only return a valid JSON list. Do not drop any key from the JSON objects.
-
 Comments:
 <comments-to-filter>
 {comments}

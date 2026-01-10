@@ -25,8 +25,8 @@ from bugbug.tools.suggestion_filtering.prompts import (
 class FilteredComments(BaseModel):
     """The response from the filtering agent."""
 
-    comments: list[GeneratedReviewComment] = Field(
-        description="A list of filtered review comments."
+    comment_indices: list[int] = Field(
+        description="A list of indices of the comments that were kept after filtering"
     )
 
 
@@ -50,6 +50,37 @@ class SuggestionFilteringTool(GenerativeModelTool):
             response_format=ProviderStrategy(FilteredComments),
         )
 
+    def get_indices_of_retained_comments(
+        self, suggestions: list[GeneratedReviewComment]
+    ) -> list[int]:
+        """Get indices of comments to keep after filtering.
+
+        Args:
+            suggestions: List of generated review comments to filter.
+
+        Returns:
+            List of indices of comments to keep.
+        """
+        if not suggestions:
+            return []
+
+        rejected_examples = self._get_rejected_examples(suggestions)
+
+        formatted_comments = "\n".join(
+            f"Index {i}: {comment.model_dump()}"
+            for i, comment in enumerate(suggestions)
+        )
+
+        prompt = PROMPT_TEMPLATE_FILTERING_ANALYSIS.format(
+            target_code_consistency=self.target_software,
+            comments=formatted_comments,
+            rejected_examples=rejected_examples,
+        )
+
+        result = self.agent.invoke({"messages": [HumanMessage(prompt)]})
+
+        return result["structured_response"].comment_indices
+
     def run(
         self, suggestions: list[GeneratedReviewComment]
     ) -> list[GeneratedReviewComment]:
@@ -61,20 +92,9 @@ class SuggestionFilteringTool(GenerativeModelTool):
         Returns:
             List of filtered GeneratedReviewComment objects.
         """
-        if not suggestions:
-            return []
-
-        rejected_examples = self._get_rejected_examples(suggestions)
-
-        prompt = PROMPT_TEMPLATE_FILTERING_ANALYSIS.format(
-            target_code_consistency=self.target_software,
-            comments=str([comment.model_dump() for comment in suggestions]),
-            rejected_examples=rejected_examples,
-        )
-
-        result = self.agent.invoke({"messages": [HumanMessage(prompt)]})
-
-        return result["structured_response"].comments
+        return [
+            suggestions[i] for i in self.get_indices_of_retained_comments(suggestions)
+        ]
 
     def _get_rejected_examples(self, suggestions: list[GeneratedReviewComment]) -> str:
         """Get rejected examples for filtering.
