@@ -135,8 +135,8 @@ class CodeReviewTool(GenerativeModelTool):
 
         self.verbose = verbose
 
-    @staticmethod
-    def create(**kwargs):
+    @classmethod
+    def create(cls, **kwargs):
         """Factory method to instantiate the tool with default dependencies.
 
         This method takes the same parameters as the constructor, but all
@@ -181,7 +181,7 @@ class CodeReviewTool(GenerativeModelTool):
 
             kwargs["suggestion_filterer"] = SuggestionFilteringTool.create()
 
-        return CodeReviewTool(**kwargs)
+        return cls(**kwargs)
 
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
