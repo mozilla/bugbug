@@ -1,6 +1,6 @@
 PROMPT_TEMPLATE_SUMMARIZATION = """You are an expert reviewer for {target_software}, with experience on source code reviews.
 
-Please, analyze the code provided and report a summarization about the new changes; for that, focus on the coded added represented by lines that start with "+".
+Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+".
 
 The summarization should have two parts:
     1. **Intent**: Describe the intent of the changes, what they are trying to achieve, and how they relate to the bug or feature request.
