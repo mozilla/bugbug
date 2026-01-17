@@ -20,6 +20,32 @@ for bug in bugzilla.get_bugs():
     print(bug["id"])
 ```
 
+### Uplift Data
+
+Here is an example of how to extract uplift requests and approvals from Bugzilla bug histories:
+
+```py
+from bugbug import bugzilla, db
+
+db.download(bugzilla.BUGS_DB)
+
+for bug in bugzilla.get_bugs():
+    for history in bug["history"]:
+        for change in history["changes"]:
+            if change["added"].startswith("approval-mozilla"):
+                uplift_tags = change["added"].split(", ")
+                for uplift_tag in uplift_tags:
+                    release_channel = uplift_tag[len("approval-mozilla-") : -1]
+                    if uplift_tag.endswith("?"):
+                        print(
+                            f"Uplift: Requested \tBug {bug['id']}\t{history['when']} \t{release_channel}"
+                        )
+                    elif uplift_tag.endswith("+"):
+                        print(
+                            f"Uplift: Approved  \tBug {bug['id']}\t{history['when']} \t{release_channel}"
+                        )
+```
+
 ## Phabricator Revisions
 
 ```py
