@@ -5,7 +5,193 @@
 
 """Bugzilla integration for code review."""
 
+import logging
+
 from libmozdata.bugzilla import Bugzilla
+
+from bugbug import bugzilla
+
+logger = logging.getLogger(__name__)
+
+MOZILLA_CORP_GROUP_ID = 42
+
+
+def _check_users_batch(emails: list[str]) -> dict[str, bool]:
+    """Check multiple users at once using libmozdata.
+
+    Args:
+        emails: List of email addresses to check
+
+    Returns:
+        Dictionary mapping email to trusted status (MOCO group only)
+
+    Raises:
+        ValueError: If Bugzilla token is not available
+        Various exceptions from API calls (network errors, etc.)
+    """
+    from libmozdata.bugzilla import BugzillaUser
+
+    results: dict[str, bool] = {}
+
+    if not emails:
+        return results
+
+    if not bugzilla.Bugzilla.TOKEN:
+        raise ValueError(
+            "Bugzilla token required for trusted user check. "
+            "Set BUGBUG_BUGZILLA_TOKEN environment variable."
+        )
+
+    def user_handler(user, data):
+        email = user.get("name", "").lower()
+        if not email:
+            return
+
+        groups = user.get("groups", [])
+        # Check for mozilla-corporation group (ID 42) only
+        is_trusted = any(g.get("id") == MOZILLA_CORP_GROUP_ID for g in groups)
+        data[email] = is_trusted
+
+    user_data: dict[str, bool] = {}
+    BugzillaUser(
+        user_names=emails,
+        include_fields=["name", "groups"],
+        user_handler=user_handler,
+        user_data=user_data,
+    ).wait()
+
+    # Add results, defaulting to False for users not found
+    for email in emails:
+        results[email] = user_data.get(email.lower(), False)
+
+    return results
+
+
+def _is_trusted(email: str, cache: dict[str, bool] | None = None) -> bool:
+    """Check if a Bugzilla user is trusted (MOCO group only).
+
+    Args:
+        email: Bugzilla email address
+        cache: Optional cache dict to avoid repeated API calls
+
+    Returns:
+        True if user is in mozilla-corporation group, False otherwise
+
+    Raises:
+        ValueError: If Bugzilla token is not available
+        Various exceptions from API calls (network errors, etc.)
+    """
+    if not email:
+        return False
+
+    if cache is not None and email in cache:
+        return cache[email]
+
+    # Check single user (batch check would be more efficient for multiple users)
+    result = _check_users_batch([email])[email]
+
+    if cache is not None:
+        cache[email] = result
+    return result
+
+
+def _sanitize_timeline_items(
+    comments: list[dict], history: list[dict], cache: dict[str, bool]
+) -> tuple[list[dict], list[dict], int, int]:
+    """Sanitize timeline items by filtering untrusted content.
+
+    Walks timeline backwards to find last trusted COMMENT (from MOCO user).
+    All content before the last MOCO comment is included (validated by MOCO).
+    Content after the last MOCO comment is filtered if not from MOCO.
+    Only comments (not metadata changes) imply content review.
+
+    Args:
+        comments: List of comment dictionaries
+        history: List of history event dictionaries
+        cache: Cache of email -> trusted status lookups
+
+    Returns:
+        Tuple of (sanitized_comments, sanitized_history, filtered_comments_count, filtered_history_count)
+
+    Security: Fail-closed - untrusted content after last MOCO comment is replaced with placeholder.
+    """
+    all_emails = set()
+    for comment in comments:
+        email = comment.get("author", "")
+        if email:
+            all_emails.add(email)
+    for event in history:
+        email = event.get("who", "")
+        if email:
+            all_emails.add(email)
+
+    uncached_emails = [email for email in all_emails if email not in cache]
+    if uncached_emails:
+        batch_results = _check_users_batch(uncached_emails)
+        cache.update(batch_results)
+
+    # Find last trusted comment time
+    last_trusted_time = None
+    for comment in reversed(comments):
+        email = comment.get("author", "")
+        if cache.get(email, False):
+            last_trusted_time = comment["time"]
+            break
+
+    filtered_comments_count = 0
+    filtered_history_count = 0
+    sanitized_comments = []
+    sanitized_history = []
+
+    for comment in comments:
+        tags = comment.get("tags", [])
+        if any(tag in ["spam", "off-topic"] for tag in tags):
+            continue
+
+        email = comment.get("author", "")
+        is_trusted = cache.get(email, False)
+        should_filter = not is_trusted and (
+            last_trusted_time is None or comment["time"] > last_trusted_time
+        )
+
+        if should_filter:
+            filtered_comments_count += 1
+            comment_copy = comment.copy()
+            comment_copy["text"] = "[Content from untrusted user removed for security]"
+            sanitized_comments.append(comment_copy)
+        else:
+            sanitized_comments.append(comment)
+
+    for event in history:
+        email = event.get("who", "")
+        is_trusted = cache.get(email, False)
+        should_filter = not is_trusted and (
+            last_trusted_time is None or event["when"] > last_trusted_time
+        )
+
+        if should_filter:
+            filtered_history_count += 1
+            event_copy = event.copy()
+            sanitized_changes = []
+            for change in event_copy["changes"]:
+                sanitized_changes.append(
+                    {
+                        "field_name": change["field_name"],
+                        "removed": "[Filtered]",
+                        "added": "[Filtered]",
+                    }
+                )
+            event_copy["changes"] = sanitized_changes
+            sanitized_history.append(event_copy)
+        else:
+            sanitized_history.append(event)
+
+    return (
+        sanitized_comments,
+        sanitized_history,
+        filtered_comments_count,
+        filtered_history_count,
+    )
 
 
 def create_bug_timeline(comments: list[dict], history: list[dict]) -> list[str]:
@@ -82,6 +268,12 @@ def create_bug_timeline(comments: list[dict], history: list[dict]) -> list[str]:
 
 def bug_dict_to_markdown(bug):
     md_lines = []
+    is_trusted_cache: dict[str, bool] = {}
+
+    # Sanitize comments and history before processing
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(bug["comments"], bug["history"], is_trusted_cache)
+    )
 
     # Header with bug ID and summary
     md_lines.append(
@@ -164,7 +356,8 @@ def bug_dict_to_markdown(bug):
             md_lines.append(f"- {rel}")
         md_lines.append("")
 
-    timeline = create_bug_timeline(bug["comments"], bug["history"])
+    # Use sanitized timeline
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
     if timeline:
         md_lines.append("## Bug Timeline")
         md_lines.append("")

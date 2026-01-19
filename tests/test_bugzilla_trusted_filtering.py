@@ -1,0 +1,576 @@
+"""Test Bugzilla trusted user filtering functionality."""
+
+import os
+
+import pytest
+
+from bugbug import bugzilla as bugzilla_module
+from bugbug.tools.core.platforms.bugzilla import (
+    _is_trusted,
+    _sanitize_timeline_items,
+    create_bug_timeline,
+)
+
+
+@pytest.mark.skipif(
+    not os.environ.get("BUGBUG_BUGZILLA_TOKEN"),
+    reason="Requires BUGBUG_BUGZILLA_TOKEN for authenticated API access",
+)
+@pytest.mark.withoutresponses
+def test_trusted_check():
+    """Test trusted user verification via Bugzilla API."""
+    bugzilla_module.set_token(os.environ["BUGBUG_BUGZILLA_TOKEN"])
+    assert _is_trusted("padenot@mozilla.com")
+    assert not _is_trusted("lkasdjflksjdfljsldjflsjdlfskldfj@mozilla.com")
+
+
+def test_trusted_check_without_token():
+    """Test that trusted check raises error without Bugzilla token."""
+    import pytest
+
+    old_token = bugzilla_module.Bugzilla.TOKEN
+    bugzilla_module.Bugzilla.TOKEN = None
+
+    try:
+        with pytest.raises(ValueError, match="Bugzilla token required"):
+            _is_trusted("test@example.com")
+    finally:
+        bugzilla_module.Bugzilla.TOKEN = old_token
+
+
+def test_trusted_check_empty_email():
+    """Test that empty email returns False."""
+    assert not _is_trusted("")
+
+
+def test_untrusted_before_last_trusted():
+    """Test that untrusted content before last trusted COMMENT is included.
+
+    Logic: Walk backwards to find last trusted COMMENT. Everything before it
+    is included (validated by trusted user). Everything after is filtered.
+    Only comments imply content review, not metadata changes.
+    """
+    # Mock trusted status
+    cache = {
+        "trusted@mozilla.com": True,
+        "untrusted@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "untrusted@example.com",
+            "id": 1,
+            "count": 0,
+            "text": "Untrusted comment before last trusted",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "trusted@mozilla.com",
+            "id": 2,
+            "count": 1,
+            "text": "Last trusted comment",
+        },
+        {
+            "time": "2024-01-01T10:02:00Z",
+            "author": "untrusted@example.com",
+            "id": 3,
+            "count": 2,
+            "text": "Untrusted comment after last trusted",
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, [], cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    # Comment before last trusted comment should be kept (trusted user saw it)
+    # Comment after last trusted comment should be filtered
+    assert filtered_comments == 1
+    assert "Untrusted comment before last trusted" in "\n".join(timeline)
+    assert "Untrusted comment after last trusted" not in "\n".join(timeline)
+    assert "[Content from untrusted user removed for security]" in "\n".join(timeline)
+
+
+def test_no_trusted_users():
+    """Test that all untrusted comments are filtered when there's no trusted activity."""
+    # Mock trusted status
+    cache = {
+        "untrusted1@example.com": False,
+        "untrusted2@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "untrusted1@example.com",
+            "id": 1,
+            "count": 0,
+            "text": "First untrusted comment",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "untrusted2@example.com",
+            "id": 2,
+            "count": 1,
+            "text": "Second untrusted comment",
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, [], cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    # All comments should be filtered when there's no trusted activity
+    assert filtered_comments == 2
+    assert "First untrusted comment" not in "\n".join(timeline)
+    assert "Second untrusted comment" not in "\n".join(timeline)
+    timeline_text = "\n".join(timeline)
+    assert (
+        timeline_text.count("[Content from untrusted user removed for security]") == 2
+    )
+
+
+def test_fail_closed_scenarios():
+    """Test that the system raises exceptions on various error conditions."""
+    from unittest.mock import patch
+
+    import pytest
+
+    from bugbug.tools.core.platforms.bugzilla import _check_users_batch
+
+    test_emails = ["test@example.com"]
+
+    # Set a dummy token for testing
+    old_token = bugzilla_module.Bugzilla.TOKEN
+    bugzilla_module.Bugzilla.TOKEN = "dummy_token"
+
+    try:
+        # Test OSError
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser", side_effect=OSError("Network error")
+        ):
+            with pytest.raises(OSError):
+                _check_users_batch(test_emails)
+
+        # Test TimeoutError
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser", side_effect=TimeoutError("Timeout")
+        ):
+            with pytest.raises(TimeoutError):
+                _check_users_batch(test_emails)
+
+        # Test ConnectionError
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser",
+            side_effect=ConnectionError("Connection failed"),
+        ):
+            with pytest.raises(ConnectionError):
+                _check_users_batch(test_emails)
+
+        # Test HTTPError
+        from requests.exceptions import HTTPError
+
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser",
+            side_effect=HTTPError("HTTP 500"),
+        ):
+            with pytest.raises(HTTPError):
+                _check_users_batch(test_emails)
+
+        # Test RequestException
+        from requests.exceptions import RequestException
+
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser",
+            side_effect=RequestException("Request failed"),
+        ):
+            with pytest.raises(RequestException):
+                _check_users_batch(test_emails)
+
+        # Test JSONDecodeError
+        from json import JSONDecodeError
+
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser",
+            side_effect=JSONDecodeError("Invalid JSON", "", 0),
+        ):
+            with pytest.raises(JSONDecodeError):
+                _check_users_batch(test_emails)
+
+        # Test KeyError
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser",
+            side_effect=KeyError("Missing key"),
+        ):
+            with pytest.raises(KeyError):
+                _check_users_batch(test_emails)
+
+        # Test ValueError
+        with patch(
+            "libmozdata.bugzilla.BugzillaUser",
+            side_effect=ValueError("Invalid value"),
+        ):
+            with pytest.raises(ValueError):
+                _check_users_batch(test_emails)
+    finally:
+        bugzilla_module.Bugzilla.TOKEN = old_token
+
+
+def test_timeline_variation_alternating():
+    """Test: Untrusted → Trusted1 → Untrusted → Trusted2 → Untrusted."""
+    cache = {
+        "trusted1@mozilla.com": True,
+        "trusted2@mozilla.com": True,
+        "untrusted@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "untrusted@example.com",
+            "id": 1,
+            "count": 0,
+            "text": "Untrusted comment 1",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "trusted1@mozilla.com",
+            "id": 2,
+            "count": 1,
+            "text": "Trusted comment 1",
+        },
+        {
+            "time": "2024-01-01T10:02:00Z",
+            "author": "untrusted@example.com",
+            "id": 3,
+            "count": 2,
+            "text": "Untrusted comment 2",
+        },
+        {
+            "time": "2024-01-01T10:03:00Z",
+            "author": "trusted2@mozilla.com",
+            "id": 4,
+            "count": 3,
+            "text": "Trusted comment 2",
+        },
+        {
+            "time": "2024-01-01T10:04:00Z",
+            "author": "untrusted@example.com",
+            "id": 5,
+            "count": 4,
+            "text": "Untrusted comment 3",
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, [], cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    timeline_text = "\n".join(timeline)
+
+    # Everything before trusted2 (the last trusted user) should be included
+    assert "Untrusted comment 1" in timeline_text
+    assert "Trusted comment 1" in timeline_text
+    assert "Untrusted comment 2" in timeline_text
+    assert "Trusted comment 2" in timeline_text
+
+    # Only the last untrusted comment (after last trusted) should be filtered
+    assert "Untrusted comment 3" not in timeline_text
+    assert filtered_comments == 1
+
+
+def test_timeline_variation_trusted_first():
+    """Test: Trusted user as first item."""
+    cache = {
+        "trusted@mozilla.com": True,
+        "untrusted@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "trusted@mozilla.com",
+            "id": 1,
+            "count": 0,
+            "text": "Trusted comment first",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "untrusted@example.com",
+            "id": 2,
+            "count": 1,
+            "text": "Untrusted comment after",
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, [], cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    timeline_text = "\n".join(timeline)
+
+    # Trusted comment is included
+    assert "Trusted comment first" in timeline_text
+
+    # Untrusted comment after last trusted should be filtered
+    assert "Untrusted comment after" not in timeline_text
+    assert filtered_comments == 1
+
+
+def test_timeline_variation_trusted_last():
+    """Test: Trusted user as last item."""
+    cache = {
+        "trusted@mozilla.com": True,
+        "untrusted@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "untrusted@example.com",
+            "id": 1,
+            "count": 0,
+            "text": "Untrusted comment first",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "trusted@mozilla.com",
+            "id": 2,
+            "count": 1,
+            "text": "Trusted comment last",
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, [], cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    timeline_text = "\n".join(timeline)
+
+    # All comments should be included because trusted user is last
+    assert "Untrusted comment first" in timeline_text
+    assert "Trusted comment last" in timeline_text
+    assert filtered_comments == 0
+
+
+def test_timeline_variation_all_trusted():
+    """Test: All trusted users (no filtering needed)."""
+    cache = {
+        "trusted1@mozilla.com": True,
+        "trusted2@mozilla.com": True,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "trusted1@mozilla.com",
+            "id": 1,
+            "count": 0,
+            "text": "Trusted comment 1",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "trusted2@mozilla.com",
+            "id": 2,
+            "count": 1,
+            "text": "Trusted comment 2",
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, [], cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    timeline_text = "\n".join(timeline)
+
+    # All comments should be included
+    assert "Trusted comment 1" in timeline_text
+    assert "Trusted comment 2" in timeline_text
+    assert filtered_comments == 0
+
+
+def test_timeline_variation_multiple_trusted_positions():
+    """Test: Multiple trusted users at different positions."""
+    cache = {
+        "trusted1@mozilla.com": True,
+        "trusted2@mozilla.com": True,
+        "trusted3@mozilla.com": True,
+        "untrusted@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "trusted1@mozilla.com",
+            "id": 1,
+            "count": 0,
+            "text": "Trusted comment 1",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "untrusted@example.com",
+            "id": 2,
+            "count": 1,
+            "text": "Untrusted comment 1",
+        },
+        {
+            "time": "2024-01-01T10:02:00Z",
+            "author": "trusted2@mozilla.com",
+            "id": 3,
+            "count": 2,
+            "text": "Trusted comment 2",
+        },
+        {
+            "time": "2024-01-01T10:03:00Z",
+            "author": "untrusted@example.com",
+            "id": 4,
+            "count": 3,
+            "text": "Untrusted comment 2",
+        },
+        {
+            "time": "2024-01-01T10:04:00Z",
+            "author": "trusted3@mozilla.com",
+            "id": 5,
+            "count": 4,
+            "text": "Trusted comment 3",
+        },
+        {
+            "time": "2024-01-01T10:05:00Z",
+            "author": "untrusted@example.com",
+            "id": 6,
+            "count": 5,
+            "text": "Untrusted comment 3",
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, [], cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    timeline_text = "\n".join(timeline)
+
+    # Everything before trusted3 (last trusted) should be included
+    assert "Trusted comment 1" in timeline_text
+    assert "Untrusted comment 1" in timeline_text
+    assert "Trusted comment 2" in timeline_text
+    assert "Untrusted comment 2" in timeline_text
+    assert "Trusted comment 3" in timeline_text
+
+    # Only last untrusted comment should be filtered
+    assert "Untrusted comment 3" not in timeline_text
+    assert filtered_comments == 1
+
+
+def test_trusted_history_does_not_validate():
+    """Test that trusted user history events do NOT validate prior content.
+
+    Only COMMENTS from trusted users imply content review. Metadata changes
+    (status, assignee, etc.) do not imply the user reviewed all prior comments.
+    """
+    cache = {
+        "trusted@mozilla.com": True,
+        "untrusted@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "untrusted@example.com",
+            "id": 1,
+            "count": 0,
+            "text": "Untrusted comment 1",
+        },
+    ]
+
+    history = [
+        {
+            "when": "2024-01-01T10:01:00Z",
+            "who": "trusted@mozilla.com",
+            "changes": [
+                {"field_name": "status", "removed": "NEW", "added": "ASSIGNED"}
+            ],
+        },
+        {
+            "when": "2024-01-01T10:02:00Z",
+            "who": "untrusted@example.com",
+            "changes": [{"field_name": "priority", "removed": "P3", "added": "P2"}],
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, history, cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    timeline_text = "\n".join(timeline)
+
+    # Trusted history event does NOT validate the untrusted comment before it
+    # Since there's no trusted COMMENT, all untrusted content should be filtered
+    assert "Untrusted comment 1" not in timeline_text
+    assert filtered_comments == 1
+
+    # Trusted history events are always included (they're metadata, not user content)
+    assert "status" in timeline_text.lower()
+    assert "ASSIGNED" in timeline_text
+
+    # Untrusted history after (no trusted comment ever) should be filtered
+    assert filtered_history == 1
+
+
+def test_trusted_comment_validates_before_untrusted_history_after():
+    """Test that trusted COMMENT validates prior content but filters untrusted history after."""
+    cache = {
+        "trusted@mozilla.com": True,
+        "untrusted@example.com": False,
+    }
+
+    comments = [
+        {
+            "time": "2024-01-01T10:00:00Z",
+            "author": "untrusted@example.com",
+            "id": 1,
+            "count": 0,
+            "text": "Untrusted comment before trusted comment",
+        },
+        {
+            "time": "2024-01-01T10:01:00Z",
+            "author": "trusted@mozilla.com",
+            "id": 2,
+            "count": 1,
+            "text": "Trusted comment - validates prior content",
+        },
+    ]
+
+    history = [
+        {
+            "when": "2024-01-01T10:02:00Z",
+            "who": "untrusted@example.com",
+            "changes": [{"field_name": "priority", "removed": "P3", "added": "P1"}],
+        },
+    ]
+
+    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
+        _sanitize_timeline_items(comments, history, cache)
+    )
+    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+
+    timeline_text = "\n".join(timeline)
+
+    # Untrusted comment BEFORE trusted comment should be included
+    assert "Untrusted comment before trusted comment" in timeline_text
+    assert filtered_comments == 0
+
+    # Trusted comment should be included
+    assert "Trusted comment - validates prior content" in timeline_text
+
+    # Untrusted history AFTER trusted comment should be filtered
+    assert filtered_history == 1
+    assert "[Filtered]" in timeline_text

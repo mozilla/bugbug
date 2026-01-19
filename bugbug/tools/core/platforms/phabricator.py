@@ -22,6 +22,126 @@ from bugbug.utils import get_secret
 
 logger = getLogger(__name__)
 
+# Trusted users group PHID (currently defined as MOCO group members)
+MOCO_GROUP_PHID = "PHID-PROJ-57"  # bmo-mozilla-employee-confidential
+
+
+def _get_users_info_batch_impl(phids: set[str]) -> dict[str, dict]:
+    """Internal implementation for fetching user information.
+
+    This function is retried by the wrapper function.
+    """
+    assert phabricator.PHABRICATOR_API is not None
+
+    if not phids:
+        return {}
+
+    logger.info(f"Fetching user info for {len(phids)} PHIDs")
+
+    # Fetch user info (let exceptions propagate for retry)
+    users_response = phabricator.PHABRICATOR_API.request(
+        "user.search",
+        constraints={"phids": list(phids)},
+        attachments={"projects": True},
+    )
+
+    result = {}
+    for user_data in users_response.get("data", []):
+        phid = user_data["phid"]
+        fields = user_data.get("fields", {})
+
+        project_phids = (
+            user_data.get("attachments", {}).get("projects", {}).get("projectPHIDs", [])
+        )
+        is_trusted = MOCO_GROUP_PHID in project_phids
+
+        result[phid] = {
+            "email": fields.get("username", "unknown"),  # Username is typically email
+            "is_trusted": is_trusted,
+            "real_name": fields.get("realName", ""),
+        }
+
+    return result
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, min=1, max=10),
+    retry=tenacity.retry_if_exception_type(Exception),
+    reraise=True,
+)
+def _get_users_info_batch_with_retry(phids: set[str]) -> dict[str, dict]:
+    """Fetch user information with retries."""
+    return _get_users_info_batch_impl(phids)
+
+
+def _get_users_info_batch(phids: set[str]) -> dict[str, dict]:
+    """Fetch user information for multiple PHIDs at once.
+
+    Args:
+        phids: Set of user PHIDs to fetch
+
+    Returns:
+        Dictionary mapping PHID to user info dict with keys:
+        - email: User's email address
+        - is_trusted: Whether user is trusted (MOCO group only)
+        - real_name: User's real name
+
+    Raises:
+        Various exceptions from API calls (network errors, etc.)
+    """
+    return _get_users_info_batch_with_retry(phids)
+
+
+def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[list, int]:
+    """Sanitize comments by filtering untrusted content.
+
+    Walks comments backwards to find last trusted comment (from MOCO user).
+    All content before the last MOCO comment is included (validated by MOCO).
+    Content after the last MOCO comment is filtered if not from MOCO.
+
+    Args:
+        comments: List of comment objects (sorted by date)
+        users_info: Dictionary mapping PHIDs to user info with trust status
+
+    Returns:
+        Tuple of (sanitized_comments, filtered_count)
+
+    Security: Fail-closed - untrusted content after last MOCO comment is replaced with placeholder.
+    """
+    from copy import copy
+
+    # Walk backwards to find last trusted comment (from MOCO)
+    last_trusted_index = -1
+    for i in range(len(comments) - 1, -1, -1):
+        comment_is_trusted = users_info.get(comments[i].author_phid, {}).get(
+            "is_trusted", False
+        )
+        if comment_is_trusted:
+            last_trusted_index = i
+            break
+
+    # Process comments and apply filtering
+    filtered_count = 0
+    sanitized_comments = []
+
+    for i, comment in enumerate(comments):
+        comment_is_trusted = users_info.get(comment.author_phid, {}).get(
+            "is_trusted", False
+        )
+
+        # Create a shallow copy to avoid modifying the original
+        comment_copy = copy(comment)
+
+        if not comment_is_trusted and i > last_trusted_index:
+            # Untrusted comment after last MOCO activity - filter it
+            filtered_count += 1
+            comment_copy.content = "[Content from untrusted user removed for security]"
+
+        sanitized_comments.append(comment_copy)
+
+    return sanitized_comments, filtered_count
+
 
 class PhabricatorComment:
     def __init__(self, transaction: dict):
@@ -428,31 +548,55 @@ class PhabricatorPatch(Patch):
         md_lines.append("## Comments Timeline")
         md_lines.append("")
 
-        sorted_comments = sorted(
+        # Get all comments and sort
+        all_comments = sorted(
             # Ignore empty comments
             (comment for comment in self.get_comments() if comment.content.strip()),
             key=lambda c: c.date_created,
         )
-        for comment in sorted_comments:
+
+        author_phid = revision["fields"]["authorPHID"]
+        user_phids = {comment.author_phid for comment in all_comments} | {author_phid}
+
+        users_info = _get_users_info_batch(user_phids)
+
+        # Sanitize comments using pre-step approach
+        comments_to_display, filtered_count = _sanitize_comments(
+            all_comments, users_info
+        )
+
+        for comment in comments_to_display:
             date = datetime.fromtimestamp(comment.date_created)
             date_str = date.strftime(date_format)
 
+            # Get author info (email preferred over PHID)
+            author_info = users_info.get(comment.author_phid, {})
+            email = author_info.get("email", "Unknown User")
+            real_name = author_info.get("real_name")
+
+            if real_name:
+                author_display = f"{real_name} ({email})"
+            else:
+                author_display = email
+
             if isinstance(comment, PhabricatorInlineComment):
+                line_length = comment.line_length
+                end_line = comment.end_line
                 line_info = (
                     f"Line {comment.start_line}"
-                    if comment.line_length == 1
-                    else f"Lines {comment.start_line}-{comment.end_line}"
+                    if line_length == 1
+                    else f"Lines {comment.start_line}-{end_line}"
                 )
                 done_status = " [RESOLVED]" if comment.is_done else ""
                 generated_status = " [AI-GENERATED]" if comment.is_generated else ""
 
                 md_lines.append(
-                    f"**{date_str}** - **Inline Comment** by {comment.author_phid} on `{comment.filename}` "
+                    f"**{date_str}** - **Inline Comment** by {author_display} on `{comment.filename}` "
                     f"at {line_info}{done_status}{generated_status}"
                 )
             else:
                 md_lines.append(
-                    f"**{date_str}** - **General Comment** by {comment.author_phid}"
+                    f"**{date_str}** - **General Comment** by {author_display}"
                 )
 
             final_comment_content = comment.content
@@ -473,7 +617,7 @@ class PhabricatorPatch(Patch):
             md_lines.append("---")
             md_lines.append("")
 
-        if not sorted_comments:
+        if not all_comments:
             md_lines.append("*No comments*")
             md_lines.append("")
 
