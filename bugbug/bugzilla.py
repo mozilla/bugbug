@@ -120,7 +120,9 @@ def get_bugs(
 
 
 def set_token(token):
-    Bugzilla.TOKEN = token
+    from libmozdata.bugzilla import BugzillaBase
+
+    BugzillaBase.TOKEN = token
 
 
 def get_ids(params):
