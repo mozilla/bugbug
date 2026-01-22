@@ -21,7 +21,7 @@ microannotate==0.0.24
 mozci==2.4.3
 numpy==2.3.5
 orjson==3.11.5
-ortools==9.14.6206
+ortools==9.15.6755
 pandas==2.3.3
 psutil==7.2.1
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
