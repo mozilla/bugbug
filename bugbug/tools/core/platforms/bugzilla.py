@@ -6,12 +6,15 @@
 """Bugzilla integration for code review."""
 
 import logging
+import os
 
-from libmozdata.bugzilla import Bugzilla
+from libmozdata.bugzilla import Bugzilla, BugzillaBase
 
 logger = logging.getLogger(__name__)
 
 MOZILLA_CORP_GROUP_ID = 42
+
+BugzillaBase.TOKEN = os.getenv("BUGZILLA_TOKEN")
 
 
 def _check_users_batch(emails: list[str]) -> dict[str, bool]:
@@ -39,7 +42,7 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
     if not BugzillaBase.TOKEN:
         raise ValueError(
             "Bugzilla token required for trusted user check. "
-            "Set BUGBUG_BUGZILLA_TOKEN environment variable."
+            "Set BUGZILLA_TOKEN environment variable."
         )
 
     def user_handler(user, data):

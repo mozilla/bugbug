@@ -14,13 +14,13 @@ from bugbug.tools.core.platforms.bugzilla import (
 
 
 @pytest.mark.skipif(
-    not os.environ.get("BUGBUG_BUGZILLA_TOKEN"),
-    reason="Requires BUGBUG_BUGZILLA_TOKEN for authenticated API access",
+    not os.environ.get("BUGZILLA_TOKEN"),
+    reason="Requires BUGZILLA_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_trusted_check():
     """Test trusted user verification via Bugzilla API."""
-    bugzilla_module.set_token(os.environ["BUGBUG_BUGZILLA_TOKEN"])
+    bugzilla_module.set_token(os.environ["BUGZILLA_TOKEN"])
     results = _check_users_batch(["padenot@mozilla.com"])
     assert results["padenot@mozilla.com"] is True
     results = _check_users_batch(["lkasdjflksjdfljsldjflsjdlfskldfj@mozilla.com"])
