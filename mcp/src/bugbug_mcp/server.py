@@ -14,6 +14,7 @@ from pydantic import Field
 
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
+from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import Bug
 from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 from bugbug.utils import get_secret
@@ -25,15 +26,9 @@ mcp = FastMCP("Firefox Development MCP Server")
 
 @functools.cache
 def get_code_review_tool():
-    from langchain.chat_models import init_chat_model
+    from bugbug.tools.code_review.agent import CodeReviewTool
 
-    from bugbug.tools.code_review import CodeReviewTool, ReviewCommentsDB
-    from bugbug.vectordb import QdrantVectorDB
-
-    return CodeReviewTool(
-        llm=init_chat_model("gpt-5.1"),
-        review_comments_db=ReviewCommentsDB(QdrantVectorDB("diff_comments")),
-    )
+    return CodeReviewTool.create()
 
 
 @mcp.prompt()
@@ -55,8 +50,14 @@ async def patch_review(
     else:
         raise ValueError(f"Unsupported patch URL: {patch_url}")
 
-    # FIXME: add the system prompt as well
-    return get_code_review_tool().generate_initial_prompt(patch)
+    tool = get_code_review_tool()
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+        target_software=tool.target_software,
+    )
+    patch_summary = tool.patch_summarizer.run(patch)
+    initial_prompt = tool.generate_initial_prompt(patch, patch_summary)
+
+    return system_prompt + "\n\n" + initial_prompt
 
 
 def get_file(commit_hash, path):
