@@ -23,39 +23,53 @@ from bugbug.utils import get_secret
 logger = getLogger(__name__)
 
 # Trusted users group PHID (currently defined as MOCO group members)
-MOCO_GROUP_PHID = "PHID-PROJ-57"  # bmo-mozilla-employee-confidential
+MOCO_GROUP_PHID = "PHID-PROJ-a2zxxknk7jm5nw4rtjsl"  # bmo-mozilla-employee-confidential
+
+# Message used when redacting untrusted content
+UNTRUSTED_CONTENT_REDACTED = "[Content from untrusted user removed for security]"
 
 
-def _get_users_info_batch_impl(phids: set[str]) -> dict[str, dict]:
+def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
     """Internal implementation for fetching user information.
 
     This function is retried by the wrapper function.
     """
     assert phabricator.PHABRICATOR_API is not None
 
-    if not phids:
+    if not user_phids:
         return {}
 
-    logger.info(f"Fetching user info for {len(phids)} PHIDs")
+    logger.info(f"Fetching user info for {len(user_phids)} PHIDs")
 
-    # Fetch user info (let exceptions propagate for retry)
+    # Get user names and nick
     users_response = phabricator.PHABRICATOR_API.request(
         "user.search",
-        constraints={"phids": list(phids)},
-        attachments={"projects": True},
+        constraints={"phids": list(user_phids)},
     )
+
+    # Get MOCO group members
+    moco_response = phabricator.PHABRICATOR_API.request(
+        "project.search",
+        constraints={"phids": [MOCO_GROUP_PHID]},
+        attachments={"members": True},
+    )
+
+    # Turn it into a set for speed, and perform membership check to determine
+    # trusted status.
+    moco_members = set()
+    if moco_response.get("data"):
+        members_data = (
+            moco_response["data"][0].get("attachments", {}).get("members", {})
+        )
+        moco_members = {m["phid"] for m in members_data.get("members", [])}
 
     result = {}
     for user_data in users_response.get("data", []):
-        phid = user_data["phid"]
+        user_phid = user_data["phid"]
         fields = user_data.get("fields", {})
+        is_trusted = user_phid in moco_members
 
-        project_phids = (
-            user_data.get("attachments", {}).get("projects", {}).get("projectPHIDs", [])
-        )
-        is_trusted = MOCO_GROUP_PHID in project_phids
-
-        result[phid] = {
+        result[user_phid] = {
             "email": fields.get("username", "unknown"),  # Username is typically email
             "is_trusted": is_trusted,
             "real_name": fields.get("realName", ""),
@@ -70,35 +84,32 @@ def _get_users_info_batch_impl(phids: set[str]) -> dict[str, dict]:
     retry=tenacity.retry_if_exception_type(Exception),
     reraise=True,
 )
-def _get_users_info_batch_with_retry(phids: set[str]) -> dict[str, dict]:
+def _get_users_info_batch_with_retry(user_phids: set[str]) -> dict[str, dict]:
     """Fetch user information with retries."""
-    return _get_users_info_batch_impl(phids)
+    return _get_users_info_batch_impl(user_phids)
 
 
-def _get_users_info_batch(phids: set[str]) -> dict[str, dict]:
-    """Fetch user information for multiple PHIDs at once.
+def _get_users_info_batch(user_phids: set[str]) -> dict[str, dict]:
+    """Fetch user information for multiple user PHIDs at once.
 
     Args:
-        phids: Set of user PHIDs to fetch
+        user_phids: Set of user PHIDs to fetch (PHID-USER-xxx)
 
     Returns:
-        Dictionary mapping PHID to user info dict with keys:
+        Dictionary mapping user PHID to info dict with keys:
         - email: User's email address
-        - is_trusted: Whether user is trusted (MOCO group only)
+        - is_trusted: Whether user is in MOCO group
         - real_name: User's real name
-
-    Raises:
-        Various exceptions from API calls (network errors, etc.)
     """
-    return _get_users_info_batch_with_retry(phids)
+    return _get_users_info_batch_with_retry(user_phids)
 
 
 def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[list, int]:
     """Sanitize comments by filtering untrusted content.
 
-    Walks comments backwards to find last trusted comment (from MOCO user).
-    All content before the last MOCO comment is included (validated by MOCO).
-    Content after the last MOCO comment is filtered if not from MOCO.
+    Walks comments backwards to find last trusted comment
+    All content before the last trusted comment is included
+    Content after the last trusted comment is filtered out
 
     Args:
         comments: List of comment objects (sorted by date)
@@ -106,8 +117,6 @@ def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[lis
 
     Returns:
         Tuple of (sanitized_comments, filtered_count)
-
-    Security: Fail-closed - untrusted content after last MOCO comment is replaced with placeholder.
     """
     from copy import copy
 
@@ -134,9 +143,12 @@ def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[lis
         comment_copy = copy(comment)
 
         if not comment_is_trusted and i > last_trusted_index:
-            # Untrusted comment after last MOCO activity - filter it
+            # Untrusted comment, redact it and mark explicitly
             filtered_count += 1
-            comment_copy.content = "[Content from untrusted user removed for security]"
+            comment_copy.content = UNTRUSTED_CONTENT_REDACTED
+            # Mark that this comment's content has been redacted so downstream
+            # code doesn't need to rely on string comparisons.
+            comment_copy.content_redacted = True
 
         sanitized_comments.append(comment_copy)
 
@@ -152,6 +164,9 @@ class PhabricatorComment:
         self.date_modified: int = comment["dateModified"]
         self.content: str = comment["content"]["raw"]
         self.author_phid: str = transaction["authorPHID"]
+        # Whether this comment's content has been redacted due to trust rules.
+        # Set by the sanitizer; used by renderers (e.g., to_md()).
+        self.content_redacted: bool = False
 
 
 class PhabricatorGeneralComment(PhabricatorComment):
@@ -445,8 +460,6 @@ class PhabricatorPatch(Patch):
         Returns a well-structured markdown document that includes revision metadata,
         diff information, stack information, code changes, and comments.
         """
-        # TODO: print authors' names instead of PHIDs
-
         date_format = "%Y-%m-%d %H:%M:%S"
         md_lines = []
 
@@ -548,7 +561,7 @@ class PhabricatorPatch(Patch):
         md_lines.append("## Comments Timeline")
         md_lines.append("")
 
-        # Get all comments and sort
+        # Get all comments and sort by date
         all_comments = sorted(
             # Ignore empty comments
             (comment for comment in self.get_comments() if comment.content.strip()),
@@ -560,7 +573,6 @@ class PhabricatorPatch(Patch):
 
         users_info = _get_users_info_batch(user_phids)
 
-        # Sanitize comments using pre-step approach
         comments_to_display, filtered_count = _sanitize_comments(
             all_comments, users_info
         )
@@ -569,15 +581,18 @@ class PhabricatorPatch(Patch):
             date = datetime.fromtimestamp(comment.date_created)
             date_str = date.strftime(date_format)
 
-            # Get author info (email preferred over PHID)
             author_info = users_info.get(comment.author_phid, {})
-            email = author_info.get("email", "Unknown User")
-            real_name = author_info.get("real_name")
-
-            if real_name:
-                author_display = f"{real_name} ({email})"
+            if comment.content_redacted:
+                # After last trusted: redact author name too
+                author_display = "[Untrusted User]"
             else:
-                author_display = email
+                # Before/at last trusted: show real name for everyone
+                email = author_info.get("email", "Unknown User")
+                real_name = author_info.get("real_name")
+                if real_name:
+                    author_display = f"{real_name} ({email})"
+                else:
+                    author_display = email
 
             if isinstance(comment, PhabricatorInlineComment):
                 line_length = comment.line_length
