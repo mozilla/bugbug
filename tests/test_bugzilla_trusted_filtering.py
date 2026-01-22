@@ -3,6 +3,7 @@
 import os
 
 import pytest
+import responses
 
 from bugbug import bugzilla as bugzilla_module
 from bugbug.tools.core.platforms.bugzilla import (
@@ -26,18 +27,95 @@ def test_trusted_check():
     assert results["lkasdjflksjdfljsldjflsjdlfskldfj@mozilla.com"] is False
 
 
+@responses.activate
+def test_token_set_on_bugzilla_base():
+    """Test that set_token() sets the token on BugzillaBase, not just Bugzilla."""
+    from libmozdata.bugzilla import Bugzilla, BugzillaBase, BugzillaUser
+
+    old_token = BugzillaBase.TOKEN
+    try:
+        bugzilla_module.set_token("test_token_12345")
+
+        # Verify token is set on BugzillaBase (parent class)
+        assert BugzillaBase.TOKEN == "test_token_12345"
+        # Verify both child classes inherit it
+        assert Bugzilla.TOKEN == "test_token_12345"
+        assert BugzillaUser.TOKEN == "test_token_12345"
+
+        # Mock trusted user response (with mozilla-corporation group)
+        responses.add(
+            responses.GET,
+            "https://bugzilla.mozilla.org/rest/user",
+            json={
+                "users": [
+                    {
+                        "name": "trusted@mozilla.com",
+                        "groups": [
+                            {"id": 42, "name": "mozilla-corporation"},
+                            {"id": 69, "name": "everyone"},
+                        ],
+                    }
+                ],
+                "faults": [],
+            },
+            status=200,
+        )
+
+        # Mock untrusted user response (no mozilla-corporation group)
+        responses.add(
+            responses.GET,
+            "https://bugzilla.mozilla.org/rest/user",
+            json={
+                "users": [
+                    {
+                        "name": "untrusted@example.com",
+                        "groups": [{"id": 69, "name": "everyone"}],
+                    }
+                ],
+                "faults": [],
+            },
+            status=200,
+        )
+
+        # Mock non-existent user response (faulted user)
+        responses.add(
+            responses.GET,
+            "https://bugzilla.mozilla.org/rest/user",
+            json={
+                "users": [],
+                "faults": [{"name": "nonexistent@example.com", "faultCode": 51}],
+            },
+            status=200,
+        )
+
+        # Test trusted user
+        results = _check_users_batch(["trusted@mozilla.com"])
+        assert results["trusted@mozilla.com"] is True
+
+        # Test untrusted user
+        results = _check_users_batch(["untrusted@example.com"])
+        assert results["untrusted@example.com"] is False
+
+        # Test non-existent user (should not raise, should return False)
+        results = _check_users_batch(["nonexistent@example.com"])
+        assert results["nonexistent@example.com"] is False
+
+    finally:
+        BugzillaBase.TOKEN = old_token
+
+
 def test_trusted_check_without_token():
     """Test that trusted check raises error without Bugzilla token."""
-    import pytest
+    from libmozdata.bugzilla import BugzillaBase
 
-    old_token = bugzilla_module.Bugzilla.TOKEN
-    bugzilla_module.Bugzilla.TOKEN = None
+    old_token = BugzillaBase.TOKEN
+    BugzillaBase.TOKEN = None
 
     try:
         with pytest.raises(ValueError, match="Bugzilla token required"):
             _check_users_batch(["test@example.com"])
     finally:
-        bugzilla_module.Bugzilla.TOKEN = old_token
+        BugzillaBase.TOKEN = old_token
 
 
 def test_trusted_check_empty_email():
@@ -141,14 +219,15 @@ def test_fail_closed_scenarios():
     from unittest.mock import patch
 
     import pytest
+    from libmozdata.bugzilla import BugzillaBase
 
     from bugbug.tools.core.platforms.bugzilla import _check_users_batch
 
     test_emails = ["test@example.com"]
 
     # Set a dummy token for testing
-    old_token = bugzilla_module.Bugzilla.TOKEN
-    bugzilla_module.Bugzilla.TOKEN = "dummy_token"
+    old_token = BugzillaBase.TOKEN
+    BugzillaBase.TOKEN = "dummy_token"
 
     try:
         # Test OSError
@@ -219,7 +298,7 @@ def test_fail_closed_scenarios():
             with pytest.raises(ValueError):
                 _check_users_batch(test_emails)
     finally:
-        bugzilla_module.Bugzilla.TOKEN = old_token
+        BugzillaBase.TOKEN = old_token
 
 
 def test_timeline_variation_alternating():
