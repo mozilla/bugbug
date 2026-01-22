@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.12 AS builder
+FROM python:3.14 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -18,7 +18,7 @@ RUN mkdir static && uv run --extra llms-txt scripts/llms-txt.py
 
 
 # Runtime stage
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
