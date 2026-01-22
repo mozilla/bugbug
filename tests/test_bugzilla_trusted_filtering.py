@@ -6,7 +6,7 @@ import pytest
 
 from bugbug import bugzilla as bugzilla_module
 from bugbug.tools.core.platforms.bugzilla import (
-    _is_trusted,
+    _check_users_batch,
     _sanitize_timeline_items,
     create_bug_timeline,
 )
@@ -20,8 +20,10 @@ from bugbug.tools.core.platforms.bugzilla import (
 def test_trusted_check():
     """Test trusted user verification via Bugzilla API."""
     bugzilla_module.set_token(os.environ["BUGBUG_BUGZILLA_TOKEN"])
-    assert _is_trusted("padenot@mozilla.com")
-    assert not _is_trusted("lkasdjflksjdfljsldjflsjdlfskldfj@mozilla.com")
+    results = _check_users_batch(["padenot@mozilla.com"])
+    assert results["padenot@mozilla.com"] is True
+    results = _check_users_batch(["lkasdjflksjdfljsldjflsjdlfskldfj@mozilla.com"])
+    assert results["lkasdjflksjdfljsldjflsjdlfskldfj@mozilla.com"] is False
 
 
 def test_trusted_check_without_token():
@@ -33,14 +35,15 @@ def test_trusted_check_without_token():
 
     try:
         with pytest.raises(ValueError, match="Bugzilla token required"):
-            _is_trusted("test@example.com")
+            _check_users_batch(["test@example.com"])
     finally:
         bugzilla_module.Bugzilla.TOKEN = old_token
 
 
 def test_trusted_check_empty_email():
-    """Test that empty email returns False."""
-    assert not _is_trusted("")
+    """Test that empty email list returns empty results."""
+    results = _check_users_batch([])
+    assert results == {}
 
 
 def test_untrusted_before_last_trusted():

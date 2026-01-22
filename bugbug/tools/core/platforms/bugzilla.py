@@ -72,34 +72,6 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
     return results
 
 
-def _is_trusted(email: str, cache: dict[str, bool] | None = None) -> bool:
-    """Check if a Bugzilla user is trusted (MOCO group only).
-
-    Args:
-        email: Bugzilla email address
-        cache: Optional cache dict to avoid repeated API calls
-
-    Returns:
-        True if user is in mozilla-corporation group, False otherwise
-
-    Raises:
-        ValueError: If Bugzilla token is not available
-        Various exceptions from API calls (network errors, etc.)
-    """
-    if not email:
-        return False
-
-    if cache is not None and email in cache:
-        return cache[email]
-
-    # Check single user (batch check would be more efficient for multiple users)
-    result = _check_users_batch([email])[email]
-
-    if cache is not None:
-        cache[email] = result
-    return result
-
-
 def _sanitize_timeline_items(
     comments: list[dict], history: list[dict], cache: dict[str, bool]
 ) -> tuple[list[dict], list[dict], int, int]:
