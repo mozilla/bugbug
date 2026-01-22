@@ -9,8 +9,6 @@ import logging
 
 from libmozdata.bugzilla import Bugzilla
 
-from bugbug import bugzilla
-
 logger = logging.getLogger(__name__)
 
 MOZILLA_CORP_GROUP_ID = 42
@@ -36,7 +34,9 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
     if not emails:
         return results
 
-    if not bugzilla.Bugzilla.TOKEN:
+    from libmozdata.bugzilla import BugzillaBase
+
+    if not BugzillaBase.TOKEN:
         raise ValueError(
             "Bugzilla token required for trusted user check. "
             "Set BUGBUG_BUGZILLA_TOKEN environment variable."
@@ -52,11 +52,16 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
         is_trusted = any(g.get("id") == MOZILLA_CORP_GROUP_ID for g in groups)
         data[email] = is_trusted
 
+    def fault_user_handler(user, data):
+        # Handle users not found - mark as untrusted
+        pass
+
     user_data: dict[str, bool] = {}
     BugzillaUser(
         user_names=emails,
         include_fields=["name", "groups"],
         user_handler=user_handler,
+        fault_user_handler=fault_user_handler,
         user_data=user_data,
     ).wait()
 
