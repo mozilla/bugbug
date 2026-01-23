@@ -27,7 +27,6 @@ import hglib
 import lmdb
 import requests
 import rs_parsepatch
-import tenacity
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
@@ -1521,36 +1520,29 @@ def clone(
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
     """Pull a revision from a branch of a remote repository into a local repository."""
-
-    @tenacity.retry(
-        stop=tenacity.stop_after_attempt(2),
-        reraise=True,
-        after=tenacity.after_log(logger, logging.DEBUG),
-        retry=tenacity.retry_if_exception_type(subprocess.TimeoutExpired),
+    cmd = _build_hg_cmd(
+        "robustcheckout",
+        f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+        repo_dir,
+        purge=False,
+        sharebase=f"{repo_dir}-shared",
+        revision=revision.encode("ascii"),
+        noupdate=True,
     )
-    def trigger_pull() -> None:
-        cmd = _build_hg_cmd(
-            "pull",
-            f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-            r=revision.encode("ascii"),
-            debug=True,
+
+    p = subprocess.Popen(cmd, cwd=repo_dir)
+
+    try:
+        p.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        p.terminate()
+        p.wait()
+        raise
+
+    if p.returncode != 0:
+        raise RuntimeError(
+            f"Error {p.returncode} when pulling {revision} from {branch}"
         )
-
-        p = subprocess.Popen(cmd, cwd=repo_dir)
-
-        try:
-            p.wait(timeout=180)
-        except subprocess.TimeoutExpired:
-            p.terminate()
-            p.wait()
-            raise
-
-        if p.returncode != 0:
-            raise RuntimeError(
-                f"Error {p.returncode} when pulling {revision} from {branch}"
-            )
-
-    trigger_pull()
 
 
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
