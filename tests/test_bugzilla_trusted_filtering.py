@@ -659,8 +659,8 @@ def test_trusted_comment_validates_before_untrusted_history_after():
 
 
 @responses.activate
-def test_editbugs_with_recent_activity_is_trusted():
-    """Test that users with editbugs and recent activity are trusted."""
+def test_extended_trusted_user_policy():
+    """Test extended trusted user policy with mixed user types in one batch."""
     from datetime import datetime, timezone
 
     from libmozdata.bugzilla import BugzillaBase
@@ -669,87 +669,30 @@ def test_editbugs_with_recent_activity_is_trusted():
     try:
         bugzilla_module.set_token("test_token")
 
-        # User with editbugs who was seen recently (today)
         recent_date = datetime.now(timezone.utc).isoformat()
+        stale_date = "2022-01-01T00:00:00Z"
+
         responses.add(
             responses.GET,
             "https://bugzilla.mozilla.org/rest/user",
             json={
                 "users": [
                     {
-                        "name": "editbugs@example.com",
+                        "name": "editbugs-recent@example.com",
                         "groups": [
                             {"id": 9, "name": "editbugs"},
                             {"id": 69, "name": "everyone"},
                         ],
                         "last_seen_date": recent_date,
-                    }
-                ],
-                "faults": [],
-            },
-            status=200,
-        )
-
-        results = _check_users_batch(["editbugs@example.com"])
-        assert results["editbugs@example.com"] is True
-
-    finally:
-        BugzillaBase.TOKEN = old_token
-
-
-@responses.activate
-def test_editbugs_with_stale_activity_is_untrusted():
-    """Test that users with editbugs but stale activity (>365 days) are not trusted."""
-    from libmozdata.bugzilla import BugzillaBase
-
-    old_token = BugzillaBase.TOKEN
-    try:
-        bugzilla_module.set_token("test_token")
-
-        # User with editbugs who was last seen over a year ago
-        stale_date = "2022-01-01T00:00:00Z"
-        responses.add(
-            responses.GET,
-            "https://bugzilla.mozilla.org/rest/user",
-            json={
-                "users": [
+                    },
                     {
-                        "name": "stale@example.com",
+                        "name": "editbugs-stale@example.com",
                         "groups": [
                             {"id": 9, "name": "editbugs"},
                             {"id": 69, "name": "everyone"},
                         ],
                         "last_seen_date": stale_date,
-                    }
-                ],
-                "faults": [],
-            },
-            status=200,
-        )
-
-        results = _check_users_batch(["stale@example.com"])
-        assert results["stale@example.com"] is False
-
-    finally:
-        BugzillaBase.TOKEN = old_token
-
-
-@responses.activate
-def test_moco_without_recent_activity_is_trusted():
-    """Test that MOCO users are trusted regardless of activity date."""
-    from libmozdata.bugzilla import BugzillaBase
-
-    old_token = BugzillaBase.TOKEN
-    try:
-        bugzilla_module.set_token("test_token")
-
-        # MOCO user with stale activity is still trusted
-        stale_date = "2022-01-01T00:00:00Z"
-        responses.add(
-            responses.GET,
-            "https://bugzilla.mozilla.org/rest/user",
-            json={
-                "users": [
+                    },
                     {
                         "name": "moco@mozilla.com",
                         "groups": [
@@ -757,51 +700,157 @@ def test_moco_without_recent_activity_is_trusted():
                             {"id": 69, "name": "everyone"},
                         ],
                         "last_seen_date": stale_date,
-                    }
+                    },
                 ],
                 "faults": [],
             },
             status=200,
         )
 
-        results = _check_users_batch(["moco@mozilla.com"])
+        results = _check_users_batch(
+            [
+                "editbugs-recent@example.com",
+                "editbugs-stale@example.com",
+                "moco@mozilla.com",
+            ]
+        )
+
+        assert results["editbugs-recent@example.com"] is True
+        assert results["editbugs-stale@example.com"] is False
         assert results["moco@mozilla.com"] is True
 
     finally:
         BugzillaBase.TOKEN = old_token
 
 
-@responses.activate
-def test_editbugs_without_last_seen_is_untrusted():
-    """Test that editbugs users without last_seen_date are not trusted."""
-    from libmozdata.bugzilla import BugzillaBase
+def test_metadata_redacted_without_trusted_comment():
+    """Test that bug metadata is redacted when no trusted user has commented."""
+    from unittest.mock import patch
 
-    old_token = BugzillaBase.TOKEN
-    try:
-        bugzilla_module.set_token("test_token")
+    from bugbug.tools.core.platforms.bugzilla import (
+        REDACTED_ASSIGNEE,
+        REDACTED_REPORTER,
+        REDACTED_TITLE,
+        SanitizedBug,
+    )
 
-        # User with editbugs but no last_seen_date field
-        responses.add(
-            responses.GET,
-            "https://bugzilla.mozilla.org/rest/user",
-            json={
-                "users": [
-                    {
-                        "name": "no_activity@example.com",
-                        "groups": [
-                            {"id": 9, "name": "editbugs"},
-                            {"id": 69, "name": "everyone"},
-                        ],
-                        # No last_seen_date field
-                    }
-                ],
-                "faults": [],
+    bug_data = {
+        "id": 12345,
+        "summary": "This is the bug title",
+        "comments": [
+            {
+                "time": "2024-01-01T10:00:00Z",
+                "author": "untrusted@example.com",
+                "id": 1,
+                "count": 0,
+                "text": "Untrusted comment",
+            }
+        ],
+        "history": [],
+        "status": "NEW",
+        "severity": "normal",
+        "product": "Core",
+        "component": "General",
+        "version": "unspecified",
+        "platform": "All",
+        "op_sys": "All",
+        "creation_time": "2024-01-01T00:00:00Z",
+        "last_change_time": "2024-01-01T10:00:00Z",
+        "creator_detail": {
+            "real_name": "Untrusted User",
+            "email": "untrusted@example.com",
+        },
+        "assigned_to_detail": {
+            "real_name": "Assignee Name",
+            "email": "assignee@example.com",
+        },
+    }
+
+    # Mock the user check to make untrusted@example.com untrusted
+    with patch(
+        "bugbug.tools.core.platforms.bugzilla._check_users_batch",
+        return_value={"untrusted@example.com": False},
+    ):
+        markdown = SanitizedBug(bug_data).to_md()
+
+    # Title should be redacted
+    assert REDACTED_TITLE in markdown
+    assert "This is the bug title" not in markdown
+
+    # Reporter should be redacted
+    assert REDACTED_REPORTER in markdown
+    assert "Untrusted User" not in markdown
+
+    # Assignee should be redacted
+    assert REDACTED_ASSIGNEE in markdown
+    assert "Assignee Name" not in markdown
+
+
+def test_metadata_shown_with_trusted_comment():
+    """Test that bug metadata is shown when a trusted user has commented."""
+    from unittest.mock import patch
+
+    from bugbug.tools.core.platforms.bugzilla import (
+        REDACTED_ASSIGNEE,
+        REDACTED_REPORTER,
+        REDACTED_TITLE,
+        SanitizedBug,
+    )
+
+    bug_data = {
+        "id": 12345,
+        "summary": "This is the bug title",
+        "comments": [
+            {
+                "time": "2024-01-01T10:00:00Z",
+                "author": "untrusted@example.com",
+                "id": 1,
+                "count": 0,
+                "text": "Untrusted comment",
             },
-            status=200,
-        )
+            {
+                "time": "2024-01-01T10:01:00Z",
+                "author": "trusted@mozilla.com",
+                "id": 2,
+                "count": 1,
+                "text": "Trusted comment",
+            },
+        ],
+        "history": [],
+        "status": "NEW",
+        "severity": "normal",
+        "product": "Core",
+        "component": "General",
+        "version": "unspecified",
+        "platform": "All",
+        "op_sys": "All",
+        "creation_time": "2024-01-01T00:00:00Z",
+        "last_change_time": "2024-01-01T10:01:00Z",
+        "creator_detail": {
+            "real_name": "Untrusted User",
+            "email": "untrusted@example.com",
+        },
+        "assigned_to_detail": {
+            "real_name": "Assignee Name",
+            "email": "assignee@example.com",
+        },
+    }
 
-        results = _check_users_batch(["no_activity@example.com"])
-        assert results["no_activity@example.com"] is False
+    # Mock the user check to make trusted@mozilla.com trusted
+    with patch(
+        "bugbug.tools.core.platforms.bugzilla._check_users_batch",
+        return_value={"untrusted@example.com": False, "trusted@mozilla.com": True},
+    ):
+        markdown = SanitizedBug(bug_data).to_md()
 
-    finally:
-        BugzillaBase.TOKEN = old_token
+    # Title should be shown
+    assert "This is the bug title" in markdown
+    assert REDACTED_TITLE not in markdown
+
+    # Reporter should be shown
+    assert "Untrusted User" in markdown
+    assert REDACTED_REPORTER not in markdown
+
+    # Assignee should be shown
+    assert "Assignee Name" in markdown
+    assert REDACTED_ASSIGNEE not in markdown
