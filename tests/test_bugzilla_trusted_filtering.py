@@ -656,3 +656,152 @@ def test_trusted_comment_validates_before_untrusted_history_after():
     # Untrusted history AFTER trusted comment should be filtered
     assert filtered_history == 1
     assert "[Filtered]" in timeline_text
+
+
+@responses.activate
+def test_editbugs_with_recent_activity_is_trusted():
+    """Test that users with editbugs and recent activity are trusted."""
+    from datetime import datetime, timezone
+
+    from libmozdata.bugzilla import BugzillaBase
+
+    old_token = BugzillaBase.TOKEN
+    try:
+        bugzilla_module.set_token("test_token")
+
+        # User with editbugs who was seen recently (today)
+        recent_date = datetime.now(timezone.utc).isoformat()
+        responses.add(
+            responses.GET,
+            "https://bugzilla.mozilla.org/rest/user",
+            json={
+                "users": [
+                    {
+                        "name": "editbugs@example.com",
+                        "groups": [
+                            {"id": 9, "name": "editbugs"},
+                            {"id": 69, "name": "everyone"},
+                        ],
+                        "last_seen_date": recent_date,
+                    }
+                ],
+                "faults": [],
+            },
+            status=200,
+        )
+
+        results = _check_users_batch(["editbugs@example.com"])
+        assert results["editbugs@example.com"] is True
+
+    finally:
+        BugzillaBase.TOKEN = old_token
+
+
+@responses.activate
+def test_editbugs_with_stale_activity_is_untrusted():
+    """Test that users with editbugs but stale activity (>365 days) are not trusted."""
+    from libmozdata.bugzilla import BugzillaBase
+
+    old_token = BugzillaBase.TOKEN
+    try:
+        bugzilla_module.set_token("test_token")
+
+        # User with editbugs who was last seen over a year ago
+        stale_date = "2022-01-01T00:00:00Z"
+        responses.add(
+            responses.GET,
+            "https://bugzilla.mozilla.org/rest/user",
+            json={
+                "users": [
+                    {
+                        "name": "stale@example.com",
+                        "groups": [
+                            {"id": 9, "name": "editbugs"},
+                            {"id": 69, "name": "everyone"},
+                        ],
+                        "last_seen_date": stale_date,
+                    }
+                ],
+                "faults": [],
+            },
+            status=200,
+        )
+
+        results = _check_users_batch(["stale@example.com"])
+        assert results["stale@example.com"] is False
+
+    finally:
+        BugzillaBase.TOKEN = old_token
+
+
+@responses.activate
+def test_moco_without_recent_activity_is_trusted():
+    """Test that MOCO users are trusted regardless of activity date."""
+    from libmozdata.bugzilla import BugzillaBase
+
+    old_token = BugzillaBase.TOKEN
+    try:
+        bugzilla_module.set_token("test_token")
+
+        # MOCO user with stale activity is still trusted
+        stale_date = "2022-01-01T00:00:00Z"
+        responses.add(
+            responses.GET,
+            "https://bugzilla.mozilla.org/rest/user",
+            json={
+                "users": [
+                    {
+                        "name": "moco@mozilla.com",
+                        "groups": [
+                            {"id": 42, "name": "mozilla-corporation"},
+                            {"id": 69, "name": "everyone"},
+                        ],
+                        "last_seen_date": stale_date,
+                    }
+                ],
+                "faults": [],
+            },
+            status=200,
+        )
+
+        results = _check_users_batch(["moco@mozilla.com"])
+        assert results["moco@mozilla.com"] is True
+
+    finally:
+        BugzillaBase.TOKEN = old_token
+
+
+@responses.activate
+def test_editbugs_without_last_seen_is_untrusted():
+    """Test that editbugs users without last_seen_date are not trusted."""
+    from libmozdata.bugzilla import BugzillaBase
+
+    old_token = BugzillaBase.TOKEN
+    try:
+        bugzilla_module.set_token("test_token")
+
+        # User with editbugs but no last_seen_date field
+        responses.add(
+            responses.GET,
+            "https://bugzilla.mozilla.org/rest/user",
+            json={
+                "users": [
+                    {
+                        "name": "no_activity@example.com",
+                        "groups": [
+                            {"id": 9, "name": "editbugs"},
+                            {"id": 69, "name": "everyone"},
+                        ],
+                        # No last_seen_date field
+                    }
+                ],
+                "faults": [],
+            },
+            status=200,
+        )
+
+        results = _check_users_batch(["no_activity@example.com"])
+        assert results["no_activity@example.com"] is False
+
+    finally:
+        BugzillaBase.TOKEN = old_token
