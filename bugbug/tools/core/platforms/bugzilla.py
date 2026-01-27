@@ -8,6 +8,7 @@
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from functools import cached_property
 
 from libmozdata.bugzilla import Bugzilla, BugzillaBase
 
@@ -16,6 +17,10 @@ logger = logging.getLogger(__name__)
 MOZILLA_CORP_GROUP_ID = 42
 EDITBUGS_GROUP_ID = 9
 EDITBUGS_CUTOFF_DAYS = 365
+
+REDACTED_TITLE = "[Unvalidated bug title redacted for security]"
+REDACTED_REPORTER = "- **Reporter**: [Redacted]"
+REDACTED_ASSIGNEE = "- **Assignee**: [Redacted]"
 
 BugzillaBase.TOKEN = os.getenv("BUGZILLA_TOKEN")
 
@@ -279,89 +284,63 @@ def create_bug_timeline(comments: list[dict], history: list[dict]) -> list[str]:
     return timeline
 
 
-def bug_dict_to_markdown(bug):
+def bug_to_markdown(bug: "Bug") -> str:
+    """Convert a Bug object to markdown representation.
+
+    Uses the bug's properties directly - sanitization is handled by the Bug
+    subclass (SanitizedBug) through property overrides.
+    """
     md_lines = []
-    is_trusted_cache: dict[str, bool] = {}
 
-    # Sanitize comments and history before processing
-    sanitized_comments, sanitized_history, filtered_comments, filtered_history = (
-        _sanitize_timeline_items(bug["comments"], bug["history"], is_trusted_cache)
-    )
-
-    # Header with bug ID and summary
-    md_lines.append(
-        f"# Bug {bug.get('id', 'Unknown')} - {bug.get('summary', 'No summary')}"
-    )
+    md_lines.append(f"# Bug {bug.id or 'Unknown'} - {bug.summary}")
     md_lines.append("")
 
-    # Basic Information
     md_lines.append("## Basic Information")
-    md_lines.append(f"- **Status**: {bug.get('status', 'Unknown')}")
-    md_lines.append(f"- **Severity**: {bug.get('severity', 'Unknown')}")
-    md_lines.append(f"- **Product**: {bug.get('product', 'Unknown')}")
-    md_lines.append(f"- **Component**: {bug.get('component', 'Unknown')}")
-    md_lines.append(f"- **Version**: {bug.get('version', 'Unknown')}")
-    md_lines.append(f"- **Platform**: {bug.get('platform', 'Unknown')}")
-    md_lines.append(f"- **OS**: {bug.get('op_sys', 'Unknown')}")
-    md_lines.append(f"- **Created**: {bug.get('creation_time', 'Unknown')}")
-    md_lines.append(f"- **Last Updated**: {bug.get('last_change_time', 'Unknown')}")
+    md_lines.append(f"- **Status**: {bug.status}")
+    md_lines.append(f"- **Severity**: {bug.severity}")
+    md_lines.append(f"- **Product**: {bug.product}")
+    md_lines.append(f"- **Component**: {bug.component}")
+    md_lines.append(f"- **Version**: {bug.version}")
+    md_lines.append(f"- **Platform**: {bug.platform}")
+    md_lines.append(f"- **OS**: {bug.op_sys}")
+    md_lines.append(f"- **Created**: {bug.creation_time}")
+    md_lines.append(f"- **Last Updated**: {bug.last_change_time}")
 
-    if bug.get("url"):
-        md_lines.append(f"- **Related URL**: {bug['url']}")
+    if bug.url:
+        md_lines.append(f"- **Related URL**: {bug.url}")
 
-    if bug.get("keywords"):
-        md_lines.append(f"- **Keywords**: {', '.join(bug['keywords'])}")
+    if bug.keywords:
+        md_lines.append(f"- **Keywords**: {', '.join(bug.keywords)}")
 
     md_lines.append("")
 
-    # People Involved
     md_lines.append("## People Involved")
 
-    creator_detail = bug.get("creator_detail", {})
-    if creator_detail:
-        creator_name = creator_detail.get(
-            "real_name",
-            creator_detail.get("nick", creator_detail.get("email", "Unknown")),
-        )
-        md_lines.append(
-            f"- **Reporter**: {creator_name} ({creator_detail.get('email', 'No email')})"
-        )
+    if bug.reporter_display:
+        md_lines.append(bug.reporter_display)
 
-    assignee_detail = bug.get("assigned_to_detail", {})
-    if assignee_detail:
-        assignee_name = assignee_detail.get(
-            "real_name",
-            assignee_detail.get("nick", assignee_detail.get("email", "Unknown")),
-        )
-        md_lines.append(
-            f"- **Assignee**: {assignee_name} ({assignee_detail.get('email', 'No email')})"
-        )
+    if bug.assignee_display:
+        md_lines.append(bug.assignee_display)
 
-    # CC List (summarized)
-    cc_count = len(bug.get("cc", []))
+    cc_count = len(bug.cc)
     if cc_count > 0:
         md_lines.append(f"- **CC Count**: {cc_count} people")
 
     md_lines.append("")
 
-    # Dependencies and Relationships
     relationships = []
-    if bug.get("blocks"):
-        relationships.append(f"**Blocks**: {', '.join(map(str, bug['blocks']))}")
-    if bug.get("depends_on"):
+    if bug.blocks:
+        relationships.append(f"**Blocks**: {', '.join(map(str, bug.blocks))}")
+    if bug.depends_on:
+        relationships.append(f"**Depends on**: {', '.join(map(str, bug.depends_on))}")
+    if bug.regressed_by:
         relationships.append(
-            f"**Depends on**: {', '.join(map(str, bug['depends_on']))}"
+            f"**Regressed by**: {', '.join(map(str, bug.regressed_by))}"
         )
-    if bug.get("regressed_by"):
-        relationships.append(
-            f"**Regressed by**: {', '.join(map(str, bug['regressed_by']))}"
-        )
-    if bug.get("duplicates"):
-        relationships.append(
-            f"**Duplicates**: {', '.join(map(str, bug['duplicates']))}"
-        )
-    if bug.get("see_also"):
-        relationships.append(f"**See also**: {', '.join(bug['see_also'])}")
+    if bug.duplicates:
+        relationships.append(f"**Duplicates**: {', '.join(map(str, bug.duplicates))}")
+    if bug.see_also:
+        relationships.append(f"**See also**: {', '.join(bug.see_also)}")
 
     if relationships:
         md_lines.append("## Bug Relationships")
@@ -369,8 +348,7 @@ def bug_dict_to_markdown(bug):
             md_lines.append(f"- {rel}")
         md_lines.append("")
 
-    # Use sanitized timeline
-    timeline = create_bug_timeline(sanitized_comments, sanitized_history)
+    timeline = create_bug_timeline(bug.timeline_comments, bug.timeline_history)
     if timeline:
         md_lines.append("## Bug Timeline")
         md_lines.append("")
@@ -401,12 +379,196 @@ class Bug:
         bug_data = bugs[0]
         assert bug_data["id"] == bug_id
 
-        return Bug(bug_data)
+        return SanitizedBug(bug_data)
+
+    @property
+    def id(self) -> int:
+        return self._metadata.get("id", 0)
 
     @property
     def summary(self) -> str:
-        return self._metadata["summary"]
+        return self._metadata.get("summary", "No summary")
+
+    @property
+    def status(self) -> str:
+        return self._metadata.get("status", "Unknown")
+
+    @property
+    def severity(self) -> str:
+        return self._metadata.get("severity", "Unknown")
+
+    @property
+    def product(self) -> str:
+        return self._metadata.get("product", "Unknown")
+
+    @property
+    def component(self) -> str:
+        return self._metadata.get("component", "Unknown")
+
+    @property
+    def version(self) -> str:
+        return self._metadata.get("version", "Unknown")
+
+    @property
+    def platform(self) -> str:
+        return self._metadata.get("platform", "Unknown")
+
+    @property
+    def op_sys(self) -> str:
+        return self._metadata.get("op_sys", "Unknown")
+
+    @property
+    def creation_time(self) -> str:
+        return self._metadata.get("creation_time", "Unknown")
+
+    @property
+    def last_change_time(self) -> str:
+        return self._metadata.get("last_change_time", "Unknown")
+
+    @property
+    def url(self) -> str:
+        return self._metadata.get("url", "")
+
+    @property
+    def keywords(self) -> list[str]:
+        return self._metadata.get("keywords", [])
+
+    @property
+    def cc(self) -> list[str]:
+        return self._metadata.get("cc", [])
+
+    @property
+    def blocks(self) -> list[int]:
+        return self._metadata.get("blocks", [])
+
+    @property
+    def depends_on(self) -> list[int]:
+        return self._metadata.get("depends_on", [])
+
+    @property
+    def regressed_by(self) -> list[int]:
+        return self._metadata.get("regressed_by", [])
+
+    @property
+    def duplicates(self) -> list[int]:
+        return self._metadata.get("duplicates", [])
+
+    @property
+    def see_also(self) -> list[str]:
+        return self._metadata.get("see_also", [])
+
+    @property
+    def comments(self) -> list[dict]:
+        return self._metadata.get("comments", [])
+
+    @property
+    def history(self) -> list[dict]:
+        return self._metadata.get("history", [])
+
+    @property
+    def creator_detail(self) -> dict:
+        return self._metadata.get("creator_detail", {})
+
+    @property
+    def assignee_detail(self) -> dict:
+        return self._metadata.get("assigned_to_detail", {})
+
+    @property
+    def reporter_display(self) -> str | None:
+        detail = self.creator_detail
+        if not detail:
+            return None
+        name = detail.get(
+            "real_name", detail.get("nick", detail.get("email", "Unknown"))
+        )
+        email = detail.get("email", "No email")
+        return f"- **Reporter**: {name} ({email})"
+
+    @property
+    def assignee_display(self) -> str | None:
+        detail = self.assignee_detail
+        if not detail:
+            return None
+        name = detail.get(
+            "real_name", detail.get("nick", detail.get("email", "Unknown"))
+        )
+        email = detail.get("email", "No email")
+        return f"- **Assignee**: {name} ({email})"
+
+    @property
+    def timeline_comments(self) -> list[dict]:
+        return self.comments
+
+    @property
+    def timeline_history(self) -> list[dict]:
+        return self.history
 
     def to_md(self) -> str:
         """Return a markdown representation of the bug."""
-        return bug_dict_to_markdown(self._metadata)
+        return bug_to_markdown(self)
+
+
+class SanitizedBug(Bug):
+    """A Bug with untrusted content redacted based on trust policy."""
+
+    @cached_property
+    def _is_trusted_cache(self) -> dict[str, bool]:
+        all_emails = set()
+        for comment in self._metadata.get("comments", []):
+            email = comment.get("author", "")
+            if email:
+                all_emails.add(email)
+        for event in self._metadata.get("history", []):
+            email = event.get("who", "")
+            if email:
+                all_emails.add(email)
+
+        if not all_emails:
+            return {}
+
+        return _check_users_batch(list(all_emails))
+
+    @cached_property
+    def _has_trusted_comment(self) -> bool:
+        return any(
+            self._is_trusted_cache.get(comment.get("author", ""), False)
+            for comment in self._metadata.get("comments", [])
+        )
+
+    @cached_property
+    def _sanitized_timeline(self) -> tuple[list[dict], list[dict], int, int]:
+        return _sanitize_timeline_items(
+            self._metadata.get("comments", []),
+            self._metadata.get("history", []),
+            dict(self._is_trusted_cache),
+        )
+
+    @property
+    def summary(self) -> str:
+        if not self._has_trusted_comment:
+            return REDACTED_TITLE
+        return super().summary
+
+    @property
+    def reporter_display(self) -> str | None:
+        if not self.creator_detail:
+            return None
+        if not self._has_trusted_comment:
+            return REDACTED_REPORTER
+        return super().reporter_display
+
+    @property
+    def assignee_display(self) -> str | None:
+        if not self.assignee_detail:
+            return None
+        if not self._has_trusted_comment:
+            return REDACTED_ASSIGNEE
+        return super().assignee_display
+
+    @property
+    def timeline_comments(self) -> list[dict]:
+        return self._sanitized_timeline[0]
+
+    @property
+    def timeline_history(self) -> list[dict]:
+        return self._sanitized_timeline[1]
