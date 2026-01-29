@@ -41,7 +41,7 @@ from bugbug.tools.code_review.utils import (
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
 from bugbug.tools.core.llms import get_tokenizer
-from bugbug.tools.core.platforms.base import Patch, ReviewData
+from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
 
@@ -84,7 +84,6 @@ class CodeReviewTool(GenerativeModelTool):
         llm: BaseChatModel,
         patch_summarizer: PatchSummarizer,
         suggestion_filterer: SuggestionFilterer,
-        review_data: ReviewData,
         function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
@@ -94,8 +93,6 @@ class CodeReviewTool(GenerativeModelTool):
         super().__init__()
 
         self.target_software = target_software
-
-        self.review_data = review_data
 
         self._tokenizer = get_tokenizer(
             llm.model_name if hasattr(llm, "model_name") else ""
@@ -156,11 +153,6 @@ class CodeReviewTool(GenerativeModelTool):
                 QdrantVectorDB("diff_comments")
             )
 
-        if "review_data" not in kwargs:
-            from bugbug.tools.core.platforms.phabricator import PhabricatorReviewData
-
-            kwargs["review_data"] = PhabricatorReviewData()
-
         if "llm" not in kwargs:
             from bugbug.tools.core.llms import create_anthropic_llm
 
@@ -217,10 +209,6 @@ class CodeReviewTool(GenerativeModelTool):
             raise ModelResultError("The model could not complete the review") from e
 
         return result["structured_response"].comments
-
-    def run_by_diff_id(self, diff_id: str | int) -> list[InlineComment] | None:
-        patch = self.review_data.get_patch_by_id(diff_id)
-        return self.run(patch)
 
     def run(self, patch: Patch) -> list[InlineComment] | None:
         if self.count_tokens(patch.raw_diff) > 21000:
