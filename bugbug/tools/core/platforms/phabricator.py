@@ -15,7 +15,7 @@ import tenacity
 from tqdm import tqdm
 
 from bugbug import db, phabricator, utils
-from bugbug.tools.core.data_types import InlineComment, ReviewRequest
+from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
 from bugbug.tools.core.platforms.bugzilla import Bug
 from bugbug.utils import get_secret
@@ -645,11 +645,6 @@ class PhabricatorReviewData(ReviewData):
         phabricator.set_api_key(
             get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
         )
-
-    def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
-        revisions = phabricator.get(rev_ids=[int(revision_id)])
-        assert len(revisions) == 1
-        return ReviewRequest(revisions[0]["fields"]["diffID"])
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),

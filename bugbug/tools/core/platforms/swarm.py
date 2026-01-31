@@ -9,7 +9,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Iterable
 
-from bugbug.tools.core.data_types import InlineComment, ReviewRequest
+from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
 from bugbug.utils import get_secret
 
@@ -77,9 +77,6 @@ class SwarmReviewData(ReviewData):
             "port": get_secret("SWARM_PORT"),
             "instance": get_secret("SWARM_INSTANCE"),
         }
-
-    def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
-        return ReviewRequest(revision_id)
 
     def get_patch_by_id(self, patch_id: str | int) -> Patch:
         return SwarmPatch(str(patch_id), self.auth)
