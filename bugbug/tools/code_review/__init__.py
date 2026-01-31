@@ -43,13 +43,6 @@ from bugbug.tools.core.platforms.base import ReviewData
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorReviewData,
 )
-from bugbug.tools.core.platforms.swarm import SwarmReviewData
-
-# Legacy compatibility
-review_data_classes = {
-    "phabricator": PhabricatorReviewData,
-    "swarm": SwarmReviewData,
-}
 
 __all__ = [
     # Agent
@@ -71,6 +64,4 @@ __all__ = [
     "ReviewData",
     # Phabricator
     "PhabricatorReviewData",
-    # Legacy
-    "review_data_classes",
 ]
