@@ -20,7 +20,7 @@ class CodeReviewContext:
 
 
 @tool
-def expand_context(file_path: str, start_line: int, end_line: int) -> str:
+async def expand_context(file_path: str, start_line: int, end_line: int) -> str:
     """Show the content of a file between specified line numbers as it is before the patch.
 
     Be careful to not fill your context window with too much data. Request the
@@ -38,7 +38,7 @@ def expand_context(file_path: str, start_line: int, end_line: int) -> str:
     runtime = get_runtime(CodeReviewContext)
 
     try:
-        file_content = runtime.context.patch.get_old_file(file_path)
+        file_content = await runtime.context.patch.get_old_file(file_path)
     except FileNotFoundError:
         return "File not found in the repository before the patch."
 

@@ -13,9 +13,10 @@ from logging import getLogger
 from typing import Iterable, Optional
 
 import tenacity
+from async_lru import alru_cache
 from tqdm import tqdm
 
-from bugbug import utils
+from bugbug.tools.core.connection import get_http_client, get_user_agent
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
 from bugbug.tools.core.platforms.bugzilla import Bug
@@ -30,8 +31,13 @@ UNTRUSTED_CONTENT_REDACTED = "[Content from untrusted user removed for security]
 
 
 @cache
-def get_phabricator_client(api_key: Optional[str] = None, url: Optional[str] = None):
+def get_phabricator_client(
+    api_key: Optional[str] = None,
+    url: Optional[str] = None,
+    user_agent: Optional[str] = None,
+):
     """Get a cached Phabricator client instance."""
+    from libmozdata.config import set_default_value
     from libmozdata.phabricator import PhabricatorAPI
 
     # Fallback to old environment variable names for backward compatibility
@@ -40,6 +46,12 @@ def get_phabricator_client(api_key: Optional[str] = None, url: Optional[str] = N
 
     if not url:
         url = os.getenv("PHABRICATOR_URL") or os.getenv("BUGBUG_PHABRICATOR_URL")
+
+    if not user_agent:
+        user_agent = get_user_agent()
+
+    # This is awkward since PhabricatorAPI does not accept user agent directly
+    set_default_value("User-Agent", "name", user_agent)
 
     return PhabricatorAPI(api_key, url)
 
@@ -281,7 +293,7 @@ class PhabricatorPatch(Patch):
 
         raise ValueError("Cannot determine revision PHID")
 
-    def _get_file_from_patch(self, file_path: str, is_before_patch: bool) -> str:
+    async def _get_file_from_patch(self, file_path: str, is_before_patch: bool) -> str:
         for changeset in self._changesets:
             if changeset["fields"]["path"]["displayPath"] == file_path:
                 break
@@ -291,22 +303,18 @@ class PhabricatorPatch(Patch):
         changeset_id = changeset["id"]
 
         view = "old" if is_before_patch else "new"
-        r = utils.get_session("phabricator_web").get(
+        client = get_http_client()
+        r = await client.get(
             f"https://phabricator.services.mozilla.com/differential/changeset/?view={view}&ref={changeset_id}",
-            headers={
-                "User-Agent": utils.get_user_agent(),
-            },
         )
         r.raise_for_status()
 
         return r.text
 
-    def _get_file_from_repo(self, file_path: str, commit_hash: str) -> str:
-        r = utils.get_session("hgmo").get(
+    async def _get_file_from_repo(self, file_path: str, commit_hash: str) -> str:
+        client = get_http_client()
+        r = await client.get(
             f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{file_path}",
-            headers={
-                "User-Agent": utils.get_user_agent(),
-            },
         )
 
         if r.status_code == 404:
@@ -317,15 +325,15 @@ class PhabricatorPatch(Patch):
         r.raise_for_status()
         return r.text
 
-    def get_old_file(self, file_path: str) -> str:
+    async def get_old_file(self, file_path: str) -> str:
         if file_path.startswith("b/") or file_path.startswith("a/"):
             file_path = file_path[2:]
 
         try:
-            return self._get_file_from_patch(file_path, is_before_patch=True)
+            return await self._get_file_from_patch(file_path, is_before_patch=True)
         except FileNotFoundError:
-            return self._get_file_from_repo(
-                file_path, commit_hash=self.base_commit_hash
+            return await self._get_file_from_repo(
+                file_path, commit_hash=await self.get_base_commit_hash()
             )
 
     @cached_property
@@ -349,14 +357,12 @@ class PhabricatorPatch(Patch):
         return raw_diff
 
     @staticmethod
-    def _commit_available(commit_hash: str) -> bool:
-        r = utils.get_session("hgmo").get(
+    async def _commit_available(commit_hash: str) -> bool:
+        client = get_http_client()
+        r = await client.get(
             f"https://hg.mozilla.org/mozilla-unified/json-rev/{commit_hash}",
-            headers={
-                "User-Agent": utils.get_user_agent(),
-            },
         )
-        return r.ok
+        return r.is_success
 
     @cached_property
     def _diff_metadata(self) -> dict:
@@ -367,13 +373,13 @@ class PhabricatorPatch(Patch):
 
         return diff
 
-    @cached_property
-    def base_commit_hash(self) -> str:
+    @alru_cache
+    async def get_base_commit_hash(self) -> str:
         diff = self._diff_metadata
 
         try:
             base_commit_hash = diff["refs"]["base"]["identifier"]
-            if self._commit_available(base_commit_hash):
+            if await self._commit_available(base_commit_hash):
                 return base_commit_hash
         except KeyError:
             pass
@@ -382,11 +388,9 @@ class PhabricatorPatch(Patch):
         start_date = datetime.fromtimestamp(diff["dateCreated"] - 86400)
         end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
         start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-        r = utils.get_session("hgmo").get(
+        client = get_http_client()
+        r = await client.get(
             f"https://hg.mozilla.org/mozilla-central/json-pushes?startdate={start_date_str}&enddate={end_date_str}&version=2&tipsonly=1",
-            headers={
-                "User-Agent": utils.get_user_agent(),
-            },
         )
         pushes = r.json()["pushes"]
         closest_push = None
