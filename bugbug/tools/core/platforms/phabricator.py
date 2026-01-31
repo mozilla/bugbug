@@ -15,7 +15,7 @@ from typing import Iterable, Optional
 import tenacity
 from tqdm import tqdm
 
-from bugbug import db, phabricator, utils
+from bugbug import utils
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
 from bugbug.tools.core.platforms.bugzilla import Bug
@@ -666,6 +666,8 @@ class PhabricatorReviewData(ReviewData):
     def get_all_inline_comments(
         self, comment_filter
     ) -> Iterable[tuple[int, list[InlineComment]]]:
+        from bugbug import db, phabricator
+
         db.download(phabricator.REVISIONS_DB)
 
         for revision in tqdm(
