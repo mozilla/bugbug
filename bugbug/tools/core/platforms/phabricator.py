@@ -5,9 +5,10 @@
 
 """Phabricator platform implementation for code review."""
 
+import os
 from collections import defaultdict
 from datetime import datetime
-from functools import cached_property
+from functools import cache, cached_property
 from logging import getLogger
 from typing import Iterable, Optional
 
@@ -18,7 +19,6 @@ from bugbug import db, phabricator, utils
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
 from bugbug.tools.core.platforms.bugzilla import Bug
-from bugbug.utils import get_secret
 
 logger = getLogger(__name__)
 
@@ -29,12 +29,27 @@ MOCO_GROUP_PHID = "PHID-PROJ-a2zxxknk7jm5nw4rtjsl"  # bmo-mozilla-employee-confi
 UNTRUSTED_CONTENT_REDACTED = "[Content from untrusted user removed for security]"
 
 
+@cache
+def get_phabricator_client(api_key: Optional[str] = None, url: Optional[str] = None):
+    """Get a cached Phabricator client instance."""
+    from libmozdata.phabricator import PhabricatorAPI
+
+    # Fallback to old environment variable names for backward compatibility
+    if not api_key:
+        api_key = os.getenv("PHABRICATOR_KEY") or os.getenv("BUGBUG_PHABRICATOR_TOKEN")
+
+    if not url:
+        url = os.getenv("PHABRICATOR_URL") or os.getenv("BUGBUG_PHABRICATOR_URL")
+
+    return PhabricatorAPI(api_key, url)
+
+
 def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
     """Internal implementation for fetching user information.
 
     This function is retried by the wrapper function.
     """
-    assert phabricator.PHABRICATOR_API is not None
+    phabricator = get_phabricator_client()
 
     if not user_phids:
         return {}
@@ -42,13 +57,13 @@ def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
     logger.info(f"Fetching user info for {len(user_phids)} PHIDs")
 
     # Get user names and nick
-    users_response = phabricator.PHABRICATOR_API.request(
+    users_response = phabricator.request(
         "user.search",
         constraints={"phids": list(user_phids)},
     )
 
     # Get MOCO group members
-    moco_response = phabricator.PHABRICATOR_API.request(
+    moco_response = phabricator.request(
         "project.search",
         constraints={"phids": [MOCO_GROUP_PHID]},
         attachments={"members": True},
@@ -315,11 +330,11 @@ class PhabricatorPatch(Patch):
 
     @cached_property
     def _changesets(self) -> list[dict]:
-        assert phabricator.PHABRICATOR_API is not None
+        phabricator = get_phabricator_client()
 
         diff = self._diff_metadata
 
-        changesets = phabricator.PHABRICATOR_API.request(
+        changesets = phabricator.request(
             "differential.changeset.search",
             constraints={"diffPHIDs": [diff["phid"]]},
         )["data"]
@@ -328,8 +343,8 @@ class PhabricatorPatch(Patch):
 
     @cached_property
     def raw_diff(self) -> str:
-        assert phabricator.PHABRICATOR_API is not None
-        raw_diff = phabricator.PHABRICATOR_API.load_raw_diff(self.diff_id)
+        phabricator = get_phabricator_client()
+        raw_diff = phabricator.load_raw_diff(self.diff_id)
 
         return raw_diff
 
@@ -345,8 +360,8 @@ class PhabricatorPatch(Patch):
 
     @cached_property
     def _diff_metadata(self) -> dict:
-        assert phabricator.PHABRICATOR_API is not None
-        diffs = phabricator.PHABRICATOR_API.search_diffs(diff_id=self.diff_id)
+        phabricator = get_phabricator_client()
+        diffs = phabricator.search_diffs(diff_id=self.diff_id)
         assert len(diffs) == 1
         diff = diffs[0]
 
@@ -399,12 +414,12 @@ class PhabricatorPatch(Patch):
 
     @cached_property
     def _revision_metadata(self) -> dict:
-        assert phabricator.PHABRICATOR_API is not None
+        phabricator = get_phabricator_client()
 
         # We pass either the revision PHID or the revision ID, not both.
         revision_phid = self.revision_phid if not self._revision_id else None
 
-        revision = phabricator.PHABRICATOR_API.load_revision(
+        revision = phabricator.load_revision(
             rev_phid=revision_phid, rev_id=self._revision_id
         )
 
@@ -435,9 +450,9 @@ class PhabricatorPatch(Patch):
         return self._revision_metadata["id"]
 
     def _get_transactions(self) -> list[dict]:
-        assert phabricator.PHABRICATOR_API is not None
+        phabricator = get_phabricator_client()
 
-        transactions = phabricator.PHABRICATOR_API.request(
+        transactions = phabricator.request(
             "transaction.search",
             objectIdentifier=self._revision_metadata["phid"],
         )["data"]
@@ -640,12 +655,6 @@ class PhabricatorPatch(Patch):
 
 
 class PhabricatorReviewData(ReviewData):
-    def __init__(self):
-        super().__init__()
-        phabricator.set_api_key(
-            get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
-        )
-
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),
         wait=tenacity.wait_exponential(multiplier=2, min=2),
