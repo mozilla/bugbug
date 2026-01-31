@@ -25,10 +25,6 @@ class Patch(ABC):
 
     @property
     @abstractmethod
-    def base_commit_hash(self) -> str: ...
-
-    @property
-    @abstractmethod
     def raw_diff(self) -> str: ...
 
     @property
@@ -64,7 +60,7 @@ class Patch(ABC):
         ...
 
     @abstractmethod
-    def get_old_file(self, file_path: str) -> str:
+    async def get_old_file(self, file_path: str) -> str:
         """Return the contents of a file before the patch was applied."""
         ...
 

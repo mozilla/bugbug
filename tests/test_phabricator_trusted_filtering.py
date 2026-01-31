@@ -369,7 +369,10 @@ class TestToMdEndToEnd:
             return_value="diff --git a/test.py b/test.py\n+hello"
         )
 
-        with patch.object(phabricator, "PHABRICATOR_API", mock_api):
+        with patch(
+            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
+            return_value=mock_api,
+        ):
             patch_obj = PhabricatorPatch(diff_id=123456)
             md_output = patch_obj.to_md()
 
@@ -435,7 +438,10 @@ class TestToMdEndToEnd:
             return_value="diff --git a/test.py b/test.py\n+hi"
         )
 
-        with patch.object(phabricator, "PHABRICATOR_API", mock_api):
+        with patch(
+            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
+            return_value=mock_api,
+        ):
             patch_obj = PhabricatorPatch(diff_id=123456)
             md_output = patch_obj.to_md()
 
