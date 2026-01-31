@@ -188,11 +188,11 @@ class CodeReviewTool(GenerativeModelTool):
             approved_examples=self._get_generated_examples(patch, created_before),
         )
 
-    def generate_review_comments(
+    async def generate_review_comments(
         self, patch: Patch, patch_summary: str
     ) -> list[GeneratedReviewComment]:
         try:
-            for chunk in self.agent.stream(
+            async for chunk in self.agent.astream(
                 {
                     "messages": [
                         HumanMessage(
@@ -210,13 +210,15 @@ class CodeReviewTool(GenerativeModelTool):
 
         return result["structured_response"].comments
 
-    def run(self, patch: Patch) -> list[InlineComment] | None:
+    async def run(self, patch: Patch) -> list[InlineComment] | None:
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
         patch_summary = self.patch_summarizer.run(patch)
 
-        unfiltered_suggestions = self.generate_review_comments(patch, patch_summary)
+        unfiltered_suggestions = await self.generate_review_comments(
+            patch, patch_summary
+        )
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
             return []
