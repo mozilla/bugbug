@@ -75,10 +75,6 @@ class ReviewData(ABC):
     NIT_PATTERN = re.compile(r"[^a-zA-Z0-9]nit[\s:,]", re.IGNORECASE)
 
     @abstractmethod
-    def get_review_request_by_id(self, review_id: int):
-        raise NotImplementedError
-
-    @abstractmethod
     def get_patch_by_id(self, patch_id: str | int) -> Patch:
         raise NotImplementedError
 
