@@ -30,16 +30,19 @@ class BasicMetricsScorer(weave.Scorer):
             "ground_truth_valid_count": valid_comment_count,
             "ground_truth_invalid_count": invalid_comment_count,
             "ground_truth_total_count": len(ground_truth_comments),
-            "successful": not output["error"],
         }
 
     def summarize(self, score_rows: list[dict]) -> dict:
         """Aggregate scores across all examples."""
-        total_generated = sum(r["generated_comment_count"] for r in score_rows)
-        total_gt_valid = sum(r["ground_truth_valid_count"] for r in score_rows)
-        total_gt_invalid = sum(r["ground_truth_invalid_count"] for r in score_rows)
-        total_gt = sum(r["ground_truth_total_count"] for r in score_rows)
-        error_count = sum(not r["successful"] for r in score_rows)
+        total_examples = len(score_rows)
+        total_generated = sum(r.get("generated_comment_count", 0) for r in score_rows)
+        total_gt_valid = sum(r.get("ground_truth_valid_count", 0) for r in score_rows)
+        total_gt_invalid = sum(
+            r.get("ground_truth_invalid_count", 0) for r in score_rows
+        )
+        total_gt = sum(r.get("ground_truth_total_count", 0) for r in score_rows)
+        successful_runs = sum("generated_comment_count" in r for r in score_rows)
+        error_count = total_examples - successful_runs
 
         return {
             "total_generated_comments": total_generated,
@@ -47,10 +50,10 @@ class BasicMetricsScorer(weave.Scorer):
             "total_ground_truth_invalid": total_gt_invalid,
             "total_ground_truth": total_gt,
             "avg_generated_per_diff": (
-                total_generated / len(score_rows) if score_rows else 0
+                total_generated / successful_runs if successful_runs else 0
             ),
-            "error_rate": error_count / len(score_rows) if score_rows else 0,
-            "num_examples": len(score_rows),
+            "error_rate": error_count / total_examples if total_examples else 0,
+            "num_examples": total_examples,
         }
 
 
@@ -210,36 +213,40 @@ class LLMCommentMatchingScorer(weave.Scorer):
         }
 
     def summarize(self, score_rows: list[dict]) -> dict:
-        total_matched_valid = sum(r["matched_valid_count"] for r in score_rows)
-        total_matched_invalid = sum(r["matched_invalid_count"] for r in score_rows)
-        total_unmatched_gen = sum(r["unmatched_generated_count"] for r in score_rows)
+        total_matched_valid = sum(r.get("matched_valid_count", 0) for r in score_rows)
+        total_matched_invalid = sum(
+            r.get("matched_invalid_count", 0) for r in score_rows
+        )
+        total_unmatched_gen = sum(
+            r.get("unmatched_generated_count", 0) for r in score_rows
+        )
         total_unmatched_gt_valid = sum(
-            r["unmatched_ground_truth_valid_count"] for r in score_rows
+            r.get("unmatched_ground_truth_valid_count", 0) for r in score_rows
         )
         total_unmatched_gt_invalid = sum(
-            r["unmatched_ground_truth_invalid_count"] for r in score_rows
+            r.get("unmatched_ground_truth_invalid_count", 0) for r in score_rows
         )
 
         total_gt_valid = total_matched_valid + total_unmatched_gt_valid
         total_gt_invalid = total_matched_invalid + total_unmatched_gt_invalid
 
         # Filtering aggregates
-        total_retained = sum(r["filtering_retained_count"] for r in score_rows)
-        total_excluded = sum(r["filtering_excluded_count"] for r in score_rows)
+        total_retained = sum(r.get("filtering_retained_count", 0) for r in score_rows)
+        total_excluded = sum(r.get("filtering_excluded_count", 0) for r in score_rows)
         total_generated = total_retained + total_excluded
 
         # Filtering x Matching aggregates (use len() since values are lists)
         total_matched_valid_retained = sum(
-            len(r["matched_valid_retained"]) for r in score_rows
+            len(r.get("matched_valid_retained", [])) for r in score_rows
         )
         total_matched_valid_excluded = sum(
-            len(r["matched_valid_excluded"]) for r in score_rows
+            len(r.get("matched_valid_excluded", [])) for r in score_rows
         )
         total_matched_invalid_retained = sum(
-            len(r["matched_invalid_retained"]) for r in score_rows
+            len(r.get("matched_invalid_retained", [])) for r in score_rows
         )
         total_matched_invalid_excluded = sum(
-            len(r["matched_invalid_excluded"]) for r in score_rows
+            len(r.get("matched_invalid_excluded", [])) for r in score_rows
         )
 
         return {
