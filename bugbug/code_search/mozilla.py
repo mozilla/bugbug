@@ -6,7 +6,6 @@ from bugbug.code_search.function_search import (
 from bugbug.code_search.parser import FunctionSearchParser
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.code_search.searchfox_data import FunctionSearchSearchfoxData
-from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
 
 class FunctionSearchMozilla(FunctionSearch):
@@ -87,82 +86,3 @@ class FunctionSearchMozilla(FunctionSearch):
 
 
 register_function_search("mozilla", FunctionSearchMozilla)
-
-
-if __name__ == "__main__":
-    import sys
-
-    from libmozdata.phabricator import PhabricatorAPI
-
-    from bugbug.utils import get_secret, get_session, get_user_agent, setup_libmozdata
-
-    setup_libmozdata()
-
-    phabricator = PhabricatorAPI(
-        get_secret("PHABRICATOR_TOKEN"), get_secret("PHABRICATOR_URL")
-    )
-
-    def get_file(commit_hash, path):
-        r = get_session("hgmo").get(
-            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
-            headers={
-                "User-Agent": get_user_agent(),
-            },
-        )
-        r.raise_for_status()
-        return r.text
-
-    repo_dir = sys.argv[1]
-
-    function_search_mozilla = FunctionSearchMozilla(repo_dir, get_file, False)
-
-    # https://phabricator.services.mozilla.com/D199272?id=811858
-    patch1 = PhabricatorPatch("811858")
-
-    # In this case, the function was not used before the patch.
-    print(
-        function_search_mozilla.get_function_by_name(
-            patch1.base_commit_hash,
-            "dom/base/nsObjectLoadingContent.cpp",
-            "LowerCaseEqualsASCII",
-        )
-    )
-
-    # In this case, the function was used before the patch.
-    print(
-        function_search_mozilla.get_function_by_name(
-            patch1.base_commit_hash,
-            "dom/base/nsObjectLoadingContent.cpp",
-            "HtmlObjectContentTypeForMIMEType",
-        )
-    )
-
-    # https://phabricator.services.mozilla.com/D199248?id=811740
-    patch2 = PhabricatorPatch("811740")
-
-    # In this case, it is a JS file.
-    print(
-        function_search_mozilla.get_function_by_name(
-            patch2.base_commit_hash,
-            "testing/modules/XPCShellContentUtils.sys.mjs",
-            "registerPathHandler",
-        )
-    )
-
-    patch3 = PhabricatorPatch("721783")
-
-    print(
-        function_search_mozilla.get_function_by_name(
-            patch3.base_commit_hash,
-            "dom/performance/Performance.cpp",
-            "Performance::MemoryPressure",
-        )
-    )
-
-    patch4 = PhabricatorPatch("736446")
-
-    function_search_mozilla.get_function_by_line(
-        patch4.base_commit_hash,
-        "browser/base/content/test/webrtc/browser_devices_select_audio_output.js",
-        180,
-    )
