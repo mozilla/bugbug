@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 MOZILLA_CORP_GROUP_ID = 42
 EDITBUGS_GROUP_ID = 9
 EDITBUGS_CUTOFF_DAYS = 365
+TRUST_BEFORE_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
 REDACTED_TITLE = "[Unvalidated bug title redacted for security]"
 REDACTED_REPORTER = "- **Reporter**: [Redacted]"
@@ -137,6 +138,25 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
     return results
 
 
+def _is_before_trust_cutoff(timestamp_str: str) -> bool:
+    """Check if a timestamp is before the trust cutoff date (2022-01-01).
+
+    Comments before this date are automatically trusted as prompt injection
+    was not a concern at that time.
+
+    Args:
+        timestamp_str: ISO format timestamp string (e.g., "2021-12-31T23:59:59Z")
+
+    Returns:
+        True if timestamp is before 2022-01-01, False otherwise
+    """
+    try:
+        timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        return timestamp < TRUST_BEFORE_DATE
+    except (ValueError, AttributeError):
+        return False
+
+
 def _sanitize_timeline_items(
     comments: list[dict], history: list[dict], cache: dict[str, bool]
 ) -> tuple[list[dict], list[dict], int, int]:
@@ -176,8 +196,10 @@ def _sanitize_timeline_items(
     last_trusted_time = None
     for comment in reversed(comments):
         email = comment.get("author", "")
-        if cache.get(email, False):
-            last_trusted_time = comment["time"]
+        comment_time = comment["time"]
+        is_trusted = cache.get(email, False) or _is_before_trust_cutoff(comment_time)
+        if is_trusted:
+            last_trusted_time = comment_time
             break
 
     filtered_comments_count = 0
@@ -191,9 +213,10 @@ def _sanitize_timeline_items(
             continue
 
         email = comment.get("author", "")
-        is_trusted = cache.get(email, False)
+        comment_time = comment["time"]
+        is_trusted = cache.get(email, False) or _is_before_trust_cutoff(comment_time)
         should_filter = not is_trusted and (
-            last_trusted_time is None or comment["time"] > last_trusted_time
+            last_trusted_time is None or comment_time > last_trusted_time
         )
 
         if should_filter:
@@ -206,9 +229,10 @@ def _sanitize_timeline_items(
 
     for event in history:
         email = event.get("who", "")
-        is_trusted = cache.get(email, False)
+        event_time = event["when"]
+        is_trusted = cache.get(email, False) or _is_before_trust_cutoff(event_time)
         should_filter = not is_trusted and (
-            last_trusted_time is None or event["when"] > last_trusted_time
+            last_trusted_time is None or event_time > last_trusted_time
         )
 
         if should_filter:
@@ -494,6 +518,7 @@ class SanitizedBug(Bug):
     def _has_trusted_comment(self) -> bool:
         return any(
             self._is_trusted_cache.get(comment.get("author", ""), False)
+            or _is_before_trust_cutoff(comment.get("time", ""))
             for comment in self._metadata.get("comments", [])
         )
 
