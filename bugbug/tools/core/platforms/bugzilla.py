@@ -22,6 +22,30 @@ REDACTED_TITLE = "[Unvalidated bug title redacted for security]"
 REDACTED_REPORTER = "- **Reporter**: [Redacted]"
 REDACTED_ASSIGNEE = "- **Assignee**: [Redacted]"
 
+COLLAPSED_COMMENT_TAGS = {
+    "abuse-reviewed",
+    "abusive-reviewed",
+    "admin-reviewed",
+    "obsolete",
+    "spam",
+    "me-too",
+    "typo",
+    "metoo",
+    "advocacy",
+    "off-topic",
+    "offtopic",
+    "abuse",
+    "abusive",
+    "mozreview-request",
+    "about-support",
+    "duplicate",
+    "empty",
+    "collapsed",
+    "admin",
+    "hide",
+    "nsfw",
+}
+
 BugzillaBase.TOKEN = os.getenv("BUGZILLA_TOKEN")
 
 
@@ -163,7 +187,7 @@ def _sanitize_timeline_items(
 
     for comment in comments:
         tags = comment.get("tags", [])
-        if any(tag in ["spam", "off-topic"] for tag in tags):
+        if any(tag in COLLAPSED_COMMENT_TAGS for tag in tags):
             continue
 
         email = comment.get("author", "")
@@ -363,6 +387,24 @@ class Bug:
     def __init__(self, data: dict):
         self._metadata = data
 
+    def __getattr__(self, name: str):
+        if name.startswith("_"):
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+        value = self._metadata.get(name)
+        if value is None and name in (
+            "keywords",
+            "cc",
+            "blocks",
+            "depends_on",
+            "regressed_by",
+            "duplicates",
+            "see_also",
+        ):
+            return []
+        return value
+
     @staticmethod
     def get(bug_id: int) -> "Bug":
         bugs: list[dict] = []
@@ -382,88 +424,8 @@ class Bug:
         return SanitizedBug(bug_data)
 
     @property
-    def id(self) -> int:
-        return self._metadata.get("id", 0)
-
-    @property
     def summary(self) -> str:
         return self._metadata.get("summary", "No summary")
-
-    @property
-    def status(self) -> str:
-        return self._metadata.get("status", "Unknown")
-
-    @property
-    def severity(self) -> str:
-        return self._metadata.get("severity", "Unknown")
-
-    @property
-    def product(self) -> str:
-        return self._metadata.get("product", "Unknown")
-
-    @property
-    def component(self) -> str:
-        return self._metadata.get("component", "Unknown")
-
-    @property
-    def version(self) -> str:
-        return self._metadata.get("version", "Unknown")
-
-    @property
-    def platform(self) -> str:
-        return self._metadata.get("platform", "Unknown")
-
-    @property
-    def op_sys(self) -> str:
-        return self._metadata.get("op_sys", "Unknown")
-
-    @property
-    def creation_time(self) -> str:
-        return self._metadata.get("creation_time", "Unknown")
-
-    @property
-    def last_change_time(self) -> str:
-        return self._metadata.get("last_change_time", "Unknown")
-
-    @property
-    def url(self) -> str:
-        return self._metadata.get("url", "")
-
-    @property
-    def keywords(self) -> list[str]:
-        return self._metadata.get("keywords", [])
-
-    @property
-    def cc(self) -> list[str]:
-        return self._metadata.get("cc", [])
-
-    @property
-    def blocks(self) -> list[int]:
-        return self._metadata.get("blocks", [])
-
-    @property
-    def depends_on(self) -> list[int]:
-        return self._metadata.get("depends_on", [])
-
-    @property
-    def regressed_by(self) -> list[int]:
-        return self._metadata.get("regressed_by", [])
-
-    @property
-    def duplicates(self) -> list[int]:
-        return self._metadata.get("duplicates", [])
-
-    @property
-    def see_also(self) -> list[str]:
-        return self._metadata.get("see_also", [])
-
-    @property
-    def comments(self) -> list[dict]:
-        return self._metadata.get("comments", [])
-
-    @property
-    def history(self) -> list[dict]:
-        return self._metadata.get("history", [])
 
     @property
     def creator_detail(self) -> dict:
@@ -497,11 +459,11 @@ class Bug:
 
     @property
     def timeline_comments(self) -> list[dict]:
-        return self.comments
+        return self._metadata.get("comments", [])
 
     @property
     def timeline_history(self) -> list[dict]:
-        return self.history
+        return self._metadata.get("history", [])
 
     def to_md(self) -> str:
         """Return a markdown representation of the bug."""
