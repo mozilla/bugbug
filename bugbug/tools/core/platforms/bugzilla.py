@@ -195,6 +195,9 @@ def _sanitize_timeline_items(
     # Find last trusted comment time
     last_trusted_time = None
     for comment in reversed(comments):
+        tags = comment.get("tags", [])
+        if any(tag in COLLAPSED_COMMENT_TAGS for tag in tags):
+            continue
         email = comment.get("author", "")
         comment_time = comment["time"]
         is_trusted = cache.get(email, False) or _is_before_trust_cutoff(comment_time)
@@ -501,6 +504,9 @@ class SanitizedBug(Bug):
     def _is_trusted_cache(self) -> dict[str, bool]:
         all_emails = set()
         for comment in self._metadata.get("comments", []):
+            tags = comment.get("tags", [])
+            if any(tag in COLLAPSED_COMMENT_TAGS for tag in tags):
+                continue
             email = comment.get("author", "")
             if email:
                 all_emails.add(email)
@@ -516,11 +522,15 @@ class SanitizedBug(Bug):
 
     @cached_property
     def _has_trusted_comment(self) -> bool:
-        return any(
-            self._is_trusted_cache.get(comment.get("author", ""), False)
-            or _is_before_trust_cutoff(comment.get("time", ""))
-            for comment in self._metadata.get("comments", [])
-        )
+        for comment in self._metadata.get("comments", []):
+            tags = comment.get("tags", [])
+            if any(tag in COLLAPSED_COMMENT_TAGS for tag in tags):
+                continue
+            if self._is_trusted_cache.get(
+                comment.get("author", ""), False
+            ) or _is_before_trust_cutoff(comment.get("time", "")):
+                return True
+        return False
 
     @cached_property
     def _sanitized_timeline(self) -> tuple[list[dict], list[dict], int, int]:
