@@ -706,8 +706,8 @@ class TestToMdEndToEnd:
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_empty():
@@ -716,15 +716,15 @@ def test_get_users_info_batch_empty():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
     result = _get_users_info_batch(set())
     assert result == {}
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_phabricator_end_to_end_trusted_check():
@@ -736,7 +736,7 @@ def test_phabricator_end_to_end_trusted_check():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
 
     # Search for two service account that are in the right group
@@ -774,8 +774,8 @@ def test_phabricator_end_to_end_trusted_check():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_mixed_trust():
@@ -785,7 +785,7 @@ def test_get_users_info_batch_mixed_trust():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
 
     # Get PHIDs for known users -- two trusted, one not trusted
@@ -811,8 +811,8 @@ def test_get_users_info_batch_mixed_trust():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_moco_group_phid_is_valid():
@@ -822,7 +822,7 @@ def test_moco_group_phid_is_valid():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
 
     resp = phabricator.PHABRICATOR_API.request(
