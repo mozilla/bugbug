@@ -73,7 +73,7 @@ def find_mixed_lines_range(hunk: Hunk):
             if line.target_line_no is None:
                 if i == 0:
                     # If this is the first line of the hunk, it
-                    # means that we are adding lines is the first
+                    # means that we are adding lines at the first
                     # line in the file.
                     return default
                 return _hunk[i - 1].target_line_no
