@@ -22,6 +22,7 @@ from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.data_types import (
     AgentResponse,
+    CodeReviewToolResponse,
     GeneratedReviewComment,
 )
 from bugbug.tools.code_review.database import ReviewCommentsDB
@@ -45,7 +46,6 @@ from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
     format_patch_set,
 )
-from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
 from bugbug.tools.core.llms import get_tokenizer
 from bugbug.tools.core.platforms.base import Patch
@@ -54,6 +54,8 @@ logger = getLogger(__name__)
 
 
 class CodeReviewTool(GenerativeModelTool):
+    version = 2
+
     def __init__(
         self,
         llm: BaseChatModel,
@@ -92,6 +94,8 @@ class CodeReviewTool(GenerativeModelTool):
         if function_search:
             tools.append(create_find_function_definition_tool(function_search))
 
+        self._agent_model = llm
+
         self.agent = create_agent(
             llm,
             tools,
@@ -106,6 +110,18 @@ class CodeReviewTool(GenerativeModelTool):
         self.show_patch_example = show_patch_example
 
         self.verbose = verbose
+
+    @property
+    def _agent_model_name(self) -> str:
+        model = self._agent_model
+
+        if hasattr(model, "model_name"):
+            return model.model_name
+
+        if hasattr(model, "model"):
+            return model.model
+
+        return str(model)
 
     @classmethod
     def create(cls, **kwargs):
@@ -185,7 +201,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         return result["structured_response"].comments
 
-    async def run(self, patch: Patch) -> list[InlineComment] | None:
+    async def run(self, patch: Patch) -> CodeReviewToolResponse:
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
@@ -196,12 +212,20 @@ class CodeReviewTool(GenerativeModelTool):
         )
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
-            return []
 
         filtered_suggestions = self.suggestion_filterer.run(unfiltered_suggestions)
 
-        return list(
+        inline_comments = list(
             convert_generated_comments_to_inline(filtered_suggestions, patch.patch_set)
+        )
+
+        return CodeReviewToolResponse(
+            review_comments=inline_comments,
+            patch_summary=patch_summary,
+            details={
+                "model": self._agent_model_name,
+                "num_unfiltered_suggestions": len(unfiltered_suggestions),
+            },
         )
 
     def _get_generated_examples(self, patch, created_before: datetime | None = None):

@@ -28,6 +28,7 @@ class InlineComment:
     is_generated: bool | None = None
     explanation: str | None = None
     order: int | None = None
+    details: dict | None = None
 
 
 class ReviewRequest:
