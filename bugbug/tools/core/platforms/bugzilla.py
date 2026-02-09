@@ -338,11 +338,11 @@ def bug_to_markdown(bug: "Bug") -> str:
 
     md_lines.append("## People Involved")
 
-    if bug.reporter_display:
-        md_lines.append(bug.reporter_display)
+    if bug.reporter:
+        md_lines.append(bug.reporter)
 
-    if bug.assignee_display:
-        md_lines.append(bug.assignee_display)
+    if bug.assignee:
+        md_lines.append(bug.assignee)
 
     cc_count = len(bug.cc)
     if cc_count > 0:
@@ -434,7 +434,7 @@ class Bug:
         return self._metadata.get("assigned_to_detail", {})
 
     @property
-    def reporter_display(self) -> str | None:
+    def reporter(self) -> str | None:
         detail = self.creator_detail
         if not detail:
             return None
@@ -445,7 +445,7 @@ class Bug:
         return f"- **Reporter**: {name} ({email})"
 
     @property
-    def assignee_display(self) -> str | None:
+    def assignee(self) -> str | None:
         detail = self.assignee_detail
         if not detail:
             return None
@@ -518,20 +518,20 @@ class SanitizedBug(Bug):
         return super().summary
 
     @property
-    def reporter_display(self) -> str | None:
+    def reporter(self) -> str | None:
         if not self.creator_detail:
             return None
         if not self._has_trusted_comment:
             return REDACTED_REPORTER
-        return super().reporter_display
+        return super().reporter
 
     @property
-    def assignee_display(self) -> str | None:
+    def assignee(self) -> str | None:
         if not self.assignee_detail:
             return None
         if not self._has_trusted_comment:
             return REDACTED_ASSIGNEE
-        return super().assignee_display
+        return super().assignee
 
     @property
     def timeline_comments(self) -> list[dict]:

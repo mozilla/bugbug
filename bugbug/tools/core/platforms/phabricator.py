@@ -497,21 +497,21 @@ class PhabricatorPatch(Patch):
         return email
 
     @property
-    def author_display(self) -> str:
+    def author(self) -> str:
         return self._format_user_display(self.author_phid)
 
     @property
-    def diff_author_display(self) -> str | None:
+    def diff_author(self) -> str | None:
         if self.author_phid == self.diff_author_phid:
             return None
         return self._format_user_display(self.diff_author_phid)
 
     @property
-    def summary_display(self) -> str | None:
+    def summary(self) -> str | None:
         return self._revision_metadata["fields"].get("summary") or None
 
     @property
-    def test_plan_display(self) -> str | None:
+    def test_plan(self) -> str | None:
         return self._revision_metadata["fields"].get("testPlan") or None
 
     @property
@@ -561,7 +561,7 @@ class PhabricatorPatch(Patch):
         md_lines.append("## Basic Information")
         md_lines.append("")
         md_lines.append(f"- **URI**: {self.revision_uri}")
-        md_lines.append(f"- **Revision Author**: {self.author_display}")
+        md_lines.append(f"- **Revision Author**: {self.author}")
         md_lines.append(f"- **Status**: {self.revision_status}")
         md_lines.append(f"- **Created**: {self.date_created.strftime(date_format)}")
         md_lines.append(f"- **Modified**: {self.date_modified.strftime(date_format)}")
@@ -570,17 +570,17 @@ class PhabricatorPatch(Patch):
         md_lines.append("")
         md_lines.append("")
 
-        if self.summary_display:
+        if self.summary:
             md_lines.append("## Summary")
             md_lines.append("")
-            md_lines.append(self.summary_display)
+            md_lines.append(self.summary)
             md_lines.append("")
             md_lines.append("")
 
-        if self.test_plan_display:
+        if self.test_plan:
             md_lines.append("## Test Plan")
             md_lines.append("")
-            md_lines.append(self.test_plan_display)
+            md_lines.append(self.test_plan)
             md_lines.append("")
             md_lines.append("")
 
@@ -588,8 +588,8 @@ class PhabricatorPatch(Patch):
         diff = self._diff_metadata
         md_lines.append(f"- **Diff ID**: {diff['id']}")
         md_lines.append(f"- **Base Revision**: `{diff['baseRevision']}`")
-        if self.diff_author_display:
-            md_lines.append(f"- **Diff Author**: {self.diff_author_display}")
+        if self.diff_author:
+            md_lines.append(f"- **Diff Author**: {self.diff_author}")
         md_lines.append("")
         md_lines.append("")
 
@@ -652,9 +652,9 @@ class PhabricatorPatch(Patch):
             date_str = date.strftime(date_format)
 
             if comment.content_redacted:
-                comment_author_display = "[Untrusted User]"
+                comment_author = "[Untrusted User]"
             else:
-                comment_author_display = self._format_user_display(comment.author_phid)
+                comment_author = self._format_user_display(comment.author_phid)
 
             if isinstance(comment, PhabricatorInlineComment):
                 line_info = (
@@ -666,12 +666,12 @@ class PhabricatorPatch(Patch):
                 generated_status = " [AI-GENERATED]" if comment.is_generated else ""
 
                 md_lines.append(
-                    f"**{date_str}** - **Inline Comment** by {comment_author_display} on `{comment.filename}` "
+                    f"**{date_str}** - **Inline Comment** by {comment_author} on `{comment.filename}` "
                     f"at {line_info}{done_status}{generated_status}"
                 )
             else:
                 md_lines.append(
-                    f"**{date_str}** - **General Comment** by {comment_author_display}"
+                    f"**{date_str}** - **General Comment** by {comment_author}"
                 )
 
             final_comment_content = comment.content
@@ -714,21 +714,21 @@ class SanitizedPhabricatorPatch(PhabricatorPatch):
         return self._revision_metadata["fields"]["title"]
 
     @property
-    def author_display(self) -> str:
+    def author(self) -> str:
         if not self._has_trusted_comment:
             return REDACTED_AUTHOR
-        return super().author_display
+        return super().author
 
     @property
-    def diff_author_display(self) -> str | None:
+    def diff_author(self) -> str | None:
         if self.author_phid == self.diff_author_phid:
             return None
         if not self._has_trusted_comment:
             return REDACTED_AUTHOR
-        return super().diff_author_display
+        return super().diff_author
 
     @property
-    def summary_display(self) -> str | None:
+    def summary(self) -> str | None:
         summary = self._revision_metadata["fields"].get("summary")
         if not summary:
             return None
@@ -737,7 +737,7 @@ class SanitizedPhabricatorPatch(PhabricatorPatch):
         return summary
 
     @property
-    def test_plan_display(self) -> str | None:
+    def test_plan(self) -> str | None:
         test_plan = self._revision_metadata["fields"].get("testPlan")
         if not test_plan:
             return None
