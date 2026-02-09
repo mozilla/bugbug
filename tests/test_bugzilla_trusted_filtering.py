@@ -41,7 +41,7 @@ def test_token_set_on_bugzilla_base():
         assert Bugzilla.TOKEN == "test_token_12345"
         assert BugzillaUser.TOKEN == "test_token_12345"
 
-        # Mock trusted user response (with mozilla-corporation group)
+        # Mock trusted user response (with editbugs group)
         responses.add(
             responses.GET,
             "https://bugzilla.mozilla.org/rest/user",
@@ -50,9 +50,8 @@ def test_token_set_on_bugzilla_base():
                     {
                         "name": "trusted@mozilla.com",
                         "groups": [
-                            {"id": 42, "name": "mozilla-corporation"},
+                            {"id": 9, "name": "editbugs"},
                         ],
-                        "last_seen_date": "2024-12-10T00:00:00Z",
                     }
                 ],
                 "faults": [],
@@ -448,7 +447,7 @@ def test_trusted_comment_validates_before_untrusted_history_after():
 
 
 def test_extended_trusted_user_policy():
-    """Test extended trusted user policy (editbugs + recent activity)."""
+    """Test that editbugs users are trusted regardless of activity."""
     from unittest.mock import patch
 
     from bugbug.tools.core.platforms.bugzilla import _check_users_batch
@@ -456,14 +455,12 @@ def test_extended_trusted_user_policy():
     mock_users_response = {
         "users": [
             {
-                "name": "active_editbugs@example.com",
+                "name": "editbugs_user@example.com",
                 "groups": [{"id": 9, "name": "editbugs"}],
-                "last_seen_date": "2026-01-01T00:00:00Z",
             },
             {
-                "name": "inactive_editbugs@example.com",
-                "groups": [{"id": 9, "name": "editbugs"}],
-                "last_seen_date": "2020-01-01T00:00:00Z",
+                "name": "no_editbugs@example.com",
+                "groups": [],
             },
         ]
     }
@@ -487,11 +484,11 @@ def test_extended_trusted_user_policy():
         mock_instance.wait = mock_wait
 
         result = _check_users_batch(
-            ["active_editbugs@example.com", "inactive_editbugs@example.com"]
+            ["editbugs_user@example.com", "no_editbugs@example.com"]
         )
 
-        assert result["active_editbugs@example.com"] is True
-        assert result["inactive_editbugs@example.com"] is False
+        assert result["editbugs_user@example.com"] is True
+        assert result["no_editbugs@example.com"] is False
 
 
 def test_metadata_redacted_without_trusted_comment():
