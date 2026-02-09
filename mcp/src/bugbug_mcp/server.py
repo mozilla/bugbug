@@ -15,7 +15,7 @@ from pydantic import Field
 from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
-from bugbug.tools.core.platforms.bugzilla import Bug
+from bugbug.tools.core.platforms.bugzilla import SanitizedBug
 from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 from bugbug.utils import get_secret
 
@@ -101,13 +101,13 @@ def find_function_definition(
 )
 def handle_bug_view_resource(bug_id: int) -> str:
     """Retrieve a bug from Bugzilla alongside its change history and comments."""
-    return Bug.get(bug_id).to_md()
+    return SanitizedBug.get(bug_id).to_md()
 
 
 @mcp.tool()
 def get_bugzilla_bug(bug_id: int) -> str:
     """Retrieve a bug from Bugzilla alongside its change history and comments."""
-    return Bug.get(bug_id).to_md()
+    return SanitizedBug.get(bug_id).to_md()
 
 
 @mcp.resource(

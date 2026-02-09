@@ -403,8 +403,8 @@ class Bug:
             return []
         return value
 
-    @staticmethod
-    def get(bug_id: int) -> "Bug":
+    @classmethod
+    def get(cls, bug_id: int) -> "Bug":
         bugs: list[dict] = []
         Bugzilla(
             bug_id,
@@ -419,7 +419,7 @@ class Bug:
         bug_data = bugs[0]
         assert bug_data["id"] == bug_id
 
-        return SanitizedBug(bug_data)
+        return cls(bug_data)
 
     @property
     def summary(self) -> str:
