@@ -57,12 +57,6 @@ def get_phabricator_client(
     # This is awkward since PhabricatorAPI does not accept user agent directly
     set_default_value("User-Agent", "name", user_agent)
 
-    if not user_agent:
-        user_agent = get_user_agent()
-
-    # This is awkward since PhabricatorAPI does not accept user agent directly
-    set_default_value("User-Agent", "name", user_agent)
-
     return PhabricatorAPI(api_key, url)
 
 
