@@ -562,7 +562,6 @@ class PhabricatorPatch(Patch):
         md_lines.append("")
         md_lines.append(f"- **URI**: {self.revision_uri}")
         md_lines.append(f"- **Revision Author**: {self.author_display}")
-        md_lines.append(f"- **Title**: {self.patch_title}")
         md_lines.append(f"- **Status**: {self.revision_status}")
         md_lines.append(f"- **Created**: {self.date_created.strftime(date_format)}")
         md_lines.append(f"- **Modified**: {self.date_modified.strftime(date_format)}")
