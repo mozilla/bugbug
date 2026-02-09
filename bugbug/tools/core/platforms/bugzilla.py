@@ -14,7 +14,6 @@ from libmozdata.bugzilla import Bugzilla, BugzillaBase
 
 logger = logging.getLogger(__name__)
 
-MOZILLA_CORP_GROUP_ID = 42
 EDITBUGS_GROUP_ID = 9
 TRUST_BEFORE_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
@@ -56,9 +55,8 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
         emails: List of email addresses to check
 
     Returns:
-        Dictionary mapping email to trusted status based on:
-        - Mozilla Corporation group membership, OR
-        - editbugs group membership
+        Dictionary mapping email to trusted status based on editbugs group membership.
+        All Mozilla Corporation members are inherently in editbugs group.
 
     Raises:
         ValueError: If Bugzilla token is not available
@@ -87,14 +85,8 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
         groups = user.get("groups", [])
         group_ids = {g.get("id") for g in groups}
 
-        # Check if user is in mozilla-corporation group
-        is_moco = MOZILLA_CORP_GROUP_ID in group_ids
-
-        # Check if user has editbugs
-        has_editbugs = EDITBUGS_GROUP_ID in group_ids
-
-        # Trusted if: MOCO employee OR has editbugs
-        is_trusted = is_moco or has_editbugs
+        # Trusted if user has editbugs (all MOCO members are in editbugs)
+        is_trusted = EDITBUGS_GROUP_ID in group_ids
         data[email] = is_trusted
 
     def fault_user_handler(user, data):
