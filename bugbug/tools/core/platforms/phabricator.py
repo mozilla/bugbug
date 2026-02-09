@@ -593,7 +593,8 @@ class PhabricatorPatch(Patch):
         md_lines.append("")
         md_lines.append("")
 
-        if len(self.stack_graph) > 1:
+        stack_graph = self.stack_graph
+        if len(stack_graph) > 1:
             md_lines.append("## Stack Information")
             md_lines.append("")
             md_lines.append("**Dependency Graph**:")
@@ -603,7 +604,7 @@ class PhabricatorPatch(Patch):
 
             current_phid = self._revision_metadata["phid"]
             revision_ids = {}
-            for phid in self.stack_graph.keys():
+            for phid in stack_graph.keys():
                 if phid == current_phid:
                     revision_ids[phid] = self.revision_id
                 else:
@@ -611,7 +612,7 @@ class PhabricatorPatch(Patch):
                         revision_phid=phid
                     ).revision_id
 
-            for phid, dependencies in self.stack_graph.items():
+            for phid, dependencies in stack_graph.items():
                 from_id = f"D{revision_ids[phid]}"
                 stack_title = self.get_stack_patch_title(phid)
 
