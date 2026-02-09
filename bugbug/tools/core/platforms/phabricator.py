@@ -766,7 +766,7 @@ class PhabricatorReviewData(ReviewData):
         reraise=True,
     )
     def get_patch_by_id(self, patch_id: str | int) -> Patch:
-        return SanitizedPhabricatorPatch(patch_id)
+        return PhabricatorPatch(patch_id)
 
     def get_all_inline_comments(
         self, comment_filter
