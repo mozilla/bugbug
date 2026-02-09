@@ -1,7 +1,7 @@
 amqp==5.3.1
 async-lru==2.1.0
 beautifulsoup4==4.14.3
-boto3==1.42.32
+boto3==1.42.44
 httpx==0.28.1
 imbalanced-learn==0.14.1
 langchain==1.2.6
