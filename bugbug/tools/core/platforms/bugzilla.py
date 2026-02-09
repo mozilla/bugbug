@@ -7,7 +7,7 @@
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import cached_property
 
 from libmozdata.bugzilla import Bugzilla, BugzillaBase
@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 MOZILLA_CORP_GROUP_ID = 42
 EDITBUGS_GROUP_ID = 9
-EDITBUGS_CUTOFF_DAYS = 365
 TRUST_BEFORE_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
 REDACTED_TITLE = "[Unvalidated bug title redacted for security]"
@@ -59,7 +58,7 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
     Returns:
         Dictionary mapping email to trusted status based on:
         - Mozilla Corporation group membership, OR
-        - editbugs group membership AND activity within last year
+        - editbugs group membership
 
     Raises:
         ValueError: If Bugzilla token is not available
@@ -91,31 +90,11 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
         # Check if user is in mozilla-corporation group
         is_moco = MOZILLA_CORP_GROUP_ID in group_ids
 
-        # Check if user has editbugs and has been seen recently
+        # Check if user has editbugs
         has_editbugs = EDITBUGS_GROUP_ID in group_ids
-        last_seen_date = user.get("last_seen_date")
-        is_recently_active = False
 
-        if last_seen_date:
-            try:
-                last_seen = datetime.fromisoformat(
-                    last_seen_date.replace("Z", "+00:00")
-                )
-                one_year_ago = datetime.now(timezone.utc) - timedelta(
-                    days=EDITBUGS_CUTOFF_DAYS
-                )
-                is_recently_active = last_seen > one_year_ago
-
-                if has_editbugs and not is_recently_active:
-                    days_since_seen = (datetime.now(timezone.utc) - last_seen).days
-                    logger.warning(
-                        f"User {email} has editbugs but hasn't been seen in {days_since_seen} days"
-                    )
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse last_seen_date for {email}: {e}")
-
-        # Trusted if: MOCO employee OR (has editbugs AND active within last year)
-        is_trusted = is_moco or (has_editbugs and is_recently_active)
+        # Trusted if: MOCO employee OR has editbugs
+        is_trusted = is_moco or has_editbugs
         data[email] = is_trusted
 
     def fault_user_handler(user, data):
@@ -125,7 +104,7 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
     user_data: dict[str, bool] = {}
     BugzillaUser(
         user_names=emails,
-        include_fields=["name", "groups", "last_seen_date"],
+        include_fields=["name", "groups"],
         user_handler=user_handler,
         fault_user_handler=fault_user_handler,
         user_data=user_data,
