@@ -16,7 +16,10 @@ from bugbug import phabricator, utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
-from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
+from bugbug.tools.core.platforms.phabricator import (
+    PhabricatorPatch,
+    SanitizedPhabricatorPatch,
+)
 from bugbug.utils import get_secret
 
 os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
@@ -117,13 +120,13 @@ def get_bugzilla_bug(bug_id: int) -> str:
 )
 def handle_revision_view_resource(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return PhabricatorPatch(revision_id=revision_id).to_md()
+    return SanitizedPhabricatorPatch(revision_id=revision_id).to_md()
 
 
 @mcp.tool()
 def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return PhabricatorPatch(revision_id=revision_id).to_md()
+    return SanitizedPhabricatorPatch(revision_id=revision_id).to_md()
 
 
 llms_txt = FileResource(
