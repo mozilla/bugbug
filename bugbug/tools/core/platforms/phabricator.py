@@ -266,9 +266,21 @@ class PhabricatorPatch(Patch):
         self._revision_phid = revision_phid
         self._revision_id = revision_id
 
+    @classmethod
+    @cache
+    def _base_url(cls) -> str:
+        api_url = os.environ.get(
+            "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
+        )
+
+        if not api_url.endswith("/api/"):
+            raise ValueError("PHABRICATOR_URL must end with /api/")
+
+        return api_url.rstrip("/api/")
+
     @property
     def patch_url(self) -> str:
-        return f"https://phabricator.services.mozilla.com/D{self.revision_id}"
+        return f"{self._base_url()}/D{self.revision_id}"
 
     @property
     def diff_id(self) -> int:
@@ -309,7 +321,7 @@ class PhabricatorPatch(Patch):
         view = "old" if is_before_patch else "new"
         client = get_http_client()
         r = await client.get(
-            f"https://phabricator.services.mozilla.com/differential/changeset/?view={view}&ref={changeset_id}",
+            f"{self._base_url()}/differential/changeset/?view={view}&ref={changeset_id}",
         )
         r.raise_for_status()
 
