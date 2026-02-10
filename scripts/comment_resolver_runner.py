@@ -1,12 +1,14 @@
 import argparse
 import sys
 
+from langchain.chat_models import init_chat_model
+
 from bugbug.tools.comment_resolution.agent import CodeGeneratorTool
-from bugbug.tools.core.llms import create_openai_llm
+from bugbug.tools.core.llms import DEFAULT_OPENAI_MODEL
 
 
 def run(args) -> None:
-    llm = create_openai_llm()
+    llm = init_chat_model(DEFAULT_OPENAI_MODEL)
     codegen = CodeGeneratorTool(
         client=None,
         model="gpt-4",
