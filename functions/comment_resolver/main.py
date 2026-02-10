@@ -2,9 +2,10 @@ import logging
 
 import flask
 import functions_framework
+from langchain.chat_models import init_chat_model
 
 from bugbug.tools.comment_resolver import CodeGeneratorTool
-from bugbug.tools.core.llms import create_openai_llm
+from bugbug.tools.core.llms import DEFAULT_OPENAI_MODEL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def handle_code_generation(request: flask.Request):
         return "Missing revisionID", 400
 
     try:
-        llm = create_openai_llm()
+        llm = init_chat_model(DEFAULT_OPENAI_MODEL)
         codegen = CodeGeneratorTool(
             client=None,
             model="gpt-4",

@@ -13,7 +13,7 @@ from typing import Optional
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
-from langchain.chat_models import BaseChatModel
+from langchain.chat_models import BaseChatModel, init_chat_model
 from langchain.messages import HumanMessage
 from langgraph.errors import GraphRecursionError
 from unidiff import PatchSet
@@ -47,7 +47,7 @@ from bugbug.tools.code_review.utils import (
     format_patch_set,
 )
 from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
-from bugbug.tools.core.llms import get_tokenizer
+from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL, get_tokenizer
 from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
@@ -145,10 +145,8 @@ class CodeReviewTool(GenerativeModelTool):
             )
 
         if "llm" not in kwargs:
-            from bugbug.tools.core.llms import create_anthropic_llm
-
-            kwargs["llm"] = create_anthropic_llm(
-                model_name="claude-opus-4-5-20251101",
+            kwargs["llm"] = init_chat_model(
+                DEFAULT_ANTHROPIC_MODEL,
                 max_tokens=40_000,
                 temperature=None,
                 thinking={"type": "enabled", "budget_tokens": 10_000},

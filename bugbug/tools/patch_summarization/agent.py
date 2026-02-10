@@ -1,9 +1,10 @@
 from langchain.agents import create_agent
-from langchain.chat_models import BaseChatModel
+from langchain.chat_models import BaseChatModel, init_chat_model
 from langchain.messages import HumanMessage
 
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.utils import format_patch_set
+from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.patch_summarization.prompts import PROMPT_TEMPLATE_SUMMARIZATION
 
@@ -22,9 +23,7 @@ class PatchSummarizationTool(GenerativeModelTool):
         component will be created and used.
         """
         if "llm" not in kwargs:
-            from bugbug.tools.core.llms import create_anthropic_llm
-
-            kwargs["llm"] = create_anthropic_llm()
+            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL)
 
         return cls(**kwargs)
 

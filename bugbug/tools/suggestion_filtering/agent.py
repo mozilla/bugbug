@@ -9,13 +9,14 @@ from typing import Iterable, Optional
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
-from langchain.chat_models import BaseChatModel
+from langchain.chat_models import BaseChatModel, init_chat_model
 from langchain.messages import HumanMessage
 from pydantic import BaseModel, Field
 
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.agent import GeneratedReviewComment
 from bugbug.tools.code_review.database import SuggestionsFeedbackDB
+from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL
 from bugbug.tools.suggestion_filtering.prompts import (
     DEFAULT_REJECTED_EXAMPLES,
     PROMPT_TEMPLATE_FILTERING_ANALYSIS,
@@ -149,8 +150,6 @@ class SuggestionFilteringTool(GenerativeModelTool):
             )
 
         if "llm" not in kwargs:
-            from bugbug.tools.core.llms import create_anthropic_llm
-
-            kwargs["llm"] = create_anthropic_llm()
+            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL)
 
         return cls(**kwargs)

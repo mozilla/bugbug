@@ -13,6 +13,10 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
+DEFAULT_OPENAI_MODEL = "gpt-5-2025-08-07"
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929"
+
+
 def create_human_llm():
     from langchain_community.llms import HumanInputLLM
 
