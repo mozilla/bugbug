@@ -456,6 +456,10 @@ class PhabricatorPatch(Patch):
         return int(self._revision_metadata["fields"]["bugzilla.bug-id"])
 
     @property
+    def has_bug(self) -> bool:
+        return bool(self._revision_metadata["fields"].get("bugzilla.bug-id"))
+
+    @property
     def bug_title(self) -> str:
         return self.bug.summary
 

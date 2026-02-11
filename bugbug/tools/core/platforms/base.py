@@ -43,6 +43,12 @@ class Patch(ABC):
 
     @property
     @abstractmethod
+    def has_bug(self) -> bool:
+        """Return whether this patch is associated with a bug."""
+        ...
+
+    @property
+    @abstractmethod
     def patch_title(self) -> str:
         """Return the title of the patch."""
         ...

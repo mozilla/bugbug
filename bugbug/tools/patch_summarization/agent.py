@@ -35,7 +35,7 @@ class PatchSummarizationTool(GenerativeModelTool):
                         PROMPT_TEMPLATE_SUMMARIZATION.format(
                             target_software=self.target_software,
                             patch=format_patch_set(patch.patch_set),
-                            bug_title=patch.bug_title,
+                            bug_title=patch.bug_title if patch.has_bug else "N/A",
                             patch_title=patch.patch_title,
                             patch_description=patch.patch_description,
                         )
