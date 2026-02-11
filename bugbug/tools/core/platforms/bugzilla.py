@@ -78,8 +78,14 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
         )
 
     def user_handler(user, data):
+        # In Bugzilla API, "name" is the user's login (email address)
         email = user.get("name", "").lower()
         if not email:
+            return
+
+        # Service accounts (*.tld) are not trusted even with editbugs
+        if email.endswith(".tld"):
+            data[email] = False
             return
 
         groups = user.get("groups", [])

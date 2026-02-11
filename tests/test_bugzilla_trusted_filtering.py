@@ -793,3 +793,54 @@ def test_collapsed_tags_filtered():
         # Only the normal comment should be in sanitized output
         assert len(sanitized) == 1
         assert sanitized[0]["text"] != f"Comment with {tag} tag"
+
+
+def test_service_accounts_not_trusted():
+    """Test that service accounts (*.tld) are not trusted even with editbugs."""
+    from unittest.mock import patch
+
+    from bugbug.tools.core.platforms.bugzilla import _check_users_batch
+
+    mock_users_response = {
+        "users": [
+            {
+                "name": "serviceaccount.tld",
+                "groups": [{"id": 9, "name": "editbugs"}],
+            },
+            {
+                "name": "real_user@mozilla.com",
+                "groups": [{"id": 9, "name": "editbugs"}],
+            },
+            {
+                "name": "another.service.tld",
+                "groups": [{"id": 9, "name": "editbugs"}],
+            },
+        ]
+    }
+
+    with (
+        patch("libmozdata.bugzilla.BugzillaBase.TOKEN", "test_token"),
+        patch("libmozdata.bugzilla.BugzillaUser") as mock_user_class,
+    ):
+        mock_instance = mock_user_class.return_value
+
+        def mock_wait():
+            call_kwargs = mock_user_class.call_args[1]
+            user_handler = call_kwargs.get("user_handler")
+            user_data = call_kwargs.get("user_data", {})
+
+            for user in mock_users_response["users"]:
+                user_handler(user, user_data)
+            return mock_instance
+
+        mock_instance.wait = mock_wait
+
+        result = _check_users_batch(
+            ["serviceaccount.tld", "real_user@mozilla.com", "another.service.tld"]
+        )
+
+        # Service accounts should not be trusted even with editbugs
+        assert result["serviceaccount.tld"] is False
+        assert result["another.service.tld"] is False
+        # Real users with editbugs should be trusted
+        assert result["real_user@mozilla.com"] is True
