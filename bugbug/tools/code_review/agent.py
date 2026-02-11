@@ -153,12 +153,12 @@ class CodeReviewTool(GenerativeModelTool):
             )
 
         if "patch_summarizer" not in kwargs:
-            from bugbug.tools.patch_summarization.agent import PatchSummarizationTool
+            from bugbug.tools.patch_summarization import PatchSummarizationTool
 
             kwargs["patch_summarizer"] = PatchSummarizationTool.create()
 
         if "suggestion_filterer" not in kwargs:
-            from bugbug.tools.suggestion_filtering.agent import SuggestionFilteringTool
+            from bugbug.tools.suggestion_filtering import SuggestionFilteringTool
 
             kwargs["suggestion_filterer"] = SuggestionFilteringTool.create()
 
