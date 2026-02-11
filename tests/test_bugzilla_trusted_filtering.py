@@ -674,9 +674,9 @@ def test_admin_tagged_comments_completely_disregarded():
         assert not bug._has_trusted_comment
 
         # Admin comment should not be in timeline
-        timeline_comments = bug.timeline_comments
-        assert len(timeline_comments) == 2
-        assert all("Admin comment" not in c["text"] for c in timeline_comments)
+        comments = bug.comments
+        assert len(comments) == 2
+        assert all("Admin comment" not in c["text"] for c in comments)
 
         # Admin comment author should not be in trust cache (wasn't even checked)
         assert "admin@mozilla.com" not in bug._is_trusted_cache
@@ -727,7 +727,7 @@ def test_pre_2022_comments_trusted():
         assert bug._has_trusted_comment
 
         # Pre-2022 comment shown as-is, post-2022 untrusted filtered
-        timeline = bug.timeline_comments
+        timeline = bug.comments
         assert timeline[0]["text"] == "Pre-2022 comment"
         assert (
             "[Content from untrusted user removed for security]" in timeline[1]["text"]

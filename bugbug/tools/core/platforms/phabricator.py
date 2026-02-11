@@ -515,7 +515,7 @@ class PhabricatorPatch(Patch):
         return self._revision_metadata["fields"].get("testPlan") or None
 
     @property
-    def timeline_comments(self) -> list:
+    def comments(self) -> list:
         return sorted(self._all_comments, key=lambda c: c.date_created)
 
     def get_stack_patch_title(self, phid: str) -> str:
@@ -647,7 +647,7 @@ class PhabricatorPatch(Patch):
         md_lines.append("## Comments Timeline")
         md_lines.append("")
 
-        for comment in self.timeline_comments:
+        for comment in self.comments:
             date = datetime.fromtimestamp(comment.date_created)
             date_str = date.strftime(date_format)
 
@@ -746,7 +746,7 @@ class SanitizedPhabricatorPatch(PhabricatorPatch):
         return test_plan
 
     @cached_property
-    def timeline_comments(self) -> list:
+    def comments(self) -> list:
         sorted_comments = sorted(self._all_comments, key=lambda c: c.date_created)
         sanitized, _ = _sanitize_comments(sorted_comments, self._users_info)
         return sanitized

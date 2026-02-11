@@ -370,7 +370,7 @@ def bug_to_markdown(bug: "Bug") -> str:
             md_lines.append(f"- {rel}")
         md_lines.append("")
 
-    timeline = create_bug_timeline(bug.timeline_comments, bug.timeline_history)
+    timeline = create_bug_timeline(bug.comments, bug.history)
     if timeline:
         md_lines.append("## Bug Timeline")
         md_lines.append("")
@@ -466,11 +466,11 @@ class Bug:
         return detail.get("email", "No email")
 
     @property
-    def timeline_comments(self) -> list[dict]:
+    def comments(self) -> list[dict]:
         return self._metadata.get("comments", [])
 
     @property
-    def timeline_history(self) -> list[dict]:
+    def history(self) -> list[dict]:
         return self._metadata.get("history", [])
 
     def to_md(self) -> str:
@@ -560,9 +560,9 @@ class SanitizedBug(Bug):
         return super().assignee_email
 
     @property
-    def timeline_comments(self) -> list[dict]:
+    def comments(self) -> list[dict]:
         return self._sanitized_timeline[0]
 
     @property
-    def timeline_history(self) -> list[dict]:
+    def history(self) -> list[dict]:
         return self._sanitized_timeline[1]
