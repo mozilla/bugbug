@@ -338,11 +338,11 @@ def bug_to_markdown(bug: "Bug") -> str:
 
     md_lines.append("## People Involved")
 
-    if bug.reporter:
-        md_lines.append(bug.reporter)
+    if bug.reporter_name:
+        md_lines.append(f"- **Reporter**: {bug.reporter_name} ({bug.reporter_email})")
 
-    if bug.assignee:
-        md_lines.append(bug.assignee)
+    if bug.assignee_name:
+        md_lines.append(f"- **Assignee**: {bug.assignee_name} ({bug.assignee_email})")
 
     cc_count = len(bug.cc)
     if cc_count > 0:
@@ -434,26 +434,36 @@ class Bug:
         return self._metadata.get("assigned_to_detail", {})
 
     @property
-    def reporter(self) -> str | None:
+    def reporter_name(self) -> str | None:
         detail = self.creator_detail
         if not detail:
             return None
-        name = detail.get(
+        return detail.get(
             "real_name", detail.get("nick", detail.get("email", "Unknown"))
         )
-        email = detail.get("email", "No email")
-        return f"- **Reporter**: {name} ({email})"
 
     @property
-    def assignee(self) -> str | None:
+    def reporter_email(self) -> str | None:
+        detail = self.creator_detail
+        if not detail:
+            return None
+        return detail.get("email", "No email")
+
+    @property
+    def assignee_name(self) -> str | None:
         detail = self.assignee_detail
         if not detail:
             return None
-        name = detail.get(
+        return detail.get(
             "real_name", detail.get("nick", detail.get("email", "Unknown"))
         )
-        email = detail.get("email", "No email")
-        return f"- **Assignee**: {name} ({email})"
+
+    @property
+    def assignee_email(self) -> str | None:
+        detail = self.assignee_detail
+        if not detail:
+            return None
+        return detail.get("email", "No email")
 
     @property
     def timeline_comments(self) -> list[dict]:
@@ -518,20 +528,36 @@ class SanitizedBug(Bug):
         return super().summary
 
     @property
-    def reporter(self) -> str | None:
+    def reporter_name(self) -> str | None:
         if not self.creator_detail:
             return None
         if not self._has_trusted_comment:
             return REDACTED_REPORTER
-        return super().reporter
+        return super().reporter_name
 
     @property
-    def assignee(self) -> str | None:
+    def reporter_email(self) -> str | None:
+        if not self.creator_detail:
+            return None
+        if not self._has_trusted_comment:
+            return "No email"
+        return super().reporter_email
+
+    @property
+    def assignee_name(self) -> str | None:
         if not self.assignee_detail:
             return None
         if not self._has_trusted_comment:
             return REDACTED_ASSIGNEE
-        return super().assignee
+        return super().assignee_name
+
+    @property
+    def assignee_email(self) -> str | None:
+        if not self.assignee_detail:
+            return None
+        if not self._has_trusted_comment:
+            return "No email"
+        return super().assignee_email
 
     @property
     def timeline_comments(self) -> list[dict]:
