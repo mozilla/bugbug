@@ -196,6 +196,7 @@ def _sanitize_timeline_items(
         if should_filter:
             filtered_comments_count += 1
             comment_copy = comment.copy()
+            comment_copy["author"] = "[Redacted]"
             comment_copy["text"] = "[Content from untrusted user removed for security]"
             sanitized_comments.append(comment_copy)
         else:
@@ -212,6 +213,7 @@ def _sanitize_timeline_items(
         if should_filter:
             filtered_history_count += 1
             event_copy = event.copy()
+            event_copy["who"] = "[Redacted]"
             sanitized_changes = []
             for change in event_copy["changes"]:
                 sanitized_changes.append(

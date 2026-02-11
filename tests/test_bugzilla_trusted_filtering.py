@@ -126,8 +126,11 @@ def test_untrusted_before_last_trusted():
 
     assert len(sanitized) == 3
     assert sanitized[0]["text"] == "Untrusted comment"
+    assert sanitized[0]["author"] == "untrusted@example.com"  # Before trusted, shown
     assert sanitized[1]["text"] == "Trusted comment"
+    assert sanitized[1]["author"] == "trusted@mozilla.com"
     assert "[Content from untrusted user removed for security]" in sanitized[2]["text"]
+    assert sanitized[2]["author"] == "[Redacted]"  # After trusted, filtered
     assert filtered_count == 1
 
 
@@ -160,7 +163,9 @@ def test_no_trusted_users():
 
     assert len(sanitized) == 2
     assert "[Content from untrusted user removed for security]" in sanitized[0]["text"]
+    assert sanitized[0]["author"] == "[Redacted]"
     assert "[Content from untrusted user removed for security]" in sanitized[1]["text"]
+    assert sanitized[1]["author"] == "[Redacted]"
     assert filtered_count == 2
 
 
@@ -182,6 +187,7 @@ def test_fail_closed_scenarios():
 
     assert len(sanitized) == 1
     assert "[Content from untrusted user removed for security]" in sanitized[0]["text"]
+    assert sanitized[0]["author"] == "[Redacted]"
     assert filtered_count == 1
 
 
@@ -227,9 +233,13 @@ def test_timeline_variation_alternating():
 
     assert len(sanitized) == 4
     assert sanitized[0]["text"] == "Trusted"
+    assert sanitized[0]["author"] == "trusted@mozilla.com"
     assert sanitized[1]["text"] == "Untrusted"
+    assert sanitized[1]["author"] == "untrusted@example.com"
     assert sanitized[2]["text"] == "Trusted again"
+    assert sanitized[2]["author"] == "trusted@mozilla.com"
     assert "[Content from untrusted user removed for security]" in sanitized[3]["text"]
+    assert sanitized[3]["author"] == "[Redacted]"
     assert filtered_count == 1
 
 
@@ -259,7 +269,9 @@ def test_timeline_variation_trusted_first():
 
     assert len(sanitized) == 2
     assert sanitized[0]["text"] == "Trusted"
+    assert sanitized[0]["author"] == "trusted@mozilla.com"
     assert "[Content from untrusted user removed for security]" in sanitized[1]["text"]
+    assert sanitized[1]["author"] == "[Redacted]"
     assert filtered_count == 1
 
 
@@ -289,7 +301,9 @@ def test_timeline_variation_trusted_last():
 
     assert len(sanitized) == 2
     assert sanitized[0]["text"] == "Untrusted"
+    assert sanitized[0]["author"] == "untrusted@example.com"
     assert sanitized[1]["text"] == "Trusted"
+    assert sanitized[1]["author"] == "trusted@mozilla.com"
     assert filtered_count == 0
 
 
@@ -319,7 +333,9 @@ def test_timeline_variation_all_trusted():
 
     assert len(sanitized) == 2
     assert sanitized[0]["text"] == "Trusted 1"
+    assert sanitized[0]["author"] == "trusted1@mozilla.com"
     assert sanitized[1]["text"] == "Trusted 2"
+    assert sanitized[1]["author"] == "trusted2@mozilla.com"
     assert filtered_count == 0
 
 
@@ -365,9 +381,13 @@ def test_timeline_variation_multiple_trusted_positions():
 
     assert len(sanitized) == 4
     assert sanitized[0]["text"] == "Untrusted 1"
+    assert sanitized[0]["author"] == "untrusted@example.com"
     assert sanitized[1]["text"] == "Trusted 1"
+    assert sanitized[1]["author"] == "trusted@mozilla.com"
     assert sanitized[2]["text"] == "Untrusted 2"
+    assert sanitized[2]["author"] == "untrusted@example.com"
     assert sanitized[3]["text"] == "Trusted 2"
+    assert sanitized[3]["author"] == "trusted@mozilla.com"
     assert filtered_count == 0
 
 
@@ -402,7 +422,9 @@ def test_trusted_history_does_not_validate():
         "[Content from untrusted user removed for security]"
         in sanitized_comments[0]["text"]
     )
+    assert sanitized_comments[0]["author"] == "[Redacted]"
     assert filtered_comments == 1
+    assert sanitized_history[0]["who"] == "trusted@mozilla.com"
     assert filtered_history == 0
 
 
@@ -439,10 +461,13 @@ def test_trusted_comment_validates_before_untrusted_history_after():
     )
 
     assert sanitized_comments[0]["text"] == "Trusted comment"
+    assert sanitized_comments[0]["author"] == "trusted@mozilla.com"
     assert filtered_comments == 0
     assert len(sanitized_history) == 2
     assert sanitized_history[0]["changes"][0]["added"] == "P1"
+    assert sanitized_history[0]["who"] == "untrusted@example.com"
     assert sanitized_history[1]["changes"][0]["added"] == "[Filtered]"
+    assert sanitized_history[1]["who"] == "[Redacted]"
     assert filtered_history == 1
 
 
@@ -729,9 +754,11 @@ def test_pre_2022_comments_trusted():
         # Pre-2022 comment shown as-is, post-2022 untrusted filtered
         timeline = bug.comments
         assert timeline[0]["text"] == "Pre-2022 comment"
+        assert timeline[0]["author"] == "old_user@example.com"
         assert (
             "[Content from untrusted user removed for security]" in timeline[1]["text"]
         )
+        assert timeline[1]["author"] == "[Redacted]"
 
 
 def test_collapsed_tags_filtered():
