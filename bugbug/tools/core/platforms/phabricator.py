@@ -518,11 +518,6 @@ class PhabricatorPatch(Patch):
     def comments(self) -> list:
         return sorted(self._all_comments, key=lambda c: c.date_created)
 
-    def get_stack_patch_title(self, phid: str) -> str:
-        if phid == self._revision_metadata["phid"]:
-            return self.patch_title
-        return PhabricatorPatch(revision_phid=phid).patch_title
-
     def _get_transactions(self) -> list[dict]:
         phabricator = get_phabricator_client()
 
@@ -548,8 +543,6 @@ class PhabricatorPatch(Patch):
 
         Returns a well-structured markdown document that includes revision metadata,
         diff information, stack information, code changes, and comments.
-
-        Sanitization is handled by property overrides in SanitizedPhabricatorPatch.
         """
         date_format = "%Y-%m-%d %H:%M:%S"
         md_lines = []
@@ -603,27 +596,28 @@ class PhabricatorPatch(Patch):
             md_lines.append("graph TD")
 
             current_phid = self._revision_metadata["phid"]
-            revision_ids = {}
-            for phid in stack_graph.keys():
-                if phid == current_phid:
-                    revision_ids[phid] = self.revision_id
-                else:
-                    revision_ids[phid] = PhabricatorPatch(
-                        revision_phid=phid
-                    ).revision_id
+            patch_map = {
+                phid: (
+                    self
+                    if phid == current_phid
+                    else PhabricatorPatch(revision_phid=phid)
+                )
+                for phid in stack_graph.keys()
+            }
 
             for phid, dependencies in stack_graph.items():
-                from_id = f"D{revision_ids[phid]}"
-                stack_title = self.get_stack_patch_title(phid)
-
+                from_patch = patch_map[phid]
+                from_id = f"D{from_patch.revision_id}"
                 if phid == current_phid:
-                    md_lines.append(f"    {from_id}[{stack_title} - CURRENT]")
+                    md_lines.append(
+                        f"    {from_id}[{from_patch.patch_title} - CURRENT]"
+                    )
                     md_lines.append(f"    style {from_id} fill:#105823")
                 else:
-                    md_lines.append(f"    {from_id}[{stack_title}]")
+                    md_lines.append(f"    {from_id}[{from_patch.patch_title}]")
 
                 for dep_phid in dependencies:
-                    dep_id = f"D{revision_ids[dep_phid]}"
+                    dep_id = f"D{patch_map[dep_phid].revision_id}"
                     md_lines.append(f"    {from_id} --> {dep_id}")
 
             md_lines.append("```")
@@ -750,13 +744,6 @@ class SanitizedPhabricatorPatch(PhabricatorPatch):
         sorted_comments = sorted(self._all_comments, key=lambda c: c.date_created)
         sanitized, _ = _sanitize_comments(sorted_comments, self._users_info)
         return sanitized
-
-    def get_stack_patch_title(self, phid: str) -> str:
-        if not self._has_trusted_comment:
-            return REDACTED_TITLE
-        if phid == self._revision_metadata["phid"]:
-            return self.patch_title
-        return PhabricatorPatch(revision_phid=phid).patch_title
 
 
 class PhabricatorReviewData(ReviewData):
