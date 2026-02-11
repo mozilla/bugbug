@@ -46,10 +46,12 @@ def get_phabricator_client(
 
     # Fallback to old environment variable names for backward compatibility
     if not api_key:
-        api_key = os.getenv("PHABRICATOR_KEY") or os.getenv("BUGBUG_PHABRICATOR_TOKEN")
+        api_key = os.getenv("PHABRICATOR_API_KEY") or os.getenv(
+            "BUGBUG_PHABRICATOR_TOKEN"
+        )
 
     if not url:
-        url = os.getenv("PHABRICATOR_URL") or os.getenv("BUGBUG_PHABRICATOR_URL")
+        url = os.getenv("PHABRICATOR_API_URL") or os.getenv("BUGBUG_PHABRICATOR_URL")
 
     if not user_agent:
         user_agent = get_user_agent()
@@ -270,11 +272,11 @@ class PhabricatorPatch(Patch):
     @cache
     def _base_url(cls) -> str:
         api_url = os.environ.get(
-            "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
+            "PHABRICATOR_API_URL", "https://phabricator.services.mozilla.com/api/"
         )
 
         if not api_url.endswith("/api/"):
-            raise ValueError("PHABRICATOR_URL must end with /api/")
+            raise ValueError("PHABRICATOR_API_URL must end with /api/")
 
         return api_url.rstrip("/api/")
 
