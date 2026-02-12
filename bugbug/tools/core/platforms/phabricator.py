@@ -26,8 +26,12 @@ logger = getLogger(__name__)
 # Trusted users group PHID (currently defined as MOCO group members)
 MOCO_GROUP_PHID = "PHID-PROJ-a2zxxknk7jm5nw4rtjsl"  # bmo-mozilla-employee-confidential
 
-# Message used when redacting untrusted content
+# Messages used when redacting untrusted content
 UNTRUSTED_CONTENT_REDACTED = "[Content from untrusted user removed for security]"
+REDACTED_TITLE = "[Unvalidated revision title redacted for security]"
+REDACTED_AUTHOR = "[Redacted]"
+REDACTED_SUMMARY = "[Unvalidated summary redacted for security]"
+REDACTED_TEST_PLAN = "[Unvalidated test plan redacted for security]"
 
 
 @cache
@@ -453,6 +457,67 @@ class PhabricatorPatch(Patch):
     def revision_id(self) -> int:
         return self._revision_metadata["id"]
 
+    @property
+    def revision_uri(self) -> str:
+        return self._revision_metadata["fields"]["uri"]
+
+    @property
+    def revision_status(self) -> str:
+        return self._revision_metadata["fields"]["status"]["name"]
+
+    @property
+    def author_phid(self) -> str:
+        return self._revision_metadata["fields"]["authorPHID"]
+
+    @property
+    def diff_author_phid(self) -> str:
+        return self._diff_metadata["authorPHID"]
+
+    @property
+    def stack_graph(self) -> dict:
+        return self._revision_metadata["fields"].get("stackGraph", {})
+
+    @cached_property
+    def _all_comments(self) -> list:
+        return [c for c in self.get_comments() if c.content.strip()]
+
+    @cached_property
+    def _users_info(self) -> dict[str, dict]:
+        user_phids = {c.author_phid for c in self._all_comments} | {self.author_phid}
+        if self.author_phid != self.diff_author_phid:
+            user_phids.add(self.diff_author_phid)
+        return _get_users_info_batch(user_phids)
+
+    def _format_user_display(self, user_phid: str) -> str:
+        info = self._users_info.get(user_phid, {})
+        email = info.get("email", "Unknown")
+        real_name = info.get("real_name", "")
+        if real_name:
+            return f"{real_name} ({email})"
+        return email
+
+    @property
+    def author(self) -> str:
+        return self._format_user_display(self.author_phid)
+
+    @property
+    def diff_author(self) -> str | None:
+        if self.author_phid == self.diff_author_phid:
+            return None
+        return self._format_user_display(self.diff_author_phid)
+
+    @property
+    def summary(self) -> str | None:
+        return self._revision_metadata["fields"].get("summary") or None
+
+    @property
+    def test_plan(self) -> str | None:
+        return self._revision_metadata["fields"].get("testPlan") or None
+
+    @property
+    def comments(self) -> list:
+        return sorted(self._all_comments, key=lambda c: c.date_created)
+
     def _get_transactions(self) -> list[dict]:
         phabricator = get_phabricator_client()
 
@@ -482,37 +547,33 @@ class PhabricatorPatch(Patch):
         date_format = "%Y-%m-%d %H:%M:%S"
         md_lines = []
 
-        revision = self._revision_metadata
-        md_lines.append(f"# Revision D{revision['id']}: {revision['fields']['title']}")
+        md_lines.append(f"# Revision D{self.revision_id}: {self.patch_title}")
         md_lines.append("")
         md_lines.append("")
 
         md_lines.append("## Basic Information")
         md_lines.append("")
-        md_lines.append(f"- **URI**: {revision['fields']['uri']}")
-        md_lines.append(f"- **Revision Author**: {revision['fields']['authorPHID']}")
-        md_lines.append(f"- **Title**: {revision['fields']['title']}")
-        md_lines.append(f"- **Status**: {revision['fields']['status']['name']}")
+        md_lines.append(f"- **URI**: {self.revision_uri}")
+        md_lines.append(f"- **Revision Author**: {self.author}")
+        md_lines.append(f"- **Status**: {self.revision_status}")
         md_lines.append(f"- **Created**: {self.date_created.strftime(date_format)}")
         md_lines.append(f"- **Modified**: {self.date_modified.strftime(date_format)}")
-        bug_id = revision["fields"].get("bugzilla.bug-id") or "N/A"
+        bug_id = self._revision_metadata["fields"].get("bugzilla.bug-id") or "N/A"
         md_lines.append(f"- **Bugzilla Bug**: {bug_id}")
         md_lines.append("")
         md_lines.append("")
 
-        summary = revision["fields"].get("summary")
-        if summary:
+        if self.summary:
             md_lines.append("## Summary")
             md_lines.append("")
-            md_lines.append(summary)
+            md_lines.append(self.summary)
             md_lines.append("")
             md_lines.append("")
 
-        test_plan = revision["fields"].get("testPlan")
-        if test_plan:
+        if self.test_plan:
             md_lines.append("## Test Plan")
             md_lines.append("")
-            md_lines.append(test_plan)
+            md_lines.append(self.test_plan)
             md_lines.append("")
             md_lines.append("")
 
@@ -520,12 +581,12 @@ class PhabricatorPatch(Patch):
         diff = self._diff_metadata
         md_lines.append(f"- **Diff ID**: {diff['id']}")
         md_lines.append(f"- **Base Revision**: `{diff['baseRevision']}`")
-        if revision["fields"]["authorPHID"] != diff["authorPHID"]:
-            md_lines.append(f"- **Diff Author**: {diff['authorPHID']}")
+        if self.diff_author:
+            md_lines.append(f"- **Diff Author**: {self.diff_author}")
         md_lines.append("")
         md_lines.append("")
 
-        stack_graph = revision["fields"].get("stackGraph")
+        stack_graph = self.stack_graph
         if len(stack_graph) > 1:
             md_lines.append("## Stack Information")
             md_lines.append("")
@@ -534,12 +595,10 @@ class PhabricatorPatch(Patch):
             md_lines.append("```mermaid")
             md_lines.append("graph TD")
 
-            current_phid = revision["phid"]
+            current_phid = self._revision_metadata["phid"]
             patch_map = {
                 phid: (
-                    self
-                    if phid == current_phid
-                    else PhabricatorPatch(revision_phid=phid)
+                    self if phid == current_phid else self.__class__(revision_phid=phid)
                 )
                 for phid in stack_graph.keys()
             }
@@ -580,66 +639,38 @@ class PhabricatorPatch(Patch):
         md_lines.append("## Comments Timeline")
         md_lines.append("")
 
-        # Get all comments and sort by date
-        all_comments = sorted(
-            # Ignore empty comments
-            (comment for comment in self.get_comments() if comment.content.strip()),
-            key=lambda c: c.date_created,
-        )
-
-        author_phid = revision["fields"]["authorPHID"]
-        user_phids = {comment.author_phid for comment in all_comments} | {author_phid}
-
-        users_info = _get_users_info_batch(user_phids)
-
-        comments_to_display, filtered_count = _sanitize_comments(
-            all_comments, users_info
-        )
-
-        for comment in comments_to_display:
+        for comment in self.comments:
             date = datetime.fromtimestamp(comment.date_created)
             date_str = date.strftime(date_format)
 
-            author_info = users_info.get(comment.author_phid, {})
             if comment.content_redacted:
-                # After last trusted: redact author name too
-                author_display = "[Untrusted User]"
+                comment_author = "[Untrusted User]"
             else:
-                # Before/at last trusted: show real name for everyone
-                email = author_info.get("email", "Unknown User")
-                real_name = author_info.get("real_name")
-                if real_name:
-                    author_display = f"{real_name} ({email})"
-                else:
-                    author_display = email
+                comment_author = self._format_user_display(comment.author_phid)
 
             if isinstance(comment, PhabricatorInlineComment):
-                line_length = comment.line_length
-                end_line = comment.end_line
                 line_info = (
                     f"Line {comment.start_line}"
-                    if line_length == 1
-                    else f"Lines {comment.start_line}-{end_line}"
+                    if comment.line_length == 1
+                    else f"Lines {comment.start_line}-{comment.end_line}"
                 )
                 done_status = " [RESOLVED]" if comment.is_done else ""
                 generated_status = " [AI-GENERATED]" if comment.is_generated else ""
 
                 md_lines.append(
-                    f"**{date_str}** - **Inline Comment** by {author_display} on `{comment.filename}` "
+                    f"**{date_str}** - **Inline Comment** by {comment_author} on `{comment.filename}` "
                     f"at {line_info}{done_status}{generated_status}"
                 )
             else:
                 md_lines.append(
-                    f"**{date_str}** - **General Comment** by {author_display}"
+                    f"**{date_str}** - **General Comment** by {comment_author}"
                 )
 
             final_comment_content = comment.content
             divider_index = final_comment_content.find("---")
             if divider_index != -1:
-                # Remove footer notes that usually added by reviewbot
                 final_comment_content = final_comment_content[:divider_index].strip()
 
-            # Truncate very long comments to avoid overloading the LLM
             if len(final_comment_content) > 2000:
                 final_comment_content = (
                     final_comment_content[:2000] + "...\n\n*[Content truncated]*"
@@ -651,11 +682,66 @@ class PhabricatorPatch(Patch):
             md_lines.append("---")
             md_lines.append("")
 
-        if not all_comments:
+        if not self._all_comments:
             md_lines.append("*No comments*")
             md_lines.append("")
 
         return "\n".join(md_lines)
+
+
+class SanitizedPhabricatorPatch(PhabricatorPatch):
+    """A PhabricatorPatch with untrusted content redacted based on trust policy."""
+
+    @cached_property
+    def _has_trusted_comment(self) -> bool:
+        return any(
+            self._users_info.get(c.author_phid, {}).get("is_trusted", False)
+            for c in self._all_comments
+        )
+
+    @cached_property
+    def patch_title(self) -> str:
+        if not self._has_trusted_comment:
+            return REDACTED_TITLE
+        return self._revision_metadata["fields"]["title"]
+
+    @property
+    def author(self) -> str:
+        if not self._has_trusted_comment:
+            return REDACTED_AUTHOR
+        return super().author
+
+    @property
+    def diff_author(self) -> str | None:
+        if self.author_phid == self.diff_author_phid:
+            return None
+        if not self._has_trusted_comment:
+            return REDACTED_AUTHOR
+        return super().diff_author
+
+    @property
+    def summary(self) -> str | None:
+        summary = self._revision_metadata["fields"].get("summary")
+        if not summary:
+            return None
+        if not self._has_trusted_comment:
+            return REDACTED_SUMMARY
+        return summary
+
+    @property
+    def test_plan(self) -> str | None:
+        test_plan = self._revision_metadata["fields"].get("testPlan")
+        if not test_plan:
+            return None
+        if not self._has_trusted_comment:
+            return REDACTED_TEST_PLAN
+        return test_plan
+
+    @cached_property
+    def comments(self) -> list:
+        sorted_comments = sorted(self._all_comments, key=lambda c: c.date_created)
+        sanitized, _ = _sanitize_comments(sorted_comments, self._users_info)
+        return sanitized
 
 
 class PhabricatorReviewData(ReviewData):

@@ -11,7 +11,7 @@ from bugbug.tools.core.platforms.phabricator import (
     UNTRUSTED_CONTENT_REDACTED,
     PhabricatorGeneralComment,
     PhabricatorInlineComment,
-    PhabricatorPatch,
+    SanitizedPhabricatorPatch,
     _get_users_info_batch,
     _sanitize_comments,
 )
@@ -373,7 +373,7 @@ class TestToMdEndToEnd:
             "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
             return_value=mock_api,
         ):
-            patch_obj = PhabricatorPatch(diff_id=123456)
+            patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
             md_output = patch_obj.to_md()
 
         # Trusted content should be visible
@@ -442,12 +442,262 @@ class TestToMdEndToEnd:
             "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
             return_value=mock_api,
         ):
-            patch_obj = PhabricatorPatch(diff_id=123456)
+            patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
             md_output = patch_obj.to_md()
 
         assert "All trusted here" in md_output
         assert UNTRUSTED_CONTENT_REDACTED not in md_output
         assert "Phabricator Automation (phab-bot)" in md_output
+
+    def test_to_md_stack_titles_redacted_without_trusted(self):
+        """Test that stack dependency titles are redacted when no trusted user commented."""
+        from bugbug.tools.core.platforms.phabricator import REDACTED_TITLE
+
+        # Revision with a stack: current depends on parent
+        mock_revision_with_stack = {
+            "id": 999999,
+            "type": "DREV",
+            "phid": "PHID-DREV-current",
+            "fields": {
+                "title": "SENSITIVE Current Revision Title",
+                "uri": "https://phabricator.services.mozilla.com/D999999",
+                "authorPHID": UNTRUSTED_PHID,
+                "status": {"value": "needs-review", "name": "Needs Review"},
+                "diffPHID": "PHID-DIFF-testdiff",
+                "diffID": "123456",
+                "summary": "SENSITIVE summary content",
+                "testPlan": "",
+                "dateCreated": 1700000000,
+                "dateModified": 1700000100,
+                "bugzilla.bug-id": "1234567",
+                "stackGraph": {
+                    "PHID-DREV-current": ["PHID-DREV-parent"],
+                    "PHID-DREV-parent": [],
+                },
+            },
+            "attachments": {},
+        }
+
+        mock_parent_revision = {
+            "id": 999998,
+            "type": "DREV",
+            "phid": "PHID-DREV-parent",
+            "fields": {
+                "title": "SENSITIVE Parent Revision Title",
+                "uri": "https://phabricator.services.mozilla.com/D999998",
+                "authorPHID": UNTRUSTED_PHID,
+                "status": {"value": "needs-review", "name": "Needs Review"},
+                "diffPHID": "PHID-DIFF-parentdiff",
+                "diffID": "123455",
+                "summary": "",
+                "testPlan": "",
+                "dateCreated": 1699999000,
+                "dateModified": 1699999100,
+                "bugzilla.bug-id": "1234567",
+                "stackGraph": {
+                    "PHID-DREV-current": ["PHID-DREV-parent"],
+                    "PHID-DREV-parent": [],
+                },
+            },
+            "attachments": {},
+        }
+
+        # Only untrusted comments - no trusted validation
+        mock_transactions_untrusted_only = {
+            "data": [
+                {
+                    "id": 1,
+                    "type": "comment",
+                    "authorPHID": UNTRUSTED_PHID,
+                    "dateCreated": 1700000010,
+                    "dateModified": 1700000010,
+                    "comments": [
+                        {
+                            "id": 101,
+                            "phid": "PHID-XCMT-1",
+                            "dateCreated": 1700000010,
+                            "dateModified": 1700000010,
+                            "content": {"raw": "Untrusted comment"},
+                        }
+                    ],
+                    "fields": {},
+                },
+            ],
+        }
+
+        def mock_request(method, **kwargs):
+            if method == "transaction.search":
+                return mock_transactions_untrusted_only
+            elif method == "user.search":
+                return self.MOCK_USERS
+            elif method == "project.search":
+                return self.MOCK_MOCO_GROUP
+            raise ValueError(f"Unexpected API call: {method}")
+
+        def mock_load_revision(rev_phid=None, rev_id=None):
+            if rev_phid == "PHID-DREV-parent":
+                return mock_parent_revision
+            return mock_revision_with_stack
+
+        mock_api = MagicMock()
+        mock_api.request = mock_request
+        mock_api.search_diffs = MagicMock(return_value=self.MOCK_DIFF)
+        mock_api.load_revision = mock_load_revision
+        mock_api.load_raw_diff = MagicMock(
+            return_value="diff --git a/test.py b/test.py\n+test"
+        )
+
+        with patch(
+            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
+            return_value=mock_api,
+        ):
+            patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
+            md_output = patch_obj.to_md()
+
+        # Verify stack section exists
+        assert "## Stack Information" in md_output
+        assert "```mermaid" in md_output
+
+        # SENSITIVE titles must NOT appear anywhere in output
+        assert "SENSITIVE Current Revision Title" not in md_output
+        assert "SENSITIVE Parent Revision Title" not in md_output
+        assert "SENSITIVE summary content" not in md_output
+
+        # Redacted title must appear (for both current and parent in stack)
+        assert REDACTED_TITLE in md_output
+
+        # Extract mermaid block and verify all titles are redacted
+        lines = md_output.split("\n")
+        in_mermaid = False
+        mermaid_lines = []
+        for line in lines:
+            if "```mermaid" in line:
+                in_mermaid = True
+                continue
+            if in_mermaid and line.strip() == "```":
+                break
+            if in_mermaid:
+                mermaid_lines.append(line)
+
+        # Check that node definitions have redacted titles
+        for line in mermaid_lines:
+            if "D999999[" in line or "D999998[" in line:
+                assert REDACTED_TITLE in line or "CURRENT" in line
+
+    def test_to_md_stack_titles_shown_with_trusted(self):
+        """Test that stack titles are shown when a trusted user has commented."""
+        from bugbug.tools.core.platforms.phabricator import REDACTED_TITLE
+
+        # Revision with a stack: current depends on parent
+        mock_revision_with_stack = {
+            "id": 999999,
+            "type": "DREV",
+            "phid": "PHID-DREV-current",
+            "fields": {
+                "title": "Current Revision Title",
+                "uri": "https://phabricator.services.mozilla.com/D999999",
+                "authorPHID": UNTRUSTED_PHID,
+                "status": {"value": "needs-review", "name": "Needs Review"},
+                "diffPHID": "PHID-DIFF-testdiff",
+                "diffID": "123456",
+                "summary": "Summary content",
+                "testPlan": "",
+                "dateCreated": 1700000000,
+                "dateModified": 1700000100,
+                "bugzilla.bug-id": "1234567",
+                "stackGraph": {
+                    "PHID-DREV-current": ["PHID-DREV-parent"],
+                    "PHID-DREV-parent": [],
+                },
+            },
+            "attachments": {},
+        }
+
+        mock_parent_revision = {
+            "id": 999998,
+            "type": "DREV",
+            "phid": "PHID-DREV-parent",
+            "fields": {
+                "title": "Parent Revision Title",
+                "uri": "https://phabricator.services.mozilla.com/D999998",
+                "authorPHID": UNTRUSTED_PHID,
+                "status": {"value": "needs-review", "name": "Needs Review"},
+                "diffPHID": "PHID-DIFF-parentdiff",
+                "diffID": "123455",
+                "summary": "",
+                "testPlan": "",
+                "dateCreated": 1699999000,
+                "dateModified": 1699999100,
+                "bugzilla.bug-id": "1234567",
+                "stackGraph": {
+                    "PHID-DREV-current": ["PHID-DREV-parent"],
+                    "PHID-DREV-parent": [],
+                },
+            },
+            "attachments": {},
+        }
+
+        # Trusted comment validates the content
+        mock_transactions_with_trusted = {
+            "data": [
+                {
+                    "id": 1,
+                    "type": "comment",
+                    "authorPHID": PHAB_BOT_PHID,  # Trusted user
+                    "dateCreated": 1700000010,
+                    "dateModified": 1700000010,
+                    "comments": [
+                        {
+                            "id": 101,
+                            "phid": "PHID-XCMT-1",
+                            "dateCreated": 1700000010,
+                            "dateModified": 1700000010,
+                            "content": {"raw": "LGTM"},
+                        }
+                    ],
+                    "fields": {},
+                },
+            ],
+        }
+
+        def mock_request(method, **kwargs):
+            if method == "transaction.search":
+                return mock_transactions_with_trusted
+            elif method == "user.search":
+                return self.MOCK_USERS
+            elif method == "project.search":
+                return self.MOCK_MOCO_GROUP
+            raise ValueError(f"Unexpected API call: {method}")
+
+        def mock_load_revision(rev_phid=None, rev_id=None):
+            if rev_phid == "PHID-DREV-parent":
+                return mock_parent_revision
+            return mock_revision_with_stack
+
+        mock_api = MagicMock()
+        mock_api.request = mock_request
+        mock_api.search_diffs = MagicMock(return_value=self.MOCK_DIFF)
+        mock_api.load_revision = mock_load_revision
+        mock_api.load_raw_diff = MagicMock(
+            return_value="diff --git a/test.py b/test.py\n+test"
+        )
+
+        with patch(
+            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
+            return_value=mock_api,
+        ):
+            patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
+            md_output = patch_obj.to_md()
+
+        # Verify stack section exists
+        assert "## Stack Information" in md_output
+
+        # Titles SHOULD appear when trusted user has commented
+        assert "Current Revision Title" in md_output
+        assert "Parent Revision Title" in md_output
+
+        # Redacted title should NOT appear
+        assert REDACTED_TITLE not in md_output
 
 
 # Subsequent test rely on having an API key present, and perform testing against
@@ -456,8 +706,8 @@ class TestToMdEndToEnd:
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_empty():
@@ -466,15 +716,15 @@ def test_get_users_info_batch_empty():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
     result = _get_users_info_batch(set())
     assert result == {}
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_phabricator_end_to_end_trusted_check():
@@ -486,7 +736,7 @@ def test_phabricator_end_to_end_trusted_check():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
 
     # Search for two service account that are in the right group
@@ -524,8 +774,8 @@ def test_phabricator_end_to_end_trusted_check():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_mixed_trust():
@@ -535,7 +785,7 @@ def test_get_users_info_batch_mixed_trust():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
 
     # Get PHIDs for known users -- two trusted, one not trusted
@@ -561,8 +811,8 @@ def test_get_users_info_batch_mixed_trust():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("PHABRICATOR_TOKEN"),
-    reason="Requires PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
+    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_moco_group_phid_is_valid():
@@ -572,7 +822,7 @@ def test_moco_group_phid_is_valid():
         os.environ.get(
             "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
         ),
-        os.environ["PHABRICATOR_TOKEN"],
+        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
     )
 
     resp = phabricator.PHABRICATOR_API.request(
@@ -583,3 +833,216 @@ def test_moco_group_phid_is_valid():
     assert len(resp["data"]) == 1
     assert resp["data"][0]["phid"] == MOCO_GROUP_PHID
     assert "bmo-mozilla-employee-confidential" in resp["data"][0]["fields"]["name"]
+
+
+def test_phabricator_metadata_redacted_without_trusted_comment():
+    """Test that revision metadata is redacted when no trusted user has commented."""
+    from unittest.mock import patch
+
+    from bugbug.tools.core.platforms.phabricator import SanitizedPhabricatorPatch
+
+    # Mock the revision and diff metadata
+    mock_revision = {
+        "id": 12345,
+        "phid": "PHID-DREV-test123",
+        "fields": {
+            "title": "This is the revision title",
+            "authorPHID": "PHID-USER-untrusted",
+            "status": {"name": "Needs Review"},
+            "uri": "https://phabricator.services.mozilla.com/D12345",
+            "bugzilla.bug-id": "123456",
+            "summary": "This is the detailed summary",
+            "testPlan": "This is the test plan",
+            "stackGraph": {},
+        },
+    }
+
+    mock_diff = {
+        "id": 54321,
+        "dateCreated": 1704110400,
+        "dateModified": 1704110400,
+        "baseRevision": "abc123",
+        "authorPHID": "PHID-USER-untrusted",
+    }
+
+    # Mock users info: no trusted users
+    mock_users_info = {
+        "PHID-USER-untrusted": {
+            "email": "untrusted@example.com",
+            "is_trusted": False,
+            "real_name": "Untrusted User",
+        }
+    }
+
+    with (
+        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
+        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "get_comments", return_value=[]),
+        patch(
+            "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
+            return_value=mock_users_info,
+        ),
+        patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
+    ):
+        patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
+        markdown = patch_obj.to_md()
+
+    # Title should be redacted
+    assert "[Unvalidated revision title redacted for security]" in markdown
+    assert "This is the revision title" not in markdown
+
+    # Author should be redacted
+    assert "**Revision Author**: [Redacted]" in markdown
+    assert "Untrusted User" not in markdown
+
+    # Summary should be redacted
+    assert "[Unvalidated summary redacted for security]" in markdown
+    assert "This is the detailed summary" not in markdown
+
+    # Test plan should be redacted
+    assert "[Unvalidated test plan redacted for security]" in markdown
+    assert "This is the test plan" not in markdown
+
+
+def test_phabricator_metadata_shown_with_trusted_comment():
+    """Test that revision metadata is shown when a trusted user has commented."""
+    from unittest.mock import Mock, patch
+
+    from bugbug.tools.core.platforms.phabricator import (
+        PhabricatorGeneralComment,
+        SanitizedPhabricatorPatch,
+    )
+
+    # Mock the revision and diff metadata
+    mock_revision = {
+        "id": 12345,
+        "phid": "PHID-DREV-test123",
+        "fields": {
+            "title": "This is the revision title",
+            "authorPHID": "PHID-USER-author",
+            "status": {"name": "Needs Review"},
+            "uri": "https://phabricator.services.mozilla.com/D12345",
+            "bugzilla.bug-id": "123456",
+            "summary": "This is the detailed summary",
+            "testPlan": "This is the test plan",
+            "stackGraph": {},
+        },
+    }
+
+    mock_diff = {
+        "id": 54321,
+        "dateCreated": 1704110400,
+        "dateModified": 1704110400,
+        "baseRevision": "abc123",
+        "authorPHID": "PHID-USER-author",
+    }
+
+    # Mock a trusted comment
+    mock_comment = Mock(spec=PhabricatorGeneralComment)
+    mock_comment.content = "LGTM"
+    mock_comment.author_phid = "PHID-USER-trusted"
+    mock_comment.date_created = 1704110500
+    mock_comment.content_redacted = False
+
+    # Mock users info: one trusted user
+    mock_users_info = {
+        "PHID-USER-author": {
+            "email": "author@example.com",
+            "is_trusted": False,
+            "real_name": "Patch Author",
+        },
+        "PHID-USER-trusted": {
+            "email": "trusted@mozilla.com",
+            "is_trusted": True,
+            "real_name": "Trusted Reviewer",
+        },
+    }
+
+    with (
+        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
+        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(
+            SanitizedPhabricatorPatch, "get_comments", return_value=[mock_comment]
+        ),
+        patch(
+            "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
+            return_value=mock_users_info,
+        ),
+        patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
+        patch(
+            "bugbug.tools.core.platforms.phabricator._sanitize_comments",
+            return_value=([mock_comment], 0),
+        ),
+    ):
+        patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
+        markdown = patch_obj.to_md()
+
+    # Title should be shown
+    assert "This is the revision title" in markdown
+    assert "[Unvalidated revision title redacted for security]" not in markdown
+
+    # Author should be shown
+    assert "Patch Author (author@example.com)" in markdown
+    assert "**Revision Author**: [Redacted]" not in markdown
+
+    # Summary should be shown
+    assert "This is the detailed summary" in markdown
+    assert "[Unvalidated summary redacted for security]" not in markdown
+
+    # Test plan should be shown
+    assert "This is the test plan" in markdown
+    assert "[Unvalidated test plan redacted for security]" not in markdown
+
+
+def test_phabricator_stack_titles_redacted():
+    """Test that stack dependency graph titles are redacted without trusted comment."""
+    from unittest.mock import patch
+
+    from bugbug.tools.core.platforms.phabricator import (
+        REDACTED_TITLE,
+        SanitizedPhabricatorPatch,
+    )
+
+    # Mock the revision
+    mock_revision = {
+        "id": 12345,
+        "phid": "PHID-DREV-current",
+        "fields": {
+            "title": "Current revision",
+            "authorPHID": "PHID-USER-author",
+            "status": {"name": "Needs Review"},
+            "uri": "https://phabricator.services.mozilla.com/D12345",
+            "bugzilla.bug-id": "123456",
+            "stackGraph": {},
+        },
+    }
+
+    mock_diff = {
+        "id": 54321,
+        "dateCreated": 1704110400,
+        "dateModified": 1704110400,
+        "baseRevision": "abc123",
+        "authorPHID": "PHID-USER-author",
+    }
+
+    mock_users_info = {
+        "PHID-USER-author": {
+            "email": "author@example.com",
+            "is_trusted": False,
+            "real_name": "Author",
+        }
+    }
+
+    with (
+        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
+        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "get_comments", return_value=[]),
+        patch(
+            "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
+            return_value=mock_users_info,
+        ),
+    ):
+        patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
+
+        # Verify patch_title property is redacted
+        assert patch_obj.patch_title == REDACTED_TITLE
