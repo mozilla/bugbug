@@ -598,9 +598,7 @@ class PhabricatorPatch(Patch):
             current_phid = self._revision_metadata["phid"]
             patch_map = {
                 phid: (
-                    self
-                    if phid == current_phid
-                    else PhabricatorPatch(revision_phid=phid)
+                    self if phid == current_phid else self.__class__(revision_phid=phid)
                 )
                 for phid in stack_graph.keys()
             }
