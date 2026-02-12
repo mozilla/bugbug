@@ -492,7 +492,7 @@ def test_extended_trusted_user_policy():
 
     with (
         patch("libmozdata.bugzilla.BugzillaBase.TOKEN", "test_token"),
-        patch("libmozdata.bugzilla.BugzillaUser") as mock_user_class,
+        patch("bugbug.tools.core.platforms.bugzilla.BugzillaUser") as mock_user_class,
     ):
         mock_instance = mock_user_class.return_value
 
@@ -820,7 +820,7 @@ def test_service_accounts_not_trusted():
 
     with (
         patch("libmozdata.bugzilla.BugzillaBase.TOKEN", "test_token"),
-        patch("libmozdata.bugzilla.BugzillaUser") as mock_user_class,
+        patch("bugbug.tools.core.platforms.bugzilla.BugzillaUser") as mock_user_class,
     ):
         mock_instance = mock_user_class.return_value
 
