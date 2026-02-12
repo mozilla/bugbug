@@ -45,7 +45,7 @@ COLLAPSED_COMMENT_TAGS = {
     "nsfw",
 }
 
-BugzillaBase.TOKEN = os.getenv("BUGZILLA_TOKEN")
+BugzillaBase.TOKEN = os.getenv("BUGZILLA_API_KEY")
 
 
 def _check_users_batch(emails: list[str]) -> dict[str, bool]:
@@ -74,7 +74,7 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
     if not BugzillaBase.TOKEN:
         raise ValueError(
             "Bugzilla token required for trusted user check. "
-            "Set BUGZILLA_TOKEN environment variable."
+            "Set BUGZILLA_API_KEY environment variable."
         )
 
     def user_handler(user, data):
