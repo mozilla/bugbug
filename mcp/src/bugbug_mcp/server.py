@@ -12,7 +12,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
 from pydantic import Field
 
-from bugbug import phabricator, utils
+from bugbug import utils
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
@@ -45,13 +45,10 @@ async def patch_review(
         and parsed_url.path.startswith("/D")
     ):
         revision_id = int(parsed_url.path[2:])
-        revisions = phabricator.get(rev_ids=[int(revision_id)])
-        assert len(revisions) == 1
-
-        patch = PhabricatorPatch(revisions[0]["fields"]["diffID"])
-
     else:
         raise ValueError(f"Unsupported patch URL: {patch_url}")
+
+    patch = PhabricatorPatch(revision_id=revision_id)
 
     tool = get_code_review_tool()
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
@@ -167,10 +164,6 @@ async def read_fx_doc_section(
 
 
 def main():
-    phabricator.set_api_key(
-        get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
-    )
-
     mcp.run(
         transport="streamable-http",
         host="0.0.0.0",
