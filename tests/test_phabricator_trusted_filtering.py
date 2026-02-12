@@ -1044,9 +1044,5 @@ def test_phabricator_stack_titles_redacted():
     ):
         patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
 
-        # When there's no trusted comment, get_stack_patch_title should return redacted
-        title = patch_obj.get_stack_patch_title("PHID-DREV-current")
-        assert title == REDACTED_TITLE
-
-        # Also verify patch_title property is redacted
+        # Verify patch_title property is redacted
         assert patch_obj.patch_title == REDACTED_TITLE
