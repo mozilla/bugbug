@@ -68,23 +68,12 @@ def _check_users_batch(emails: list[str]) -> dict[str, bool]:
         All Mozilla Corporation members are inherently in editbugs group.
 
     Raises:
-        ValueError: If Bugzilla token is not available
         Various exceptions from API calls (network errors, etc.)
     """
-    from libmozdata.bugzilla import BugzillaUser
-
     results: dict[str, bool] = {}
 
     if not emails:
         return results
-
-    from libmozdata.bugzilla import BugzillaBase
-
-    if not BugzillaBase.TOKEN:
-        raise ValueError(
-            "Bugzilla token required for trusted user check. "
-            "Set BUGZILLA_API_KEY environment variable."
-        )
 
     def user_handler(user, data):
         # In Bugzilla API, "name" is the user's login (email address)
