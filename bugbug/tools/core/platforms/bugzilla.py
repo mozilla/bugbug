@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timezone
 from functools import cached_property
 
-from libmozdata.bugzilla import Bugzilla, BugzillaBase
+from libmozdata.bugzilla import Bugzilla, BugzillaBase, BugzillaUser
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,15 @@ COLLAPSED_COMMENT_TAGS = {
 }
 
 BugzillaBase.TOKEN = os.getenv("BUGZILLA_API_KEY")
+
+bugzilla_url = os.getenv("BUGZILLA_URL", "https://bugzilla.mozilla.org")
+if bugzilla_url != "https://bugzilla.mozilla.org":
+    # NOTE: This is a workaround for libmozdata which uses class attributes for
+    # API URLs.
+    BugzillaBase.URL = bugzilla_url
+    Bugzilla.API_URL = bugzilla_url + "/rest/bug"
+    Bugzilla.ATTACHMENT_API_URL = bugzilla_url + "/rest/bug/attachment"
+    BugzillaUser.API_URL = bugzilla_url + "/rest/user"
 
 
 def _check_users_batch(emails: list[str]) -> dict[str, bool]:
