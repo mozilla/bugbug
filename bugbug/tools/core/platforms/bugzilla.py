@@ -11,6 +11,9 @@ from datetime import datetime, timezone
 from functools import cached_property
 
 from libmozdata.bugzilla import Bugzilla, BugzillaBase, BugzillaUser
+from libmozdata.config import set_default_value
+
+from bugbug.tools.core.connection import get_user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +58,9 @@ if bugzilla_url != "https://bugzilla.mozilla.org":
     Bugzilla.API_URL = bugzilla_url + "/rest/bug"
     Bugzilla.ATTACHMENT_API_URL = bugzilla_url + "/rest/bug/attachment"
     BugzillaUser.API_URL = bugzilla_url + "/rest/user"
+
+# NOTE: This is a workaround for libmozdata
+set_default_value("User-Agent", "name", get_user_agent())
 
 
 def _check_users_batch(emails: list[str]) -> dict[str, bool]:
