@@ -139,6 +139,28 @@ tasks:
 
         - $mergeDeep:
             - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("mcp_tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-lcx"
+                  - "git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./mcp[dev] &&
+                    pytest --cov=bugbug_mcp mcp/tests/ -vvv &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug mcp tests
+                description: bugbug mcp tests
+
+        - $mergeDeep:
+            - { $eval: default_task_definition }
             - taskId: { $eval: as_slugid("packaging_test_task") }
               payload:
                 env:
@@ -253,6 +275,7 @@ tasks:
                   - { $eval: as_slugid("lint_task") }
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
+                  - { $eval: as_slugid("mcp_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("packaging_test_task") }
                   - { $eval: as_slugid("version_check_task") }
@@ -283,6 +306,7 @@ tasks:
                   - { $eval: as_slugid("lint_task") }
                   - { $eval: as_slugid("version_check_task") }
                   - { $eval: as_slugid("tests_task") }
+                  - { $eval: as_slugid("mcp_tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("packaging_test_task") }
