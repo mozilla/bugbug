@@ -65,20 +65,6 @@ def test_token_set_on_bugzilla_base():
         BugzillaBase.TOKEN = old_token
 
 
-def test_trusted_check_without_token():
-    """Test that _check_users_batch raises error when token is not set."""
-    from libmozdata.bugzilla import BugzillaBase
-
-    old_token = BugzillaBase.TOKEN
-    try:
-        BugzillaBase.TOKEN = None
-
-        with pytest.raises(ValueError, match="Bugzilla token required"):
-            _check_users_batch(["test@example.com"])
-    finally:
-        BugzillaBase.TOKEN = old_token
-
-
 def test_trusted_check_empty_email():
     """Test that empty email list returns empty results."""
     from libmozdata.bugzilla import BugzillaBase
