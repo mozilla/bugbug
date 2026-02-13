@@ -35,23 +35,31 @@ REDACTED_TEST_PLAN = "[Unvalidated test plan redacted for security]"
 
 
 @cache
+def _base_url() -> str:
+    base_url = os.getenv("PHABRICATOR_URL", "https://phabricator.services.mozilla.com")
+    assert not base_url.endswith("/"), "PHABRICATOR_URL should not end with a slash"
+    return base_url
+
+
+@cache
 def get_phabricator_client(
     api_key: Optional[str] = None,
-    url: Optional[str] = None,
+    base_url: Optional[str] = None,
     user_agent: Optional[str] = None,
 ):
     """Get a cached Phabricator client instance."""
     from libmozdata.config import set_default_value
     from libmozdata.phabricator import PhabricatorAPI
 
+    base_url = base_url or _base_url()
+    api_url = base_url + "/api/"
     api_key = api_key or os.getenv("PHABRICATOR_API_KEY")
-    url = url or os.getenv("PHABRICATOR_API_URL")
     user_agent = user_agent or get_user_agent()
 
     # This is a workaround since PhabricatorAPI does not accept user agent directly
     set_default_value("User-Agent", "name", user_agent)
 
-    return PhabricatorAPI(api_key, url)
+    return PhabricatorAPI(api_key, api_url)
 
 
 def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
@@ -260,21 +268,9 @@ class PhabricatorPatch(Patch):
         self._revision_phid = revision_phid
         self._revision_id = revision_id
 
-    @classmethod
-    @cache
-    def _base_url(cls) -> str:
-        api_url = os.environ.get(
-            "PHABRICATOR_API_URL", "https://phabricator.services.mozilla.com/api/"
-        )
-
-        if not api_url.endswith("/api/"):
-            raise ValueError("PHABRICATOR_API_URL must end with /api/")
-
-        return api_url.rstrip("/api/")
-
     @property
     def patch_url(self) -> str:
-        return f"{self._base_url()}/D{self.revision_id}"
+        return f"{_base_url()}/D{self.revision_id}"
 
     @property
     def diff_id(self) -> int:
@@ -315,7 +311,7 @@ class PhabricatorPatch(Patch):
         view = "old" if is_before_patch else "new"
         client = get_http_client()
         r = await client.get(
-            f"{self._base_url()}/differential/changeset/?view={view}&ref={changeset_id}",
+            f"{_base_url()}/differential/changeset/?view={view}&ref={changeset_id}",
         )
         r.raise_for_status()
 
