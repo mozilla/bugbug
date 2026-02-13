@@ -20,9 +20,6 @@ from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     SanitizedPhabricatorPatch,
 )
-from bugbug.utils import get_secret
-
-os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
 
 mcp = FastMCP("Firefox Development MCP Server")
 
