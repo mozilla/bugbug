@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bugbug import phabricator
 from bugbug.tools.core.platforms.phabricator import (
     MOCO_GROUP_PHID,
     UNTRUSTED_CONTENT_REDACTED,
@@ -14,6 +13,7 @@ from bugbug.tools.core.platforms.phabricator import (
     SanitizedPhabricatorPatch,
     _get_users_info_batch,
     _sanitize_comments,
+    get_phabricator_client,
 )
 
 # Test user PHIDs (real PHIDs from Mozilla Phabricator)
@@ -706,25 +706,19 @@ class TestToMdEndToEnd:
 
 
 @pytest.mark.skipif(
-    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
-    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("PHABRICATOR_API_KEY"),
+    reason="Requires PHABRICATOR_API_KEY for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_empty():
     """Test that empty PHIDs set returns empty dict."""
-    phabricator.set_api_key(
-        os.environ.get(
-            "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
-        ),
-        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
-    )
     result = _get_users_info_batch(set())
     assert result == {}
 
 
 @pytest.mark.skipif(
-    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
-    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("PHABRICATOR_API_KEY"),
+    reason="Requires PHABRICATOR_API_KEY for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_phabricator_end_to_end_trusted_check():
@@ -732,19 +726,14 @@ def test_phabricator_end_to_end_trusted_check():
     the actual server.
         This doesn't run in CI but can be run locally
     """
-    phabricator.set_api_key(
-        os.environ.get(
-            "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
-        ),
-        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
-    )
+    phabricator_client = get_phabricator_client()
 
     # Search for two service account that are in the right group
-    phabbot_response = phabricator.PHABRICATOR_API.request(
+    phabbot_response = phabricator_client.request(
         "user.search",
         constraints={"query": "phab-bot"},
     )
-    reviewbot_response = phabricator.PHABRICATOR_API.request(
+    reviewbot_response = phabricator_client.request(
         "user.search",
         constraints={"query": "reviewbot"},
     )
@@ -774,22 +763,17 @@ def test_phabricator_end_to_end_trusted_check():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
-    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("PHABRICATOR_API_KEY"),
+    reason="Requires PHABRICATOR_API_KEY for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_mixed_trust():
     """Test that mixed trusted/untrusted users are correctly identified. Can
     only be run with a phab token, to validate changes locally."""
-    phabricator.set_api_key(
-        os.environ.get(
-            "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
-        ),
-        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
-    )
+    phabricator_client = get_phabricator_client()
 
     # Get PHIDs for known users -- two trusted, one not trusted
-    resp = phabricator.PHABRICATOR_API.request(
+    resp = phabricator_client.request(
         "user.search",
         constraints={"usernames": ["phab-bot", "reviewbot", "YuK"]},
     )
@@ -811,21 +795,16 @@ def test_get_users_info_batch_mixed_trust():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("BUGBUG_PHABRICATOR_TOKEN"),
-    reason="Requires BUGBUG_PHABRICATOR_TOKEN for authenticated API access",
+    not os.environ.get("PHABRICATOR_API_KEY"),
+    reason="Requires PHABRICATOR_API_KEY for authenticated API access",
 )
 @pytest.mark.withoutresponses
 def test_moco_group_phid_is_valid():
     """Test that MOCO_GROUP_PHID points to a valid project. This can only be
     run with an API key, to validate changes locally."""
-    phabricator.set_api_key(
-        os.environ.get(
-            "PHABRICATOR_URL", "https://phabricator.services.mozilla.com/api/"
-        ),
-        os.environ["BUGBUG_PHABRICATOR_TOKEN"],
-    )
+    phabricator_client = get_phabricator_client()
 
-    resp = phabricator.PHABRICATOR_API.request(
+    resp = phabricator_client.request(
         "project.search",
         constraints={"phids": [MOCO_GROUP_PHID]},
     )
