@@ -44,17 +44,9 @@ def get_phabricator_client(
     from libmozdata.config import set_default_value
     from libmozdata.phabricator import PhabricatorAPI
 
-    # Fallback to old environment variable names for backward compatibility
-    if not api_key:
-        api_key = os.getenv("PHABRICATOR_API_KEY") or os.getenv(
-            "BUGBUG_PHABRICATOR_TOKEN"
-        )
-
-    if not url:
-        url = os.getenv("PHABRICATOR_API_URL") or os.getenv("BUGBUG_PHABRICATOR_URL")
-
-    if not user_agent:
-        user_agent = get_user_agent()
+    api_key = api_key or os.getenv("PHABRICATOR_API_KEY")
+    url = url or os.getenv("PHABRICATOR_API_URL")
+    user_agent = user_agent or get_user_agent()
 
     # This is a workaround since PhabricatorAPI does not accept user agent directly
     set_default_value("User-Agent", "name", user_agent)
