@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable, Optional
@@ -11,8 +12,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.conversions import common_types as qdrant_types
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
-
-from bugbug.utils import get_secret
 
 
 @dataclass
@@ -102,7 +101,7 @@ class QdrantVectorDB(VectorDB):
         super().__init__(*args, **kwargs)
         self.collection_name = collection_name
         self.client = QdrantClient(
-            location=get_secret("QDRANT_LOCATION"), api_key=get_secret("QDRANT_API_KEY")
+            location=os.getenv("QDRANT_LOCATION"), api_key=os.getenv("QDRANT_API_KEY")
         )
 
     def setup(self):
