@@ -12,12 +12,11 @@ from datetime import datetime
 from logging import getLogger
 from typing import Iterable, Literal
 
-from langchain_openai import OpenAIEmbeddings
+from langchain.embeddings import init_embeddings
 from unidiff import Hunk, PatchSet
 
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch
-from bugbug.utils import get_secret
 from bugbug.vectordb import PayloadScore, QueryFilter, VectorDB, VectorPoint
 
 logger = getLogger(__name__)
@@ -29,9 +28,7 @@ class ReviewCommentsDB:
 
     def __init__(self, vector_db: VectorDB) -> None:
         self.vector_db = vector_db
-        self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
-        )
+        self.embeddings = init_embeddings("openai:text-embedding-3-large")
 
     def clean_comment(self, comment: str):
         # We do not want to keep the LLM note in the comment, it is not useful
@@ -158,9 +155,7 @@ class SuggestionFeedback:
 class SuggestionsFeedbackDB:
     def __init__(self, vector_db: VectorDB) -> None:
         self.vector_db = vector_db
-        self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
-        )
+        self.embeddings = init_embeddings("openai:text-embedding-3-large")
 
     def add_suggestions_feedback(self, suggestions: Iterable[SuggestionFeedback]):
         def vector_points():
