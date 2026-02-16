@@ -18,7 +18,7 @@ lmdb==1.7.5
 lxml-html-clean==0.4.3
 markdown2==2.5.4
 matplotlib==3.10.8
-mercurial==7.1.2
+mercurial==7.2
 microannotate==0.0.24
 mozci==2.4.3
 numpy==2.3.5
