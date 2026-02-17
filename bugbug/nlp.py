@@ -49,13 +49,12 @@ def spacy_token_lemmatizer(text):
     return [token.lemma_ for token in doc]
 
 
-class SpacyVectorizer(TfidfVectorizer):
-    def __init__(self, *args, **kwargs):
-        # Detect when the Spacy optional dependency is missing
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
+def lemmatizing_tfidf_vectorizer(**kwargs):
+    # Detect when the Spacy optional dependency is missing.
+    if not HAS_OPTIONAL_DEPENDENCIES:
+        raise NotImplementedError(OPT_MSG_MISSING)
 
-        super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
+    return TfidfVectorizer(tokenizer=spacy_token_lemmatizer, **kwargs)
 
 
 @lru_cache()
