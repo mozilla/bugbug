@@ -14,6 +14,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
+DEFAULT_SPACY_MODEL = "en_core_web_md"
+_spacy_model_name = DEFAULT_SPACY_MODEL
+_nlp = None
+
 HAS_OPTIONAL_DEPENDENCIES = False
 
 try:
@@ -23,43 +27,69 @@ try:
 except ImportError:
     pass
 
-try:
-    if HAS_OPTIONAL_DEPENDENCIES:
-        nlp = spacy.load("en_core_web_md")
-except OSError:
-    HAS_OPTIONAL_DEPENDENCIES = False
-    logger.error(
-        "Spacy model is missing, install it with: %s -m spacy download en_core_web_md",
-        sys.executable,
-    )
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
     "You might need also to download the models with: "
-    f"{sys.executable} -m spacy download en_core_web_md"
+    f"{sys.executable} -m spacy download {{model_name}}"
 )
 
 
+def get_spacy_model_name():
+    return _spacy_model_name
+
+
+def set_spacy_model_name(model_name):
+    if not model_name:
+        raise ValueError("model_name must be a non-empty string")
+
+    global _spacy_model_name
+    global _nlp
+    _spacy_model_name = model_name
+    _nlp = None
+
+
+def get_nlp():
+    model_name = get_spacy_model_name()
+    opt_msg_missing = OPT_MSG_MISSING.format(model_name=model_name)
+
+    if not HAS_OPTIONAL_DEPENDENCIES:
+        raise NotImplementedError(opt_msg_missing)
+
+    global _nlp
+    if _nlp is None:
+        try:
+            _nlp = spacy.load(model_name)
+        except OSError as e:
+            logger.error(
+                "Spacy model '%s' is missing, install it with: %s -m spacy download %s",
+                model_name,
+                sys.executable,
+                model_name,
+            )
+            raise NotImplementedError(opt_msg_missing) from e
+
+    return _nlp
+
+
 def spacy_token_lemmatizer(text):
-    if len(text) > nlp.max_length:
-        text = text[: nlp.max_length - 1]
-    doc = nlp(text)
+    model = get_nlp()
+    if len(text) > model.max_length:
+        text = text[: model.max_length - 1]
+    doc = model(text)
     return [token.lemma_ for token in doc]
 
 
 def lemmatizing_tfidf_vectorizer(**kwargs):
-    # Detect when the Spacy optional dependency is missing.
-    if not HAS_OPTIONAL_DEPENDENCIES:
-        raise NotImplementedError(OPT_MSG_MISSING)
-
     return TfidfVectorizer(tokenizer=spacy_token_lemmatizer, **kwargs)
 
 
 def _get_vector_dim():
-    if nlp.vocab.vectors_length:
-        return nlp.vocab.vectors_length
+    model = get_nlp()
+    if model.vocab.vectors_length:
+        return model.vocab.vectors_length
 
-    doc = nlp("vector")
+    doc = model("vector")
     if doc:
         return doc[0].vector.shape[0]
 
@@ -68,10 +98,11 @@ def _get_vector_dim():
 
 def _token_vector(token):
     key = token.lower_
+    vocab = token.vocab
 
     # Check if there is a lowercase word vector first.
-    if nlp.vocab.has_vector(key):
-        return nlp.vocab.get_vector(key)
+    if vocab.has_vector(key):
+        return vocab.get_vector(key)
 
     if token.has_vector:
         return token.vector
@@ -81,16 +112,13 @@ def _token_vector(token):
 
 class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
-        # Detect when the Spacy optional dependency is missing.
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         self.dim = _get_vector_dim()
 
     def fit(self, x, y=None):
         return self
 
     def transform(self, data):
+        model = get_nlp()
         return np.array(
             [
                 np.mean(
@@ -98,7 +126,7 @@ class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
                     or [np.zeros(self.dim)],
                     axis=0,
                 )
-                for doc in nlp.pipe(data)
+                for doc in model.pipe(data)
             ]
         )
 
@@ -125,6 +153,7 @@ class TfidfMeanEmbeddingTransformer(MeanEmbeddingTransformer):
         return self
 
     def transform(self, data):
+        model = get_nlp()
         return np.array(
             [
                 np.mean(
@@ -136,6 +165,6 @@ class TfidfMeanEmbeddingTransformer(MeanEmbeddingTransformer):
                     or [np.zeros(self.dim)],
                     axis=0,
                 )
-                for doc in nlp.pipe(data)
+                for doc in model.pipe(data)
             ]
         )
