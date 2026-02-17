@@ -17,7 +17,7 @@ def runtime_nlp(monkeypatch):
     model.vocab.set_vector("world", np.array([3.0, 4.0, 5.0], dtype=np.float32))
     model.vocab.set_vector("alpha", np.array([1.0, 2.0, 0.0], dtype=np.float32))
     model.vocab.set_vector("beta", np.array([3.0, 5.0, 0.0], dtype=np.float32))
-    monkeypatch.setattr(nlp, "nlp", model)
+    monkeypatch.setattr(nlp, "get_nlp", lambda: model)
     return model
 
 
