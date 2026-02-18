@@ -52,6 +52,7 @@ async def create_or_get_review_request(
     )
 
     existing_request = await db.scalar(stmt)
+    # We don't support re-processing the same diff or reviewing older diffs
     if existing_request and (request.diff_id <= existing_request.diff_id):
         return JSONResponse(
             {
