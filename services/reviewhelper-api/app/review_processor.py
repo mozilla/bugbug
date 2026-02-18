@@ -70,7 +70,7 @@ async def process_review(review_request: ReviewRequest) -> list[GeneratedComment
 
 def submit_review_to_platform(
     review_request: ReviewRequest, generated_comments: Iterable[GeneratedComment]
-) -> Iterable[int]:
+) -> Iterable[tuple[GeneratedComment, int]]:
     """Submit generated comments to the appropriate platform.
 
     Args:
@@ -78,7 +78,8 @@ def submit_review_to_platform(
         generated_comments: The comments to submit.
 
     Returns:
-        IDs of the submitted comments on the platform.
+        An iterable of tuples containing the generated comment and the inline
+        comment ID assigned by the platform.
     """
     if review_request.platform == Platform.PHABRICATOR:
         yield from _submit_review_to_phabricator(review_request, generated_comments)
@@ -88,7 +89,7 @@ def submit_review_to_platform(
 
 def _submit_review_to_phabricator(
     review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
-) -> Iterable[int]:
+) -> Iterable[tuple[GeneratedComment, int]]:
     """Submit generated comments to Phabricator."""
     phabricator = get_phabricator_client()
 
@@ -113,11 +114,10 @@ def _submit_review_to_phabricator(
             lineLength=comment.line_end - comment.line_start,
             content=comment.content,
         )
-        comment.platform_comment_id = phabricator_inline_comment["id"]
 
-        # We yield here to allow the caller to commit the updated
-        # platform_comment_id to the database
-        yield
+        # We yield here to allow the caller to save the platform comment id to
+        # the database.
+        yield comment, phabricator_inline_comment["id"]
 
     phabricator.request(
         "differential.createcomment",

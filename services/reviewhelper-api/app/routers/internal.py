@@ -86,10 +86,13 @@ async def process_review_request(
         review_request.status = ReviewStatus.COMPLETED
         await db.commit()
 
-    for _ in submit_review_to_platform(review_request, generated_comments):
+    for generated_comment, inline_comment_id in submit_review_to_platform(
+        review_request, generated_comments
+    ):
         # We need to commit after each comment is submitted to ensure that the
         # platform_comment_id is saved to the database, which allows the
         # submission process to be safely retried in case of failures.
+        generated_comment.platform_comment_id = inline_comment_id
         await db.commit()
 
     review_request.status = ReviewStatus.PUBLISHED
