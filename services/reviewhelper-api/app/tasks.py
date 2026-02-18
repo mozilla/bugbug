@@ -52,5 +52,6 @@ async def create_review_task(review_request_id: int) -> str:
         "Created task %s for review request %s", response.name, review_request_id
     )
 
-    # Return only the task ID
-    return response.name.split("/")[-1]
+    task_id = response.name.split("/")[-1]
+
+    return task_id
