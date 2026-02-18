@@ -2,8 +2,8 @@ from enum import Enum
 
 
 class Platform(str, Enum):
-    PHABRICATOR = "phabricator"
-    GITHUB = "github"
+    PHABRICATOR = "Phabricator"
+    GITHUB = "GitHub"
 
 
 class ReviewStatus(str, Enum):
