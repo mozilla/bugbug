@@ -130,6 +130,10 @@ class GeneratedComment(Base):
         "Feedback", back_populates="generated_comment"
     )
 
+    __table_args__ = (
+        Index("ix_generated_comments_platform_comment_id", "platform_comment_id"),
+    )
+
 
 class Feedback(Base):
     __tablename__ = "feedback"
