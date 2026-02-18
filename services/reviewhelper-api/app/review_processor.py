@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 from functools import cache
 from typing import Collection, Iterable
 
@@ -24,21 +23,14 @@ def get_code_review_tool():
     return CodeReviewTool.create()
 
 
-@dataclass
-class ReviewProcessingResult:
-    generated_comments: list[GeneratedComment]
-    patch_summary: str
-    metadata: dict | None
-
-
-async def process_review(review_request: ReviewRequest) -> ReviewProcessingResult:
+async def process_review(review_request: ReviewRequest) -> list[GeneratedComment]:
     """Process a review request and generate comments.
 
     Args:
         review_request: The review request to process.
 
     Returns:
-        ReviewProcessingResult: The result of the review processing.
+        The generated comments from the review processing.
     """
     logger.info(
         "Processing review request %s for platform %s",
