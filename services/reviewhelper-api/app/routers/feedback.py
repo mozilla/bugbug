@@ -51,6 +51,7 @@ async def submit_feedback(
         feedback_type=request.feedback_type,
         user_id=request.user_id,
         user_name=request.user_name,
+        acting_capacity=request.acting_capacity,
     )
 
     try:
@@ -70,7 +71,10 @@ async def submit_feedback(
 
         stmt = (
             update(Feedback)
-            .values(feedback_type=request.feedback_type)
+            .values(
+                feedback_type=request.feedback_type,
+                acting_capacity=request.acting_capacity,
+            )
             .where(
                 Feedback.generated_comment_id == generated_comment_id,
                 Feedback.user_id == request.user_id,
