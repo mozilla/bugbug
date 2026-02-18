@@ -18,7 +18,7 @@ def _get_tasks_client():
     return CloudTasksAsyncClient()
 
 
-async def create_review_task(review_request_id: int) -> str | None:
+async def create_review_task(review_request_id: int) -> str:
     """Create a Cloud Task to process a review request.
 
     Args:
