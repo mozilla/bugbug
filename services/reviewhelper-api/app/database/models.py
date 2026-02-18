@@ -148,7 +148,7 @@ class Feedback(Base):
     # Optional FK to generated_comments
     generated_comment_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("generated_comments.id", ondelete="SET NULL"),
+        ForeignKey("generated_comments.id", ondelete="CASCADE"),
     )
 
     feedback_type: Mapped[FeedbackType] = mapped_column(

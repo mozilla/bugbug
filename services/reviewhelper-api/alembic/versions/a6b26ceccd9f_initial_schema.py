@@ -109,7 +109,7 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.ForeignKeyConstraint(
-            ["generated_comment_id"], ["generated_comments.id"], ondelete="SET NULL"
+            ["generated_comment_id"], ["generated_comments.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
