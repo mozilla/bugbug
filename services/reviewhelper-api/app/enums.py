@@ -15,7 +15,7 @@ class ReviewStatus(str, Enum):
 
     @property
     def is_final(self) -> bool:
-        return self in {ReviewStatus.PUBLISHED, ReviewStatus.FAILED}
+        return self is ReviewStatus.PUBLISHED or self is ReviewStatus.FAILED
 
 
 class FeedbackType(str, Enum):
