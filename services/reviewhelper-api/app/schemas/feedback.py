@@ -10,7 +10,7 @@ class FeedbackCreate(BaseModel):
     feedback_type: FeedbackType
     user_id: int
     user_name: str
-    acting_capacity: ActingCapacity | None
+    acting_capacity: ActingCapacity | None = None
 
 
 class FeedbackResponse(BaseModel):
