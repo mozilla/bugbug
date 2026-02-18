@@ -1,4 +1,5 @@
 import logging
+from functools import cache
 
 from google.cloud.tasks_v2 import (
     CloudTasksAsyncClient,
@@ -12,6 +13,11 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+@cache
+def _get_tasks_client():
+    return CloudTasksAsyncClient()
+
+
 async def create_review_task(review_request_id: int) -> str | None:
     """Create a Cloud Task to process a review request.
 
@@ -21,7 +27,7 @@ async def create_review_task(review_request_id: int) -> str | None:
     Returns:
         The name of the created task.
     """
-    client = CloudTasksAsyncClient()
+    client = _get_tasks_client()
 
     parent = client.queue_path(
         settings.cloud_tasks_project,
