@@ -52,6 +52,7 @@ async def submit_feedback(
         user_id=request.user_id,
         user_name=request.user_name,
         acting_capacity=request.acting_capacity,
+        reviewer_status=request.reviewer_status,
     )
 
     try:
@@ -74,6 +75,7 @@ async def submit_feedback(
             .values(
                 feedback_type=request.feedback_type,
                 acting_capacity=request.acting_capacity,
+                reviewer_status=request.reviewer_status,
             )
             .where(
                 Feedback.generated_comment_id == generated_comment_id,
