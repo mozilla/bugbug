@@ -60,8 +60,8 @@ class AgentResponse(BaseModel):
 class BuildRepairTool(GenerativeModelTool):
     """Two-stage build repair agent using Claude Agent SDK.
 
-    Stage 1 (Opus): Analyzes the failure and produces analysis/planning/summary docs.
-    Stage 2 (Sonnet): Reads the analysis and implements a fix. Skipped in analysis-only mode.
+    Stage 1: Analyzes the failure and produces analysis/planning/summary docs.
+    Stage 2: Reads the analysis and implements a fix. Skipped in analysis-only mode.
     After Stage 2, commits the fix, runs ./mach build, and optionally submits to try.
     """
 

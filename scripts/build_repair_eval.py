@@ -16,18 +16,23 @@ Usage:
 
 import argparse
 import asyncio
+import logging
 import os
+from datetime import date
 from functools import cached_property
 
 import weave
 
 from bugbug.tools.build_repair.agent import AgentResponse, BuildFailure, BuildRepairTool
+from bugbug.tools.build_repair.config import MODEL_CUTOFF_DATES
 from bugbug.tools.build_repair.scorer import (
     BasicMetricsScorer,
     BuildPassRateScorer,
     LLMFixMatchingScorer,
 )
 from bugbug.tools.build_repair.worktree import WorktreeManager
+
+logger = logging.getLogger(__name__)
 
 
 class BuildRepairModel(weave.Model):
@@ -53,21 +58,33 @@ class BuildRepairModel(weave.Model):
         pre_fix_bug: dict,
         gh_failure_commits: list[str],
         failures: list[dict],
+        fix_commit_date: str,
         **kwargs,
     ) -> dict:
         wt_name = f"bug-{bug_id}-trial-{self.trial_id}"
-        worktree_path = self.worktree_mgr.create(gh_failure_commits[0], wt_name)
+
         try:
+            cutoff = max(
+                MODEL_CUTOFF_DATES[self.tool.analysis_model],
+                MODEL_CUTOFF_DATES[self.tool.fix_model],
+            )
+            if date.fromisoformat(fix_commit_date) < cutoff:
+                logger.warning(
+                    "Skipping bug %d: fix date %s is before model cutoff %s",
+                    bug_id,
+                    fix_commit_date,
+                    cutoff,
+                )
+                raise ValueError("skipped_data_contamination")
+
+            worktree_path = self.worktree_mgr.create(gh_failure_commits[0], wt_name)
+
             failure = BuildFailure(
                 bug_id=bug_id,
-                bug_title=pre_fix_bug.get("title"),
-                bug_comments=pre_fix_bug.get("comments"),
+                bug_title=pre_fix_bug["title"],
+                bug_comments=pre_fix_bug["comments"],
                 git_commit=gh_failure_commits[0],
-                failure_tasks=[
-                    f
-                    for f in failures
-                    if "build" in f["task_name"] and "test" not in f["task_name"]
-                ],
+                failure_tasks=failures,
             )
             result: AgentResponse = await self.tool.run(
                 failure,
@@ -96,7 +113,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build repair evaluation")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--trials", type=int, default=1)
-    parser.add_argument("--parallelism", type=int, default=8)
+    parser.add_argument("--parallelism", type=int, default=4)
     parser.add_argument("--firefox-repo", default=os.environ.get("FIREFOX_GIT_REPO"))
     parser.add_argument("--dataset", default="build_repair_one_commit_eval")
     parser.add_argument("--analysis-only", action="store_true")
