@@ -5,6 +5,8 @@
 
 from datetime import date
 
+from claude_agent_sdk import SandboxNetworkConfig, SandboxSettings
+
 ANALYSIS_MODEL = "claude-opus-4-6"
 FIX_MODEL = "claude-opus-4-6"
 DEFAULT_MAX_TURNS = 80
@@ -30,52 +32,47 @@ MODEL_CUTOFF_DATES = {
     "claude-opus-4-20250514": date(2025, 3, 1),
 }
 
-CLAUDE_PERMISSIONS_CONFIG = {
-    "permissions": {
-        "allow": [
-            "Edit(~/.mozbuild)",
-            "Edit(~/.cache/uv)",
-            "Bash(./mach build:*)",
-            "Bash(./mach clobber:*)",
-            "Bash(./mach configure:*)",
-            "Bash(./mach run:*)",
-            "Bash(./mach test:*)",
-            "Bash(./mach wpt:*)",
-            "Bash(./mach lint:*)",
-            "Bash(./mach format:*)",
-            "Bash(./mach clang-format:*)",
-            "Bash(./mach try:*)",
-            "Bash(./mach help:*)",
-            "Bash(./mach vendor:*)",
-            "Bash(./mach bootstrap:*)",
-            "Bash(./mach artifact:*)",
-            "Bash(clang++:*)",
-            "Bash(rm:*)",
-            "Bash(timeout:*)",
-            "Bash(find:*)",
-            "Bash(grep:*)",
-            "Bash(tee:*)",
-            "Bash(kill:*)",
-            "Bash(searchfox-cli:*)",
-            "Bash(treeherder-cli:*)",
-            "Bash(jj:*)",
-            "WebFetch(domain:firefox-source-docs.mozilla.org)",
-            "WebFetch(domain:treeherder.mozilla.org)",
-            "WebFetch(domain:searchfox.org)",
-            "WebFetch(o1069899.ingest.sentry.io)",
-        ],
-        "deny": [],
-        "additionalDirectories": [
-            "~/.mozbuild",
-            "~/.cache/uv/",
-        ],
-    },
-    "sandbox": {
-        "enabled": True,
-        "autoAllowBashIfSandboxed": True,
-        "allowUnsandboxedCommands": False,
-        "network": {
-            "allowLocalBinding": True,
-        },
-    },
-}
+ALLOWED_TOOLS = [
+    "Edit(~/.mozbuild)",
+    "Edit(~/.cache/uv)",
+    "Bash(./mach build:*)",
+    "Bash(./mach clobber:*)",
+    "Bash(./mach configure:*)",
+    "Bash(./mach run:*)",
+    "Bash(./mach test:*)",
+    "Bash(./mach wpt:*)",
+    "Bash(./mach lint:*)",
+    "Bash(./mach format:*)",
+    "Bash(./mach clang-format:*)",
+    "Bash(./mach try:*)",
+    "Bash(./mach help:*)",
+    "Bash(./mach vendor:*)",
+    "Bash(./mach bootstrap:*)",
+    "Bash(./mach artifact:*)",
+    "Bash(clang++:*)",
+    "Bash(rm:*)",
+    "Bash(timeout:*)",
+    "Bash(find:*)",
+    "Bash(grep:*)",
+    "Bash(tee:*)",
+    "Bash(kill:*)",
+    "Bash(searchfox-cli:*)",
+    "Bash(treeherder-cli:*)",
+    "Bash(jj:*)",
+    "WebFetch(domain:firefox-source-docs.mozilla.org)",
+    "WebFetch(domain:treeherder.mozilla.org)",
+    "WebFetch(domain:searchfox.org)",
+    "WebFetch(o1069899.ingest.sentry.io)",
+]
+
+ADDITIONAL_DIRS = [
+    "~/.mozbuild",
+    "~/.cache/uv/",
+]
+
+SANDBOX_CONFIG = SandboxSettings(
+    enabled=True,
+    autoAllowBashIfSandboxed=True,
+    allowUnsandboxedCommands=False,
+    network=SandboxNetworkConfig(allowLocalBinding=True),
+)

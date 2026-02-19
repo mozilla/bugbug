@@ -62,6 +62,13 @@ class BuildRepairModel(weave.Model):
         **kwargs,
     ) -> dict:
         wt_name = f"bug-{bug_id}-trial-{self.trial_id}"
+        logger.info(
+            "Invoking bug %d (trial=%d, commit=%s, %d failures)",
+            bug_id,
+            self.trial_id,
+            gh_failure_commits[0][:12],
+            len(failures),
+        )
 
         try:
             cutoff = max(
@@ -91,8 +98,20 @@ class BuildRepairModel(weave.Model):
                 worktree_path=worktree_path,
                 skip_try_push=self.no_try_push,
             )
+            logger.info(
+                "Bug %d completed: error=%s, diff_len=%d, cost=$%.4f, turns=%d, "
+                "local_build=%s, try_build=%s",
+                bug_id,
+                result.error,
+                len(result.diff),
+                result.cost_usd,
+                result.num_turns,
+                result.local_build_passed,
+                result.try_build_passed,
+            )
             return result.model_dump()
         except Exception as e:
+            logger.error("Bug %d failed with exception: %s", bug_id, e, exc_info=True)
             return {
                 "error": str(e),
                 "diff": "",
@@ -106,6 +125,7 @@ class BuildRepairModel(weave.Model):
                 "treeherder_url": None,
             }
         finally:
+            logger.info("Bug %d: cleaning up worktree %s", bug_id, wt_name)
             self.worktree_mgr.cleanup(wt_name)
 
 
@@ -123,19 +143,40 @@ def main() -> None:
     if not args.firefox_repo:
         parser.error("--firefox-repo or FIREFOX_GIT_REPO env var is required")
 
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    logger.info(
+        "Starting evaluation: dataset=%s, limit=%s, trials=%d, parallelism=%d, "
+        "analysis_only=%s, no_try_push=%s, firefox_repo=%s",
+        args.dataset,
+        args.limit,
+        args.trials,
+        args.parallelism,
+        args.analysis_only,
+        args.no_try_push,
+        args.firefox_repo,
+    )
+
     os.environ["WEAVE_PARALLELISM"] = str(args.parallelism)
     weave.init("bugbug-build-repair-eval")
 
     dataset = weave.ref(args.dataset).get()
     rows = dataset.rows
+    logger.info("Loaded dataset %s with %d rows", args.dataset, len(rows))
     if args.limit:
         rows = rows[: args.limit]
+        logger.info("Limited to %d rows", len(rows))
 
     scorers = [BasicMetricsScorer(), LLMFixMatchingScorer()]
     if not args.analysis_only:
         scorers.insert(1, BuildPassRateScorer())
+    logger.info("Scorers: %s", [type(s).__name__ for s in scorers])
 
     for trial in range(args.trials):
+        logger.info("Starting trial %d/%d", trial + 1, args.trials)
         model = BuildRepairModel(
             firefox_repo=args.firefox_repo,
             analysis_only=args.analysis_only,
@@ -148,7 +189,7 @@ def main() -> None:
             scorers=scorers,
         )
         results = asyncio.run(evaluation.evaluate(model))
-        print(f"Trial {trial} results: {results}")
+        logger.info("Trial %d/%d results: %s", trial + 1, args.trials, results)
 
     # TODO: To compute pass@k across trials, collect per-row scores from each
     # trial via the Weave API (weave.ref(...).get() on individual evaluation

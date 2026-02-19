@@ -35,6 +35,7 @@ class TryPushResult:
 
 
 def _commit_fix(worktree_path: Path, bug_id: int) -> None:
+    logger.info("Committing fix for bug %d in %s", bug_id, worktree_path)
     subprocess.run(
         ["git", "add", "-A"],
         cwd=worktree_path,
@@ -45,17 +46,26 @@ def _commit_fix(worktree_path: Path, bug_id: int) -> None:
         cwd=worktree_path,
         check=True,
     )
+    logger.info("Bug %d: fix committed", bug_id)
 
 
 def _run_local_build(worktree_path: Path) -> bool:
+    logger.info("Running local build in %s", worktree_path)
     result = subprocess.run(
         ["./mach", "build"],
         cwd=worktree_path,
     )
-    return result.returncode == 0
+    passed = result.returncode == 0
+    logger.info(
+        "Local build %s (returncode=%d)",
+        "passed" if passed else "failed",
+        result.returncode,
+    )
+    return passed
 
 
 def _submit_try(worktree_path: Path, task_name: str) -> tuple[str | None, str | None]:
+    logger.info("Submitting try push for task=%s in %s", task_name, worktree_path)
     result = subprocess.run(
         ["./mach", "try", "fuzzy", "--query", task_name],
         cwd=worktree_path,
@@ -63,6 +73,7 @@ def _submit_try(worktree_path: Path, task_name: str) -> tuple[str | None, str | 
         text=True,
     )
     stdout = result.stdout + result.stderr
+    logger.debug("Try push output: %s", stdout)
     match = _LANDO_JOB_ID_RE.search(stdout)
     if not match:
         logger.warning("Could not parse Lando job ID from try output: %s", stdout)
@@ -70,6 +81,11 @@ def _submit_try(worktree_path: Path, task_name: str) -> tuple[str | None, str | 
 
     lando_job_id = match.group(1)
     treeherder_url = f"{TREEHERDER_BASE_URL}/jobs?repo=try&landoCommitID={lando_job_id}"
+    logger.info(
+        "Try push submitted: lando_job_id=%s, treeherder=%s",
+        lando_job_id,
+        treeherder_url,
+    )
     return lando_job_id, treeherder_url
 
 
@@ -126,27 +142,59 @@ def _get_build_job_result(push_id: int, task_name: str) -> str | None:
 
 
 def _poll_treeherder(lando_job_id: str, task_name: str) -> bool | None:
+    logger.info(
+        "Polling Treeherder for lando_job_id=%s, task=%s (timeout=%ds, interval=%ds)",
+        lando_job_id,
+        task_name,
+        TRY_PUSH_TIMEOUT_SECONDS,
+        TRY_PUSH_POLL_INTERVAL_SECONDS,
+    )
     deadline = time.monotonic() + TRY_PUSH_TIMEOUT_SECONDS
     push_id: int | None = None
+    poll_count = 0
 
     while time.monotonic() < deadline:
+        poll_count += 1
         if push_id is None:
             revision = _get_push_revision(lando_job_id)
             if revision:
+                logger.info(
+                    "Resolved revision=%s for lando_job_id=%s", revision, lando_job_id
+                )
                 push = _get_push_by_revision(revision)
                 if push:
                     push_id = push["id"]
+                    logger.info(
+                        "Resolved push_id=%d for revision=%s", push_id, revision
+                    )
 
         if push_id is not None:
             result = _get_build_job_result(push_id, task_name)
+            logger.debug(
+                "Poll #%d: job result=%s for push_id=%d", poll_count, result, push_id
+            )
             if result == "success":
+                logger.info("Try build succeeded for lando_job_id=%s", lando_job_id)
                 return True
             if result in ("busted", "testfailed", "exception"):
+                logger.info(
+                    "Try build failed (%s) for lando_job_id=%s", result, lando_job_id
+                )
                 return False
+        else:
+            logger.debug(
+                "Poll #%d: push not yet available for lando_job_id=%s",
+                poll_count,
+                lando_job_id,
+            )
 
         time.sleep(TRY_PUSH_POLL_INTERVAL_SECONDS)
 
-    logger.warning("Try push polling timed out for lando job %s", lando_job_id)
+    logger.warning(
+        "Try push polling timed out after %d polls for lando job %s",
+        poll_count,
+        lando_job_id,
+    )
     return None
 
 
@@ -156,10 +204,17 @@ def run_try_verification(
     task_name: str,
     skip_try_push: bool = False,
 ) -> TryPushResult:
+    logger.info(
+        "Starting try verification for bug %d (task=%s, skip_try_push=%s)",
+        bug_id,
+        task_name,
+        skip_try_push,
+    )
     _commit_fix(worktree_path, bug_id)
 
     local_passed = _run_local_build(worktree_path)
     if not local_passed:
+        logger.warning("Bug %d: local build failed, skipping try push", bug_id)
         return TryPushResult(
             local_build_passed=False,
             try_build_passed=None,
@@ -168,6 +223,9 @@ def run_try_verification(
         )
 
     if skip_try_push:
+        logger.info(
+            "Bug %d: local build passed, skipping try push as requested", bug_id
+        )
         return TryPushResult(
             local_build_passed=True,
             try_build_passed=None,
@@ -177,6 +235,7 @@ def run_try_verification(
 
     lando_job_id, treeherder_url = _submit_try(worktree_path, task_name)
     if not lando_job_id:
+        logger.warning("Bug %d: try push submission failed, no lando job ID", bug_id)
         return TryPushResult(
             local_build_passed=True,
             try_build_passed=None,

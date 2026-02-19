@@ -25,13 +25,15 @@ class BasicMetricsScorer(weave.Scorer):
     def summarize(self, score_rows: list[dict]) -> dict:
         n = len(score_rows)
         costs = [r["cost_usd"] for r in score_rows]
-        return {
+        summary = {
             "success_rate": sum(r["successful"] for r in score_rows) / n if n else 0,
             "diff_rate": sum(r["has_diff"] for r in score_rows) / n if n else 0,
             "avg_cost_usd": sum(costs) / n if n else 0,
             "total_cost_usd": sum(costs),
             "num_examples": n,
         }
+        logger.info("BasicMetrics summary: %s", summary)
+        return summary
 
 
 class BuildPassRateScorer(weave.Scorer):
@@ -49,7 +51,7 @@ class BuildPassRateScorer(weave.Scorer):
         local_passed = sum(1 for r in score_rows if r["local_build_passed"] is True)
         try_known = [r for r in score_rows if r["try_build_passed"] is not None]
         try_passed = sum(1 for r in try_known if r["try_build_passed"] is True)
-        return {
+        summary = {
             "local_build_pass_rate": local_passed / n if n else 0,
             "local_builds_passed": local_passed,
             "try_build_pass_rate": try_passed / len(try_known) if try_known else 0,
@@ -57,6 +59,8 @@ class BuildPassRateScorer(weave.Scorer):
             "try_builds_timed_out": n - len(try_known),
             "num_examples": n,
         }
+        logger.info("BuildPassRate summary: %s", summary)
+        return summary
 
 
 class LLMFixMatchingScorer(weave.Scorer):

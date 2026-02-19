@@ -4,9 +4,12 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import subprocess
+from logging import getLogger
 from pathlib import Path
 
 from bugbug.tools.build_repair.config import WORKTREE_BASE_DIR
+
+logger = getLogger(__name__)
 
 
 class WorktreeManager:
@@ -23,23 +26,31 @@ class WorktreeManager:
 
     def create(self, commit_hash: str, name: str) -> Path:
         worktree_path = self.base_dir / name
+        logger.info(
+            "Creating worktree %s at %s (commit=%s)", name, worktree_path, commit_hash
+        )
         subprocess.run(
             ["git", "worktree", "add", str(worktree_path), commit_hash],
             cwd=self.repo,
             check=True,
         )
+        logger.info("Worktree %s created", name)
         return worktree_path
 
     def cleanup(self, name: str) -> None:
+        logger.info("Cleaning up worktree %s", name)
         subprocess.run(
             ["git", "worktree", "remove", str(self.base_dir / name), "--force"],
             cwd=self.repo,
             check=True,
         )
+        logger.info("Worktree %s removed", name)
 
     def cleanup_all(self) -> None:
+        logger.info("Cleaning up all worktrees in %s", self.base_dir)
         for entry in self.base_dir.iterdir():
             if entry.is_dir():
+                logger.info("Removing worktree %s", entry)
                 subprocess.run(
                     ["git", "worktree", "remove", str(entry), "--force"],
                     cwd=self.repo,

@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
 import subprocess
 from logging import getLogger
 from pathlib import Path
@@ -13,11 +12,12 @@ from pydantic import BaseModel, Field
 
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.build_repair.config import (
+    ADDITIONAL_DIRS,
+    ALLOWED_TOOLS,
     ANALYSIS_MODEL,
-    CLAUDE_PERMISSIONS_CONFIG,
-    DEFAULT_MAX_TURNS,
     FIREFOX_MCP_URL,
     FIX_MODEL,
+    SANDBOX_CONFIG,
 )
 from bugbug.tools.build_repair.prompts import (
     ANALYSIS_TEMPLATE,
@@ -71,13 +71,11 @@ class BuildRepairTool(GenerativeModelTool):
         analysis_only: bool = False,
         analysis_model: str = ANALYSIS_MODEL,
         fix_model: str = FIX_MODEL,
-        max_turns: int = DEFAULT_MAX_TURNS,
     ) -> None:
         self.target_software = target_software
         self.analysis_only = analysis_only
         self.analysis_model = analysis_model
         self.fix_model = fix_model
-        self.max_turns = max_turns
 
     @classmethod
     def create(cls, **kwargs):
@@ -101,11 +99,11 @@ class BuildRepairTool(GenerativeModelTool):
         out_dir = worktree_path / "repair_agent" / "out" / str(failure.bug_id)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    def _write_settings(self, worktree_path: Path) -> None:
-        settings_dir = worktree_path / ".claude"
-        settings_dir.mkdir(exist_ok=True)
-        (settings_dir / "settings.json").write_text(
-            json.dumps(CLAUDE_PERMISSIONS_CONFIG, indent=2)
+        logger.info(
+            "Prepared input files for bug %d at %s (%d failure tasks)",
+            failure.bug_id,
+            in_dir,
+            len(failure.failure_tasks),
         )
 
     def _read_output(self, failure: BuildFailure, worktree_path: Path, key: str) -> str:
@@ -122,27 +120,41 @@ class BuildRepairTool(GenerativeModelTool):
         worktree_path: Path,
         skip_try_push: bool = False,
     ) -> AgentResponse:
+        logger.info(
+            "Starting build repair for bug %d (commit=%s, worktree=%s, "
+            "analysis_only=%s, skip_try_push=%s)",
+            failure.bug_id,
+            failure.git_commit,
+            worktree_path,
+            self.analysis_only,
+            skip_try_push,
+        )
         self._prepare_input_files(failure, worktree_path)
-        self._write_settings(worktree_path)
 
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             target_software=self.target_software
         )
-        mcp_servers = [{"url": FIREFOX_MCP_URL, "name": "firefox"}]
+        mcp_servers = {"firefox": {"type": "http", "url": FIREFOX_MCP_URL}}
         disallowed = ["AskUserQuestion", "Task"]
         total_cost = 0.0
         total_turns = 0
 
+        logger.info(
+            "Bug %d: starting Stage 1 (analysis) with model=%s",
+            failure.bug_id,
+            self.analysis_model,
+        )
         # Stage 1: Analysis
         stage1_options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             model=self.analysis_model,
             cwd=str(worktree_path),
+            allowed_tools=ALLOWED_TOOLS,
             disallowed_tools=disallowed,
-            permission_mode="default",
-            setting_sources=["project"],
-            max_turns=self.max_turns,
-            max_thinking_tokens=16000,
+            add_dirs=ADDITIONAL_DIRS,
+            sandbox=SANDBOX_CONFIG,
+            permission_mode="plan",
+            effort="high",
             mcp_servers=mcp_servers,
         )
         analysis_prompt = ANALYSIS_TEMPLATE.format(
@@ -155,16 +167,36 @@ class BuildRepairTool(GenerativeModelTool):
                     total_cost += message.total_cost_usd or 0
                     total_turns += message.num_turns or 0
         except Exception as e:
+            logger.error(
+                "Bug %d: Stage 1 (analysis) failed: %s",
+                failure.bug_id,
+                e,
+                exc_info=True,
+            )
             return AgentResponse(
                 error=str(e),
                 cost_usd=total_cost,
                 num_turns=total_turns,
             )
 
+        logger.info(
+            "Bug %d: Stage 1 complete (cost=$%.4f, turns=%d)",
+            failure.bug_id,
+            total_cost,
+            total_turns,
+        )
+
         summary = self._read_output(failure, worktree_path, "summary")
         analysis = self._read_output(failure, worktree_path, "analysis")
+        logger.info(
+            "Bug %d: read output files (summary=%d chars, analysis=%d chars)",
+            failure.bug_id,
+            len(summary),
+            len(analysis),
+        )
 
         if self.analysis_only:
+            logger.info("Bug %d: analysis-only mode, skipping Stage 2", failure.bug_id)
             return AgentResponse(
                 summary=summary,
                 analysis=analysis,
@@ -172,15 +204,22 @@ class BuildRepairTool(GenerativeModelTool):
                 num_turns=total_turns,
             )
 
+        logger.info(
+            "Bug %d: starting Stage 2 (fix) with model=%s",
+            failure.bug_id,
+            self.fix_model,
+        )
         # Stage 2: Fix
         stage2_options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             model=self.fix_model,
             cwd=str(worktree_path),
+            allowed_tools=ALLOWED_TOOLS,
             disallowed_tools=disallowed,
-            permission_mode="default",
-            setting_sources=["project"],
-            max_turns=self.max_turns,
+            add_dirs=ADDITIONAL_DIRS,
+            sandbox=SANDBOX_CONFIG,
+            permission_mode="acceptEdits",
+            effort="low",
             mcp_servers=mcp_servers,
         )
         fix_prompt = FIX_TEMPLATE.format(bug_id=failure.bug_id)
@@ -190,6 +229,9 @@ class BuildRepairTool(GenerativeModelTool):
                     total_cost += message.total_cost_usd or 0
                     total_turns += message.num_turns or 0
         except Exception as e:
+            logger.error(
+                "Bug %d: Stage 2 (fix) failed: %s", failure.bug_id, e, exc_info=True
+            )
             return AgentResponse(
                 summary=summary,
                 analysis=analysis,
@@ -198,6 +240,13 @@ class BuildRepairTool(GenerativeModelTool):
                 num_turns=total_turns,
             )
 
+        logger.info(
+            "Bug %d: Stage 2 complete (cost=$%.4f, turns=%d)",
+            failure.bug_id,
+            total_cost,
+            total_turns,
+        )
+
         diff_result = subprocess.run(
             ["git", "diff", "HEAD"],
             cwd=worktree_path,
@@ -205,8 +254,10 @@ class BuildRepairTool(GenerativeModelTool):
             text=True,
         )
         diff = diff_result.stdout
+        logger.info("Bug %d: git diff produced %d chars", failure.bug_id, len(diff))
 
         if not diff.strip():
+            logger.warning("Bug %d: no diff produced, returning early", failure.bug_id)
             return AgentResponse(
                 summary=summary,
                 analysis=analysis,
@@ -220,6 +271,12 @@ class BuildRepairTool(GenerativeModelTool):
         task_name = (
             failure.failure_tasks[0]["task_name"] if failure.failure_tasks else ""
         )
+        logger.info(
+            "Bug %d: starting try verification (task=%s, skip_try_push=%s)",
+            failure.bug_id,
+            task_name,
+            skip_try_push,
+        )
         try_result = run_try_verification(
             worktree_path=worktree_path,
             bug_id=failure.bug_id,
@@ -227,6 +284,16 @@ class BuildRepairTool(GenerativeModelTool):
             skip_try_push=skip_try_push,
         )
 
+        logger.info(
+            "Bug %d: try verification done (local_build=%s, try_build=%s, "
+            "lando_job=%s, total_cost=$%.4f, total_turns=%d)",
+            failure.bug_id,
+            try_result.local_build_passed,
+            try_result.try_build_passed,
+            try_result.lando_job_id,
+            total_cost,
+            total_turns,
+        )
         return AgentResponse(
             summary=summary,
             analysis=analysis,
