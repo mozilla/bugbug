@@ -51,6 +51,9 @@ class ReviewRequest(Base):
     # User info
     user_id: Mapped[int]
     user_name: Mapped[str]
+    acting_capacity: Mapped[ActingCapacity | None] = mapped_column(
+        Enum(ActingCapacity, name="acting_capacity_enum")
+    )
 
     # Status and result
     status: Mapped[ReviewStatus] = mapped_column(
