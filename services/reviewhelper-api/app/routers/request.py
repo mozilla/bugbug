@@ -68,6 +68,7 @@ async def create_or_get_review_request(
         diff_id=request.diff_id,
         user_id=request.user_id,
         user_name=request.user_name,
+        acting_capacity=request.acting_capacity,
         status=ReviewStatus.PENDING,
     )
     db.add(review_request)

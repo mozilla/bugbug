@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.enums import ReviewStatus
+from app.enums import ActingCapacity, ReviewStatus
 
 
 class ReviewRequestCreate(BaseModel):
@@ -10,6 +10,7 @@ class ReviewRequestCreate(BaseModel):
     diff_id: int
     user_id: int
     user_name: str
+    acting_capacity: ActingCapacity | None = None
 
 
 class ReviewRequestResponse(BaseModel):
