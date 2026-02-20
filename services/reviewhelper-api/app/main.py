@@ -1,11 +1,22 @@
 import logging
 from contextlib import asynccontextmanager
+from subprocess import check_output
 
+import sentry_sdk
 from fastapi import FastAPI
 
+from app import __version__
 from app.config import settings
 from app.database.connection import close_db, init_db
 from app.routers import feedback_router, internal_router, request_router
+
+sentry_sdk.init(
+    dsn=settings.sentry_dsn,
+    environment=settings.environment,
+    release=f"reviewhelper-api@{__version__}",
+    server_name=check_output("hostname").decode("utf-8").rstrip(),
+    send_default_pii=True,
+)
 
 logging.basicConfig(
     level=logging.INFO,

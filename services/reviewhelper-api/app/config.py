@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     bugzilla_url: str
     bugzilla_api_key: str
 
+    # Environment
+    environment: str = "development"
+
+    # Sentry
+    sentry_dsn: str = "https://14980b902e7207de7ffe7f00ea5d8aef@o1069899.ingest.us.sentry.io/4510918097371136"
+
     # Cloud Run
     port: int = 8080
 
