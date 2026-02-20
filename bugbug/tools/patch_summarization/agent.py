@@ -44,4 +44,12 @@ class PatchSummarizationTool(GenerativeModelTool):
             }
         )
 
-        return result["messages"][-1].content
+        summary = result["messages"][-1].content
+
+        # FIXME(#5705): This is a temporary workaround until we have a more
+        # robust way to handle token budgets in the agent's output
+        idx = summary.rfind("<budget:token")
+        if idx != -1:
+            summary = summary[:idx].strip()
+
+        return summary
