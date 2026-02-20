@@ -331,16 +331,24 @@ class PhabricatorPatch(Patch):
         r.raise_for_status()
         return r.text
 
-    async def get_old_file(self, file_path: str) -> str:
+    async def _get_file(self, file_path: str, *, is_before_patch: bool) -> str:
         if file_path.startswith("b/") or file_path.startswith("a/"):
             file_path = file_path[2:]
 
         try:
-            return await self._get_file_from_patch(file_path, is_before_patch=True)
+            return await self._get_file_from_patch(
+                file_path, is_before_patch=is_before_patch
+            )
         except FileNotFoundError:
             return await self._get_file_from_repo(
                 file_path, commit_hash=await self.get_base_commit_hash()
             )
+
+    async def get_old_file(self, file_path: str) -> str:
+        return await self._get_file(file_path, is_before_patch=True)
+
+    async def get_new_file(self, file_path: str) -> str:
+        return await self._get_file(file_path, is_before_patch=False)
 
     @cached_property
     def _changesets(self) -> list[dict]:
