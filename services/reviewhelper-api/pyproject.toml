@@ -17,6 +17,7 @@ dependencies = [
     "cloud-sql-python-connector[asyncpg]>=1.5.0",
     "python-dotenv>=1.0.0",
     "bugbug",
+    "sentry-sdk>=2.51.0",
 ]
 
 [project.optional-dependencies]
