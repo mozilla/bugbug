@@ -15,7 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from app.enums import ActingCapacity, FeedbackType, Platform, ReviewStatus
+from app.enums import (
+    ActingCapacity,
+    FeedbackType,
+    Platform,
+    ReviewerStatus,
+    ReviewStatus,
+)
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -53,6 +59,9 @@ class ReviewRequest(Base):
     user_name: Mapped[str]
     acting_capacity: Mapped[ActingCapacity | None] = mapped_column(
         Enum(ActingCapacity, name="acting_capacity_enum")
+    )
+    reviewer_status: Mapped[ReviewerStatus | None] = mapped_column(
+        Enum(ReviewerStatus, name="reviewer_status_enum")
     )
 
     # Status and result
@@ -166,6 +175,9 @@ class Feedback(Base):
     user_name: Mapped[str]
     acting_capacity: Mapped[ActingCapacity | None] = mapped_column(
         Enum(ActingCapacity, name="acting_capacity_enum")
+    )
+    reviewer_status: Mapped[ReviewerStatus | None] = mapped_column(
+        Enum(ReviewerStatus, name="reviewer_status_enum")
     )
 
     # Relationships

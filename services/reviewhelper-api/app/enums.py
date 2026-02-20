@@ -27,3 +27,14 @@ class ActingCapacity(str, Enum):
     AUTHOR = "author"
     REVIEWER = "reviewer"
     PARTICIPANT = "participant"
+
+
+class ReviewerStatus(str, Enum):
+    BLOCKING = "blocking"
+    ADDED = "added"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    COMMENTED = "commented"
+    ACCEPTED_OLDER = "accepted-older"
+    REJECTED_OLDER = "rejected-older"
+    RESIGNED = "resigned"

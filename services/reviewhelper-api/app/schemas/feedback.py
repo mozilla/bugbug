@@ -1,16 +1,14 @@
 from pydantic import BaseModel
 
-from app.enums import ActingCapacity, FeedbackType
+from app.enums import FeedbackType
+from app.schemas.base import UserActionBase
 
 
-class FeedbackCreate(BaseModel):
+class FeedbackCreate(UserActionBase):
     """Request body for submitting feedback."""
 
     comment_id: int
     feedback_type: FeedbackType
-    user_id: int
-    user_name: str
-    acting_capacity: ActingCapacity | None = None
 
 
 class FeedbackResponse(BaseModel):
