@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,7 +36,8 @@ async def process_review_request(
     review_request = result.scalar_one_or_none()
 
     if not review_request:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        logger.error("Review request %s not found", review_request_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     if not review_request.task_id:
         # We need to tolerate the possibility of delay or failures before
@@ -56,10 +57,7 @@ async def process_review_request(
             review_request.task_id,
             x_cloudtasks_taskname,
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Task ID does not match the one associated with the review request",
-        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     if review_request.status.is_final:
         logger.error(
@@ -67,10 +65,7 @@ async def process_review_request(
             review_request_id,
             review_request.status,
         )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Review request is not in a processable state",
-        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     if review_request.status == ReviewStatus.COMPLETED:
         # If we already have the generated comments from a previous processing
