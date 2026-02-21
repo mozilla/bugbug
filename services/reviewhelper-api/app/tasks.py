@@ -7,6 +7,7 @@ from google.cloud.tasks_v2 import (
     HttpRequest,
     Task,
 )
+from google.protobuf.duration_pb2 import Duration
 
 from app.config import settings
 
@@ -18,14 +19,11 @@ def _get_tasks_client():
     return CloudTasksAsyncClient()
 
 
-async def create_review_task(review_request_id: int) -> str:
+async def create_review_task(review_request_id: int):
     """Create a Cloud Task to process a review request.
 
     Args:
         review_request_id: The ID of the review request to process.
-
-    Returns:
-        The name of the created task.
     """
     client = _get_tasks_client()
 
@@ -45,13 +43,10 @@ async def create_review_task(review_request_id: int) -> str:
                 "Authorization": f"Bearer {settings.internal_api_key}",
             },
         ),
+        dispatch_deadline=Duration(seconds=30 * 60),
     )
 
     response = await client.create_task(parent=parent, task=task)
     logger.info(
         "Created task %s for review request %s", response.name, review_request_id
     )
-
-    task_id = response.name.split("/")[-1]
-
-    return task_id

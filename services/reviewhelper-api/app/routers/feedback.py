@@ -85,6 +85,8 @@ async def submit_feedback(
 
         await db.execute(stmt)
 
+    await db.commit()
+
     return JSONResponse(
         {
             "message": (

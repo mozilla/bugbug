@@ -73,8 +73,6 @@ class ReviewRequest(Base):
     error: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
 
-    task_id: Mapped[str | None]
-
     # Relationships
     comments: Mapped[list["GeneratedComment"]] = relationship(
         "GeneratedComment",

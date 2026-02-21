@@ -9,7 +9,7 @@ class Platform(str, Enum):
 class ReviewStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
-    COMPLETED = "completed"
+    RETRY_PENDING = "retry_pending"
     PUBLISHED = "published"
     FAILED = "failed"
 
