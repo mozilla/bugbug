@@ -23,14 +23,16 @@ def get_code_review_tool():
     return CodeReviewTool.create()
 
 
-async def process_review(review_request: ReviewRequest) -> list[GeneratedComment]:
+async def process_review(
+    review_request: ReviewRequest,
+) -> tuple[list[GeneratedComment], str, dict]:
     """Process a review request and generate comments.
 
     Args:
         review_request: The review request to process.
 
     Returns:
-        The generated comments from the review processing.
+        A tuple of (generated comments, patch summary, review details).
     """
     logger.info(
         "Processing review request %s for platform %s",
@@ -62,10 +64,7 @@ async def process_review(review_request: ReviewRequest) -> list[GeneratedComment
         for comment in result.review_comments
     ]
 
-    review_request.summary = result.patch_summary
-    review_request.details = result.details
-
-    return generated_comments
+    return generated_comments, result.patch_summary, result.details
 
 
 def submit_review_to_platform(

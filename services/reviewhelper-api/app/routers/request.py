@@ -76,7 +76,7 @@ async def create_or_get_review_request(
     await db.commit()
 
     # Queue task for processing
-    review_request.task_id = await create_review_task(review_request.id)
+    await create_review_task(review_request.id)
 
     return JSONResponse(
         {
@@ -95,8 +95,8 @@ def _build_response_message(review_request: ReviewRequest) -> str:
     if review_request.status == ReviewStatus.PROCESSING:
         return f"The review for Diff {review_request.diff_id} is currently being processed. Review Helper will comment once it's done."
 
-    if review_request.status == ReviewStatus.COMPLETED:
-        return f"The review for Diff {review_request.diff_id} has been completed successfully. Review Helper is ready to post its review."
+    if review_request.status == ReviewStatus.RETRY_PENDING:
+        return f"The review for Diff {review_request.diff_id} encountered an issue and will be scheduled for retry."
 
     if review_request.status == ReviewStatus.PUBLISHED:
         return f"Review Helper already posted its review for Diff {review_request.diff_id}."
