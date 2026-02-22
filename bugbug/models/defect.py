@@ -7,15 +7,22 @@ import itertools
 import logging
 from typing import Any
 
+import torch
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
+from skorch import NeuralNetClassifier
+from skorch.callbacks import ProgressBar
+from skorch.hf import HuggingfacePretrainedTokenizer
+from torch import nn
 
 from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
 from bugbug.model import BugModel
+from bugbug.nn import DistilBertModule, ExtractEmbeddings, get_training_device
+from bugbug.utils import MergeText
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -290,3 +297,94 @@ class DefectModel(BugModel):
                 classes[i] = 0 if not probabilities else [1.0, 0.0]
 
         return classes
+
+
+class DefectFinetuningModel(DefectModel):
+    def __init__(self, last_layer_only=True, **kwargs):
+        super().__init__(**kwargs)
+
+        self.sampler = None
+        self.calculate_importance = False
+        self.cross_validation_enabled = False
+
+        self.extraction_pipeline = Pipeline(
+            [
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor([], [], rollback=True),
+                ),
+                ("extract", MergeText(["title", "comments"])),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
+                (
+                    "tokenizer",
+                    HuggingfacePretrainedTokenizer(
+                        "distilbert-base-uncased", max_length=512
+                    ),
+                ),
+                (
+                    "classifier",
+                    NeuralNetClassifier(
+                        DistilBertModule,
+                        module__name="distilbert-base-uncased",
+                        module__num_labels=2,
+                        module__last_layer_only=last_layer_only,
+                        optimizer=torch.optim.AdamW,
+                        lr=6e-5,
+                        max_epochs=2,
+                        criterion=nn.CrossEntropyLoss,
+                        batch_size=4,
+                        iterator_train__shuffle=True,
+                        device=get_training_device(),
+                        callbacks=[
+                            ProgressBar(),
+                        ],
+                    ),
+                ),
+            ]
+        )
+
+    def get_feature_names(self):
+        return []
+
+
+class DefectEmbeddingModel(DefectModel):
+    def __init__(self, **kwargs):
+        print(**kwargs)
+        super().__init__(**kwargs)
+
+        self.sampler = None
+        self.calculate_importance = False
+        self.cross_validation_enabled = False
+
+        self.extraction_pipeline = Pipeline(
+            [
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor([], [], rollback=True),
+                ),
+                ("extract", MergeText(["title", "comments"])),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
+                (
+                    "tokenizer",
+                    HuggingfacePretrainedTokenizer(
+                        "distilbert-base-uncased", max_length=512
+                    ),
+                ),
+                ("extract_embeddings", ExtractEmbeddings("distilbert-base-uncased")),
+                (
+                    "classifier",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
+            ]
+        )
+
+    def get_feature_names(self):
+        return []

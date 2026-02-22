@@ -22,7 +22,9 @@ class Trainer(object):
 
         model_name = args.model
         model_class = get_model_class(model_name)
-        parameter_names = set(inspect.signature(model_class.__init__).parameters)
+        parameter_names = set(inspect.signature(model_class.__init__).parameters) - {
+            "kwargs"
+        }
         parameters = {
             key: value for key, value in vars(args).items() if key in parameter_names
         }
@@ -47,7 +49,7 @@ class Trainer(object):
 
         logger.info("Training done")
 
-        model_directory = f"{model_name}model"
+        model_directory = model_obj.__class__.__name__.lower()
         assert os.path.exists(model_directory)
         create_tar_zst(f"{model_directory}.tar.zst")
 
