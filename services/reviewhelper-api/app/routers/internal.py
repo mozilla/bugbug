@@ -86,14 +86,14 @@ async def process_review_request(
                 review_request_id,
                 age,
             )
-            return Response(status_code=status.HTTP_509_SERVICE_UNAVAILABLE)
+            return Response(status_code=status.HTTP_409_CONFLICT)
 
     if not await claim_review_request(db, review_request):
         logger.warning(
             "Review request %s was modified concurrently, likely claimed by another worker",
             review_request_id,
         )
-        return Response(status_code=status.HTTP_509_SERVICE_UNAVAILABLE)
+        return Response(status_code=status.HTTP_409_CONFLICT)
 
     if review_request.summary:
         logger.info(
