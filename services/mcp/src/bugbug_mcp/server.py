@@ -12,8 +12,6 @@ from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
 from pydantic import Field
 
-from bugbug import utils
-from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
 from bugbug.tools.core.platforms.phabricator import (
@@ -55,40 +53,6 @@ async def patch_review(
     initial_prompt = tool.generate_initial_prompt(patch, patch_summary)
 
     return system_prompt + "\n\n" + initial_prompt
-
-
-def get_file(commit_hash, path):
-    if commit_hash == "main":
-        commit_hash = "refs/heads/main"
-
-    r = utils.get_session("githubusercontent").get(
-        f"https://raw.githubusercontent.com/mozilla-firefox/firefox/{commit_hash}/{path}",
-        headers={
-            "User-Agent": utils.get_user_agent(),
-        },
-    )
-    r.raise_for_status()
-    return r.text
-
-
-function_search = FunctionSearchSearchfoxAPI(get_file)
-
-
-@mcp.tool()
-def find_function_definition(
-    function_name: Annotated[str, "The name of the function to find its definition."],
-) -> str:
-    """Find the definition of a function in the Firefox codebase using Searchfox."""
-    functions = function_search.get_function_by_name(
-        "main",
-        "n/a",  # The file path is not used
-        function_name,
-    )
-
-    if not functions:
-        return "Function definition not found."
-
-    return functions[0].source
 
 
 @mcp.resource(
