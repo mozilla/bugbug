@@ -16,10 +16,12 @@ Usage:
 
 import argparse
 import asyncio
+import json
 import logging
 import os
-from datetime import date
+from datetime import datetime
 from functools import cached_property
+from typing import Any
 
 import weave
 
@@ -33,6 +35,139 @@ from bugbug.tools.build_repair.scorer import (
 from bugbug.tools.build_repair.worktree import WorktreeManager
 
 logger = logging.getLogger(__name__)
+
+# todo: verify tracing code
+
+
+def _attr(obj, key, default=None):
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def _to_chat_message(data: dict) -> dict | None:
+    """Convert a serialized claude_agent_sdk message to OpenAI chat format.
+
+    Content blocks may be dicts (from model_dump) or dataclass instances
+    (from vars), so we use _attr() for uniform access.
+    """
+    msg_type = data.get("type", "")
+
+    if msg_type == "AssistantMessage":
+        blocks = data.get("content", [])
+        text_parts = []
+        tool_calls = []
+        for block in blocks:
+            text = _attr(block, "text")
+            if text is not None:
+                text_parts.append(text)
+                continue
+            name = _attr(block, "name")
+            block_id = _attr(block, "id")
+            if name is not None and block_id is not None:
+                tool_calls.append(
+                    {
+                        "id": block_id,
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "arguments": json.dumps(_attr(block, "input", {})),
+                        },
+                    }
+                )
+        if not text_parts and not tool_calls:
+            return None
+        msg: dict = {"role": "assistant"}
+        if text_parts:
+            msg["content"] = "\n".join(text_parts)
+        if tool_calls:
+            msg["tool_calls"] = tool_calls
+        return msg
+
+    if msg_type == "UserMessage":
+        content = data.get("content", "")
+        if isinstance(content, list):
+            for block in content:
+                tool_use_id = _attr(block, "tool_use_id")
+                if tool_use_id:
+                    block_content = _attr(block, "content", "")
+                    return {
+                        "role": "tool",
+                        "tool_call_id": tool_use_id,
+                        "content": str(block_content) if block_content else "",
+                    }
+
+    return None
+
+
+@weave.op(kind="llm")
+def trace_llm_stage(
+    stage: str,
+    messages: list[dict],
+    model: str,
+    result_data: dict | None = None,
+) -> dict:
+    last_assistant = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "assistant" and msg.get("content"):
+            last_assistant = msg["content"]
+            break
+
+    result: dict[str, Any] = {
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": last_assistant},
+            }
+        ],
+    }
+    if result_data:
+        usage = {
+            k: result_data[k]
+            for k in (
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "cache_read_input_tokens",
+                "cache_creation_input_tokens",
+                "total_cost_usd",
+                "num_turns",
+            )
+            if k in result_data
+        }
+        if usage:
+            result["usage"] = {model: usage}
+    return result
+
+
+def _make_weave_callback():
+    stages: dict[str, dict] = {}
+
+    def on_message(stage: str, data: dict) -> None:
+        msg_type = data["type"]
+        if msg_type == "stage_start":
+            stages[stage] = {
+                "model": data["model"],
+                "messages": [
+                    {"role": "system", "content": data["system_prompt"]},
+                    {"role": "user", "content": data["prompt"]},
+                ],
+            }
+        elif msg_type == "stage_end":
+            if stage in stages:
+                s = stages.pop(stage)
+                trace_llm_stage(
+                    stage=stage,
+                    messages=s["messages"],
+                    model=s["model"],
+                    result_data=data.get("result_data") or None,
+                )
+        else:
+            if stage in stages:
+                chat_msg = _to_chat_message(data)
+                if chat_msg:
+                    stages[stage]["messages"].append(chat_msg)
+
+    return on_message
 
 
 class BuildRepairModel(weave.Model):
@@ -63,11 +198,8 @@ class BuildRepairModel(weave.Model):
     ) -> dict:
         wt_name = f"bug-{bug_id}-trial-{self.trial_id}"
         logger.info(
-            "Invoking bug %d (trial=%d, commit=%s, %d failures)",
-            bug_id,
-            self.trial_id,
-            gh_failure_commits[0][:12],
-            len(failures),
+            f"Invoking bug {bug_id} (trial={self.trial_id}, "
+            f"commit={gh_failure_commits[0][:12]}, {len(failures)} failures)"
         )
 
         try:
@@ -75,12 +207,10 @@ class BuildRepairModel(weave.Model):
                 MODEL_CUTOFF_DATES[self.tool.analysis_model],
                 MODEL_CUTOFF_DATES[self.tool.fix_model],
             )
-            if date.fromisoformat(fix_commit_date) < cutoff:
+            if datetime.fromisoformat(fix_commit_date).date() < cutoff:
                 logger.warning(
-                    "Skipping bug %d: fix date %s is before model cutoff %s",
-                    bug_id,
-                    fix_commit_date,
-                    cutoff,
+                    f"Skipping bug {bug_id}: fix date {fix_commit_date} "
+                    f"is before model cutoff {cutoff}"
                 )
                 raise ValueError("skipped_data_contamination")
 
@@ -97,21 +227,18 @@ class BuildRepairModel(weave.Model):
                 failure,
                 worktree_path=worktree_path,
                 skip_try_push=self.no_try_push,
+                on_message=_make_weave_callback(),
             )
             logger.info(
-                "Bug %d completed: error=%s, diff_len=%d, cost=$%.4f, turns=%d, "
-                "local_build=%s, try_build=%s",
-                bug_id,
-                result.error,
-                len(result.diff),
-                result.cost_usd,
-                result.num_turns,
-                result.local_build_passed,
-                result.try_build_passed,
+                f"Bug {bug_id} completed: error={result.error}, "
+                f"diff_len={len(result.diff)}, cost=${result.cost_usd:.4f}, "
+                f"turns={result.num_turns}, "
+                f"local_build={result.local_build_passed}, "
+                f"try_build={result.try_build_passed}"
             )
             return result.model_dump()
         except Exception as e:
-            logger.error("Bug %d failed with exception: %s", bug_id, e, exc_info=True)
+            logger.error(f"Bug {bug_id} failed with exception: {e}", exc_info=True)
             return {
                 "error": str(e),
                 "diff": "",
@@ -123,9 +250,11 @@ class BuildRepairModel(weave.Model):
                 "try_build_passed": None,
                 "lando_job_id": None,
                 "treeherder_url": None,
+                "stage1_transcript": [],
+                "stage2_transcript": [],
             }
         finally:
-            logger.info("Bug %d: cleaning up worktree %s", bug_id, wt_name)
+            logger.info(f"Bug {bug_id}: cleaning up worktree {wt_name}")
             self.worktree_mgr.cleanup(wt_name)
 
 
@@ -133,7 +262,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build repair evaluation")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--trials", type=int, default=1)
-    parser.add_argument("--parallelism", type=int, default=4)
+    parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument("--firefox-repo", default=os.environ.get("FIREFOX_GIT_REPO"))
     parser.add_argument("--dataset", default="build_repair_one_commit_eval")
     parser.add_argument("--analysis-only", action="store_true")
@@ -147,17 +276,13 @@ def main() -> None:
         level=logging.DEBUG,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     logger.info(
-        "Starting evaluation: dataset=%s, limit=%s, trials=%d, parallelism=%d, "
-        "analysis_only=%s, no_try_push=%s, firefox_repo=%s",
-        args.dataset,
-        args.limit,
-        args.trials,
-        args.parallelism,
-        args.analysis_only,
-        args.no_try_push,
-        args.firefox_repo,
+        f"Starting evaluation: dataset={args.dataset}, limit={args.limit}, "
+        f"trials={args.trials}, parallelism={args.parallelism}, "
+        f"analysis_only={args.analysis_only}, no_try_push={args.no_try_push}, "
+        f"firefox_repo={args.firefox_repo}"
     )
 
     os.environ["WEAVE_PARALLELISM"] = str(args.parallelism)
@@ -165,18 +290,18 @@ def main() -> None:
 
     dataset = weave.ref(args.dataset).get()
     rows = dataset.rows
-    logger.info("Loaded dataset %s with %d rows", args.dataset, len(rows))
+    logger.info(f"Loaded dataset {args.dataset} with {len(rows)} rows")
     if args.limit:
         rows = rows[: args.limit]
-        logger.info("Limited to %d rows", len(rows))
+        logger.info(f"Limited to {len(rows)} rows")
 
     scorers = [BasicMetricsScorer(), LLMFixMatchingScorer()]
     if not args.analysis_only:
         scorers.insert(1, BuildPassRateScorer())
-    logger.info("Scorers: %s", [type(s).__name__ for s in scorers])
+    logger.info(f"Scorers: {[type(s).__name__ for s in scorers]}")
 
     for trial in range(args.trials):
-        logger.info("Starting trial %d/%d", trial + 1, args.trials)
+        logger.info(f"Starting trial {trial + 1}/{args.trials}")
         model = BuildRepairModel(
             firefox_repo=args.firefox_repo,
             analysis_only=args.analysis_only,
@@ -189,7 +314,7 @@ def main() -> None:
             scorers=scorers,
         )
         results = asyncio.run(evaluation.evaluate(model))
-        logger.info("Trial %d/%d results: %s", trial + 1, args.trials, results)
+        logger.info(f"Trial {trial + 1}/{args.trials} results: {results}")
 
     # TODO: To compute pass@k across trials, collect per-row scores from each
     # trial via the Weave API (weave.ref(...).get() on individual evaluation

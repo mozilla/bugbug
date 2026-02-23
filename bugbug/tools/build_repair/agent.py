@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import subprocess
+from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
 
@@ -55,6 +56,8 @@ class AgentResponse(BaseModel):
     try_build_passed: bool | None = Field(default=None)
     lando_job_id: str | None = Field(default=None)
     treeherder_url: str | None = Field(default=None)
+    stage1_transcript: list[dict] = Field(default_factory=list)
+    stage2_transcript: list[dict] = Field(default_factory=list)
 
 
 class BuildRepairTool(GenerativeModelTool):
@@ -81,6 +84,68 @@ class BuildRepairTool(GenerativeModelTool):
     def create(cls, **kwargs):
         return cls(**kwargs)
 
+    @staticmethod
+    def _serialize_message(message) -> dict:
+        data = {"type": type(message).__name__}
+        if hasattr(message, "model_dump"):
+            data.update(message.model_dump())
+        elif hasattr(message, "__dict__"):
+            data.update(vars(message))
+        else:
+            data["raw"] = str(message)
+        return data
+
+    async def _run_stage(
+        self,
+        stage_name: str,
+        prompt: str,
+        system_prompt: str,
+        model: str,
+        options: ClaudeAgentOptions,
+        bug_id: int,
+        on_message: Callable[[str, dict], None] | None = None,
+    ) -> tuple[list[dict], float, int]:
+        transcript: list[dict] = []
+        cost = 0.0
+        turns = 0
+        result_data: dict = {}
+
+        if on_message:
+            on_message(
+                stage_name,
+                {
+                    "type": "stage_start",
+                    "prompt": prompt,
+                    "system_prompt": system_prompt,
+                    "model": model,
+                },
+            )
+        try:
+            async for message in query(prompt=prompt, options=options):
+                serialized = self._serialize_message(message)
+                transcript.append(serialized)
+                logger.info(f"Bug {bug_id}: {stage_name} [{serialized['type']}]")
+                logger.debug(f"Bug {bug_id}: {stage_name} detail: {serialized}")
+                if on_message:
+                    on_message(stage_name, serialized)
+                if isinstance(message, ResultMessage):
+                    cost += message.total_cost_usd or 0
+                    turns += message.num_turns or 0
+                    result_data = serialized
+        finally:
+            if on_message:
+                on_message(
+                    stage_name,
+                    {
+                        "type": "stage_end",
+                        "cost_usd": cost,
+                        "num_turns": turns,
+                        "result_data": result_data,
+                    },
+                )
+
+        return transcript, cost, turns
+
     def _prepare_input_files(self, failure: BuildFailure, worktree_path: Path) -> None:
         in_dir = worktree_path / "repair_agent" / "in" / str(failure.bug_id)
         in_dir.mkdir(parents=True, exist_ok=True)
@@ -100,10 +165,8 @@ class BuildRepairTool(GenerativeModelTool):
         out_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
-            "Prepared input files for bug %d at %s (%d failure tasks)",
-            failure.bug_id,
-            in_dir,
-            len(failure.failure_tasks),
+            f"Prepared input files for bug {failure.bug_id} at {in_dir} "
+            f"({len(failure.failure_tasks)} failure tasks)"
         )
 
     def _read_output(self, failure: BuildFailure, worktree_path: Path, key: str) -> str:
@@ -119,15 +182,12 @@ class BuildRepairTool(GenerativeModelTool):
         failure: BuildFailure,
         worktree_path: Path,
         skip_try_push: bool = False,
+        on_message: Callable[[str, dict], None] | None = None,
     ) -> AgentResponse:
         logger.info(
-            "Starting build repair for bug %d (commit=%s, worktree=%s, "
-            "analysis_only=%s, skip_try_push=%s)",
-            failure.bug_id,
-            failure.git_commit,
-            worktree_path,
-            self.analysis_only,
-            skip_try_push,
+            f"Starting build repair for bug {failure.bug_id} "
+            f"(commit={failure.git_commit}, worktree={worktree_path}, "
+            f"analysis_only={self.analysis_only}, skip_try_push={skip_try_push})"
         )
         self._prepare_input_files(failure, worktree_path)
 
@@ -140,11 +200,9 @@ class BuildRepairTool(GenerativeModelTool):
         total_turns = 0
 
         logger.info(
-            "Bug %d: starting Stage 1 (analysis) with model=%s",
-            failure.bug_id,
-            self.analysis_model,
+            f"Bug {failure.bug_id}: starting Stage 1 (analysis) "
+            f"with model={self.analysis_model}"
         )
-        # Stage 1: Analysis
         stage1_options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             model=self.analysis_model,
@@ -153,7 +211,7 @@ class BuildRepairTool(GenerativeModelTool):
             disallowed_tools=disallowed,
             add_dirs=ADDITIONAL_DIRS,
             sandbox=SANDBOX_CONFIG,
-            permission_mode="plan",
+            permission_mode="acceptEdits",
             effort="high",
             mcp_servers=mcp_servers,
         )
@@ -162,16 +220,20 @@ class BuildRepairTool(GenerativeModelTool):
             target_software=self.target_software,
         )
         try:
-            async for message in query(prompt=analysis_prompt, options=stage1_options):
-                if isinstance(message, ResultMessage):
-                    total_cost += message.total_cost_usd or 0
-                    total_turns += message.num_turns or 0
+            stage1_transcript, stage1_cost, stage1_turns = await self._run_stage(
+                "analysis",
+                analysis_prompt,
+                system_prompt,
+                self.analysis_model,
+                stage1_options,
+                failure.bug_id,
+                on_message,
+            )
+            total_cost += stage1_cost
+            total_turns += stage1_turns
         except Exception as e:
             logger.error(
-                "Bug %d: Stage 1 (analysis) failed: %s",
-                failure.bug_id,
-                e,
-                exc_info=True,
+                f"Bug {failure.bug_id}: Stage 1 (analysis) failed: {e}", exc_info=True
             )
             return AgentResponse(
                 error=str(e),
@@ -180,36 +242,30 @@ class BuildRepairTool(GenerativeModelTool):
             )
 
         logger.info(
-            "Bug %d: Stage 1 complete (cost=$%.4f, turns=%d)",
-            failure.bug_id,
-            total_cost,
-            total_turns,
+            f"Bug {failure.bug_id}: Stage 1 complete "
+            f"(cost=${total_cost:.4f}, turns={total_turns})"
         )
 
         summary = self._read_output(failure, worktree_path, "summary")
         analysis = self._read_output(failure, worktree_path, "analysis")
         logger.info(
-            "Bug %d: read output files (summary=%d chars, analysis=%d chars)",
-            failure.bug_id,
-            len(summary),
-            len(analysis),
+            f"Bug {failure.bug_id}: read output files "
+            f"(summary={len(summary)} chars, analysis={len(analysis)} chars)"
         )
 
         if self.analysis_only:
-            logger.info("Bug %d: analysis-only mode, skipping Stage 2", failure.bug_id)
+            logger.info(f"Bug {failure.bug_id}: analysis-only mode, skipping Stage 2")
             return AgentResponse(
                 summary=summary,
                 analysis=analysis,
                 cost_usd=total_cost,
                 num_turns=total_turns,
+                stage1_transcript=stage1_transcript,
             )
 
         logger.info(
-            "Bug %d: starting Stage 2 (fix) with model=%s",
-            failure.bug_id,
-            self.fix_model,
+            f"Bug {failure.bug_id}: starting Stage 2 (fix) with model={self.fix_model}"
         )
-        # Stage 2: Fix
         stage2_options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             model=self.fix_model,
@@ -224,13 +280,20 @@ class BuildRepairTool(GenerativeModelTool):
         )
         fix_prompt = FIX_TEMPLATE.format(bug_id=failure.bug_id)
         try:
-            async for message in query(prompt=fix_prompt, options=stage2_options):
-                if isinstance(message, ResultMessage):
-                    total_cost += message.total_cost_usd or 0
-                    total_turns += message.num_turns or 0
+            stage2_transcript, stage2_cost, stage2_turns = await self._run_stage(
+                "fix",
+                fix_prompt,
+                system_prompt,
+                self.fix_model,
+                stage2_options,
+                failure.bug_id,
+                on_message,
+            )
+            total_cost += stage2_cost
+            total_turns += stage2_turns
         except Exception as e:
             logger.error(
-                "Bug %d: Stage 2 (fix) failed: %s", failure.bug_id, e, exc_info=True
+                f"Bug {failure.bug_id}: Stage 2 (fix) failed: {e}", exc_info=True
             )
             return AgentResponse(
                 summary=summary,
@@ -241,10 +304,8 @@ class BuildRepairTool(GenerativeModelTool):
             )
 
         logger.info(
-            "Bug %d: Stage 2 complete (cost=$%.4f, turns=%d)",
-            failure.bug_id,
-            total_cost,
-            total_turns,
+            f"Bug {failure.bug_id}: Stage 2 complete "
+            f"(cost=${total_cost:.4f}, turns={total_turns})"
         )
 
         diff_result = subprocess.run(
@@ -254,16 +315,18 @@ class BuildRepairTool(GenerativeModelTool):
             text=True,
         )
         diff = diff_result.stdout
-        logger.info("Bug %d: git diff produced %d chars", failure.bug_id, len(diff))
+        logger.info(f"Bug {failure.bug_id}: git diff produced {len(diff)} chars")
 
         if not diff.strip():
-            logger.warning("Bug %d: no diff produced, returning early", failure.bug_id)
+            logger.warning(f"Bug {failure.bug_id}: no diff produced, returning early")
             return AgentResponse(
                 summary=summary,
                 analysis=analysis,
                 diff=diff,
                 cost_usd=total_cost,
                 num_turns=total_turns,
+                stage1_transcript=stage1_transcript,
+                stage2_transcript=stage2_transcript,
             )
 
         from bugbug.tools.build_repair.try_server import run_try_verification
@@ -272,10 +335,8 @@ class BuildRepairTool(GenerativeModelTool):
             failure.failure_tasks[0]["task_name"] if failure.failure_tasks else ""
         )
         logger.info(
-            "Bug %d: starting try verification (task=%s, skip_try_push=%s)",
-            failure.bug_id,
-            task_name,
-            skip_try_push,
+            f"Bug {failure.bug_id}: starting try verification "
+            f"(task={task_name}, skip_try_push={skip_try_push})"
         )
         try_result = run_try_verification(
             worktree_path=worktree_path,
@@ -285,14 +346,11 @@ class BuildRepairTool(GenerativeModelTool):
         )
 
         logger.info(
-            "Bug %d: try verification done (local_build=%s, try_build=%s, "
-            "lando_job=%s, total_cost=$%.4f, total_turns=%d)",
-            failure.bug_id,
-            try_result.local_build_passed,
-            try_result.try_build_passed,
-            try_result.lando_job_id,
-            total_cost,
-            total_turns,
+            f"Bug {failure.bug_id}: try verification done "
+            f"(local_build={try_result.local_build_passed}, "
+            f"try_build={try_result.try_build_passed}, "
+            f"lando_job={try_result.lando_job_id}, "
+            f"total_cost=${total_cost:.4f}, total_turns={total_turns})"
         )
         return AgentResponse(
             summary=summary,
@@ -304,4 +362,6 @@ class BuildRepairTool(GenerativeModelTool):
             try_build_passed=try_result.try_build_passed,
             lando_job_id=try_result.lando_job_id,
             treeherder_url=try_result.treeherder_url,
+            stage1_transcript=stage1_transcript,
+            stage2_transcript=stage2_transcript,
         )

@@ -27,32 +27,49 @@ class WorktreeManager:
     def create(self, commit_hash: str, name: str) -> Path:
         worktree_path = self.base_dir / name
         logger.info(
-            "Creating worktree %s at %s (commit=%s)", name, worktree_path, commit_hash
+            f"Creating worktree {name} at {worktree_path} (commit={commit_hash})"
         )
+        if worktree_path.exists():
+            self.cleanup(name)
         subprocess.run(
-            ["git", "worktree", "add", str(worktree_path), commit_hash],
+            [
+                "git",
+                "worktree",
+                "add",
+                "--force",
+                "--force",
+                str(worktree_path),
+                commit_hash,
+            ],
             cwd=self.repo,
             check=True,
         )
-        logger.info("Worktree %s created", name)
+        logger.info(f"Worktree {name} created")
         return worktree_path
 
     def cleanup(self, name: str) -> None:
-        logger.info("Cleaning up worktree %s", name)
+        logger.info(f"Cleaning up worktree {name}")
         subprocess.run(
-            ["git", "worktree", "remove", str(self.base_dir / name), "--force"],
+            [
+                "git",
+                "worktree",
+                "remove",
+                "--force",
+                "--force",
+                str(self.base_dir / name),
+            ],
             cwd=self.repo,
             check=True,
         )
-        logger.info("Worktree %s removed", name)
+        logger.info(f"Worktree {name} removed")
 
     def cleanup_all(self) -> None:
-        logger.info("Cleaning up all worktrees in %s", self.base_dir)
+        logger.info(f"Cleaning up all worktrees in {self.base_dir}")
         for entry in self.base_dir.iterdir():
             if entry.is_dir():
-                logger.info("Removing worktree %s", entry)
+                logger.info(f"Removing worktree {entry}")
                 subprocess.run(
-                    ["git", "worktree", "remove", str(entry), "--force"],
+                    ["git", "worktree", "remove", "--force", "--force", str(entry)],
                     cwd=self.repo,
                     check=False,
                 )

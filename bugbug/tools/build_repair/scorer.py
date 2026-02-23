@@ -32,7 +32,7 @@ class BasicMetricsScorer(weave.Scorer):
             "total_cost_usd": sum(costs),
             "num_examples": n,
         }
-        logger.info("BasicMetrics summary: %s", summary)
+        logger.info(f"BasicMetrics summary: {summary}")
         return summary
 
 
@@ -59,7 +59,7 @@ class BuildPassRateScorer(weave.Scorer):
             "try_builds_timed_out": n - len(try_known),
             "num_examples": n,
         }
-        logger.info("BuildPassRate summary: %s", summary)
+        logger.info(f"BuildPassRate summary: {summary}")
         return summary
 
 

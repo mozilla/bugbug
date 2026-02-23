@@ -8,5 +8,3 @@ RUN pip install -e .
 RUN pip install claude-agent-sdk jupyter
 
 ENV FIREFOX_GIT_REPO=/workspace/firefox
-
-ENTRYPOINT ["python", "scripts/build_repair_eval.py"]
