@@ -14,6 +14,7 @@ from typing import Iterable, Optional
 
 import tenacity
 from async_lru import alru_cache
+from libmozdata.phabricator import PhabricatorRevisionNotFoundException
 from tqdm import tqdm
 
 from bugbug.tools.core.connection import get_http_client, get_user_agent
@@ -271,6 +272,15 @@ class PhabricatorPatch(Patch):
     @property
     def patch_url(self) -> str:
         return f"{_base_url()}/D{self.revision_id}"
+
+    def is_accessible(self) -> bool:
+        try:
+            return bool(self._revision_metadata)
+        except PhabricatorRevisionNotFoundException:
+            return False
+
+    def is_public(self) -> bool:
+        return self._revision_metadata["fields"]["policy"]["view"] == "public"
 
     @property
     def diff_id(self) -> int:

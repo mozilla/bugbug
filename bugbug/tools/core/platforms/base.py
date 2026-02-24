@@ -75,6 +75,14 @@ class Patch(ABC):
         """Return the contents of a file after the patch is applied."""
         ...
 
+    @abstractmethod
+    def is_accessible(self) -> bool:
+        """Return whether this patch is accessible."""
+
+    @abstractmethod
+    def is_public(self) -> bool:
+        """Return whether this patch is public."""
+
 
 class ReviewData(ABC):
     """Abstract base class for code review platform data access."""

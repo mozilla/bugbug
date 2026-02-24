@@ -10,8 +10,11 @@ from app.auth import verify_internal_api_key
 from app.database.connection import get_db
 from app.database.models import ReviewRequest
 from app.enums import ReviewStatus
-from app.review_processor import process_review, submit_review_to_platform
-from bugbug.tools.core.exceptions import LargeDiffError
+from app.review_processor import (
+    ReviewProcessingError,
+    process_review,
+    submit_review_to_platform,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +107,8 @@ async def process_review_request(
     else:
         try:
             comments, patch_summary, details = await process_review(review_request)
-        except LargeDiffError:
-            review_request.error = (
-                "The diff size exceeds the current processing limits."
-            )
+        except ReviewProcessingError as e:
+            review_request.error = str(e)
             review_request.status = ReviewStatus.FAILED
             await db.commit()
             # We return 204 here to avoid triggering retries, since this is a

@@ -4,6 +4,7 @@ from typing import Collection, Iterable
 
 from app.database.models import GeneratedComment, ReviewRequest
 from app.enums import Platform
+from bugbug.tools.core.exceptions import LargeDiffError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     get_phabricator_client,
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ReviewProcessingError(Exception):
-    """Custom exception for review processing errors."""
+    """Custom exception for permanent errors during review processing that should not trigger retries."""
 
 
 @cache
@@ -47,9 +48,20 @@ async def process_review(
     else:
         raise ValueError(f"Unsupported platform: {review_request.platform}")
 
+    if not patch.is_accessible() or not patch.is_public():
+        raise ReviewProcessingError(
+            "Unable to access the revision. This may be because "
+            "the revision is private or has restricted visibility."
+        )
+
     tool = get_code_review_tool()
 
-    result = await tool.run(patch)
+    try:
+        result = await tool.run(patch)
+    except LargeDiffError as e:
+        raise ReviewProcessingError(
+            "The diff size exceeds the current processing limits."
+        ) from e
 
     generated_comments = [
         GeneratedComment(
