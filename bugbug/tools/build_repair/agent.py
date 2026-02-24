@@ -22,6 +22,7 @@ from bugbug.tools.build_repair.config import (
 )
 from bugbug.tools.build_repair.prompts import (
     ANALYSIS_TEMPLATE,
+    EVAL_PROMPT,
     FIX_TEMPLATE,
     SYSTEM_PROMPT_TEMPLATE,
 )
@@ -72,9 +73,11 @@ class BuildRepairTool(GenerativeModelTool):
         self,
         target_software: str = "Mozilla Firefox",
         analysis_only: bool = False,
+        eval_mode: bool = False,
         analysis_model: str = ANALYSIS_MODEL,
         fix_model: str = FIX_MODEL,
     ) -> None:
+        self.eval_mode = eval_mode
         self.target_software = target_software
         self.analysis_only = analysis_only
         self.analysis_model = analysis_model
@@ -212,12 +215,13 @@ class BuildRepairTool(GenerativeModelTool):
             add_dirs=ADDITIONAL_DIRS,
             sandbox=SANDBOX_CONFIG,
             permission_mode="acceptEdits",
-            effort="high",
+            effort="low",
             mcp_servers=mcp_servers,
         )
         analysis_prompt = ANALYSIS_TEMPLATE.format(
             bug_id=failure.bug_id,
             target_software=self.target_software,
+            eval=EVAL_PROMPT if self.eval_mode else "",
         )
         try:
             stage1_transcript, stage1_cost, stage1_turns = await self._run_stage(
@@ -278,7 +282,9 @@ class BuildRepairTool(GenerativeModelTool):
             effort="low",
             mcp_servers=mcp_servers,
         )
-        fix_prompt = FIX_TEMPLATE.format(bug_id=failure.bug_id)
+        fix_prompt = FIX_TEMPLATE.format(
+            bug_id=failure.bug_id, eval=EVAL_PROMPT if self.eval_mode else ""
+        )
         try:
             stage2_transcript, stage2_cost, stage2_turns = await self._run_stage(
                 "fix",

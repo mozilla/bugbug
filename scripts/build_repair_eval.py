@@ -180,7 +180,7 @@ class BuildRepairModel(weave.Model):
 
     @cached_property
     def tool(self) -> BuildRepairTool:
-        return BuildRepairTool.create(analysis_only=self.analysis_only)
+        return BuildRepairTool.create(analysis_only=self.analysis_only, eval_mode=True)
 
     @cached_property
     def worktree_mgr(self) -> WorktreeManager:

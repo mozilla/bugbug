@@ -23,6 +23,7 @@ Create three separate documents:
 3. repair_agent/out/{bug_id}/summary.md with a brief one paragraph summary of analysis and planning that can point a developer in the right direction
 
 Do not prompt to edit those documents.
+{eval}
 
 Do not write any code yet. Work fully autonomously, do not ask any questions. Think hard.
 """
@@ -30,6 +31,12 @@ Do not write any code yet. Work fully autonomously, do not ask any questions. Th
 FIX_TEMPLATE = """Read the following files and implement a fix of the failure:
 1. repair_agent/out/{bug_id}/analysis.md with your detailed analysis on what caused the issues
 2. repair_agent/out/{bug_id}/planning.md with a fixing plan
+{eval}
 
 Do not prompt to edit files. Work fully autonomously, do not ask any questions. Use all allowed tools without prompting.
+"""
+
+EVAL_PROMPT = """
+Do not request bug info from Bugzilla or Phabricator. Use only the provided file with bug description.
+Do not look at git commits other than the specified last commit.
 """
