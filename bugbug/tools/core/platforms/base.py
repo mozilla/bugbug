@@ -78,10 +78,12 @@ class Patch(ABC):
     @abstractmethod
     def is_accessible(self) -> bool:
         """Return whether this patch is accessible."""
+        ...
 
     @abstractmethod
     def is_public(self) -> bool:
         """Return whether this patch is public."""
+        ...
 
 
 class ReviewData(ABC):
