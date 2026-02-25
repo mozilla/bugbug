@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
 import re
 import subprocess
 import time
@@ -24,6 +25,12 @@ _HEADERS = {"User-Agent": "bugbug-build-repair-eval/1.0"}
 _LANDO_JOB_ID_RE = re.compile(r"landoCommitID=([A-Za-z0-9_-]+)")
 
 
+def _mach_env(worktree_path: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["MOZBUILD_STATE_PATH"] = str(worktree_path / ".mozbuild")
+    return env
+
+
 @dataclass
 class TryPushResult:
     """Result of local build verification and optional try push submission."""
@@ -42,7 +49,16 @@ def _commit_fix(worktree_path: Path, bug_id: int) -> None:
         check=True,
     )
     subprocess.run(
-        ["git", "commit", "-m", f"Build repair fix for bug {bug_id}"],
+        [
+            "git",
+            "-c",
+            "user.name=bugbug",
+            "-c",
+            "user.email=bugbug@mozilla.com",
+            "commit",
+            "-m",
+            f"Build repair fix for bug {bug_id}",
+        ],
         cwd=worktree_path,
         check=True,
     )
@@ -50,10 +66,22 @@ def _commit_fix(worktree_path: Path, bug_id: int) -> None:
 
 
 def _run_local_build(worktree_path: Path) -> bool:
+    logger.info(f"Running bootstrap in {worktree_path}")
+    result = subprocess.run(
+        ["./mach", "--no-interactive", "bootstrap"],
+        cwd=worktree_path,
+        env=_mach_env(worktree_path),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Local bootstrap failed with return code {result.returncode}"
+        )
+
     logger.info(f"Running local build in {worktree_path}")
     result = subprocess.run(
         ["./mach", "build"],
         cwd=worktree_path,
+        env=_mach_env(worktree_path),
     )
     passed = result.returncode == 0
     status = "passed" if passed else "failed"
@@ -68,6 +96,7 @@ def _submit_try(worktree_path: Path, task_name: str) -> tuple[str | None, str | 
         cwd=worktree_path,
         capture_output=True,
         text=True,
+        env=_mach_env(worktree_path),
     )
     stdout = result.stdout + result.stderr
     logger.debug(f"Try push output: {stdout}")
