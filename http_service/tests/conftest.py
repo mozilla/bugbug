@@ -247,7 +247,8 @@ def mock_repo(
     orig_hgutil_cmdbuilder = hglib.util.cmdbuilder
 
     def hglib_cmdbuilder(name, *args, **kwargs):
-        if name == "pull":
+        if name == "robustcheckout":
+            name = "pull"
             args = list(args)
             args[0] = str(remote_dir).encode("ascii")
 
