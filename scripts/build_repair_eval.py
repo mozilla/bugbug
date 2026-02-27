@@ -294,7 +294,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build repair evaluation")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--trials", type=int, default=1)
-    parser.add_argument("--parallelism", type=int, default=1)
+    parser.add_argument("--parallelism", type=int, default=8)
     parser.add_argument("--firefox-repo", default=os.environ.get("FIREFOX_GIT_REPO"))
     parser.add_argument("--dataset", default="build_repair_one_commit_eval")
     parser.add_argument("--analysis-only", action="store_true")
