@@ -231,7 +231,7 @@ class BuildRepairTool(GenerativeModelTool):
             add_dirs=ADDITIONAL_DIRS,
             sandbox=SANDBOX_CONFIG,
             permission_mode="acceptEdits",
-            effort="low",
+            effort="high",
             mcp_servers=mcp_servers,
         )
         analysis_prompt = ANALYSIS_TEMPLATE.format(
