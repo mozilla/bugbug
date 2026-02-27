@@ -53,6 +53,10 @@ class AgentResponse(BaseModel):
     error: str | None = Field(default=None)
     cost_usd: float = Field(default=0.0)
     num_turns: int = Field(default=0)
+    input_tokens: int = Field(default=0)
+    output_tokens: int = Field(default=0)
+    cache_read_input_tokens: int = Field(default=0)
+    cache_creation_input_tokens: int = Field(default=0)
     local_build_passed: bool | None = Field(default=None)
     try_build_passed: bool | None = Field(default=None)
     lando_job_id: str | None = Field(default=None)
@@ -88,6 +92,15 @@ class BuildRepairTool(GenerativeModelTool):
         return cls(**kwargs)
 
     @staticmethod
+    def _usage_fields(usage: dict) -> dict:
+        return {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+        }
+
+    @staticmethod
     def _serialize_message(message) -> dict:
         data = {"type": type(message).__name__}
         if hasattr(message, "model_dump"):
@@ -107,11 +120,12 @@ class BuildRepairTool(GenerativeModelTool):
         options: ClaudeAgentOptions,
         bug_id: int,
         on_message: Callable[[str, dict], None] | None = None,
-    ) -> tuple[list[dict], float, int]:
+    ) -> tuple[list[dict], float, int, dict]:
         transcript: list[dict] = []
         cost = 0.0
         turns = 0
         result_data: dict = {}
+        usage: dict = {}
 
         if on_message:
             on_message(
@@ -134,6 +148,7 @@ class BuildRepairTool(GenerativeModelTool):
                 if isinstance(message, ResultMessage):
                     cost += message.total_cost_usd or 0
                     turns += message.num_turns or 0
+                    usage = getattr(message, "usage", {}) or {}
                     result_data = serialized
         finally:
             if on_message:
@@ -147,7 +162,7 @@ class BuildRepairTool(GenerativeModelTool):
                     },
                 )
 
-        return transcript, cost, turns
+        return transcript, cost, turns, usage
 
     def _prepare_input_files(self, failure: BuildFailure, worktree_path: Path) -> None:
         in_dir = worktree_path / "repair_agent" / "in" / str(failure.bug_id)
@@ -201,6 +216,7 @@ class BuildRepairTool(GenerativeModelTool):
         disallowed = ["AskUserQuestion", "Task"]
         total_cost = 0.0
         total_turns = 0
+        total_usage: dict = {}
 
         logger.info(
             f"Bug {failure.bug_id}: starting Stage 1 (analysis) "
@@ -224,7 +240,12 @@ class BuildRepairTool(GenerativeModelTool):
             eval=EVAL_PROMPT if self.eval_mode else "",
         )
         try:
-            stage1_transcript, stage1_cost, stage1_turns = await self._run_stage(
+            (
+                stage1_transcript,
+                stage1_cost,
+                stage1_turns,
+                stage1_usage,
+            ) = await self._run_stage(
                 "analysis",
                 analysis_prompt,
                 system_prompt,
@@ -235,6 +256,9 @@ class BuildRepairTool(GenerativeModelTool):
             )
             total_cost += stage1_cost
             total_turns += stage1_turns
+            for k, v in stage1_usage.items():
+                if isinstance(v, (int, float)):
+                    total_usage[k] = total_usage.get(k, 0) + v
         except Exception as e:
             logger.error(
                 f"Bug {failure.bug_id}: Stage 1 (analysis) failed: {e}", exc_info=True
@@ -243,6 +267,7 @@ class BuildRepairTool(GenerativeModelTool):
                 error=str(e),
                 cost_usd=total_cost,
                 num_turns=total_turns,
+                **self._usage_fields(total_usage),
             )
 
         logger.info(
@@ -264,6 +289,7 @@ class BuildRepairTool(GenerativeModelTool):
                 analysis=analysis,
                 cost_usd=total_cost,
                 num_turns=total_turns,
+                **self._usage_fields(total_usage),
                 stage1_transcript=stage1_transcript,
             )
 
@@ -286,7 +312,12 @@ class BuildRepairTool(GenerativeModelTool):
             bug_id=failure.bug_id, eval=EVAL_PROMPT if self.eval_mode else ""
         )
         try:
-            stage2_transcript, stage2_cost, stage2_turns = await self._run_stage(
+            (
+                stage2_transcript,
+                stage2_cost,
+                stage2_turns,
+                stage2_usage,
+            ) = await self._run_stage(
                 "fix",
                 fix_prompt,
                 system_prompt,
@@ -297,6 +328,9 @@ class BuildRepairTool(GenerativeModelTool):
             )
             total_cost += stage2_cost
             total_turns += stage2_turns
+            for k, v in stage2_usage.items():
+                if isinstance(v, (int, float)):
+                    total_usage[k] = total_usage.get(k, 0) + v
         except Exception as e:
             logger.error(
                 f"Bug {failure.bug_id}: Stage 2 (fix) failed: {e}", exc_info=True
@@ -307,6 +341,7 @@ class BuildRepairTool(GenerativeModelTool):
                 error=str(e),
                 cost_usd=total_cost,
                 num_turns=total_turns,
+                **self._usage_fields(total_usage),
             )
 
         logger.info(
@@ -331,6 +366,7 @@ class BuildRepairTool(GenerativeModelTool):
                 diff=diff,
                 cost_usd=total_cost,
                 num_turns=total_turns,
+                **self._usage_fields(total_usage),
                 stage1_transcript=stage1_transcript,
                 stage2_transcript=stage2_transcript,
             )
@@ -364,6 +400,7 @@ class BuildRepairTool(GenerativeModelTool):
             diff=diff,
             cost_usd=total_cost,
             num_turns=total_turns,
+            **self._usage_fields(total_usage),
             local_build_passed=try_result.local_build_passed,
             try_build_passed=try_result.try_build_passed,
             lando_job_id=try_result.lando_job_id,

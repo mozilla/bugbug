@@ -114,6 +114,7 @@ def trace_llm_stage(
             break
 
     result: dict[str, Any] = {
+        "model": model,
         "choices": [
             {
                 "message": {"role": "assistant", "content": last_assistant},
@@ -121,22 +122,49 @@ def trace_llm_stage(
         ],
     }
     if result_data:
-        usage = {
-            k: result_data[k]
-            for k in (
-                "input_tokens",
-                "output_tokens",
-                "total_tokens",
-                "cache_read_input_tokens",
-                "cache_creation_input_tokens",
-                "total_cost_usd",
-                "num_turns",
-            )
-            if k in result_data
+        raw_usage = result_data.get("usage", {}) or {}
+        input_tokens = raw_usage.get("input_tokens", 0)
+        output_tokens = raw_usage.get("output_tokens", 0)
+        result["usage"] = {
+            "prompt_tokens": input_tokens,
+            "completion_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
+            "cache_read_input_tokens": raw_usage.get("cache_read_input_tokens", 0),
+            "cache_creation_input_tokens": raw_usage.get(
+                "cache_creation_input_tokens", 0
+            ),
+            "total_cost_usd": result_data.get("total_cost_usd", 0),
+            "num_turns": result_data.get("num_turns", 0),
         }
-        if usage:
-            result["usage"] = {model: usage}
     return result
+
+
+# Per-token costs in USD (standard, non-cached rates).
+# Weave uses these for its built-in cost UI; the SDK's total_cost_usd
+# (which accounts for cache pricing) is tracked separately as the authoritative cost.
+ANTHROPIC_TOKEN_COSTS: dict[str, tuple[float, float]] = {
+    "claude-opus-4-6": (15.0e-6, 75.0e-6),
+    "claude-sonnet-4-6": (3.0e-6, 15.0e-6),
+    "claude-haiku-4-5-20251001": (0.8e-6, 4.0e-6),
+    "claude-sonnet-4-5-20250929": (3.0e-6, 15.0e-6),
+    "claude-opus-4-5-20251101": (15.0e-6, 75.0e-6),
+    "claude-opus-4-1-20250805": (15.0e-6, 75.0e-6),
+    "claude-sonnet-4-20250514": (3.0e-6, 15.0e-6),
+    "claude-3-7-sonnet-20250219": (3.0e-6, 15.0e-6),
+    "claude-opus-4-20250514": (15.0e-6, 75.0e-6),
+}
+
+
+def _register_model_costs(client) -> None:
+    for model_id, (prompt_cost, completion_cost) in ANTHROPIC_TOKEN_COSTS.items():
+        try:
+            client.add_cost(
+                llm_id=model_id,
+                prompt_token_cost=prompt_cost,
+                completion_token_cost=completion_cost,
+            )
+        except Exception as e:
+            logger.debug(f"Could not register cost for {model_id}: {e}")
 
 
 def _make_weave_callback():
@@ -246,6 +274,10 @@ class BuildRepairModel(weave.Model):
                 "analysis": "",
                 "cost_usd": 0,
                 "num_turns": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
                 "local_build_passed": None,
                 "try_build_passed": None,
                 "lando_job_id": None,
@@ -286,7 +318,8 @@ def main() -> None:
     )
 
     os.environ["WEAVE_PARALLELISM"] = str(args.parallelism)
-    weave.init("bugbug-build-repair-eval")
+    client = weave.init("bugbug-build-repair-eval")
+    _register_model_costs(client)
 
     dataset = weave.ref(args.dataset).get()
     rows = dataset.rows
