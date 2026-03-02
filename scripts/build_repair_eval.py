@@ -324,11 +324,10 @@ def main() -> None:
     _register_model_costs(client)
 
     dataset = weave.ref(args.dataset).get()
-    rows = dataset.rows
-    logger.info(f"Loaded dataset {args.dataset} with {len(rows)} rows")
+    logger.info(f"Loaded dataset {args.dataset} with {len(dataset.rows)} rows")
     if args.limit:
-        rows = rows[: args.limit]
-        logger.info(f"Limited to {len(rows)} rows")
+        dataset.rows = dataset.rows[: args.limit]
+        logger.info(f"Limited to {len(dataset.rows)} rows")
 
     scorers = [BasicMetricsScorer(), LLMFixMatchingScorer()]
     if not args.analysis_only:
@@ -345,7 +344,7 @@ def main() -> None:
         )
         evaluation = weave.Evaluation(
             name=f"build-repair-trial-{trial}",
-            dataset=rows,
+            dataset=dataset,
             scorers=scorers,
         )
         results = asyncio.run(evaluation.evaluate(model))
