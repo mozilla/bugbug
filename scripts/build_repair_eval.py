@@ -200,6 +200,14 @@ def _make_weave_callback():
     return on_message
 
 
+class BuildRepairError(Exception):
+    """Raised when the agent completes but reports an error."""
+
+    def __init__(self, output: dict):
+        self.output = output
+        super().__init__(output.get("error", "Unknown error"))
+
+
 class BuildRepairModel(weave.Model):
     """Weave Model wrapper that creates a worktree per example and runs BuildRepairTool."""
 
@@ -232,6 +240,7 @@ class BuildRepairModel(weave.Model):
             f"commit={gh_failure_commits[0][:12]}, {len(failures)} failures)"
         )
 
+        worktree_created = False
         try:
             cutoff = max(
                 MODEL_CUTOFF_DATES[self.tool.analysis_model],
@@ -245,6 +254,7 @@ class BuildRepairModel(weave.Model):
                 raise ValueError("skipped_data_contamination")
 
             worktree_path = self.worktree_mgr.create(gh_failure_commits[0], wt_name)
+            worktree_created = True
 
             failure = BuildFailure(
                 bug_id=bug_id,
@@ -266,30 +276,15 @@ class BuildRepairModel(weave.Model):
                 f"local_build={result.local_build_passed}, "
                 f"try_build={result.try_build_passed}"
             )
-            return result.model_dump()
-        except Exception as e:
-            logger.error(f"Bug {bug_id} failed with exception: {e}", exc_info=True)
-            return {
-                "error": str(e),
-                "diff": "",
-                "summary": "",
-                "analysis": "",
-                "cost_usd": 0,
-                "num_turns": 0,
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "cache_read_input_tokens": 0,
-                "cache_creation_input_tokens": 0,
-                "local_build_passed": None,
-                "try_build_passed": None,
-                "lando_job_id": None,
-                "treeherder_url": None,
-                "stage1_transcript": [],
-                "stage2_transcript": [],
-            }
+
+            output = result.model_dump()
+            if result.error:
+                raise BuildRepairError(output)
+            return output
         finally:
-            logger.info(f"Bug {bug_id}: cleaning up worktree {wt_name}")
-            self.worktree_mgr.cleanup(wt_name)
+            if worktree_created:
+                logger.info(f"Bug {bug_id}: cleaning up worktree {wt_name}")
+                self.worktree_mgr.cleanup(wt_name)
 
 
 def main() -> None:

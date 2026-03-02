@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import subprocess
+import traceback
 from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
@@ -50,6 +51,8 @@ class AgentResponse(BaseModel):
     analysis: str = Field(default="")
     diff: str = Field(default="")
     error: str | None = Field(default=None)
+    error_traceback: str | None = Field(default=None)
+    failure_stage: str | None = Field(default=None)
     cost_usd: float = Field(default=0.0)
     num_turns: int = Field(default=0)
     input_tokens: int = Field(default=0)
@@ -257,6 +260,8 @@ class BuildRepairTool(GenerativeModelTool):
             )
             return AgentResponse(
                 error=str(e),
+                error_traceback=traceback.format_exc(),
+                failure_stage="analysis",
                 cost_usd=total_cost,
                 num_turns=total_turns,
                 **self._usage_fields(total_usage),
@@ -329,6 +334,8 @@ class BuildRepairTool(GenerativeModelTool):
                 summary=summary,
                 analysis=analysis,
                 error=str(e),
+                error_traceback=traceback.format_exc(),
+                failure_stage="fix",
                 cost_usd=total_cost,
                 num_turns=total_turns,
                 **self._usage_fields(total_usage),

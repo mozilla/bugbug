@@ -14,7 +14,18 @@ class BasicMetricsScorer(weave.Scorer):
     """Scores success rate, diff production rate, cost, and turn count."""
 
     @weave.op()
-    def score(self, output: dict) -> dict:
+    def score(self, output: dict | None) -> dict:
+        if output is None:
+            return {
+                "successful": False,
+                "has_diff": False,
+                "cost_usd": 0,
+                "num_turns": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            }
         return {
             "successful": output.get("error") is None,
             "has_diff": bool(output.get("diff", "").strip()),
@@ -54,7 +65,12 @@ class BuildPassRateScorer(weave.Scorer):
     """Scores local ./mach build and try push pass rates."""
 
     @weave.op()
-    def score(self, output: dict) -> dict:
+    def score(self, output: dict | None) -> dict:
+        if output is None:
+            return {
+                "local_build_passed": None,
+                "try_build_passed": None,
+            }
         return {
             "local_build_passed": output.get("local_build_passed"),
             "try_build_passed": output.get("try_build_passed"),
@@ -85,7 +101,12 @@ class LLMFixMatchingScorer(weave.Scorer):
     """
 
     @weave.op()
-    async def score(self, output: dict, gh_fix_commits: list[str]) -> dict:
+    async def score(self, output: dict | None, gh_fix_commits: list[str]) -> dict:
+        if output is None:
+            return {
+                "match_score": None,
+                "match_category": "errored",
+            }
         return {
             "match_score": None,
             "match_category": "not_implemented",
