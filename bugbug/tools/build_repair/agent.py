@@ -24,7 +24,6 @@ from bugbug.tools.build_repair.prompts import (
     ANALYSIS_TEMPLATE,
     EVAL_PROMPT,
     FIX_TEMPLATE,
-    SYSTEM_PROMPT_TEMPLATE,
 )
 
 logger = getLogger(__name__)
@@ -115,7 +114,6 @@ class BuildRepairTool(GenerativeModelTool):
         self,
         stage_name: str,
         prompt: str,
-        system_prompt: str,
         model: str,
         options: ClaudeAgentOptions,
         bug_id: int,
@@ -133,7 +131,6 @@ class BuildRepairTool(GenerativeModelTool):
                 {
                     "type": "stage_start",
                     "prompt": prompt,
-                    "system_prompt": system_prompt,
                     "model": model,
                 },
             )
@@ -209,9 +206,6 @@ class BuildRepairTool(GenerativeModelTool):
         )
         self._prepare_input_files(failure, worktree_path)
 
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-            target_software=self.target_software
-        )
         mcp_servers = {"firefox": {"type": "http", "url": FIREFOX_MCP_URL}}
         disallowed = ["AskUserQuestion", "Task"]
         total_cost = 0.0
@@ -223,7 +217,6 @@ class BuildRepairTool(GenerativeModelTool):
             f"with model={self.analysis_model}"
         )
         stage1_options = ClaudeAgentOptions(
-            system_prompt=system_prompt,
             model=self.analysis_model,
             cwd=str(worktree_path),
             allowed_tools=ALLOWED_TOOLS,
@@ -248,7 +241,6 @@ class BuildRepairTool(GenerativeModelTool):
             ) = await self._run_stage(
                 "analysis",
                 analysis_prompt,
-                system_prompt,
                 self.analysis_model,
                 stage1_options,
                 failure.bug_id,
@@ -297,7 +289,6 @@ class BuildRepairTool(GenerativeModelTool):
             f"Bug {failure.bug_id}: starting Stage 2 (fix) with model={self.fix_model}"
         )
         stage2_options = ClaudeAgentOptions(
-            system_prompt=system_prompt,
             model=self.fix_model,
             cwd=str(worktree_path),
             allowed_tools=ALLOWED_TOOLS,
@@ -320,7 +311,6 @@ class BuildRepairTool(GenerativeModelTool):
             ) = await self._run_stage(
                 "fix",
                 fix_prompt,
-                system_prompt,
                 self.fix_model,
                 stage2_options,
                 failure.bug_id,

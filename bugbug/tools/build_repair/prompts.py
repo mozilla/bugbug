@@ -5,9 +5,9 @@
 
 """Prompt templates for build repair agent."""
 
-SYSTEM_PROMPT_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing and fixing a build failure. """
+ANALYSIS_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing and fixing a build failure.
 
-ANALYSIS_TEMPLATE = """Investigate why the last commit broke {target_software} build.
+Investigate why the last commit broke {target_software} build.
 
 The last commit attempted to fix a bug from Bugzilla.
 

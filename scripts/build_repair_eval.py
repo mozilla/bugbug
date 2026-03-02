@@ -173,12 +173,14 @@ def _make_weave_callback():
     def on_message(stage: str, data: dict) -> None:
         msg_type = data["type"]
         if msg_type == "stage_start":
+            messages = []
+            if "system_prompt" in data:
+                messages.append({"role": "system", "content": data["system_prompt"]})
+            messages.append({"role": "user", "content": data["prompt"]})
+
             stages[stage] = {
                 "model": data["model"],
-                "messages": [
-                    {"role": "system", "content": data["system_prompt"]},
-                    {"role": "user", "content": data["prompt"]},
-                ],
+                "messages": messages,
             }
         elif msg_type == "stage_end":
             if stage in stages:
