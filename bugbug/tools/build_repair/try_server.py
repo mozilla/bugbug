@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 import os
 import re
 import subprocess
@@ -65,27 +66,46 @@ def _commit_fix(worktree_path: Path, bug_id: int) -> None:
     logger.info(f"Bug {bug_id}: fix committed")
 
 
-def _run_local_build(worktree_path: Path) -> bool:
-    logger.info(f"Running bootstrap in {worktree_path}")
-    result = subprocess.run(
-        ["./mach", "--no-interactive", "bootstrap"],
+def _run_subprocess(
+    cmd: list[str], worktree_path: Path, capture: bool
+) -> subprocess.CompletedProcess[str]:
+    if capture:
+        return subprocess.run(
+            cmd,
+            cwd=worktree_path,
+            env=_mach_env(worktree_path),
+            capture_output=True,
+            text=True,
+        )
+    return subprocess.run(
+        cmd,
         cwd=worktree_path,
         env=_mach_env(worktree_path),
+        text=True,
+    )
+
+
+def _run_local_build(worktree_path: Path) -> bool:
+    capture = not logger.isEnabledFor(logging.DEBUG)
+
+    logger.info(f"Running bootstrap in {worktree_path}")
+    result = _run_subprocess(
+        ["./mach", "--no-interactive", "bootstrap"], worktree_path, capture
     )
     if result.returncode != 0:
+        if capture and result.stderr:
+            logger.warning(f"Bootstrap stderr:\n{result.stderr[-2000:]}")
         raise RuntimeError(
             f"Local bootstrap failed with return code {result.returncode}"
         )
 
     logger.info(f"Running local build in {worktree_path}")
-    result = subprocess.run(
-        ["./mach", "build"],
-        cwd=worktree_path,
-        env=_mach_env(worktree_path),
-    )
+    result = _run_subprocess(["./mach", "build"], worktree_path, capture)
     passed = result.returncode == 0
     status = "passed" if passed else "failed"
     logger.info(f"Local build {status} (returncode={result.returncode})")
+    if not passed and capture and result.stderr:
+        logger.warning(f"Build stderr:\n{result.stderr[-2000:]}")
     return passed
 
 

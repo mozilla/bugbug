@@ -12,6 +12,7 @@ Usage:
     python scripts/build_repair_eval.py --limit 5
     python scripts/build_repair_eval.py --parallelism 4
     python scripts/build_repair_eval.py --no-try-push
+    python scripts/build_repair_eval.py --verbose
 """
 
 import argparse
@@ -296,16 +297,22 @@ def main() -> None:
     parser.add_argument("--dataset", default="build_repair_one_commit_eval")
     parser.add_argument("--analysis-only", action="store_true")
     parser.add_argument("--no-try-push", action="store_true")
+    parser.add_argument("--verbose", action="store_true", help="Enable DEBUG logging")
     args = parser.parse_args()
 
     if not args.firefox_repo:
         parser.error("--firefox-repo or FIREFOX_GIT_REPO env var is required")
 
+    log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=log_level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    if not args.verbose:
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("hgitaly").setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     logger.info(
         f"Starting evaluation: dataset={args.dataset}, limit={args.limit}, "
