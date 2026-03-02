@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 from datetime import datetime
 from functools import cached_property
 from typing import Any
@@ -32,6 +33,7 @@ from bugbug.tools.build_repair.scorer import (
     BasicMetricsScorer,
     BuildPassRateScorer,
     LLMFixMatchingScorer,
+    compute_pass_at_k,
 )
 from bugbug.tools.build_repair.worktree import WorktreeManager
 
@@ -215,7 +217,6 @@ class BuildRepairModel(weave.Model):
     firefox_repo: str
     analysis_only: bool = False
     no_try_push: bool = False
-    trial_id: int = 0
 
     @cached_property
     def tool(self) -> BuildRepairTool:
@@ -235,10 +236,10 @@ class BuildRepairModel(weave.Model):
         fix_commit_date: str,
         **kwargs,
     ) -> dict:
-        wt_name = f"bug-{bug_id}-trial-{self.trial_id}"
+        wt_name = f"bug-{bug_id}-{uuid.uuid4().hex[:8]}"
         logger.info(
-            f"Invoking bug {bug_id} (trial={self.trial_id}, "
-            f"commit={gh_failure_commits[0][:12]}, {len(failures)} failures)"
+            f"Invoking bug {bug_id} "
+            f"(commit={gh_failure_commits[0][:12]}, {len(failures)} failures)"
         )
 
         worktree_created = False
@@ -336,26 +337,37 @@ def main() -> None:
         scorers.insert(1, BuildPassRateScorer())
     logger.info(f"Scorers: {[type(s).__name__ for s in scorers]}")
 
-    for trial in range(args.trials):
-        logger.info(f"Starting trial {trial + 1}/{args.trials}")
-        model = BuildRepairModel(
-            firefox_repo=args.firefox_repo,
-            analysis_only=args.analysis_only,
-            no_try_push=args.no_try_push,
-            trial_id=trial,
-        )
-        evaluation = weave.Evaluation(
-            name=f"build-repair-trial-{trial}",
-            dataset=dataset,
-            scorers=scorers,
-        )
-        results = asyncio.run(evaluation.evaluate(model))
-        logger.info(f"Trial {trial + 1}/{args.trials} results: {results}")
+    model = BuildRepairModel(
+        firefox_repo=args.firefox_repo,
+        analysis_only=args.analysis_only,
+        no_try_push=args.no_try_push,
+    )
+    evaluation = weave.Evaluation(
+        name="build-repair",
+        dataset=dataset,
+        scorers=scorers,
+        trials=args.trials,
+    )
 
-    # TODO: To compute pass@k across trials, collect per-row scores from each
-    # trial via the Weave API (weave.ref(...).get() on individual evaluation
-    # runs) and pass them to compute_pass_at_k(). The evaluate() return value
-    # only contains aggregated summaries, not per-row data.
+    async def run_eval():
+        eval_results = await evaluation.get_eval_results(model)
+        summary = await evaluation.summarize(eval_results)
+        return eval_results, summary
+
+    eval_results, summary = asyncio.run(run_eval())
+    logger.info(f"Evaluation results: {summary}")
+
+    if args.trials > 1:
+        num_examples = len(dataset.rows)
+        rows = list(eval_results.rows)
+        pass_k_metrics = [("BasicMetricsScorer", "successful")]
+        if not args.analysis_only:
+            pass_k_metrics.append(("BuildPassRateScorer", "local_build_passed"))
+        for scorer_name, metric in pass_k_metrics:
+            pass_k = compute_pass_at_k(
+                rows, num_examples, args.trials, scorer_name, metric
+            )
+            logger.info(f"pass@k ({metric}): {pass_k}")
 
 
 if __name__ == "__main__":

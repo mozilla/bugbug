@@ -117,35 +117,43 @@ class LLMFixMatchingScorer(weave.Scorer):
 
 
 def compute_pass_at_k(
-    trial_results: list[list[dict]],
+    result_rows: list[dict],
+    num_examples: int,
+    num_trials: int,
+    scorer_name: str,
     metric: str,
-) -> dict:
-    """Compute pass@k metrics across multiple trial runs.
+) -> dict[str, float]:
+    """Compute pass@k from Weave evaluation results with trials.
 
-    Args:
-        trial_results: list of k trial result lists, each with per-example scores
-        metric: which boolean metric to use (e.g. "local_build_passed", "successful")
-
-    Returns:
-        pass@1, pass@3, pass@k and pass^k metrics
+    Rows are ordered: first num_examples = trial 0, next = trial 1, etc.
     """
-    k = len(trial_results)
-    num_examples = len(trial_results[0])
+    if num_trials < 2:
+        return {}
 
-    pass_at = {}
-    for n in [1, 3, k]:
-        if n > k:
+    pass_at: dict[str, float] = {}
+    for n in {1, 3, num_trials}:
+        if n > num_trials:
             continue
         successes = sum(
-            any(trial_results[t][i][metric] is True for t in range(n))
+            any(
+                result_rows[t * num_examples + i]["scores"]
+                .get(scorer_name, {})
+                .get(metric)
+                is True
+                for t in range(n)
+            )
             for i in range(num_examples)
         )
-        pass_at[f"pass@{n}"] = successes / num_examples
+        pass_at[f"pass@{n}"] = successes / num_examples if num_examples else 0
 
     all_pass = sum(
-        all(trial_results[t][i][metric] is True for t in range(k))
+        all(
+            result_rows[t * num_examples + i]["scores"].get(scorer_name, {}).get(metric)
+            is True
+            for t in range(num_trials)
+        )
         for i in range(num_examples)
     )
-    pass_at[f"pass^{k}"] = all_pass / num_examples
+    pass_at[f"pass^{num_trials}"] = all_pass / num_examples if num_examples else 0
 
     return pass_at
