@@ -33,7 +33,6 @@ from bugbug.tools.build_repair.scorer import (
     BasicMetricsScorer,
     BuildPassRateScorer,
     LLMFixMatchingScorer,
-    compute_pass_at_k,
 )
 from bugbug.tools.build_repair.worktree import WorktreeManager
 
@@ -332,9 +331,9 @@ def main() -> None:
         dataset.rows = dataset.rows[: args.limit]
         logger.info(f"Limited to {len(dataset.rows)} rows")
 
-    scorers = [BasicMetricsScorer(), LLMFixMatchingScorer()]
+    scorers = [BasicMetricsScorer(num_trials=args.trials), LLMFixMatchingScorer()]
     if not args.analysis_only:
-        scorers.insert(1, BuildPassRateScorer())
+        scorers.insert(1, BuildPassRateScorer(num_trials=args.trials))
     logger.info(f"Scorers: {[type(s).__name__ for s in scorers]}")
 
     model = BuildRepairModel(
@@ -348,26 +347,8 @@ def main() -> None:
         scorers=scorers,
         trials=args.trials,
     )
-
-    async def run_eval():
-        eval_results = await evaluation.get_eval_results(model)
-        summary = await evaluation.summarize(eval_results)
-        return eval_results, summary
-
-    eval_results, summary = asyncio.run(run_eval())
-    logger.info(f"Evaluation results: {summary}")
-
-    if args.trials > 1:
-        num_examples = len(dataset.rows)
-        rows = list(eval_results.rows)
-        pass_k_metrics = [("BasicMetricsScorer", "successful")]
-        if not args.analysis_only:
-            pass_k_metrics.append(("BuildPassRateScorer", "local_build_passed"))
-        for scorer_name, metric in pass_k_metrics:
-            pass_k = compute_pass_at_k(
-                rows, num_examples, args.trials, scorer_name, metric
-            )
-            logger.info(f"pass@k ({metric}): {pass_k}")
+    results = asyncio.run(evaluation.evaluate(model))
+    logger.info(f"Evaluation results: {results}")
 
 
 if __name__ == "__main__":
