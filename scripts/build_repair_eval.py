@@ -38,7 +38,7 @@ from bugbug.tools.build_repair.worktree import WorktreeManager
 
 logger = logging.getLogger(__name__)
 
-# todo: verify tracing code
+# TODO: replace with native tracing for Anthropic Agents SDK when released by W&B
 
 
 def _attr(obj, key, default=None):
