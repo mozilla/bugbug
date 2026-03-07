@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.auth import verify_internal_api_key
 from app.database.connection import get_db
@@ -48,7 +49,7 @@ async def claim_review_request(db: AsyncSession, review_request: ReviewRequest) 
     if result.rowcount == 0:
         return False
 
-    await db.refresh(review_request)
+    set_committed_value(review_request, "status", ReviewStatus.PROCESSING)
     return True
 
 
