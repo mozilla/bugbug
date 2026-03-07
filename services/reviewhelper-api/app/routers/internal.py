@@ -99,6 +99,18 @@ async def process_review_request(
         )
         return Response(status_code=status.HTTP_409_CONFLICT)
 
+    async def _set_retry_pending(db: AsyncSession):
+        stmt = (
+            update(ReviewRequest)
+            .where(ReviewRequest.id == review_request_id)
+            .where(ReviewRequest.status == ReviewStatus.PROCESSING)
+            .values(status=ReviewStatus.RETRY_PENDING)
+        )
+        await db.execute(stmt)
+        await db.commit()
+
+    db.info["on_error"] = _set_retry_pending
+
     if review_request.summary:
         logger.info(
             "Review request %s already has a summary, skipping AI processing",
@@ -115,11 +127,6 @@ async def process_review_request(
             # We return 204 here to avoid triggering retries, since this is a
             # permanent failure that won't be resolved by retrying.
             return Response(status_code=status.HTTP_204_NO_CONTENT)
-        except Exception:
-            review_request.status = ReviewStatus.RETRY_PENDING
-            await db.commit()
-            raise
-
         db.add_all(comments)
         review_request.summary = patch_summary
         review_request.details = details
