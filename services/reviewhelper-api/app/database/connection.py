@@ -1,10 +1,13 @@
 import asyncio
+import logging
 from collections.abc import AsyncGenerator
 
 from google.cloud.sql.connector import Connector, IPTypes
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 connector: Connector | None = None
 engine = None
@@ -62,4 +65,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         except Exception:
             await session.rollback()
+            if on_error := session.info.get("on_error"):
+                try:
+                    await on_error(session)
+                except Exception:
+                    logger.exception("on_error callback failed")
             raise
