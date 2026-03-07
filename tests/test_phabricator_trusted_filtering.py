@@ -7,6 +7,7 @@ import pytest
 
 from bugbug.tools.core.platforms.phabricator import (
     MOCO_GROUP_PHID,
+    TRUSTED_BOT_PHIDS,
     UNTRUSTED_CONTENT_REDACTED,
     PhabricatorGeneralComment,
     PhabricatorInlineComment,
@@ -1025,3 +1026,44 @@ def test_phabricator_stack_titles_redacted():
 
         # Verify patch_title property is redacted
         assert patch_obj.patch_title == REDACTED_TITLE
+
+
+def test_trusted_bot_phids_not_filtered():
+    """Test that comments from trusted bot accounts are not redacted."""
+    bot_phid = list(TRUSTED_BOT_PHIDS)[0]
+
+    comments = []
+
+    trusted_comment = MagicMock(spec=PhabricatorGeneralComment)
+    trusted_comment.author_phid = "PHID-USER-trusted"
+    trusted_comment.date_created = 1000
+    trusted_comment.content = "Trusted reviewer comment"
+    trusted_comment.content_redacted = False
+    comments.append(trusted_comment)
+
+    bot_comment = MagicMock(spec=PhabricatorGeneralComment)
+    bot_comment.author_phid = bot_phid
+    bot_comment.date_created = 2000
+    bot_comment.content = "Bot analysis comment"
+    bot_comment.content_redacted = False
+    comments.append(bot_comment)
+
+    users_info = {
+        "PHID-USER-trusted": {
+            "is_trusted": True,
+            "email": "trusted@mozilla.com",
+            "real_name": "",
+        },
+        bot_phid: {
+            "is_trusted": True,
+            "email": "bot@mozilla.com",
+            "real_name": "",
+        },
+    }
+
+    all_comments = sorted(comments, key=lambda c: c.date_created)
+    sanitized_comments, filtered_count = _sanitize_comments(all_comments, users_info)
+
+    assert filtered_count == 0
+    assert sanitized_comments[1].content == "Bot analysis comment"
+    assert sanitized_comments[1].content_redacted is False
