@@ -105,11 +105,13 @@ def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
     for user_data in users_response.get("data", []):
         user_phid = user_data["phid"]
         fields = user_data.get("fields", {})
-        is_trusted = user_phid in moco_members or user_phid in TRUSTED_BOT_PHIDS
+        is_trusted = user_phid in moco_members
+        is_trusted_bot = user_phid in TRUSTED_BOT_PHIDS
 
         result[user_phid] = {
             "email": fields.get("username", "unknown"),  # Username is typically email
             "is_trusted": is_trusted,
+            "is_trusted_bot": is_trusted_bot,
             "real_name": fields.get("realName", ""),
         }
 
@@ -173,8 +175,9 @@ def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[lis
     sanitized_comments = []
 
     for i, comment in enumerate(comments):
-        comment_is_trusted = users_info.get(comment.author_phid, {}).get(
-            "is_trusted", False
+        author = users_info.get(comment.author_phid)
+        comment_is_trusted = author and (
+            author["is_trusted"] or author["is_trusted_bot"]
         )
 
         # Create a shallow copy to avoid modifying the original
