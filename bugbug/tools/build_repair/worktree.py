@@ -31,6 +31,7 @@ class WorktreeManager:
         )
         if worktree_path.exists():
             self.cleanup(name)
+        # --force twice to operate on locked worktrees (see https://git-scm.com/docs/git-worktree#_options)
         subprocess.run(
             [
                 "git",
@@ -49,6 +50,7 @@ class WorktreeManager:
 
     def cleanup(self, name: str) -> None:
         logger.info(f"Cleaning up worktree {name}")
+        # --force twice to operate on locked worktrees (see https://git-scm.com/docs/git-worktree#_options)
         subprocess.run(
             [
                 "git",
