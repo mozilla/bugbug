@@ -8,7 +8,7 @@ services:
       dockerfile: docker/build_repair/Dockerfile
     volumes:
       - .:/app # live code editing
-      - ${FIREFOX_REPO}:/workspace/firefox # Firefox repo
+      - ${FIREFOX_GIT_REPO}:/workspace/firefox # Firefox repo
       - build-repair-tmp:/tmp/build_repair_worktrees
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
