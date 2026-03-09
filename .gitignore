@@ -49,6 +49,3 @@ node_modules/
 *.log
 # Desktop Service Store
 *.DS_Store
-
-# JetBrains IDEs
-.idea
