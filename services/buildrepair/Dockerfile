@@ -1,4 +1,4 @@
-# ./mach taskgraph load-image
+# ./mach taskgraph load-image  --task-id aQDejwXUQsSHxvwE2qQcQg
 FROM debian12-amd64-build
 
 WORKDIR /app
