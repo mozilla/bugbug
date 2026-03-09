@@ -10,7 +10,7 @@ logger = getLogger(__name__)
 
 
 DEFAULT_OPENAI_MODEL = "gpt-5-2025-08-07"
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929"
+DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-6"
 
 
 def get_tokenizer(model_name):

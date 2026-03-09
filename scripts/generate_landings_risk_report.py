@@ -891,7 +891,7 @@ class LandingsRiskReportGenerator(object):
         bugs_set = set(bugs + test_info_bugs + meta_bugs + [FUZZING_METABUG_ID])
 
         bug_map = {}
-        for bug in bugzilla.get_bugs():
+        for bug in bugzilla.get_bugs(include_all_products=True):
             # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the bug_to_types call) and bugs that caused regressions.
             if (
                 bug["id"] in bugs_set
@@ -950,7 +950,7 @@ def notification(days: int) -> None:
     all_s1_s2_bugs = []
 
     bug_map = {}
-    for b in bugzilla.get_bugs():
+    for b in bugzilla.get_bugs(include_all_products=True):
         if (
             b["id"] in bug_summary_ids
             or b["id"] in all_crash_bugs

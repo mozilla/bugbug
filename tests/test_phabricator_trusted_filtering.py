@@ -7,6 +7,7 @@ import pytest
 
 from bugbug.tools.core.platforms.phabricator import (
     MOCO_GROUP_PHID,
+    TRUSTED_BOT_PHIDS,
     UNTRUSTED_CONTENT_REDACTED,
     PhabricatorGeneralComment,
     PhabricatorInlineComment,
@@ -59,16 +60,19 @@ def test_phabricator_filtering_untrusted_before_last_trusted():
     users_info = {
         "PHID-USER-untrusted1": {
             "is_trusted": False,
+            "is_trusted_bot": False,
             "email": "untrusted1@example.com",
             "real_name": "",
         },
         "PHID-USER-trusted": {
             "is_trusted": True,
+            "is_trusted_bot": False,
             "email": "trusted@mozilla.com",
             "real_name": "",
         },
         "PHID-USER-untrusted2": {
             "is_trusted": False,
+            "is_trusted_bot": False,
             "email": "untrusted2@example.com",
             "real_name": "",
         },
@@ -111,11 +115,13 @@ def test_phabricator_filtering_no_trusted_users():
     users_info = {
         "PHID-USER-untrusted1": {
             "is_trusted": False,
+            "is_trusted_bot": False,
             "email": "untrusted1@example.com",
             "real_name": "",
         },
         "PHID-USER-untrusted2": {
             "is_trusted": False,
+            "is_trusted_bot": False,
             "email": "untrusted2@example.com",
             "real_name": "",
         },
@@ -163,11 +169,13 @@ def test_phabricator_filtering_inline_comments():
     users_info = {
         "PHID-USER-untrusted": {
             "is_trusted": False,
+            "is_trusted_bot": False,
             "email": "untrusted@example.com",
             "real_name": "",
         },
         "PHID-USER-trusted": {
             "is_trusted": True,
+            "is_trusted_bot": False,
             "email": "trusted@mozilla.com",
             "real_name": "",
         },
@@ -849,6 +857,7 @@ def test_phabricator_metadata_redacted_without_trusted_comment():
         "PHID-USER-untrusted": {
             "email": "untrusted@example.com",
             "is_trusted": False,
+            "is_trusted_bot": False,
             "real_name": "Untrusted User",
         }
     }
@@ -928,11 +937,13 @@ def test_phabricator_metadata_shown_with_trusted_comment():
         "PHID-USER-author": {
             "email": "author@example.com",
             "is_trusted": False,
+            "is_trusted_bot": False,
             "real_name": "Patch Author",
         },
         "PHID-USER-trusted": {
             "email": "trusted@mozilla.com",
             "is_trusted": True,
+            "is_trusted_bot": False,
             "real_name": "Trusted Reviewer",
         },
     }
@@ -1008,6 +1019,7 @@ def test_phabricator_stack_titles_redacted():
         "PHID-USER-author": {
             "email": "author@example.com",
             "is_trusted": False,
+            "is_trusted_bot": False,
             "real_name": "Author",
         }
     }
@@ -1025,3 +1037,68 @@ def test_phabricator_stack_titles_redacted():
 
         # Verify patch_title property is redacted
         assert patch_obj.patch_title == REDACTED_TITLE
+
+
+def test_trusted_bot_phids_not_filtered():
+    """Test that bot comments are shown but don't propagate trust backward."""
+    bot_phid = list(TRUSTED_BOT_PHIDS)[0]
+
+    comments = []
+
+    trusted_comment = MagicMock(spec=PhabricatorGeneralComment)
+    trusted_comment.author_phid = "PHID-USER-trusted"
+    trusted_comment.date_created = 1000
+    trusted_comment.content = "Trusted reviewer comment"
+    trusted_comment.content_redacted = False
+    comments.append(trusted_comment)
+
+    untrusted_comment = MagicMock(spec=PhabricatorGeneralComment)
+    untrusted_comment.author_phid = "PHID-USER-untrusted"
+    untrusted_comment.date_created = 2000
+    untrusted_comment.content = "Untrusted comment after trusted"
+    untrusted_comment.content_redacted = False
+    comments.append(untrusted_comment)
+
+    bot_comment = MagicMock(spec=PhabricatorGeneralComment)
+    bot_comment.author_phid = bot_phid
+    bot_comment.date_created = 3000
+    bot_comment.content = "Bot analysis comment"
+    bot_comment.content_redacted = False
+    comments.append(bot_comment)
+
+    users_info = {
+        "PHID-USER-trusted": {
+            "is_trusted": True,
+            "is_trusted_bot": False,
+            "email": "trusted@mozilla.com",
+            "real_name": "",
+        },
+        "PHID-USER-untrusted": {
+            "is_trusted": False,
+            "is_trusted_bot": False,
+            "email": "untrusted@example.com",
+            "real_name": "",
+        },
+        bot_phid: {
+            "is_trusted": False,
+            "is_trusted_bot": True,
+            "email": "bot@mozilla.com",
+            "real_name": "",
+        },
+    }
+
+    all_comments = sorted(comments, key=lambda c: c.date_created)
+    sanitized_comments, filtered_count = _sanitize_comments(all_comments, users_info)
+
+    # Bot comment is shown (not redacted)
+    assert sanitized_comments[2].content == "Bot analysis comment"
+    assert sanitized_comments[2].content_redacted is False
+
+    # Untrusted comment after last MOCO comment is still redacted
+    # (bot doesn't propagate trust backward)
+    assert filtered_count == 1
+    assert sanitized_comments[1].content == UNTRUSTED_CONTENT_REDACTED
+    assert sanitized_comments[1].content_redacted is True
+
+    # Trusted (MOCO) comment is shown
+    assert sanitized_comments[0].content == "Trusted reviewer comment"
