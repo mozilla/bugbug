@@ -973,6 +973,142 @@ def test_phabricator_metadata_shown_with_trusted_comment():
     assert "[Unvalidated test plan redacted for security]" not in markdown
 
 
+def test_phabricator_metadata_shown_with_trusted_author_no_comments():
+    """Test that metadata is shown when the revision author is trusted, even with no comments."""
+    from unittest.mock import patch
+
+    from bugbug.tools.core.platforms.phabricator import SanitizedPhabricatorPatch
+
+    mock_revision = {
+        "id": 12345,
+        "phid": "PHID-DREV-test123",
+        "fields": {
+            "title": "This is the revision title",
+            "authorPHID": "PHID-USER-trusted-author",
+            "status": {"name": "Needs Review"},
+            "uri": "https://phabricator.services.mozilla.com/D12345",
+            "bugzilla.bug-id": "123456",
+            "summary": "This is the detailed summary",
+            "testPlan": "This is the test plan",
+            "stackGraph": {},
+        },
+    }
+
+    mock_diff = {
+        "id": 54321,
+        "dateCreated": 1704110400,
+        "dateModified": 1704110400,
+        "baseRevision": "abc123",
+        "authorPHID": "PHID-USER-trusted-author",
+    }
+
+    mock_users_info = {
+        "PHID-USER-trusted-author": {
+            "email": "author@mozilla.com",
+            "is_trusted": True,
+            "real_name": "Trusted Author",
+        }
+    }
+
+    with (
+        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
+        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "get_comments", return_value=[]),
+        patch(
+            "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
+            return_value=mock_users_info,
+        ),
+        patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
+    ):
+        patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
+        markdown = patch_obj.to_md()
+
+    assert "This is the revision title" in markdown
+    assert "[Unvalidated revision title redacted for security]" not in markdown
+    assert "Trusted Author (author@mozilla.com)" in markdown
+    assert "**Revision Author**: [Redacted]" not in markdown
+    assert "This is the detailed summary" in markdown
+    assert "[Unvalidated summary redacted for security]" not in markdown
+    assert "This is the test plan" in markdown
+    assert "[Unvalidated test plan redacted for security]" not in markdown
+
+
+def test_phabricator_metadata_shown_trusted_author_untrusted_comment_redacted():
+    """Test that metadata is shown when author is trusted, but untrusted comment is redacted."""
+    from unittest.mock import Mock, patch
+
+    from bugbug.tools.core.platforms.phabricator import (
+        UNTRUSTED_CONTENT_REDACTED,
+        PhabricatorGeneralComment,
+        SanitizedPhabricatorPatch,
+    )
+
+    mock_revision = {
+        "id": 12345,
+        "phid": "PHID-DREV-test123",
+        "fields": {
+            "title": "This is the revision title",
+            "authorPHID": "PHID-USER-trusted-author",
+            "status": {"name": "Needs Review"},
+            "uri": "https://phabricator.services.mozilla.com/D12345",
+            "bugzilla.bug-id": "123456",
+            "summary": "This is the detailed summary",
+            "testPlan": "",
+            "stackGraph": {},
+        },
+    }
+
+    mock_diff = {
+        "id": 54321,
+        "dateCreated": 1704110400,
+        "dateModified": 1704110400,
+        "baseRevision": "abc123",
+        "authorPHID": "PHID-USER-trusted-author",
+    }
+
+    untrusted_comment = Mock(spec=PhabricatorGeneralComment)
+    untrusted_comment.content = "MALICIOUS CONTENT"
+    untrusted_comment.author_phid = "PHID-USER-untrusted"
+    untrusted_comment.date_created = 1704110500
+    untrusted_comment.content_redacted = False
+
+    mock_users_info = {
+        "PHID-USER-trusted-author": {
+            "email": "author@mozilla.com",
+            "is_trusted": True,
+            "real_name": "Trusted Author",
+        },
+        "PHID-USER-untrusted": {
+            "email": "attacker@example.com",
+            "is_trusted": False,
+            "real_name": "Attacker",
+        },
+    }
+
+    with (
+        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
+        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(
+            SanitizedPhabricatorPatch,
+            "get_comments",
+            return_value=[untrusted_comment],
+        ),
+        patch(
+            "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
+            return_value=mock_users_info,
+        ),
+        patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
+    ):
+        patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
+        markdown = patch_obj.to_md()
+
+    assert "This is the revision title" in markdown
+    assert "[Unvalidated revision title redacted for security]" not in markdown
+    assert "Trusted Author (author@mozilla.com)" in markdown
+    assert "MALICIOUS CONTENT" not in markdown
+    assert UNTRUSTED_CONTENT_REDACTED in markdown
+
+
 def test_phabricator_stack_titles_redacted():
     """Test that stack dependency graph titles are redacted without trusted comment."""
     from unittest.mock import patch

@@ -708,6 +708,8 @@ class SanitizedPhabricatorPatch(PhabricatorPatch):
 
     @cached_property
     def _has_trusted_comment(self) -> bool:
+        if self._users_info.get(self.author_phid, {}).get("is_trusted", False):
+            return True
         return any(
             self._users_info.get(c.author_phid, {}).get("is_trusted", False)
             for c in self._all_comments
