@@ -2,9 +2,9 @@
 name = "bugbug-mcp"
 dynamic = ["version"]
 description = "BugBug MCP Server"
-requires-python = ">=3.12"
+requires-python = ">=3.12, <3.13"
 dependencies = [
-    "bugbug>=0.0.597",
+    "bugbug",
     "fastmcp>=2.12.0",
     "sentry-sdk>=2.43.0",
 ]
@@ -16,4 +16,4 @@ llms-txt = [
 ]
 
 [tool.uv.sources]
-bugbug = { path = "..", editable = true }
+bugbug = { git = "https://github.com/mozilla/bugbug", rev = "93c473abdd42f896e95b606d79af076f1bbd5502" }
