@@ -1017,6 +1017,7 @@ def test_phabricator_metadata_shown_with_trusted_author_no_comments():
         "PHID-USER-trusted-author": {
             "email": "author@mozilla.com",
             "is_trusted": True,
+            "is_trusted_bot": False,
             "real_name": "Trusted Author",
         }
     }
@@ -1087,11 +1088,13 @@ def test_phabricator_metadata_shown_trusted_author_untrusted_comment_redacted():
         "PHID-USER-trusted-author": {
             "email": "author@mozilla.com",
             "is_trusted": True,
+            "is_trusted_bot": False,
             "real_name": "Trusted Author",
         },
         "PHID-USER-untrusted": {
             "email": "attacker@example.com",
             "is_trusted": False,
+            "is_trusted_bot": False,
             "real_name": "Attacker",
         },
     }
