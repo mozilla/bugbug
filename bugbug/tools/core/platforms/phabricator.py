@@ -177,7 +177,7 @@ def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[lis
     for i, comment in enumerate(comments):
         author = users_info.get(comment.author_phid)
         comment_is_trusted = author and (
-            author.get("is_trusted", False) or author.get("is_trusted_bot", False)
+            author["is_trusted"] or author["is_trusted_bot"]
         )
 
         # Create a shallow copy to avoid modifying the original
