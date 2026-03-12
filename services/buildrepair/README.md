@@ -12,8 +12,9 @@ To run locally:
 
 2. Prepare the Docker image
 
-Pull the base Docker image to build Firefox from Taskcluster. 
+Pull the base Docker image to build Firefox from Taskcluster.
 From the Firefox repo run:
+
 ```bash
 ./mach taskgraph load-image --task-id aQDejwXUQsSHxvwE2qQcQg
 ```
@@ -34,6 +35,7 @@ export DOCKER_DEFAULT_PLATFORM=linux/amd64
 4. `cd` to this repo
 
 5. (Optional) Prebuild the Docker image and use `image: build-repair-debian-base` in `docker-compose.dev.yml`
+
 ```bash
 docker build -t build-repair-debian-base -f services/buildrepair/Dockerfile .
 ```
@@ -47,14 +49,16 @@ docker compose -f services/buildrepair/docker-compose.dev.yml run build-repair
 7. Run the evaluation script.
 
 To test:
+
 ```bash
 /opt/venv/bin/python scripts/build_repair_eval.py --no-try-push --limit 1
 ```
 
 To run full evaluation (with 3 trials):
+
 ```bash
 /opt/venv/bin/python scripts/build_repair_eval.py --no-try-push --parallellism 8 --trials 3
 ```
 
-It will run each of 85 examples from the evaluation dataset 3 times. 
+It will run each of 85 examples from the evaluation dataset 3 times.
 It will build Firefox each time with the proposed fix, then write results to Weave.
