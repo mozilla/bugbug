@@ -1,0 +1,12 @@
+[project]
+name = "bugbug-build-repair"
+dynamic = ["version"]
+description = "BugBug Build Repair Agent"
+requires-python = ">=3.12"
+dependencies = [
+    "bugbug",
+]
+
+[tool.uv.sources]
+bugbug = { path = "../..", editable = true }
+
