@@ -346,8 +346,13 @@ class BuildRepairTool(GenerativeModelTool):
             f"(cost=${total_cost:.4f}, turns={total_turns})"
         )
 
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=worktree_path,
+            capture_output=True,
+        )
         diff_result = subprocess.run(
-            ["git", "diff", "HEAD"],
+            ["git", "diff", "--staged", "HEAD"],
             cwd=worktree_path,
             capture_output=True,
             text=True,
