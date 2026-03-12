@@ -51,7 +51,7 @@ class WorktreeManager:
     def cleanup(self, name: str) -> None:
         logger.info(f"Cleaning up worktree {name}")
         # --force twice to operate on locked worktrees (see https://git-scm.com/docs/git-worktree#_options)
-        subprocess.run(
+        result = subprocess.run(
             [
                 "git",
                 "worktree",
@@ -61,9 +61,13 @@ class WorktreeManager:
                 str(self.base_dir / name),
             ],
             cwd=self.repo,
-            check=True,
+            capture_output=True,
+            text=True,
         )
-        logger.info(f"Worktree {name} removed")
+        if result.returncode != 0:
+            logger.error(f"Failed to remove worktree {name}: {result.stderr.strip()}")
+        else:
+            logger.info(f"Worktree {name} removed")
 
     def cleanup_all(self) -> None:
         logger.info(f"Cleaning up all worktrees in {self.base_dir}")
