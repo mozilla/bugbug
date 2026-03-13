@@ -341,6 +341,7 @@ def main() -> None:
     )
 
     os.environ["WEAVE_PARALLELISM"] = str(args.parallelism)
+    os.environ["WEAVE_LOG_LEVEL"] = "INFO" if args.verbose else "WARNING"
     client = weave.init("bugbug-build-repair-eval")
     _register_model_costs(client)
 
