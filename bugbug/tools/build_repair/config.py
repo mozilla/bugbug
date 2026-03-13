@@ -9,6 +9,7 @@ from claude_agent_sdk import SandboxNetworkConfig, SandboxSettings
 
 ANALYSIS_MODEL = "claude-opus-4-6"
 FIX_MODEL = "claude-opus-4-6"
+VERIFY_MODEL = "claude-opus-4-6"
 DEFAULT_MAX_TURNS = 80
 WORKTREE_BASE_DIR = "/tmp/build_repair_worktrees"
 TRY_PUSH_TIMEOUT_SECONDS = 7200
@@ -31,6 +32,17 @@ MODEL_CUTOFF_DATES = {
     "claude-3-7-sonnet-20250219": date(2024, 11, 1),
     "claude-opus-4-20250514": date(2025, 3, 1),
 }
+
+VERIFY_ALLOWED_TOOLS = [
+    "Read",
+    "Bash(git show:*)",
+    "Bash(git log:*)",
+    "Bash(git diff:*)",
+    "Bash(find:*)",
+    "Bash(grep:*)",
+    "WebFetch(domain:firefox-source-docs.mozilla.org)",
+    "WebFetch(domain:searchfox.org)",
+]
 
 ALLOWED_TOOLS = [
     "Edit(~/.mozbuild)",
