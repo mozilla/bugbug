@@ -1,0 +1,18 @@
+services:
+  build-repair:
+    # To minimize rebuilding use `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker build -t build-repair-debian-base -f services/buildrepair/Dockerfile .`
+    # and replace the "build" section with:
+    #  image: build-repair-debian-base
+    build:
+      context: ../..
+      dockerfile: services/buildrepair/Dockerfile
+    volumes:
+      - ../../:/app # live code editing
+      - ${FIREFOX_GIT_REPO}:/workspace/firefox # Firefox repo
+      - build-repair-tmp:/tmp/build_repair_worktrees
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WANDB_API_KEY=${WANDB_API_KEY} # for weave
+      - FIREFOX_GIT_REPO=/workspace/firefox
+volumes:
+  build-repair-tmp:
