@@ -239,7 +239,7 @@ def schedule_tests(branch: str, rev: str) -> str:
 
     # Pull the revision to the local repository
     LOGGER.info("Pulling commits from the remote repository...")
-    repository.pull(REPO_DIR, branch, rev)
+    repository.pull(REPO_DIR, branch, rev, update=True)
 
     # Load the full stack of patches leading to that revision
     LOGGER.info("Loading commits to analyze using automationrelevance...")
@@ -311,7 +311,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
 
     # Pull the base revision to the local repository
     LOGGER.info("Pulling base revision from the remote repository...")
-    repository.pull(REPO_DIR, "integration/autoland", hg_base_rev)
+    repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=True)
 
     LOGGER.info("Generating commit(s) from patch...")
     revs = repository.import_commits(REPO_DIR, hg_base_rev, patch=patch_data_raw)

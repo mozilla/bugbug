@@ -416,7 +416,7 @@ class Bug:
         return value
 
     @classmethod
-    def get(cls, bug_id: int) -> "Bug":
+    def get(cls, bug_id: int, allow_private: bool = False) -> "Bug":
         bugs: list[dict] = []
         Bugzilla(
             bug_id,
@@ -425,7 +425,7 @@ class Bug:
             bugdata=bugs,
         ).get_data().wait()
 
-        if not bugs:
+        if not bugs or (not allow_private and bugs[0]["groups"]):
             raise ValueError(f"Bug {bug_id} not found")
 
         bug_data = bugs[0]
