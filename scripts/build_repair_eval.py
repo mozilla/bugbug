@@ -27,7 +27,12 @@ from typing import Any
 
 import weave
 
-from bugbug.tools.build_repair.agent import AgentResponse, BuildFailure, BuildRepairTool
+from bugbug.tools.build_repair.agent import (
+    AgentResponse,
+    BuildFailure,
+    BuildRepairTool,
+    GroundTruth,
+)
 from bugbug.tools.build_repair.config import MODEL_CUTOFF_DATES
 from bugbug.tools.build_repair.scorer import (
     BasicMetricsScorer,
@@ -231,6 +236,7 @@ class BuildRepairModel(weave.Model):
         bug_id: int,
         pre_fix_bug: dict,
         gh_failure_commits: list[str],
+        gh_fix_commits: list[str],
         failures: list[dict],
         fix_commit_date: str,
         **kwargs,
@@ -257,6 +263,7 @@ class BuildRepairModel(weave.Model):
             worktree_path = self.worktree_mgr.create(gh_failure_commits[0], wt_name)
             worktree_created = True
 
+            on_message = _make_weave_callback()
             failure = BuildFailure(
                 bug_id=bug_id,
                 bug_title=pre_fix_bug["title"],
@@ -268,7 +275,7 @@ class BuildRepairModel(weave.Model):
                 failure,
                 worktree_path=worktree_path,
                 skip_try_push=self.no_try_push,
-                on_message=_make_weave_callback(),
+                on_message=on_message,
             )
             logger.info(
                 f"Bug {bug_id} completed: error={result.error}, "
@@ -279,6 +286,18 @@ class BuildRepairModel(weave.Model):
             )
 
             output = result.model_dump()
+
+            if result.analysis or result.summary:
+                ground_truth = GroundTruth(gh_fix_commits=gh_fix_commits)
+                verify_result = await self.tool.verify(
+                    failure,
+                    result.diff,
+                    ground_truth,
+                    worktree_path,
+                    on_message,
+                )
+                output["verify"] = verify_result.model_dump()
+
             if result.error:
                 raise BuildRepairError(output)
             return output
@@ -331,7 +350,10 @@ def main() -> None:
         dataset.rows = dataset.rows[: args.limit]
         logger.info(f"Limited to {len(dataset.rows)} rows")
 
-    scorers = [BasicMetricsScorer(num_trials=args.trials), LLMFixMatchingScorer()]
+    scorers = [
+        BasicMetricsScorer(num_trials=args.trials),
+        LLMFixMatchingScorer(num_trials=args.trials),
+    ]
     if not args.analysis_only:
         scorers.insert(1, BuildPassRateScorer(num_trials=args.trials))
     logger.info(f"Scorers: {[type(s).__name__ for s in scorers]}")
