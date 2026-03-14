@@ -10,7 +10,7 @@ langchain-anthropic==1.3.4
 langchain-classic==1.0.3
 langchain-community==0.4.1
 langchain-google-genai==4.2.1
-langchain-mistralai==1.1.1
+langchain-mistralai==1.1.2
 langchain-openai==1.1.11
 langgraph==1.0.8
 libmozdata==0.2.12
