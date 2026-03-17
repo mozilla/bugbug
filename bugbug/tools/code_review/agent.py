@@ -12,6 +12,7 @@ from logging import getLogger
 from typing import Optional
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import TodoListMiddleware
 from langchain.agents.structured_output import ProviderStrategy
 from langchain.chat_models import BaseChatModel, init_chat_model
 from langchain.messages import HumanMessage
@@ -32,6 +33,8 @@ from bugbug.tools.code_review.langchain_tools import (
     expand_context,
 )
 from bugbug.tools.code_review.prompts import (
+    CODE_REVIEW_TODO_PROMPT,
+    CODE_REVIEW_TODO_TOOL_DESCRIPTION,
     FIRST_MESSAGE_TEMPLATE,
     STATIC_COMMENT_EXAMPLES,
     SYSTEM_PROMPT_TEMPLATE,
@@ -103,6 +106,12 @@ class CodeReviewTool(GenerativeModelTool):
                 target_software=self.target_software,
             ),
             response_format=ProviderStrategy(AgentResponse),
+            middleware=[
+                TodoListMiddleware(
+                    system_prompt=CODE_REVIEW_TODO_PROMPT,
+                    tool_description=CODE_REVIEW_TODO_TOOL_DESCRIPTION,
+                )
+            ],
         )
 
         self.review_comments_db = review_comments_db
