@@ -498,7 +498,7 @@ class BuildRepairTool(GenerativeModelTool):
     ) -> VerifyResponse:
         out_dir = worktree_path / "repair_agent" / "out" / str(failure.bug_id)
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "agent_fix.diff").write_text(agent_diff)
+        (out_dir / "agent_fix.diff").write_text(agent_diff, encoding="utf-8")
 
         gt_commits = " ".join(ground_truth.gh_fix_commits)
         prompt = VERIFY_TEMPLATE.format(
