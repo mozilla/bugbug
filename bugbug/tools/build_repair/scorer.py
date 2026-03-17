@@ -183,29 +183,19 @@ class LLMFixMatchingScorer(weave.Scorer):
     def summarize(self, score_rows: list[dict]) -> dict:
         scored = [r for r in score_rows if r.get("analysis_quality") is not None]
         n = len(scored)
+
+        total_analysis_quality = sum(r["analysis_quality"] for r in scored)
+        analysis_correct_count = sum(r.get("analysis_correct") is True for r in scored)
+        total_fix_quality = sum(r["fix_quality"] for r in scored)
+        fix_match_count = sum(r.get("fix_matches_ground_truth") is True for r in scored)
+        total_fix_acceptance = sum(r["fix_acceptance_probability"] for r in scored)
+
         summary: dict = {
-            "avg_analysis_quality": sum(r["analysis_quality"] for r in scored) / n
-            if n
-            else 0,
-            "analysis_correct_rate": sum(
-                r.get("analysis_correct") is True for r in scored
-            )
-            / n
-            if n
-            else 0,
-            "avg_fix_quality": sum(r["fix_quality"] for r in scored) / n if n else 0,
-            "fix_match_rate": sum(
-                r.get("fix_matches_ground_truth") is True for r in scored
-            )
-            / n
-            if n
-            else 0,
-            "avg_fix_acceptance_probability": sum(
-                r["fix_acceptance_probability"] for r in scored
-            )
-            / n
-            if n
-            else 0,
+            "avg_analysis_quality": total_analysis_quality / n if n else 0,
+            "analysis_correct_rate": analysis_correct_count / n if n else 0,
+            "avg_fix_quality": total_fix_quality / n if n else 0,
+            "fix_match_rate": fix_match_count / n if n else 0,
+            "avg_fix_acceptance_probability": total_fix_acceptance / n if n else 0,
             "total_judge_cost_usd": sum(r.get("judge_cost_usd", 0) for r in score_rows),
             "num_scored": n,
         }
