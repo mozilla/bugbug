@@ -187,6 +187,27 @@ STATIC_COMMENT_EXAMPLES = [
     },
 ]
 
+CODE_REVIEW_TODO_PROMPT = """
+## Review Planning with `write_todos`
+
+Use the `write_todos` tool to track investigation tasks as you review.
+
+- After your initial scan, create todos for any concerns that need deeper investigation
+  (e.g., "Verify that removed error handler is covered elsewhere", "Check callers of
+  renamed function for breakage")
+- As the review progresses, add new todos when you discover additional concerns
+- Remove or complete todos that turn out to be non-issues after verification
+- For small or straightforward patches, skip todos entirely — just review directly
+"""
+
+CODE_REVIEW_TODO_TOOL_DESCRIPTION = (
+    "Track investigation tasks during code review. Add items for concerns that need "
+    "tool-based verification (expand_context, find_function_definition). Evolve the "
+    "list as you go — add new items when you discover concerns, remove irrelevant ones. "
+    "Do not use this as a file checklist."
+)
+
+
 TEMPLATE_PATCH_FROM_HUNK = """diff --git a/{filename} b/{filename}
 --- a/{filename}
 +++ b/{filename}
