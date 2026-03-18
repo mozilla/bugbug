@@ -4,7 +4,9 @@ updates:
     directories:
       - "/http_service"
       - "/infra"
-      - "/mcp"
+      - "/services/mcp"
+      - "/services/reviewhelper-api"
+      - "/services/buildrepair"
     schedule:
       interval: weekly
     groups:
