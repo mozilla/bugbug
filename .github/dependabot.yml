@@ -60,7 +60,7 @@ updates:
       semver-patch-days: 3
     open-pull-requests-limit: 99
   - package-ecosystem: uv
-    directory: "/mcp"
+    directory: "/services/mcp"
     schedule:
       interval: weekly
     groups:
