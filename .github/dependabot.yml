@@ -60,7 +60,9 @@ updates:
       semver-patch-days: 3
     open-pull-requests-limit: 99
   - package-ecosystem: uv
-    directory: "/services/mcp"
+    directories:
+      - "/services/mcp"
+      - "/services/reviewhelper-api"
     schedule:
       interval: weekly
     groups:
