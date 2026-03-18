@@ -141,23 +141,67 @@ class BuildPassRateScorer(weave.Scorer):
 
 
 class LLMFixMatchingScorer(weave.Scorer):
-    """Scaffold for LLM-as-a-judge comparing agent fix to ground truth.
+    """Aggregates LLM-as-a-judge verify results from the model output."""
 
-    Implementation deferred. Will use a non-Claude LLM to semantically
-    compare the agent's diff against the ground truth fix commit.
-    """
+    num_trials: int = 1
 
     @weave.op()
-    async def score(self, output: dict | None, gh_fix_commits: list[str]) -> dict:
+    def score(self, output: dict | None) -> dict:
+        none_metrics = {
+            "analysis_correct": None,
+            "analysis_quality": None,
+            "fix_matches_ground_truth": None,
+            "fix_quality": None,
+            "fix_acceptance_probability": None,
+            "judge_cost_usd": 0,
+        }
+
         if output is None:
-            return {
-                "match_score": None,
-                "match_category": "errored",
-            }
+            return none_metrics
+
+        verify = output.get("verify")
+        if not verify:
+            return none_metrics
+
+        j = verify.get("judgment")
+        if not j:
+            none_metrics["judge_cost_usd"] = verify.get("cost_usd", 0)
+            return none_metrics
+
         return {
-            "match_score": None,
-            "match_category": "not_implemented",
+            "analysis_correct": j.get("analysis_correct"),
+            "analysis_quality": j.get("analysis_quality"),
+            "analysis_explanation": j.get("analysis_explanation", ""),
+            "fix_matches_ground_truth": j.get("fix_matches_ground_truth"),
+            "fix_quality": j.get("fix_quality"),
+            "fix_explanation": j.get("fix_explanation", ""),
+            "fix_acceptance_probability": j.get("fix_acceptance_probability"),
+            "fix_acceptance_explanation": j.get("fix_acceptance_explanation", ""),
+            "judge_cost_usd": verify.get("cost_usd", 0),
         }
 
     def summarize(self, score_rows: list[dict]) -> dict:
-        return {"status": "not_implemented"}
+        scored = [r for r in score_rows if r.get("analysis_quality") is not None]
+        n = len(scored)
+
+        total_analysis_quality = sum(r["analysis_quality"] for r in scored)
+        analysis_correct_count = sum(r.get("analysis_correct") is True for r in scored)
+        total_fix_quality = sum(r["fix_quality"] for r in scored)
+        fix_match_count = sum(r.get("fix_matches_ground_truth") is True for r in scored)
+        total_fix_acceptance = sum(r["fix_acceptance_probability"] for r in scored)
+
+        summary: dict = {
+            "avg_analysis_quality": total_analysis_quality / n if n else 0,
+            "analysis_correct_rate": analysis_correct_count / n if n else 0,
+            "avg_fix_quality": total_fix_quality / n if n else 0,
+            "fix_match_rate": fix_match_count / n if n else 0,
+            "avg_fix_acceptance_probability": total_fix_acceptance / n if n else 0,
+            "total_judge_cost_usd": sum(r.get("judge_cost_usd", 0) for r in score_rows),
+            "num_scored": n,
+        }
+        if self.num_trials > 1:
+            summary.update(
+                _pass_at_k(score_rows, self.num_trials, "fix_matches_ground_truth")
+            )
+        logger.info(f"LLMFixMatching summary: {summary}")
+        return summary
