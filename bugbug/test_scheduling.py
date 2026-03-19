@@ -1027,7 +1027,7 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                         )
 
                     def has_wpt_files(d: Path) -> bool:
-                        return any(is_wpt_file(p) for p in d.iterdir())
+                        return d.is_dir() and any(is_wpt_file(p) for p in d.iterdir())
 
                     while cur_dir != test_root and not has_wpt_files(cur_dir):
                         cur_dir = cur_dir.parent

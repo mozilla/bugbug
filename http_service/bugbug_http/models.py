@@ -239,7 +239,7 @@ def schedule_tests(branch: str, rev: str) -> str:
 
     # Pull the revision to the local repository
     LOGGER.info("Pulling commits from the remote repository...")
-    repository.pull(REPO_DIR, branch, rev, update=True)
+    repository.pull(REPO_DIR, branch, rev, update=False)
 
     # Load the full stack of patches leading to that revision
     LOGGER.info("Loading commits to analyze using automationrelevance...")
