@@ -10,12 +10,11 @@ updates:
     schedule:
       interval: weekly
     groups:
-      minor-and-patch:
+      patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
-          - minor
           - patch
     open-pull-requests-limit: 99
   - package-ecosystem: pip
@@ -23,12 +22,11 @@ updates:
     schedule:
       interval: weekly
     groups:
-      minor-and-patch:
+      patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
-          - minor
           - patch
     cooldown:
       semver-major-days: 14
@@ -43,12 +41,11 @@ updates:
     schedule:
       interval: weekly
     groups:
-      minor-and-patch:
+      patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
-          - minor
           - patch
     cooldown:
       semver-major-days: 14
@@ -62,12 +59,11 @@ updates:
     schedule:
       interval: weekly
     groups:
-      minor-and-patch:
+      patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
-          - minor
           - patch
     cooldown:
       semver-major-days: 14
@@ -79,11 +75,10 @@ updates:
     schedule:
       interval: weekly
     groups:
-      minor-and-patch:
+      patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
-          - minor
           - patch
     open-pull-requests-limit: 99
