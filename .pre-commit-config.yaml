@@ -5,9 +5,9 @@ repos:
       - id: prettier
         exclude: ^tests/fixtures/
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.5
+    rev: v0.15.6
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
   - repo: https://github.com/pycqa/pydocstyle

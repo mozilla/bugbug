@@ -2,9 +2,9 @@ import logging
 
 import flask
 import functions_framework
+from bugbug.tools.comment_resolver import CodeGeneratorTool
 from langchain.chat_models import init_chat_model
 
-from bugbug.tools.comment_resolver import CodeGeneratorTool
 from bugbug.tools.core.llms import DEFAULT_OPENAI_MODEL
 
 logging.basicConfig(level=logging.INFO)
