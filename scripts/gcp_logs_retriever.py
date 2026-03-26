@@ -95,9 +95,9 @@ def list_entries(
     return response.json()
 
 
-def get_container_name(entry: dict) -> str:
+def get_pod_name(entry: dict) -> str:
     resource_labels = entry.get("resource", {}).get("labels", {})
-    return resource_labels.get("container_name", "-")
+    return resource_labels.get("pod_name", resource_labels.get("container_name", "-"))
 
 
 def get_text_payload(entry: dict) -> str:
@@ -123,7 +123,7 @@ def format_entry(entry: dict) -> str:
         (
             date_part,
             time_part,
-            get_container_name(entry),
+            get_pod_name(entry),
             entry.get("severity", "DEFAULT"),
             get_text_payload(entry),
         )
@@ -212,7 +212,7 @@ def main() -> None:
 
     entries.sort(key=get_sort_key)
 
-    lines = ["DATE\tHOUR\tCONTAINER_NAME\tSEVERITY\tTEXT_PAYLOAD"]
+    lines = ["DATE\tHOUR\tPOD_NAME\tSEVERITY\tTEXT_PAYLOAD"]
     lines.extend(format_entry(entry) for entry in entries)
     serialized_output = "\n".join(lines)
 
