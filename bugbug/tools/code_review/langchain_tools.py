@@ -6,12 +6,16 @@
 """LangGraph tools for code review agent."""
 
 from dataclasses import dataclass
+from logging import getLogger
 
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
+from requests import HTTPError
 
 from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.core.platforms.base import Patch
+
+logger = getLogger(__name__)
 
 
 @dataclass
@@ -68,12 +72,22 @@ def create_find_function_definition_tool(function_search: FunctionSearch):
         Returns:
             The function definition.
         """
-        functions = function_search.get_function_by_name(
-            # TODO: We may want to use the patch base commit hash here instead of "tip".
-            "tip",
-            file_path,
-            function_name,
-        )
+        try:
+            functions = function_search.get_function_by_name(
+                # TODO: We may want to use the patch base commit hash here instead of "tip".
+                "tip",
+                file_path,
+                function_name,
+            )
+        except HTTPError as e:
+            logger.error(
+                "HTTP error occurred while searching for the definition of function '%s' which is used in file '%s' at line %d: %s",
+                function_name,
+                file_path,
+                line_number,
+                e,
+            )
+            return "Error occurred while searching for the function definition."
 
         if not functions:
             return "Function definition not found."
