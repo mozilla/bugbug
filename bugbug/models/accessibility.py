@@ -83,7 +83,9 @@ class AccessibilityModel(BugModel):
     def __is_accessibility_bug(bug):
         """Check if a bug is an accessibility bug."""
         return (
-            bug.get("cf_accessibility_severity") != "---" or "access" in bug["keywords"]
+            bug.get("cf_accessibility_severity") != "---"
+            or "access" in bug["keywords"]
+            or (bug["product"] == "Firefox" and bug["component"] == "Disability Access")
         )
 
     @staticmethod
