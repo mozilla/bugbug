@@ -38,6 +38,7 @@ MODELS = {
     "uplift": "bugbug.models.uplift.UpliftModel",
     "worksforme": "bugbug.models.worksforme.WorksForMeModel",
     "fenixcomponent": "bugbug.models.fenixcomponent.FenixComponentModel",
+    "componentspecific": "bugbug.models.component_specific.ComponentSpecificModel",
 }
 
 

@@ -28,6 +28,7 @@ LOGGER = logging.getLogger()
 MODELS_NAMES = [
     "defectenhancementtask",
     "component",
+    "componentspecific",
     "invalidcompatibilityreport",
     "needsdiagnosis",
     "regression",

@@ -661,6 +661,41 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-componentspecific
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - componentspecific
+
+        artifacts:
+          public/componentspecificmodel.tar.zst:
+            path: /componentspecificmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_componentspecific.${version}
+        - index.project.bugbug.train_componentspecific.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_componentspecific.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_componentspecific.latest
+      metadata:
+        name: bugbug train componentspecific model
+        description: bugbug train componentspecific model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: train-defectenhancementtask
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
@@ -1374,6 +1409,7 @@ tasks:
       workerType: batch
       dependencies:
         - train-component
+        - train-componentspecific
         - train-defectenhancementtask
         - train-regression
         - train-regressor
@@ -1416,6 +1452,7 @@ tasks:
       dependencies:
         - train-defectenhancementtask
         - train-component
+        - train-componentspecific
         - train-regression
         - train-stepstoreproduce
         - train-spambug
