@@ -7,7 +7,7 @@ flask-cors==6.0.2
 gunicorn==25.1.0
 kombu==5.6.2
 marshmallow==3.26.2
-requests==2.32.5
+requests==2.33.0
 rq==2.7.0
 rq-dashboard==0.8.6
 sentry-sdk[flask]==2.55.0
