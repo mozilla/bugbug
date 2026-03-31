@@ -130,7 +130,7 @@ def parse_args(args):
                     f"--{parameter.name}",
                     default=parameter.default,
                     dest=parameter.name,
-                    type=int,
+                    type=parameter_type,
                 )
 
     return main_parser.parse_args(args)
