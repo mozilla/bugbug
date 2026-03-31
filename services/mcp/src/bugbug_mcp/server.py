@@ -12,8 +12,6 @@ from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
 from pydantic import Field
 
-from bugbug import utils
-from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
 from bugbug.tools.core.platforms.phabricator import (
@@ -57,40 +55,6 @@ async def patch_review(
     return system_prompt + "\n\n" + initial_prompt
 
 
-def get_file(commit_hash, path):
-    if commit_hash == "main":
-        commit_hash = "refs/heads/main"
-
-    r = utils.get_session("githubusercontent").get(
-        f"https://raw.githubusercontent.com/mozilla-firefox/firefox/{commit_hash}/{path}",
-        headers={
-            "User-Agent": utils.get_user_agent(),
-        },
-    )
-    r.raise_for_status()
-    return r.text
-
-
-function_search = FunctionSearchSearchfoxAPI(get_file)
-
-
-@mcp.tool()
-def find_function_definition(
-    function_name: Annotated[str, "The name of the function to find its definition."],
-) -> str:
-    """Find the definition of a function in the Firefox codebase using Searchfox."""
-    functions = function_search.get_function_by_name(
-        "main",
-        "n/a",  # The file path is not used
-        function_name,
-    )
-
-    if not functions:
-        return "Function definition not found."
-
-    return functions[0].source
-
-
 @mcp.resource(
     uri="bugzilla://bug/{bug_id}",
     name="Bugzilla Bug Content",
@@ -105,6 +69,74 @@ def handle_bug_view_resource(bug_id: int) -> str:
 def get_bugzilla_bug(bug_id: int) -> str:
     """Retrieve a bug from Bugzilla alongside its change history and comments."""
     return SanitizedBug.get(bug_id).to_md()
+
+
+@mcp.tool()
+def bugzilla_quick_search(
+    search_query: Annotated[
+        str,
+        "A quick search string to find bugs. Can include bug numbers, keywords, status, product, component, etc. Examples: 'firefox crash', 'FIXED', 'status:NEW product:Core'",
+    ],
+    limit: Annotated[int, "Maximum number of bugs to return (default: 20)"] = 20,
+) -> str:
+    """Search for bugs in Bugzilla using quick search syntax.
+
+    Quick search supports shortcuts like bug numbers, keywords, status,
+    products/components, and combinations of these.
+
+    For the full syntax reference, see:
+    https://bugzilla.mozilla.org/page.cgi?id=quicksearch.html
+
+    Returns a formatted list of matching bugs with their ID, status, summary, and link.
+    """
+    from libmozdata.bugzilla import Bugzilla
+
+    bugs = []
+
+    def bughandler(bug):
+        bugs.append(bug)
+
+    # Use Bugzilla quicksearch API
+    params = {
+        "quicksearch": search_query,
+        "limit": limit,
+    }
+
+    Bugzilla(
+        params,
+        include_fields=[
+            "id",
+            "status",
+            "summary",
+            "product",
+            "component",
+            "priority",
+            "severity",
+        ],
+        bughandler=bughandler,
+    ).get_data().wait()
+
+    if not bugs:
+        return f"No bugs found matching: {search_query}"
+
+    # Format results concisely for LLM consumption
+    result = f"Found {len(bugs)} bug(s) matching '{search_query}':\n\n"
+
+    for bug in bugs:
+        bug_id = bug["id"]
+        status = bug.get("status", "N/A")
+        summary = bug.get("summary", "N/A")
+        product = bug.get("product", "N/A")
+        component = bug.get("component", "N/A")
+        priority = bug.get("priority", "N/A")
+        severity = bug.get("severity", "N/A")
+
+        result += f"Bug {bug_id} [{status}] - {summary}\n"
+        result += f"  Product: {product}::{component}\n"
+        result += f"  Priority: {priority} | Severity: {severity}\n"
+        result += f"  URL: https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}\n\n"
+
+    return result
 
 
 @mcp.resource(

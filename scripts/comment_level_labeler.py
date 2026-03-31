@@ -8,8 +8,9 @@ import csv
 import os
 import random
 
-from bugbug import bugzilla
 from bugbug.models.bug import BugModel
+
+from bugbug import bugzilla
 from bugbug.models.regression import RegressionModel
 
 parser = argparse.ArgumentParser()

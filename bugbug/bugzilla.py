@@ -105,6 +105,7 @@ INCLUDE_FIELDS = ["_default", "filed_via"]
 def get_bugs(
     include_invalid: bool | None = False,
     include_additional_products: tuple[str, ...] = (),
+    include_all_products: bool = False,
 ) -> Iterator[BugDict]:
     products = (
         PRODUCTS + include_additional_products
@@ -114,7 +115,7 @@ def get_bugs(
     yield from (
         bug
         for bug in db.read(BUGS_DB)
-        if bug["product"] in products
+        if (include_all_products or bug["product"] in products)
         and (include_invalid or bug["product"] != "Invalid Bugs")
     )
 

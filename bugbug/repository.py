@@ -1519,7 +1519,7 @@ def clone(
     logger.info("%s cloned", repo_dir)
 
 
-def pull(repo_dir: str, branch: str, revision: str) -> None:
+def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> None:
     """Pull a revision from a branch of a remote repository into a local repository."""
 
     @tenacity.retry(
@@ -1550,15 +1550,16 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
                 f"Error {p.returncode} when pulling {revision} from {branch}"
             )
 
+        if update:
+            with hglib.open(repo_dir) as hg:
+                hg.update(revision.encode("utf-8"), clean=True)
+
     trigger_pull()
 
 
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
     """Import commits from a git format-patch style patches into a Mercurial repository."""
     with hglib.open(repo_dir) as hg:
-        logger.info("Updating to base revision %s...", base_rev)
-        hg.update(base_rev.encode("utf-8"), clean=True)
-
         logger.info("Applying the patch ...")
         hg.import_(patches=io.BytesIO(patch))
 

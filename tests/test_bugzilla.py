@@ -27,6 +27,33 @@ def test_get_bugs():
     assert 1572747 in legitimate_bugs
 
 
+def test_get_bugs_include_all_products(monkeypatch: Any):
+    monkeypatch.setattr(
+        bugzilla.db,
+        "read",
+        lambda _: iter(
+            [
+                {"id": 1, "product": "Firefox"},
+                {"id": 2, "product": "Firefox Graveyard"},
+                {"id": 3, "product": "Invalid Bugs"},
+            ]
+        ),
+    )
+
+    default_bugs = [bug["id"] for bug in bugzilla.get_bugs()]
+    all_product_bugs = [
+        bug["id"] for bug in bugzilla.get_bugs(include_all_products=True)
+    ]
+    all_product_and_invalid_bugs = [
+        bug["id"]
+        for bug in bugzilla.get_bugs(include_all_products=True, include_invalid=True)
+    ]
+
+    assert default_bugs == [1]
+    assert all_product_bugs == [1, 2]
+    assert all_product_and_invalid_bugs == [1, 2, 3]
+
+
 def test_get_fixed_versions():
     assert bugzilla.get_fixed_versions(
         {

@@ -1,0 +1,207 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+from logging import getLogger
+
+import weave
+
+logger = getLogger(__name__)
+
+
+def _pass_at_k(
+    score_rows: list[dict],
+    num_trials: int,
+    metric: str,
+) -> dict[str, float]:
+    """Compute pass@k from scorer rows ordered by trial.
+
+    Rows are ordered: first num_examples = trial 0, next = trial 1, etc.
+    Rows may be empty dicts when the model raised an exception.
+    """
+    num_examples = len(score_rows) // num_trials
+    pass_at: dict[str, float] = {}
+    for n in sorted({1, 3, num_trials}):
+        if n > num_trials:
+            continue
+        successes = sum(
+            any(score_rows[t * num_examples + i].get(metric) is True for t in range(n))
+            for i in range(num_examples)
+        )
+        pass_at[f"pass@{n}"] = successes / num_examples if num_examples else 0
+
+    all_pass = sum(
+        all(
+            score_rows[t * num_examples + i].get(metric) is True
+            for t in range(num_trials)
+        )
+        for i in range(num_examples)
+    )
+    pass_at[f"pass^{num_trials}"] = all_pass / num_examples if num_examples else 0
+
+    return pass_at
+
+
+class BasicMetricsScorer(weave.Scorer):
+    """Scores success rate, diff production rate, cost, and turn count."""
+
+    num_trials: int = 1
+
+    @weave.op()
+    def score(self, output: dict | None) -> dict:
+        if output is None:
+            return {
+                "successful": False,
+                "has_diff": False,
+                "cost_usd": 0,
+                "num_turns": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            }
+        return {
+            "successful": output.get("error") is None,
+            "has_diff": bool(output.get("diff", "").strip()),
+            "cost_usd": output.get("cost_usd", 0),
+            "num_turns": output.get("num_turns", 0),
+            "input_tokens": output.get("input_tokens", 0),
+            "output_tokens": output.get("output_tokens", 0),
+            "cache_read_input_tokens": output.get("cache_read_input_tokens", 0),
+            "cache_creation_input_tokens": output.get("cache_creation_input_tokens", 0),
+        }
+
+    def summarize(self, score_rows: list[dict]) -> dict:
+        n = len(score_rows)
+        costs = [r.get("cost_usd", 0) for r in score_rows]
+        input_toks = [r.get("input_tokens", 0) for r in score_rows]
+        output_toks = [r.get("output_tokens", 0) for r in score_rows]
+        summary = {
+            "success_rate": sum(r.get("successful", False) for r in score_rows) / n
+            if n
+            else 0,
+            "diff_rate": sum(r.get("has_diff", False) for r in score_rows) / n
+            if n
+            else 0,
+            "avg_cost_usd": sum(costs) / n if n else 0,
+            "total_cost_usd": sum(costs),
+            "total_input_tokens": sum(input_toks),
+            "total_output_tokens": sum(output_toks),
+            "total_cache_read_tokens": sum(
+                r.get("cache_read_input_tokens", 0) for r in score_rows
+            ),
+            "total_cache_creation_tokens": sum(
+                r.get("cache_creation_input_tokens", 0) for r in score_rows
+            ),
+            "num_examples": n,
+        }
+        if self.num_trials > 1:
+            summary.update(_pass_at_k(score_rows, self.num_trials, "successful"))
+        logger.info(f"BasicMetrics summary: {summary}")
+        return summary
+
+
+class BuildPassRateScorer(weave.Scorer):
+    """Scores local ./mach build and try push pass rates."""
+
+    num_trials: int = 1
+
+    @weave.op()
+    def score(self, output: dict | None) -> dict:
+        if output is None:
+            return {
+                "local_build_passed": None,
+                "try_build_passed": None,
+            }
+        return {
+            "local_build_passed": output.get("local_build_passed"),
+            "try_build_passed": output.get("try_build_passed"),
+        }
+
+    def summarize(self, score_rows: list[dict]) -> dict:
+        n = len(score_rows)
+        local_passed = sum(1 for r in score_rows if r.get("local_build_passed") is True)
+        try_known = [r for r in score_rows if r.get("try_build_passed") is not None]
+        try_passed = sum(1 for r in try_known if r.get("try_build_passed") is True)
+        summary = {
+            "local_build_pass_rate": local_passed / n if n else 0,
+            "local_builds_passed": local_passed,
+            "try_build_pass_rate": try_passed / len(try_known) if try_known else 0,
+            "try_builds_passed": try_passed,
+            "try_builds_timed_out": n - len(try_known),
+            "num_examples": n,
+        }
+        if self.num_trials > 1:
+            summary.update(
+                _pass_at_k(score_rows, self.num_trials, "local_build_passed")
+            )
+        logger.info(f"BuildPassRate summary: {summary}")
+        return summary
+
+
+class LLMFixMatchingScorer(weave.Scorer):
+    """Aggregates LLM-as-a-judge verify results from the model output."""
+
+    num_trials: int = 1
+
+    @weave.op()
+    def score(self, output: dict | None) -> dict:
+        none_metrics = {
+            "analysis_correct": None,
+            "analysis_quality": None,
+            "fix_matches_ground_truth": None,
+            "fix_quality": None,
+            "fix_acceptance_probability": None,
+            "judge_cost_usd": 0,
+        }
+
+        if output is None:
+            return none_metrics
+
+        verify = output.get("verify")
+        if not verify:
+            return none_metrics
+
+        j = verify.get("judgment")
+        if not j:
+            none_metrics["judge_cost_usd"] = verify.get("cost_usd", 0)
+            return none_metrics
+
+        return {
+            "analysis_correct": j.get("analysis_correct"),
+            "analysis_quality": j.get("analysis_quality"),
+            "analysis_explanation": j.get("analysis_explanation", ""),
+            "fix_matches_ground_truth": j.get("fix_matches_ground_truth"),
+            "fix_quality": j.get("fix_quality"),
+            "fix_explanation": j.get("fix_explanation", ""),
+            "fix_acceptance_probability": j.get("fix_acceptance_probability"),
+            "fix_acceptance_explanation": j.get("fix_acceptance_explanation", ""),
+            "judge_cost_usd": verify.get("cost_usd", 0),
+        }
+
+    def summarize(self, score_rows: list[dict]) -> dict:
+        scored = [r for r in score_rows if r.get("analysis_quality") is not None]
+        n = len(scored)
+
+        total_analysis_quality = sum(r["analysis_quality"] for r in scored)
+        analysis_correct_count = sum(r.get("analysis_correct") is True for r in scored)
+        total_fix_quality = sum(r["fix_quality"] for r in scored)
+        fix_match_count = sum(r.get("fix_matches_ground_truth") is True for r in scored)
+        total_fix_acceptance = sum(r["fix_acceptance_probability"] for r in scored)
+
+        summary: dict = {
+            "avg_analysis_quality": total_analysis_quality / n if n else 0,
+            "analysis_correct_rate": analysis_correct_count / n if n else 0,
+            "avg_fix_quality": total_fix_quality / n if n else 0,
+            "fix_match_rate": fix_match_count / n if n else 0,
+            "avg_fix_acceptance_probability": total_fix_acceptance / n if n else 0,
+            "total_judge_cost_usd": sum(r.get("judge_cost_usd", 0) for r in score_rows),
+            "num_scored": n,
+        }
+        if self.num_trials > 1:
+            summary.update(
+                _pass_at_k(score_rows, self.num_trials, "fix_matches_ground_truth")
+            )
+        logger.info(f"LLMFixMatching summary: {summary}")
+        return summary

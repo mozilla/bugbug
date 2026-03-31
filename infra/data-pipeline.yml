@@ -303,8 +303,8 @@ tasks:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
-        - index.project.bugbug_annotate.ci_failures_retriever.${version}
-        - index.project.bugbug_annotate.ci_failures_retriever.latest
+        - index.project.bugbug.data_ci_failures.${version}
+        - index.project.bugbug.data_ci_failures.latest
       metadata:
         name: bugbug CI failures retriever
         description: bugbug CI failures retriever

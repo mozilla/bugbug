@@ -21,7 +21,7 @@ class CodeReviewContext:
 
 @tool
 async def expand_context(file_path: str, start_line: int, end_line: int) -> str:
-    """Show the content of a file between specified line numbers as it is before the patch.
+    """Show the content of a file between specified line numbers as it is after the patch. If the file is not modified by the patch, the original file content is returned as-is.
 
     Be careful to not fill your context window with too much data. Request the
     minimum amount of context necessary to understand the code, but do not split
@@ -29,8 +29,8 @@ async def expand_context(file_path: str, start_line: int, end_line: int) -> str:
 
     Args:
         file_path: The path to the file.
-        start_line: The starting line number in the original file. Minimum is 1.
-        end_line: The ending line number in the original file. Maximum is the total number of lines in the file.
+        start_line: The starting line number in the patched file. Minimum is 1.
+        end_line: The ending line number in the patched file. Maximum is the total number of lines in the file.
 
     Returns:
         The content of the file between the specified line numbers.
@@ -38,15 +38,15 @@ async def expand_context(file_path: str, start_line: int, end_line: int) -> str:
     runtime = get_runtime(CodeReviewContext)
 
     try:
-        file_content = await runtime.context.patch.get_old_file(file_path)
+        file_content = await runtime.context.patch.get_new_file(file_path)
     except FileNotFoundError:
-        return "File not found in the repository before the patch."
+        return "File not found in the repository after the patch."
 
     lines = file_content.splitlines()
     start = max(1, start_line) - 1
     end = min(len(lines), end_line)
 
-    # Format the output with line numbers that match the original file.
+    # Format the output with line numbers that match the patched file.
     line_number_width = len(str(end))
     return "\n".join(
         f"{i + 1:>{line_number_width}}| {lines[i]}" for i in range(start, end)

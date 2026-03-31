@@ -79,6 +79,7 @@ def get_fixed_by_commit_pushes():
             "failures": push["failures"],
             "commits": [],
         }
+    logger.info("Got %d failures.", len(fixed_by_commit_pushes))
 
     fixed_by_commit_elements = []
 

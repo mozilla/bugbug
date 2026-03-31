@@ -29,7 +29,7 @@ from xgboost import XGBModel
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
-from bugbug.nlp import SpacyVectorizer
+from bugbug.nlp import lemmatizing_tfidf_vectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
 logging.basicConfig(level=logging.INFO)
@@ -164,7 +164,7 @@ def sort_class_names(class_names):
 class Model:
     def __init__(self, lemmatization=False):
         if lemmatization:
-            self.text_vectorizer = SpacyVectorizer
+            self.text_vectorizer = lemmatizing_tfidf_vectorizer
         else:
             self.text_vectorizer = TfidfVectorizer
 

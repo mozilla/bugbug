@@ -28,7 +28,7 @@ Follow this systematic approach to review the patch:
 **Step 3: Verify and Assess Confidence**
 - Use available tools when you need to verify concerns or gather additional context
 - Only include comments where you are at least 80% confident the issue is valid
-- When uncertain about an issue, use tools like `find_function_definition` or `expand_context` to verify before commenting
+- When uncertain about an issue, use available tools to verify before commenting
 - Do not suggest issues you cannot verify with available context
 
 **Step 4: Sort and Order Comments**
