@@ -17,6 +17,7 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
+from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class ComponentModel(BugModel):
         "Firefox for Android": "Firefox for Android::General",
     }
 
-    def __init__(self, lemmatization=False):
+    def __init__(self, calibration=True, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
         self.cross_validation_enabled = False
@@ -103,6 +104,12 @@ class ComponentModel(BugModel):
             ]
         )
 
+        estimator = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        if calibration:
+            estimator = IsotonicRegressionCalibrator(estimator)
+            # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
+            self.calculate_importance = False
+
         self.clf = Pipeline(
             [
                 (
@@ -121,7 +128,7 @@ class ComponentModel(BugModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    estimator,
                 ),
             ]
         )
