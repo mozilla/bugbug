@@ -103,29 +103,29 @@ LOGGER = logging.getLogger()
 class BugPrediction(Schema):
     prob = fields.List(fields.Float())
     index = fields.Integer()
-    suggestion = fields.Str()
+    suggestion = fields.String()
     extra_data = fields.Dict()
 
 
 class NotAvailableYet(Schema):
-    ready = fields.Boolean(enum=[False])
+    ready = fields.Boolean(metadata={"enum": [False]})
 
 
 class ModelName(Schema):
-    model_name = fields.Str(enum=MODELS_NAMES, example="component")
+    model_name = fields.String(metadata={"enum": MODELS_NAMES, "example": "component"})
 
 
 class UnauthorizedError(Schema):
-    message = fields.Str(default="Error, missing X-API-KEY")
+    message = fields.String(dump_default="Error, missing X-API-KEY")
 
 
 class BranchName(Schema):
-    branch = fields.Str(example="autoland")
+    branch = fields.String(metadata={"example": "autoland"})
 
 
 class Schedules(Schema):
-    tasks = fields.List(fields.Str)
-    groups = fields.List(fields.Str)
+    tasks = fields.List(fields.String())
+    groups = fields.List(fields.String())
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
