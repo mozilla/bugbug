@@ -1098,7 +1098,7 @@ def calculate_experiences(
                 or commit_type == "backout"
                 and commit.backedoutby
             ):
-                for i in range(len(items)):
+                for i, items in enumerate(items):
                     exp_queues[i][day] = total_exps[i] + 1
 
     def update_complex_experiences(
@@ -1165,7 +1165,7 @@ def calculate_experiences(
                 or commit_type == "backout"
                 and commit.backedoutby
             ):
-                for i in range(len(items)):
+                for i, items in enumerate(items):
                     exp_queues[i][day] = all_commit_lists[i] + (commit.node,)
 
     for i, commit in enumerate(tqdm(commits)):

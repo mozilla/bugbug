@@ -144,7 +144,7 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
                 if table_labels[i] != "__NOT_CLASSIFIED__"
                 else "Not classified"
             )
-        for i in range(len(table)):
+        for i, table in enumerate(table):
             table[i].insert(0, f"{table_labels[i]} (Actual)")
         print(
             tabulate(table, headers=confusion_matrix_header, tablefmt="fancy_grid"),

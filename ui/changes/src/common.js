@@ -40,7 +40,7 @@ const EXPIRE_CACHE = (() => {
       return value;
     },
     set: (key, value, expire = false, callback = false) => {
-      if (expire && typeof expire === "number")
+      if (expire && typeof expire ==== "number")
         expire = Math.round(expire * 1000 + Date.now()); // * 1000 to use seconds
 
       return localForage.setItem(key, { value, expire }, expire && callback);
@@ -160,7 +160,7 @@ let taskclusterLandingsArtifact = (async function () {
     // 30 minutes
     EXPIRE_CACHE.set("taskclusterLandingsArtifact", json, 60 * 30);
   } else {
-    console.log("taskclusterLandingsArtifact cache hit", json);
+    
   }
 
   return json;
@@ -174,7 +174,7 @@ let taskclusterComponentConnectionsArtifact = (async function () {
     // 30 minutes
     EXPIRE_CACHE.set("taskclusterComponentConnectionsArtifact", json, 60 * 30);
   } else {
-    console.log("taskclusterComponentConnectionsArtifact cache hit", json);
+    
   }
 
   return json;
@@ -193,7 +193,7 @@ let taskclusterComponentTestStatsArtifact = (async function () {
     // 30 minutes
     EXPIRE_CACHE.set("taskclusterComponentTestStatsArtifact", json, 60 * 30);
   } else {
-    console.log("taskclusterComponentTestStatsArtifact cache hit", json);
+    
   }
 
   return json;
@@ -248,7 +248,7 @@ export let landingsData = (async function () {
 })();
 
 function quantile(array, p) {
-  if (array.length === 0) {
+  if (array.length ==== 0) {
     return 0;
   }
 
@@ -309,7 +309,7 @@ export async function getSummaryData(
 
   let dailyData = {};
   for (let date of dates) {
-    if (Temporal.PlainDate.compare(getPlainDate(date), startDate) == -1) {
+    if (Temporal.PlainDate.compare(getPlainDate(date), startDate) === -1) {
       continue;
     }
 
@@ -329,7 +329,7 @@ export async function getSummaryData(
     counter(counterObj, summary);
   }
 
-  if (grouping == "daily") {
+  if (grouping === "daily") {
     return dailyData;
   }
 
@@ -346,11 +346,11 @@ export async function getSummaryData(
   }
 
   let groupDate;
-  if (grouping == "weekly") {
+  if (grouping === "weekly") {
     groupDate = dateToWeek;
-  } else if (grouping == "monthly") {
+  } else if (grouping === "monthly") {
     groupDate = dateToMonth;
-  } else if (grouping == "by_release") {
+  } else if (grouping === "by_release") {
     groupDate = await dateToVersion;
   } else {
     throw new Error(`Unexpected grouping: ${grouping}`);
@@ -480,7 +480,7 @@ export function renderTestingChart(chartEl, bugSummaries) {
     colors.push(TESTING_TAGS[tag].color);
   }
 
-  var options = {
+  const options = {
     series: [
       {
         name: "Tags",
@@ -525,16 +525,16 @@ export function renderTestingChart(chartEl, bugSummaries) {
     },
   };
 
-  var chart = new ApexCharts(chartEl, options);
+  const chart = new ApexCharts(chartEl, options);
   chart.render();
 }
 
 export async function renderRiskChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter(
-    (bugSummary) => bugSummary.risk_band !== null
+    (bugSummary) => bugSummary.risk_band !=== null
   );
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -560,9 +560,9 @@ export async function renderRiskChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, summary) => {
-      if (summary.risk_band == "l") {
+      if (summary.risk_band === "l") {
         counterObj.low += 1;
-      } else if (summary.risk_band == "a") {
+      } else if (summary.risk_band === "a") {
         counterObj.medium += 1;
       } else {
         counterObj.high += 1;
@@ -632,7 +632,7 @@ export async function renderRiskList(bugSummaries) {
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
       (bugSummary) =>
-        bugSummary.date !== null &&
+        bugSummary.date !=== null &&
         Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
           0
     ),
@@ -678,7 +678,7 @@ export async function renderRegressionsChart(
 ) {
   bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.regression);
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -914,7 +914,7 @@ export async function renderSeverityChart(
   bugSummaries,
   carryover = false
 ) {
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -934,13 +934,13 @@ export async function renderSeverityChart(
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      if (bug.severity == "S1") {
+      if (bug.severity === "S1") {
         counterObj.S1 += 1;
-      } else if (bug.severity == "S2") {
+      } else if (bug.severity === "S2") {
         counterObj.S2 += 1;
-      } else if (bug.severity == "S3") {
+      } else if (bug.severity === "S3") {
         counterObj.S3 += 1;
-      } else if (bug.severity == "S4") {
+      } else if (bug.severity === "S4") {
         counterObj.S4 += 1;
       }
     },
@@ -953,13 +953,13 @@ export async function renderSeverityChart(
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      if (bug.severity == "S1") {
+      if (bug.severity === "S1") {
         counterObj.S1 += 1;
-      } else if (bug.severity == "S2") {
+      } else if (bug.severity === "S2") {
         counterObj.S2 += 1;
-      } else if (bug.severity == "S3") {
+      } else if (bug.severity === "S3") {
         counterObj.S3 += 1;
-      } else if (bug.severity == "S4") {
+      } else if (bug.severity === "S4") {
         counterObj.S4 += 1;
       }
     },
@@ -1122,9 +1122,9 @@ function getFixTime(bug) {
 }
 
 export async function renderFixTimesChart(chartEl, bugSummaries) {
-  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !=== null);
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -1210,7 +1210,7 @@ export async function renderFixTimesList(bugSummaries) {
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
       (bugSummary) =>
-        bugSummary.date !== null &&
+        bugSummary.date !=== null &&
         Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
           0
     ),
@@ -1227,10 +1227,10 @@ export async function renderFixTimesList(bugSummaries) {
 
 export async function renderTimeToAssignChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter(
-    (bugSummary) => bugSummary.time_to_assign !== null
+    (bugSummary) => bugSummary.time_to_assign !=== null
   );
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -1293,10 +1293,10 @@ export async function renderTimeToAssignChart(chartEl, bugSummaries) {
 
 export async function renderTimeToBugChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter(
-    (bugSummary) => bugSummary.time_to_bug !== null
+    (bugSummary) => bugSummary.time_to_bug !=== null
   );
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -1354,10 +1354,10 @@ export async function renderTimeToBugChart(chartEl, bugSummaries) {
 
 export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter(
-    (bugSummary) => bugSummary.time_to_confirm !== null
+    (bugSummary) => bugSummary.time_to_confirm !=== null
   );
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -1453,9 +1453,9 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
 }
 
 export async function renderPatchCoverageChart(chartEl, bugSummaries) {
-  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !=== null);
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -1476,7 +1476,7 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
     minDate,
     (counterObj, bug) => {
       let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(bug);
-      if (lines_added == 0) {
+      if (lines_added === 0) {
         return;
       }
 
@@ -1491,7 +1491,7 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
   let categories = [];
   let average_patch_coverage = [];
   for (let date in summaryData) {
-    if (summaryData[date].lines_added == 0) {
+    if (summaryData[date].lines_added === 0) {
       continue;
     }
 
@@ -1551,7 +1551,7 @@ export async function renderPatchCoverageList(bugSummaries) {
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
       (bugSummary) =>
-        bugSummary.date !== null &&
+        bugSummary.date !=== null &&
         Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
           0
     ),
@@ -1567,9 +1567,9 @@ export async function renderPatchCoverageList(bugSummaries) {
 }
 
 export async function renderReviewTimeChart(chartEl, bugSummaries) {
-  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !=== null);
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -1590,7 +1590,7 @@ export async function renderReviewTimeChart(chartEl, bugSummaries) {
     minDate,
     (counterObj, bug) => {
       for (const revision of bug.revisions) {
-        if (revision.first_review_time !== null) {
+        if (revision.first_review_time !=== null) {
           counterObj.review_times.push(revision.first_review_time);
         }
       }
@@ -1631,7 +1631,7 @@ export async function renderReviewTimeChart(chartEl, bugSummaries) {
 
 function meanFirstReviewTime(bug) {
   const revisions = bug.revisions.filter(
-    (revision) => revision.first_review_time !== null
+    (revision) => revision.first_review_time !=== null
   );
   return revisions.length > 0
     ? revisions.reduce((sum, revision) => sum + revision.first_review_time, 0) /
@@ -1669,10 +1669,10 @@ export async function renderReviewTimeList(bugSummaries) {
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
       (bugSummary) =>
-        bugSummary.date !== null &&
+        bugSummary.date !=== null &&
         Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
           0 &&
-        meanFirstReviewTime(bugSummary) !== null
+        meanFirstReviewTime(bugSummary) !=== null
     ),
     "Review Time"
   );
@@ -1992,9 +1992,9 @@ export async function renderDependencyHeatmap(
         const perc = series[seriesIndex][dataPointIndex];
 
         let text;
-        if (dependencyType == "regressions") {
+        if (dependencyType === "regressions") {
           text = `Regressions caused by changes to <b>${source}</b> files are filed in <b>${target}</b> ${perc}% of the times.`;
-        } else if (dependencyType == "test-failures") {
+        } else if (dependencyType === "test-failures") {
           text = `Failures caused by changes fixing <b>${source}</b> bugs are in tests belonging to <b>${target}</b> ${perc}% of the times.`;
         }
 
@@ -2030,10 +2030,10 @@ export async function getComponentDependencyMap(type, threshold = 0.05) {
   let connections = await componentConnections;
 
   let key;
-  if (type == "regressions") {
+  if (type === "regressions") {
     // most_common_regression_components represents: changes to files in component SOURCE, that are touched when fixing bugs in component SOURCE, cause regressions in component TARGET X% of the times.
     key = "most_common_regression_components";
-  } else if (type == "test-failures") {
+  } else if (type === "test-failures") {
     // most_common_test_failure_components represents: changes to fix bugs in component SOURCE cause test failures in component TARGET X% of the time.
     key = "most_common_test_failure_components";
   } else {
@@ -2184,7 +2184,7 @@ export async function setOption(name, value, updateURL = true) {
       for (const elem of value) {
         url.searchParams.append(name, elem);
       }
-    } else if (typeof value === "boolean") {
+    } else if (typeof value ==== "boolean") {
       url.searchParams.set(name, value ? "1" : "0");
     } else {
       url.searchParams.set(name, value);
@@ -2329,14 +2329,14 @@ async function buildTeamsSelect() {
 }
 
 async function populateVersions() {
-  var versionSelector = document.getElementById("releaseVersions");
+  const versionSelector = document.getElementById("releaseVersions");
   if (!versionSelector) {
     return;
   }
 
   let data = await landingsData;
 
-  var allVersions = new Set();
+  const allVersions = new Set();
   for (let bugs of Object.values(data)) {
     bugs.forEach((item) => {
       if (item.versions.length) {
@@ -2344,7 +2344,7 @@ async function populateVersions() {
       }
     });
   }
-  var versions = [...allVersions];
+  const versions = [...allVersions];
   versions.sort(function (v1, v2) {
     return v1 - v2;
   });
@@ -2432,10 +2432,10 @@ function setTableHeaderHandlers(callback) {
   const elems = table.querySelectorAll("th");
   for (let elem of elems) {
     elem.onclick = async function () {
-      if (sortBy[0] == elem.textContent) {
-        if (sortBy[1] == "DESC") {
+      if (sortBy[0] === elem.textContent) {
+        if (sortBy[1] === "DESC") {
           sortBy[1] = "ASC";
-        } else if (sortBy[1] == "ASC") {
+        } else if (sortBy[1] === "ASC") {
           sortBy[1] = "DESC";
         }
       } else {
@@ -2485,8 +2485,8 @@ export async function setupOptions(callback) {
 
     let queryValues = url.searchParams.getAll(optionName);
 
-    if (optionType === "text") {
-      if (queryValues.length != 0) {
+    if (optionType ==== "text") {
+      if (queryValues.length !== 0) {
         elem.value = queryValues[0];
       }
 
@@ -2497,9 +2497,9 @@ export async function setupOptions(callback) {
           await callback();
         }
       });
-    } else if (optionType === "checkbox") {
-      if (queryValues.length != 0) {
-        elem.checked = queryValues[0] != "0" && queryValues[0] != "false";
+    } else if (optionType ==== "checkbox") {
+      if (queryValues.length !== 0) {
+        elem.checked = queryValues[0] !== "0" && queryValues[0] !== "false";
       }
 
       await setOption(optionName, elem.checked, false);
@@ -2509,8 +2509,8 @@ export async function setupOptions(callback) {
           await callback();
         }
       };
-    } else if (optionType === "select") {
-      if (queryValues.length != 0) {
+    } else if (optionType ==== "select") {
+      if (queryValues.length !== 0) {
         for (const option of elem.options) {
           option.selected = queryValues.includes(option.value);
         }
@@ -2537,12 +2537,12 @@ export async function setupOptions(callback) {
           await callback();
         }
       };
-    } else if (optionType === "radio") {
-      if (queryValues.length != 0) {
+    } else if (optionType ==== "radio") {
+      if (queryValues.length !== 0) {
         for (const radio of document.querySelectorAll(
           `input[name=${optionName}]`
         )) {
-          radio.checked = radio.value == queryValues[0];
+          radio.checked = radio.value === queryValues[0];
         }
       }
 
@@ -2576,22 +2576,22 @@ export async function setupOptions(callback) {
 }
 
 function getCompareFunction(field) {
-  if (field == "Date") {
+  if (field === "Date") {
     return function (a, b) {
       return Temporal.PlainDate.compare(
         getPlainDate(a.date ? a.date : a.creation_date),
         getPlainDate(b.date ? b.date : b.creation_date)
       );
     };
-  } else if (field == "Riskiness") {
+  } else if (field === "Riskiness") {
     return function (a, b) {
       return a.risk - b.risk;
     };
-  } else if (field == "Bug") {
+  } else if (field === "Bug") {
     return function (a, b) {
       return a.id - b.id;
     };
-  } else if (field == "Coverage") {
+  } else if (field === "Coverage") {
     return function (a, b) {
       const [lines_added_a, lines_covered_a, lines_unknown_a] =
         summarizeCoverage(a);
@@ -2601,17 +2601,17 @@ function getCompareFunction(field) {
       const uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
       const uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
 
-      if (uncovered_a == uncovered_b) {
+      if (uncovered_a === uncovered_b) {
         return lines_added_a - lines_added_b;
       }
 
       return uncovered_a - uncovered_b;
     };
-  } else if (field == "Review Time") {
+  } else if (field === "Review Time") {
     return function (a, b) {
       return meanFirstReviewTime(a) - meanFirstReviewTime(b);
     };
-  } else if (field == "Fix Time") {
+  } else if (field === "Fix Time") {
     return function (a, b) {
       return getFixTime(a) - getFixTime(b);
     };
@@ -2623,7 +2623,7 @@ function getCompareFunction(field) {
 function sortBugSummaries(bugSummaries, field, order) {
   const sortFunction = getCompareFunction(field);
   if (sortFunction) {
-    if (order == "DESC") {
+    if (order === "DESC") {
       bugSummaries.sort((a, b) => -sortFunction(a, b));
     } else {
       bugSummaries.sort(sortFunction);
@@ -2718,7 +2718,7 @@ export async function getFilteredBugSummaries() {
     const includeNotAvailableTestingTags = testingTags.includes("N/A");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
-        (includeNotAvailableTestingTags && bugSummary.commits.length == 0) ||
+        (includeNotAvailableTestingTags && bugSummary.commits.length === 0) ||
         bugSummary.commits.some(
           (commit) =>
             (includeUnknownTestingTags && !commit.testing) ||
@@ -2757,7 +2757,7 @@ export async function getFilteredBugSummaries() {
     const includeUnfixed = getOption("includeUnfixed");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
-        (includeUnfixed && bugSummary.versions.length == 0) ||
+        (includeUnfixed && bugSummary.versions.length === 0) ||
         releaseVersions.some((version) =>
           bugSummary.versions.includes(Number(version))
         )
@@ -2782,7 +2782,7 @@ export async function getFilteredBugSummaries() {
     const includeNotAvailableRiskiness = riskiness.includes("N/A");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
-        (includeNotAvailableRiskiness && bugSummary.risk_band === null) ||
+        (includeNotAvailableRiskiness && bugSummary.risk_band ==== null) ||
         riskiness.includes(bugSummary.risk_band)
     );
   }
@@ -2824,7 +2824,7 @@ function addRow(
   */
 
   for (const column of columns) {
-    if (column == "bug") {
+    if (column === "bug") {
       const bug_column = row.insertCell();
       const bug_link = document.createElement("a");
       bug_link.textContent = `Bug ${bugSummary["id"]}`;
@@ -2868,10 +2868,10 @@ function addRow(
           component_container.append(component_list);
         }
       }
-    } else if (column == "date") {
+    } else if (column === "date") {
       const date_column = row.insertCell();
       date_column.textContent = bugSummary.date;
-    } else if (column == "testing-tags") {
+    } else if (column === "testing-tags") {
       const testing_tags_column = row.insertCell();
       testing_tags_column.classList.add("testing-tags");
       const testing_tags_list = document.createElement("ul");
@@ -2887,12 +2887,12 @@ function addRow(
         testing_tags_list.append(testing_tags_list_item);
       }
       testing_tags_column.append(testing_tags_list);
-    } else if (column == "coverage") {
+    } else if (column === "coverage") {
       const coverage_column = row.insertCell();
       const [lines_added, lines_covered, lines_unknown] =
         summarizeCoverage(bugSummary);
-      if (lines_added != 0) {
-        if (lines_unknown != 0) {
+      if (lines_added !== 0) {
+        if (lines_unknown !== 0) {
           coverage_column.textContent = `${lines_covered}-${
             lines_covered + lines_unknown
           } of ${lines_added}`;
@@ -2902,24 +2902,24 @@ function addRow(
       } else {
         coverage_column.textContent = "";
       }
-    } else if (column == "risk") {
+    } else if (column === "risk") {
       const risk_column = row.insertCell();
 
       const risk_text = document.createElement("span");
       risk_text.textContent = `${bugSummary.risk_band} risk`;
-      if (bugSummary.risk_band == "l") {
+      if (bugSummary.risk_band === "l") {
         // Lower than average risk.
         risk_text.style.color = LOW_RISK_COLOR;
         risk_text.textContent = "Lower";
-      } else if (bugSummary.risk_band == "a") {
+      } else if (bugSummary.risk_band === "a") {
         // Average risk.
         risk_text.style.color = MEDIUM_RISK_COLOR;
         risk_text.textContent = "Average";
-      } else if (bugSummary.risk_band == "h") {
+      } else if (bugSummary.risk_band === "h") {
         // Higher than average risk.
         risk_text.style.color = HIGH_RISK_COLOR;
         risk_text.textContent = "Higher";
-      } else if (bugSummary.risk_band == null) {
+      } else if (bugSummary.risk_band === null) {
         // No risk available (there are no commits associated to the bug).
         risk_text.textContent = "N/A";
       } else {
@@ -2927,15 +2927,15 @@ function addRow(
       }
 
       risk_column.append(risk_text);
-    } else if (column == "review-time") {
+    } else if (column === "review-time") {
       const reviewtime_column = row.insertCell();
       reviewtime_column.textContent = `${Math.round(
         meanFirstReviewTime(bugSummary)
       )} days`;
-    } else if (column == "fix-time") {
+    } else if (column === "fix-time") {
       const fixtime_column = row.insertCell();
       fixtime_column.textContent = `${getFixTime(bugSummary)} days`;
-    } else if (column == "failure-count") {
+    } else if (column === "failure-count") {
       const failurecount_column = row.insertCell();
       failurecount_column.textContent = `${bugSummary["failures"]} failures`;
     }

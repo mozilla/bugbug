@@ -5,9 +5,9 @@ let resultGraphs = document.getElementById("result-graphs");
 
 async function renderFeatureChangesChart(chartEl, bugSummaries) {
   // Only show fixed bugs.
-  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !=== null);
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 

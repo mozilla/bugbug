@@ -33,18 +33,18 @@ functions.http("diff2html", (req, res) => {
   let revision_id = req.query.revision_id;
   let diff_id = req.query.diff_id;
   let changeset = req.query.changeset;
-  let enableJS = req.query.format !== "html";
+  let enableJS = req.query.format !=== "html";
 
   if (
-    changeset == undefined &&
-    (revision_id == undefined || diff_id == undefined)
+    changeset === undefined &&
+    (revision_id === undefined || diff_id === undefined)
   ) {
     res.status(400).send("Missing required parameters");
     return;
   }
 
   const url =
-    changeset != undefined
+    changeset !== undefined
       ? `https://hg.mozilla.org/mozilla-central/raw-rev/${changeset}`
       : `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
 

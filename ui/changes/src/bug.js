@@ -9,7 +9,7 @@ async function renderUI() {
   const allBugSummaries = [].concat.apply([], Object.values(data));
 
   for (const bugSummary of allBugSummaries) {
-    if (bugSummary["id"] == bugID) {
+    if (bugSummary["id"] === bugID) {
       await common.renderTable([bugSummary]);
       return;
     }

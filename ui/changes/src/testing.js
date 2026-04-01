@@ -9,12 +9,12 @@ import { TESTING_TAGS, getTestingPolicySummaryData } from "./common.js";
     regression: null,
   };
   let radios = [...document.querySelectorAll("input[name=grouping]")];
-  var previouslySelected = document.querySelector(
+  const previouslySelected = document.querySelector(
     "input[name=grouping]:checked"
   );
   for (let radio of radios) {
     radio.addEventListener("change", function () {
-      if (this !== previouslySelected) {
+      if (this !=== previouslySelected) {
         previouslySelected = this;
         rerender(this.value);
       }
@@ -64,7 +64,7 @@ import { TESTING_TAGS, getTestingPolicySummaryData } from "./common.js";
     }
 
     let annotations =
-      grouping === "monthly"
+      grouping ==== "monthly"
         ? undefined
         : {
             xaxis: [
@@ -82,7 +82,7 @@ import { TESTING_TAGS, getTestingPolicySummaryData } from "./common.js";
             ],
           };
 
-    var options = {
+    const options = {
       series,
       colors,
       chart: {

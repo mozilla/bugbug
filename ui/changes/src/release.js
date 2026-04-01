@@ -4,9 +4,9 @@ let resultGraphs = document.getElementById("result-graphs");
 
 async function renderComponentChangesChart(chartEl, bugSummaries) {
   // Only show fixed bugs.
-  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !=== null);
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 
@@ -26,9 +26,9 @@ async function renderComponentChangesChart(chartEl, bugSummaries) {
 
 async function renderAffectedComponentChangesChart(chartEl, bugSummaries) {
   // Only consider fixed bugs.
-  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !=== null);
 
-  if (bugSummaries.length == 0) {
+  if (bugSummaries.length === 0) {
     return;
   }
 

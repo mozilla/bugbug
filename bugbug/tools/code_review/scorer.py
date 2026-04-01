@@ -155,7 +155,7 @@ class LLMCommentMatchingScorer(weave.Scorer):
         unmatched_gt_valid = []
         unmatched_gt_invalid = []
 
-        for i in range(len(ground_truth_comments)):
+        for i, ground_truth_comments in enumerate(ground_truth_comments):
             if i in seen_old:
                 continue
 
@@ -169,7 +169,7 @@ class LLMCommentMatchingScorer(weave.Scorer):
         unmatched_gen_retained = []
         unmatched_gen_excluded = []
 
-        for i in range(len(generated_comments)):
+        for i, generated_comments in enumerate(generated_comments):
             if i in seen_new:
                 continue
 
