@@ -1523,10 +1523,13 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
     """Pull a revision from a branch of a remote repository into a local repository."""
 
     @tenacity.retry(
-        stop=tenacity.stop_after_attempt(2),
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
         reraise=True,
         after=tenacity.after_log(logger, logging.DEBUG),
-        retry=tenacity.retry_if_exception_type(subprocess.TimeoutExpired),
+        retry=tenacity.retry_if_exception_type(
+            (subprocess.TimeoutExpired, RuntimeError)
+        ),
     )
     def trigger_pull() -> None:
         cmd = _build_hg_cmd(
