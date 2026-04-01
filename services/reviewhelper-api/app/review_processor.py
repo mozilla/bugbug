@@ -1,4 +1,5 @@
 import logging
+from collections.abc import AsyncIterator
 from functools import cache
 from typing import Collection, Iterable
 
@@ -81,7 +82,7 @@ async def process_review(
 
 def submit_review_to_platform(
     review_request: ReviewRequest, generated_comments: Iterable[GeneratedComment]
-) -> Iterable[tuple[GeneratedComment, int]]:
+) -> AsyncIterator[tuple[GeneratedComment, int]]:
     """Submit generated comments to the appropriate platform.
 
     Args:
@@ -89,18 +90,18 @@ def submit_review_to_platform(
         generated_comments: The comments to submit.
 
     Returns:
-        An iterable of tuples containing the generated comment and the inline
-        comment ID assigned by the platform.
+        An async iterator of tuples containing the generated comment and the
+        inline comment ID assigned by the platform.
     """
     if review_request.platform == Platform.PHABRICATOR:
-        yield from _submit_review_to_phabricator(review_request, generated_comments)
+        return _submit_review_to_phabricator(review_request, generated_comments)
     else:
         raise ValueError(f"Unsupported platform: {review_request.platform}")
 
 
-def _submit_review_to_phabricator(
+async def _submit_review_to_phabricator(
     review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
-) -> Iterable[tuple[GeneratedComment, int]]:
+) -> AsyncIterator[tuple[GeneratedComment, int]]:
     """Submit generated comments to Phabricator."""
     phabricator = get_phabricator_client()
 
@@ -130,11 +131,17 @@ def _submit_review_to_phabricator(
         # the database.
         yield comment, phabricator_inline_comment["id"]
 
+    is_first_review = await review_request.is_first_published_review()
+
     phabricator.request(
         "differential.createcomment",
         revision_id=review_request.revision_id,
         attach_inlines=1,
-        message=create_main_review_comment(review_request, generated_comments),
+        message=(
+            create_main_review_comment(review_request, generated_comments)
+            if is_first_review
+            else None
+        ),
     )
 
 

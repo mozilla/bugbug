@@ -9,9 +9,10 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    select,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.ext.asyncio import AsyncAttrs, async_object_session
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -79,6 +80,22 @@ class ReviewRequest(Base):
         back_populates="review_request",
         cascade="all, delete-orphan",
     )
+
+    async def is_first_published_review(self) -> bool:
+        """Check if this is the first review to be published for this revision."""
+        session = async_object_session(self)
+        stmt = (
+            select(ReviewRequest.id)
+            .where(
+                ReviewRequest.revision_id == self.revision_id,
+                ReviewRequest.platform == self.platform,
+                ReviewRequest.id != self.id,
+                ReviewRequest.summary.isnot(None),
+                ReviewRequest.status == ReviewStatus.PUBLISHED,
+            )
+            .limit(1)
+        )
+        return await session.scalar(stmt) is None
 
     __table_args__ = (
         # Partial unique index for Phabricator requests
