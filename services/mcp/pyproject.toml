@@ -2,7 +2,7 @@
 name = "bugbug-mcp"
 dynamic = ["version"]
 description = "BugBug MCP Server"
-requires-python = ">=3.12, <3.13"
+requires-python = ">=3.12"
 dependencies = [
     "bugbug",
     "fastmcp>=2.12.0",
@@ -21,7 +21,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-bugbug = { git = "https://github.com/mozilla/bugbug", rev = "93c473abdd42f896e95b606d79af076f1bbd5502" }
+bugbug = { git = "https://github.com/mozilla/bugbug", rev = "67078a7892d7998efb6238e75579a70b9985d30a" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
