@@ -132,7 +132,7 @@ async def process_review_request(
         review_request.details = details
         await db.commit()
 
-    for generated_comment, inline_comment_id in submit_review_to_platform(
+    async for generated_comment, inline_comment_id in submit_review_to_platform(
         review_request, comments
     ):
         # We need to commit after each comment is submitted to ensure that the
