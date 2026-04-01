@@ -3,7 +3,7 @@ name = "reviewhelper-api"
 version = "0.1.1"
 description = "The backend API for Mozilla's Review Helper"
 readme = "README.md"
-requires-python = ">=3.12, <3.13"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
@@ -28,4 +28,4 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.uv.sources]
-bugbug = { git = "https://github.com/mozilla/bugbug", rev = "7eb05c3725ec1bf8fa2c5fe162b60648c7c7d646" }
+bugbug = { git = "https://github.com/mozilla/bugbug", rev = "67078a7892d7998efb6238e75579a70b9985d30a" }
