@@ -1,10 +1,17 @@
 FROM python:3.14.3-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV PATH="/opt/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/opt/venv"
+ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
+
 # Setup dependencies in a cacheable step
-RUN --mount=type=bind,source=requirements.txt,target=/requirements.txt \
+RUN --mount=type=bind,source=pyproject.toml,target=/tmp/bugbug/pyproject.toml \
+	--mount=type=bind,source=uv.lock,target=/tmp/bugbug/uv.lock \
 	apt-get update && \
 	apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch git && \
-	pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
+	cd /tmp/bugbug && uv sync --frozen --package bugbug --no-dev --no-install-project && \
 	apt-get purge -y gcc g++ libffi-dev patch git && \
 	apt-get autoremove -y && \
 	rm -rf /var/lib/apt/lists/*
@@ -14,4 +21,4 @@ ENV LD_PRELOAD="libjemalloc.so.2"
 COPY infra/mozci_config.toml /root/.config/mozci/config.toml
 
 RUN --mount=type=bind,target=/tmp/bugbug,rw \
-	pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
+	cd /tmp/bugbug && uv sync --frozen --package bugbug --no-dev --no-editable

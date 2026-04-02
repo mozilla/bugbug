@@ -3,14 +3,18 @@ ARG BUGBUG_VERSION=latest
 FROM mozilla/bugbug-commit-retrieval:$BUGBUG_VERSION
 
 # Install dependencies first
-COPY requirements.txt /requirements-http.txt
-RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements-http.txt
+RUN --mount=type=bind,source=pyproject.toml,target=/tmp/workspace/pyproject.toml \
+	--mount=type=bind,source=uv.lock,target=/tmp/workspace/uv.lock \
+	--mount=type=bind,source=VERSION,target=/tmp/workspace/VERSION \
+	--mount=type=bind,source=http_service/pyproject.toml,target=/tmp/workspace/http_service/pyproject.toml \
+	cd /tmp/workspace && uv sync --frozen --no-dev --package bugbug-http-service --no-install-project
 
 # Setup http service as package
-COPY . /code/http_service
-# Use same version as bugbug
-RUN python -c "import importlib.metadata; print(importlib.metadata.version('bugbug'))" > /code/http_service/VERSION
-RUN pip install --disable-pip-version-check --quiet --no-cache-dir /code/http_service
+RUN --mount=type=bind,target=/tmp/workspace,rw \
+	cd /tmp/workspace && uv sync --frozen --no-dev --package bugbug-http-service --no-editable
+
+# Copy the model loading script
+COPY http_service/ensure_models.sh /code/http_service/ensure_models.sh
 
 # Load the models
 WORKDIR /code/

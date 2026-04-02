@@ -26,7 +26,8 @@ services:
 
   bugbug-http-service:
     build:
-      context: http_service
+      context: .
+      dockerfile: http_service/Dockerfile
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
@@ -40,8 +41,8 @@ services:
 
   bugbug-http-service-bg-worker:
     build:
-      context: http_service
-      dockerfile: Dockerfile.bg_worker
+      context: .
+      dockerfile: http_service/Dockerfile.bg_worker
     image: mozilla/bugbug-http-service-bg-worker
     environment:
       - BUGBUG_BUGZILLA_TOKEN
@@ -49,6 +50,6 @@ services:
 
   bugbug-spawn-pipeline:
     build:
-      context: infra/
-      dockerfile: dockerfile.spawn_pipeline
+      context: .
+      dockerfile: infra/dockerfile.spawn_pipeline
     image: mozilla/bugbug-spawn-pipeline

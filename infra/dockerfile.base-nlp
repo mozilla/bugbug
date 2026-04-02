@@ -1,13 +1,13 @@
 FROM mozilla/bugbug-base:latest
 
 # Setup dependencies in a cacheable step
-ADD extra-nlp-requirements.txt /
-
-RUN apt-get update && \
+RUN --mount=type=bind,source=pyproject.toml,target=/tmp/bugbug/pyproject.toml \
+	--mount=type=bind,source=uv.lock,target=/tmp/bugbug/uv.lock \
+		apt-get update && \
 		apt-get install -y --no-install-recommends gcc g++ libgomp1 && \
-		pip install --disable-pip-version-check --quiet --no-cache-dir -r /extra-nlp-requirements.txt && \
+		cd /tmp/bugbug && uv sync --frozen --package bugbug --no-dev --extra nlp --no-install-project && \
 		apt-get purge -y gcc g++ && \
 		apt-get autoremove -y && \
 		rm -rf /var/lib/apt/lists/*
 
-RUN python -m spacy download en_core_web_sm
+RUN uv run --no-project --with pip -- spacy download en_core_web_sm
