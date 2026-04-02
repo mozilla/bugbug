@@ -1,3 +1,129 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bugbug"
+dynamic = ["version"]
+description = "ML tools for Mozilla projects"
+license = "MPL-2.0"
+requires-python = ">=3.12"
+authors = [{ name = "Marco Castelluccio", email = "mcastelluccio@mozilla.com" }]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+]
+dependencies = [
+    "amqp==5.3.1",
+    "async-lru==2.3.0",
+    "beautifulsoup4==4.14.3",
+    "boto3==1.42.78",
+    "claude-agent-sdk>=0.1.30",
+    "httpx==0.28.1",
+    "imbalanced-learn==0.14.1",
+    "langchain==1.2.13",
+    "langchain-anthropic==1.3.4",
+    "langchain-classic==1.0.3",
+    "langchain-community==0.4.1",
+    "langchain-google-genai==4.2.1",
+    "langchain-mistralai==1.1.2",
+    "langchain-openai==1.1.12",
+    "langgraph==1.1.3",
+    "libmozdata==0.2.12",
+    "llama-cpp-python==0.3.19",
+    "lmdb==1.8.1",
+    "lxml-html-clean==0.4.4",
+    "markdown2==2.5.5",
+    "matplotlib==3.10.8",
+    "mercurial==7.2",
+    "microannotate==0.0.24",
+    "mozci==2.4.8",
+    "numpy==2.4.3",
+    "orjson==3.11.7",
+    "ortools==9.15.6755",
+    "pandas==3.0.1",
+    "psutil==7.2.2",
+    "pyOpenSSL>=0.14",
+    "python-dateutil==2.9.0.post0",
+    "python-hglib==2.6.2",
+    "qdrant-client==1.15.1",
+    "ratelimit==2.2.1",
+    "requests==2.33.0",
+    "requests-html==0.10.0",
+    "rs-parsepatch==0.4.6",
+    "scikit-learn==1.7.2",
+    "scipy==1.17.1",
+    "sendgrid==6.12.5",
+    "shap[plots]==0.51.0",
+    "tabulate==0.10.0",
+    "taskcluster==97.1.0",
+    "tenacity==9.1.4",
+    "tqdm==4.67.3",
+    "unidiff==0.7.5",
+    "weave>=0.50.0",
+    "xgboost==3.2.0",
+    "zstandard==0.25.0",
+]
+
+[project.optional-dependencies]
+nlp = [
+    "spacy==3.8.13",
+]
+nn = []
+
+[dependency-groups]
+test = [
+    "coverage==7.13.5",
+    "hypothesis==6.151.9",
+    "igraph==1.0.0",
+    "jsonschema==4.26.0",
+    "pre-commit==4.5.1",
+    "pytest==9.0.2",
+    "pytest-cov==7.1.0",
+    "pytest-responses==0.5.1",
+    "responses==0.21.0",
+]
+spawn-pipeline = [
+    "json-e==4.8.2",
+    "pyyaml==6.0.3",
+    "requests==2.33.0",
+    "taskcluster==97.1.0",
+]
+
+[project.scripts]
+bugbug-data-commits = "scripts.commit_retriever:main"
+bugbug-data-bugzilla = "scripts.bug_retriever:main"
+bugbug-data-test-scheduling-history = "scripts.test_scheduling_history_retriever:main"
+bugbug-data-revisions = "scripts.revision_retriever:main"
+bugbug-train = "scripts.trainer:main"
+bugbug-check = "scripts.check:main"
+bugbug-maintenance-effectiveness-indicator = "scripts.maintenance_effectiveness_indicator:main"
+bugbug-microannotate-generate = "scripts.microannotate_generator:main"
+bugbug-classify-commit = "scripts.commit_classifier:main"
+bugbug-classify-bug = "scripts.bug_classifier:main"
+bugbug-regressor-finder = "scripts.regressor_finder:main"
+bugbug-retrieve-training-metrics = "scripts.retrieve_training_metrics:main"
+bugbug-analyze-training-metrics = "scripts.analyze_training_metrics:main"
+bugbug-check-all-metrics = "scripts.check_all_metrics:main"
+bugbug-past-bugs-by-unit = "scripts.past_bugs_by_unit:main"
+bugbug-testing-policy-stats = "scripts.testing_policy_stats:main"
+bugbug-generate-landings-risk-report = "scripts.generate_landings_risk_report:main"
+bugbug-shadow-scheduler-stats = "scripts.shadow_scheduler_stats:main"
+bugbug-data-github = "scripts.github_issue_retriever:main"
+bugbug-fixed-comments = "scripts.inline_comments_data_collection:main"
+bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["/bugbug", "/scripts", "/VERSION"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["bugbug", "scripts"]
+
 [tool.ruff]
 extend-exclude = ["data"]
 
