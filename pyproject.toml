@@ -124,6 +124,9 @@ include = ["/bugbug", "/scripts", "/VERSION"]
 [tool.hatch.build.targets.wheel]
 packages = ["bugbug", "scripts"]
 
+[tool.uv.workspace]
+members = ["http_service"]
+
 [tool.ruff]
 extend-exclude = ["data"]
 
