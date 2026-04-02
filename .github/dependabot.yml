@@ -17,8 +17,11 @@ updates:
         update-types:
           - patch
     open-pull-requests-limit: 99
-  - package-ecosystem: pip
-    directory: "/"
+  - package-ecosystem: uv
+    directories:
+      - "/"
+      - "/services/mcp"
+      - "/services/reviewhelper-api"
     schedule:
       interval: weekly
     groups:
@@ -38,24 +41,6 @@ updates:
       - dependency-type: indirect
   - package-ecosystem: npm
     directory: "/ui/changes"
-    schedule:
-      interval: weekly
-    groups:
-      patch:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - patch
-    cooldown:
-      semver-major-days: 14
-      semver-minor-days: 7
-      semver-patch-days: 3
-    open-pull-requests-limit: 99
-  - package-ecosystem: uv
-    directories:
-      - "/services/mcp"
-      - "/services/reviewhelper-api"
     schedule:
       interval: weekly
     groups:
