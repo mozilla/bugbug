@@ -58,8 +58,10 @@ tasks:
                   - "git clone --quiet ${repository} &&
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    pre-commit run -a --show-diff-on-failure"
+                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
+                    export PATH=$HOME/.local/bin:$PATH &&
+                    uv sync --frozen --package bugbug --only-group test &&
+                    uv run pre-commit run -a --show-diff-on-failure"
               metadata:
                 name: bugbug lint
                 description: bugbug lint
@@ -98,12 +100,11 @@ tasks:
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r infra/spawn_pipeline_requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
+                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
+                    export PATH=$HOME/.local/bin:$PATH &&
+                    uv sync --frozen --package bugbug --group test --extra nlp --group spawn-pipeline &&
                     hg clone -r ae4bf6620a9a3821cfb9709bd03cd3f5f1849ff3 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
-                    python -m pytest --cov=./ tests/test_*.py &&
+                    uv run pytest --cov=./ tests/test_*.py &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug tests
@@ -126,38 +127,15 @@ tasks:
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    cp VERSION http_service/VERSION &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./http_service &&
+                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
+                    export PATH=$HOME/.local/bin:$PATH &&
+                    uv sync --frozen --package bugbug --package bugbug-http-service --group test &&
                     hg clone -r ae4bf6620a9a3821cfb9709bd03cd3f5f1849ff3 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
-                    pytest --cov=http_service http_service/tests/ -vvv &&
+                    uv run pytest --cov=http_service http_service/tests/ -vvv &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug http service tests
                 description: bugbug http service tests
-
-        - $mergeDeep:
-            - { $eval: default_task_definition }
-            - taskId: { $eval: as_slugid("mcp_tests_task") }
-              workerType: compute-smaller
-              payload:
-                env:
-                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
-                command:
-                  - "/bin/bash"
-                  - "-lcx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
-                    git -c advice.detachedHead=false checkout ${head_rev} &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./services/mcp[dev] &&
-                    pytest --cov=bugbug_mcp services/mcp/tests/ -vvv &&
-                    bash <(curl -s https://codecov.io/bash)"
-              metadata:
-                name: bugbug mcp tests
-                description: bugbug mcp tests
 
         - $mergeDeep:
             - { $eval: default_task_definition }
@@ -173,10 +151,12 @@ tasks:
                     git clone --quiet ${repository} &&
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    python -m coverage run setup.py sdist &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
+                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
+                    export PATH=$HOME/.local/bin:$PATH &&
+                    uv build &&
+                    uv venv /tmp/test-venv &&
+                    uv pip install --python /tmp/test-venv/bin/python dist/bugbug-$(cat VERSION).tar.gz &&
+                    uv pip install --python /tmp/test-venv/bin/python dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug packaging test
@@ -275,7 +255,6 @@ tasks:
                   - { $eval: as_slugid("lint_task") }
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
-                  - { $eval: as_slugid("mcp_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("packaging_test_task") }
                   - { $eval: as_slugid("version_check_task") }
@@ -306,7 +285,6 @@ tasks:
                   - { $eval: as_slugid("lint_task") }
                   - { $eval: as_slugid("version_check_task") }
                   - { $eval: as_slugid("tests_task") }
-                  - { $eval: as_slugid("mcp_tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("packaging_test_task") }
