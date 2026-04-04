@@ -4,9 +4,7 @@ updates:
     directories:
       - "/http_service"
       - "/infra"
-      - "/services/mcp"
-      - "/services/reviewhelper-api"
-      - "/services/buildrepair"
+      - "/services/*"
     schedule:
       interval: weekly
     groups:
@@ -20,8 +18,7 @@ updates:
   - package-ecosystem: uv
     directories:
       - "/"
-      - "/services/mcp"
-      - "/services/reviewhelper-api"
+      - "/services/*"
     schedule:
       interval: weekly
     groups:
