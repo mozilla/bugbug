@@ -41,7 +41,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.12.3
+          image: astral/uv:python3.12-trixie
         metadata:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
@@ -58,8 +58,6 @@ tasks:
                   - "git clone --quiet ${repository} &&
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
-                    export PATH=$HOME/.local/bin:$PATH &&
                     uv sync --frozen --package bugbug --only-group test &&
                     uv run pre-commit run -a --show-diff-on-failure"
               metadata:
@@ -100,8 +98,6 @@ tasks:
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
-                    export PATH=$HOME/.local/bin:$PATH &&
                     uv sync --frozen --package bugbug --group test --extra nlp --group spawn-pipeline &&
                     hg clone -r ae4bf6620a9a3821cfb9709bd03cd3f5f1849ff3 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     uv run pytest --cov=./ tests/test_*.py &&
@@ -127,8 +123,6 @@ tasks:
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
-                    export PATH=$HOME/.local/bin:$PATH &&
                     uv sync --frozen --package bugbug --package bugbug-http-service --group test &&
                     hg clone -r ae4bf6620a9a3821cfb9709bd03cd3f5f1849ff3 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     uv run pytest --cov=http_service http_service/tests/ -vvv &&
@@ -151,8 +145,6 @@ tasks:
                     git clone --quiet ${repository} &&
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                    curl -LsSf https://astral.sh/uv/install.sh | sh &&
-                    export PATH=$HOME/.local/bin:$PATH &&
                     uv build &&
                     uv venv /tmp/test-venv &&
                     uv pip install --python /tmp/test-venv/bin/python dist/bugbug-$(cat VERSION).tar.gz &&
