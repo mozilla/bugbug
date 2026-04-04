@@ -13,6 +13,7 @@ import re
 import shelve
 import shutil
 import struct
+import tomllib
 from datetime import datetime
 from pathlib import Path
 from typing import (
@@ -28,7 +29,6 @@ from typing import (
     cast,
 )
 
-import tomllib
 from tqdm import tqdm
 
 from bugbug import db, repository
