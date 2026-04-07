@@ -118,8 +118,19 @@ async def process_review_request(
         )
         comments = await review_request.awaitable_attrs.comments
     else:
+        # Release the connection before the long-running AI processing to avoid
+        # exhausting the connection pool (see #5867). A new pool connection will
+        # be acquired on the next database operation.
+        await db.close()
+
         try:
-            comments, patch_summary, details = await process_review(review_request)
+            try:
+                comments, patch_summary, details = await process_review(review_request)
+            finally:
+                # Re-associate since the identity map was cleared when we closed
+                # the connection.
+                db.add(review_request)
+
         except ReviewProcessingError as e:
             review_request.error = str(e)
             review_request.status = ReviewStatus.FAILED
