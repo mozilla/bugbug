@@ -13,6 +13,7 @@ from app.database.models import ReviewRequest
 from app.enums import ReviewStatus
 from app.review_processor import (
     ReviewProcessingError,
+    RevisionNotYetPublicError,
     process_review,
     submit_review_to_platform,
 )
@@ -131,6 +132,11 @@ async def process_review_request(
                 # the connection.
                 db.add(review_request)
 
+        except RevisionNotYetPublicError as e:
+            logger.warning("Review request %s: %s", review_request_id, e)
+            review_request.status = ReviewStatus.RETRY_PENDING
+            await db.commit()
+            return Response(status_code=status.HTTP_409_CONFLICT)
         except ReviewProcessingError as e:
             review_request.error = str(e)
             review_request.status = ReviewStatus.FAILED

@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -14,6 +15,12 @@ from app.schemas.review_request import ReviewRequestCreate, ReviewRequestRespons
 from app.tasks import create_review_task
 
 logger = logging.getLogger(__name__)
+
+# For newly-created revisions, delay the task to give phab-bot time to
+# update visibility before we attempt processing. If the delay has
+# already elapsed, Cloud Tasks dispatches immediately.
+INITIAL_TASK_DELAY = timedelta(seconds=30)
+
 
 router = APIRouter(
     tags=["request"],
@@ -75,8 +82,17 @@ async def create_or_get_review_request(
     db.add(review_request)
     await db.commit()
 
+    schedule_time = (
+        request.revision_created_at + INITIAL_TASK_DELAY
+        # NOTE: This is a check for backwards compatibility with older
+        # version of Phabricator, and can be dropped once
+        # https://github.com/mozilla-conduit/phabricator/pull/84 is deployed
+        if request.revision_created_at is not None
+        else None
+    )
+
     # Queue task for processing
-    await create_review_task(review_request.id)
+    await create_review_task(review_request.id, schedule_time=schedule_time)
 
     return JSONResponse(
         {
