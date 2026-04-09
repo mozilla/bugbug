@@ -1,5 +1,6 @@
 import logging
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from functools import cache
 from typing import Collection, Iterable
 
@@ -13,9 +14,18 @@ from bugbug.tools.core.platforms.phabricator import (
 
 logger = logging.getLogger(__name__)
 
+VISIBILITY_TIMEOUT = timedelta(minutes=5)
+
 
 class ReviewProcessingError(Exception):
     """Custom exception for permanent errors during review processing that should not trigger retries."""
+
+
+class RevisionNotYetPublicError(Exception):
+    """The revision is not yet public but was recently created.
+
+    This is a transient error — Cloud Tasks should retry after backoff.
+    """
 
 
 @cache
@@ -50,6 +60,13 @@ async def process_review(
         raise ValueError(f"Unsupported platform: {review_request.platform}")
 
     if not patch.is_accessible() or not patch.is_public():
+        age = datetime.now(UTC) - review_request.created_at
+        if age < VISIBILITY_TIMEOUT:
+            raise RevisionNotYetPublicError(
+                f"Revision D{review_request.revision_id} is not public. "
+                "But the review request was created recently, so this may be a visibility delay."
+            )
+
         raise ReviewProcessingError(
             "Unable to access the revision. This may be because "
             "the revision is private or has restricted visibility."

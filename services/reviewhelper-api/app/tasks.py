@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from functools import cache
 
 from google.cloud.tasks_v2 import (
@@ -19,11 +20,14 @@ def _get_tasks_client():
     return CloudTasksAsyncClient()
 
 
-async def create_review_task(review_request_id: int):
+async def create_review_task(
+    review_request_id: int, schedule_time: datetime | None = None
+):
     """Create a Cloud Task to process a review request.
 
     Args:
         review_request_id: The ID of the review request to process.
+        schedule_time: Optional time to delay task dispatch until.
     """
     client = _get_tasks_client()
 
@@ -44,6 +48,7 @@ async def create_review_task(review_request_id: int):
             },
         ),
         dispatch_deadline=Duration(seconds=30 * 60),
+        schedule_time=schedule_time,
     )
 
     response = await client.create_task(parent=parent, task=task)
