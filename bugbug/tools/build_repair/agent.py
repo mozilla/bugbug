@@ -184,8 +184,11 @@ class BuildRepairTool(GenerativeModelTool):
             stop=stop_after_attempt(5),
             wait=wait_exponential_jitter(initial=2, max=60, jitter=5),
             before_sleep=lambda rs: logger.warning(
-                f"Bug {bug_id}: {stage_name} transient error "
-                f"(attempt {rs.attempt_number}/5), retrying: {rs.outcome.exception()}"
+                "Bug %s: %s transient error (attempt %d/5), retrying: %s",
+                bug_id,
+                stage_name,
+                rs.attempt_number,
+                rs.outcome.exception(),
             ),
             reraise=True,
         )
@@ -194,7 +197,7 @@ class BuildRepairTool(GenerativeModelTool):
             async for message in query(prompt=prompt, options=options):
                 serialized = self._serialize_message(message)
                 transcript.append(serialized)
-                logger.debug(f"Bug {bug_id}: {stage_name} [{serialized['type']}]")
+                logger.debug("Bug %s: %s [%s]", bug_id, stage_name, serialized['type'])
                 if on_message:
                     on_message(stage_name, serialized)
                 if isinstance(message, ResultMessage):
@@ -247,8 +250,10 @@ class BuildRepairTool(GenerativeModelTool):
         out_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
-            f"Prepared input files for bug {failure.bug_id} at {in_dir} "
-            f"({len(failure.failure_tasks)} failure tasks)"
+            "Prepared input files for bug %s at %s (%d failure tasks)",
+            failure.bug_id,
+            in_dir,
+            len(failure.failure_tasks),
         )
 
     def _read_output(self, failure: BuildFailure, worktree_path: Path, key: str) -> str:
@@ -267,9 +272,13 @@ class BuildRepairTool(GenerativeModelTool):
         on_message: Callable[[str, dict], None] | None = None,
     ) -> AgentResponse:
         logger.info(
-            f"Starting build repair for bug {failure.bug_id} "
-            f"(commit={failure.git_commit}, worktree={worktree_path}, "
-            f"analysis_only={self.analysis_only}, skip_try_push={skip_try_push})"
+            "Starting build repair for bug %s "
+            "(commit=%s, worktree=%s, analysis_only=%s, skip_try_push=%s)",
+            failure.bug_id,
+            failure.git_commit,
+            worktree_path,
+            self.analysis_only,
+            skip_try_push,
         )
         self._prepare_input_files(failure, worktree_path)
 
@@ -280,8 +289,9 @@ class BuildRepairTool(GenerativeModelTool):
         total_usage: dict = {}
 
         logger.info(
-            f"Bug {failure.bug_id}: starting Stage 1 (analysis) "
-            f"with model={self.analysis_model}"
+            "Bug %s: starting Stage 1 (analysis) with model=%s",
+            failure.bug_id,
+            self.analysis_model,
         )
         stage1_options = ClaudeAgentOptions(
             model=self.analysis_model,
@@ -321,7 +331,10 @@ class BuildRepairTool(GenerativeModelTool):
                     total_usage[k] = total_usage.get(k, 0) + v
         except Exception as e:
             logger.error(
-                f"Bug {failure.bug_id}: Stage 1 (analysis) failed: {e}", exc_info=True
+                "Bug %s: Stage 1 (analysis) failed: %s",
+                failure.bug_id,
+                e,
+                exc_info=True,
             )
             return AgentResponse(
                 error=str(e),
@@ -333,19 +346,22 @@ class BuildRepairTool(GenerativeModelTool):
             )
 
         logger.info(
-            f"Bug {failure.bug_id}: Stage 1 complete "
-            f"(cost=${total_cost:.4f}, turns={total_turns})"
+            "Bug %s: Stage 1 complete (cost=$%.4f, turns=%d)",
+            failure.bug_id,
+            total_cost,
+            total_turns,
         )
-
         summary = self._read_output(failure, worktree_path, "summary")
         analysis = self._read_output(failure, worktree_path, "analysis")
         logger.info(
-            f"Bug {failure.bug_id}: read output files "
-            f"(summary={len(summary)} chars, analysis={len(analysis)} chars)"
+            "Bug %s: read output files (summary=%d chars, analysis=%d chars)",
+            failure.bug_id,
+            len(summary),
+            len(analysis),
         )
 
         if self.analysis_only:
-            logger.info(f"Bug {failure.bug_id}: analysis-only mode, skipping Stage 2")
+            logger.info("Bug %s: analysis-only mode, skipping Stage 2", failure.bug_id)
             return AgentResponse(
                 summary=summary,
                 analysis=analysis,
@@ -356,7 +372,9 @@ class BuildRepairTool(GenerativeModelTool):
             )
 
         logger.info(
-            f"Bug {failure.bug_id}: starting Stage 2 (fix) with model={self.fix_model}"
+            "Bug %s: starting Stage 2 (fix) with model=%s",
+            failure.bug_id,
+            self.fix_model,
         )
         stage2_options = ClaudeAgentOptions(
             model=self.fix_model,
@@ -396,7 +414,10 @@ class BuildRepairTool(GenerativeModelTool):
                     total_usage[k] = total_usage.get(k, 0) + v
         except Exception as e:
             logger.error(
-                f"Bug {failure.bug_id}: Stage 2 (fix) failed: {e}", exc_info=True
+                "Bug %s: Stage 2 (fix) failed: %s",
+                failure.bug_id,
+                e,
+                exc_info=True,
             )
             return AgentResponse(
                 summary=summary,
@@ -410,8 +431,10 @@ class BuildRepairTool(GenerativeModelTool):
             )
 
         logger.info(
-            f"Bug {failure.bug_id}: Stage 2 complete "
-            f"(cost=${total_cost:.4f}, turns={total_turns})"
+            "Bug %s: Stage 2 complete (cost=$%.4f, turns=%d)",
+            failure.bug_id,
+            total_cost,
+            total_turns,
         )
 
         subprocess.run(
@@ -426,10 +449,10 @@ class BuildRepairTool(GenerativeModelTool):
             text=True,
         )
         diff = diff_result.stdout
-        logger.info(f"Bug {failure.bug_id}: git diff produced {len(diff)} chars")
+        logger.info("Bug %s: git diff produced %d chars", failure.bug_id, len(diff))
 
         if not diff.strip():
-            logger.warning(f"Bug {failure.bug_id}: no diff produced, returning early")
+            logger.warning("Bug %s: no diff produced, returning early", failure.bug_id)
             return AgentResponse(
                 summary=summary,
                 analysis=analysis,
@@ -447,8 +470,10 @@ class BuildRepairTool(GenerativeModelTool):
             failure.failure_tasks[0]["task_name"] if failure.failure_tasks else ""
         )
         logger.info(
-            f"Bug {failure.bug_id}: starting try verification "
-            f"(task={task_name}, skip_try_push={skip_try_push})"
+            "Bug %s: starting try verification (task=%s, skip_try_push=%s)",
+            failure.bug_id,
+            task_name,
+            skip_try_push,
         )
         try_result = run_try_verification(
             worktree_path=worktree_path,
@@ -458,11 +483,15 @@ class BuildRepairTool(GenerativeModelTool):
         )
 
         logger.info(
-            f"Bug {failure.bug_id}: try verification done "
-            f"(local_build={try_result.local_build_passed}, "
-            f"try_build={try_result.try_build_passed}, "
-            f"lando_job={try_result.lando_job_id}, "
-            f"total_cost=${total_cost:.4f}, total_turns={total_turns})"
+            "Bug %s: try verification done "
+            "(local_build=%s, try_build=%s, lando_job=%s, "
+            "total_cost=$%.4f, total_turns=%d)",
+            failure.bug_id,
+            try_result.local_build_passed,
+            try_result.try_build_passed,
+            try_result.lando_job_id,
+            total_cost,
+            total_turns,
         )
         return AgentResponse(
             summary=summary,
@@ -483,8 +512,9 @@ class BuildRepairTool(GenerativeModelTool):
         stop=stop_after_attempt(3),
         wait=wait_exponential_jitter(initial=2, max=30, jitter=5),
         before_sleep=lambda rs: logger.warning(
-            f"Verification failed (attempt {rs.attempt_number}/3), "
-            f"retrying: {rs.outcome.exception()}"
+            "Verification failed (attempt %d/3), retrying: %s",
+            rs.attempt_number,
+            rs.outcome.exception(),
         ),
         reraise=True,
     )
@@ -524,8 +554,10 @@ class BuildRepairTool(GenerativeModelTool):
         )
 
         logger.info(
-            f"Bug {failure.bug_id}: starting verification stage "
-            f"(model={self.verify_model}, ground_truth={gt_commits})"
+            "Bug %s: starting verification stage (model=%s, ground_truth=%s)",
+            failure.bug_id,
+            self.verify_model,
+            gt_commits,
         )
 
         transcript, cost, turns, usage = await self._run_stage(
