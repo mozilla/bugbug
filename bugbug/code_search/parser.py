@@ -42,7 +42,9 @@ def search(repo_dir, commit_hash, symbol_name):
             return []
 
         logger.error(
-            f"Error running 'hg grep' command.\nstdout:\n{e.stdout.decode()}\n\nstderr:\n{e.stderr.decode()}"
+            "Error running 'hg grep' command.\nstdout:\n %s \n\nstderr:\n %s",
+            e.stdout.decode(),
+            e.stderr.decode() 
         )
         raise
 
@@ -60,7 +62,9 @@ def search(repo_dir, commit_hash, symbol_name):
             )
         except subprocess.CalledProcessError as e:
             logger.error(
-                f"Error running 'hg cat' command.\nstdout:\n{e.stdout.decode()}\n\nstderr:\n{e.stderr.decode()}"
+                "Error running 'hg cat' command.\nstdout:\n%s\n\nstderr:\n%s",
+                e.stdout.decode(),
+                e.stderr.decode()
             )
             raise
 
