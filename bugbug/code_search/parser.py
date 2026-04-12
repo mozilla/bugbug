@@ -44,7 +44,7 @@ def search(repo_dir, commit_hash, symbol_name):
         logger.error(
             "Error running 'hg grep' command.\nstdout:\n %s \n\nstderr:\n %s",
             e.stdout.decode(),
-            e.stderr.decode() 
+            e.stderr.decode(),
         )
         raise
 
@@ -64,7 +64,7 @@ def search(repo_dir, commit_hash, symbol_name):
             logger.error(
                 "Error running 'hg cat' command.\nstdout:\n%s\n\nstderr:\n%s",
                 e.stdout.decode(),
-                e.stderr.decode()
+                e.stderr.decode(),
             )
             raise
 

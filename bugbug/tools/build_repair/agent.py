@@ -197,7 +197,7 @@ class BuildRepairTool(GenerativeModelTool):
             async for message in query(prompt=prompt, options=options):
                 serialized = self._serialize_message(message)
                 transcript.append(serialized)
-                logger.debug("Bug %s: %s [%s]", bug_id, stage_name, serialized['type'])
+                logger.debug("Bug %s: %s [%s]", bug_id, stage_name, serialized["type"])
                 if on_message:
                     on_message(stage_name, serialized)
                 if isinstance(message, ResultMessage):
@@ -331,10 +331,9 @@ class BuildRepairTool(GenerativeModelTool):
                     total_usage[k] = total_usage.get(k, 0) + v
         except Exception as e:
             logger.error(
-                "Bug %s: Stage 1 (analysis) failed: %s",
+                "Bug %s: starting Stage 2 (fix) with model=%s",
                 failure.bug_id,
-                e,
-                exc_info=True,
+                self.fix_model,
             )
             return AgentResponse(
                 error=str(e),
@@ -413,11 +412,10 @@ class BuildRepairTool(GenerativeModelTool):
                 if isinstance(v, (int, float)):
                     total_usage[k] = total_usage.get(k, 0) + v
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Bug %s: Stage 2 (fix) failed: %s",
                 failure.bug_id,
                 e,
-                exc_info=True,
             )
             return AgentResponse(
                 summary=summary,

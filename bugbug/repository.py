@@ -670,7 +670,9 @@ def set_commit_metrics(
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
     except AnalysisException:
-        logger.debug("rust-code-analysis error on commit %s, path %s", commit.node, path)
+        logger.debug(
+            "rust-code-analysis error on commit %s, path %s", commit.node, path
+        )
 
     before_metrics_dict = get_total_metrics_dict()
     try:
@@ -679,7 +681,9 @@ def set_commit_metrics(
                 before_metrics_dict, before_metrics["spaces"], calc_summaries=False
             )
     except AnalysisException:
-        logger.debug("rust-code-analysis error on commit %s, path %s", commit.node, path)
+        logger.debug(
+            "rust-code-analysis error on commit %s, path %s", commit.node, path
+        )
 
     commit.metrics_diff = {
         f"{metric}_total": commit.metrics[f"{metric}_total"]
@@ -707,7 +711,7 @@ def set_commit_metrics(
                 "rust-code-analysis error on commit %s, path %s, function %s}",
                 commit.node,
                 path,
-                func['name']
+                func["name"],
             )
 
         commit.functions[path].append(
@@ -1191,7 +1195,7 @@ def calculate_experiences(
                         "Experience missing for file %s, type '%s', on commit %s",
                         orig,
                         commit_type,
-                        commit.node
+                        commit.node,
                     )
 
         if (

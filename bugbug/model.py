@@ -317,7 +317,7 @@ class Model:
 
         # allow maximum of 3 columns in a row to fit the page better
         COLUMNS = 3
-        logger.info("Top {} features:".format(len(top_feature_names)))
+        logger.info("Top %s features:", len(top_feature_names))
         for i in range(0, len(top_feature_names), COLUMNS):
             table = []
             for item in shap_val:
@@ -411,7 +411,7 @@ class Model:
                     "%s: f%.4f (+/- %.4f)",
                     scoring.capitalize(),
                     score.mean(),
-                    (score.std() * 2)
+                    (score.std() * 2),
                 )
 
         logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
@@ -483,7 +483,7 @@ class Model:
                 "The predictions should be multilabel"
             )
 
-        logger.info("No confidence threshold - %d classified", len(y_test)) 
+        logger.info("No confidence threshold - %d classified", len(y_test))
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         else:
@@ -553,7 +553,7 @@ class Model:
             logger.info(
                 "\nConfidence threshold > %s - %d classified",
                 confidence_threshold,
-                classified_num
+                classified_num,
             )
             if is_multilabel:
                 confusion_matrix = metrics.multilabel_confusion_matrix(
@@ -584,7 +584,7 @@ class Model:
             X_train = X
             y_train = y
 
-            logger.info("X_train: %s, y_train: %s", X_train.shape,  y_train.shape)
+            logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
