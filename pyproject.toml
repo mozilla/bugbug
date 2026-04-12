@@ -131,7 +131,7 @@ members = ["http_service"]
 extend-exclude = ["data"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "T10", "CPY"]
+select = ["E4", "E7", "E9", "F", "I", "T10", "CPY", "G"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["bugbug_http"]

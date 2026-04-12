@@ -85,7 +85,7 @@ def _get_cost(config: str) -> int:
         if all(s in config for s in substrings):
             return cost
 
-    logger.warning(f"Couldn't find cost for {config}")
+    logger.warning("Couldn't find cost for %s", config)
     return max(cost for _, cost in costs)
 
 
@@ -309,7 +309,7 @@ def select_configs(
 
     for group in groups:
         if group not in equivalence_sets:
-            logger.warning(f"No equivalence sets for group {group}")
+            logger.warning("No equivalence sets for group %s", group)
             continue
         # Create constraints to ensure at least one task from each set of equivalent
         # groups is selected.
