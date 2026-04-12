@@ -90,9 +90,6 @@ spawn-pipeline = [
     "requests==2.33.0",
     "taskcluster==97.1.0",
 ]
-dev = [
-    "ruff>=0.15.10",
-]
 
 [project.scripts]
 bugbug-data-commits = "scripts.commit_retriever:main"
