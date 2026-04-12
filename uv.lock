@@ -546,7 +546,6 @@ requires-dist = [
 provides-extras = ["nlp", "nn"]
 
 [package.metadata.requires-dev]
-dev = []
 spawn-pipeline = [
     { name = "json-e", specifier = "==4.8.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
