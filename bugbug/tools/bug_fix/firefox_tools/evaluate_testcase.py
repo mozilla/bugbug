@@ -18,7 +18,7 @@ getLogger("ffpuppet").setLevel(ERROR)
 getLogger("sapphire").setLevel(ERROR)
 
 
-class LarreyFirefoxTarget(FirefoxTarget):
+class PIDCaptureFirefoxTarget(FirefoxTarget):
     """Firefox target that captures parent PID for crash analysis."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -83,7 +83,7 @@ async def evaluate_testcase(
     timeout: int = 30,
     prefs: dict[str, str | int | bool] = {},
 ) -> dict[str, Any]:
-    """Test a vulnerability testcase in Firefox and capture crash output.
+    """Test a testcase in Firefox and capture crash output.
 
     Args:
         content: Testcase file content

@@ -1,4 +1,4 @@
-"""Build Firefox with the ASAN fuzzing mozconfig."""
+"""Build Firefox with a given mozconfig."""
 
 import asyncio
 import os
