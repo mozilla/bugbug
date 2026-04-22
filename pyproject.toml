@@ -123,6 +123,12 @@ include = ["/bugbug", "/scripts", "/VERSION"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["bugbug", "scripts"]
+artifacts = [
+    "bugbug/tools/bug_fix/prompts/",
+    "bugbug/tools/bug_fix/rules/",
+    "bugbug/tools/bug_fix/memory/",
+    "bugbug/tools/duplicate_bugs/prompts/",
+]
 
 [tool.uv.workspace]
 members = ["http_service"]
