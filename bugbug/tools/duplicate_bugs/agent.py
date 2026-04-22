@@ -11,8 +11,6 @@ mode="local_to_local"  One crash per sub-directory, but the directory
                        still contains internal duplicates. Groups the
                        sub-directories by crash and copies one
                        representative per group into results_dir.
-
-Adapted from the standalone larrey/dupdetector.py with minimal changes.
 """
 
 from __future__ import annotations

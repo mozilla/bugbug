@@ -3,8 +3,6 @@
 Orchestrates a Claude agent that triages bugs according to rulesets
 in the rules/ directory, with access to a source repository and an
 in-process Bugzilla MCP server.
-
-Adapted from the standalone larrey project with minimal changes.
 """
 
 from __future__ import annotations

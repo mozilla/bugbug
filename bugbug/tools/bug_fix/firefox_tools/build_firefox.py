@@ -11,7 +11,7 @@ async def build_firefox(
     mozconfig_path: Path,
     objdir: Path,
 ) -> dict[str, Any]:
-    """Build Firefox using the ASAN fuzzing configuration.
+    """Build Firefox using a specified mozconfig.
 
     Args:
         firefox_dir: Firefox source directory (contains ./mach)

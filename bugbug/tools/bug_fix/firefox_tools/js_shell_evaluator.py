@@ -1,4 +1,4 @@
-"""Evaluate testcase tool for testing vulnerabilities in the SpiderMonkey JS shell."""
+"""Evaluate testcase tool for testing defects in the SpiderMonkey JS shell."""
 
 import asyncio
 import os
@@ -37,7 +37,7 @@ async def js_shell_evaluator(
         }
 
     try:
-        with tempfile.TemporaryDirectory(prefix="larrey_js_") as tmp_dir:
+        with tempfile.TemporaryDirectory(prefix="bugbug_js_") as tmp_dir:
             fd, tmp_path = tempfile.mkstemp(suffix=".js", dir=tmp_dir)
             testcase_path = Path(tmp_path)
             os.close(fd)

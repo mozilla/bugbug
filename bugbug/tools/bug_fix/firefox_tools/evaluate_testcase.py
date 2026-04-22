@@ -165,14 +165,14 @@ def _run_testcase_in_browser(
         }
 
     testcase = TestCase(
-        entry_point=filename, adapter_name="larrey", input_fname=filename
+        entry_point=filename, adapter_name="bugbug", input_fname=filename
     )
 
     # Add testcase content from bytes (creates temp file internally)
     testcase.add_from_bytes(content.encode("utf-8"), filename, required=True)
 
     # Use our custom target to capture parent PID
-    target = LarreyFirefoxTarget(
+    target = PIDCaptureFirefoxTarget(
         binary=firefox_binary,
         display_mode="xvfb",
         launch_timeout=30,
@@ -189,14 +189,14 @@ def _run_testcase_in_browser(
     # If custom prefs are provided, generate base prefs.js with prefpicker
     # and append custom prefs before process_assets() so grizzly uses ours
     if prefs:
-        with tempfile.TemporaryDirectory(prefix="larrey_prefs_") as prefs_dir:
+        with tempfile.TemporaryDirectory(prefix="bugbug_prefs_") as prefs_dir:
             prefs_path = Path(prefs_dir) / "prefs.js"
             template = PrefPicker.lookup_template("browser-fuzzing.yml")
             assert template is not None
             PrefPicker.load_template(template).create_prefsjs(prefs_path)
             # Append custom prefs
             with open(prefs_path, "a") as f:
-                f.write("\n// Custom larrey prefs\n")
+                f.write("\n// Custom bugbug prefs\n")
                 for name, value in prefs.items():
                     f.write(f'user_pref("{name}", {_format_pref_value(value)});\n')
             target.asset_mgr.add("prefs", prefs_path)
@@ -223,7 +223,7 @@ def _run_testcase_in_browser(
 
         if not results:
             # No crash - capture logs for debugging
-            with tempfile.TemporaryDirectory(prefix="larrey_logs_") as log_dir_str:
+            with tempfile.TemporaryDirectory(prefix="bugbug_logs_") as log_dir_str:
                 log_dir = Path(log_dir_str)
                 target.save_logs(log_dir)
                 logs = read_grizzly_logs(log_dir)
@@ -233,7 +233,7 @@ def _run_testcase_in_browser(
 
                 msg = (
                     "No crash detected - check logs for clues "
-                    "about why the testcase didn't trigger the vulnerability"
+                    "about why the testcase didn't trigger the defect."
                 )
                 return {
                     "crashed": False,
@@ -246,7 +246,7 @@ def _run_testcase_in_browser(
         report = result_obj.report
 
         # Create temp directory for dump
-        with tempfile.TemporaryDirectory(prefix="larrey_dump_") as dump_dir_str:
+        with tempfile.TemporaryDirectory(prefix="bugbug_dump_") as dump_dir_str:
             dump_dir = Path(dump_dir_str)
 
             # Dump testcase to temp directory
