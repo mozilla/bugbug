@@ -211,7 +211,7 @@ tasks:
                   command:
                     - "/bin/sh"
                     - "-lcx"
-                    - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
+                    - "uv run python -m scripts.trainer $(uv run python -m scripts.trainer_extract_args)"
                 metadata:
                   name: bugbug train on TC
                   description: Train a BugBug model on Taskcluster
