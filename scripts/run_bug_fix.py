@@ -1,4 +1,4 @@
-"""Run the bug_fix triage tool locally."""
+"""Run the bug_fix tool locally."""
 
 import asyncio
 from pathlib import Path
