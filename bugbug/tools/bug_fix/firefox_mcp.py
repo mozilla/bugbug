@@ -52,11 +52,14 @@ def build_server(ctx: FirefoxContext):
 
     @tool(
         "evaluate_testcase",
-        "Run a testcase in an ASAN-instrumented Firefox under xvfb and "
-        "capture crash output via grizzly. Returns JSON: "
+        "Run a testcase in Firefox under xvfb and capture crash output via "
+        "grizzly. The build's sanitizer configuration (ASAN, TSAN, plain "
+        "debug, etc.) is whatever the configured mozconfig produces. "
+        "Returns JSON: "
         "crashed (bool) — whether Firefox crashed; "
         "crashed_parent (bool) — parent process vs content process crash; "
-        "logs (dict) — stderr/stdout and, if crashed, crashdata (ASAN report); "
+        "logs (dict) — stderr/stdout and, if crashed, crashdata (crash/"
+        "sanitizer report); "
         "files (dict) — the testcase bundle that triggered the crash; "
         "message (str) — human-readable summary. "
         "When crashed=false, logs.stderr/stdout often reveal why the trigger "
@@ -79,8 +82,7 @@ def build_server(ctx: FirefoxContext):
                 "firefox_binary": {
                     "type": "string",
                     "description": (
-                        "Path to Firefox binary. Optional — defaults to the "
-                        f"ASAN build at {ctx.binary}"
+                        f"Path to Firefox binary. Optional — defaults to {ctx.binary}"
                     ),
                 },
                 "timeout": {
@@ -119,7 +121,7 @@ def build_server(ctx: FirefoxContext):
 
     @tool(
         "build_firefox",
-        "Build Firefox with the ASAN+UBSAN fuzzing mozconfig. Slow (tens of "
+        "Build Firefox using the configured mozconfig. Slow (tens of "
         "minutes on a cold build, faster incremental). Returns JSON: "
         "success (bool), build_dir (str), message (str), stdout/stderr. "
         "Only call this if you've changed source or the binary is missing — "
@@ -155,14 +157,15 @@ def build_server(ctx: FirefoxContext):
 
     @tool(
         "evaluate_js_shell",
-        "Run a JS testcase in the SpiderMonkey shell (ASAN build) and "
-        "capture crash output. Much faster than full-browser evaluate_testcase "
-        "— use this for engine-level bugs (JIT, GC, TypedArrays, WASM) that "
-        "don't need a DOM. Returns JSON: "
-        "crashed (bool) — whether the shell crashed (signal or ASAN); "
+        "Run a JS testcase in the SpiderMonkey shell and capture crash "
+        "output. The shell's sanitizer configuration is whatever the "
+        "configured mozconfig produces. Much faster than full-browser "
+        "evaluate_testcase — use this for engine-level bugs (JIT, GC, "
+        "TypedArrays, WASM) that don't need a DOM. Returns JSON: "
+        "crashed (bool) — whether the shell crashed (signal or sanitizer); "
         "message (str) — human-readable summary, includes signal name if killed; "
         "logs (dict) — stderr/stdout (tail-truncated to 1 MB) and, if crashed, "
-        "crashdata (ASAN report); "
+        "crashdata (crash/sanitizer report); "
         "files (dict) — the .js testcase that triggered the crash. "
         "A nonzero exit without a signal is a JS exception, NOT a crash — "
         "check logs.stderr for the syntax/runtime error.",

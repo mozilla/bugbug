@@ -28,8 +28,8 @@ Your working directory is the source repository for the product these bugs are f
 
 When a bug needs reproducing or fixing, you have `firefox` MCP tools:
 
-- `evaluate_testcase(content, filename, prefs?, timeout?)` — runs a testcase in an ASAN-instrumented Firefox under xvfb via grizzly. Returns `crashed` (bool), `crashed_parent` (bool — parent-process crash), ASAN `logs`, and the testcase bundle. When `crashed=false`, inspect `logs.stderr` for why (JS exception, gated pref, etc).
-- `build_firefox()` — runs `./mach build` with the ASAN mozconfig. Slow. Only call this if you've patched source or the binary is missing — check with Bash first.
+- `evaluate_testcase(content, filename, prefs?, timeout?)` — runs a testcase in Firefox under xvfb via grizzly (the build's sanitizer configuration depends on the configured mozconfig). Returns `crashed` (bool), `crashed_parent` (bool — parent-process crash), `logs` (stderr/stdout and, if crashed, `crashdata`), and the testcase bundle. When `crashed=false`, inspect `logs.stderr` for why (JS exception, gated pref, etc).
+- `build_firefox()` — runs `./mach build` with the configured mozconfig. Slow. Only call this if you've patched source or the binary is missing — check with Bash first.
 
 Follow these rules:
 
