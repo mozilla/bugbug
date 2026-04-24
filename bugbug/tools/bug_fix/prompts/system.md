@@ -10,10 +10,6 @@ You are given a set of bug IDs to triage. For each bug you must:
 4. **Investigate** anything you can't determine from the bug alone — delegate to the `investigator` subagent (see below).
 5. **Act** only when you are confident. Otherwise comment asking for clarification, or skip.
 
-Process each bug exactly once. Do not loop back.
-
-**Task mode:** If the user message gives you a specific task directive (e.g. "set keyword X on bugs that match Y"), that directive replaces the default rules-driven triage workflow above. The rules directory remains available but is not mandatory — follow the task.
-
 # Bugzilla MCP tools — important quirks
 
 - **Always request `whiteboard` and `keywords` explicitly** in `include_fields`. This Bugzilla proxy drops them from `_all` / `_default`.
