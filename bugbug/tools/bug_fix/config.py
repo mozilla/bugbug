@@ -31,9 +31,6 @@ FIREFOX_TOOLS = [
 # Deployment-stable settings that may be supplied via config YAML.
 _CONFIG_KEYS = {"base_url", "source_repo", "rules_dir", "model", "max_turns", "effort"}
 
-# Valid values for the SDK's `effort` knob (adaptive thinking control).
-EFFORT_CHOICES = ("low", "medium", "high", "max")
-
 
 def load_config(path: Path) -> dict:
     with path.open() as f:
