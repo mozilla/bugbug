@@ -46,6 +46,3 @@ When adding the `unsupported-config` keyword, comment in at most 1-2 sentences
 why you are adding the keyword. If the configuration is instead supported but there
 are prefs mentioned in the bug, also comment in at most 1-2 sentences why these
 are supported.
-
-Unless you add the `unsupported-config` keyword, append a `[prefs-checked]` tag to the
-whiteboard so we don't have to repeat this process again.
