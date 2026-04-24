@@ -48,7 +48,7 @@ HERE = Path(__file__).resolve().parent
 
 
 @dataclass
-class TriageResult:
+class BugFixResult:
     exit_code: int = 0
     bugs_processed: int = 0
     simulated_writes: list[dict] = field(default_factory=list)
@@ -292,7 +292,7 @@ class BugFixTool(GenerativeModelTool):
         effort: str | None = None,
         verbose: bool = False,
         log: Path | None = None,
-    ) -> TriageResult:
+    ) -> BugFixResult:
         if rules_dir is None:
             rules_dir = HERE / "rules"
         keywords = keywords or []
@@ -315,7 +315,7 @@ class BugFixTool(GenerativeModelTool):
             )
         except bugsy.BugsyException as e:
             print(f"[bug_fix] bug selection failed: {e}", file=sys.stderr)
-            return TriageResult(exit_code=2)
+            return BugFixResult(exit_code=2)
 
         if inaccessible:
             print(
@@ -327,7 +327,7 @@ class BugFixTool(GenerativeModelTool):
                 "[bug_fix] no accessible bugs match the selectors — nothing to do",
                 file=sys.stderr,
             )
-            return TriageResult(exit_code=0)
+            return BugFixResult(exit_code=0)
 
         selected.sort(reverse=newest_first)
         print(f"[bug_fix] triaging {len(selected)} bug(s): {selected}", file=sys.stderr)
@@ -390,7 +390,7 @@ class BugFixTool(GenerativeModelTool):
                             exit_code = 1
 
         # --- Build result ------------------------------------------------- #
-        result = TriageResult(
+        result = BugFixResult(
             exit_code=exit_code,
             bugs_processed=len(selected),
             simulated_writes=list(bz_ctx.simulated) if dry_run else [],
