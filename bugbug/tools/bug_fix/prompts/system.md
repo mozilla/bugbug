@@ -31,11 +31,8 @@ When a bug needs reproducing or fixing, you have `firefox` MCP tools:
 - `evaluate_testcase(content, filename, prefs?, timeout?)` — runs a testcase in an ASAN-instrumented Firefox under xvfb via grizzly. Returns `crashed` (bool), `crashed_parent` (bool — parent-process crash), ASAN `logs`, and the testcase bundle. When `crashed=false`, inspect `logs.stderr` for why (JS exception, gated pref, etc).
 - `build_firefox()` — runs `./mach build` with the ASAN mozconfig. Slow. Only call this if you've patched source or the binary is missing — check with Bash first.
 
-These tools are not gated by --dry-run: reproducing a crash is assessment, not modification.
+Follow these rules:
 
-Only produce a fix when explicitly asked for, and follow these rules:
-
-- Before trying to reproduce or fix anything, ensure you are at origin/main with no local source changes.
 - If reproducing requires any external scripts (e.g. an external server script), download that to a temporary
   directory and run it for reproduction purposes.
 - Reproduce the issue first, then plan your fix and test that the issue no longer reproduces. If you cannot
