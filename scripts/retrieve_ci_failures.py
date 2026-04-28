@@ -66,6 +66,7 @@ def query_redash(start_date, end_date):
 
     result = r.json()
     if "query_result" not in result:
+        logger.warning("query_result not in result: %s", result)
         raise tenacity.TryAgain
 
     return result["query_result"]["data"]["rows"]
