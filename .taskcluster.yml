@@ -307,7 +307,7 @@ tasks:
               - taskId: { $eval: as_slugid("integration_test") }
                 dependencies:
                   - { $eval: as_slugid("docker_push") }
-                workerType: compute-small
+                workerType: compute-large
                 scopes:
                   - secrets:get:project/bugbug/integration
                   - "docker-worker:cache:bugbug-mercurial-repository"
