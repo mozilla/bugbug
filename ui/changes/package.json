@@ -12,12 +12,12 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "prettier": "^3.8.2",
+    "prettier": "^3.8.3",
     "snowpack": "^3.8.8"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
-    "apexcharts": "^5.10.5",
+    "apexcharts": "^5.10.6",
     "localforage": "^1.10.0"
   }
 }
