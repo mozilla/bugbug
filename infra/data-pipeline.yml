@@ -615,7 +615,7 @@ tasks:
         image: mozilla/bugbug-base:${version}
         command:
           - "/bin/bash"
-          - "-lcx"
+          - "-cx"
           - "python -c 'from bugbug import bugzilla, db; db.download(bugzilla.BUGS_DB)' &&
             python -m bugbug.bug_snapshot --verbose"
       routes:
@@ -1429,7 +1429,7 @@ tasks:
         image: mozilla/bugbug-base:${version}
         command:
           - "/bin/bash"
-          - "-lcx"
+          - "-cx"
           - "mkdir /metrics &&
             mkdir /metrics-output &&
             bugbug-check-all-metrics /metrics /metrics-output"
@@ -1471,7 +1471,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} /code &&
             cd /code &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1515,7 +1515,7 @@ tasks:
           CACHE_DIR: "/cache"
         command:
           - "/bin/bash"
-          - "-lcx"
+          - "-cx"
           - "apt-get -qq update &&
             apt-get -qq install -y redis-server &&
             git clone --quiet ${repository} &&
@@ -1549,7 +1549,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} &&
             cd bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1580,7 +1580,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} &&
             cd bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1613,7 +1613,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} &&
             cd bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1645,7 +1645,7 @@ tasks:
           TASKCLUSTER_SECRET: project/bugbug/deploy
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - 'taskboot push-artifact &&
             taskboot github-workflow-dispatch mozilla/bugbug docker-push.yml ${version} --inputs ''{"image_tag": "${version}"}'''
       routes:
@@ -1676,7 +1676,7 @@ tasks:
           TASKCLUSTER_SECRET: project/bugbug/deploy
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar.zst' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar.zst'"
 
       routes:

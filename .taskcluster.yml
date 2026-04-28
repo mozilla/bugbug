@@ -54,7 +54,7 @@ tasks:
               payload:
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "git clone --quiet ${repository} &&
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -72,7 +72,7 @@ tasks:
                 payload:
                   command:
                     - "/bin/bash"
-                    - "-lcx"
+                    - "-cx"
                     - "git clone --quiet ${repository} &&
                       cd bugbug &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -90,7 +90,7 @@ tasks:
                   CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev zstd &&
                     git clone --quiet ${repository} &&
@@ -115,7 +115,7 @@ tasks:
                   CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y zstd &&
                     git clone --quiet ${repository} &&
@@ -139,7 +139,7 @@ tasks:
                   CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev &&
                     git clone --quiet ${repository} &&
@@ -172,7 +172,7 @@ tasks:
                     else: "latest"
                 command:
                   - "/bin/sh"
-                  - "-lcxe"
+                  - "-cxe"
                   - "git clone --quiet ${repository} /code &&
                     cd /code &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -210,7 +210,7 @@ tasks:
                     PR_DESCRIPTION: "${pr_description}"
                   command:
                     - "/bin/sh"
-                    - "-lcx"
+                    - "-cx"
                     - "uv run python -m scripts.trainer $(uv run python -m scripts.trainer_extract_args)"
                 metadata:
                   name: bugbug train on TC
@@ -223,7 +223,7 @@ tasks:
                 image: node:lts
                 command:
                   - "/bin/sh"
-                  - "-lcxe"
+                  - "-cxe"
                   - "git clone --quiet ${repository} /bugbug &&
                     cd /bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -322,7 +322,7 @@ tasks:
                     CACHE_DIR: "/cache"
                   command:
                     - "/bin/bash"
-                    - "-lcx"
+                    - "-cx"
                     - "apt-get -qq update &&
                       apt-get -qq install -y redis-server &&
                       git clone --quiet ${repository} &&
@@ -355,7 +355,7 @@ tasks:
                   image: "${taskboot_image}"
                   command:
                     - "/bin/sh"
-                    - "-lcxe"
+                    - "-cxe"
                     - "git clone --quiet ${repository} &&
                       cd bugbug &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
