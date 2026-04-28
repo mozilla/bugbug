@@ -65,7 +65,7 @@ tasks:
         image: node:lts
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} /bugbug &&
             cd /bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
