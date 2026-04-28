@@ -1498,7 +1498,7 @@ tasks:
       deadline: { $fromNow: "3 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - docker-build
       scopes:
