@@ -37,7 +37,7 @@
         "taskclusterProxy": true
       },
       "command": [
-        "python3",
+        "python",
         "/code/spawn_pipeline.py",
         "/code/data-pipeline.yml"
       ],
