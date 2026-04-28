@@ -46,7 +46,7 @@ def download_dbs():
 
 
 @tenacity.retry(
-    wait=tenacity.wait_exponential(multiplier=2, min=2),
+    wait=tenacity.wait_exponential(multiplier=4),
     stop=tenacity.stop_after_attempt(7),
     reraise=True,
 )
