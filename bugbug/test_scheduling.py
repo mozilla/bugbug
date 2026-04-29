@@ -100,6 +100,12 @@ db.register(
 
 HISTORICAL_TIMESPAN = 4500
 
+# Lookback windows used when computing past failure features. These roughly
+# correspond to one week, two weeks, and one month of pushes on autoland.
+PAST_FAILURES_LOOKBACK_WEEK = 700
+PAST_FAILURES_LOOKBACK_TWO_WEEKS = 1400
+PAST_FAILURES_LOOKBACK_MONTH = 2800
+
 JOBS_TO_CONSIDER = ("test-", "build-")
 JOBS_TO_IGNORE = (
     "docker-image-",
@@ -726,9 +732,15 @@ def _read_and_update_past_failures(
         value = cur[round(push_num / 100)]
 
         values_total.append(value)
-        values_prev_700.append(value - cur[round((push_num - 700) / 100)])
-        values_prev_1400.append(value - cur[round((push_num - 1400) / 100)])
-        values_prev_2800.append(value - cur[round((push_num - 2800) / 100)])
+        values_prev_700.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_WEEK) / 100)]
+        )
+        values_prev_1400.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_TWO_WEEKS) / 100)]
+        )
+        values_prev_2800.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_MONTH) / 100)]
+        )
 
         if is_regression:
             cur[round(push_num / 100)] = value + 1

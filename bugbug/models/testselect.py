@@ -690,9 +690,19 @@ class TestSelectModel(Model):
             # past failure data for the push itself.
             # The number 100 comes from the fact that in the past failure data
             # generation we store past failures in batches of 100 pushes.
-            push["all_possibly_selected"] = self.select_tests(
-                commits, 0.5, push_num - 100
+            push_num -= 100
+
+            # Clamp so that the PAST_FAILURES_LOOKBACK_MONTH-push lookback doesn't
+            # fall before the queue's start_day.
+            start_day_max = round(last_push_num / 100) - int(
+                test_scheduling.HISTORICAL_TIMESPAN / 100
             )
+            min_push_num = (
+                start_day_max + int(test_scheduling.PAST_FAILURES_LOOKBACK_MONTH / 100)
+            ) * 100
+            push_num = max(push_num, min_push_num)
+
+            push["all_possibly_selected"] = self.select_tests(commits, 0.5, push_num)
 
         def do_eval(
             executor: concurrent.futures.ProcessPoolExecutor,
