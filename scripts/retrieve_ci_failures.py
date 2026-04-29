@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import enum
 import os
 import subprocess
 import tempfile
@@ -21,6 +22,15 @@ from bugbug import db, repository, utils
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
+
+
+class RedashQueryStatus(enum.IntEnum):
+    PENDING = 1
+    STARTED = 2
+    SUCCESS = 3
+    FAILURE = 4
+    CANCELLED = 5
+
 
 CI_FAILURES_DB = "data/ci_failures.json"
 db.register(
@@ -66,7 +76,10 @@ def query_redash(start_date, end_date):
 
     result = r.json()
     if "query_result" not in result:
-        logger.warning("query_result not in result: %s", result)
+        status = result.get("job", {}).get("status")
+        if status == RedashQueryStatus.FAILURE:
+            raise Exception(f"Redash query failed: {result}")
+        logger.warning("query_result not in result (status=%s): %s", status, result)
         raise tenacity.TryAgain
 
     return result["query_result"]["data"]["rows"]
