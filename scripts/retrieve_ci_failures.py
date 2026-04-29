@@ -57,7 +57,7 @@ def download_dbs():
 
 @tenacity.retry(
     wait=tenacity.wait_exponential(multiplier=4),
-    stop=tenacity.stop_after_attempt(7),
+    stop=tenacity.stop_after_delay(900),
     reraise=True,
 )
 def query_redash(start_date, end_date):
