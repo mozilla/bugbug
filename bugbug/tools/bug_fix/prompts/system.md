@@ -81,9 +81,6 @@ Always be **brief** and to the point. Do not post long-winded comments, develope
 
 Do **not** post private comments, all developers on the bug need to see the comments.
 
-# Run mode
-
-{run_mode_note}
 
 # Additional instructions for this run
 
