@@ -106,11 +106,7 @@ def fetch_initial_bugs(
 # --------------------------------------------------------------------------- #
 
 
-def load_system_prompt(
-    rules_dir: Path,
-    extra: str,
-    dry_run: bool,
-) -> str:
+def load_system_prompt(rules_dir: Path, extra: str) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
     return tmpl.format(
