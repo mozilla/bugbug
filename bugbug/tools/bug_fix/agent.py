@@ -319,7 +319,7 @@ class BugFixTool(GenerativeModelTool):
         print(f"[bug_fix] triaging {len(selected)} bug(s): {selected}", file=sys.stderr)
 
         # --- Build agent options ------------------------------------------ #
-        system_prompt = load_system_prompt(rules_dir, instructions, dry_run)
+        system_prompt = load_system_prompt(rules_dir, instructions)
 
         options = ClaudeAgentOptions(
             system_prompt=system_prompt,
