@@ -1350,7 +1350,6 @@ def download_commits(
     revs: list[bytes] | None = None,
     branch: str | None = "default",
     save: bool = True,
-    use_single_process: bool = False,
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
@@ -1376,6 +1375,12 @@ def download_commits(
         first_pushdate = get_first_pushdate(repo_dir)
 
         logger.info("Mining %d commits...", len(revs))
+
+        cpu_count = os.cpu_count()
+        threads_num = cpu_count + 1 if cpu_count is not None else 1
+        # Only process revisions in parallel when we have enough of them, otherwise
+        # we'll pay the cost of starting multiple threads for nothing.
+        use_single_process = len(revs) < threads_num
 
         if not use_single_process:
             logger.info("Using %d processes...", os.cpu_count())

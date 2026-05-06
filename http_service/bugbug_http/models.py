@@ -332,7 +332,6 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
         revs=revs,
         branch=branch,
         save=False,
-        use_single_process=True,
         include_no_bug=True,
     )
 
