@@ -69,6 +69,7 @@ class CodeReviewTool(GenerativeModelTool):
         show_patch_example: bool = False,
         verbose: bool = True,
         target_software: str = "Mozilla Firefox",
+        todo_enabled: bool = True,
     ) -> None:
         super().__init__()
 
@@ -99,6 +100,15 @@ class CodeReviewTool(GenerativeModelTool):
 
         self._agent_model = llm
 
+        middleware = []
+        if todo_enabled:
+            middleware.append(
+                TodoListMiddleware(
+                    system_prompt=CODE_REVIEW_TODO_PROMPT,
+                    tool_description=CODE_REVIEW_TODO_TOOL_DESCRIPTION,
+                )
+            )
+
         self.agent = create_agent(
             llm,
             tools,
@@ -106,12 +116,7 @@ class CodeReviewTool(GenerativeModelTool):
                 target_software=self.target_software,
             ),
             response_format=ProviderStrategy(AgentResponse),
-            middleware=[
-                TodoListMiddleware(
-                    system_prompt=CODE_REVIEW_TODO_PROMPT,
-                    tool_description=CODE_REVIEW_TODO_TOOL_DESCRIPTION,
-                )
-            ],
+            middleware=middleware,
         )
 
         self.review_comments_db = review_comments_db
