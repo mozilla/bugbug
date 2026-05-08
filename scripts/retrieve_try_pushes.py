@@ -30,8 +30,6 @@ def get_try_pushes_and_jobs(last_push_id):
     end = yesterday = datetime.today() - timedelta(days=1)
     start = end - timedelta(days=42)
 
-    print(last_push_id)
-
     while start < yesterday:
         end = min(start + timedelta(days=2), yesterday)
         logger.info("Retrieving 'try pushes' data between %s and %s...", start, end)
@@ -102,9 +100,7 @@ def main() -> None:
                 }
             )
 
-    new_pushes = [
-        push for push in pushes.values() if push["id"] not in previous_pushes
-    ][:7]
+    new_pushes = [push for push in pushes.values() if push["id"] not in previous_pushes]
 
     def process_push(push):
         return {
