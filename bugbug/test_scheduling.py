@@ -1066,9 +1066,15 @@ _CPPUNIT_INFRA_FILES = {
 
 
 def _get_cppunit_test_names(repo_dir: Path) -> set[str]:
-    with open(repo_dir / "testing" / "cppunittest.toml", "rb") as f:
-        data = tomllib.load(f)
-    return {f"{key}.cpp" for key in data if key != "DEFAULT"}
+    try:
+        with open(repo_dir / "testing" / "cppunittest.toml", "rb") as f:
+            data = tomllib.load(f)
+        return {f"{key}.cpp" for key in data if key != "DEFAULT"}
+    except FileNotFoundError:
+        logger.error(
+            "testing/cppunittest.toml wasn't found, cppunit heuristic won't work"
+        )
+        return set()
 
 
 def find_tasks_for_paths(
