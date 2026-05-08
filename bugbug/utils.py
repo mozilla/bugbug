@@ -536,6 +536,10 @@ def setup_libmozdata():
     os.environ["LIBMOZDATA_CFG_USER-AGENT_NAME"] = get_user_agent()
 
 
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(7),
+    wait=tenacity.wait_exponential(multiplier=2, min=2),
+)
 def get_automationrelevance(branch: str, revision: str) -> dict:
     response = get_session("hgmo").get(
         f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}",
