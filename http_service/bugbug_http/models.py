@@ -352,7 +352,14 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     testlabelselect_model = MODEL_CACHE.get("testlabelselect")
     testgroupselect_model = MODEL_CACHE.get("testgroupselect")
 
+    known_tasks = get_known_tasks()
+    modified_paths = list(set(path for commit in commits for path in commit["files"]))
+
     tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+    for task in test_scheduling.find_tasks_for_paths(
+        REPO_DIR, known_tasks, modified_paths
+    ):
+        tasks[task] = 1.0
 
     reduced = testselect.reduce_configs(
         set(t for t, c in tasks.items() if c >= 0.8), 1.0
@@ -363,9 +370,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     )
 
     groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
-    for group in test_scheduling.find_manifests_for_paths(
-        REPO_DIR, list(set(path for commit in commits for path in commit["files"]))
-    ):
+    for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
 
     config_groups = testselect.select_configs(groups.keys(), 0.9)
@@ -376,7 +381,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
         "config_groups": config_groups,
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
-        "known_tasks": get_known_tasks(),
+        "known_tasks": known_tasks,
     }
 
     return data
