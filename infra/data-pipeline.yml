@@ -311,6 +311,43 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: try-pushes-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-try-pushes-retriever
+
+        artifacts:
+          public/try_pushes.json.zst:
+            path: /data/try_pushes.json.zst
+            type: file
+          public/try_pushes.json.version:
+            path: /data/try_pushes.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_try_pushes.${version}
+        - index.project.bugbug.data_try_pushes.latest
+      metadata:
+        name: bugbug try pushes retriever
+        description: bugbug try pushes retriever
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: issues-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }

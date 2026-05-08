@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import enum
 import os
 import subprocess
 import tempfile
@@ -22,15 +21,6 @@ from bugbug import db, repository, utils
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
-
-
-class RedashQueryStatus(enum.IntEnum):
-    PENDING = 1
-    STARTED = 2
-    SUCCESS = 3
-    FAILURE = 4
-    CANCELLED = 5
-
 
 CI_FAILURES_DB = "data/ci_failures.json"
 db.register(
@@ -55,34 +45,14 @@ def download_dbs():
     db.download(CI_FAILURES_DB)
 
 
-@tenacity.retry(
-    wait=tenacity.wait_exponential(multiplier=2, max=60),
-    stop=tenacity.stop_after_delay(1800),
-    reraise=True,
-)
-def query_redash(start_date, end_date):
-    r = utils.get_session("redash").post(
-        "https://sql.telemetry.mozilla.org/api/queries/111789/results",
-        json={
-            "parameters": {
-                "startdate": start_date.strftime("%Y-%m-%d"),
-                "enddate": end_date.strftime("%Y-%m-%d"),
-            },
-            "max_age": 1800,
+def get_fixed_by_commit_data(start, end):
+    return utils.query_redash(
+        111789,
+        {
+            "startdate": start.strftime("%Y-%m-%d"),
+            "enddate": end.strftime("%Y-%m-%d"),
         },
-        headers={"Authorization": f"Key {utils.get_secret('REDASH_API_KEY')}"},
     )
-    r.raise_for_status()
-
-    result = r.json()
-    if "query_result" not in result:
-        status = result.get("job", {}).get("status")
-        if status == RedashQueryStatus.FAILURE:
-            raise Exception(f"Redash query failed: {result}")
-        logger.warning("query_result not in result (status=%s): %s", status, result)
-        raise tenacity.TryAgain
-
-    return result["query_result"]["data"]["rows"]
 
 
 def get_fixed_by_commit_pushes():
@@ -106,7 +76,7 @@ def get_fixed_by_commit_pushes():
         logger.info(
             "Retrieving 'fixed by commit' data between %s and %s...", start, end
         )
-        fixed_by_commit_elements += query_redash(start, end)
+        fixed_by_commit_elements += get_fixed_by_commit_data(start, end)
         start = end
 
     fixed_by_commit_elements = [
