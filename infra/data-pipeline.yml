@@ -337,7 +337,6 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "secrets:get:project/bugbug/production"
-        - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_try_pushes.${version}
