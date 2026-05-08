@@ -539,6 +539,7 @@ def setup_libmozdata():
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(7),
     wait=tenacity.wait_exponential(multiplier=2, min=2),
+    reraise=True,
 )
 def get_automationrelevance(branch: str, revision: str) -> dict:
     response = get_session("hgmo").get(
