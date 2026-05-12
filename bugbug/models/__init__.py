@@ -33,6 +33,7 @@ MODELS = {
     "testlabelselect": "bugbug.models.testselect.TestLabelSelectModel",
     "testgroupselect": "bugbug.models.testselect.TestGroupSelectModel",
     "testconfiggroupselect": "bugbug.models.testselect.TestConfigGroupSelectModel",
+    "testconfig": "bugbug.models.testfailure.TestConfigModel",
     "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",

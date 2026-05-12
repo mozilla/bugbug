@@ -218,6 +218,8 @@ class Model:
                 feature_name = f"Combined text contains '{feature_name}'"
             elif type_ == "files":
                 feature_name = f"File '{feature_name}'"
+            elif type_ == "filespathcomponents":
+                feature_name = f"File path component '{feature_name}'"
             elif type_ not in ("data", "couple_data"):
                 raise ValueError(f"Unexpected feature type for: {full_feature_name}")
 
@@ -226,6 +228,12 @@ class Model:
         return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values):
+        # In the multi-class case, we have (n_samples, n_features, n_classes) and
+        # we need to normalize it to (n_classes, n_samples, n_features) for the logic
+        # below to work.
+        if isinstance(shap_values, np.ndarray) and shap_values.ndim == 3:
+            shap_values = np.moveaxis(shap_values, -1, 0)
+
         # returns top features for a shap_value matrix
         def get_top_features(cutoff, shap_values):
             # Calculate the values that represent the fraction of the model output variability attributable
