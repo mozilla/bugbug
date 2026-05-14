@@ -132,7 +132,7 @@ artifacts = [
 ]
 
 [tool.uv.workspace]
-members = ["http_service"]
+members = ["http_service", "services/hackbot-api"]
 
 [tool.ruff]
 extend-exclude = ["data"]

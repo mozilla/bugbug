@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from app.config import settings
 from app.schemas import BugFixRequest, BugFixResponse
-from bugbug.tools.bug_fix import BugFixTool
+from bugbug.tools.bug_fix.agent import BugFixTool
 
 router = APIRouter(tags=["bug-fix"])
 
