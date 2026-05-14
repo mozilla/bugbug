@@ -1263,6 +1263,43 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-test-config
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - test-label-scheduling-history-generator
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfig
+
+        artifacts:
+          public/testconfigmodel.tar.zst:
+            path: /testconfigmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfig.${version}
+        - index.project.bugbug.train_testconfig.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfig.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfig.latest
+      metadata:
+        name: bugbug train testconfig model
+        description: bugbug train testconfig model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: train-needsdiagnosis
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
@@ -1454,6 +1491,7 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-test-failure
+        - train-test-config
         - train-needsdiagnosis
         - train-accessibility
         - train-performancebug
@@ -1494,6 +1532,7 @@ tasks:
         - train-spambug
         - train-test-label-select
         - train-test-group-select
+        - train-test-config
         - train-needsdiagnosis
         - train-accessibility
         - train-performancebug
