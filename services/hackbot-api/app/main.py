@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from app import __version__
 from app.config import settings
-from app.routers import duplicate_router, triage_router
+from app.routers import bug_fix_router, duplicate_router
 
 if settings.sentry_dsn:
     sentry_sdk.init(
@@ -34,7 +34,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(triage_router)
+app.include_router(bug_fix_router)
 app.include_router(duplicate_router)
 
 

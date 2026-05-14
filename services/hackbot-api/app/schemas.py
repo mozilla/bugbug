@@ -1,9 +1,9 @@
 from pydantic import BaseModel, Field
 
-# --- Triage ---
+# --- Bug Fix ---
 
 
-class TriageRequest(BaseModel):
+class BugFixRequest(BaseModel):
     bugs: list[int] | None = None
     keywords: list[str] | None = None
     blocks: int | None = None
@@ -18,7 +18,7 @@ class TriageRequest(BaseModel):
     effort: str | None = None
 
 
-class TriageResponse(BaseModel):
+class BugFixResponse(BaseModel):
     exit_code: int
     bugs_processed: int
     simulated_writes: list[dict] = Field(default_factory=list)
