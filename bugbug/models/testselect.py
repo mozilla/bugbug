@@ -280,7 +280,7 @@ def reduce_configs(
 
 
 def select_configs(
-    groups: Collection[str],
+    group_confidences: dict[str, float],
     min_redundancy_confidence: float,
     max_configurations: int = 3,
 ) -> dict[str, list[str]]:
@@ -289,6 +289,12 @@ def select_configs(
     all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
     all_configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
     config_costs = {config: _get_cost(config) for config in all_configs}
+
+    all_groups = group_confidences.keys()
+    high_confidence_groups = {
+        group for group in all_groups if group_confidences.get(group, 0.0) >= 0.99
+    }
+    groups = [group for group in all_groups if group not in high_confidence_groups]
 
     solver = pywraplp.Solver(
         "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
@@ -304,6 +310,14 @@ def select_configs(
             else all_configs
         )
     }
+
+    # Configs used by high-confidence groups are already committed; fix their
+    # config_vars to 1 so the solver treats their fixed cost as already paid.
+    committed_configs = set()
+    for group in high_confidence_groups:
+        committed_configs |= set(all_configs_by_group.get(group, all_configs))
+    for config in committed_configs:
+        solver.Add(config_vars[config] == 1)
 
     equivalence_sets = _get_equivalence_sets(min_redundancy_confidence)
 
@@ -374,7 +388,10 @@ def select_configs(
         )
     )
 
-    configs_by_group: dict[str, list[str]] = {}
+    configs_by_group: dict[str, list[str]] = {
+        group: list(all_configs_by_group.get(group, all_configs))
+        for group in high_confidence_groups
+    }
     for group in groups:
         configs_by_group[group] = []
 
@@ -922,7 +939,14 @@ def eval_apply_transforms(
         if granularity == "label":
             selected = reduce_configs(selected, reduction)
         elif granularity == "group":
-            group_configs = select_configs(selected, reduction)
+            group_configs = select_configs(
+                {
+                    name: confidence
+                    for name, confidence in push["all_possibly_selected"].items()
+                    if name in selected
+                },
+                reduction,
+            )
 
     if minimum is not None and len(selected) < minimum:
         remaining = [

@@ -373,7 +373,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
 
-    config_groups = testselect.select_configs(groups.keys(), 0.9)
+    config_groups = testselect.select_configs(groups, 0.9)
 
     data = {
         "tasks": tasks,
