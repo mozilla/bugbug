@@ -4,15 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class BugFixRequest(BaseModel):
-    bugs: list[int] | None = None
-    keywords: list[str] | None = None
-    blocks: int | None = None
-    status: list[str] | None = None
-    instructions: str = ""
-    task: str | None = None
-    rules_dir: str | None = None
-    dry_run: bool = True  # Default to dry-run for safety
-    newest_first: bool = False
+    bug_id: int
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
