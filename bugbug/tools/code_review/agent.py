@@ -25,11 +25,13 @@ from bugbug.tools.code_review.data_types import (
     AgentResponse,
     CodeReviewToolResponse,
     GeneratedReviewComment,
+    Skill,
 )
 from bugbug.tools.code_review.database import ReviewCommentsDB
 from bugbug.tools.code_review.langchain_tools import (
     CodeReviewContext,
     create_find_function_definition_tool,
+    create_load_skill_tool,
     expand_context,
 )
 from bugbug.tools.code_review.prompts import (
@@ -70,6 +72,7 @@ class CodeReviewTool(GenerativeModelTool):
         verbose: bool = True,
         target_software: str = "Mozilla Firefox",
         todo_enabled: bool = True,
+        skills: Optional[list[Skill]] = None,
     ) -> None:
         super().__init__()
 
@@ -97,6 +100,9 @@ class CodeReviewTool(GenerativeModelTool):
         tools = [expand_context]
         if function_search:
             tools.append(create_find_function_definition_tool(function_search))
+
+        if skills:
+            tools.append(create_load_skill_tool(skills))
 
         self._agent_model = llm
 
@@ -175,6 +181,11 @@ class CodeReviewTool(GenerativeModelTool):
             from bugbug.tools.suggestion_filtering import SuggestionFilteringTool
 
             kwargs["suggestion_filterer"] = SuggestionFilteringTool.create()
+
+        if "skills" not in kwargs:
+            from bugbug.tools.code_review.prompts import REVIEW_SKILLS
+
+            kwargs["skills"] = REVIEW_SKILLS
 
         return cls(**kwargs)
 

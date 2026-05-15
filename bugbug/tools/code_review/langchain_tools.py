@@ -13,6 +13,7 @@ from langgraph.runtime import get_runtime
 from requests import HTTPError
 
 from bugbug.code_search.function_search import FunctionSearch
+from bugbug.tools.code_review.data_types import Skill, SkillLoadError
 from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
@@ -95,3 +96,37 @@ def create_find_function_definition_tool(function_search: FunctionSearch):
         return functions[0].source
 
     return find_function_definition
+
+
+def create_load_skill_tool(skills: list[Skill]):
+    skills_by_name = {skill.name: skill for skill in skills}
+    available_names = ", ".join(skills_by_name)
+
+    catalog_lines = "\n".join(
+        f"- **{skill.name}**: {skill.description}" for skill in skills
+    )
+    description = (
+        "Load the contents of a named skill to guide the review. Use this when "
+        "the patch touches an area covered by one of the skills below; otherwise, "
+        "do not call it.\n\n"
+        "Available skills:\n"
+        f"{catalog_lines}\n\n"
+        "Args:\n"
+        "    name: The name of the skill to load (must match one of the names above).\n\n"
+        "Returns:\n"
+        "    The skill content as Markdown."
+    )
+
+    @tool(description=description)
+    async def load_skill(name: str) -> str:
+        skill = skills_by_name.get(name)
+        if skill is None:
+            return f"Unknown skill '{name}'. Available: {available_names}."
+
+        try:
+            return await skill.load()
+        except SkillLoadError:
+            logger.exception("Failed to load skill '%s'", name)
+            return f"Failed to load skill '{name}'. Please proceed without it."
+
+    return load_skill
