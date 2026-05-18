@@ -654,6 +654,7 @@ class RedashQueryStatus(enum.IntEnum):
 
 
 @tenacity.retry(
+    retry=tenacity.retry_if_exception_type(tenacity.TryAgain),
     wait=tenacity.wait_exponential(multiplier=2, max=60),
     stop=tenacity.stop_after_delay(1800),
     reraise=True,
