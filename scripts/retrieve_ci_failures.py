@@ -45,12 +45,43 @@ def download_dbs():
     db.download(CI_FAILURES_DB)
 
 
-def get_fixed_by_commit_data(start, end, last_push_id):
+def query_push_id_by_revision(revision):
+    # https://sql.telemetry.mozilla.org/queries/120004/source
+    # SELECT MIN(p.id) AS first_push_id
+    # FROM push p
+    # WHERE p.repository_id = '{{ repository_id }}'
+    #   AND p.revision = '{{ revision }}';
+    results = utils.query_redash(
+        120004,
+        {
+            "repository_id": 77,
+            "revision": revision,
+        },
+    )
+    return results[0]["first_push_id"]
+
+
+def query_first_push_id_by_date(date):
+    # https://sql.telemetry.mozilla.org/queries/119896/source
+    # SELECT MIN(p.id) AS first_push_id
+    # FROM push p
+    # WHERE p.repository_id = '{{ repository_id }}'
+    #   AND p.time >= '{{ startdate }}';
+    results = utils.query_redash(
+        119896,
+        {
+            "repository_id": 77,
+            "startdate": date,
+        },
+    )
+    return results[0]["first_push_id"]
+
+
+def get_fixed_by_commit_data(first_push_id, last_push_id):
     return utils.query_redash(
         111789,
         {
-            "startdate": start.strftime("%Y-%m-%d"),
-            "enddate": end.strftime("%Y-%m-%d"),
+            "first_push_id": first_push_id,
             "last_push_id": last_push_id,
         },
     )
@@ -59,35 +90,66 @@ def get_fixed_by_commit_data(start, end, last_push_id):
 def get_fixed_by_commit_pushes():
     logger.info("Get previously found failures...")
     fixed_by_commit_pushes = {}
+    last_processed_commit = None
     for push in db.read(CI_FAILURES_DB):
         fixed_by_commit_pushes[push["bug_id"]] = {
             "failures": push["failures"],
             "commits": [],
         }
 
+        last_processed_commit = push["failure_commits"][-1]
+
     # Retrieve the last processed push ID
-    # Subtract 350 so we reprocess some pushes that might have some new data now
-    r = utils.get_session("hgmo").get(
-        f"https://hg-edge.mozilla.org/integration/autoland/json-pushes?version=2&tipsonly=1&fromchange={push['failure_commits'][0]}"
-    )
-    r.raise_for_status()
-    last_push_id = int(list(r.json()["pushes"].keys())[0]) - 350
+    if last_processed_commit is not None:
+        last_processed_push_id = query_push_id_by_revision(last_processed_commit)
+    else:
+        last_processed_push_id = 0
 
     logger.info("Got %d failures.", len(fixed_by_commit_pushes))
 
     fixed_by_commit_elements = []
 
-    end = today = datetime.today()
+    end = datetime.today()
     # Treeherder stores 120 days of data.
     start = end - timedelta(days=120)
 
-    while start < today:
-        end = min(start + timedelta(days=1), today)
-        logger.info(
-            "Retrieving 'fixed by commit' data between %s and %s...", start, end
-        )
-        fixed_by_commit_elements += get_fixed_by_commit_data(start, end, last_push_id)
-        start = end
+    first_push_id = query_first_push_id_by_date(start.strftime("%Y-%m-%d"))
+    if first_push_id <= last_processed_push_id:
+        first_push_id = last_processed_push_id + 1
+    last_push_id = query_first_push_id_by_date(end.strftime("%Y-%m-%d"))
+
+    logger.info(
+        "Retrieving 'fixed by commit' data between %d and %d...",
+        first_push_id,
+        last_push_id,
+    )
+
+    MAX_BATCH_SIZE = 210
+    MIN_BATCH_SIZE = 1
+
+    current = first_push_id
+
+    with tqdm(total=last_push_id - first_push_id + 1) as pbar:
+        while current <= last_push_id:
+            batch_size = min(MAX_BATCH_SIZE, last_push_id - current + 1)
+
+            while batch_size >= MIN_BATCH_SIZE:
+                first = current
+                last = min(current + batch_size - 1, last_push_id)
+
+                try:
+                    fixed_by_commit_elements += get_fixed_by_commit_data(first, last)
+                except Exception:
+                    if batch_size == MIN_BATCH_SIZE:
+                        raise
+
+                    batch_size = max(MIN_BATCH_SIZE, batch_size // 2)
+                    continue
+
+                processed = last - first + 1
+                current = last + 1
+                pbar.update(processed)
+                break
 
     fixed_by_commit_elements = [
         element
@@ -116,7 +178,7 @@ def get_fixed_by_commit_pushes():
             }
         )
 
-    logger.info("Analyzing %s 'fixed by commit' pushes.", len(fixed_by_commit_pushes))
+    logger.info("Analyzing %d 'fixed by commit' pushes.", len(fixed_by_commit_pushes))
 
     backouts_by_bug_id = defaultdict(int)
     for commit in repository.get_commits(include_backouts=True):
