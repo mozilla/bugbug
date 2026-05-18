@@ -27,9 +27,9 @@ db.register(
 def query_try_pushes(first_push_id, last_push_id):
     # https://sql.telemetry.mozilla.org/queries/119580/source
     # SELECT p.id,
-    #         p.revision,
-    #         jt.name AS job_name,
-    #         j.result
+    #        p.revision,
+    #        jt.name AS job_name,
+    #        j.result
     # FROM push p
     # JOIN job j ON j.push_id = p.id
     # JOIN job_type jt ON jt.id = j.job_type_id
