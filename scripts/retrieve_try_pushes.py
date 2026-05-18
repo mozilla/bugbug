@@ -7,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from logging import INFO, basicConfig, getLogger
 
-import mozci.push
 from tqdm import tqdm
 
 from bugbug import db, utils
@@ -22,6 +21,22 @@ db.register(
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_try_pushes.latest/artifacts/public/try_pushes.json.zst",
     1,
 )
+
+
+def query_first_push_id_by_date(date):
+    # https://sql.telemetry.mozilla.org/queries/119580/source
+    # SELECT MIN(p.id) AS first_push_id
+    # FROM push p
+    # WHERE p.repository_id = '{{ repository_id }}'
+    #   AND p.time >= '{{ startdate }}';
+    results = utils.query_redash(
+        119896,
+        {
+            "repository_id": 4,
+            "startdate": date,
+        },
+    )
+    return results[0]["first_push_id"]
 
 
 def query_try_pushes(first_push_id, last_push_id):
@@ -55,16 +70,8 @@ def get_try_pushes_and_jobs(last_processed_push_id):
     end = datetime.today() - timedelta(days=1)
     start = end - timedelta(days=42)
 
-    first_push_id = mozci.push.make_push_objects(
-        from_date=start.strftime("%Y-%m-%d"),
-        to_date=(start + timedelta(days=1)).strftime("%Y-%m-%d"),
-        branch="try",
-    )[0].id
-    last_push_id = mozci.push.make_push_objects(
-        from_date=(end - timedelta(days=1)).strftime("%Y-%m-%d"),
-        to_date=end.strftime("%Y-%m-%d"),
-        branch="try",
-    )[-1].id
+    first_push_id = query_first_push_id_by_date(start.strftime("%Y-%m-%d"))
+    last_push_id = query_first_push_id_by_date(end.strftime("%Y-%m-%d"))
 
     if first_push_id <= last_processed_push_id:
         first_push_id = last_processed_push_id + 1
