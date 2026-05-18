@@ -668,7 +668,8 @@ def query_redash(query_id, parameters):
         },
         headers={"Authorization": f"Key {get_secret('REDASH_API_KEY')}"},
     )
-    r.raise_for_status()
+    if not r.ok:
+        raise Exception(f"Redash query error: {r.text}")
 
     result = r.json()
     if "query_result" not in result:
