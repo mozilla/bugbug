@@ -76,6 +76,8 @@ def get_try_pushes_and_jobs(last_processed_push_id):
     if first_push_id <= last_processed_push_id:
         first_push_id = last_processed_push_id + 1
 
+    print(f"Retrieving try pushes between {first_push_id} and {last_push_id}...")
+
     MAX_BATCH_SIZE = 210
     MIN_BATCH_SIZE = 1
 
