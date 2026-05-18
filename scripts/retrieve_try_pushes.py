@@ -102,7 +102,7 @@ def get_try_pushes_and_jobs(last_processed_push_id):
 def main() -> None:
     db.download(TRY_PUSHES_DB)
 
-    previous_pushes = {push["id"] for push in db.read(TRY_PUSHES_DB)}
+    previous_pushes = {push["th_id"] for push in db.read(TRY_PUSHES_DB)}
 
     pushes_and_jobs = get_try_pushes_and_jobs(max(previous_pushes, default=0))
 
@@ -110,7 +110,7 @@ def main() -> None:
     for push_and_job in pushes_and_jobs:
         if push_and_job["id"] not in pushes:
             pushes[push_and_job["id"]] = {
-                "id": push_and_job["id"],
+                "th_id": push_and_job["id"],
                 "revision": push_and_job["revision"],
                 "tasks": [
                     {
@@ -120,18 +120,20 @@ def main() -> None:
                 ],
             }
         else:
-            pushes[push_and_job["id"]]["tasks"].append(
+            pushes[push_and_job["revision"]]["tasks"].append(
                 {
                     "name": push_and_job["job_name"],
                     "result": push_and_job["result"],
                 }
             )
 
-    new_pushes = [push for push in pushes.values() if push["id"] not in previous_pushes]
+    new_pushes = [
+        push for push in pushes.values() if push["th_id"] not in previous_pushes
+    ]
 
     def process_push(push):
         return {
-            "id": push["id"],
+            "th_id": push["id"],
             "try_data": utils.get_automationrelevance("try", push["revision"]),
             "tasks": push["tasks"],
         }
