@@ -1,39 +1,69 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+from enum import Enum
+from typing import Any
+from uuid import UUID
 
-# --- Bug Fix ---
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class BugFixRequest(BaseModel):
+class RunStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+    timed_out = "timed_out"
+
+
+TERMINAL_STATUSES = {RunStatus.succeeded, RunStatus.failed, RunStatus.timed_out}
+
+
+class ArtifactRef(BaseModel):
+    name: str
+    size: int
+    content_type: str | None = None
+
+
+class RunSummary(BaseModel):
+    status: str
+    error: str | None = None
+    findings: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentDescriptor(BaseModel):
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+class RunRef(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: UUID
+    agent: str
+    status: RunStatus
+
+
+class RunDoc(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: UUID
+    agent: str
+    status: RunStatus
+    inputs: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+    execution_name: str | None = None
+    results_prefix: str
+    summary: RunSummary | None = None
+    artifacts: list[ArtifactRef] = Field(default_factory=list)
+    error: str | None = None
+
+
+# --- Per-agent input schemas ---
+
+
+class BugFixInputs(BaseModel):
     bug_id: int
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
-
-
-class BugFixResponse(BaseModel):
-    exit_code: int
-    bugs_processed: int
-    simulated_writes: list[dict] = Field(default_factory=list)
-
-
-# --- Duplicate Detection ---
-
-
-class DuplicateRequest(BaseModel):
-    mode: str  # "local" | "bugs" | "local_to_local"
-    meta_bug: int | None = None
-    bug_ids: list[int] | None = None
-    local_dir: str | None = None
-    results_dir: str | None = None
-    model: str | None = None
-    max_turns: int | None = None
-
-
-class DuplicateResultItem(BaseModel):
-    name: str
-    verdict: str
-
-
-class DuplicateResponse(BaseModel):
-    exit_code: int
-    results: list[DuplicateResultItem]

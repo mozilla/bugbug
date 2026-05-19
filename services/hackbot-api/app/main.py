@@ -6,7 +6,8 @@ from fastapi import FastAPI
 
 from app import __version__
 from app.config import settings
-from app.routers import bug_fix_router, duplicate_router
+from app.database.connection import close_db, init_db
+from app.routers import runs_router
 
 if settings.sentry_dsn:
     sentry_sdk.init(
@@ -24,18 +25,21 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    await init_db()
+    try:
+        yield
+    finally:
+        await close_db()
 
 
 app = FastAPI(
     title="Hackbot API",
-    description="Agentic service to accelerate Firefox development",
+    description="Agent orchestration platform that runs agents as Cloud Run Jobs",
     version=__version__,
     lifespan=lifespan,
 )
 
-app.include_router(bug_fix_router)
-app.include_router(duplicate_router)
+app.include_router(runs_router)
 
 
 @app.get("/health")

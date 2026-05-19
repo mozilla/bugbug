@@ -1,23 +1,24 @@
 """Bug fix triage tool -- a Bugzilla triage agent.
 
 Orchestrates a Claude agent that triages bugs according to rulesets
-in the rules/ directory, with access to a source repository and an
-in-process Bugzilla MCP server.
+in the rules/ directory. The agent has access to a source repository
+and reaches Bugzilla via an out-of-process MCP broker (HTTP transport)
+that holds the Bugzilla token — the agent process itself never sees it.
 """
 
 from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-import bugsy
 from claude_agent_sdk import (
     AgentDefinition,
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    McpServerConfig,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -28,8 +29,6 @@ from claude_agent_sdk import (
 )
 
 from bugbug.tools.base import GenerativeModelTool
-from bugbug.tools.bug_fix.bugzilla_mcp import BugzillaContext
-from bugbug.tools.bug_fix.bugzilla_mcp import build_server as build_bugzilla_server
 from bugbug.tools.bug_fix.config import (
     BUGZILLA_READ_TOOLS,
     BUGZILLA_WRITE_TOOLS,
@@ -51,54 +50,6 @@ HERE = Path(__file__).resolve().parent
 class BugFixResult:
     exit_code: int = 0
     bugs_processed: int = 0
-    simulated_writes: list[dict] = field(default_factory=list)
-
-
-# --------------------------------------------------------------------------- #
-# Bug selection
-# --------------------------------------------------------------------------- #
-
-
-def fetch_initial_bugs(
-    bz: bugsy.Bugsy,
-    bug_ids: list[int] | None,
-    keywords: list[str],
-    blocks: int | None,
-    status: list[str],
-) -> tuple[list[int], list[int]]:
-    """Resolve selectors into a concrete list of bug IDs.
-
-    All selectors intersect: ``bugs=[1,2,3]`` + ``keywords=["sec-low"]``
-    returns only those of 1,2,3 that carry sec-low.
-
-    Returns (selected_ids, inaccessible_ids).
-    """
-    params: dict = {"include_fields": "id"}
-    if bug_ids:
-        params["id"] = ",".join(str(i) for i in bug_ids)
-    for kw in keywords:
-        params.setdefault("keywords", []).append(kw)
-    if blocks is not None:
-        params["blocks"] = blocks
-    if status:
-        params["status"] = status
-
-    if not bug_ids:
-        params.setdefault("limit", 200)
-
-    for k, v in list(params.items()):
-        if isinstance(v, list) and len(v) == 1:
-            params[k] = v[0]
-
-    result = bz.request("bug", params=params)
-    returned = [b["id"] for b in result.get("bugs", [])]
-    returned_set = set(returned)
-
-    inaccessible: list[int] = []
-    if bug_ids:
-        inaccessible = [i for i in bug_ids if i not in returned_set]
-
-    return returned, inaccessible
 
 
 # --------------------------------------------------------------------------- #
@@ -261,17 +212,12 @@ class BugFixTool(GenerativeModelTool):
     async def run(
         self,
         *,
-        base_url: str,
-        api_key: str,
+        bugzilla_mcp_server: McpServerConfig,
         source_repo: Path,
-        bugs: list[int] | None = None,
-        keywords: list[str] | None = None,
-        blocks: int | None = None,
-        status: list[str] | None = None,
+        bugs: list[int],
         instructions: str = "",
         task: str | None = None,
         rules_dir: Path | None = None,
-        dry_run: bool = False,
         newest_first: bool = False,
         model: str | None = None,
         max_turns: int | None = None,
@@ -281,49 +227,24 @@ class BugFixTool(GenerativeModelTool):
     ) -> BugFixResult:
         if rules_dir is None:
             rules_dir = HERE / "rules"
-        keywords = keywords or []
-        status = status or []
 
-        # --- Bugzilla client & MCP server --------------------------------- #
-        bz = bugsy.Bugsy(api_key=api_key, bugzilla_url=base_url)
-        bz_ctx = BugzillaContext(client=bz, dry_run=dry_run)
-        bugzilla_server = build_bugzilla_server(bz_ctx)
-
-        # --- Firefox build/eval MCP server -------------------------------- #
-        fx_ctx = FirefoxContext.from_source_repo(source_repo)
-        firefox_server = build_firefox_server(fx_ctx)
-
-        # --- Resolve bug selectors to concrete IDs ------------------------ #
-        print("[bug_fix] resolving bug set...", file=sys.stderr)
-        try:
-            selected, inaccessible = fetch_initial_bugs(
-                bz, bugs, keywords, blocks, status
-            )
-        except bugsy.BugsyException as e:
-            print(f"[bug_fix] bug selection failed: {e}", file=sys.stderr)
-            return BugFixResult(exit_code=2)
-
-        if inaccessible:
-            print(
-                f"[bug_fix] {len(inaccessible)} bug(s) inaccessible, skipping: {inaccessible}",
-                file=sys.stderr,
-            )
-        if not selected:
-            print(
-                "[bug_fix] no accessible bugs match the selectors — nothing to do",
-                file=sys.stderr,
-            )
+        if not bugs:
+            print("[bug_fix] no bug ids supplied — nothing to do", file=sys.stderr)
             return BugFixResult(exit_code=0)
 
-        selected.sort(reverse=newest_first)
+        selected = sorted(bugs, reverse=newest_first)
         print(f"[bug_fix] triaging {len(selected)} bug(s): {selected}", file=sys.stderr)
+
+        # --- Firefox build/eval MCP server (in-process; no tokens) -------- #
+        fx_ctx = FirefoxContext.from_source_repo(source_repo)
+        firefox_server = build_firefox_server(fx_ctx)
 
         # --- Build agent options ------------------------------------------ #
         system_prompt = load_system_prompt(rules_dir, instructions)
 
         options = ClaudeAgentOptions(
             system_prompt=system_prompt,
-            mcp_servers={"bugzilla": bugzilla_server, "firefox": firefox_server},
+            mcp_servers={"bugzilla": bugzilla_mcp_server, "firefox": firefox_server},
             agents={"investigator": make_investigator()},
             cwd=str(source_repo.resolve()),
             add_dirs=[str(rules_dir.resolve())],
@@ -339,7 +260,6 @@ class BugFixTool(GenerativeModelTool):
                 *BUGZILLA_WRITE_TOOLS,
                 *FIREFOX_TOOLS,
             ],
-            disallowed_tools=list(BUGZILLA_WRITE_TOOLS) if dry_run else [],
             model=model,
             max_turns=max_turns,
             **({"effort": effort} if effort else {}),
@@ -375,20 +295,7 @@ class BugFixTool(GenerativeModelTool):
                         if isinstance(msg, ResultMessage) and msg.is_error:
                             exit_code = 1
 
-        # --- Build result ------------------------------------------------- #
-        result = BugFixResult(
+        return BugFixResult(
             exit_code=exit_code,
             bugs_processed=len(selected),
-            simulated_writes=list(bz_ctx.simulated) if dry_run else [],
         )
-
-        if dry_run and bz_ctx.simulated:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print(
-                f"[bug_fix] DRY-RUN SUMMARY: {len(bz_ctx.simulated)} simulated write(s)",
-                file=sys.stderr,
-            )
-            for i, s in enumerate(bz_ctx.simulated, 1):
-                print(f"  {i}. {s['action']} bug {s['bug_id']}", file=sys.stderr)
-
-        return result

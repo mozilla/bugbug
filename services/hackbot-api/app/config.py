@@ -2,17 +2,24 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Bugzilla
-    bz_base_url: str = ""
-    bz_api_key: str = ""
+    # GCP
+    gcp_project: str = ""
+    gcp_region: str = "us-central1"
+    results_bucket: str = ""
 
-    # Firefox source repo (for bug_fix tool)
-    source_repo: str = "/workspace/firefox"
+    # Cloud SQL Postgres
+    cloud_sql_instance: str = ""
+    db_user: str = ""
+    db_pass: str = ""
+    db_name: str = "hackbot"
 
-    # Agent
-    model: str | None = None
-    max_turns: int | None = None
-    effort: str | None = None
+    # Cloud Run Jobs
+    job_execution_timeout_seconds: int = 8 * 60 * 60
+    signed_policy_max_bytes: int = 5 * 1024 * 1024 * 1024
+    signed_policy_grace_seconds: int = 60 * 60
+
+    # API auth
+    api_key: str = ""
 
     # Server
     port: int = 8080

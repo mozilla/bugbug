@@ -1,4 +1,6 @@
-version: "3.2"
+include:
+  - path: agents/bug-fix/compose.yml
+
 services:
   bugbug-base:
     build:

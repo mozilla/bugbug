@@ -13,7 +13,7 @@ import json
 import mimetypes
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import bugsy
 from claude_agent_sdk import create_sdk_mcp_server, tool
@@ -35,8 +35,6 @@ class BugzillaContext:
     client: bugsy.Bugsy
     dry_run: bool = False
     confirm: bool = False
-    # Record of simulated writes during dry-run, for end-of-run summary.
-    simulated: list[dict] = field(default_factory=list)
 
 
 def _text(content: str) -> dict:
@@ -381,7 +379,6 @@ def build_server(ctx: BugzillaContext):
         if ctx.dry_run:
             print(f"\n[DRY-RUN] update_bug {bug_id}", file=sys.stderr)
             print(json.dumps(action_desc, indent=2, default=str), file=sys.stderr)
-            ctx.simulated.append({"action": "update_bug", **action_desc})
             return _jtext(
                 {
                     "dry_run": True,
@@ -451,7 +448,6 @@ def build_server(ctx: BugzillaContext):
         if ctx.dry_run:
             print(f"\n[DRY-RUN] add_comment on bug {bug_id}", file=sys.stderr)
             print(json.dumps(action_desc, indent=2, default=str), file=sys.stderr)
-            ctx.simulated.append({"action": "add_comment", **action_desc})
             return _jtext(
                 {
                     "dry_run": True,
@@ -573,7 +569,6 @@ def build_server(ctx: BugzillaContext):
         if ctx.dry_run:
             print(f"\n[DRY-RUN] add_attachment on bug {bug_id}", file=sys.stderr)
             print(json.dumps(action_desc, indent=2, default=str), file=sys.stderr)
-            ctx.simulated.append({"action": "add_attachment", **action_desc})
             return _jtext(
                 {
                     "dry_run": True,
@@ -704,7 +699,6 @@ def build_server(ctx: BugzillaContext):
         if ctx.dry_run:
             print("\n[DRY-RUN] create_bug", file=sys.stderr)
             print(json.dumps(action_desc, indent=2, default=str), file=sys.stderr)
-            ctx.simulated.append({"action": "create_bug", **action_desc})
             return _jtext(
                 {
                     "dry_run": True,
