@@ -9,6 +9,7 @@ from pathlib import Path
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from bugbug.tools.bug_fix.firefox_tools import (
+    bootstrap_firefox,
     build_firefox,
     evaluate_testcase,
     js_shell_evaluator,
@@ -209,8 +210,41 @@ def build_server(ctx: FirefoxContext):
         )
         return _jtext(crash_info)
 
+    @tool(
+        "bootstrap_firefox",
+        "Run `./mach bootstrap` to install the Firefox build toolchain "
+        "(rust, clang, cbindgen) under the running user's ~/.mozbuild/. "
+        "Required before a full (non-artifact) build. Slow — ~10-15 min on a "
+        "fresh image, fast on re-runs. Returns JSON: success, message, "
+        "stdout, stderr. Only call this if you intend to do a full build; "
+        "artifact builds don't need bootstrap.",
+        {
+            "type": "object",
+            "properties": {
+                "firefox_dir": {
+                    "type": "string",
+                    "description": (
+                        "Firefox source directory. Optional — defaults to "
+                        f"{ctx.source_dir}"
+                    ),
+                },
+            },
+        },
+    )
+    async def bootstrap_firefox_tool(args):
+        firefox_dir = (
+            Path(args["firefox_dir"]) if "firefox_dir" in args else ctx.source_dir
+        )
+        result = await bootstrap_firefox(firefox_dir)
+        return _jtext(result)
+
     return create_sdk_mcp_server(
         name="firefox",
         version="0.1.0",
-        tools=[evaluate_testcase_tool, build_firefox_tool, evaluate_js_shell_tool],
+        tools=[
+            evaluate_testcase_tool,
+            build_firefox_tool,
+            evaluate_js_shell_tool,
+            bootstrap_firefox_tool,
+        ],
     )
