@@ -27,7 +27,9 @@ class SignedPolicyUploader:
         response = requests.post(self.url, data=form, files=files, timeout=300)
         response.raise_for_status()
 
-    def upload_file(self, name: str, path: Path, content_type: str | None = None) -> None:
+    def upload_file(
+        self, name: str, path: Path, content_type: str | None = None
+    ) -> None:
         data = path.read_bytes()
         self.upload_bytes(name, data, content_type or "application/octet-stream")
 

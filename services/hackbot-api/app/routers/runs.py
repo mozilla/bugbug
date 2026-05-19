@@ -125,7 +125,10 @@ async def _reconcile(db: AsyncSession, run: Run) -> None:
         return
 
     if exec_status in (ExecutionStatus.pending, ExecutionStatus.running):
-        if run.status == RunStatus.pending.value and exec_status == ExecutionStatus.running:
+        if (
+            run.status == RunStatus.pending.value
+            and exec_status == ExecutionStatus.running
+        ):
             run.status = RunStatus.running.value
             await db.commit()
         return

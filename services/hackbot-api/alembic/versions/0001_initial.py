@@ -1,10 +1,11 @@
-"""initial schema: runs table
+"""initial schema: runs table.
 
 Revision ID: 0001_initial
 Revises:
 Create Date: 2026-05-16
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

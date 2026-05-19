@@ -2,10 +2,9 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.engine import Connection
-
 from app.database.connection import close_db, init_db
 from app.database.models import Base
+from sqlalchemy.engine import Connection
 
 config = context.config
 

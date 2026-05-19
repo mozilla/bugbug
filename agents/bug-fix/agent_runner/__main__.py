@@ -4,9 +4,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
 from hackbot_runtime import AgentResult, Context, run_async
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 log = logging.getLogger("bug-fix-agent")
 

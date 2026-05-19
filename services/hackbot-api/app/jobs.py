@@ -31,9 +31,7 @@ def _executions_client() -> run_v2.ExecutionsClient:
 def _job_resource_name(job_name: str) -> str:
     if not settings.gcp_project or not settings.gcp_region:
         raise RuntimeError("gcp_project and gcp_region must be configured")
-    return (
-        f"projects/{settings.gcp_project}/locations/{settings.gcp_region}/jobs/{job_name}"
-    )
+    return f"projects/{settings.gcp_project}/locations/{settings.gcp_region}/jobs/{job_name}"
 
 
 _AGENT_CONTAINER_NAME = "agent"
@@ -49,9 +47,7 @@ def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
         container_overrides=[
             run_v2.RunJobRequest.Overrides.ContainerOverride(
                 name=_AGENT_CONTAINER_NAME,
-                env=[
-                    run_v2.EnvVar(name=k, value=v) for k, v in env_overrides.items()
-                ],
+                env=[run_v2.EnvVar(name=k, value=v) for k, v in env_overrides.items()],
             )
         ],
         timeout={"seconds": settings.job_execution_timeout_seconds},

@@ -81,9 +81,7 @@ def _finish(ctx: Context, result_or_exc: AgentResult | BaseException) -> int:
 def _validate_result(result: object) -> AgentResult | RuntimeError:
     if isinstance(result, AgentResult):
         return result
-    return RuntimeError(
-        f"Agent returned {type(result).__name__}; expected AgentResult"
-    )
+    return RuntimeError(f"Agent returned {type(result).__name__}; expected AgentResult")
 
 
 def run(entrypoint: AgentMain) -> int:
