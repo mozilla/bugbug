@@ -16,11 +16,6 @@ services:
       context: ../..
       dockerfile: agents/bug-fix/Dockerfile
       target: agent
-    # Only required env vars are listed. Optional ones (MODEL, MAX_TURNS,
-    # EFFORT, RESULTS_POLICY_URL, RESULTS_POLICY_FIELDS, RESULTS_PREFIX)
-    # are intentionally omitted — pydantic-settings uses defaults / treats
-    # absence as "unspecified" rather than parsing "" as int. To override
-    # at runtime, use `docker compose run -e MODEL=…`.
     environment:
       RUN_ID: ${RUN_ID:-local-dev}
       BUG_ID: ${BUG_ID:?error}
