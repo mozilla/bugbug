@@ -26,11 +26,42 @@ class AgentInputs(BaseSettings):
 def ensure_firefox_source(source_repo: Path) -> None:
     """Shallow-clone the Firefox source tree if it isn't already present.
 
-    Idempotent: a mounted volume or pre-baked image with an existing
-    checkout short-circuits the clone.
+    Idempotent and recovers from a partial checkout left by an earlier
+    failed run (e.g. clone succeeded but checkout ran out of disk).
     """
     if (source_repo / ".git").exists():
-        log.info("firefox source already present at %s", source_repo)
+        status = subprocess.run(
+            ["git", "-C", str(source_repo), "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        # A healthy fresh shallow clone has an empty status; a broken
+        # checkout shows thousands of missing-file "D" entries.
+        if status.stdout.strip():
+            log.warning(
+                "firefox source at %s is incomplete; restoring working tree",
+                source_repo,
+            )
+            subprocess.run(
+                ["git", "-C", str(source_repo), "restore", "--source=HEAD", ":/"],
+                check=True,
+                stdout=sys.stderr,
+                stderr=sys.stderr,
+            )
+        log.info("updating firefox source at %s (shallow fetch)", source_repo)
+        subprocess.run(
+            ["git", "-C", str(source_repo), "fetch", "--depth=1", "origin", "HEAD"],
+            check=True,
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+        )
+        subprocess.run(
+            ["git", "-C", str(source_repo), "reset", "--hard", "FETCH_HEAD"],
+            check=True,
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+        )
         return
     source_repo.mkdir(parents=True, exist_ok=True)
     log.info("cloning firefox source (shallow) to %s", source_repo)
