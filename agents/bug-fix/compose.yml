@@ -27,6 +27,11 @@ services:
       BUGZILLA_MCP_URL: http://bug-fix-broker:8765/mcp
       SOURCE_REPO: /workspace/firefox
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?error}
+    volumes:
+      - workspace:/workspace
     depends_on:
       bug-fix-broker:
         condition: service_started
+
+volumes:
+  workspace:
