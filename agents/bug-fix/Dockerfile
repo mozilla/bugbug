@@ -30,6 +30,7 @@ COPY --from=builder /app /app
 WORKDIR /app/agents/bug-fix
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV PATH="/app/.venv/bin:$PATH"
 
 FROM base AS agent
@@ -38,12 +39,15 @@ RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
 
-ENV PYTHONDONTWRITEBYTECODE=1
 USER agent
 
 CMD ["python", "-m", "agent_runner"]
 
 FROM base AS broker
+
+RUN useradd --create-home --shell /bin/bash broker
+
+USER broker
 
 EXPOSE 8765
 
