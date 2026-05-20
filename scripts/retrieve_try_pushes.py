@@ -77,7 +77,7 @@ def get_try_pushes_and_jobs(last_processed_push_id):
         first_push_id = last_processed_push_id + 1
 
     logger.info(
-        "Retrieving try pushes between {%d} and {%d}...", first_push_id, last_push_id
+        "Retrieving try pushes between %d and %d...", first_push_id, last_push_id
     )
 
     MAX_BATCH_SIZE = 210
@@ -131,7 +131,7 @@ def main() -> None:
                 ],
             }
         else:
-            pushes[push_and_job["revision"]]["tasks"].append(
+            pushes[push_and_job["id"]]["tasks"].append(
                 {
                     "name": push_and_job["job_name"],
                     "result": push_and_job["result"],
@@ -144,7 +144,7 @@ def main() -> None:
 
     def process_push(push):
         return {
-            "th_id": push["id"],
+            "th_id": push["th_id"],
             "try_data": utils.get_automationrelevance("try", push["revision"]),
             "tasks": push["tasks"],
         }
