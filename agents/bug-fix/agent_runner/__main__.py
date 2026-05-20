@@ -84,6 +84,7 @@ async def main(ctx: Context) -> AgentResult:
 
     tool = BugFixTool.create()
     result = await tool.run(
+        task="Triage and fix the bug, and verify the fix",
         bugzilla_mcp_server={
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
