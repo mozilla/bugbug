@@ -95,6 +95,7 @@ async def main(ctx: Context) -> AgentResult:
         max_turns=inputs.max_turns,
         effort=inputs.effort,
         log=log_path,
+        verbose=True,
     )
 
     if log_path.exists() and ctx.uploader is not None:
