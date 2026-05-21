@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     signed_policy_grace_seconds: int = 60 * 60
 
     # API auth
-    api_key: str = ""
+    external_api_key: str = ""
 
     # Server
     port: int = 8080
