@@ -749,7 +749,6 @@ def test_pre_2022_comments_trusted():
 
 def test_collapsed_tags_filtered():
     """Test that all collapsed tags cause comments to be filtered."""
-
     # Test a few different collapsed tags
     for tag in ["spam", "abuse", "nsfw", "off-topic"]:
         comments = [
