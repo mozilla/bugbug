@@ -27,7 +27,7 @@ class WorktreeManager:
     def create(self, commit_hash: str, name: str) -> Path:
         worktree_path = self.base_dir / name
         logger.info(
-            f"Creating worktree {name} at {worktree_path} (commit={commit_hash})"
+            "Creating worktree %s at %s (commit=%s)", name, worktree_path, commit_hash
         )
         if worktree_path.exists():
             self.cleanup(name)
@@ -45,11 +45,11 @@ class WorktreeManager:
             cwd=self.repo,
             check=True,
         )
-        logger.info(f"Worktree {name} created")
+        logger.info("Worktree %s created", name)
         return worktree_path
 
     def cleanup(self, name: str) -> None:
-        logger.info(f"Cleaning up worktree {name}")
+        logger.info("Cleaning up worktree %s", name)
         # --force twice to operate on locked worktrees (see https://git-scm.com/docs/git-worktree#_options)
         result = subprocess.run(
             [
@@ -65,15 +65,17 @@ class WorktreeManager:
             text=True,
         )
         if result.returncode != 0:
-            logger.error(f"Failed to remove worktree {name}: {result.stderr.strip()}")
+            logger.error(
+                "Failed to remove worktree %s: %s", name, result.stderr.strip()
+            )
         else:
-            logger.info(f"Worktree {name} removed")
+            logger.info("Worktree %s removed", name)
 
     def cleanup_all(self) -> None:
-        logger.info(f"Cleaning up all worktrees in {self.base_dir}")
+        logger.info("Cleaning up all worktrees in %s", self.base_dir)
         for entry in self.base_dir.iterdir():
             if entry.is_dir():
-                logger.info(f"Removing worktree {entry}")
+                logger.info("Removing worktree %s", entry)
                 subprocess.run(
                     ["git", "worktree", "remove", "--force", "--force", str(entry)],
                     cwd=self.repo,

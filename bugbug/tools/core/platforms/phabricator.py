@@ -77,7 +77,7 @@ def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
     if not user_phids:
         return {}
 
-    logger.info(f"Fetching user info for {len(user_phids)} PHIDs")
+    logger.info("Fetching user info for %s PHIDs", len(user_phids))
 
     # Get user names and nick
     users_response = phabricator.request(

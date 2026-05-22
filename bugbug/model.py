@@ -218,6 +218,8 @@ class Model:
                 feature_name = f"Combined text contains '{feature_name}'"
             elif type_ == "files":
                 feature_name = f"File '{feature_name}'"
+            elif type_ == "filespathcomponents":
+                feature_name = f"File path component '{feature_name}'"
             elif type_ not in ("data", "couple_data"):
                 raise ValueError(f"Unexpected feature type for: {full_feature_name}")
 
@@ -226,6 +228,12 @@ class Model:
         return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values):
+        # In the multi-class case, we have (n_samples, n_features, n_classes) and
+        # we need to normalize it to (n_classes, n_samples, n_features) for the logic
+        # below to work.
+        if isinstance(shap_values, np.ndarray) and shap_values.ndim == 3:
+            shap_values = np.moveaxis(shap_values, -1, 0)
+
         # returns top features for a shap_value matrix
         def get_top_features(cutoff, shap_values):
             # Calculate the values that represent the fraction of the model output variability attributable
@@ -317,7 +325,7 @@ class Model:
 
         # allow maximum of 3 columns in a row to fit the page better
         COLUMNS = 3
-        logger.info("Top {} features:".format(len(top_feature_names)))
+        logger.info("Top %s features:", len(top_feature_names))
         for i in range(0, len(top_feature_names), COLUMNS):
             table = []
             for item in shap_val:
@@ -380,7 +388,7 @@ class Model:
             X = X[:limit]
             y = y[:limit]
 
-        logger.info(f"X: {X.shape}, y: {y.shape}")
+        logger.info("X: %s , y: %s", X.shape, y.shape)
 
         is_multilabel = isinstance(y[0], np.ndarray)
         is_binary = len(self.class_names) == 2
@@ -408,11 +416,14 @@ class Model:
                     "std": score.std() * 2,
                 }
                 logger.info(
-                    f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
+                    "%s: f%.4f (+/- %.4f)",
+                    scoring.capitalize(),
+                    score.mean(),
+                    (score.std() * 2),
                 )
 
-        logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
-        logger.info(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
+        logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
+        logger.info("X_test: %s, y_test: %s", X_test.shape, y_test.shape)
 
         self.clf.fit(X_train, self.le.transform(y_train))
         logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
@@ -480,7 +491,7 @@ class Model:
                 "The predictions should be multilabel"
             )
 
-        logger.info(f"No confidence threshold - {len(y_test)} classified")
+        logger.info("No confidence threshold - %d classified", len(y_test))
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         else:
@@ -535,7 +546,7 @@ class Model:
                     y_pred_filter.append(argmax)
 
             if not is_multilabel:
-                y_pred_filter = np.array(y_pred_filter)
+                y_pred_filter = np.array(y_pred_filter, dtype=object)
                 y_pred_filter[classified_indices] = self.le.inverse_transform(
                     np.array(y_pred_filter[classified_indices], dtype=int)
                 )
@@ -548,7 +559,9 @@ class Model:
                 )
 
             logger.info(
-                f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"
+                "\nConfidence threshold > %s - %d classified",
+                confidence_threshold,
+                classified_num,
             )
             if is_multilabel:
                 confusion_matrix = metrics.multilabel_confusion_matrix(
@@ -579,7 +592,7 @@ class Model:
             X_train = X
             y_train = y
 
-            logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+            logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
             self.clf.fit(X_train, self.le.transform(y_train))
 

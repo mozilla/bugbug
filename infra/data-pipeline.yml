@@ -311,6 +311,42 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: try-pushes-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-try-pushes-retriever
+
+        artifacts:
+          public/try_pushes.json.zst:
+            path: /data/try_pushes.json.zst
+            type: file
+          public/try_pushes.json.version:
+            path: /data/try_pushes.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_try_pushes.${version}
+        - index.project.bugbug.data_try_pushes.latest
+      metadata:
+        name: bugbug try pushes retriever
+        description: bugbug try pushes retriever
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: issues-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
@@ -365,7 +401,7 @@ tasks:
           - retrieve
           - label
           - --reretrieve=0
-          - --training-months=8
+          - --training-months=12
 
         artifacts:
           public/push_data_label.json.zst:
@@ -483,7 +519,7 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - label
-          - --training-months=8
+          - --training-months=12
 
         artifacts:
           public/test_label_scheduling_history.pickle.zst:
@@ -1200,6 +1236,7 @@ tasks:
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-generator
+        - test-group-scheduling-history-generator
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
@@ -1224,6 +1261,43 @@ tasks:
       metadata:
         name: bugbug train test failure model
         description: bugbug train test failure model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-test-config
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - test-label-scheduling-history-generator
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfig
+
+        artifacts:
+          public/testconfigmodel.tar.zst:
+            path: /testconfigmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfig.${version}
+        - index.project.bugbug.train_testconfig.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfig.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfig.latest
+      metadata:
+        name: bugbug train testconfig model
+        description: bugbug train testconfig model
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
@@ -1402,6 +1476,41 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-severity
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - severity
+
+        artifacts:
+          public/severitymodel.tar.zst:
+            path: /severitymodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_severity.${version}
+        - index.project.bugbug.train_severity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_severity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_severity.latest
+      metadata:
+        name: bugbug train severity model
+        description: bugbug train severity model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: check_metrics
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
@@ -1418,12 +1527,14 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-test-failure
+        - train-test-config
         - train-needsdiagnosis
         - train-accessibility
         - train-performancebug
         - train-worksforme
         - train-fenixcomponent
         - train-invalidcompatibilityreport
+        - train-severity
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
@@ -1458,6 +1569,7 @@ tasks:
         - train-spambug
         - train-test-label-select
         - train-test-group-select
+        - train-test-config
         - train-needsdiagnosis
         - train-accessibility
         - train-performancebug

@@ -23,7 +23,7 @@ DEPLOYMENT_CONFIG = {
         "namespace": "bugbug-prod",
     },
     "dev": {
-        "project": "moz-fx-webservices-high-nonprod",
+        "project": "moz-fx-webservices-high-nonpro",
         "namespace": "bugbug-dev",
     },
 }

@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import enum
 import os
 import subprocess
 import tempfile
@@ -22,15 +21,6 @@ from bugbug import db, repository, utils
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
-
-
-class RedashQueryStatus(enum.IntEnum):
-    PENDING = 1
-    STARTED = 2
-    SUCCESS = 3
-    FAILURE = 4
-    CANCELLED = 5
-
 
 CI_FAILURES_DB = "data/ci_failures.json"
 db.register(
@@ -55,57 +45,111 @@ def download_dbs():
     db.download(CI_FAILURES_DB)
 
 
-@tenacity.retry(
-    wait=tenacity.wait_exponential(multiplier=2, max=60),
-    stop=tenacity.stop_after_delay(900),
-    reraise=True,
-)
-def query_redash(start_date, end_date):
-    r = utils.get_session("redash").post(
-        "https://sql.telemetry.mozilla.org/api/queries/111789/results",
-        json={
-            "parameters": {
-                "startdate": start_date.strftime("%Y-%m-%d"),
-                "enddate": end_date.strftime("%Y-%m-%d"),
-            },
-            "max_age": 1800,
+def query_push_id_by_revision(revision):
+    # https://sql.telemetry.mozilla.org/queries/120004/source
+    # SELECT MIN(p.id) AS first_push_id
+    # FROM push p
+    # WHERE p.repository_id = '{{ repository_id }}'
+    #   AND p.revision = '{{ revision }}';
+    results = utils.query_redash(
+        120004,
+        {
+            "repository_id": 77,
+            "revision": revision,
         },
-        headers={"Authorization": f"Key {utils.get_secret('REDASH_API_KEY')}"},
     )
-    r.raise_for_status()
+    return results[0]["first_push_id"]
 
-    result = r.json()
-    if "query_result" not in result:
-        status = result.get("job", {}).get("status")
-        if status == RedashQueryStatus.FAILURE:
-            raise Exception(f"Redash query failed: {result}")
-        logger.warning("query_result not in result (status=%s): %s", status, result)
-        raise tenacity.TryAgain
 
-    return result["query_result"]["data"]["rows"]
+def query_first_push_id_by_date(date):
+    # https://sql.telemetry.mozilla.org/queries/119896/source
+    # SELECT MIN(p.id) AS first_push_id
+    # FROM push p
+    # WHERE p.repository_id = '{{ repository_id }}'
+    #   AND p.time >= '{{ startdate }}';
+    results = utils.query_redash(
+        119896,
+        {
+            "repository_id": 77,
+            "startdate": date,
+        },
+    )
+    return results[0]["first_push_id"]
+
+
+def get_fixed_by_commit_data(first_push_id, last_push_id):
+    return utils.query_redash(
+        111789,
+        {
+            "first_push_id": first_push_id,
+            "last_push_id": last_push_id,
+        },
+    )
 
 
 def get_fixed_by_commit_pushes():
     logger.info("Get previously found failures...")
     fixed_by_commit_pushes = {}
+    last_processed_commit = None
     for push in db.read(CI_FAILURES_DB):
         fixed_by_commit_pushes[push["bug_id"]] = {
             "failures": push["failures"],
             "commits": [],
         }
+
+        last_processed_commit = push["failure_commits"][-1]
+
+    # Retrieve the last processed push ID
+    if last_processed_commit is not None:
+        last_processed_push_id = query_push_id_by_revision(last_processed_commit)
+    else:
+        last_processed_push_id = 0
+
     logger.info("Got %d failures.", len(fixed_by_commit_pushes))
 
     fixed_by_commit_elements = []
 
-    end = today = datetime.today()
+    end = datetime.today()
     # Treeherder stores 120 days of data.
     start = end - timedelta(days=120)
 
-    while start < today:
-        end = min(start + timedelta(days=7), today)
-        logger.info(f"Retrieving 'fixed by commit' data between {start} and {end}...")
-        fixed_by_commit_elements += query_redash(start, end)
-        start = end
+    first_push_id = query_first_push_id_by_date(start.strftime("%Y-%m-%d"))
+    if first_push_id <= last_processed_push_id:
+        first_push_id = last_processed_push_id + 1
+    last_push_id = query_first_push_id_by_date(end.strftime("%Y-%m-%d"))
+
+    logger.info(
+        "Retrieving 'fixed by commit' data between %d and %d...",
+        first_push_id,
+        last_push_id,
+    )
+
+    MAX_BATCH_SIZE = 210
+    MIN_BATCH_SIZE = 1
+
+    current = first_push_id
+
+    with tqdm(total=last_push_id - first_push_id + 1) as pbar:
+        while current <= last_push_id:
+            batch_size = min(MAX_BATCH_SIZE, last_push_id - current + 1)
+
+            while batch_size >= MIN_BATCH_SIZE:
+                first = current
+                last = min(current + batch_size - 1, last_push_id)
+
+                try:
+                    fixed_by_commit_elements += get_fixed_by_commit_data(first, last)
+                except Exception:
+                    if batch_size == MIN_BATCH_SIZE:
+                        raise
+
+                    batch_size = max(MIN_BATCH_SIZE, batch_size // 2)
+                    continue
+
+                processed = last - first + 1
+                current = last + 1
+                pbar.update(processed)
+                break
 
     fixed_by_commit_elements = [
         element
@@ -134,7 +178,7 @@ def get_fixed_by_commit_pushes():
             }
         )
 
-    logger.info(f"Analyzing {len(fixed_by_commit_pushes)} 'fixed by commit' pushes.")
+    logger.info("Analyzing %d 'fixed by commit' pushes.", len(fixed_by_commit_pushes))
 
     backouts_by_bug_id = defaultdict(int)
     for commit in repository.get_commits(include_backouts=True):
@@ -153,14 +197,14 @@ def get_fixed_by_commit_pushes():
             no_relanding_bugs.add(bug_id)
 
     logger.info(
-        f"{len(no_relanding_bugs)} cases removed because there was no relanding."
+        "%s cases removed because there was no relanding.", len(no_relanding_bugs)
     )
 
     for bug_id in no_relanding_bugs:
         del fixed_by_commit_pushes[bug_id]
 
     logger.info(
-        f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze."
+        "%s 'fixed by commit' pushes left to analyze.", len(fixed_by_commit_pushes)
     )
 
     # Skip cases where there are multiple backouts associated to the same bug ID.
@@ -171,14 +215,15 @@ def get_fixed_by_commit_pushes():
                 multiple_backouts.add(bug_id)
 
     logger.info(
-        f"{len(multiple_backouts)} cases to be removed because there were multiple backouts in the same bug."
+        "%s cases to be removed because there were multiple backouts in the same bug.",
+        len(multiple_backouts),
     )
 
     for multiple_backout in multiple_backouts:
         del fixed_by_commit_pushes[multiple_backout]
 
     logger.info(
-        f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze."
+        "%s 'fixed by commit' pushes left to analyze.", len(fixed_by_commit_pushes)
     )
 
     # Skip cases where there is no backout (and so the fix was a bustage fix).
@@ -192,14 +237,15 @@ def get_fixed_by_commit_pushes():
             no_backouts.add(bug_id)
 
     logger.info(
-        f"{len(no_backouts)} cases to be removed because there were no backouts in the bug."
+        "%s cases to be removed because there were no backouts in the bug.",
+        len(no_backouts),
     )
 
     for no_backout in no_backouts:
         del fixed_by_commit_pushes[no_backout]
 
     logger.info(
-        f"{len(fixed_by_commit_pushes)} 'fixed by commit' pushes left to analyze."
+        "%s 'fixed by commit' pushes left to analyze.", len(fixed_by_commit_pushes)
     )
 
     # TODO: skip cases where a single push contains multiple backouts?
@@ -356,8 +402,8 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         else:
             diff_errors += 1
 
-    logger.info(f"Failed mapping {mapping_errors} hashes")
-    logger.info(f"Failed generating {diff_errors} diffs")
+    logger.info("Failed mapping %s hashes", mapping_errors)
+    logger.info("Failed generating %s diffs", diff_errors)
 
 
 def write_results(fixed_by_commit_pushes):

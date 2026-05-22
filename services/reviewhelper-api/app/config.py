@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Cloud Run
     port: int = 8080
 
+    # Agent settings
+    todo_enabled: bool = True
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

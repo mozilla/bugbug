@@ -118,8 +118,8 @@ JOBS_TO_IGNORE = (
     "browsertime",
     "backlog",
     # inclusive test suites -- these *only* run when certain files have changed
-    "-test-verify-",
-    "-test-coverage-",
+    "-test-verify",
+    "-test-coverage",
     "jittest",
     "jsreftest",
     "android-hw-gfx",
@@ -514,7 +514,7 @@ def generate_failing_together_probabilities(
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
         logger.info(
-            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            "%s - %s redundancy confidence %f, support %f (%d over %d).",
             couple[0],
             couple[1],
             confidence,
@@ -530,7 +530,7 @@ def generate_failing_together_probabilities(
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
         logger.info(
-            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            "%s - %s redundancy confidence %f, support %f (%d over %d).",
             couple[0],
             couple[1],
             confidence,
@@ -1054,3 +1054,90 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                     break
 
     return manifests
+
+
+_GTEST_RE = re.compile(rb"^[ \t]*(?:TEST|TEST_F)\(", re.MULTILINE)
+_GTEST_FOLDERS = ("gtest", "gtests", "googletest")
+_CPPUNIT_INFRA_FILES = {
+    "testing/remotecppunittests.py",
+    "testing/runcppunittests.py",
+    "testing/cppunittest.toml",
+}
+
+
+def _get_cppunit_test_names(repo_dir: Path) -> set[str]:
+    try:
+        with open(repo_dir / "testing" / "cppunittest.toml", "rb") as f:
+            data = tomllib.load(f)
+        return {f"{key}.cpp" for key in data if key != "DEFAULT"}
+    except FileNotFoundError:
+        logger.error(
+            "testing/cppunittest.toml wasn't found, cppunit heuristic won't work"
+        )
+        return set()
+
+
+def find_tasks_for_paths(
+    repo_dir_str: str, known_tasks: tuple[str, ...], paths: list[str]
+) -> list[str]:
+    repo_dir = Path(repo_dir_str)
+
+    select_gtest = False
+    select_cppunit = False
+    select_rusttests = False
+
+    # Any Rust file is modified.
+    for path in paths:
+        if repository.get_type(path) == "Rust":
+            select_rusttests = True
+            break
+
+    # Any file in a gtest folder is modified.
+    for path in paths:
+        if any(f"/{gtest_path}/" in path for gtest_path in _GTEST_FOLDERS):
+            select_gtest = True
+            break
+
+    # Any file in a folder close to a gtest folder is modified (e.g. dom/media/CubebUtils.cpp and we have dom/media/gtest/).
+    if not select_gtest:
+        for path in paths:
+            for sibling in (repo_dir / path).parent.rglob("*"):
+                if sibling.is_dir() and any(
+                    part in _GTEST_FOLDERS for part in sibling.parts
+                ):
+                    select_gtest = True
+                    break
+            if select_gtest:
+                break
+
+    # Any C/C++ file containing gtests is modified.
+    if not select_gtest:
+        for path in paths:
+            if repository.get_type(path) in ["C/C++", "Objective-C/C++"]:
+                try:
+                    with open(repo_dir / path, "rb") as f:
+                        select_gtest = _GTEST_RE.search(f.read()) is not None
+                        if select_gtest:
+                            break
+                except OSError:
+                    pass
+
+    # Cppunit: run if infrastructure files are modified, or any .cpp file whose
+    # name matches a stem listed in testing/cppunittest.toml is modified.
+    cppunit_test_names = _get_cppunit_test_names(repo_dir)
+    for path in paths:
+        if path in _CPPUNIT_INFRA_FILES or Path(path).name in cppunit_test_names:
+            select_cppunit = True
+            break
+
+    selected_tasks = []
+
+    for task in known_tasks:
+        if select_gtest and "gtest" in task:
+            selected_tasks.append(task)
+        if select_cppunit and "cppunit" in task:
+            selected_tasks.append(task)
+        if select_rusttests and "rusttests" in task:
+            selected_tasks.append(task)
+
+    return selected_tasks

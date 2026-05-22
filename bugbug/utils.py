@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import concurrent.futures
+import enum
 import errno
 import json
 import logging
@@ -30,6 +31,7 @@ import psutil
 import requests
 import scipy
 import taskcluster
+import tenacity
 import zstandard
 from requests.packages.urllib3.util.retry import Retry
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -534,16 +536,25 @@ def setup_libmozdata():
     os.environ["LIBMOZDATA_CFG_USER-AGENT_NAME"] = get_user_agent()
 
 
-def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
-    """Load descriptions of patches in the stack for a given revision."""
-    url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
-    r = get_session("hgmo").get(
-        url,
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(7),
+    wait=tenacity.wait_exponential(multiplier=2, min=2),
+    reraise=True,
+)
+def get_automationrelevance(branch: str, revision: str) -> dict:
+    response = get_session("hgmo").get(
+        f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}",
         headers={
             "User-Agent": get_user_agent(),
         },
     )
-    r.raise_for_status()
+    response.raise_for_status()
+    return response.json()
+
+
+def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
+    """Load descriptions of patches in the stack for a given revision."""
+    automation_relevance = get_automationrelevance(branch, revision)
 
     def should_skip(changeset):
         # Analyze all changesets if we are not on try.
@@ -566,7 +577,9 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
         return False
 
     return [
-        c["node"].encode("ascii") for c in r.json()["changesets"] if not should_skip(c)
+        c["node"].encode("ascii")
+        for c in automation_relevance["changesets"]
+        if not should_skip(c)
     ]
 
 
@@ -630,3 +643,40 @@ def git2hg(hash: str) -> str:
     r = get_session("lando").get(f"https://lando.moz.tools/api/git2hg/firefox/{hash}")
     r.raise_for_status()
     return r.json()["hg_hash"]
+
+
+class RedashQueryStatus(enum.IntEnum):
+    PENDING = 1
+    STARTED = 2
+    SUCCESS = 3
+    FAILURE = 4
+    CANCELLED = 5
+
+
+@tenacity.retry(
+    retry=tenacity.retry_if_exception_type(tenacity.TryAgain),
+    wait=tenacity.wait_exponential(multiplier=2, max=60),
+    stop=tenacity.stop_after_delay(1800),
+    reraise=True,
+)
+def query_redash(query_id, parameters):
+    r = get_session("redash").post(
+        f"https://sql.telemetry.mozilla.org/api/queries/{query_id}/results",
+        json={
+            "parameters": parameters,
+            "max_age": 1800,
+        },
+        headers={"Authorization": f"Key {get_secret('REDASH_API_KEY')}"},
+    )
+    if not r.ok:
+        raise Exception(f"Redash query error: {r.text}")
+
+    result = r.json()
+    if "query_result" not in result:
+        status = result.get("job", {}).get("status")
+        if status == RedashQueryStatus.FAILURE:
+            raise Exception(f"Redash query failed: {result}")
+        logger.warning("query_result not in result (status=%s): %s", status, result)
+        raise tenacity.TryAgain
+
+    return result["query_result"]["data"]["rows"]

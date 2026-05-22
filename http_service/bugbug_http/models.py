@@ -62,7 +62,7 @@ cctx = zstandard.ZstdCompressor(level=10)
 
 
 def setkey(key: str, value: bytes, compress: bool = False) -> None:
-    LOGGER.debug(f"Storing data at {key}: {value!r}")
+    LOGGER.debug("Storing data at %s: %r", key, value)
     if compress:
         value = cctx.compress(value)
     redis.set(key, value)
@@ -93,7 +93,7 @@ def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
@@ -153,7 +153,7 @@ def classify_issue(
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
@@ -199,7 +199,7 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
@@ -247,7 +247,7 @@ def schedule_tests(branch: str, rev: str) -> str:
     try:
         revs = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
-        LOGGER.warning(f"Push not found for {branch} @ {rev}!")
+        LOGGER.warning("Push not found for %s @ %s!", branch, rev)
         return "NOK"
 
     # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
@@ -304,11 +304,11 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     patch_data_raw = redis.get(patch_key)
 
     if not patch_data_raw:
-        LOGGER.error(f"Patch not found in Redis for hash {patch_hash}")
+        LOGGER.error("Patch not found in Redis for hash %s", patch_hash)
         return "NOK"
 
     hg_base_rev = utils.git2hg(base_rev)
-    LOGGER.info(f"Mapped git base rev {base_rev} to hg rev {hg_base_rev}")
+    LOGGER.info("Mapped git base rev %s to hg rev %s", base_rev, hg_base_rev)
 
     # Pull the base revision to the local repository
     LOGGER.info("Pulling base revision from the remote repository...")
@@ -332,7 +332,6 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
         revs=revs,
         branch=branch,
         save=False,
-        use_single_process=True,
         include_no_bug=True,
     )
 
@@ -353,7 +352,14 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     testlabelselect_model = MODEL_CACHE.get("testlabelselect")
     testgroupselect_model = MODEL_CACHE.get("testgroupselect")
 
+    known_tasks = get_known_tasks()
+    modified_paths = list(set(path for commit in commits for path in commit["files"]))
+
     tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+    for task in test_scheduling.find_tasks_for_paths(
+        REPO_DIR, known_tasks, modified_paths
+    ):
+        tasks[task] = 1.0
 
     reduced = testselect.reduce_configs(
         set(t for t, c in tasks.items() if c >= 0.8), 1.0
@@ -364,12 +370,10 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     )
 
     groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
-    for group in test_scheduling.find_manifests_for_paths(
-        REPO_DIR, list(set(path for commit in commits for path in commit["files"]))
-    ):
+    for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
 
-    config_groups = testselect.select_configs(groups.keys(), 0.9)
+    config_groups = testselect.select_configs(groups, 0.9)
 
     data = {
         "tasks": tasks,
@@ -377,7 +381,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
         "config_groups": config_groups,
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
-        "known_tasks": get_known_tasks(),
+        "known_tasks": known_tasks,
     }
 
     return data

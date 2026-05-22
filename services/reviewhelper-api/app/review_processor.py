@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from functools import cache
 from typing import Collection, Iterable
 
+from app.config import settings
 from app.database.models import GeneratedComment, ReviewRequest
 from app.enums import Platform
 from bugbug.tools.core.exceptions import LargeDiffError
@@ -32,7 +33,7 @@ class RevisionNotYetPublicError(Exception):
 def get_code_review_tool():
     from bugbug.tools.code_review import CodeReviewTool
 
-    return CodeReviewTool.create()
+    return CodeReviewTool.create(todo_enabled=settings.todo_enabled)
 
 
 async def process_review(

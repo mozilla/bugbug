@@ -718,37 +718,28 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     test_scheduling.close_failing_together_db("config_group")
 
     result = testselect.select_configs(
-        {
-            "group1",
-        },
+        {"group1": 0.0},
         1.0,
     )
     assert len(result) == 1
     assert set(result["group1"]) == {"linux2404-64-asan/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group2",
-        },
+        {"group2": 0.0},
         1.0,
     )
     assert len(result) == 1
     assert set(result["group2"]) == {"linux2404-64/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group3",
-        },
+        {"group3": 0.0},
         1.0,
     )
     assert len(result) == 1
     assert set(result["group3"]) == {"windows10/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group1",
-            "group2",
-        },
+        {"group1": 0.0, "group2": 0.0},
         1.0,
     )
     assert len(result) == 2
@@ -759,10 +750,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     }
 
     result = testselect.select_configs(
-        {
-            "group1",
-            "group3",
-        },
+        {"group1": 0.0, "group3": 0.0},
         1.0,
     )
     assert len(result) == 2
@@ -770,10 +758,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert set(result["group3"]) == {"windows10/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group2",
-            "group3",
-        },
+        {"group2": 0.0, "group3": 0.0},
         1.0,
     )
     assert len(result) == 2
@@ -781,11 +766,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert set(result["group3"]) == {"linux2404-64/opt", "windows10/debug"}
 
     result = testselect.select_configs(
-        {
-            "group1",
-            "group2",
-            "group3",
-        },
+        {"group1": 0.0, "group2": 0.0, "group3": 0.0},
         1.0,
     )
     assert len(result) == 3
@@ -796,3 +777,19 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
         "linux2404-64-asan/debug",
     }
     assert set(result["group3"]) == {"linux2404-64/opt", "windows10/debug"}
+
+    # A group selected with >= 0.99 confidence runs on all its configs.
+    all_configs = {
+        "linux2404-64-asan/debug",
+        "linux2404-64/debug",
+        "linux2404-64/opt",
+        "mac/debug",
+        "windows10/debug",
+    }
+    result = testselect.select_configs(
+        {"group1": 0.99, "group2": 0.0},
+        1.0,
+    )
+    assert len(result) == 2
+    assert set(result["group1"]) == all_configs
+    assert set(result["group2"]) == {"linux2404-64/opt", "linux2404-64/debug"}

@@ -171,7 +171,7 @@ def _register_model_costs(client) -> None:
                 completion_token_cost=completion_cost,
             )
         except Exception as e:
-            logger.debug(f"Could not register cost for {model_id}: {e}")
+            logger.debug("Could not register cost for %s: %s", model_id, e)
 
 
 def _make_weave_callback():
@@ -243,8 +243,10 @@ class BuildRepairModel(weave.Model):
     ) -> dict:
         wt_name = f"bug-{bug_id}-{uuid.uuid4().hex[:8]}"
         logger.info(
-            f"Invoking bug {bug_id} "
-            f"(commit={gh_failure_commits[0][:12]}, {len(failures)} failures)"
+            "Invoking bug %s (commit=%s, %s failures)",
+            bug_id,
+            gh_failure_commits[0][:12],
+            len(failures),
         )
 
         worktree_created = False
@@ -255,8 +257,10 @@ class BuildRepairModel(weave.Model):
             )
             if datetime.fromisoformat(fix_commit_date).date() < cutoff:
                 logger.warning(
-                    f"Skipping bug {bug_id}: fix date {fix_commit_date} "
-                    f"is before model cutoff {cutoff}"
+                    "Skipping bug %s: fix date %s is before model cutoff %s",
+                    bug_id,
+                    fix_commit_date,
+                    cutoff,
                 )
                 raise ValueError("skipped_data_contamination")
 
@@ -278,11 +282,15 @@ class BuildRepairModel(weave.Model):
                 on_message=on_message,
             )
             logger.info(
-                f"Bug {bug_id} completed: error={result.error}, "
-                f"diff_len={len(result.diff)}, cost=${result.cost_usd:.4f}, "
-                f"turns={result.num_turns}, "
-                f"local_build={result.local_build_passed}, "
-                f"try_build={result.try_build_passed}"
+                "Bug %s completed: error=%s, diff_len=%s, cost=$%.4f, turns=%s, "
+                "local_build=%s, try_build=%s",
+                bug_id,
+                result.error,
+                len(result.diff),
+                result.cost_usd,
+                result.num_turns,
+                result.local_build_passed,
+                result.try_build_passed,
             )
 
             output = result.model_dump()
@@ -303,7 +311,7 @@ class BuildRepairModel(weave.Model):
             return output
         finally:
             if worktree_created:
-                logger.info(f"Bug {bug_id}: cleaning up worktree {wt_name}")
+                logger.info("Bug %s: cleaning up worktree %s", bug_id, wt_name)
                 self.worktree_mgr.cleanup(wt_name)
 
 
@@ -334,10 +342,15 @@ def main() -> None:
         logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     logger.info(
-        f"Starting evaluation: dataset={args.dataset}, limit={args.limit}, "
-        f"trials={args.trials}, parallelism={args.parallelism}, "
-        f"analysis_only={args.analysis_only}, no_try_push={args.no_try_push}, "
-        f"firefox_repo={args.firefox_repo}"
+        "Starting evaluation: dataset=%s, limit=%s, trials=%s, parallelism=%s, "
+        "analysis_only=%s, no_try_push=%s, firefox_repo=%s",
+        args.dataset,
+        args.limit,
+        args.trials,
+        args.parallelism,
+        args.analysis_only,
+        args.no_try_push,
+        args.firefox_repo,
     )
 
     os.environ["WEAVE_PARALLELISM"] = str(args.parallelism)
@@ -346,10 +359,10 @@ def main() -> None:
     _register_model_costs(client)
 
     dataset = weave.ref(args.dataset).get()
-    logger.info(f"Loaded dataset {args.dataset} with {len(dataset.rows)} rows")
+    logger.info("Loaded dataset %s with %s rows", args.dataset, len(dataset.rows))
     if args.limit:
         dataset.rows = dataset.rows[: args.limit]
-        logger.info(f"Limited to {len(dataset.rows)} rows")
+        logger.info("Limited to %s rows", len(dataset.rows))
 
     scorers = [
         BasicMetricsScorer(num_trials=args.trials),
@@ -357,7 +370,7 @@ def main() -> None:
     ]
     if not args.analysis_only:
         scorers.insert(1, BuildPassRateScorer(num_trials=args.trials))
-    logger.info(f"Scorers: {[type(s).__name__ for s in scorers]}")
+    logger.info("Scorers: %s", [type(s).__name__ for s in scorers])
 
     model = BuildRepairModel(
         firefox_repo=args.firefox_repo,
@@ -371,7 +384,7 @@ def main() -> None:
         trials=args.trials,
     )
     results = asyncio.run(evaluation.evaluate(model))
-    logger.info(f"Evaluation results: {results}")
+    logger.info("Evaluation results: %s", results)
 
 
 if __name__ == "__main__":

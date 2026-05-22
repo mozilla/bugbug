@@ -120,9 +120,9 @@ def process_comments(limit, diff_length_limit):
                 diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["new"])
                 if not diffs:
                     logger.error(
-                        "No diff found for fix patch, PHID {}, revision {}".format(
-                            most_recent_update["fields"]["new"], revision_info["id"]
-                        )
+                        "No diff found for fix patch, PHID %s, revision %s",
+                        most_recent_update["fields"]["new"],
+                        revision_info["id"],
                     )
                     continue
 
@@ -142,9 +142,9 @@ def process_comments(limit, diff_length_limit):
                 diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["old"])
                 if not diffs:
                     logger.error(
-                        "No diff found for previous patch, PHID {}, revision {}".format(
-                            most_recent_update["fields"]["old"], revision_info["id"]
-                        )
+                        "No diff found for previous patch, PHID %s, revision %s",
+                        most_recent_update["fields"]["old"],
+                        revision_info["id"],
                     )
                     continue
 
@@ -155,7 +155,7 @@ def process_comments(limit, diff_length_limit):
                     revision_id, previous_patch_id, fix_patch_id
                 )
             except Exception as e:
-                logger.error(f"Failed to fetch diff: {e}")
+                logger.error("Failed to fetch diff: %s", e)
                 continue
 
             if len(patch_diff) > diff_length_limit:

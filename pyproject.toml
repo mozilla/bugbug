@@ -113,6 +113,7 @@ bugbug-shadow-scheduler-stats = "scripts.shadow_scheduler_stats:main"
 bugbug-data-github = "scripts.github_issue_retriever:main"
 bugbug-fixed-comments = "scripts.inline_comments_data_collection:main"
 bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
+bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
 
 [tool.hatch.version]
 path = "VERSION"
@@ -137,7 +138,7 @@ members = ["http_service"]
 extend-exclude = ["data"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "T10", "CPY", "D"]
+select = ["E4", "E7", "E9", "F", "I", "T10", "CPY", "G", "D"]
 # Ignore warnings about missing docstrings.
 ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107"]
 

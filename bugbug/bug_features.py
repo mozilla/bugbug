@@ -823,6 +823,7 @@ class IsSecurityBug(SingleBugFeature):
         self,
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
+        **kwargs,
     ) -> bool:
         if any(
             keyword.startswith(prefix)
@@ -849,6 +850,7 @@ class IsCrashBug(SingleBugFeature):
         self,
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
+        **kwargs,
     ) -> bool:
         # Checking for `[@` will exclude some bugs that do not have valid
         # signatures: https://mzl.la/46XAqRF

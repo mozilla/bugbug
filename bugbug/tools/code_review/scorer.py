@@ -127,8 +127,10 @@ class LLMCommentMatchingScorer(weave.Scorer):
 
             if gt_comment["file_path"] != gen_comment.file:
                 logger.debug(
-                    f"File mismatch for diff {diff_id}: "
-                    f"{gt_comment['file_path']} != {gen_comment.file}"
+                    "File mismatch for diff %s: %s != %s",
+                    diff_id,
+                    gt_comment["file_path"],
+                    gen_comment.file,
                 )
                 continue
 

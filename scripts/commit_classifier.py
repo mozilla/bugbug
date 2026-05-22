@@ -134,7 +134,6 @@ class CommitClassifier(object):
         repo_dir: str,
         git_repo_dir: str,
         method_defect_predictor_dir: str,
-        use_single_process: bool,
         skip_feature_importance: bool,
         phabricator_deployment: str | None = None,
         diff_id: int | None = None,
@@ -167,7 +166,6 @@ class CommitClassifier(object):
                 "8cc47f47ffb686a29324435a0151b5fabd37f865",
             )
 
-        self.use_single_process = use_single_process
         self.skip_feature_importance = skip_feature_importance
 
         if model_name == "regressor":
@@ -260,7 +258,6 @@ class CommitClassifier(object):
         repository.download_commits(
             self.repo_dir,
             rev_start="children({})".format(commit["node"]),
-            use_single_process=self.use_single_process,
         )
 
     def has_revision(self, hg, revision):
@@ -315,7 +312,7 @@ class CommitClassifier(object):
         # Update repo to base revision
         hg_base = needed_stack[0].base_revision
         if not self.has_revision(hg, hg_base):
-            logger.warning("Missing base revision {} from Phabricator".format(hg_base))
+            logger.warning("Missing base revision %s from Phabricator", hg_base)
             hg_base = "default"
 
         if hg_base:
@@ -455,8 +452,8 @@ class CommitClassifier(object):
                 clean_X <= median
             ).sum() / clean_X.shape[0]
 
-            logger.info("Feature: {}".format(name))
-            logger.info("Shap value: {}{}".format("+" if (is_positive) else "-", val))
+            logger.info("Feature: %s", name)
+            logger.info("Shap value: %s%s", "+" if is_positive else "-", val)
             logger.info("spearman: %f", spearman)
             logger.info("value: %f", value)
             logger.info("overall mean: %f", np.mean(X))
@@ -596,7 +593,6 @@ class CommitClassifier(object):
                 self.repo_dir,
                 rev_start=revision,
                 save=False,
-                use_single_process=self.use_single_process,
             )
         else:
             assert revision is not None
@@ -612,7 +608,6 @@ class CommitClassifier(object):
                     self.repo_dir,
                     revs=[revision.encode("ascii")],
                     save=False,
-                    use_single_process=self.use_single_process,
                 )
 
         assert len(commits) > 0, "There are no commits to analyze"
@@ -832,11 +827,6 @@ def main() -> None:
         help="Path where the git repository will be cloned.",
     )
     parser.add_argument(
-        "--use-single-process",
-        action="store_true",
-        help="Whether to use a single process.",
-    )
-    parser.add_argument(
         "--skip-feature-importance",
         action="store_true",
         help="Whether to skip feature importance calculation.",
@@ -857,7 +847,6 @@ def main() -> None:
         args.repo_dir,
         args.git_repo_dir,
         args.method_defect_predictor_dir,
-        args.use_single_process,
         args.skip_feature_importance,
         args.phabricator_deployment,
         args.diff_id,

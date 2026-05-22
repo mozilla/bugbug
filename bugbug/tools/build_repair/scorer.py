@@ -98,7 +98,7 @@ class BasicMetricsScorer(weave.Scorer):
         }
         if self.num_trials > 1:
             summary.update(_pass_at_k(score_rows, self.num_trials, "successful"))
-        logger.info(f"BasicMetrics summary: {summary}")
+        logger.info("BasicMetrics summary: %s", summary)
         return summary
 
 
@@ -136,7 +136,7 @@ class BuildPassRateScorer(weave.Scorer):
             summary.update(
                 _pass_at_k(score_rows, self.num_trials, "local_build_passed")
             )
-        logger.info(f"BuildPassRate summary: {summary}")
+        logger.info("BuildPassRate summary: %s", summary)
         return summary
 
 
@@ -203,5 +203,5 @@ class LLMFixMatchingScorer(weave.Scorer):
             summary.update(
                 _pass_at_k(score_rows, self.num_trials, "fix_matches_ground_truth")
             )
-        logger.info(f"LLMFixMatching summary: {summary}")
+        logger.info("LLMFixMatching summary: %s", summary)
         return summary

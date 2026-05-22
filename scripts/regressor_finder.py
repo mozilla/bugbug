@@ -212,7 +212,9 @@ class RegressorFinder(object):
         start_date = datetime.now() - RELATIVE_START_DATE
         end_date = datetime.now() - RELATIVE_END_DATE
         logger.info(
-            f"Gathering bug IDs associated to commits (since {start_date} and up to {end_date})..."
+            "Gathering bug IDs associated to commits (since %s and up to %s)...",
+            start_date,
+            end_date,
         )
         commit_map = defaultdict(list)
         for commit in repository.get_commits():

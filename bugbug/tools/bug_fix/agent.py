@@ -106,26 +106,12 @@ def fetch_initial_bugs(
 # --------------------------------------------------------------------------- #
 
 
-def load_system_prompt(
-    rules_dir: Path,
-    extra: str,
-    dry_run: bool,
-) -> str:
+def load_system_prompt(rules_dir: Path, extra: str) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
-    if dry_run:
-        mode = (
-            "**DRY-RUN ACTIVE.** Bugzilla write tools (`update_bug`, "
-            "`add_comment`, `add_attachment`, `create_bug`) are disabled — "
-            "do not attempt them. Source-repo edits (Write/Edit) are still "
-            "allowed so you can prepare and inspect a candidate patch; the "
-            "caller will review diffs manually."
-        )
-    else:
-        mode = "Writes are live. Be careful."
+
     return tmpl.format(
         rules_dir=str(rules_dir.resolve()),
         extra_instructions=extra or "(none)",
-        run_mode_note=mode,
     )
 
 
@@ -333,7 +319,7 @@ class BugFixTool(GenerativeModelTool):
         print(f"[bug_fix] triaging {len(selected)} bug(s): {selected}", file=sys.stderr)
 
         # --- Build agent options ------------------------------------------ #
-        system_prompt = load_system_prompt(rules_dir, instructions, dry_run)
+        system_prompt = load_system_prompt(rules_dir, instructions)
 
         options = ClaudeAgentOptions(
             system_prompt=system_prompt,

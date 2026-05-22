@@ -1189,3 +1189,143 @@ support-files = ""
         str(tmp_path),
         ["testing/web-platform/tests/encrypted-media/content/content-metadata.js"],
     ) == {"testing/web-platform/tests/encrypted-media"}
+
+
+def test_find_tasks_for_paths(tmp_path) -> None:
+    known_tasks = (
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-mochitest-browser-chrome-1proc",
+        "test-linux64/opt-gtest-e10s",
+        "test-linux64/opt-cppunit",
+        "test-linux64/opt-rusttests",
+    )
+
+    # Set up a minimal cppunittest.toml listing two test names.
+    (tmp_path / "testing").mkdir(parents=True)
+    (tmp_path / "testing" / "cppunittest.toml").write_text(
+        '[DEFAULT]\n\n["TestArray"]\n\n["TestArrayUtils"]\n'
+    )
+
+    # Non-C/C++ file containing GTest patterns should not trigger gtest selection.
+    (tmp_path / "script.py").write_bytes(b"TEST(Foo, Bar) {}")
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["script.py"])
+        == []
+    )
+
+    # C/C++ file without GTest patterns should not trigger gtest selection.
+    (tmp_path / "source.cpp").write_bytes(b"int main() { return 0; }")
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["source.cpp"])
+        == []
+    )
+
+    # C/C++ file with TEST macro selects tasks containing "gtest".
+    (tmp_path / "test_foo.cpp").write_bytes(b"TEST(FooTest, Bar) {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["test_foo.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # C/C++ file with TEST_F macro also triggers gtest selection.
+    (tmp_path / "test_fixture.cpp").write_bytes(b"TEST_F(FooFixture, Bar) {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["test_fixture.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # Non-existent C/C++ file raises OSError which is silently skipped.
+    assert (
+        test_scheduling.find_tasks_for_paths(
+            str(tmp_path), known_tasks, ["nonexistent.cpp"]
+        )
+        == []
+    )
+
+    # No paths -> no tasks selected.
+    assert test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, []) == []
+
+    # known_tasks without any "gtest" task -> empty even when GTest file present.
+    assert (
+        test_scheduling.find_tasks_for_paths(
+            str(tmp_path),
+            ("test-linux64/opt-mochitest-browser-chrome-1proc",),
+            ["test_foo.cpp"],
+        )
+        == []
+    )
+
+    # Two paths: one C/C++ with GTest patterns and one without -> gtest tasks selected.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["source.cpp", "test_foo.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # File whose path contains a gtest folder triggers gtest selection regardless of content.
+    (tmp_path / "dom" / "media" / "gtest").mkdir(parents=True)
+    (tmp_path / "dom" / "media" / "gtest" / "TestCubeb.cpp").write_bytes(
+        b"// no test macros\n"
+    )
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["dom/media/gtest/TestCubeb.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # File in a folder adjacent to a gtest subfolder triggers gtest selection.
+    (tmp_path / "dom" / "media" / "CubebUtils.cpp").write_bytes(b"int foo() {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["dom/media/CubebUtils.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # Rust file triggers rusttests selection.
+    (tmp_path / "servo").mkdir()
+    (tmp_path / "servo" / "lib.rs").write_bytes(b"pub fn foo() {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["servo/lib.rs"]
+    ) == ["test-linux64/opt-rusttests"]
+
+    # Non-Rust file does not trigger rusttests selection.
+    assert "test-linux64/opt-rusttests" not in test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["servo/foo.cpp"]
+    )
+
+    # Modifying testing/cppunittest.toml itself triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/cppunittest.toml"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # Modifying testing/remotecppunittests.py triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/remotecppunittests.py"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # Modifying testing/runcppunittests.py triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/runcppunittests.py"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # A .cpp file whose stem is listed in cppunittest.toml triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["mfbt/TestArrayUtils.cpp"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # A .cpp file whose stem is not listed in cppunittest.toml does not trigger cppunit.
+    assert "test-linux64/opt-cppunit" not in test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["mfbt/TestUnknown.cpp"]
+    )
+
+    # Empty known_tasks -> always empty.
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), (), ["test_foo.cpp"]) == []
+    )

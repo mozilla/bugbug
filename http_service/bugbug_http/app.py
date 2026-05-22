@@ -291,19 +291,19 @@ def is_pending(job):
     job_id = redis_conn.get(job.mapping_key)
 
     if not job_id:
-        LOGGER.debug(f"No job ID mapping {job_id}, False")
+        LOGGER.debug("No job ID mapping %s, False", job_id)
         return False
 
     try:
         job = Job.fetch(job_id.decode("ascii"), connection=redis_conn)
     except NoSuchJobError:
-        LOGGER.debug(f"No job in DB for {job_id}, False")
+        LOGGER.debug("No job in DB for %s, False", job_id)
         # The job might have expired from redis
         return False
 
     job_status = job.get_status()
     if job_status == "started":
-        LOGGER.debug(f"Job {job_id} is running, True")
+        LOGGER.debug("Job %s is running, True", job_id)
         return True
 
     # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
@@ -314,15 +314,15 @@ def is_pending(job):
         job.cancel()
         job.cleanup()
 
-        LOGGER.debug(f"Job timeout {job_id}, False")
+        LOGGER.debug("Job timeout %s, False", job_id)
 
         return False
 
     if job_status == "queued":
-        LOGGER.debug(f"Job {job_id} is queued, True")
+        LOGGER.debug("Job %s is queued, True", job_id)
         return True
 
-    LOGGER.debug(f"Job {job_id} has status {job_status}, False")
+    LOGGER.debug("Job %s has status %s, False", job_id, job_status)
 
     return False
 
@@ -384,18 +384,18 @@ def is_prediction_invalidated(job, change_time):
 
 def clean_prediction_cache(job):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
-    LOGGER.debug(f"Cleaning results for {job}")
+    LOGGER.debug("Cleaning results for %s", job)
 
     redis_conn.delete(job.result_key)
     redis_conn.delete(job.change_time_key)
 
 
 def get_result(job: JobInfo) -> Any | None:
-    LOGGER.debug(f"Checking for existing results at {job.result_key}")
+    LOGGER.debug("Checking for existing results at %s", job.result_key)
     result = redis_conn.get(job.result_key)
 
     if result:
-        LOGGER.debug(f"Found {result!r}")
+        LOGGER.debug("Found %r", result)
         try:
             result = dctx.decompress(result)
         except zstandard.ZstdError:
@@ -1129,7 +1129,7 @@ def patch_schedules(base_rev, patch_hash):
         redis_conn.set(patch_key, patch)
         redis_conn.expire(patch_key, 7 * 24 * 3600)  # 7 days expiration
 
-        LOGGER.info(f"Stored patch with hash {patch_hash}")
+        LOGGER.info("Stored patch with hash %s", patch_hash)
 
         schedule_job(job)
 

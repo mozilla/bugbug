@@ -86,11 +86,9 @@ def _on_message(body, message):
             url = "{}/push/{}/{}/schedules".format(BUGBUG_HTTP_SERVER, branch, rev)
             response = requests.get(url, headers={"X-Api-Key": "pulse_listener"})
             if response.status_code == 202:
-                logger.info("Successfully requested {}/{}".format(branch, rev))
+                logger.info("Successfully requested %s/%s", branch, rev)
             else:
-                logger.warning(
-                    "We got status: {} for: {}".format(response.status_code, url)
-                )
+                logger.warning("We got status: %s for: %s", response.status_code, url)
     except Exception:
         logger.warning(body)
         traceback.print_exc()

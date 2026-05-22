@@ -187,7 +187,7 @@ def get_testing_project(rev: RevisionDict) -> str | None:
     ]
 
     if len(testing_projects) > 1:
-        logger.warning("Revision D{} has more than one testing tag.".format(rev["id"]))
+        logger.warning("Revision D%s has more than one testing tag.", rev["id"])
 
     if len(testing_projects) == 0:
         return None
@@ -237,7 +237,7 @@ def get_first_review_time(rev: RevisionDict) -> timedelta | None:
     ) = get_review_dates(rev)
 
     if creation_date is None:
-        logger.warning("Revision D{} has no creation date.".format(rev["id"]))
+        logger.warning("Revision D%s has no creation date.", rev["id"])
         return None
 
     if len(review_dates) == 0:
@@ -253,7 +253,7 @@ def get_first_review_time(rev: RevisionDict) -> timedelta | None:
         and first_exclusion_end_date is not None
         and first_exclusion_start_date > first_exclusion_end_date
     ):
-        logger.warning("Revision D{} was in an inconsistent state.".format(rev["id"]))
+        logger.warning("Revision D%s was in an inconsistent state.", rev["id"])
 
     if (
         first_exclusion_start_date is None
@@ -264,9 +264,8 @@ def get_first_review_time(rev: RevisionDict) -> timedelta | None:
         first_exclusion_end_date is None or first_exclusion_end_date > first_review_date
     ):
         logger.warning(
-            "Revision D{} was accepted while in 'planned changes' or 'closed' state.".format(
-                rev["id"]
-            )
+            "Revision D%s was accepted while in 'planned changes' or 'closed' state.",
+            rev["id"],
         )
         return first_review_date - creation_date
     else:
@@ -284,7 +283,7 @@ def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
     creation_date, _, exclusion_start_dates, exclusion_end_dates = get_review_dates(rev)
 
     if creation_date is None:
-        logger.warning("Revision D{} has no creation date.".format(rev["id"]))
+        logger.warning("Revision D%s has no creation date.", rev["id"])
         return None
 
     last_exclusion_start_date = max(exclusion_start_dates, default=None)
@@ -295,9 +294,8 @@ def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
         or last_exclusion_start_date > last_exclusion_end_date
     ):
         logger.warning(
-            "Revision D{} was in an inconsistent state (needs review, but is in an exception timespan).".format(
-                rev["id"]
-            )
+            "Revision D%s was in an inconsistent state (needs review, but is in an exception timespan).",
+            rev["id"],
         )
 
     if last_exclusion_end_date is not None:

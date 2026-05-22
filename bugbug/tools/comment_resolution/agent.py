@@ -377,7 +377,7 @@ Output only the rephrased, actionable version of the comment, without any explan
                     }
                 except Exception as e:
                     logger.warning(
-                        f"Error generating fix for comment {comment_id}: {e}"
+                        "Error generating fix for comment %s: %s", comment_id, e
                     )
                     comment_map[comment_id] = {
                         "fix": f"Error: {e}",
