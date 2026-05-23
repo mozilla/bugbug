@@ -5,6 +5,9 @@ from datetime import timedelta
 from functools import lru_cache
 from typing import Any
 
+import google.auth
+from google.auth import impersonated_credentials
+from google.auth.transport.requests import Request as AuthRequest
 from google.cloud import storage
 
 from app.config import settings
@@ -23,7 +26,38 @@ def summary_blob_name(run_id: str) -> str:
 
 @lru_cache(maxsize=1)
 def _client() -> storage.Client:
-    return storage.Client(project=settings.gcp_project or None)
+    """Storage client whose credentials can sign blobs.
+
+    Cloud Run gives us `compute_engine.Credentials` (metadata-server
+    token only — no local private key), which the GCS library refuses
+    to use for signing. Wrap it with `impersonated_credentials`
+    targeting the same SA: that produces a `Signing` credential that
+    delegates `sign_bytes` to the IAM `signBlob` API. The runtime SA
+    needs `roles/iam.serviceAccountTokenCreator` on itself for the
+    delegation to work.
+
+    For local dev: `gcloud auth application-default login
+    --impersonate-service-account=<sa>` produces an already-signing
+    credential and this wrapper is a cheap no-op.
+    """
+    source, _ = google.auth.default()
+    source.refresh(AuthRequest())
+    sa_email = getattr(source, "service_account_email", None)
+    if not sa_email:
+        raise RuntimeError(
+            "Default credentials don't expose a service_account_email. "
+            "On Cloud Run this should be automatic; for local dev use "
+            "`gcloud auth application-default login "
+            "--impersonate-service-account=<sa>`."
+        )
+    signing_creds = impersonated_credentials.Credentials(
+        source_credentials=source,
+        target_principal=sa_email,
+        target_scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    return storage.Client(
+        project=settings.gcp_project or None, credentials=signing_creds
+    )
 
 
 def _generate_post_policy_sync(run_id: str) -> dict[str, Any]:
