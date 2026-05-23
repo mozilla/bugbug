@@ -138,7 +138,15 @@ members = ["http_service"]
 extend-exclude = ["data"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "T10", "CPY", "G"]
+select = ["E4", "E7", "E9", "F", "I", "T10", "CPY", "G", "D"]
+# Ignore warnings about missing docstrings.
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107"]
+
+[tool.ruff.lint.per-file-ignores]
+"http_service/**" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.isort]
 known-first-party = ["bugbug_http"]

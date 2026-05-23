@@ -887,13 +887,12 @@ class BugTypes(SingleBugFeature):
         """Infer bug types based on various bug characteristics.
 
         Args:
-        - bug (bugzilla.BugDict): A dictionary containing bug data.
-        - bug_map (Optional[dict[int, bugzilla.BugDict]]): A mapping
-            of bug IDs to bug dictionaries. Default is None.
+            bug: A dictionary containing bug data.
+            bug_map: A mapping of bug IDs to bug dictionaries. Default is `None`.
 
         Returns:
-        - list[str]: A list of inferred bug types (e.g., "memory", "power",
-            "performance", "security", "crash").
+            A list of inferred bug types (e.g., `"memory"`, `"power"`,
+            `"performance"`, `"security"`, `"crash"`).
         """
         return [
             is_type.type_name
