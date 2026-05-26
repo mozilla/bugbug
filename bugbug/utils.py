@@ -17,7 +17,7 @@ import urllib.parse
 from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
-from functools import lru_cache
+from functools import cache, lru_cache
 from importlib.metadata import PackageNotFoundError
 from typing import Any, Iterator
 
@@ -169,6 +169,7 @@ def get_secret(secret_id: str, default_value: str | None = None) -> Any:
         raise ValueError("Failed to find secret {}".format(secret_id))
 
 
+@cache
 def get_s3_credentials() -> dict:
     auth = taskcluster.Auth(get_taskcluster_options())
     response = auth.awsS3Credentials("read-write", "communitytc-bugbug", "data/")
