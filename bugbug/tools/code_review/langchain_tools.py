@@ -7,6 +7,7 @@
 
 from dataclasses import dataclass
 from logging import getLogger
+from typing import Optional
 
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
@@ -15,8 +16,14 @@ from requests import HTTPError
 from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
 from bugbug.tools.core.platforms.base import Patch
+from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
 
 logger = getLogger(__name__)
+
+
+def _tool_error(message: str, *, fatal: bool = False) -> str:
+    prefix = "Fatal" if fatal else "Warning"
+    return f"{prefix}: {message}"
 
 
 @dataclass
@@ -25,37 +32,53 @@ class CodeReviewContext:
 
 
 @tool
-async def expand_context(file_path: str, start_line: int, end_line: int) -> str:
-    """Show the content of a file between specified line numbers as it is after the patch. If the file is not modified by the patch, the original file content is returned as-is.
+async def expand_context(
+    file_path: str,
+    start_line: Optional[int] = None,
+    end_line: Optional[int] = None,
+) -> str:
+    """Retrieve the content of a file, optionally restricted to a line range.
 
-    Be careful to not fill your context window with too much data. Request the
-    minimum amount of context necessary to understand the code, but do not split
-    what you really need into multiple requests if the line range is continuous.
+    Omit start_line and end_line to get the full file. When specifying a range,
+    be careful to not fill your context window with too much data — request the
+    minimum necessary, but do not split a continuous range into multiple requests.
 
     Args:
-        file_path: The path to the file.
-        start_line: The starting line number in the patched file. Minimum is 1.
-        end_line: The ending line number in the patched file. Maximum is the total number of lines in the file.
+        file_path: Repository-relative path, e.g. 'dom/media/webaudio/AudioNode.h'.
+        start_line: Starting line number (1-based). Omit to start from the beginning.
+        end_line: Ending line number (inclusive). Omit to read to the end of the file.
 
     Returns:
-        The content of the file between the specified line numbers.
+        The file content, with line numbers prefixed.
     """
     runtime = get_runtime(CodeReviewContext)
+    patch = runtime.context.patch
+
+    warning = None
+    try:
+        patch_stack = patch.patch_stack
+    except Exception as e:
+        warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
+        patch_stack = [patch.patch_set]
 
     try:
-        file_content = await runtime.context.patch.get_new_file(file_path)
+        file_content = await get_file_after_stack(patch_stack, file_path, patch.get_old_file)
     except FileNotFoundError:
-        return "File not found in the repository after the patch."
+        return f"Warning: {file_path} was removed by the patch stack."
+    except Exception as e:
+        return f"Warning: could not retrieve {file_path}: {e}."
 
     lines = file_content.splitlines()
-    start = max(1, start_line) - 1
-    end = min(len(lines), end_line)
+    start = max(1, start_line) - 1 if start_line is not None else 0
+    end = min(len(lines), end_line) if end_line is not None else len(lines)
 
-    # Format the output with line numbers that match the patched file.
     line_number_width = len(str(end))
-    return "\n".join(
+    content = "\n".join(
         f"{i + 1:>{line_number_width}}| {lines[i]}" for i in range(start, end)
     )
+    if warning:
+        return f"Warning: {warning}\n\n{content}"
+    return content
 
 
 def create_find_function_definition_tool(function_search: FunctionSearch):
