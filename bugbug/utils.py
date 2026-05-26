@@ -169,7 +169,6 @@ def get_secret(secret_id: str, default_value: str | None = None) -> Any:
         raise ValueError("Failed to find secret {}".format(secret_id))
 
 
-@cache
 def get_s3_credentials() -> dict:
     auth = taskcluster.Auth(get_taskcluster_options())
     response = auth.awsS3Credentials("read-write", "communitytc-bugbug", "data/")
