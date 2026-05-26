@@ -17,7 +17,7 @@ import urllib.parse
 from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
-from functools import cache, lru_cache
+from functools import cache
 from importlib.metadata import PackageNotFoundError
 from typing import Any, Iterator
 
@@ -529,7 +529,7 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_session(name: str) -> requests.Session:
     session = requests.Session()
 
