@@ -35,7 +35,6 @@ updates:
     open-pull-requests-limit: 99
     allow:
       - dependency-type: direct
-      - dependency-type: indirect
   - package-ecosystem: npm
     directory: "/ui/changes"
     schedule:
