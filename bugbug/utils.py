@@ -210,6 +210,25 @@ def exists_s3(path: str) -> bool:
         raise
 
 
+def list_s3(prefix: str) -> set[str]:
+    """Return the set of all S3 keys under *prefix* in the bugbug bucket."""
+    credentials = get_s3_credentials()
+
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=credentials["accessKeyId"],
+        aws_secret_access_key=credentials["secretAccessKey"],
+        aws_session_token=credentials["sessionToken"],
+    )
+
+    keys: set[str] = set()
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket="communitytc-bugbug", Prefix=prefix):
+        for obj in page.get("Contents", []):
+            keys.add(obj["Key"])
+    return keys
+
+
 def download_check_etag(url, path=None):
     session = get_session(urllib.parse.urlparse(url).netloc)
     r = session.head(url, allow_redirects=True)
