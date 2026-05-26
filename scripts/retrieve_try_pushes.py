@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from logging import INFO, basicConfig, getLogger
@@ -149,10 +150,22 @@ def main() -> None:
             "tasks": push["tasks"],
         }
 
-    with ThreadPoolExecutor() as executor:
-        results = tqdm(executor.map(process_push, new_pushes), total=len(new_pushes))
-        db.append(TRY_PUSHES_DB, results)
-    utils.zstd_compress(TRY_PUSHES_DB)
+    def _track(it, pbar):
+        for item in it:
+            pbar.update(1)
+            yield item
+
+    BATCH_SIZE = 1000
+
+    with tqdm(total=len(new_pushes)) as pbar:
+        for batch in itertools.batched(new_pushes, BATCH_SIZE):
+            with ThreadPoolExecutor() as executor:
+                db.append(
+                    TRY_PUSHES_DB,
+                    _track(executor.map(process_push, batch), pbar),
+                )
+
+            utils.zstd_compress(TRY_PUSHES_DB)
 
 
 if __name__ == "__main__":
