@@ -38,7 +38,7 @@ class Retriever(object):
         chunk_size = 70000
 
         for chunk in itertools.batched(revs, chunk_size):
-            repository.download_commits(self.repo_dir, revs=chunk)
+            repository.download_commits(self.repo_dir, revs=list(chunk))
 
         logger.info("commit data extracted from repository")
 
