@@ -30,9 +30,18 @@ from bugbug.tools.code_review.data_types import (
 from bugbug.tools.code_review.database import ReviewCommentsDB
 from bugbug.tools.code_review.langchain_tools import (
     CodeReviewContext,
+    calls_between,
+    calls_from,
+    calls_to,
+    check_can_gc,
     create_find_function_definition_tool,
     create_load_skill_tool,
     expand_context,
+    find_definition,
+    get_blame,
+    get_field_layout,
+    search_identifier,
+    search_text,
 )
 from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
@@ -97,7 +106,18 @@ class CodeReviewTool(GenerativeModelTool):
         self.patch_summarizer = patch_summarizer
         self.suggestion_filterer = suggestion_filterer
 
-        tools = [expand_context]
+        tools = [
+            expand_context,
+            search_text,
+            get_blame,
+            get_field_layout,
+            find_definition,
+            search_identifier,
+            calls_from,
+            calls_to,
+            calls_between,
+            check_can_gc,
+        ]
         if function_search:
             tools.append(create_find_function_definition_tool(function_search))
 

@@ -7,18 +7,24 @@
 
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Optional
+from typing import Literal, Optional
 
+import tenacity
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
 from requests import HTTPError
+from searchfox import AsyncSearchfoxClient
 
 from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
 
-logger = getLogger(__name__)
+_retry = tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, min=1, max=4),
+    reraise=True,
+)
 
 
 def _tool_error(message: str, *, fatal: bool = False) -> str:
@@ -26,9 +32,26 @@ def _tool_error(message: str, *, fatal: bool = False) -> str:
     return f"{prefix}: {message}"
 
 
+logger = getLogger(__name__)
+
+LangStr = Literal[
+    "cpp", "c", "js", "webidl", "java", "kotlin", "rust", "python", "html", "css"
+]
+Tests = Optional[Literal["only", "exclude"]]
+
+_client: Optional[AsyncSearchfoxClient] = None
+
+
 @dataclass
 class CodeReviewContext:
     patch: Patch
+
+
+def _get_client() -> AsyncSearchfoxClient:
+    global _client
+    if _client is None:
+        _client = AsyncSearchfoxClient()
+    return _client
 
 
 @tool
@@ -61,8 +84,20 @@ async def expand_context(
         warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
         patch_stack = [patch.patch_set]
 
+    revision = await patch.get_base_revision()
+    client = _get_client()
+
+    async def fetch(path: str) -> str:
+        if revision:
+            try:
+                return await _retry(client.get_file_at_revision)(path, revision)
+            except Exception:
+                # searchfox raises plain Exception; fall back to tip
+                pass
+        return await _retry(client.get_file)(path)
+
     try:
-        file_content = await get_file_after_stack(patch_stack, file_path, patch.get_old_file)
+        file_content = await get_file_after_stack(patch_stack, file_path, fetch)
     except FileNotFoundError:
         return f"Warning: {file_path} was removed by the patch stack."
     except Exception as e:
@@ -153,3 +188,253 @@ def create_load_skill_tool(skills: list[Skill]):
             return f"Failed to load skill '{name}'. Please proceed without it."
 
     return load_skill
+@tool
+async def search_text(
+    query: str,
+    path_filter: Optional[str] = None,
+    langs: Optional[list[LangStr]] = None,
+    tests: Tests = None,
+    regexp: bool = False,
+    case_sensitive: bool = False,
+    limit: int = 50,
+    context_lines: Optional[int] = None,
+) -> str:
+    """Search for text or patterns across the codebase.
+
+    Args:
+        query: Text or regular expression to search for.
+        path_filter: Optional path prefix, e.g. 'dom/media'.
+        langs: Optional language filter. Multiple values are OR-ed.
+        tests: 'only' to restrict to test files, 'exclude' to omit them.
+        regexp: Treat query as a regular expression.
+        case_sensitive: Enable case-sensitive matching.
+        limit: Maximum number of results (default 50).
+        context_lines: Surrounding lines to include per match.
+
+    Returns:
+        Matching lines as 'path:line: content' entries.
+    """
+    try:
+        results = await _get_client().search(
+            query=query,
+            path=path_filter,
+            langs=langs,
+            tests=tests,
+            regexp=regexp,
+            case=case_sensitive,
+            limit=limit,
+            context=context_lines,
+        )
+        if not results:
+            return "No results found."
+        return "\n".join(f"{path}:{line}: {content}" for path, line, content in results)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error searching for '%s': %s", query, e)
+        return _tool_error(f"search failed: {e}")
+
+
+@tool
+async def get_field_layout(
+    class_name: str,
+) -> str:
+    """Show the memory layout of a C++ class or struct, including field offsets and sizes.
+
+    Args:
+        class_name: Fully-qualified class name, e.g. 'mozilla::dom::AudioContext'.
+
+    Returns:
+        Field layout as JSON.
+    """
+    try:
+        return await _get_client().search_field_layout(class_name)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error fetching field layout for '%s': %s", class_name, e)
+        return _tool_error(f"field layout fetch failed: {e}")
+
+
+@tool
+async def get_blame(
+    file_path: str,
+    lines: list[int],
+) -> str:
+    """Get the commit that last modified each of the given lines in a file.
+
+    Args:
+        file_path: Repository-relative path, e.g. 'dom/media/webaudio/AudioNode.cpp'.
+        lines: List of 1-based line numbers to look up.
+
+    Returns:
+        For each line: 'LINE: HASH (DATE) MESSAGE'.
+    """
+    try:
+        results = await _get_client().get_blame_for_lines(file_path, lines)
+        if not results:
+            return "No blame information found."
+        return "\n".join(
+            f"{line}: {hash_} ({date}) {message}"
+            for line, hash_, message, date in results
+        )
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error fetching blame for '%s': %s", file_path, e)
+        return _tool_error(f"blame fetch failed: {e}")
+
+
+@tool
+async def check_can_gc(
+    symbol: str,
+) -> str:
+    """Check whether a C++ function can trigger garbage collection in SpiderMonkey.
+
+    Accepts partial names (e.g. 'CreateGain') or fully-qualified names
+    (e.g. 'mozilla::dom::AudioContext::CreateGain').
+
+    Args:
+        symbol: Function name to check.
+
+    Returns:
+        For each match: whether it can GC, and the GC call path if available.
+    """
+    try:
+        results = await _get_client().get_gc_info(symbol)
+        if not results:
+            return "No GC information found. GC analysis is only available for C++ functions."
+        lines = []
+        for pretty, _mangled, can_gc, gc_path in results:
+            status = "can GC" if can_gc else "cannot GC"
+            line = f"{pretty}: {status}"
+            if gc_path:
+                line += f" (via {gc_path})"
+            lines.append(line)
+        return "\n".join(lines)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error checking GC status for '%s': %s", symbol, e)
+        return _tool_error(f"GC check failed: {e}")
+
+
+@tool
+async def find_definition(
+    name: str,
+    path_filter: Optional[str] = None,
+) -> str:
+    """Find the definition of a function, method, class, or struct.
+
+    Accepts partial names (e.g. 'AudioNode') or fully-qualified names
+    (e.g. 'mozilla::dom::AudioNode' or 'AudioNode::Connect').
+
+    Args:
+        name: Symbol name to look up.
+        path_filter: Optional path prefix, e.g. 'dom/media'.
+
+    Returns:
+        The definition source.
+    """
+    try:
+        return await _get_client().get_definition(name, path_filter)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error finding definition for '%s': %s", name, e)
+        return _tool_error(f"definition lookup failed: {e}")
+
+
+@tool
+async def search_identifier(
+    identifier: str,
+    path_filter: Optional[str] = None,
+    langs: Optional[list[LangStr]] = None,
+    tests: Tests = None,
+    limit: int = 50,
+) -> str:
+    """Search for an exact identifier across the codebase.
+
+    Args:
+        identifier: Identifier to search for.
+        path_filter: Optional path prefix, e.g. 'dom/media'.
+        langs: Optional language filter. Multiple values are OR-ed.
+        tests: 'only' to restrict to test files, 'exclude' to omit them.
+        limit: Maximum number of results (default 50).
+
+    Returns:
+        Matching lines as 'path:line: content' entries.
+    """
+    try:
+        results = await _get_client().search(
+            id=identifier,
+            path=path_filter,
+            langs=langs,
+            tests=tests,
+            limit=limit,
+        )
+        if not results:
+            return "No results found."
+        return "\n".join(f"{path}:{line}: {content}" for path, line, content in results)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error searching for identifier '%s': %s", identifier, e)
+        return _tool_error(f"identifier search failed: {e}")
+
+
+@tool
+async def calls_from(
+    symbol: str,
+    depth: int = 2,
+) -> str:
+    """Find functions called by the given symbol (outgoing calls).
+
+    Args:
+        symbol: Fully-qualified function or method name, e.g. 'mozilla::dom::AudioNode::Connect'.
+        depth: Levels of calls to traverse (default 2).
+
+    Returns:
+        Call graph as JSON.
+    """
+    try:
+        return await _get_client().search_call_graph(calls_from=symbol, depth=depth)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error fetching calls from '%s': %s", symbol, e)
+        return _tool_error(f"call graph fetch failed: {e}")
+
+
+@tool
+async def calls_to(
+    symbol: str,
+    depth: int = 2,
+) -> str:
+    """Find functions that call the given symbol (incoming calls).
+
+    Args:
+        symbol: Fully-qualified function or method name, e.g. 'mozilla::dom::AudioNode::Connect'.
+        depth: Levels of callers to traverse (default 2).
+
+    Returns:
+        Call graph as JSON.
+    """
+    try:
+        return await _get_client().search_call_graph(calls_to=symbol, depth=depth)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error("Error fetching calls to '%s': %s", symbol, e)
+        return _tool_error(f"call graph fetch failed: {e}")
+
+
+@tool
+async def calls_between(
+    symbol_a: str,
+    symbol_b: str,
+    depth: int = 2,
+) -> str:
+    """Find call paths between two symbols or classes.
+
+    Args:
+        symbol_a: First fully-qualified symbol or class name, e.g. 'mozilla::dom::AudioContext'.
+        symbol_b: Second fully-qualified symbol or class name.
+        depth: Levels to traverse (default 2).
+
+    Returns:
+        Call graph as JSON.
+    """
+    try:
+        return await _get_client().search_call_graph(
+            calls_between=(symbol_a, symbol_b), depth=depth
+        )
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error(
+            "Error fetching calls between '%s' and '%s': %s", symbol_a, symbol_b, e
+        )
+        return _tool_error(f"call graph fetch failed: {e}")
