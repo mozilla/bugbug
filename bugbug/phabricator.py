@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
 import logging
 from datetime import datetime, timedelta
 from typing import Collection, Iterator, NewType
@@ -150,9 +151,7 @@ def download_revisions(rev_ids: Collection[int]) -> None:
     logger.info("Loaded %d revisions.", old_rev_count)
 
     new_rev_ids_list = sorted(list(new_rev_ids))
-    rev_ids_groups = (
-        new_rev_ids_list[i : i + 100] for i in range(0, len(new_rev_ids_list), 100)
-    )
+    rev_ids_groups = itertools.batched(new_rev_ids_list, 100)
 
     logger.info("%d revisions left to download", len(new_rev_ids_list))
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import itertools
 import os
 from logging import INFO, basicConfig, getLogger
 
@@ -36,8 +37,8 @@ class Retriever(object):
 
         chunk_size = 70000
 
-        for i in range(0, len(revs), chunk_size):
-            repository.download_commits(self.repo_dir, revs=revs[i : (i + chunk_size)])
+        for chunk in itertools.batched(revs, chunk_size):
+            repository.download_commits(self.repo_dir, revs=chunk)
 
         logger.info("commit data extracted from repository")
 
