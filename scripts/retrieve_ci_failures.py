@@ -268,7 +268,7 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
         ]
 
         # We iterate over the futures as they finish so tqdm can update the progress bar.
-        all(tqdm(as_completed(futures), total=len(futures)))
+        all(tqdm(as_completed(futures), total=len(futures), desc="Retrieving logs"))
 
 
 def process_logs(failure, upload):
@@ -360,7 +360,9 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
     diff_errors = 0
     mapping_errors = 0
     for bug_id, obj in tqdm(
-        fixed_by_commit_pushes.items(), total=len(fixed_by_commit_pushes)
+        fixed_by_commit_pushes.items(),
+        total=len(fixed_by_commit_pushes),
+        desc="Generating diffs",
     ):
         diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
         diff_zst_path = f"{diff_path}.zst"
