@@ -49,7 +49,7 @@ dependencies = [
     "python-hglib~=2.6.2",
     "qdrant-client~=1.15.1",
     "ratelimit~=2.2.1",
-    "requests~=2.33.0",
+    "requests>=2.33,<2.35",
     "requests-html~=0.10.0",
     "rs-parsepatch~=0.4.6",
     "scikit-learn~=1.7.2",
@@ -87,7 +87,7 @@ test = [
 spawn-pipeline = [
     "json-e==4.8.2",
     "pyyaml==6.0.3",
-    "requests==2.33.0",
+    "requests==2.34.2",
     "taskcluster==97.1.0",
 ]
 
