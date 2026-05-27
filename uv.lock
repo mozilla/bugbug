@@ -535,7 +535,7 @@ requires-dist = [
     { name = "shap", extras = ["plots"], specifier = "~=0.51.0" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = "==3.8.14" },
     { name = "tabulate", specifier = "~=0.10.0" },
-    { name = "taskcluster", specifier = "~=97.1.0" },
+    { name = "taskcluster", specifier = ">=97.1,<100.1" },
     { name = "tenacity", specifier = "~=9.1.4" },
     { name = "tqdm", specifier = "~=4.67.3" },
     { name = "unidiff", specifier = "~=0.7.5" },
@@ -550,7 +550,7 @@ spawn-pipeline = [
     { name = "json-e", specifier = "==4.8.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "requests", specifier = "==2.34.2" },
-    { name = "taskcluster", specifier = "==97.1.0" },
+    { name = "taskcluster", specifier = "==100.0.1" },
 ]
 test = [
     { name = "coverage", specifier = "==7.13.5" },
@@ -5327,7 +5327,7 @@ wheels = [
 
 [[package]]
 name = "taskcluster"
-version = "97.1.0"
+version = "100.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -5338,9 +5338,9 @@ dependencies = [
     { name = "slugid" },
     { name = "taskcluster-urls" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b2/9b/5cf56edf5aa2c3e8684fd657d61afe549771eb56c6c6348aafa034630c5f/taskcluster-97.1.0.tar.gz", hash = "sha256:2b8b6ccb50201a96c63e3f8e05187e0d574df282793102ad094f3e5891ffdd27", size = 254571, upload-time = "2026-03-10T15:06:22.376Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/49/84397a81ce0ee0106a4e42d74339c562b342e6a8c1c07d690f48ac454736/taskcluster-100.0.1.tar.gz", hash = "sha256:dcdae49cdd34c4fec1e053b79fd2cf99a36046a175d49d839004f0f141bce4d0", size = 254575, upload-time = "2026-05-06T16:55:24.801Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/f3/a9e39b82bc1d1c470df03171f546717a8e4ba0e701bf135da86936a0ad22/taskcluster-97.1.0-py3-none-any.whl", hash = "sha256:68de91150c492b22ac53cd2b27ebc2b6164a0dfb91f3e8e39bf564dcd6c1da69", size = 150880, upload-time = "2026-03-10T15:06:20.951Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/af/7940e71ad6d4832597a56141f4ccbbcc441beff394e8dfd7f06895052cd3/taskcluster-100.0.1-py3-none-any.whl", hash = "sha256:e656af9d5e3c6185b1f1e6ad163a4f2bdec599e952128bf66b6da21c99e4fbdc", size = 150895, upload-time = "2026-05-06T16:55:22.883Z" },
 ]
 
 [[package]]
