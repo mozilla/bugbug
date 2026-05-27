@@ -54,7 +54,7 @@ repos:
           - types-python-dateutil==2.9.0.20260518
           - types-PyYAML==6.0.12.20260518
           - types-orjson==3.6.2
-          - types-tabulate==0.10.0.20260408
+          - types-tabulate==0.10.0.20260508
           - types-requests==2.33.0.20260518
       - id: mypy
         name: mypy-bugbug-http
@@ -68,7 +68,7 @@ repos:
           - types-redis==4.6.0.20241004
           - types-python-dateutil==2.9.0.20260518
           - types-orjson==3.6.2
-          - types-tabulate==0.10.0.20260408
+          - types-tabulate==0.10.0.20260508
   - repo: meta
     hooks:
       - id: check-useless-excludes
