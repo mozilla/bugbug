@@ -5,7 +5,7 @@ description = "The backend API for Mozilla's Review Helper"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.109.0",
+    "fastapi>=0.136.1",
     "uvicorn[standard]>=0.48.0",
     "sqlalchemy[asyncio]>=2.0.25",
     "asyncpg>=0.29.0",
