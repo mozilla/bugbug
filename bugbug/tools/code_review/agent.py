@@ -160,6 +160,15 @@ class CodeReviewTool(GenerativeModelTool):
                 max_tokens=40_000,
                 temperature=None,
                 thinking={"type": "enabled", "budget_tokens": 10_000},
+                mcp_servers=[
+                    {
+                        "type": "url",
+                        "url": os.getenv(
+                            "BUGBUG_MOZ_MCP_URL", "https://mcp-dev.moz.tools/mcp"
+                        ),
+                        "name": "mozilla",
+                    }
+                ],
             )
 
         if "patch_summarizer" not in kwargs:
