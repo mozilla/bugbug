@@ -68,7 +68,7 @@ dependencies = [
 
 [project.optional-dependencies]
 nlp = [
-    "spacy==3.8.13",
+    "spacy==3.8.14",
 ]
 nn = []
 
