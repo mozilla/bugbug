@@ -1,6 +1,7 @@
 """MCP server for Firefox Development."""
 
 import functools
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
@@ -12,7 +13,11 @@ from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
 from pydantic import Field
 
-from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
+from bugbug.tools.code_review.data_types import LocalPatch
+from bugbug.tools.code_review.prompts import (
+    LOCAL_SYSTEM_PROMPT_TEMPLATE,
+    SYSTEM_PROMPT_TEMPLATE,
+)
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
@@ -20,6 +25,7 @@ from bugbug.tools.core.platforms.phabricator import (
 )
 
 mcp = FastMCP("Firefox Development MCP Server")
+logger = logging.getLogger(__name__)
 
 
 @functools.cache
@@ -29,30 +35,72 @@ def get_code_review_tool():
     return CodeReviewTool.create()
 
 
+@functools.cache
+def get_local_code_review_tool():
+    """Minimal tool for local diff prompt assembly — no LLM calls on the server."""
+    from bugbug.tools.code_review.agent import CodeReviewTool
+
+    return CodeReviewTool.create(
+        review_comments_db=None,
+        suggestion_filterer=None,
+    )
+
+
+async def _patch_review_impl(
+    patch_url: str | None,
+    diff: str | None,
+    commit_message: str | None,
+) -> str:
+    if diff:
+        patch = LocalPatch(diff, commit_message=commit_message or "")
+    elif patch_url:
+        parsed_url = urlparse(patch_url)
+        if (
+            parsed_url.netloc == "phabricator.services.mozilla.com"
+            and parsed_url.path.startswith("/D")
+        ):
+            revision_id = int(parsed_url.path[2:])
+        else:
+            raise ValueError(f"Unsupported patch URL: {patch_url}")
+        patch = PhabricatorPatch(revision_id=revision_id)
+    else:
+        raise ValueError("Provide either patch_url or diff.")
+
+    tool = get_local_code_review_tool() if diff else get_code_review_tool()
+    prompt_template = LOCAL_SYSTEM_PROMPT_TEMPLATE if diff else SYSTEM_PROMPT_TEMPLATE
+    system_prompt = prompt_template.format(target_software=tool.target_software)
+    patch_summary = "" if diff else tool.patch_summarizer.run(patch)
+    initial_prompt = tool.generate_initial_prompt(patch, patch_summary)
+    return system_prompt + "\n\n" + initial_prompt
+
+
 @mcp.prompt()
 async def patch_review(
-    patch_url: str = Field(description="URL to the Phabricator patch to review."),
+    patch_url: str | None = Field(
+        default=None,
+        description="URL to the Phabricator patch to review.",
+    ),
+    diff: str | None = Field(
+        default=None,
+        description="Raw unified diff to review (for local patches not yet on Phabricator).",
+    ),
+    commit_message: str | None = Field(
+        default=None,
+        description="Commit message for the local diff (optional, used to extract bug ID, title, and Differential Revision URL).",
+    ),
 ) -> str:
-    """Review a code patch from Phabricator."""
-    parsed_url = urlparse(patch_url)
-    if (
-        parsed_url.netloc == "phabricator.services.mozilla.com"
-        and parsed_url.path.startswith("/D")
-    ):
-        revision_id = int(parsed_url.path[2:])
-    else:
-        raise ValueError(f"Unsupported patch URL: {patch_url}")
+    """Review a code patch from Phabricator or a raw local diff."""
+    return await _patch_review_impl(patch_url, diff, commit_message)
 
-    patch = PhabricatorPatch(revision_id=revision_id)
 
-    tool = get_code_review_tool()
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        target_software=tool.target_software,
-    )
-    patch_summary = tool.patch_summarizer.run(patch)
-    initial_prompt = tool.generate_initial_prompt(patch, patch_summary)
-
-    return system_prompt + "\n\n" + initial_prompt
+@mcp.tool()
+async def patch_review_tool(
+    patch_url: str | None = None,
+    diff: str | None = None,
+    commit_message: str | None = None,
+) -> str:
+    """Build the patch review prompt. Use diff= for local diffs, patch_url= for Phabricator."""
+    return await _patch_review_impl(patch_url, diff, commit_message)
 
 
 @mcp.resource(
