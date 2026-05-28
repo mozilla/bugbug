@@ -41,6 +41,13 @@ class ReviewerGroup(BaseModel):
     enabled: bool = False
     risk_threshold: int | None = None
     complexity_threshold: int | None = None
+    # When True, only review revisions authored by a member of this group's
+    # Phabricator project. Lets a team dogfood automated review on its own
+    # patches before opening it to outside contributors.
+    restrict_to_member_authors: bool = True
+    # PHIDs of group members who have opted out of automated review on their
+    # own patches.
+    opt_out: list[str] = Field(default_factory=list)
 
     def all_slugs(self) -> list[str]:
         """The group's own slug plus any alias slugs."""
