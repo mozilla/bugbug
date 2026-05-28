@@ -4,8 +4,10 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from datetime import timedelta
+from unittest.mock import MagicMock
 
 from bugbug import phabricator
+from bugbug.tools.core.platforms import phabricator as phab_platform
 
 
 def test_get_first_review_time() -> None:
@@ -204,3 +206,119 @@ def test_get_first_review_time() -> None:
     assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=11)
+
+
+# ---------------------------------------------------------------------------
+# Reviewer groups + project membership
+# ---------------------------------------------------------------------------
+
+
+def _fake_client(responses: dict) -> MagicMock:
+    """Build a fake client whose .request(method, ...) returns a canned response."""
+    client = MagicMock()
+    client.request.side_effect = lambda method, **kwargs: responses[method]
+    return client
+
+
+def test_reviewer_phids_and_project_phids(monkeypatch) -> None:
+    response = {
+        "differential.revision.search": {
+            "data": [
+                {
+                    "attachments": {
+                        "reviewers": {
+                            "reviewers": [
+                                {"reviewerPHID": "PHID-USER-alice"},
+                                {"reviewerPHID": "PHID-PROJ-ipprotection"},
+                                {"reviewerPHID": "PHID-PROJ-homenewtab"},
+                                {"reviewerPHID": None},
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    }
+    monkeypatch.setattr(
+        phab_platform, "get_phabricator_client", lambda: _fake_client(response)
+    )
+
+    class FakePatch(phab_platform.PhabricatorPatch):
+        def __init__(self):
+            pass
+
+        @property
+        def revision_phid(self):
+            return "PHID-DREV-test"
+
+    patch = FakePatch()
+    assert patch.reviewer_phids == [
+        "PHID-USER-alice",
+        "PHID-PROJ-ipprotection",
+        "PHID-PROJ-homenewtab",
+    ]
+    assert patch.reviewer_project_phids == [
+        "PHID-PROJ-ipprotection",
+        "PHID-PROJ-homenewtab",
+    ]
+
+
+def test_resolve_project_phid(monkeypatch) -> None:
+    phab_platform.resolve_project_phid.cache_clear()
+    response = {"project.search": {"data": [{"phid": "PHID-PROJ-ipprotection"}]}}
+    monkeypatch.setattr(
+        phab_platform, "get_phabricator_client", lambda: _fake_client(response)
+    )
+    assert (
+        phab_platform.resolve_project_phid("ip-protection-reviewers")
+        == "PHID-PROJ-ipprotection"
+    )
+    phab_platform.resolve_project_phid.cache_clear()
+
+
+def test_resolve_project_phid_not_found(monkeypatch) -> None:
+    phab_platform.resolve_project_phid.cache_clear()
+    monkeypatch.setattr(
+        phab_platform,
+        "get_phabricator_client",
+        lambda: _fake_client({"project.search": {"data": []}}),
+    )
+    assert phab_platform.resolve_project_phid("does-not-exist") is None
+    phab_platform.resolve_project_phid.cache_clear()
+
+
+def test_get_project_members(monkeypatch) -> None:
+    phab_platform.get_project_members.cache_clear()
+    response = {
+        "project.search": {
+            "data": [
+                {
+                    "attachments": {
+                        "members": {
+                            "members": [
+                                {"phid": "PHID-USER-alice"},
+                                {"phid": "PHID-USER-bob"},
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    }
+    monkeypatch.setattr(
+        phab_platform, "get_phabricator_client", lambda: _fake_client(response)
+    )
+    members = phab_platform.get_project_members("PHID-PROJ-ipprotection")
+    assert members == frozenset({"PHID-USER-alice", "PHID-USER-bob"})
+    phab_platform.get_project_members.cache_clear()
+
+
+def test_get_project_members_empty(monkeypatch) -> None:
+    phab_platform.get_project_members.cache_clear()
+    monkeypatch.setattr(
+        phab_platform,
+        "get_phabricator_client",
+        lambda: _fake_client({"project.search": {"data": []}}),
+    )
+    assert phab_platform.get_project_members("PHID-PROJ-missing") == frozenset()
+    phab_platform.get_project_members.cache_clear()
