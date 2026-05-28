@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Agent settings
     todo_enabled: bool = True
 
+    # Risk/complexity pre-screen (gates whether the review agent runs).
+    scoring_model: str = "claude-haiku-4-5-20251001"
+    scoring_max_tokens: int = 1024
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
