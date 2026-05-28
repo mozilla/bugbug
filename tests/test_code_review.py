@@ -10,7 +10,7 @@ from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools
 from bugbug.tools.code_review.data_types import Skill, _strip_frontmatter
-from bugbug.tools.code_review.langchain_tools import create_load_skill_tool
+from bugbug.tools.code_review.langchain_tools import _fetch_file, create_load_skill_tool
 from bugbug.tools.code_review.utils import find_comment_scope
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
@@ -410,3 +410,73 @@ def test_load_skill_tool_description_lists_skills():
     for skill in skills:
         assert skill.name in tool.description
         assert skill.description in tool.description
+
+
+# ---------------------------------------------------------------------------
+# _fetch_file
+# ---------------------------------------------------------------------------
+
+
+def make_client(*, at_revision=None, latest=None):
+    client = MagicMock()
+    client.get_file_at_revision = AsyncMock(
+        return_value=at_revision,
+        side_effect=None if at_revision is not None else Exception("not found"),
+    )
+    client.get_file = AsyncMock(return_value=latest)
+    return client
+
+
+def make_patch_obj(*, old_file=None, old_file_exc=None):
+    patch = MagicMock()
+    if old_file_exc is not None:
+        patch.get_old_file = AsyncMock(side_effect=old_file_exc)
+    else:
+        patch.get_old_file = AsyncMock(return_value=old_file)
+    return patch
+
+
+def test_fetch_file_uses_phabricator_first():
+    patch = make_patch_obj(old_file="phab content")
+    client = make_client(at_revision="rev content", latest="latest content")
+    result = asyncio.run(_fetch_file("f.txt", "abc123", client, patch))
+    assert result == "phab content"
+    client.get_file_at_revision.assert_not_called()
+    client.get_file.assert_not_called()
+
+
+def test_fetch_file_falls_back_to_revision_on_file_not_found():
+    patch = make_patch_obj(old_file_exc=FileNotFoundError("not in patch"))
+    client = make_client(at_revision="rev content", latest="latest content")
+    result = asyncio.run(_fetch_file("f.txt", "abc123", client, patch))
+    assert result == "rev content"
+    client.get_file.assert_not_called()
+
+
+def test_fetch_file_falls_back_to_revision_on_http_error():
+    response = httpx.Response(500, request=httpx.Request("GET", "http://x"))
+    patch = make_patch_obj(
+        old_file_exc=httpx.HTTPStatusError(
+            "err", request=response.request, response=response
+        )
+    )
+    client = make_client(at_revision="rev content", latest="latest content")
+    result = asyncio.run(_fetch_file("f.txt", "abc123", client, patch))
+    assert result == "rev content"
+    client.get_file.assert_not_called()
+
+
+def test_fetch_file_falls_back_to_latest_when_revision_fails():
+    patch = make_patch_obj(old_file_exc=FileNotFoundError())
+    client = make_client(latest="latest content")
+    client.get_file_at_revision = AsyncMock(side_effect=Exception("searchfox error"))
+    result = asyncio.run(_fetch_file("f.txt", "abc123", client, patch))
+    assert result == "latest content"
+
+
+def test_fetch_file_skips_revision_when_none():
+    patch = make_patch_obj(old_file_exc=FileNotFoundError())
+    client = make_client(latest="latest content")
+    result = asyncio.run(_fetch_file("f.txt", None, client, patch))
+    assert result == "latest content"
+    client.get_file_at_revision.assert_not_called()

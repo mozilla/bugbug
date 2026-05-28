@@ -6,7 +6,7 @@
 """LangGraph tools for code review agent."""
 
 from dataclasses import dataclass
-from functools import cache, partial
+from functools import cache
 from logging import getLogger
 from typing import Literal, Optional
 
@@ -56,15 +56,15 @@ async def _fetch_file(
     client: AsyncSearchfoxClient,
     patch: Patch,
 ) -> str:
+    try:
+        return await patch.get_old_file(path)
+    except (FileNotFoundError, httpx.HTTPStatusError):
+        pass
     if revision:
         try:
             return await _retry(client.get_file_at_revision)(path, revision)
         except Exception:  # searchfox raises plain Exception
             pass
-    try:
-        return await patch.get_old_file(path)
-    except (FileNotFoundError, httpx.HTTPStatusError):
-        pass
     return await _retry(client.get_file)(path)
 
 
@@ -101,7 +101,8 @@ async def expand_context(
     revision = await patch.get_base_revision()
     client = _get_client()
 
-    fetch = partial(_fetch_file, revision=revision, client=client, patch=patch)
+    async def fetch(path: str) -> str:
+        return await _fetch_file(path, revision, client, patch)
 
     try:
         file_content = await get_file_after_stack(patch_stack, file_path, fetch)
@@ -155,6 +156,8 @@ def create_load_skill_tool(skills: list[Skill]):
             return f"Failed to load skill '{name}'. Please proceed without it."
 
     return load_skill
+
+
 @tool
 async def search_text(
     query: str,

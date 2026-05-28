@@ -27,6 +27,11 @@ from bugbug.tools.code_review.data_types import (
     Skill,
 )
 from bugbug.tools.code_review.database import ReviewCommentsDB
+from bugbug.tools.code_review.langchain_tools import (
+    SEARCHFOX_TOOLS,
+    CodeReviewContext,
+    create_load_skill_tool,
+)
 from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
     CODE_REVIEW_TODO_TOOL_DESCRIPTION,
@@ -39,11 +44,6 @@ from bugbug.tools.code_review.prompts import (
 from bugbug.tools.code_review.protocols import (
     PatchSummarizer,
     SuggestionFilterer,
-)
-from bugbug.tools.code_review.langchain_tools import (
-    SEARCHFOX_TOOLS,
-    CodeReviewContext,
-    create_load_skill_tool,
 )
 from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
