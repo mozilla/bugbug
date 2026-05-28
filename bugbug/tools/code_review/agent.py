@@ -40,7 +40,7 @@ from bugbug.tools.code_review.protocols import (
     PatchSummarizer,
     SuggestionFilterer,
 )
-from bugbug.tools.code_review.searchfox_tools import (
+from bugbug.tools.code_review.langchain_tools import (
     SEARCHFOX_TOOLS,
     CodeReviewContext,
     create_load_skill_tool,

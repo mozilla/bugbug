@@ -6,10 +6,11 @@
 """LangGraph tools for code review agent."""
 
 from dataclasses import dataclass
-from functools import cache
+from functools import cache, partial
 from logging import getLogger
 from typing import Literal, Optional
 
+import httpx
 import tenacity
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
@@ -49,6 +50,24 @@ def _get_client() -> AsyncSearchfoxClient:
     return AsyncSearchfoxClient()
 
 
+async def _fetch_file(
+    path: str,
+    revision: Optional[str],
+    client: AsyncSearchfoxClient,
+    patch: Patch,
+) -> str:
+    if revision:
+        try:
+            return await _retry(client.get_file_at_revision)(path, revision)
+        except Exception:  # searchfox raises plain Exception
+            pass
+    try:
+        return await patch.get_old_file(path)
+    except (FileNotFoundError, httpx.HTTPStatusError):
+        pass
+    return await _retry(client.get_file)(path)
+
+
 @tool
 async def expand_context(
     file_path: str,
@@ -75,24 +94,14 @@ async def expand_context(
     warning = None
     try:
         patch_stack = patch.patch_stack
-    except Exception as e:
+    except ValueError as e:
         warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
         patch_stack = [patch.patch_set]
 
     revision = await patch.get_base_revision()
     client = _get_client()
 
-    async def fetch(path: str) -> str:
-        if revision:
-            try:
-                return await _retry(client.get_file_at_revision)(path, revision)
-            except Exception:
-                pass
-        try:
-            return await patch.get_old_file(path)
-        except Exception:
-            pass
-        return await _retry(client.get_file)(path)
+    fetch = partial(_fetch_file, revision=revision, client=client, patch=patch)
 
     try:
         file_content = await get_file_after_stack(patch_stack, file_path, fetch)
