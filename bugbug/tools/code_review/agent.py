@@ -19,7 +19,6 @@ from langchain.messages import HumanMessage
 from langgraph.errors import GraphRecursionError
 from unidiff import PatchSet
 
-from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.data_types import (
     AgentResponse,
@@ -29,10 +28,9 @@ from bugbug.tools.code_review.data_types import (
 )
 from bugbug.tools.code_review.database import ReviewCommentsDB
 from bugbug.tools.code_review.langchain_tools import (
+    SEARCHFOX_TOOLS,
     CodeReviewContext,
-    create_find_function_definition_tool,
     create_load_skill_tool,
-    expand_context,
 )
 from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
@@ -66,7 +64,6 @@ class CodeReviewTool(GenerativeModelTool):
         llm: BaseChatModel,
         patch_summarizer: PatchSummarizer,
         suggestion_filterer: SuggestionFilterer,
-        function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
         verbose: bool = True,
@@ -97,9 +94,7 @@ class CodeReviewTool(GenerativeModelTool):
         self.patch_summarizer = patch_summarizer
         self.suggestion_filterer = suggestion_filterer
 
-        tools = [expand_context]
-        if function_search:
-            tools.append(create_find_function_definition_tool(function_search))
+        tools = list(SEARCHFOX_TOOLS)
 
         if skills:
             tools.append(create_load_skill_tool(skills))
@@ -151,11 +146,6 @@ class CodeReviewTool(GenerativeModelTool):
         parameters are optional. If a parameter is not provided, a default
         component will be created and used.
         """
-        if "function_search" not in kwargs:
-            from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
-
-            kwargs["function_search"] = FunctionSearchSearchfoxAPI()
-
         if "review_comments_db" not in kwargs:
             from bugbug.tools.code_review.database import ReviewCommentsDB
             from bugbug.vectordb import QdrantVectorDB

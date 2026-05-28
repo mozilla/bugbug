@@ -454,6 +454,7 @@ dependencies = [
     { name = "rs-parsepatch" },
     { name = "scikit-learn" },
     { name = "scipy" },
+    { name = "searchfox" },
     { name = "sendgrid" },
     { name = "shap", extra = ["plots"] },
     { name = "tabulate" },
@@ -532,6 +533,7 @@ requires-dist = [
     { name = "rs-parsepatch", specifier = "~=0.4.6" },
     { name = "scikit-learn", specifier = "~=1.7.2" },
     { name = "scipy", specifier = "~=1.17.1" },
+    { name = "searchfox", specifier = ">=0.14.0" },
     { name = "sendgrid", specifier = "~=6.12.5" },
     { name = "shap", extras = ["plots"], specifier = "~=0.51.0" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = "==3.8.14" },
@@ -4954,6 +4956,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/52/52/e57eceff0e342a1f50e274264ed47497b59e6a4e3118808ee58ddda7b74a/scipy-1.17.1-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:a77cbd07b940d326d39a1d1b37817e2ee4d79cb30e7338f3d0cddffae70fcaa2", size = 37682317, upload-time = "2026-02-23T00:22:18.513Z" },
     { url = "https://files.pythonhosted.org/packages/11/2f/b29eafe4a3fbc3d6de9662b36e028d5f039e72d345e05c250e121a230dd4/scipy-1.17.1-cp314-cp314t-win_amd64.whl", hash = "sha256:eb092099205ef62cd1782b006658db09e2fed75bffcae7cc0d44052d8aa0f484", size = 37345327, upload-time = "2026-02-23T00:22:24.442Z" },
     { url = "https://files.pythonhosted.org/packages/07/39/338d9219c4e87f3e708f18857ecd24d22a0c3094752393319553096b98af/scipy-1.17.1-cp314-cp314t-win_arm64.whl", hash = "sha256:200e1050faffacc162be6a486a984a0497866ec54149a01270adc8a59b7c7d21", size = 25489165, upload-time = "2026-02-23T00:22:29.563Z" },
+]
+
+[[package]]
+name = "searchfox"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b6/94/b51b8f9441bec76da0a1a4cbbe078c46c4a4942f2a99f892bc27880f9aab/searchfox-0.14.0-cp38-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:a44a2de92fb0e0f5a6d032472da34fe41361685c707587e25beeb544e4c47a85", size = 4211018 },
 ]
 
 [[package]]
