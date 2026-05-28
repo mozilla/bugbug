@@ -21,6 +21,8 @@ from bugbug.tools.core.exceptions import LargeDiffError, RecursionLimitError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     get_phabricator_client,
+    get_project_members,
+    resolve_project_phid,
 )
 
 logger = logging.getLogger(__name__)
@@ -148,19 +150,20 @@ async def _score_and_gate(
     ``ReviewSkipped`` when either score is at or above the group's threshold.
     """
     config = get_reviewer_groups_config()
-    groups = matching_groups(patch)
-    # First matching group acts as the primary; otherwise fall back to defaults.
-    primary = groups[0] if groups else None
-    risk_threshold = (
-        primary.effective_risk_threshold(config.defaults)
-        if primary
-        else config.defaults.risk_threshold
-    )
-    complexity_threshold = (
-        primary.effective_complexity_threshold(config.defaults)
-        if primary
-        else config.defaults.complexity_threshold
-    )
+
+    # Only revisions requesting review from an enabled group are auto-reviewed.
+    enabled_groups = [group for group in matching_groups(patch) if group.enabled]
+    if not enabled_groups:
+        raise ReviewSkipped("not_enabled")
+
+    # First enabled matching group acts as the primary.
+    primary = enabled_groups[0]
+
+    # Cheap author gates run before the (paid) scoring call.
+    _enforce_author_gates(primary, patch)
+
+    risk_threshold = primary.effective_risk_threshold(config.defaults)
+    complexity_threshold = primary.effective_complexity_threshold(config.defaults)
 
     diff_stats = analyze_diff(patch.raw_diff)
     coverage = await lookup_existing_coverage(diff_stats.non_test_paths)
@@ -200,7 +203,7 @@ async def _score_and_gate(
         "thresholds": {
             "risk": risk_threshold,
             "complexity": complexity_threshold,
-            "group": primary.slug if primary else None,
+            "group": primary.slug,
         },
     }
 
@@ -216,6 +219,27 @@ async def _score_and_gate(
         raise ReviewSkipped("above_threshold", details=scoring_details)
 
     return test_signals_block, scoring_details
+
+
+def _enforce_author_gates(group, patch: PhabricatorPatch) -> None:
+    """Skip review based on the revision author's relationship to the group.
+
+    Raises ``ReviewSkipped`` when the author has opted out, or when the group
+    restricts review to its own members and the author isn't one.
+    """
+    author_phid = patch.author_phid
+
+    if author_phid in group.opt_out:
+        raise ReviewSkipped("author_opted_out")
+
+    if group.restrict_to_member_authors:
+        group_phid = resolve_project_phid(group.slug)
+        members = get_project_members(group_phid) if group_phid else frozenset()
+        # If the membership lookup is empty (transient failure / unresolved
+        # project), don't skip — we'd rather over-include than silently drop
+        # everything for the group.
+        if members and author_phid not in members:
+            raise ReviewSkipped("author_not_in_group")
 
 
 def submit_review_to_platform(
