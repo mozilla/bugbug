@@ -535,7 +535,7 @@ requires-dist = [
     { name = "shap", extras = ["plots"], specifier = "~=0.51.0" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = "==3.8.14" },
     { name = "tabulate", specifier = "~=0.10.0" },
-    { name = "taskcluster", specifier = ">=97.1,<100.1" },
+    { name = "taskcluster", specifier = ">=97.1,<100.2" },
     { name = "tenacity", specifier = "~=9.1.4" },
     { name = "tqdm", specifier = "~=4.67.3" },
     { name = "unidiff", specifier = "~=0.7.5" },
@@ -550,7 +550,7 @@ spawn-pipeline = [
     { name = "json-e", specifier = "==4.8.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "requests", specifier = "==2.34.2" },
-    { name = "taskcluster", specifier = "==100.0.1" },
+    { name = "taskcluster", specifier = "==100.1.1" },
 ]
 test = [
     { name = "coverage", specifier = "==7.14.0" },
@@ -597,7 +597,7 @@ requires-dist = [
     { name = "marshmallow", specifier = ">=3.18.0" },
     { name = "rq", specifier = "~=2.7.0" },
     { name = "rq-dashboard", specifier = "~=0.8.6" },
-    { name = "sentry-sdk", extras = ["flask"], specifier = ">=2.55,<2.62" },
+    { name = "sentry-sdk", extras = ["flask"], specifier = "~=2.55.0" },
 ]
 
 [[package]]
@@ -4894,15 +4894,15 @@ wheels = [
 
 [[package]]
 name = "sentry-sdk"
-version = "2.61.0"
+version = "2.55.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/4d/3c66e6045bd2071256b6b6fdcb0cc02b86ce54b2acc2ceac79af8e0efbb5/sentry_sdk-2.61.0.tar.gz", hash = "sha256:1ca9b4bb777eb5be67004edab7eb894f21c6301f1d05ed64966719ad5d1764ce", size = 458510, upload-time = "2026-05-28T09:40:28.917Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e9/b8/285293dc60fc198fffc3fcdbc7c6d4e646e0f74e61461c355d40faa64ceb/sentry_sdk-2.55.0.tar.gz", hash = "sha256:3774c4d8820720ca4101548131b9c162f4c9426eb7f4d24aca453012a7470f69", size = 424505, upload-time = "2026-03-17T14:15:51.707Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/21/5a/9794736d5802689c1a48862e6afe6b7f3e86cc37c15d4a84bc0143877dc1/sentry_sdk-2.61.0-py3-none-any.whl", hash = "sha256:ec4d30273909cb1d198e03208b16ee70e2bc5d90a16fd9f1fb2fc6a72e1f03dc", size = 483111, upload-time = "2026-05-28T09:40:27.027Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/66/20465097782d7e1e742d846407ea7262d338c6e876ddddad38ca8907b38f/sentry_sdk-2.55.0-py2.py3-none-any.whl", hash = "sha256:97026981cb15699394474a196b88503a393cbc58d182ece0d3abe12b9bd978d4", size = 449284, upload-time = "2026-03-17T14:15:49.604Z" },
 ]
 
 [package.optional-dependencies]
@@ -5271,7 +5271,7 @@ wheels = [
 
 [[package]]
 name = "taskcluster"
-version = "100.0.1"
+version = "100.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -5282,9 +5282,9 @@ dependencies = [
     { name = "slugid" },
     { name = "taskcluster-urls" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/49/84397a81ce0ee0106a4e42d74339c562b342e6a8c1c07d690f48ac454736/taskcluster-100.0.1.tar.gz", hash = "sha256:dcdae49cdd34c4fec1e053b79fd2cf99a36046a175d49d839004f0f141bce4d0", size = 254575, upload-time = "2026-05-06T16:55:24.801Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/93/f1db4404fc2ebc2a3883aadbac6e967c7a208b0cb32d7a189a9c61f258fd/taskcluster-100.1.1.tar.gz", hash = "sha256:9eb915cdce8a830719375b319a12c95b7f5a6918e1fc5e47027afeb5fe4ba110", size = 254854, upload-time = "2026-05-19T15:57:50.751Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/af/7940e71ad6d4832597a56141f4ccbbcc441beff394e8dfd7f06895052cd3/taskcluster-100.0.1-py3-none-any.whl", hash = "sha256:e656af9d5e3c6185b1f1e6ad163a4f2bdec599e952128bf66b6da21c99e4fbdc", size = 150895, upload-time = "2026-05-06T16:55:22.883Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/b7/0a7fc27df57a89a9b0ae205bcbc6fe296a4ea83e86bbec44d887c79ceeb8/taskcluster-100.1.1-py3-none-any.whl", hash = "sha256:cf4d0e2896ea34dc6abe808cd74e3ad3885417e140ef501f6fa8706c2cd58c07", size = 150894, upload-time = "2026-05-19T15:57:48.93Z" },
 ]
 
 [[package]]
