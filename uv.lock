@@ -533,7 +533,7 @@ requires-dist = [
     { name = "rs-parsepatch", specifier = "~=0.4.6" },
     { name = "scikit-learn", specifier = "~=1.7.2" },
     { name = "scipy", specifier = "~=1.17.1" },
-    { name = "searchfox", specifier = ">=0.13.0" },
+    { name = "searchfox", specifier = ">=0.14.0" },
     { name = "sendgrid", specifier = "~=6.12.5" },
     { name = "shap", extras = ["plots"], specifier = "~=0.51.0" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = "==3.8.14" },

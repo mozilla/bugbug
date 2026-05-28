@@ -6,19 +6,20 @@
 """LangGraph tools for code review agent."""
 
 from dataclasses import dataclass
+from functools import cache
 from logging import getLogger
 from typing import Literal, Optional
 
 import tenacity
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
-from requests import HTTPError
 from searchfox import AsyncSearchfoxClient
 
-from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
+
+logger = getLogger(__name__)
 
 _retry = tenacity.retry(
     stop=tenacity.stop_after_attempt(3),
@@ -32,14 +33,10 @@ def _tool_error(message: str, *, fatal: bool = False) -> str:
     return f"{prefix}: {message}"
 
 
-logger = getLogger(__name__)
-
 LangStr = Literal[
     "cpp", "c", "js", "webidl", "java", "kotlin", "rust", "python", "html", "css"
 ]
 Tests = Optional[Literal["only", "exclude"]]
-
-_client: Optional[AsyncSearchfoxClient] = None
 
 
 @dataclass
@@ -47,11 +44,9 @@ class CodeReviewContext:
     patch: Patch
 
 
+@cache
 def _get_client() -> AsyncSearchfoxClient:
-    global _client
-    if _client is None:
-        _client = AsyncSearchfoxClient()
-    return _client
+    return AsyncSearchfoxClient()
 
 
 @tool
@@ -92,8 +87,11 @@ async def expand_context(
             try:
                 return await _retry(client.get_file_at_revision)(path, revision)
             except Exception:
-                # searchfox raises plain Exception; fall back to tip
                 pass
+        try:
+            return await patch.get_old_file(path)
+        except Exception:
+            pass
         return await _retry(client.get_file)(path)
 
     try:
@@ -114,46 +112,6 @@ async def expand_context(
     if warning:
         return f"Warning: {warning}\n\n{content}"
     return content
-
-
-def create_find_function_definition_tool(function_search: FunctionSearch):
-    @tool
-    def find_function_definition(
-        file_path: str, line_number: int, function_name: str
-    ) -> str:
-        """Find the definition of a function based on its usage.
-
-        Args:
-            file_path: The path to the file where the function is used.
-            line_number: The line number where the function is used. It should be based on the original file, not the patch.
-            function_name: The name of the function to find its definition.
-
-        Returns:
-            The function definition.
-        """
-        try:
-            functions = function_search.get_function_by_name(
-                # TODO: We may want to use the patch base commit hash here instead of "tip".
-                "tip",
-                file_path,
-                function_name,
-            )
-        except HTTPError as e:
-            logger.error(
-                "HTTP error occurred while searching for the definition of function '%s' which is used in file '%s' at line %d: %s",
-                function_name,
-                file_path,
-                line_number,
-                e,
-            )
-            return "Error occurred while searching for the function definition."
-
-        if not functions:
-            return "Function definition not found."
-
-        return functions[0].source
-
-    return find_function_definition
 
 
 def create_load_skill_tool(skills: list[Skill]):
@@ -438,3 +396,44 @@ async def calls_between(
             "Error fetching calls between '%s' and '%s': %s", symbol_a, symbol_b, e
         )
         return _tool_error(f"call graph fetch failed: {e}")
+
+
+@tool
+async def get_function_at_line(
+    file_path: str,
+    line: int,
+) -> str:
+    """Get the source of the innermost function enclosing a given line.
+
+    Useful when you know a line number and want the full function body without
+    having to know the function name.
+
+    Args:
+        file_path: Repository-relative path, e.g. 'dom/media/webaudio/AudioNode.cpp'.
+        line: 1-based line number inside the function.
+
+    Returns:
+        The function source.
+    """
+    try:
+        return await _get_client().get_function_at_line(file_path, line)
+    except Exception as e:  # searchfox raises plain Exception
+        logger.error(
+            "Error fetching function at line %d in '%s': %s", line, file_path, e
+        )
+        return _tool_error(f"function lookup failed: {e}")
+
+
+SEARCHFOX_TOOLS = [
+    expand_context,
+    search_text,
+    get_blame,
+    get_field_layout,
+    find_definition,
+    get_function_at_line,
+    search_identifier,
+    calls_from,
+    calls_to,
+    calls_between,
+    check_can_gc,
+]

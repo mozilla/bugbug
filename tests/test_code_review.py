@@ -105,21 +105,27 @@ def test_get_file_after_stack_modifies_file():
         "--- a/foo.txt\n+++ b/foo.txt\n@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n"
     )
     result = asyncio.run(
-        get_file_after_stack(patch.patch_stack,"foo.txt", make_fetch({"foo.txt": "a\nb\nc\n"}))
+        get_file_after_stack(
+            patch.patch_stack, "foo.txt", make_fetch({"foo.txt": "a\nb\nc\n"})
+        )
     )
     assert result == "a\nB\nc\nd\n"
 
 
 def test_get_file_after_stack_added_file():
     patch = make_patch("--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
-    result = asyncio.run(get_file_after_stack(patch.patch_stack,"new.txt", make_fetch({})))
+    result = asyncio.run(
+        get_file_after_stack(patch.patch_stack, "new.txt", make_fetch({}))
+    )
     assert result == "a\nb\n"
 
 
 def test_get_file_after_stack_unmodified_file():
     patch = make_patch("")
     result = asyncio.run(
-        get_file_after_stack(patch.patch_stack,"foo.txt", make_fetch({"foo.txt": "a\nb\n"}))
+        get_file_after_stack(
+            patch.patch_stack, "foo.txt", make_fetch({"foo.txt": "a\nb\n"})
+        )
     )
     assert result == "a\nb\n"
 
@@ -129,7 +135,9 @@ def test_get_file_after_stack_applies_stack():
         "--- /dev/null\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n",
         "--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,3 @@\n a\n-b\n+B\n+c\n",
     )
-    result = asyncio.run(get_file_after_stack(patch.patch_stack,"f.txt", make_fetch({})))
+    result = asyncio.run(
+        get_file_after_stack(patch.patch_stack, "f.txt", make_fetch({}))
+    )
     assert result == "a\nB\nc\n"
 
 
@@ -137,7 +145,9 @@ def test_get_file_after_stack_raises_for_deleted_file():
     patch = make_patch("--- a/f.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\n")
     try:
         asyncio.run(
-            get_file_after_stack(patch.patch_stack,"f.txt", make_fetch({"f.txt": "a\nb\n"}))
+            get_file_after_stack(
+                patch.patch_stack, "f.txt", make_fetch({"f.txt": "a\nb\n"})
+            )
         )
         assert False, "expected FileNotFoundError"
     except FileNotFoundError:
@@ -150,7 +160,9 @@ def test_get_file_after_stack_follows_renames():
         "--- a/old.txt\n+++ b/new.txt\n@@ -1,2 +1,3 @@\n a\n-B\n+C\n+d\n",
     )
     result = asyncio.run(
-        get_file_after_stack(patch.patch_stack,"new.txt", make_fetch({"old.txt": "a\nb\n"}))
+        get_file_after_stack(
+            patch.patch_stack, "new.txt", make_fetch({"old.txt": "a\nb\n"})
+        )
     )
     assert result == "a\nC\nd\n"
 

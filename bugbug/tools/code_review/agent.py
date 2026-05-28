@@ -19,7 +19,6 @@ from langchain.messages import HumanMessage
 from langgraph.errors import GraphRecursionError
 from unidiff import PatchSet
 
-from bugbug.code_search.function_search import FunctionSearch
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.data_types import (
     AgentResponse,
@@ -28,21 +27,6 @@ from bugbug.tools.code_review.data_types import (
     Skill,
 )
 from bugbug.tools.code_review.database import ReviewCommentsDB
-from bugbug.tools.code_review.langchain_tools import (
-    CodeReviewContext,
-    calls_between,
-    calls_from,
-    calls_to,
-    check_can_gc,
-    create_find_function_definition_tool,
-    create_load_skill_tool,
-    expand_context,
-    find_definition,
-    get_blame,
-    get_field_layout,
-    search_identifier,
-    search_text,
-)
 from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
     CODE_REVIEW_TODO_TOOL_DESCRIPTION,
@@ -55,6 +39,11 @@ from bugbug.tools.code_review.prompts import (
 from bugbug.tools.code_review.protocols import (
     PatchSummarizer,
     SuggestionFilterer,
+)
+from bugbug.tools.code_review.searchfox_tools import (
+    SEARCHFOX_TOOLS,
+    CodeReviewContext,
+    create_load_skill_tool,
 )
 from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
@@ -75,7 +64,6 @@ class CodeReviewTool(GenerativeModelTool):
         llm: BaseChatModel,
         patch_summarizer: PatchSummarizer,
         suggestion_filterer: SuggestionFilterer,
-        function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
         verbose: bool = True,
@@ -106,20 +94,7 @@ class CodeReviewTool(GenerativeModelTool):
         self.patch_summarizer = patch_summarizer
         self.suggestion_filterer = suggestion_filterer
 
-        tools = [
-            expand_context,
-            search_text,
-            get_blame,
-            get_field_layout,
-            find_definition,
-            search_identifier,
-            calls_from,
-            calls_to,
-            calls_between,
-            check_can_gc,
-        ]
-        if function_search:
-            tools.append(create_find_function_definition_tool(function_search))
+        tools = list(SEARCHFOX_TOOLS)
 
         if skills:
             tools.append(create_load_skill_tool(skills))
@@ -171,11 +146,6 @@ class CodeReviewTool(GenerativeModelTool):
         parameters are optional. If a parameter is not provided, a default
         component will be created and used.
         """
-        if "function_search" not in kwargs:
-            from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
-
-            kwargs["function_search"] = FunctionSearchSearchfoxAPI()
-
         if "review_comments_db" not in kwargs:
             from bugbug.tools.code_review.database import ReviewCommentsDB
             from bugbug.vectordb import QdrantVectorDB
