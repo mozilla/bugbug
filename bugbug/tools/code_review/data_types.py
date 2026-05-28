@@ -1,5 +1,9 @@
-from pydantic import BaseModel, Field
+import re
 
+import httpx
+from pydantic import BaseModel, Field, PrivateAttr
+
+from bugbug.tools.core.connection import get_http_client
 from bugbug.tools.core.data_types import InlineComment
 
 
@@ -37,3 +41,44 @@ class CodeReviewToolResponse(BaseModel):
     details: dict = Field(
         description="Additional details about the tool's execution, such as which models were used and any relevant metadata."
     )
+
+
+class SkillLoadError(Exception):
+    """Raised when a Skill's body cannot be loaded."""
+
+
+_FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
+
+
+def _strip_frontmatter(text: str) -> str:
+    return _FRONTMATTER_RE.sub("", text, count=1)
+
+
+class Skill(BaseModel):
+    """A reusable instruction set the agent can load on demand."""
+
+    name: str = Field(
+        description="A unique identifier the agent uses to load the skill."
+    )
+    url: str = Field(description="HTTPS URL of the skill.md file.")
+    description: str = Field(
+        description="Short summary shown to the agent so it can decide when to load this skill."
+    )
+
+    _cached_body: str | None = PrivateAttr(default=None)
+
+    async def load(self) -> str:
+        """Return the skill body, fetching and caching it on first use."""
+        if self._cached_body is not None:
+            return self._cached_body
+
+        try:
+            response = await get_http_client().get(self.url, timeout=30)
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            raise SkillLoadError(
+                f"Could not load skill '{self.name}' from {self.url}"
+            ) from e
+
+        self._cached_body = _strip_frontmatter(response.text)
+        return self._cached_body
