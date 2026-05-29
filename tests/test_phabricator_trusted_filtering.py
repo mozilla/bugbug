@@ -708,6 +708,90 @@ class TestToMdEndToEnd:
         assert REDACTED_TITLE not in md_output
 
 
+def test_to_md_includes_reviewers_and_target_repository():
+    mock_revision = {
+        "id": 12345,
+        "phid": "PHID-DREV-test123",
+        "fields": {
+            "title": "This is the revision title",
+            "authorPHID": "PHID-USER-author",
+            "status": {"name": "Needs Review"},
+            "uri": "https://phabricator.services.mozilla.com/D12345",
+            "bugzilla.bug-id": "123456",
+            "summary": "",
+            "testPlan": "",
+            "stackGraph": {},
+            "repositoryPHID": "PHID-REPO-firefoxbeta",
+        },
+    }
+    mock_revision_search = {
+        "attachments": {
+            "reviewers": {
+                "reviewers": [
+                    {
+                        "reviewerPHID": "PHID-USER-reviewer",
+                        "status": "blocking",
+                        "isBlocking": True,
+                    }
+                ]
+            }
+        }
+    }
+    mock_repository_info = {
+        "fields": {
+            "shortName": "firefox-beta",
+            "defaultBranch": "beta",
+        }
+    }
+    mock_diff = {
+        "id": 54321,
+        "dateCreated": 1704110400,
+        "dateModified": 1704110400,
+        "baseRevision": "abc123",
+        "authorPHID": "PHID-USER-author",
+    }
+    mock_users_info = {
+        "PHID-USER-author": {
+            "email": "author@example.com",
+            "is_trusted": True,
+            "is_trusted_bot": False,
+            "real_name": "Patch Author",
+        },
+        "PHID-USER-reviewer": {
+            "email": "reviewer@example.com",
+            "is_trusted": True,
+            "is_trusted_bot": False,
+            "real_name": "Patch Reviewer",
+        },
+    }
+
+    with (
+        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
+        patch.object(
+            SanitizedPhabricatorPatch,
+            "_revision_search_metadata",
+            mock_revision_search,
+        ),
+        patch.object(
+            SanitizedPhabricatorPatch, "repository_info", mock_repository_info
+        ),
+        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "get_comments", return_value=[]),
+        patch(
+            "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
+            return_value=mock_users_info,
+        ),
+        patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
+    ):
+        patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
+        markdown = patch_obj.to_md()
+
+    assert (
+        "- **Reviewers**: Patch Reviewer (reviewer@example.com) [blocking]" in markdown
+    )
+    assert "- **Target Repository**: firefox-beta (default branch: beta)" in markdown
+
+
 # Subsequent test rely on having an API key present, and perform testing against
 # the live phabricator instance. They can be helpful to validate changes
 # locally, but aren't run in CI.
