@@ -435,9 +435,9 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
 
         if upload and diff_zst_path in cached_keys:
             continue
-        
+
         diffs.append((bug_id, obj))
-    
+
     with ThreadPoolExecutor() as executor:
         futures = [
             executor.submit(generate_diff_for_bug, bug_id, obj, upload, repo_path)
