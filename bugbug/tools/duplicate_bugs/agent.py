@@ -498,7 +498,7 @@ class DuplicateBugsTool(GenerativeModelTool):
             raise ValueError("meta_bug is required for local/bugs modes")
 
         bz = bugsy.Bugsy(api_key=api_key, bugzilla_url=base_url)
-        bz_ctx = BugzillaContext(client=bz, dry_run=True)
+        bz_ctx = BugzillaContext(client=bz)
         bugzilla_server = build_bugzilla_server(bz_ctx)
 
         if mode == "local":

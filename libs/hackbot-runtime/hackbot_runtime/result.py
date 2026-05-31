@@ -8,7 +8,8 @@ class AgentResult:
 
     The runtime serialises this into the summary.json artifact the orchestrator
     reads. `status` drives the run's terminal state in hackbot-api; `findings`
-    is opaque to the platform and surfaced verbatim.
+    is opaque to the platform and surfaced verbatim. Recorded actions are not
+    carried here — the runtime reads them from `Context.actions`.
     """
 
     status: Literal["ok", "error"] = "ok"

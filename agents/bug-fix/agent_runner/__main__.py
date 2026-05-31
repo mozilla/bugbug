@@ -96,10 +96,12 @@ async def main(ctx: Context) -> AgentResult:
         effort=inputs.effort,
         log=log_path,
         verbose=True,
+        actions_recorder=ctx.actions,
     )
 
-    if log_path.exists() and ctx.uploader is not None:
-        ctx.uploader.upload_file("logs/agent.log", log_path, "text/plain")
+    if log_path.exists():
+        # Uploaded when a signed policy is set, else copied into ./artifacts.
+        ctx.publish_file("logs/agent.log", log_path, "text/plain")
 
     return AgentResult(
         status="ok" if result.exit_code == 0 else "error",

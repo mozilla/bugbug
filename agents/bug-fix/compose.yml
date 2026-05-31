@@ -7,7 +7,6 @@ services:
     environment:
       BUGZILLA_API_URL: ${BUGZILLA_API_URL}
       BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
-      DRY_RUN: ${BROKER_DRY_RUN:-true}
     expose:
       - "8765"
 
@@ -17,13 +16,18 @@ services:
       dockerfile: agents/bug-fix/Dockerfile
       target: agent
     environment:
-      RUN_ID: ${RUN_ID:-local-dev}
-      BUG_ID: ${BUG_ID:?error}
-      BUGZILLA_MCP_URL: http://bug-fix-broker:8765/mcp
-      SOURCE_REPO: /workspace/firefox
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?error}
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      - BUGZILLA_MCP_URL=http://bug-fix-broker:8765/mcp
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts so
+      # compose and direct runs land in the same user-scoped location.
+      - ARTIFACTS_DIR=/artifacts
     volumes:
       - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
     depends_on:
       bug-fix-broker:
         condition: service_started

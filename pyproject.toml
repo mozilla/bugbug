@@ -20,6 +20,7 @@ dependencies = [
     "beautifulsoup4~=4.14.3",
     "boto3>=1.42.78,<1.44.0",
     "claude-agent-sdk>=0.1.30",
+    "hackbot-runtime[claude-sdk]",
     "httpx~=0.28.1",
     "imbalanced-learn~=0.14.1",
     "langchain~=1.2.13",
@@ -134,6 +135,9 @@ artifacts = [
 
 [tool.uv.workspace]
 members = ["http_service", "services/hackbot-api", "agents/bug-fix", "libs/hackbot-runtime"]
+
+[tool.uv.sources]
+hackbot-runtime = { workspace = true }
 
 [tool.ruff]
 extend-exclude = ["data"]

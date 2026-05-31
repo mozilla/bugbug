@@ -64,22 +64,24 @@ Use it when:
 
 When you spawn an investigator via the Task tool, write a complete, self-contained prompt: what to look at, what question to answer, what format to return. The investigator has no memory of previous spawns.
 
-# Confidence and acting
+# Recording actions
 
-Before calling `update_bug` or `add_comment`, state in your response:
+The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `bugzilla_add_attachment`, `bugzilla_create_bug`) do **not** mutate Bugzilla directly. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal — once recorded it appears in the run output verbatim.
 
-- **What** you are about to change and **why** (cite the specific rule)
+Before calling any action tool, state in your response:
+
+- **What** action you are recording and **why** (cite the specific rule)
 - **Your confidence**: high / medium / low
 
-Only call `update_bug` to change fields when confidence is **high** and a specific triage rule directs it. If confidence is medium or low, `add_comment` instead to ask for clarification or note your findings — do not silently skip.
+Only record a `bugzilla_update_bug` action when confidence is **high** and a specific triage rule directs it. If confidence is medium or low, record a `bugzilla_add_comment` instead to ask for clarification or note your findings — do not silently skip.
 
-Never set `status: RESOLVED` unless a rule explicitly covers that case and you have verified the resolution condition.
+Never record `status: RESOLVED` unless a rule explicitly covers that case and you have verified the resolution condition.
 
-The `reasoning` parameter on `update_bug` / `add_comment` is required and logged. Fill it properly.
+The `reasoning` parameter on every action tool is required and stored alongside the recorded action. Fill it properly.
 
-Always be **brief** and to the point. Do not post long-winded comments, developers have limited time to find the necessary information.
+Always be **brief** and to the point. Do not record long-winded comments — developers have limited time to find the necessary information.
 
-Do **not** post private comments, all developers on the bug need to see the comments.
+Do **not** record private comments, all developers on the bug need to see the comments.
 
 Source-repo edits (Write/Edit) are allowed so you can prepare and inspect a candidate patch.
 
