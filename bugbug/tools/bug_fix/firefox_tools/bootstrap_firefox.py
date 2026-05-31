@@ -24,6 +24,8 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
             return {
                 "success": False,
                 "message": f"Firefox directory not found at {firefox_dir}",
+                "stdout": "",
+                "stderr": "",
             }
 
         process = await asyncio.create_subprocess_exec(
@@ -57,4 +59,6 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
         return {
             "success": False,
             "message": f"Error running mach bootstrap: {type(e).__name__}: {e!s}",
+            "stdout": "",
+            "stderr": "",
         }
