@@ -78,10 +78,19 @@ def _finish(ctx: Context, result_or_exc: AgentResult | BaseException) -> int:
     return exit_code
 
 
-def _validate_result(result: object) -> AgentResult | RuntimeError:
+def _validate_result(result: object) -> AgentResult:
+    """Coerce arbitrary agent return values into an AgentResult.
+
+    Returning a synthetic AgentResult (rather than letting an exception
+    object flow into `_finish`) keeps the summary deterministic: the
+    exception path calls `traceback.format_exc()`, which evaluates to
+    "NoneType: None" when no exception is active.
+    """
     if isinstance(result, AgentResult):
         return result
-    return RuntimeError(f"Agent returned {type(result).__name__}; expected AgentResult")
+    msg = f"Agent returned {type(result).__name__}; expected AgentResult"
+    log.error(msg)
+    return AgentResult(status="error", error=msg, exit_code=1)
 
 
 def run(entrypoint: AgentMain) -> int:
@@ -96,10 +105,7 @@ def run(entrypoint: AgentMain) -> int:
         log.exception("Agent raised an exception")
         return _finish(ctx, exc)
 
-    validated = _validate_result(result)
-    if isinstance(validated, RuntimeError):
-        log.error(str(validated))
-    return _finish(ctx, validated)
+    return _finish(ctx, _validate_result(result))
 
 
 def run_async(entrypoint: AsyncAgentMain) -> int:
@@ -114,7 +120,4 @@ def run_async(entrypoint: AsyncAgentMain) -> int:
         log.exception("Agent raised an exception")
         return _finish(ctx, exc)
 
-    validated = _validate_result(result)
-    if isinstance(validated, RuntimeError):
-        log.error(str(validated))
-    return _finish(ctx, validated)
+    return _finish(ctx, _validate_result(result))
