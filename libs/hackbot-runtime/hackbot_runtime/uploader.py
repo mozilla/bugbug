@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import IO
 
 import requests
 
@@ -20,10 +21,33 @@ class SignedPolicyUploader:
     def upload_bytes(
         self, name: str, data: bytes, content_type: str = "application/octet-stream"
     ) -> None:
+        self._post(name, data, content_type, size=len(data))
+
+    def upload_file(
+        self, name: str, path: Path, content_type: str | None = None
+    ) -> None:
+        # Stream from disk so we don't slurp a multi-GB artifact into
+        # memory; the V4 signed policy allows uploads up to its
+        # configured `content-length-range` cap.
+        size = path.stat().st_size
+        with path.open("rb") as fp:
+            self._post(name, fp, content_type or "application/octet-stream", size=size)
+
+    def upload_json(self, name: str, payload: dict) -> None:
+        body = json.dumps(payload, default=str).encode("utf-8")
+        self.upload_bytes(name, body, "application/json")
+
+    def _post(
+        self,
+        name: str,
+        body: bytes | IO[bytes],
+        content_type: str,
+        size: int,
+    ) -> None:
         key = f"{self.prefix}{name}"
         form: dict[str, str] = dict(self.fields)
         form["key"] = key
-        files = {"file": (name, data, content_type)}
+        files = {"file": (name, body, content_type)}
         response = requests.post(self.url, data=form, files=files, timeout=300)
         if not response.ok:
             # GCS V4 signed POST policy errors are only readable in the
@@ -32,16 +56,6 @@ class SignedPolicyUploader:
             # exception message.
             raise requests.HTTPError(
                 f"{response.status_code} uploading {name} to {self.url} "
-                f"(key={key}, size={len(data)}): {response.text[:2000]}",
+                f"(key={key}, size={size}): {response.text[:2000]}",
                 response=response,
             )
-
-    def upload_file(
-        self, name: str, path: Path, content_type: str | None = None
-    ) -> None:
-        data = path.read_bytes()
-        self.upload_bytes(name, data, content_type or "application/octet-stream")
-
-    def upload_json(self, name: str, payload: dict) -> None:
-        body = json.dumps(payload, default=str).encode("utf-8")
-        self.upload_bytes(name, body, "application/json")
