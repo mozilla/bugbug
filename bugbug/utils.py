@@ -175,7 +175,7 @@ def get_s3_credentials() -> dict:
     return response["credentials"]
 
 
-def upload_s3(paths: str) -> None:
+def upload_s3(paths: list[str]) -> None:
     credentials = get_s3_credentials()
 
     client = boto3.client(

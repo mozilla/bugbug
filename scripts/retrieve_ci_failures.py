@@ -349,6 +349,58 @@ def diff_failure_vs_fix(repo, failure_commits, fix_commits):
         return None
 
 
+def generate_diff_for_bug(
+    bug_id: str, obj: dict, upload: bool, repo_path: str
+) -> tuple[int, int]:
+    """Generate and optionally upload the diff for a single bug.
+
+    Returns:
+        A tuple of (mapping_errors, diff_errors) where each is 0 or 1
+        indicating whether that error type occurred for this bug.
+    """
+    diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
+    diff_zst_path = f"{diff_path}.zst"
+
+    if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
+        return (0, 0)
+
+    if upload and utils.exists_s3(diff_zst_path):
+        return (0, 0)
+
+    try:
+        diff = diff_failure_vs_fix(
+            repo_path,
+            [
+                utils.hg2git(commit["node"])
+                for commit in obj["commits"]
+                if commit["backedoutby"]
+            ],
+            [
+                utils.hg2git(commit["node"])
+                for commit in obj["commits"]
+                if not commit["backedoutby"] and not commit["backsout"]
+            ],
+        )
+    except requests.exceptions.HTTPError as e:
+        logger.error("Failure mapping hg commit hash to git commit hash %s", e)
+        return (1, 0)
+
+    if diff is None or len(diff) == 0:
+        return (0, 1)
+
+    with open(diff_path, "wb") as f:
+        f.write(diff)
+
+    utils.zstd_compress(diff_path)
+
+    os.remove(diff_path)
+
+    if upload:
+        utils.upload_s3([diff_zst_path])
+
+    return (0, 0)
+
+
 def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
     if not os.path.exists(repo_path):
         for attempt in tenacity.Retrying(
@@ -370,6 +422,7 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
 
     diff_errors = 0
     mapping_errors = 0
+    diffs = []
     for bug_id, obj in tqdm(
         fixed_by_commit_pushes.items(),
         total=len(fixed_by_commit_pushes),
@@ -383,37 +436,18 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         if upload and diff_zst_path in cached_keys:
             continue
 
-        try:
-            diff = diff_failure_vs_fix(
-                repo_path,
-                [
-                    utils.hg2git(commit["node"])
-                    for commit in obj["commits"]
-                    if commit["backedoutby"]
-                ],
-                [
-                    utils.hg2git(commit["node"])
-                    for commit in obj["commits"]
-                    if not commit["backedoutby"] and not commit["backsout"]
-                ],
-            )
-        except requests.exceptions.HTTPError as e:
-            logger.error("Failure mapping hg commit hash to git commit hash %s", e)
-            mapping_errors += 1
-            continue
+        diffs.append((bug_id, obj))
 
-        if diff is not None and len(diff) > 0:
-            with open(diff_path, "wb") as f:
-                f.write(diff)
+    with ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(generate_diff_for_bug, bug_id, obj, upload, repo_path)
+            for bug_id, obj in diffs
+        ]
 
-            utils.zstd_compress(diff_path)
-
-            os.remove(diff_path)
-
-            if upload:
-                utils.upload_s3([diff_zst_path])
-        else:
-            diff_errors += 1
+        for future in tqdm(as_completed(futures), total=len(futures)):
+            mapping_error, diff_error = future.result()
+            mapping_errors += mapping_error
+            diff_errors += diff_error
 
     logger.info("Failed mapping %s hashes", mapping_errors)
     logger.info("Failed generating %s diffs", diff_errors)
