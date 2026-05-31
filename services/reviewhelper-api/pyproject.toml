@@ -5,19 +5,19 @@ description = "The backend API for Mozilla's Review Helper"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.27.0",
-    "sqlalchemy[asyncio]>=2.0.25",
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.48.0",
+    "sqlalchemy[asyncio]>=2.0.50",
     "asyncpg>=0.29.0",
     "alembic>=1.13.1",
     "alembic-postgresql-enum>=1.9.0",
-    "pydantic>=2.6.0",
-    "pydantic-settings>=2.1.0",
-    "google-cloud-tasks>=2.15.0",
-    "cloud-sql-python-connector[asyncpg]>=1.5.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.1",
+    "google-cloud-tasks>=2.22.0",
+    "cloud-sql-python-connector[asyncpg]>=1.20.3",
     "python-dotenv>=1.0.0",
     "bugbug",
-    "sentry-sdk>=2.51.0",
+    "sentry-sdk>=2.60.0",
 ]
 
 [project.optional-dependencies]

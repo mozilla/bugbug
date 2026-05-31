@@ -16,11 +16,10 @@ updates:
           - patch
     open-pull-requests-limit: 99
   - package-ecosystem: uv
-    directories:
-      - "/"
-      - "/services/*"
+    directory: "/"
     schedule:
       interval: weekly
+      day: monday
     groups:
       patch:
         applies-to: version-updates
@@ -35,7 +34,63 @@ updates:
     open-pull-requests-limit: 99
     allow:
       - dependency-type: direct
-      - dependency-type: indirect
+  - package-ecosystem: uv
+    directory: "/services/mcp"
+    schedule:
+      interval: weekly
+      day: tuesday
+    groups:
+      patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - patch
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
+    open-pull-requests-limit: 99
+    allow:
+      - dependency-type: direct
+  - package-ecosystem: uv
+    directory: "/services/reviewhelper-api"
+    schedule:
+      interval: weekly
+      day: wednesday
+    groups:
+      patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - patch
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
+    open-pull-requests-limit: 99
+    allow:
+      - dependency-type: direct
+  - package-ecosystem: uv
+    directory: "/services/buildrepair"
+    schedule:
+      interval: weekly
+      day: thursday
+    groups:
+      patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - patch
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
+    open-pull-requests-limit: 99
+    allow:
+      - dependency-type: direct
   - package-ecosystem: npm
     directory: "/ui/changes"
     schedule:

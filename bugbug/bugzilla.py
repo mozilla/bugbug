@@ -5,6 +5,7 @@
 
 import collections
 import csv
+import itertools
 import math
 import re
 from datetime import datetime
@@ -232,10 +233,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
 
     new_bug_ids = sorted(list(new_bug_ids_set))
 
-    chunks = (
-        new_bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
-        for i in range(0, len(new_bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE)
-    )
+    chunks = itertools.batched(new_bug_ids, Bugzilla.BUGZILLA_CHUNK_SIZE)
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),

@@ -126,13 +126,13 @@ def process_link(
     """Process a link recursively, handling toctree directives.
 
     Args:
-        html_url: HTML URL to process
-        visited: Set of already visited URLs (for cycle detection)
-        depth: Current recursion depth
-        fallback_title: Optional title to use if extraction from content fails
+        html_url: HTML URL to process.
+        visited: Set of already visited URLs (for cycle detection).
+        depth: Current recursion depth.
+        title: Optional title to use if extraction from content fails.
 
     Returns:
-        List of dict entries with 'url', 'title', 'children' keys
+        List of dict entries with `'url'`, `'title'`, `'children'` keys.
     """
     # Limit recursion depth
     if depth > 5:

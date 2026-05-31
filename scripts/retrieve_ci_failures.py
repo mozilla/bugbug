@@ -262,16 +262,22 @@ def retrieve_logs(fixed_by_commit_pushes, upload):
         for failure in push["failures"]
     ]
 
+    cached_keys: set[str] = set()
+    if upload:
+        logger.info("Listing existing logs in S3...")
+        cached_keys = utils.list_s3("data/ci_failures_logs/")
+
     with ThreadPoolExecutor() as executor:
         futures = [
-            executor.submit(process_logs, failure, upload) for failure in all_failures
+            executor.submit(process_logs, failure, upload, cached_keys)
+            for failure in all_failures
         ]
 
         # We iterate over the futures as they finish so tqdm can update the progress bar.
-        all(tqdm(as_completed(futures), total=len(futures)))
+        all(tqdm(as_completed(futures), total=len(futures), desc="Retrieving logs"))
 
 
-def process_logs(failure, upload):
+def process_logs(failure, upload, cached_keys):
     task_id = failure["task_id"]
     retry_id = failure["retry_id"]
 
@@ -282,7 +288,7 @@ def process_logs(failure, upload):
         if os.path.exists(log_path) or os.path.exists(log_zst_path):
             return
 
-        if upload and utils.exists_s3(log_zst_path):
+        if upload and log_zst_path in cached_keys:
             return
 
         try:
@@ -357,17 +363,24 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
 
     os.makedirs(os.path.join("data", "ci_failures_diffs"), exist_ok=True)
 
+    cached_keys: set[str] = set()
+    if upload:
+        logger.info("Listing existing diffs in S3...")
+        cached_keys = utils.list_s3("data/ci_failures_diffs/")
+
     diff_errors = 0
     mapping_errors = 0
     for bug_id, obj in tqdm(
-        fixed_by_commit_pushes.items(), total=len(fixed_by_commit_pushes)
+        fixed_by_commit_pushes.items(),
+        total=len(fixed_by_commit_pushes),
+        desc="Generating diffs",
     ):
         diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
         diff_zst_path = f"{diff_path}.zst"
         if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
             continue
 
-        if upload and utils.exists_s3(diff_zst_path):
+        if upload and diff_zst_path in cached_keys:
             continue
 
         try:

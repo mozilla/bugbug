@@ -16,6 +16,7 @@ import tenacity
 from async_lru import alru_cache
 from libmozdata.phabricator import PhabricatorRevisionNotFoundException
 from tqdm import tqdm
+from unidiff import PatchSet
 
 from bugbug.tools.core.connection import get_http_client, get_user_agent
 from bugbug.tools.core.data_types import InlineComment
@@ -268,6 +269,7 @@ class PhabricatorPatch(Patch):
         revision_phid: Optional[str] = None,
         revision_id: Optional[int] = None,
     ) -> None:
+        super().__init__()
         assert diff_id or revision_phid or revision_id, (
             "You must provide at least one of diff_id, revision_phid, or revision_id"
         )
@@ -404,6 +406,12 @@ class PhabricatorPatch(Patch):
 
         return diff
 
+    async def get_base_revision(self) -> Optional[str]:
+        try:
+            return await self.get_base_commit_hash()
+        except Exception:
+            return None
+
     @alru_cache
     async def get_base_commit_hash(self) -> str:
         diff = self._diff_metadata
@@ -507,6 +515,44 @@ class PhabricatorPatch(Patch):
     @property
     def stack_graph(self) -> dict:
         return self._revision_metadata["fields"].get("stackGraph", {})
+
+    @cached_property
+    def patch_stack(self) -> list[PatchSet]:
+        """Return the ordered list of patch sets to apply to reach this revision.
+
+        Walks the Phabricator stackGraph from the bottom-most ancestor up to the
+        current revision. If the graph is non-linear (diamond / merge dependency),
+        only the current patch set is returned and an error is set.
+        """
+        current_phid = self._revision_metadata["phid"]
+        stack_graph = self.stack_graph
+
+        if not stack_graph or current_phid not in stack_graph:
+            return [self.patch_set]
+
+        # Only walk the ancestry of current_phid — unrelated branches in
+        # stack_graph may have diamonds that don't affect this patch's lineage.
+        ancestor: Optional[str] = current_phid
+        while ancestor is not None:
+            deps = stack_graph.get(ancestor, [])
+            if len(deps) > 1:
+                raise ValueError("Patch stack is not linear")
+            ancestor = deps[0] if deps else None
+
+        ordered_phids = []
+        phid: Optional[str] = current_phid
+        while phid is not None:
+            ordered_phids.append(phid)
+            deps = stack_graph.get(phid, [])
+            phid = deps[0] if deps else None
+        ordered_phids.reverse()
+
+        return [
+            self.patch_set
+            if phid == current_phid
+            else self.__class__(revision_phid=phid).patch_set
+            for phid in ordered_phids
+        ]
 
     @cached_property
     def _all_comments(self) -> list:

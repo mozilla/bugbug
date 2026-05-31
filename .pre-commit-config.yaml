@@ -5,20 +5,11 @@ repos:
       - id: prettier
         exclude: ^tests/fixtures/
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.15.14
     hooks:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
-  - repo: https://github.com/pycqa/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        exclude: ^http_service/
-        args:
-          - --convention=google
-          # Ignoring warnings about missing docstrings.
-          - --add-ignore=D100,D101,D102,D103,D104,D105,D107
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -60,11 +51,11 @@ repos:
         pass_filenames: false
         additional_dependencies:
           - types-pkg_resources==0.1.2
-          - types-python-dateutil==2.9.0.20260408
-          - types-PyYAML==6.0.12.20260408
+          - types-python-dateutil==2.9.0.20260518
+          - types-PyYAML==6.0.12.20260518
           - types-orjson==3.6.2
-          - types-tabulate==0.10.0.20260408
-          - types-requests==2.33.0.20260503
+          - types-tabulate==0.10.0.20260508
+          - types-requests==2.33.0.20260518
       - id: mypy
         name: mypy-bugbug-http
         files: ^http_service/
@@ -72,12 +63,12 @@ repos:
         pass_filenames: false
         additional_dependencies:
           - types-pkg_resources==0.1.2
-          - types-requests==2.33.0.20260503
+          - types-requests==2.33.0.20260518
           - types-Flask==1.1.6
           - types-redis==4.6.0.20241004
-          - types-python-dateutil==2.9.0.20260408
+          - types-python-dateutil==2.9.0.20260518
           - types-orjson==3.6.2
-          - types-tabulate==0.10.0.20260408
+          - types-tabulate==0.10.0.20260508
   - repo: meta
     hooks:
       - id: check-useless-excludes

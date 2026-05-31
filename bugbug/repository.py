@@ -1254,6 +1254,8 @@ def download_coverage_mapping() -> None:
 
 def get_coverage_mapping(readonly: bool = True) -> LMDBDict:
     global commit_to_coverage
+    if commit_to_coverage is not None:
+        return commit_to_coverage
     commit_to_coverage = LMDBDict("data/coverage_mapping.lmdb", readonly=readonly)
     return commit_to_coverage
 
@@ -1308,6 +1310,8 @@ def download_component_mapping():
 
 def get_component_mapping(readonly=True):
     global path_to_component
+    if path_to_component is not None:
+        return path_to_component
     path_to_component = LMDBDict("data/component_mapping.lmdb", readonly=readonly)
     return path_to_component
 

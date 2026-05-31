@@ -5,6 +5,8 @@
 
 """Prompt templates for code review agent."""
 
+from bugbug.tools.code_review.data_types import Skill
+
 TARGET_SOFTWARE: str | None = None
 
 
@@ -213,3 +215,10 @@ TEMPLATE_PATCH_FROM_HUNK = """diff --git a/{filename} b/{filename}
 +++ b/{filename}
 {raw_hunk}
 """
+
+
+# The agent exposes these to the model via a load_skill tool that fetches
+# the URL on demand, strips YAML frontmatter, and caches the result.
+REVIEW_SKILLS: list[Skill] = [
+    # Skill(name="...", url="https://...", description="..."),
+]

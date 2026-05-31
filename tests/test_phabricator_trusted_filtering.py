@@ -358,7 +358,7 @@ class TestToMdEndToEnd:
     }
 
     def _mock_api_request(self, method, **kwargs):
-        """Mock for phabricator.PHABRICATOR_API.request()"""
+        """Mock for `phabricator.PHABRICATOR_API.request()`."""
         if method == "transaction.search":
             return self.MOCK_TRANSACTIONS_WITH_COMMENTS
         elif method == "user.search":
@@ -730,9 +730,9 @@ def test_get_users_info_batch_empty():
 )
 @pytest.mark.withoutresponses
 def test_phabricator_end_to_end_trusted_check():
-    """END-TO-END test: Verify phab-bot and reviewbot are trusted, contacting
-    the actual server.
-        This doesn't run in CI but can be run locally
+    """End-to-end test: verify phab-bot and reviewbot are trusted, contacting the actual server.
+
+    This doesn't run in CI but can be run locally.
     """
     phabricator_client = get_phabricator_client()
 
@@ -776,8 +776,10 @@ def test_phabricator_end_to_end_trusted_check():
 )
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_mixed_trust():
-    """Test that mixed trusted/untrusted users are correctly identified. Can
-    only be run with a phab token, to validate changes locally."""
+    """Test that mixed trusted/untrusted users are correctly identified.
+
+    Can only be run with a phab token, to validate changes locally.
+    """
     phabricator_client = get_phabricator_client()
 
     # Get PHIDs for known users -- two trusted, one not trusted
@@ -808,8 +810,10 @@ def test_get_users_info_batch_mixed_trust():
 )
 @pytest.mark.withoutresponses
 def test_moco_group_phid_is_valid():
-    """Test that MOCO_GROUP_PHID points to a valid project. This can only be
-    run with an API key, to validate changes locally."""
+    """Test that `MOCO_GROUP_PHID` points to a valid project.
+
+    This can only be run with an API key, to validate changes locally.
+    """
     phabricator_client = get_phabricator_client()
 
     resp = phabricator_client.request(

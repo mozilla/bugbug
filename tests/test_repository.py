@@ -19,6 +19,7 @@ import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import commit_features, repository, rust_code_analysis_server
+from bugbug.utils import LMDBDict
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -181,7 +182,7 @@ def test_get_revs(fake_hg_repo):
     assert revs[1].decode("ascii") == revision3
 
 
-def test_hg_modified_files(fake_hg_repo):
+def test_hg_modified_files(fake_hg_repo, tmp_path):
     hg, local, remote = fake_hg_repo
 
     add_file(hg, local, "f1", "1\n2\n3\n4\n5\n6\n7\n")
@@ -211,7 +212,9 @@ def test_hg_modified_files(fake_hg_repo):
     revs = repository.get_revs(hg, revision1)
     commits = repository.hg_log(hg, revs)
 
-    repository.path_to_component = {}
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
 
     for c in commits:
         repository.hg_modified_files(hg, c)
@@ -235,6 +238,8 @@ def test_hg_modified_files(fake_hg_repo):
     assert commits[4].node == revision5
     assert commits[4].files == []
     assert commits[4].file_copies == {}
+
+    repository.close_component_mapping()
 
 
 def test_hg_log(fake_hg_repo):
@@ -716,10 +721,12 @@ def test_get_directories():
 
 
 @pytest.fixture
-def ignored_commits_to_test(fake_hg_repo):
+def ignored_commits_to_test(fake_hg_repo, tmp_path):
     hg, local, remote = fake_hg_repo
 
-    repository.path_to_component = {}
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
 
     add_file(
         hg,
@@ -759,7 +766,9 @@ def ignored_commits_to_test(fake_hg_repo):
         ),
     ]
 
-    return hg, local, commits
+    yield hg, local, commits
+
+    repository.close_component_mapping()
 
 
 def test_set_commits_to_ignore(ignored_commits_to_test):
@@ -833,14 +842,15 @@ def test_filter_commits(ignored_commits_to_test):
     }
 
 
-def test_calculate_experiences() -> None:
-    repository.path_to_component = {
-        b"dom/file1.cpp": memoryview(b"Core::DOM"),
-        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
-        b"dom/file2.cpp": memoryview(b"Core::Layout"),
-        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
-        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
-    }
+def test_calculate_experiences(tmp_path) -> None:
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
+    repository.path_to_component[b"dom/file1.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file1copied.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file2.cpp"] = b"Core::Layout"
+    repository.path_to_component[b"apps/file1.jsm"] = b"Firefox::Boh"
+    repository.path_to_component[b"apps/file2.jsm"] = b"Firefox::Boh"
 
     commits = {
         "commit1": repository.Commit(
@@ -1308,15 +1318,18 @@ def test_calculate_experiences() -> None:
     ):
         repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
 
+    repository.close_component_mapping()
 
-def test_calculate_experiences_no_save() -> None:
-    repository.path_to_component = {
-        b"dom/file1.cpp": memoryview(b"Core::DOM"),
-        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
-        b"dom/file2.cpp": memoryview(b"Core::Layout"),
-        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
-        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
-    }
+
+def test_calculate_experiences_no_save(tmp_path) -> None:
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
+    repository.path_to_component[b"dom/file1.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file1copied.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file2.cpp"] = b"Core::Layout"
+    repository.path_to_component[b"apps/file1.jsm"] = b"Firefox::Boh"
+    repository.path_to_component[b"apps/file2.jsm"] = b"Firefox::Boh"
 
     commits = {
         "commit1": repository.Commit(
@@ -1761,6 +1774,8 @@ def test_calculate_experiences_no_save() -> None:
     assert commits["commit6"].touched_prev_90_days_component_sum == 2
     assert commits["commit6"].touched_prev_90_days_component_max == 2
     assert commits["commit6"].touched_prev_90_days_component_min == 2
+
+    repository.close_component_mapping()
 
 
 def test_get_touched_functions():

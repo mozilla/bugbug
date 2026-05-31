@@ -9,11 +9,14 @@ import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from functools import cached_property
-from typing import Iterable
+from logging import getLogger
+from typing import Iterable, Optional
 
 from unidiff import Hunk, PatchedFile, PatchSet
 
 from bugbug.tools.core.data_types import InlineComment
+
+logger = getLogger(__name__)
 
 
 class Patch(ABC):
@@ -34,6 +37,11 @@ class Patch(ABC):
     @cached_property
     def patch_set(self) -> PatchSet:
         return PatchSet.from_string(self.raw_diff)
+
+    @cached_property
+    def patch_stack(self) -> list[PatchSet]:
+        """Return patch sets that must be applied, in order, to get this patch."""
+        return [self.patch_set]
 
     @property
     @abstractmethod
@@ -63,6 +71,11 @@ class Patch(ABC):
     @abstractmethod
     def patch_url(self) -> str:
         """Return the URL of the patch."""
+        ...
+
+    @abstractmethod
+    async def get_base_revision(self) -> Optional[str]:
+        """Return the VCS revision the patch was written against, or None."""
         ...
 
     @abstractmethod
@@ -126,7 +139,7 @@ class ReviewData(ABC):
 
     def get_matching_hunk(
         self, patched_file: PatchedFile, comment: InlineComment
-    ) -> Hunk:
+    ) -> Hunk | None:
         def source_end(hunk: Hunk) -> int:
             return hunk.source_start + hunk.source_length
 
@@ -146,9 +159,6 @@ class ReviewData(ABC):
             # prioritize added lines over deleted lines because comments are more
             # likely to be on added lines than deleted lines.
             if len(matching_hunks) > 1:
-                from logging import getLogger
-
-                logger = getLogger(__name__)
                 logger.warning(
                     "Multiple matching hunks found for comment %s in file %s",
                     comment.id,
@@ -178,6 +188,13 @@ class ReviewData(ABC):
             for hunk in patched_file:
                 if hunk.target_start <= comment.start_line < target_end(hunk):
                     return hunk
+
+        logger.warning(
+            "No matching hunk found for comment %s in file %s",
+            comment.id,
+            comment.filename,
+        )
+        return None
 
     def retrieve_comments_with_hunks(self):
         def comment_filter(comment: InlineComment):
@@ -217,12 +234,8 @@ class ReviewData(ABC):
 
             return True
 
-        from logging import getLogger
-
         from libmozdata.phabricator import ConduitError
         from unidiff.errors import UnidiffParseError
-
-        logger = getLogger(__name__)
 
         for diff_id, comments in self.get_all_inline_comments(comment_filter):
             try:

@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
+import itertools
 import logging
 import os
 import uuid
@@ -765,8 +766,7 @@ def batch_prediction(model_name):
 
     queueJobList: Queue = []
 
-    for i in range(0, len(missing_bugs), 100):
-        bug_ids = missing_bugs[i : (i + 100)]
+    for bug_ids in itertools.batched(missing_bugs, 100):
         job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
     q.enqueue_many(queueJobList)
@@ -948,8 +948,7 @@ def batch_prediction_broken_site_report(model_name):
 
     queueJobList: Queue = []
 
-    for i in range(0, len(missing_reports), 100):
-        reports = missing_reports[i : (i + 100)]
+    for reports in itertools.batched(missing_reports, 100):
         job_info, job_id, timeout = create_broken_site_report_classification_jobs(
             model_name, reports
         )
