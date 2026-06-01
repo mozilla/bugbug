@@ -20,6 +20,13 @@ from bugbug.tools.code_review.langchain_tools import (
     search_identifier,
     search_text,
 )
+from bugbug.tools.code_review.review_context_schema import (
+    ReviewContextValidationError,
+    parse_review_context_toml,
+)
+from bugbug.tools.code_review.review_context_schema import (
+    main as validate_review_context_main,
+)
 from bugbug.tools.code_review.utils import find_comment_scope
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
@@ -544,3 +551,97 @@ async def test_external_content_load_caches():
     assert first == "body\n"
     assert second == "body\n"
     assert client.get.await_count == 1
+
+
+_RULES_TOML = """
+version = 1
+
+[[rules]]
+name = "Audio/Video C++"
+when = { any_file = { include = ["dom/media/**"], ext = [".cpp", ".h"] } }
+load = [
+  { type = "file", path = ".claude/skills/dom-media.md" },
+]
+
+[[rules]]
+name = "WebIDL"
+when = { any_file = { ext = [".webidl"] } }
+load = [
+  { type = "file", path = ".claude/skills/webidl.md", repo = "mozilla-firefox/firefox" },
+]
+
+[[rules]]
+name = "Any JS"
+when = { any_file = { ext = [".js"] } }
+load = [
+  { type = "file", path = ".claude/skills/js-style.md" },
+]
+
+[[rules]]
+name = "Bugzilla component only"
+when = { bugzilla = { component = ["Core::DOM: Web Audio"] } }
+load = [
+  { type = "file", path = ".claude/skills/dom-audio.md" },
+]
+"""
+
+
+def test_parse_review_context_toml_rejects_missing_when():
+    toml = """
+version = 1
+[[rules]]
+name = "Broken"
+load = [{ type = "file", path = "x.md" }]
+"""
+    with pytest.raises(ReviewContextValidationError, match="rules\\[0\\].when"):
+        parse_review_context_toml(toml)
+
+
+def test_parse_review_context_toml_rejects_unknown_action_type():
+    toml = """
+version = 1
+[[rules]]
+name = "Broken"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "url", path = "x.md" }]
+"""
+    with pytest.raises(ReviewContextValidationError, match="unknown action type"):
+        parse_review_context_toml(toml)
+
+
+def test_parse_review_context_toml_rejects_unknown_rule_field():
+    toml = """
+version = 1
+[[rules]]
+name = "Broken"
+bogus = true
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "x.md" }]
+"""
+    with pytest.raises(ReviewContextValidationError, match="unknown field"):
+        parse_review_context_toml(toml)
+
+
+def test_validate_review_context_main(tmp_path, capsys):
+    review_context_path = tmp_path / "review-context.toml"
+    review_context_path.write_text(_RULES_TOML)
+
+    assert validate_review_context_main([str(review_context_path)]) == 0
+    captured = capsys.readouterr()
+    assert "valid" in captured.out
+
+
+def test_validate_review_context_main_failure(tmp_path, capsys):
+    review_context_path = tmp_path / "review-context.toml"
+    review_context_path.write_text(
+        """
+version = 1
+[[rules]]
+name = "Broken"
+load = [{ type = "file", path = "x.md" }]
+"""
+    )
+
+    assert validate_review_context_main([str(review_context_path)]) == 1
+    captured = capsys.readouterr()
+    assert "invalid" in captured.err
