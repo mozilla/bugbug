@@ -1,6 +1,7 @@
 import re
 
 import httpx
+import tenacity
 from pydantic import BaseModel, Field, PrivateAttr
 
 from bugbug.tools.core.connection import get_http_client
@@ -78,6 +79,49 @@ class Skill(BaseModel):
         except httpx.HTTPError as e:
             raise SkillLoadError(
                 f"Could not load skill '{self.name}' from {self.url}"
+            ) from e
+
+        self._cached_body = _strip_frontmatter(response.text)
+        return self._cached_body
+
+
+class ExternalContentLoadError(Exception):
+    """Raised when an ExternalContent body cannot be loaded."""
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, min=1),
+    retry=tenacity.retry_if_exception_type(httpx.TransportError),
+    reraise=True,
+)
+async def _fetch_url(url: str) -> httpx.Response:
+    response = await get_http_client().get(url, timeout=30)
+    response.raise_for_status()
+    return response
+
+
+class ExternalContent(BaseModel):
+    """An external file fetched and injected as context for the review."""
+
+    name: str = Field(description="A unique identifier for this content item.")
+    url: str = Field(description="HTTPS URL of the file to fetch.")
+    description: str = Field(
+        description="Short description of what this content provides."
+    )
+
+    _cached_body: str | None = PrivateAttr(default=None)
+
+    async def load(self) -> str:
+        """Return the content body, fetching and caching it on first use."""
+        if self._cached_body is not None:
+            return self._cached_body
+
+        try:
+            response = await _fetch_url(self.url)
+        except httpx.HTTPError as e:
+            raise ExternalContentLoadError(
+                f"Could not load content '{self.name}' from {self.url}"
             ) from e
 
         self._cached_body = _strip_frontmatter(response.text)

@@ -9,7 +9,11 @@ import pytest
 from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools
-from bugbug.tools.code_review.data_types import Skill, _strip_frontmatter
+from bugbug.tools.code_review.data_types import (
+    ExternalContent,
+    Skill,
+    _strip_frontmatter,
+)
 from bugbug.tools.code_review.langchain_tools import (
     _fetch_file,
     create_load_skill_tool,
@@ -524,3 +528,19 @@ async def test_search_identifier_accepts_double_encoded_tests_value():
         )
     assert "dom/a.cpp:1: match" in result
     assert client.search.await_args.kwargs["tests"] == "only"
+
+
+@pytest.mark.asyncio
+async def test_external_content_load_caches():
+    item = ExternalContent(
+        name="a",
+        url="https://example.com/a.md",
+        description="example",
+    )
+    client = _mock_client_returning("---\nname: a\n---\nbody\n")
+    with patch.object(data_types, "get_http_client", return_value=client):
+        first = await item.load()
+        second = await item.load()
+    assert first == "body\n"
+    assert second == "body\n"
+    assert client.get.await_count == 1
