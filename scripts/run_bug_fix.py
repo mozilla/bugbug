@@ -1,9 +1,4 @@
-"""Run the bug_fix tool locally.
-
-Uses an in-process Bugzilla MCP server for simplicity — no separate
-broker needed. The orchestrated production path is different: the agent
-runs with no Bugzilla credentials and talks to a broker sidecar.
-"""
+"""Run the bug_fix tool locally."""
 
 import asyncio
 from pathlib import Path
