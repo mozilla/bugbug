@@ -8,7 +8,7 @@ import httpx
 import pytest
 from unidiff import PatchSet
 
-from bugbug.tools.code_review import data_types, langchain_tools
+from bugbug.tools.code_review import data_types, langchain_tools, review_context
 from bugbug.tools.code_review.data_types import (
     ExternalContent,
     Skill,
@@ -20,8 +20,20 @@ from bugbug.tools.code_review.langchain_tools import (
     search_identifier,
     search_text,
 )
+from bugbug.tools.code_review.review_context import (
+    _merge_rules,
+    external_content_manifest,
+    format_external_content,
+    github_repo_allowed,
+    load_external_content_for_diff,
+    parse_diff_files,
+    rule_matches,
+)
 from bugbug.tools.code_review.review_context_schema import (
+    AnyFilePredicate,
+    FilePredicate,
     ReviewContextValidationError,
+    Rule,
     parse_review_context_toml,
 )
 from bugbug.tools.code_review.review_context_schema import (
@@ -585,6 +597,65 @@ load = [
 ]
 """
 
+_DIFF_MEDIA = """\
+diff --git a/dom/media/Foo.cpp b/dom/media/Foo.cpp
+--- a/dom/media/Foo.cpp
++++ b/dom/media/Foo.cpp
+@@ -1,1 +1,1 @@
+-old
++new
+"""
+
+_DIFF_WEBIDL = """\
+diff --git a/dom/webidl/Foo.webidl b/dom/webidl/Foo.webidl
+--- a/dom/webidl/Foo.webidl
++++ b/dom/webidl/Foo.webidl
+@@ -1,1 +1,1 @@
+-old
++new
+"""
+
+
+@pytest.fixture(autouse=True)
+def clear_review_context_cache():
+    review_context._review_context_cache.clear()
+    yield
+    review_context._review_context_cache.clear()
+
+
+def test_parse_diff_files():
+    files = parse_diff_files(_DIFF_MEDIA)
+    assert files == {"dom/media/Foo.cpp"}
+
+
+def test_github_repo_allowed_policy():
+    assert github_repo_allowed("mozilla/cubeb", "example/repo", {"mozilla/"})
+    assert github_repo_allowed("whatwg/html", "example/repo", {"whatwg/html"})
+    assert github_repo_allowed("example/repo", "example/repo", set())
+    assert not github_repo_allowed("mozilla/cubeb", "example/repo", set())
+    assert not github_repo_allowed("whatwg/html-tests", "example/repo", {"whatwg/html"})
+
+
+def test_rule_matches_extension_and_path():
+    rule = Rule(
+        name="test",
+        when=AnyFilePredicate(FilePredicate(include=["dom/media/**"], ext=[".cpp"])),
+        load=[],
+    )
+    assert rule_matches(rule, {"dom/media/Foo.cpp"})
+    assert not rule_matches(rule, {"dom/canvas/Foo.cpp"})
+    assert not rule_matches(rule, {"dom/media/Foo.js"})
+
+
+def test_rule_matches_extension_only():
+    rule = Rule(
+        name="test",
+        when=AnyFilePredicate(FilePredicate(ext=[".webidl"])),
+        load=[],
+    )
+    assert rule_matches(rule, {"dom/webidl/Foo.webidl"})
+    assert not rule_matches(rule, {"dom/webidl/Foo.js"})
+
 
 def test_parse_review_context_toml_rejects_missing_when():
     toml = """
@@ -645,3 +716,313 @@ load = [{ type = "file", path = "x.md" }]
     assert validate_review_context_main([str(review_context_path)]) == 1
     captured = capsys.readouterr()
     assert "invalid" in captured.err
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_for_diff_file_load():
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+    content_response = MagicMock()
+    content_response.text = "---\nname: dom-media\n---\nMedia review guidelines\n"
+    content_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, content_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_MEDIA, review_context_repo, review_context_branch="release"
+        )
+
+    assert len(results) == 1
+    assert results[0].name == ".claude/skills/dom-media.md"
+    assert results[0].body == "Media review guidelines\n"
+    assert results[0].source_type == "github_file"
+    assert results[0].matched_rules == ["Audio/Video C++"]
+    client.get.assert_any_await(
+        "https://raw.githubusercontent.com/mozilla-firefox/firefox/refs/heads/release/review-context.toml",
+        timeout=30,
+    )
+    client.get.assert_any_await(
+        "https://raw.githubusercontent.com/mozilla-firefox/firefox/refs/heads/release/.claude/skills/dom-media.md",
+        timeout=30,
+    )
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_for_diff_no_match():
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    diff = """diff --git a/README.txt b/README.txt\n--- a/README.txt\n+++ b/README.txt\n@@ -1 +1 @@\n-a\n+b\n"""
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(diff, review_context_repo)
+
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_for_diff_rules_fetch_failure():
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_MEDIA, "mozilla-firefox/firefox"
+        )
+
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_deduplicates_actions():
+    rules = """
+version = 1
+
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = ".claude/skills/cpp.md" }]
+
+[[rules]]
+name = "B"
+when = { any_file = { include = ["dom/media/**"] } }
+load = [{ type = "file", path = ".claude/skills/cpp.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = rules
+    rules_response.raise_for_status = MagicMock()
+    content_response = MagicMock()
+    content_response.text = "C++ guidelines"
+    content_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, content_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(_DIFF_MEDIA, review_context_repo)
+
+    assert len(results) == 1
+    assert results[0].matched_rules == ["A", "B"]
+    assert client.get.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_orders_by_priority():
+    rules = """
+version = 1
+
+[[rules]]
+name = "Low"
+priority = 0
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = ".claude/skills/low.md" }]
+
+[[rules]]
+name = "High"
+priority = 10
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = ".claude/skills/high.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = rules
+    rules_response.raise_for_status = MagicMock()
+    low_response = MagicMock()
+    low_response.text = "low"
+    low_response.raise_for_status = MagicMock()
+    high_response = MagicMock()
+    high_response.text = "high"
+    high_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, high_response, low_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_MEDIA,
+            review_context_repo,
+        )
+
+    assert [r.name for r in results] == [
+        ".claude/skills/high.md",
+        ".claude/skills/low.md",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_rejects_disallowed_github_repo():
+    rules = """
+version = 1
+[[rules]]
+name = "Cross repo"
+when = { any_file = { ext = [".webidl"] } }
+load = [{ type = "file", repo = "mozilla/cubeb", path = "REVIEWING.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = rules
+    rules_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_WEBIDL,
+            review_context_repo,
+        )
+
+    assert results == []
+    assert client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_allows_policy_prefix_repo():
+    rules = """
+version = 1
+[policy.github]
+allowed_repos = ["mozilla/"]
+[[rules]]
+name = "Cross repo"
+when = { any_file = { ext = [".webidl"] } }
+load = [{ type = "file", repo = "mozilla/cubeb", path = "REVIEWING.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = rules
+    rules_response.raise_for_status = MagicMock()
+    content_response = MagicMock()
+    content_response.text = "cubeb guidelines"
+    content_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, content_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_WEBIDL,
+            review_context_repo,
+        )
+
+    assert len(results) == 1
+    assert results[0].source.endswith("/mozilla/cubeb/refs/heads/main/REVIEWING.md")
+
+
+def test_merge_rules_appends_new():
+    base = parse_review_context_toml(
+        """
+version = 1
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "a.md" }]
+"""
+    )
+    merged = _merge_rules(
+        base.rules,
+        """
+version = 1
+[[rules]]
+name = "B"
+when = { any_file = { ext = [".js"] } }
+load = [{ type = "file", path = "b.md" }]
+""",
+    )
+    assert [rule.name for rule in merged] == ["A", "B"]
+
+
+def test_merge_rules_replaces_by_name():
+    base = parse_review_context_toml(
+        """
+version = 1
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "a.md" }]
+"""
+    )
+    merged = _merge_rules(
+        base.rules,
+        """
+version = 1
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".js"] } }
+load = [{ type = "file", path = "replacement.md" }]
+""",
+    )
+    assert len(merged) == 1
+    assert merged[0].load[0].path == "replacement.md"
+
+
+def test_merge_rules_empty_extra():
+    base = parse_review_context_toml(
+        """
+version = 1
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "a.md" }]
+"""
+    )
+    merged = _merge_rules(base.rules, "version = 1\n")
+    assert merged == base.rules
+
+
+@pytest.mark.asyncio
+async def test_content_override_used_instead_of_fetch():
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+    overrides = {".claude/skills/dom-media.md": "Override body"}
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_MEDIA, review_context_repo, content_overrides=overrides
+        )
+
+    assert len(results) == 1
+    assert results[0].body == "Override body"
+    assert client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_external_content_manifest_and_prompt_body():
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+    overrides = {".claude/skills/dom-media.md": "Guideline body"}
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_MEDIA, review_context_repo, content_overrides=overrides
+        )
+
+    manifest = external_content_manifest(results)
+    assert manifest == [
+        {
+            "name": ".claude/skills/dom-media.md",
+            "source_type": "github_file",
+            "source": "https://raw.githubusercontent.com/mozilla-firefox/firefox/refs/heads/main/.claude/skills/dom-media.md",
+            "action": {"type": "file", "path": ".claude/skills/dom-media.md"},
+            "matched_rules": ["Audio/Video C++"],
+            "trusted": True,
+            "trust_reason": "github_repo_content",
+            "bytes": len("Guideline body".encode()),
+            "sha256": results[0].sha256,
+        }
+    ]
+    prompt = format_external_content(results)
+    assert "<external_content_manifest>" in prompt
+    assert "<external_context>" in prompt
+    assert '<context name=".claude/skills/dom-media.md">' in prompt
+    assert "Guideline body" in prompt
