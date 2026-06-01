@@ -1,0 +1,20 @@
+[project]
+name = "hackbot-agent-bug-fix"
+version = "0.1.0"
+description = "Cloud Run Job image that runs the bug-fix agent for hackbot-api"
+requires-python = ">=3.12"
+dependencies = [
+    "bugbug",
+    "hackbot-runtime",
+    "bugsy",
+    "grizzly-framework",
+    "prefpicker",
+    "claude-agent-sdk>=0.1.30",
+    "mcp>=1.0.0",
+    "starlette>=0.36.0",
+    "uvicorn>=0.27.0",
+]
+
+[tool.uv.sources]
+bugbug = { workspace = true }
+hackbot-runtime = { workspace = true }

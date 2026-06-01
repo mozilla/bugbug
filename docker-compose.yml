@@ -1,4 +1,10 @@
-version: "3.2"
+# The version property should be dropped once this is supported by task-boot
+# See https://github.com/mozilla/task-boot/issues/505
+version: "3.8"
+
+include:
+  - path: agents/bug-fix/compose.yml
+
 services:
   bugbug-base:
     build:

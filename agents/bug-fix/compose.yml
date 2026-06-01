@@ -1,0 +1,32 @@
+services:
+  bug-fix-broker:
+    build:
+      context: ../..
+      dockerfile: agents/bug-fix/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+      DRY_RUN: ${BROKER_DRY_RUN:-true}
+    expose:
+      - "8765"
+
+  bug-fix-agent:
+    build:
+      context: ../..
+      dockerfile: agents/bug-fix/Dockerfile
+      target: agent
+    environment:
+      RUN_ID: ${RUN_ID:-local-dev}
+      BUG_ID: ${BUG_ID:?error}
+      BUGZILLA_MCP_URL: http://bug-fix-broker:8765/mcp
+      SOURCE_REPO: /workspace/firefox
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?error}
+    volumes:
+      - workspace:/workspace
+    depends_on:
+      bug-fix-broker:
+        condition: service_started
+
+volumes:
+  workspace:

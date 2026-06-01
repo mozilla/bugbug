@@ -26,6 +26,8 @@ BUGZILLA_WRITE_TOOLS = [
 FIREFOX_TOOLS = [
     "mcp__firefox__evaluate_testcase",
     "mcp__firefox__build_firefox",
+    "mcp__firefox__evaluate_js_shell",
+    "mcp__firefox__bootstrap_firefox",
 ]
 
 # Deployment-stable settings that may be supplied via config YAML.
