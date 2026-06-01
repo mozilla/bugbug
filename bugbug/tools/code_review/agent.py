@@ -191,25 +191,30 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    def generate_initial_prompt(self, patch: Patch, patch_summary: str) -> str:
+    def generate_initial_prompt(
+        self, patch: Patch, patch_summary: str, external_context: str = ""
+    ) -> str:
         created_before = patch.date_created if self.is_experiment_env else None
 
         return FIRST_MESSAGE_TEMPLATE.format(
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
+            external_context=external_context,
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
         )
 
     async def generate_review_comments(
-        self, patch: Patch, patch_summary: str
+        self, patch: Patch, patch_summary: str, external_context: str = ""
     ) -> list[GeneratedReviewComment]:
         try:
             async for chunk in self.agent.astream(
                 {
                     "messages": [
                         HumanMessage(
-                            self.generate_initial_prompt(patch, patch_summary)
+                            self.generate_initial_prompt(
+                                patch, patch_summary, external_context
+                            )
                         ),
                     ]
                 },
@@ -223,14 +228,47 @@ class CodeReviewTool(GenerativeModelTool):
 
         return result["structured_response"].comments
 
-    async def run(self, patch: Patch) -> CodeReviewToolResponse:
+    async def run(
+        self,
+        patch: Patch,
+        review_context_repo: Optional[str] = None,
+        review_context_branch: str = "main",
+        extra_context_toml: Optional[str] = None,
+        content_overrides: Optional[dict[str, str]] = None,
+    ) -> CodeReviewToolResponse:
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
         patch_summary = self.patch_summarizer.run(patch)
 
+        external_context = ""
+        external_content_manifest = []
+        if review_context_repo:
+            from bugbug.tools.code_review.review_context import (
+                external_content_manifest as build_external_content_manifest,
+            )
+            from bugbug.tools.code_review.review_context import (
+                format_external_content,
+                load_external_content_for_diff,
+            )
+
+            bug_id = getattr(patch, "bug_id", None)
+            content_items = await load_external_content_for_diff(
+                patch.raw_diff,
+                review_context_repo,
+                review_context_branch=review_context_branch,
+                bug_id=bug_id,
+                extra_context_toml=extra_context_toml,
+                content_overrides=content_overrides,
+            )
+            if content_items:
+                external_context = format_external_content(content_items)
+                external_content_manifest = build_external_content_manifest(
+                    content_items
+                )
+
         unfiltered_suggestions = await self.generate_review_comments(
-            patch, patch_summary
+            patch, patch_summary, external_context
         )
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
@@ -247,6 +285,7 @@ class CodeReviewTool(GenerativeModelTool):
             details={
                 "model": self._agent_model_name,
                 "num_unfiltered_suggestions": len(unfiltered_suggestions),
+                "external_content": external_content_manifest,
             },
         )
 

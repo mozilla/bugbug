@@ -1,6 +1,7 @@
 """MCP server for Firefox Development."""
 
 import functools
+import json
 import logging
 import os
 from pathlib import Path
@@ -17,6 +18,10 @@ from bugbug.tools.code_review.data_types import LocalPatch
 from bugbug.tools.code_review.prompts import (
     LOCAL_SYSTEM_PROMPT_TEMPLATE,
     SYSTEM_PROMPT_TEMPLATE,
+)
+from bugbug.tools.code_review.review_context import (
+    format_external_content,
+    load_external_content_for_diff,
 )
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
 from bugbug.tools.core.platforms.phabricator import (
@@ -50,6 +55,10 @@ async def _patch_review_impl(
     patch_url: str | None,
     diff: str | None,
     commit_message: str | None,
+    review_context_repo: str | None,
+    review_context_branch: str,
+    extra_context_toml: str | None,
+    content_overrides: str | None,
 ) -> str:
     if diff:
         patch = LocalPatch(diff, commit_message=commit_message or "")
@@ -70,7 +79,33 @@ async def _patch_review_impl(
     prompt_template = LOCAL_SYSTEM_PROMPT_TEMPLATE if diff else SYSTEM_PROMPT_TEMPLATE
     system_prompt = prompt_template.format(target_software=tool.target_software)
     patch_summary = "" if diff else tool.patch_summarizer.run(patch)
-    initial_prompt = tool.generate_initial_prompt(patch, patch_summary)
+
+    parsed_overrides: dict[str, str] | None = None
+    if content_overrides:
+        try:
+            parsed_overrides = json.loads(content_overrides)
+        except json.JSONDecodeError:
+            pass
+
+    external_context = ""
+    if review_context_repo:
+        bug_id = getattr(patch, "bug_id", None) if patch.has_bug else None
+        content_items = await load_external_content_for_diff(
+            patch.raw_diff,
+            review_context_repo,
+            review_context_branch=review_context_branch or "main",
+            bug_id=bug_id,
+            extra_context_toml=(
+                extra_context_toml if extra_context_toml != "None" else None
+            ),
+            content_overrides=parsed_overrides,
+        )
+        if content_items:
+            external_context = format_external_content(content_items)
+
+    initial_prompt = tool.generate_initial_prompt(
+        patch, patch_summary, external_context
+    )
     return system_prompt + "\n\n" + initial_prompt
 
 
@@ -88,9 +123,46 @@ async def patch_review(
         default=None,
         description="Commit message for the local diff (optional, used to extract bug ID, title, and Differential Revision URL).",
     ),
+    review_context_repo: str | None = Field(
+        default=None,
+        description=(
+            "GitHub repository containing review-context.toml, in org/project form. "
+            "When omitted, no rule-based context is loaded."
+        ),
+    ),
+    review_context_branch: str = Field(
+        default="main",
+        description="GitHub branch to read review-context.toml and same-repo content from.",
+    ),
+    extra_context_toml: str | None = Field(
+        default=None,
+        description=(
+            "TOML content to merge into the fetched review-context.toml. "
+            "Rules are matched by name: same name replaces, new name appends. "
+            "Use this to test new or modified rules before landing."
+        ),
+    ),
+    content_overrides: str | None = Field(
+        default=None,
+        description=(
+            "JSON object mapping content name (file path) to body text. Overrides "
+            "the fetched content for matching items, or provides content for new "
+            "items referenced by extra_context_toml. Use this to test changes before "
+            "landing. Example: "
+            '{".claude/skills/dom-audio.md": "My guidelines."}'
+        ),
+    ),
 ) -> str:
     """Review a code patch from Phabricator or a raw local diff."""
-    return await _patch_review_impl(patch_url, diff, commit_message)
+    return await _patch_review_impl(
+        patch_url,
+        diff,
+        commit_message,
+        review_context_repo,
+        review_context_branch,
+        extra_context_toml,
+        content_overrides,
+    )
 
 
 @mcp.tool()
@@ -98,9 +170,21 @@ async def patch_review_tool(
     patch_url: str | None = None,
     diff: str | None = None,
     commit_message: str | None = None,
+    review_context_repo: str | None = None,
+    review_context_branch: str = "main",
+    extra_context_toml: str | None = None,
+    content_overrides: str | None = None,
 ) -> str:
     """Build the patch review prompt. Use diff= for local diffs, patch_url= for Phabricator."""
-    return await _patch_review_impl(patch_url, diff, commit_message)
+    return await _patch_review_impl(
+        patch_url,
+        diff,
+        commit_message,
+        review_context_repo,
+        review_context_branch,
+        extra_context_toml,
+        content_overrides,
+    )
 
 
 @mcp.resource(
