@@ -9,7 +9,7 @@ import pytest
 from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools
-from bugbug.tools.code_review.data_types import Skill, _strip_frontmatter
+from bugbug.tools.code_review.data_types import ExternalContent, Skill, _strip_frontmatter
 from bugbug.tools.code_review.langchain_tools import _fetch_file, create_load_skill_tool
 from bugbug.tools.code_review.utils import find_comment_scope
 from bugbug.tools.core.platforms.patch_apply import (
@@ -480,3 +480,19 @@ def test_fetch_file_skips_revision_when_none():
     result = asyncio.run(_fetch_file("f.txt", None, client, patch))
     assert result == "latest content"
     client.get_file_at_revision.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_content_load_caches():
+    item = ExternalContent(
+        name="a",
+        url="https://example.com/a.md",
+        description="example",
+    )
+    client = _mock_client_returning("---\nname: a\n---\nbody\n")
+    with patch.object(data_types, "get_http_client", return_value=client):
+        first = await item.load()
+        second = await item.load()
+    assert first == "body\n"
+    assert second == "body\n"
+    assert client.get.await_count == 1
