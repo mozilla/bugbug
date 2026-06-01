@@ -116,6 +116,7 @@ bugbug-data-github = "scripts.github_issue_retriever:main"
 bugbug-fixed-comments = "scripts.inline_comments_data_collection:main"
 bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
 bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
+bugbug-validate-review-context = "bugbug.tools.code_review.review_context_schema:main"
 
 [tool.hatch.version]
 path = "VERSION"
