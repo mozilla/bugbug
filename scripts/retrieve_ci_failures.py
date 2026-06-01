@@ -285,10 +285,10 @@ def process_logs(failure, upload, cached_keys):
     log_zst_path = f"{log_path}.zst"
 
     with get_lock_for_file(log_zst_path):
-        if os.path.exists(log_path) or os.path.exists(log_zst_path):
+        if upload and log_zst_path in cached_keys:
             return
 
-        if upload and log_zst_path in cached_keys:
+        if os.path.exists(log_path) or os.path.exists(log_zst_path):
             return
 
         try:
@@ -361,10 +361,10 @@ def generate_diff_for_bug(
     diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
     diff_zst_path = f"{diff_path}.zst"
 
-    if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
+    if upload and utils.exists_s3(diff_zst_path):
         return (0, 0)
 
-    if upload and utils.exists_s3(diff_zst_path):
+    if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
         return (0, 0)
 
     try:
@@ -430,10 +430,11 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
     ):
         diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
         diff_zst_path = f"{diff_path}.zst"
-        if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
-            continue
 
         if upload and diff_zst_path in cached_keys:
+            continue
+
+        if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
             continue
 
         diffs.append((bug_id, obj))
