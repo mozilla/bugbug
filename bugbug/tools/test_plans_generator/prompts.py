@@ -22,9 +22,24 @@ Using the knowledge and information you are given, generate no more than 15 test
 3. Check to see if each generated case is relevant to the feature.
 4. Check to see if each generated case is within the scope of testing.
 5. Check to see if each generated case is dissimilar to any existing test cases.
+6. Return only valid JSON with a "test_cases" key.
+7. Each entry in "test_cases" must have an "id" integer and a "test_case" string.
 
-The test cases should be presented in a numbered list, with each entry being a single, concise test case.
-Avoid using a title and markdown formatting."""
+Avoid using a title, markdown formatting, comments, or any text outside the JSON object.
+
+-- Here is an example of the expected output format --:
+{{
+  "test_cases": [
+    {{
+      "id": 1,
+      "test_case": "Verify that sponsored suggestions can be disabled from Settings."
+    }},
+    {{
+      "id": 2,
+      "test_case": "Verify that organic search suggestions continue to appear when sponsored suggestions are disabled."
+    }}
+  ]
+}}"""
 
 
 TEST_STEPS_PROMPT_TEMPLATE = """You are an expert Quality Assurance Engineer with expertise in designing detailed test steps for test cases of features of the {target_software} web browser.
@@ -41,20 +56,33 @@ Using the knowledge and information you are given, generate test steps for each 
 1. Thoroughly understand the feature from the description and the test cases.
 2. For each test case, generate clear and concise steps to execute the test case.
 3. Each test case should have its own set of steps.
-4. Present the steps in a numbered list under each test case.
-Avoid using a title and markdown formatting.
+4. Return only valid JSON with a "test_cases" key.
+5. Keep the same "id" and "test_case" values from the input test cases.
+6. Each entry in "test_cases" must have an "id" integer, a "test_case" string, and a "test_steps" array of strings.
+Avoid using a title, markdown formatting, comments, or any text outside the JSON object.
 
 -- Here are some examples --:
-Test Case 1: Ensure that Rich suggestions entries match the design
-Test Steps:
-1. Launch Firefox.
-2. Start typing a popular keyword inside the Address Bar.
-3. Observe the Rich entities icon and description.
-
-Test Case 2: Search-shortcut - Ensure that Rich entities are accessible via keyboard
-Test Steps:
-1. Launch Firefox.
-2. Observe the Address Bar.
-3. Click inside the Address Bar, select the google search shortcut.
-4. Press 'Down' arrow key.
-5. Navigate through the Rich entities using Up/Down arrow keys."""
+{{
+  "test_cases": [
+    {{
+      "id": 1,
+      "test_case": "Ensure that Rich suggestions entries match the design",
+      "test_steps": [
+        "Launch Firefox.",
+        "Start typing a popular keyword inside the Address Bar.",
+        "Observe the Rich entities icon and description."
+      ]
+    }},
+    {{
+      "id": 2,
+      "test_case": "Search-shortcut - Ensure that Rich entities are accessible via keyboard",
+      "test_steps": [
+        "Launch Firefox.",
+        "Observe the Address Bar.",
+        "Click inside the Address Bar, select the google search shortcut.",
+        "Press 'Down' arrow key.",
+        "Navigate through the Rich entities using Up/Down arrow keys."
+      ]
+    }}
+  ]
+}}"""

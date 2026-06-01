@@ -7,6 +7,6 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class TestGenerationResult:
+class TestPlanGenerationResult:
     test_cases: str
     test_steps: str | None = None

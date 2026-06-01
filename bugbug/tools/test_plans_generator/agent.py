@@ -15,8 +15,8 @@ from langchain.messages import HumanMessage
 
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.core.llms import DEFAULT_OPENAI_MODEL
-from bugbug.tools.test_generation.data_types import TestGenerationResult
-from bugbug.tools.test_generation.prompts import (
+from bugbug.tools.test_plans_generator.data_types import TestPlanGenerationResult
+from bugbug.tools.test_plans_generator.prompts import (
     TEST_CASES_PROMPT_TEMPLATE,
     TEST_STEPS_PROMPT_TEMPLATE,
 )
@@ -36,7 +36,7 @@ def _message_content_to_text(content: Any) -> str:
     return str(content)
 
 
-class TestGenerationTool(GenerativeModelTool):
+class TestPlanGenerationTool(GenerativeModelTool):
     """Tool for generating QA test cases and test steps."""
 
     def __init__(
@@ -93,7 +93,7 @@ class TestGenerationTool(GenerativeModelTool):
         test_scope: str,
         qa_test_cases: str = "",
         generate_steps: bool = True,
-    ) -> TestGenerationResult:
+    ) -> TestPlanGenerationResult:
         """Generate test cases and optionally generate steps for them."""
         generated_test_cases = self.generate_test_cases(
             feature_description,
@@ -108,7 +108,7 @@ class TestGenerationTool(GenerativeModelTool):
                 generated_test_cases,
             )
 
-        return TestGenerationResult(
+        return TestPlanGenerationResult(
             test_cases=generated_test_cases,
             test_steps=test_steps,
         )
