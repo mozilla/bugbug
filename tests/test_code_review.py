@@ -15,6 +15,7 @@ from bugbug.tools.code_review.review_context import (
     _merge_rules,
     external_content_manifest,
     format_external_content,
+    get_bug_component,
     github_repo_allowed,
     load_external_content_for_diff,
     parse_diff_files,
@@ -609,6 +610,35 @@ def test_rule_matches_extension_only():
     assert not rule_matches(rule, {"dom/webidl/Foo.js"})
 
 
+def test_rule_bugzilla_component_fails_closed_without_component():
+    config = parse_review_context_toml(_RULES_TOML)
+    rule = next(rule for rule in config.rules if rule.name == "Bugzilla component only")
+    assert not rule_matches(rule, set(), bug_component=None)
+
+
+def test_rule_bugzilla_component_matches():
+    config = parse_review_context_toml(_RULES_TOML)
+    rule = next(rule for rule in config.rules if rule.name == "Bugzilla component only")
+    assert rule_matches(rule, set(), bug_component="Core::DOM: Web Audio")
+    assert not rule_matches(rule, set(), bug_component="Core::Layout")
+
+
+@pytest.mark.asyncio
+async def test_get_bug_component():
+    with patch("libmozdata.bugzilla.Bugzilla") as bugzilla_cls:
+        instance = MagicMock()
+        bugzilla_cls.return_value = instance
+
+        def get_data():
+            handler = bugzilla_cls.call_args.kwargs["bughandler"]
+            data = bugzilla_cls.call_args.kwargs["bugdata"]
+            handler({"product": "Core", "component": "DOM: Web Audio"}, data)
+            return MagicMock(wait=MagicMock())
+
+        instance.get_data.side_effect = get_data
+        assert await get_bug_component(123) == "Core::DOM: Web Audio"
+
+
 def test_parse_review_context_toml_rejects_missing_when():
     toml = """
 version = 1
@@ -980,3 +1010,103 @@ async def test_external_content_manifest_and_prompt_body():
     assert "<external_context>" in prompt
     assert '<context name=".claude/skills/dom-media.md">' in prompt
     assert "Guideline body" in prompt
+
+
+@pytest.mark.asyncio
+async def test_extra_context_toml_appended():
+    review_context_repo = "mozilla-firefox/firefox"
+    base_rules = """
+version = 1
+[[rules]]
+name = "Base"
+when = { any_file = { ext = [".js"] } }
+load = [{ type = "file", path = "base.md" }]
+"""
+    extra_rules = """
+version = 1
+[[rules]]
+name = "Extra"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "extra.md" }]
+"""
+    rules_response = MagicMock()
+    rules_response.text = base_rules
+    rules_response.raise_for_status = MagicMock()
+    content_response = MagicMock()
+    content_response.text = "extra"
+    content_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, content_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_MEDIA,
+            review_context_repo,
+            extra_context_toml=extra_rules,
+        )
+
+    assert [result.name for result in results] == ["extra.md"]
+
+
+@pytest.mark.asyncio
+async def test_extra_context_toml_replaces_by_name():
+    review_context_repo = "mozilla-firefox/firefox"
+    extra_rules = """
+version = 1
+[[rules]]
+name = "Audio/Video C++"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "replacement.md" }]
+"""
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+    content_response = MagicMock()
+    content_response.text = "replacement"
+    content_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, content_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        results = await load_external_content_for_diff(
+            _DIFF_MEDIA,
+            review_context_repo,
+            extra_context_toml=extra_rules,
+        )
+
+    assert [result.name for result in results] == ["replacement.md"]
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_fetches_phabricator_revision():
+    rules = """
+version = 1
+[[rules]]
+name = "Revision"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "fetch_revision", revision = "D123" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = rules
+    rules_response.raise_for_status = MagicMock()
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    phabricator = MagicMock()
+    phabricator.load_revision.return_value = {"fields": {"diffID": 456}}
+    phabricator.load_raw_diff.return_value = "diff content"
+
+    with (
+        patch.object(data_types, "get_http_client", return_value=client),
+        patch(
+            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
+            return_value=phabricator,
+        ),
+    ):
+        results = await load_external_content_for_diff(_DIFF_MEDIA, review_context_repo)
+
+    assert len(results) == 1
+    assert results[0].name == "Revision D123"
+    assert results[0].body == "diff content"
+    assert results[0].source_type == "phabricator_revision"

@@ -9,9 +9,11 @@ Fetches review-context.toml from a GitHub repository, matches changed files
 against the rules, and pre-loads the referenced content.
 """
 
+import asyncio
 import fnmatch
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass
 from logging import getLogger
@@ -31,19 +33,26 @@ from bugbug.tools.code_review.review_context_schema import (
     AllPredicate,
     AnyFilePredicate,
     AnyPredicate,
+    BugzillaPredicate,
+    FetchRevisionAction,
     FilePredicate,
     LoadFileAction,
     NotPredicate,
+    PatchPredicate,
     Predicate,
     ReviewContextConfig,
     ReviewContextValidationError,
+    ReviewPredicate,
     Rule,
     RuleAction,
     parse_review_context_toml,
     tomllib,
 )
+from bugbug.tools.core.connection import get_http_client
 
 logger = getLogger(__name__)
+
+_PHAB_RE = re.compile(r"D(\d+)$")
 
 _review_context_cache: dict[
     tuple[str, str, str], tuple[float, "ReviewContextConfig"]
@@ -141,6 +150,29 @@ def parse_diff_files(diff: str) -> set[str]:
         return files
 
 
+async def get_bug_component(bug_id: int) -> str | None:
+    """Return 'Product::Component' for the given Bugzilla bug, or None on failure."""
+    from libmozdata.bugzilla import Bugzilla
+
+    def _fetch() -> str | None:
+        bugs: list[dict] = []
+        Bugzilla(
+            bug_id,
+            include_fields=["product", "component"],
+            bughandler=lambda bug, data: data.append(bug),
+            bugdata=bugs,
+        ).get_data().wait()
+        if not bugs:
+            return None
+        return f"{bugs[0]['product']}::{bugs[0]['component']}"
+
+    try:
+        return await asyncio.get_event_loop().run_in_executor(None, _fetch)
+    except Exception:
+        logger.warning("Could not fetch component for bug %s", bug_id)
+        return None
+
+
 def rule_matches(
     rule: Rule, changed_files: set[str], bug_component: str | None = None
 ) -> bool:
@@ -169,8 +201,21 @@ def _file_matches(predicate: FilePredicate, path: str) -> bool:
     return True
 
 
+def _bugzilla_matches(
+    predicate: BugzillaPredicate, bug_component: str | None = None
+) -> bool:
+    if predicate.product or predicate.keywords or predicate.severity:
+        return False
+    if predicate.component:
+        return bug_component is not None and bug_component in predicate.component
+    return False
 
-def _unsupported_metadata_predicate() -> bool:
+
+def _review_matches(predicate: ReviewPredicate) -> bool:
+    return False
+
+
+def _patch_matches(predicate: PatchPredicate) -> bool:
     return False
 
 
@@ -198,8 +243,12 @@ def predicate_matches(
             return bool(changed_files) and all(
                 _file_matches(file_predicate, f) for f in changed_files
             )
-        case _:
-            return _unsupported_metadata_predicate()
+        case BugzillaPredicate():
+            return _bugzilla_matches(predicate, bug_component)
+        case ReviewPredicate():
+            return _review_matches(predicate)
+        case PatchPredicate():
+            return _patch_matches(predicate)
     raise TypeError(f"Unknown predicate type: {type(predicate).__name__}")
 
 
@@ -210,6 +259,13 @@ def _action_key(action: RuleAction) -> tuple:
             action.repo or "",
             action.branch or "",
             action.path,
+        )
+    if isinstance(action, FetchRevisionAction):
+        return (
+            "fetch_revision",
+            action.revision or "",
+            action.repo or "",
+            action.hash or "",
         )
     raise ValueError(f"Unknown action type: {action.type!r}")
 
@@ -233,6 +289,68 @@ def _action_to_content(
         raise ValueError(f"GitHub repo is not allowed for review context: {repo}")
     url = _github_raw_url(repo, branch, path)
     return ExternalContent(name=path, url=url, description=path)
+
+
+async def _fetch_revision(
+    action: FetchRevisionAction,
+) -> tuple[str, str, Literal["phabricator_revision", "github_commit"], str, str] | None:
+    """Fetch the diff of another revision, either from Phabricator or GitHub."""
+    revision_str = action.revision or ""
+    repo = action.repo or ""
+    commit_hash = action.hash or ""
+
+    if revision_str:
+        m = _PHAB_RE.match(revision_str.strip())
+        if not m:
+            logger.warning("fetch_revision: cannot parse revision %r", revision_str)
+            return None
+        rev_num = int(m.group(1))
+        try:
+            from bugbug.tools.core.platforms.phabricator import get_phabricator_client
+
+            def _load():
+                phab = get_phabricator_client()
+                revision = phab.load_revision(rev_id=rev_num)
+                diff_id = revision["fields"]["diffID"]
+                return phab.load_raw_diff(diff_id)
+
+            content = await asyncio.get_event_loop().run_in_executor(None, _load)
+            name = f"Revision D{rev_num}"
+            return (
+                name,
+                content,
+                "phabricator_revision",
+                name,
+                "phabricator_revision",
+            )
+        except Exception:
+            logger.warning("fetch_revision: failed to load Phabricator D%s", rev_num)
+            return None
+
+    if repo and commit_hash:
+        try:
+            response = await get_http_client().get(
+                f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
+                headers={"Accept": "application/vnd.github.diff"},
+                timeout=30,
+            )
+            response.raise_for_status()
+            source = f"{repo}@{commit_hash}"
+            return (
+                f"{repo}@{commit_hash[:12]}",
+                response.text,
+                "github_commit",
+                source,
+                "github_repo_content",
+            )
+        except httpx.HTTPError:
+            logger.warning("fetch_revision: failed to load %s@%s", repo, commit_hash)
+            return None
+
+    logger.warning(
+        "fetch_revision: action has neither revision nor repo+hash: %s", action
+    )
+    return None
 
 
 def _merge_rules(base: list[Rule], extra_toml: str) -> list[Rule]:
@@ -324,15 +442,29 @@ async def execute_actions(
 ) -> list[ExternalContentItem]:
     """Execute a list of actions and return loaded external content.
 
-    file actions resolve to an ExternalContent URL and fetch the file content.
-    content_overrides bypasses the network fetch for matching names, allowing
-    callers to inject test content.
+    fetch_revision actions fetch the raw diff of a Phabricator revision or
+    GitHub commit. file actions resolve to an ExternalContent URL and
+    fetch the file content. content_overrides bypasses the network fetch for
+    matching names, allowing callers to inject test content.
     """
     results: list[ExternalContentItem] = []
     for matched_action in actions:
         action = matched_action.action
-        if not isinstance(action, LoadFileAction):
-            logger.error("Unsupported review context action %s", _action_to_dict(action))
+        if isinstance(action, FetchRevisionAction):
+            result = await _fetch_revision(action)
+            if result:
+                name, body, source_type, source, trust_reason = result
+                results.append(
+                    ExternalContentItem.create(
+                        name=name,
+                        body=body,
+                        source_type=source_type,
+                        source=source,
+                        action=action,
+                        matched_rules=matched_action.matched_rules,
+                        trust_reason=trust_reason,
+                    )
+                )
             continue
         try:
             item = _action_to_content(
@@ -389,6 +521,7 @@ async def load_external_content_for_diff(
     review_context_repo: str,
     review_context_branch: str = "main",
     review_context_path: str = DEFAULT_REVIEW_CONTEXT_PATH,
+    bug_id: int | None = None,
     extra_context_toml: str | None = None,
     content_overrides: dict[str, str] | None = None,
 ) -> list[ExternalContentItem]:
@@ -419,8 +552,12 @@ async def load_external_content_for_diff(
         )
         return []
 
+    bug_component: str | None = None
+    if bug_id is not None:
+        bug_component = await get_bug_component(bug_id)
+
     try:
-        actions = collect_actions(diff, config, extra_context_toml=extra_context_toml)
+        actions = collect_actions(diff, config, bug_component, extra_context_toml)
     except (tomllib.TOMLDecodeError, ReviewContextValidationError):
         logger.exception("Could not parse extra review context")
         return []
