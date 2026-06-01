@@ -361,12 +361,6 @@ def generate_diff_for_bug(
     diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
     diff_zst_path = f"{diff_path}.zst"
 
-    if upload and utils.exists_s3(diff_zst_path):
-        return (0, 0)
-
-    if os.path.exists(diff_path) or os.path.exists(diff_zst_path):
-        return (0, 0)
-
     try:
         diff = diff_failure_vs_fix(
             repo_path,
