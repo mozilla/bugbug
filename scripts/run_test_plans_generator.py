@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
         "--no-test-steps",
         dest="generate_steps",
         action="store_false",
+        default=True,
         help="Only generate test cases, without detailed test steps.",
     )
     parser.add_argument(
@@ -74,13 +75,13 @@ def main() -> None:
 
     if not args.generate_steps:
         if args.json_lines:
-            _print_json({"type": "test_cases", **test_cases}, json_lines=True)
+            _print_json({"type": "test_cases", "data": test_cases}, json_lines=True)
         else:
             _print_json(test_cases)
         return
 
     if args.json_lines:
-        _print_json({"type": "test_cases", **test_cases}, json_lines=True)
+        _print_json({"type": "test_cases", "data": test_cases}, json_lines=True)
 
     generated_test_steps = tool.generate_test_steps(
         feature_description=args.feature_description,
@@ -89,7 +90,7 @@ def main() -> None:
     test_plan = _load_json(generated_test_steps, "test steps")
 
     if args.json_lines:
-        _print_json({"type": "test_steps", **test_plan}, json_lines=True)
+        _print_json({"type": "test_steps", "data": test_plan}, json_lines=True)
         return
 
     _print_json(test_plan)
