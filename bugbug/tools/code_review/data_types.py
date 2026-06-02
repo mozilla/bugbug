@@ -1,10 +1,13 @@
 import re
+from datetime import datetime
 
 import httpx
+import tenacity
 from pydantic import BaseModel, Field, PrivateAttr
 
 from bugbug.tools.core.connection import get_http_client
 from bugbug.tools.core.data_types import InlineComment
+from bugbug.tools.core.platforms.base import Patch
 
 
 class GeneratedReviewComment(BaseModel):
@@ -78,6 +81,132 @@ class Skill(BaseModel):
         except httpx.HTTPError as e:
             raise SkillLoadError(
                 f"Could not load skill '{self.name}' from {self.url}"
+            ) from e
+
+        self._cached_body = _strip_frontmatter(response.text)
+        return self._cached_body
+
+
+_BUG_RE = re.compile(r"[Bb]ug\s+(\d+)")
+_DIFFERENTIAL_RE = re.compile(r"Differential Revision:\s*(https?://\S+)")
+_DATE_RE = re.compile(r"^Date:\s+(.+)$", re.MULTILINE)
+
+
+class LocalPatch(Patch):
+    """A patch from a local diff string, not backed by any platform."""
+
+    def __init__(
+        self,
+        diff: str,
+        commit_message: str = "",
+    ) -> None:
+        self._diff = diff
+        self._commit_message = commit_message
+        lines = commit_message.splitlines()
+        self._title = lines[0].strip() if lines else "Local patch"
+        self._description = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+        m = _BUG_RE.search(commit_message)
+        self._bug_id: int | None = int(m.group(1)) if m else None
+        m2 = _DIFFERENTIAL_RE.search(commit_message)
+        self._url = m2.group(1) if m2 else ""
+        m3 = _DATE_RE.search(commit_message)
+        if m3:
+            from email.utils import parsedate_to_datetime
+            try:
+                self._date = parsedate_to_datetime(m3.group(1))
+            except Exception:
+                self._date = datetime.now()
+        else:
+            self._date = datetime.now()
+
+    @property
+    def patch_id(self) -> str:
+        return "local"
+
+    @property
+    def raw_diff(self) -> str:
+        return self._diff
+
+    @property
+    def date_created(self) -> datetime:
+        return self._date
+
+    @property
+    def has_bug(self) -> bool:
+        return self._bug_id is not None
+
+    @property
+    def bug_id(self) -> int | None:
+        return self._bug_id
+
+    @property
+    def bug_title(self) -> str:
+        return ""
+
+    @property
+    def patch_title(self) -> str:
+        return self._title
+
+    @property
+    def patch_description(self) -> str:
+        return self._description
+
+    @property
+    def patch_url(self) -> str:
+        return self._url
+
+    def is_accessible(self) -> bool:
+        return True
+
+    def is_public(self) -> bool:
+        return True
+
+    async def get_new_file(self, file_path: str) -> str:
+        raise FileNotFoundError(
+            f"No repository checkout available for '{file_path}' — use local tools to inspect it directly."
+        )
+
+    async def get_old_file(self, file_path: str) -> str:
+        raise FileNotFoundError(
+            f"No repository checkout available for '{file_path}' — use local tools to inspect it directly."
+        )
+
+
+class ExternalContentLoadError(Exception):
+    """Raised when an ExternalContent body cannot be loaded."""
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, min=1),
+    retry=tenacity.retry_if_exception_type(httpx.TransportError),
+    reraise=True,
+)
+async def _fetch_url(url: str) -> httpx.Response:
+    response = await get_http_client().get(url, timeout=30)
+    response.raise_for_status()
+    return response
+
+
+class ExternalContent(BaseModel):
+    """An external file fetched and injected as context for the review."""
+
+    name: str = Field(description="A unique identifier for this content item.")
+    url: str = Field(description="HTTPS URL of the file to fetch.")
+    description: str = Field(description="Short description of what this content provides.")
+
+    _cached_body: str | None = PrivateAttr(default=None)
+
+    async def load(self) -> str:
+        """Return the content body, fetching and caching it on first use."""
+        if self._cached_body is not None:
+            return self._cached_body
+
+        try:
+            response = await _fetch_url(self.url)
+        except httpx.HTTPError as e:
+            raise ExternalContentLoadError(
+                f"Could not load content '{self.name}' from {self.url}"
             ) from e
 
         self._cached_body = _strip_frontmatter(response.text)

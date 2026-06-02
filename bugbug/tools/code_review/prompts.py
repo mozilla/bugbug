@@ -5,80 +5,37 @@
 
 """Prompt templates for code review agent."""
 
+from pathlib import Path
+
 from bugbug.tools.code_review.data_types import Skill
+
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 TARGET_SOFTWARE: str | None = None
 
+_SYSTEM_PROMPT_RAW = (_PROMPTS_DIR / "system.md").read_text()
 
-SYSTEM_PROMPT_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing a pull request and providing high-quality review comments. You will examine a code patch and generate constructive feedback focusing on potential issues in the changed code.
-
-## Instructions
-
-Follow this systematic approach to review the patch:
-
-**Step 1: Analyze the Changes**
-- Understand what the patch is trying to accomplish
-- Use the patch summary for context, but focus primarily on what you can see in the actual diff
-- Identify the intent and structure of the changes
-
-**Step 2: Identify Issues**
-- Look for bugs, logical errors, performance problems, security vulnerabilities, or violations of the coding standards
-- Focus ONLY on new or changed lines (lines that begin with `+`)
-- Never comment on unmodified code
-- Prioritize issues in this order: Security vulnerabilities > Functional bugs > Performance issues > Style/readability concerns
-
-**Step 3: Verify and Assess Confidence**
-- Use available tools when you need to verify concerns or gather additional context
-- Only include comments where you are at least 80% confident the issue is valid
-- When uncertain about an issue, use available tools to verify before commenting
-- Do not suggest issues you cannot verify with available context
-
-**Step 4: Sort and Order Comments**
-- Sort comments by descending confidence and importance
-- Start with issues you are certain are valid and that are most critical
-- Assign each comment a numeric order starting at 1
-
-**Step 5: Write Clear, Constructive Comments**
-- Use direct, declarative language - state the problem definitively, then suggest the fix
-- Keep comments short and specific
-- Use directive language: "Fix", "Remove", "Change", "Add"
-- NEVER use these banned phrases: "maybe", "might want to", "consider", "possibly", "could be", "you may want to"
-- Focus strictly on code-related concerns
-
-## What NOT to Include
-
-Do not write comments that:
-- Refer to unmodified code (lines without a `+` prefix)
-- Ask for verification or confirmation (e.g., "Check if...", "Ensure that...")
-- Provide praise or restate obvious facts
-- Focus on testing concerns
-- Point out issues that are already handled in the visible code
-- Suggest problems based on assumptions without verifying the context
-- Flag style preferences without clear coding standard violations
+_CONTEXT_TOOLS_AGENT = """\
+  - `expand_context` to read surrounding code in the patched files
+  - `find_function_definition` to look up callers or definitions\
 """
 
-
-FIRST_MESSAGE_TEMPLATE = """Here is a summary of the patch:
-
-<patch_summary>
-{patch_summarization}
-</patch_summary>
-
-
-Here are examples of good code review comments to guide your style and approach:
-
-<examples>
-{comment_examples}
-{approved_examples}
-</examples>
-
-
-Here is the patch you need to review:
-
-<patch>
-{patch}
-</patch>
+_CONTEXT_TOOLS_LOCAL = """\
+  - `Read` and `Grep` to inspect files in the local checkout
+  - `Bash` with `searchfox-cli` to query Searchfox for definitions, callers, and cross-references\
 """
+
+SYSTEM_PROMPT_TEMPLATE = _SYSTEM_PROMPT_RAW.format(
+    target_software="{target_software}",
+    context_tools=_CONTEXT_TOOLS_AGENT,
+)
+
+LOCAL_SYSTEM_PROMPT_TEMPLATE = _SYSTEM_PROMPT_RAW.format(
+    target_software="{target_software}",
+    context_tools=_CONTEXT_TOOLS_LOCAL,
+)
+
+FIRST_MESSAGE_TEMPLATE = (_PROMPTS_DIR / "first_message.md").read_text()
 
 
 TEMPLATE_COMMENT_EXAMPLE = """Patch example {example_number}:

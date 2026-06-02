@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,9 +10,34 @@ import httpx
 import pytest
 from unidiff import PatchSet
 
-from bugbug.tools.code_review import data_types, langchain_tools
-from bugbug.tools.code_review.data_types import Skill, _strip_frontmatter
+from bugbug.tools.code_review import data_types, langchain_tools, review_context
+from bugbug.tools.code_review.data_types import (
+    ExternalContent,
+    Skill,
+    _strip_frontmatter,
+)
 from bugbug.tools.code_review.langchain_tools import _fetch_file, create_load_skill_tool
+from bugbug.tools.code_review.review_context import (
+    _merge_rules,
+    external_content_manifest,
+    format_external_content,
+    get_bug_component,
+    github_repo_allowed,
+    load_external_content_for_diff,
+    parse_diff_files,
+    parse_review_context_toml,
+    rule_matches,
+)
+from bugbug.tools.code_review.review_context_schema import (
+    AnyFilePredicate,
+    BugzillaPredicate,
+    FilePredicate,
+    ReviewContextValidationError,
+    Rule,
+)
+from bugbug.tools.code_review.review_context_schema import (
+    main as validate_review_context_main,
+)
 from bugbug.tools.code_review.utils import find_comment_scope
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
@@ -41,6 +68,17 @@ def make_fetch(files):
         return files[path]
 
     return fetch
+
+
+def extract_review_context_examples(markdown: str) -> list[tuple[int, str]]:
+    examples = []
+    fence_re = re.compile(r"^```(?P<info>[^\n]*)\n(?P<body>.*?)^```", re.M | re.S)
+    for match in fence_re.finditer(markdown):
+        info = match.group("info").split()
+        if info == ["toml", "review-context"]:
+            line = markdown.count("\n", 0, match.start()) + 1
+            examples.append((line, match.group("body")))
+    return examples
 
 
 # ---------------------------------------------------------------------------
@@ -480,3 +518,685 @@ def test_fetch_file_skips_revision_when_none():
     result = asyncio.run(_fetch_file("f.txt", None, client, patch))
     assert result == "latest content"
     client.get_file_at_revision.assert_not_called()
+
+
+@pytest.fixture(autouse=True)
+def clear_review_context_cache():
+    review_context._review_context_cache.clear()
+    yield
+    review_context._review_context_cache.clear()
+
+
+@pytest.mark.asyncio
+async def test_external_content_load_caches():
+    item = ExternalContent(
+        name="a",
+        url="https://example.com/a.md",
+        description="example",
+    )
+    client = _mock_client_returning("---\nname: a\n---\nbody\n")
+    with patch.object(data_types, "get_http_client", return_value=client):
+        first = await item.load()
+        second = await item.load()
+    assert first == "body\n"
+    assert second == "body\n"
+    assert client.get.await_count == 1
+
+
+_RULES_TOML = """
+version = 1
+
+[[rules]]
+name = "Audio/Video C++"
+when = { any_file = { include = ["dom/media/**"], ext = [".cpp", ".h"] } }
+load = [
+  { type = "file", path = ".claude/skills/dom-media.md" },
+]
+
+[[rules]]
+name = "WebIDL"
+when = { any_file = { ext = [".webidl"] } }
+load = [
+  { type = "file", path = ".claude/skills/webidl.md", repo = "mozilla-firefox/firefox" },
+]
+
+[[rules]]
+name = "Any JS"
+when = { any_file = { ext = [".js"] } }
+load = [
+  { type = "file", path = ".claude/skills/js-style.md" },
+]
+
+[[rules]]
+name = "Bugzilla component only"
+when = { bugzilla = { component = ["Core::DOM: Web Audio"] } }
+load = [
+  { type = "file", path = ".claude/skills/dom-audio.md" },
+]
+"""
+
+_DIFF_MEDIA = """\
+diff --git a/dom/media/Foo.cpp b/dom/media/Foo.cpp
+--- a/dom/media/Foo.cpp
++++ b/dom/media/Foo.cpp
+@@ -1,1 +1,1 @@
+-old
++new
+"""
+
+_DIFF_WEBIDL = """\
+diff --git a/dom/webidl/Foo.webidl b/dom/webidl/Foo.webidl
+--- a/dom/webidl/Foo.webidl
++++ b/dom/webidl/Foo.webidl
+@@ -1,1 +1,1 @@
+-old
++new
+"""
+
+
+def test_parse_diff_files():
+    files = parse_diff_files(_DIFF_MEDIA)
+    assert files == {"dom/media/Foo.cpp"}
+
+
+def test_github_repo_allowed_policy():
+    assert github_repo_allowed("mozilla/cubeb", "example/repo", {"mozilla/"})
+    assert github_repo_allowed("whatwg/html", "example/repo", {"whatwg/html"})
+    assert github_repo_allowed("example/repo", "example/repo", set())
+    assert not github_repo_allowed("mozilla/cubeb", "example/repo", set())
+    assert not github_repo_allowed("whatwg/html-tests", "example/repo", {"whatwg/html"})
+
+
+def test_rule_matches_extension_and_path():
+    rule = Rule(
+        name="test",
+        when=AnyFilePredicate(FilePredicate(include=["dom/media/**"], ext=[".cpp"])),
+        load=[],
+    )
+    assert rule_matches(rule, {"dom/media/Foo.cpp"})
+    assert not rule_matches(rule, {"dom/canvas/Foo.cpp"})
+    assert not rule_matches(rule, {"dom/media/Foo.js"})
+
+
+def test_rule_matches_extension_only():
+    rule = Rule(
+        name="test",
+        when=AnyFilePredicate(FilePredicate(ext=[".webidl"])),
+        load=[],
+    )
+    assert rule_matches(rule, {"dom/webidl/Foo.webidl"})
+    assert not rule_matches(rule, {"dom/media/Foo.cpp"})
+
+
+def test_parse_review_context_toml_rejects_missing_when():
+    toml = """
+version = 1
+
+[[rules]]
+name = "Bad rule"
+load = [{ type = "file", path = "skills/guide.md" }]
+"""
+    with pytest.raises(ReviewContextValidationError):
+        parse_review_context_toml(toml)
+
+
+def test_parse_review_context_toml_rejects_unknown_action_type():
+    toml = """
+version = 1
+
+[[rules]]
+name = "Bad rule"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "unknown", path = "skills/guide.md" }]
+"""
+    with pytest.raises(ReviewContextValidationError):
+        parse_review_context_toml(toml)
+
+
+def test_parse_review_context_toml_rejects_unknown_rule_field():
+    toml = """
+version = 1
+
+[[rules]]
+name = "Bad rule"
+when = { any_file = { ext = [".cpp"] } }
+match_unknown = ["x"]
+load = [{ type = "file", path = "skills/guide.md" }]
+"""
+    with pytest.raises(ReviewContextValidationError):
+        parse_review_context_toml(toml)
+
+
+def test_parse_review_context_example_file():
+    repo_root = Path(__file__).resolve().parent.parent
+    example = (repo_root / "docs/code-review-context-example.toml").read_text()
+    config = parse_review_context_toml(example)
+    assert config.version == 1
+    assert len(config.rules) >= 1
+    assert "whatwg/html" in config.policy.github.allowed_repos
+
+
+def test_parse_review_context_examples_from_docs():
+    repo_root = Path(__file__).resolve().parent.parent
+    docs = (repo_root / "docs/code-review-skills.md").read_text()
+    examples = extract_review_context_examples(docs)
+    assert examples
+
+    for line, example in examples:
+        try:
+            config = parse_review_context_toml(example)
+        except ReviewContextValidationError as exc:
+            pytest.fail(f"docs/code-review-skills.md:{line}: {exc}")
+        assert config.rules, f"docs/code-review-skills.md:{line}: expected rules"
+
+
+def test_validate_review_context_main(tmp_path, capsys):
+    review_context_path = tmp_path / "review-context.toml"
+    review_context_path.write_text(_RULES_TOML)
+
+    assert validate_review_context_main([str(review_context_path)]) == 0
+
+    captured = capsys.readouterr()
+    assert "valid (4 rule(s))" in captured.out
+
+
+def test_validate_review_context_main_failure(tmp_path, capsys):
+    review_context_path = tmp_path / "review-context.toml"
+    review_context_path.write_text(
+        """
+version = 1
+
+[[rules]]
+name = "Bad rule"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "unknown" }]
+"""
+    )
+
+    assert validate_review_context_main([str(review_context_path)]) == 1
+
+    captured = capsys.readouterr()
+    assert "invalid" in captured.err
+    assert "unknown action type" in captured.err
+
+
+def test_rule_bugzilla_component_fails_closed_without_component():
+    rule = Rule(
+        name="test",
+        when=BugzillaPredicate(component=["Core::DOM: Web Audio"]),
+        load=[],
+    )
+    assert not rule_matches(rule, {"dom/media/Foo.cpp"}, bug_component=None)
+
+
+def test_rule_bugzilla_component_matches():
+    rule = Rule(
+        name="test",
+        when=BugzillaPredicate(component=["Core::DOM: Web Audio"]),
+        load=[],
+    )
+    assert rule_matches(
+        rule, {"dom/media/Foo.cpp"}, bug_component="Core::DOM: Web Audio"
+    )
+    assert not rule_matches(
+        rule, {"dom/media/Foo.cpp"}, bug_component="Core::Networking"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_bug_component():
+    def fake_bugzilla(bug_id, include_fields, bughandler, bugdata):
+        bughandler({"product": "Core", "component": "DOM: Web Audio"}, bugdata)
+        mock = MagicMock()
+        mock.get_data.return_value.wait = MagicMock()
+        return mock
+
+    with patch("libmozdata.bugzilla.Bugzilla", side_effect=fake_bugzilla):
+        component = await get_bug_component(12345)
+
+    assert component == "Core::DOM: Web Audio"
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_for_diff_file_load():
+    review_context_repo = "mozilla-firefox/firefox"
+    content_body = "---\nname: dom-media\n---\nAudio guidelines.\n"
+
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+
+    content_response = MagicMock()
+    content_response.text = content_body
+    content_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, content_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA, review_context_repo, review_context_branch="release"
+            )
+
+    assert len(results) == 1
+    item = results[0]
+    assert item.name == ".claude/skills/dom-media.md"
+    assert item.body == "Audio guidelines.\n"
+    assert item.source_type == "github_file"
+    assert item.trusted
+    assert item.trust_reason == "github_repo_content"
+    assert item.matched_rules == ["Audio/Video C++"]
+    assert item.bytes == len("Audio guidelines.\n".encode())
+    assert item.sha256
+    assert client.get.await_args_list[0].args[0] == (
+        "https://raw.githubusercontent.com/"
+        "mozilla-firefox/firefox/refs/heads/release/review-context.toml"
+    )
+    assert client.get.await_args_list[1].args[0] == (
+        "https://raw.githubusercontent.com/"
+        "mozilla-firefox/firefox/refs/heads/release/"
+        ".claude/skills/dom-media.md"
+    )
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_for_diff_no_match():
+    review_context_repo = "mozilla-firefox/firefox"
+
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    diff = "diff --git a/build/Makefile b/build/Makefile\n+++ b/build/Makefile\n+new\n"
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(diff, review_context_repo)
+
+    assert results == []
+    assert client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_for_diff_rules_fetch_failure():
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA, "mozilla-firefox/firefox"
+            )
+
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_deduplicates_actions():
+    toml = """
+version = 1
+
+[[rules]]
+name = "Rule A"
+when = { any_file = { include = ["dom/media/**"], ext = [".cpp"] } }
+load = [{ type = "file", path = "skills/guide.md" }]
+
+[[rules]]
+name = "Rule B"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "skills/guide.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+
+    rules_response = MagicMock()
+    rules_response.text = toml
+    rules_response.raise_for_status = MagicMock()
+
+    content_response = MagicMock()
+    content_response.text = "body"
+    content_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[rules_response, content_response])
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA, review_context_repo
+            )
+
+    assert len(results) == 1
+    assert results[0].matched_rules == ["Rule A", "Rule B"]
+    assert client.get.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_orders_by_priority():
+    toml = """
+version = 1
+
+[[rules]]
+name = "Low"
+priority = 1
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "skills/low.md" }]
+
+[[rules]]
+name = "High"
+priority = 10
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "skills/high.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = toml
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA,
+                review_context_repo,
+                content_overrides={
+                    "skills/low.md": "low\n",
+                    "skills/high.md": "high\n",
+                },
+            )
+
+    assert [item.name for item in results] == ["skills/high.md", "skills/low.md"]
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_rejects_disallowed_github_repo():
+    toml = """
+version = 1
+
+[[rules]]
+name = "External"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", repo = "whatwg/html", path = "review.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = toml
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA,
+                review_context_repo,
+                content_overrides={"review.md": "external\n"},
+            )
+
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_load_external_content_allows_policy_prefix_repo():
+    toml = """
+version = 1
+
+[policy.github]
+allowed_repos = ["mozilla/"]
+
+[[rules]]
+name = "External"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", repo = "mozilla/cubeb", path = "review.md" }]
+"""
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = toml
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA,
+                review_context_repo,
+                content_overrides={"review.md": "external\n"},
+            )
+
+    assert [item.name for item in results] == ["review.md"]
+
+
+# --- _merge_rules ---
+
+
+def test_merge_rules_appends_new():
+    base = parse_review_context_toml(
+        """
+version = 1
+
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "a.md" }]
+"""
+    ).rules
+    extra = """
+version = 1
+
+[[rules]]
+name = "B"
+when = { any_file = { ext = [".js"] } }
+load = [{ type = "file", path = "b.md" }]
+"""
+    merged = _merge_rules(base, extra)
+    assert len(merged) == 2
+    assert merged[1].name == "B"
+
+
+def test_merge_rules_replaces_by_name():
+    base = parse_review_context_toml(
+        """
+version = 1
+
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "a.md" }]
+"""
+    ).rules
+    extra = """
+version = 1
+
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp", ".h"] } }
+load = [{ type = "file", path = "a.md" }]
+"""
+    merged = _merge_rules(base, extra)
+    assert len(merged) == 1
+    assert merged[0].when.predicate.ext == [".cpp", ".h"]
+
+
+def test_merge_rules_empty_extra():
+    base = parse_review_context_toml(
+        """
+version = 1
+
+[[rules]]
+name = "A"
+when = { any_file = { ext = [".cpp"] } }
+load = [{ type = "file", path = "a.md" }]
+"""
+    ).rules
+    merged = _merge_rules(base, "version = 1\n")
+    assert len(merged) == 1
+    assert merged[0].name == "A"
+    assert merged[0].when.predicate.ext == [".cpp"]
+    assert len(merged[0].load) == 1
+
+    merged = _merge_rules(base, "version = 1\n# comment\n")
+    assert len(merged) == 1
+    assert merged[0].name == "A"
+    assert merged[0].when.predicate.ext == [".cpp"]
+    assert len(merged[0].load) == 1
+
+
+# --- content_overrides ---
+
+
+@pytest.mark.asyncio
+async def test_content_override_used_instead_of_fetch():
+    review_context_repo = "mozilla-firefox/firefox"
+
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    overrides = {".claude/skills/dom-media.md": "Overridden content.\n"}
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA, review_context_repo, content_overrides=overrides
+            )
+
+    assert len(results) == 1
+    assert results[0].name == ".claude/skills/dom-media.md"
+    assert results[0].body == "Overridden content.\n"
+    assert client.get.await_count == 1  # only the rules fetch, not the content
+
+
+@pytest.mark.asyncio
+async def test_external_content_manifest_and_prompt_body():
+    review_context_repo = "mozilla-firefox/firefox"
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    overrides = {".claude/skills/dom-media.md": "Audio guidelines.\n"}
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA, review_context_repo, content_overrides=overrides
+            )
+
+    manifest = external_content_manifest(results)
+    assert manifest == [
+        {
+            "name": ".claude/skills/dom-media.md",
+            "source_type": "github_file",
+            "source": (
+                "https://raw.githubusercontent.com/mozilla-firefox/firefox/"
+                "refs/heads/main/.claude/skills/dom-media.md"
+            ),
+            "action": {
+                "type": "file",
+                "path": ".claude/skills/dom-media.md",
+            },
+            "matched_rules": ["Audio/Video C++"],
+            "trusted": True,
+            "trust_reason": "github_repo_content",
+            "bytes": len("Audio guidelines.\n".encode()),
+            "sha256": results[0].sha256,
+        }
+    ]
+
+    prompt_content = format_external_content(results)
+    assert "<external_content_manifest>" in prompt_content
+    assert "<external_context>" in prompt_content
+    assert "Audio guidelines." in prompt_content
+
+
+@pytest.mark.asyncio
+async def test_extra_context_toml_appended():
+    review_context_repo = "mozilla-firefox/firefox"
+    extra = """
+version = 1
+
+[[rules]]
+name = "Extra JS rule"
+when = { any_file = { ext = [".js"] } }
+load = [{ type = "file", path = ".claude/skills/js.md" }]
+"""
+    diff_js = "diff --git a/Foo.js b/Foo.js\n+++ b/Foo.js\n+new\n"
+
+    # Use a base TOML without any .js rules so only the extra rule fires.
+    base_toml = """
+version = 1
+
+[[rules]]
+name = "Audio/Video C++"
+when = { any_file = { include = ["dom/media/**"], ext = [".cpp", ".h"] } }
+load = [{ type = "file", path = ".claude/skills/dom-media.md" }]
+"""
+    rules_response = MagicMock()
+    rules_response.text = base_toml
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    overrides = {".claude/skills/js.md": "JS guidelines.\n"}
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                diff_js,
+                review_context_repo,
+                extra_context_toml=extra,
+                content_overrides=overrides,
+            )
+
+    assert len(results) == 1
+    assert results[0].name == ".claude/skills/js.md"
+    assert results[0].body == "JS guidelines.\n"
+
+
+@pytest.mark.asyncio
+async def test_extra_context_toml_replaces_by_name():
+    review_context_repo = "mozilla-firefox/firefox"
+    # Replace the "Audio/Video C++" rule with a version that loads different content
+    extra = """
+version = 1
+
+[[rules]]
+name = "Audio/Video C++"
+when = { any_file = { include = ["dom/media/**"], ext = [".cpp", ".h"] } }
+load = [{ type = "file", path = ".claude/skills/dom-media-v2.md" }]
+"""
+    rules_response = MagicMock()
+    rules_response.text = _RULES_TOML
+    rules_response.raise_for_status = MagicMock()
+
+    client = MagicMock()
+    client.get = AsyncMock(return_value=rules_response)
+
+    overrides = {".claude/skills/dom-media-v2.md": "Updated guidelines.\n"}
+
+    with patch.object(data_types, "get_http_client", return_value=client):
+        with patch.object(review_context, "get_http_client", return_value=client):
+            results = await load_external_content_for_diff(
+                _DIFF_MEDIA,
+                review_context_repo,
+                extra_context_toml=extra,
+                content_overrides=overrides,
+            )
+
+    assert len(results) == 1
+    assert results[0].name == ".claude/skills/dom-media-v2.md"
+    assert results[0].body == "Updated guidelines.\n"

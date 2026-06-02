@@ -145,6 +145,42 @@ def _get_users_info_batch(user_phids: set[str]) -> dict[str, dict]:
     return _get_users_info_batch_with_retry(user_phids)
 
 
+def _get_project_info_batch(project_phids: set[str]) -> dict[str, dict]:
+    if not project_phids:
+        return {}
+
+    phabricator = get_phabricator_client()
+    projects_response = phabricator.request(
+        "project.search",
+        constraints={"phids": list(project_phids)},
+    )
+
+    result = {}
+    for project_data in projects_response.get("data", []):
+        phid = project_data["phid"]
+        fields = project_data.get("fields", {})
+        result[phid] = {
+            "name": fields.get("name", phid),
+            "slug": fields.get("slug"),
+        }
+    return result
+
+
+def _get_repository_info(repository_phid: str | None) -> dict | None:
+    if not repository_phid:
+        return None
+
+    phabricator = get_phabricator_client()
+    repositories_response = phabricator.request(
+        "diffusion.repository.search",
+        constraints={"phids": [repository_phid]},
+    )
+    repositories = repositories_response.get("data", [])
+    if not repositories:
+        return None
+    return repositories[0]
+
+
 def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[list, int]:
     """Sanitize comments by filtering untrusted content.
 
@@ -512,6 +548,19 @@ class PhabricatorPatch(Patch):
     def diff_author_phid(self) -> str:
         return self._diff_metadata["authorPHID"]
 
+    @cached_property
+    def _revision_search_metadata(self) -> dict:
+        phabricator = get_phabricator_client()
+        response = phabricator.request(
+            "differential.revision.search",
+            constraints={"ids": [self.revision_id]},
+            attachments={"reviewers": True},
+        )
+        revisions = response.get("data", [])
+        if not revisions:
+            return {}
+        return revisions[0]
+
     @property
     def stack_graph(self) -> dict:
         return self._revision_metadata["fields"].get("stackGraph", {})
@@ -560,10 +609,44 @@ class PhabricatorPatch(Patch):
 
     @cached_property
     def _users_info(self) -> dict[str, dict]:
-        user_phids = {c.author_phid for c in self._all_comments} | {self.author_phid}
+        user_phids = (
+            {c.author_phid for c in self._all_comments}
+            | {self.author_phid}
+            | self.reviewer_user_phids
+        )
         if self.author_phid != self.diff_author_phid:
             user_phids.add(self.diff_author_phid)
         return _get_users_info_batch(user_phids)
+
+    @cached_property
+    def _project_info(self) -> dict[str, dict]:
+        return _get_project_info_batch(self.reviewer_project_phids)
+
+    @cached_property
+    def reviewers(self) -> list[dict]:
+        if not self._revision_metadata["fields"].get("repositoryPHID"):
+            return []
+        return (
+            self._revision_search_metadata.get("attachments", {})
+            .get("reviewers", {})
+            .get("reviewers", [])
+        )
+
+    @cached_property
+    def reviewer_user_phids(self) -> set[str]:
+        return {
+            reviewer["reviewerPHID"]
+            for reviewer in self.reviewers
+            if reviewer.get("reviewerPHID", "").startswith("PHID-USER-")
+        }
+
+    @cached_property
+    def reviewer_project_phids(self) -> set[str]:
+        return {
+            reviewer["reviewerPHID"]
+            for reviewer in self.reviewers
+            if reviewer.get("reviewerPHID", "").startswith("PHID-PROJ-")
+        }
 
     def _format_user_display(self, user_phid: str) -> str:
         info = self._users_info.get(user_phid, {})
@@ -572,6 +655,49 @@ class PhabricatorPatch(Patch):
         if real_name:
             return f"{real_name} ({email})"
         return email
+
+    def _format_reviewer_display(self, reviewer: dict) -> str:
+        reviewer_phid = reviewer["reviewerPHID"]
+        if reviewer_phid.startswith("PHID-USER-"):
+            name = self._format_user_display(reviewer_phid)
+        elif reviewer_phid.startswith("PHID-PROJ-"):
+            project = self._project_info.get(reviewer_phid, {})
+            slug = project.get("slug")
+            name = slug or project.get("name", reviewer_phid)
+        else:
+            name = reviewer_phid
+
+        status = reviewer.get("status")
+        if reviewer.get("isBlocking"):
+            status = "blocking"
+        if status:
+            return f"{name} [{status}]"
+        return name
+
+    @property
+    def reviewer_summary(self) -> str | None:
+        if not self.reviewers:
+            return None
+        return ", ".join(self._format_reviewer_display(r) for r in self.reviewers)
+
+    @cached_property
+    def repository_info(self) -> dict | None:
+        return _get_repository_info(
+            self._revision_metadata["fields"].get("repositoryPHID")
+        )
+
+    @property
+    def target_repository(self) -> str | None:
+        if not self.repository_info:
+            return None
+        fields = self.repository_info.get("fields", {})
+        return fields.get("shortName") or fields.get("name")
+
+    @property
+    def target_repository_default_branch(self) -> str | None:
+        if not self.repository_info:
+            return None
+        return self.repository_info.get("fields", {}).get("defaultBranch")
 
     @property
     def author(self) -> str:
@@ -633,6 +759,15 @@ class PhabricatorPatch(Patch):
         md_lines.append(f"- **URI**: {self.revision_uri}")
         md_lines.append(f"- **Revision Author**: {self.author}")
         md_lines.append(f"- **Status**: {self.revision_status}")
+        if self.reviewer_summary:
+            md_lines.append(f"- **Reviewers**: {self.reviewer_summary}")
+        if self.target_repository:
+            repository_line = self.target_repository
+            if self.target_repository_default_branch:
+                repository_line += (
+                    f" (default branch: {self.target_repository_default_branch})"
+                )
+            md_lines.append(f"- **Target Repository**: {repository_line}")
         md_lines.append(f"- **Created**: {self.date_created.strftime(date_format)}")
         md_lines.append(f"- **Modified**: {self.date_modified.strftime(date_format)}")
         bug_id = self._revision_metadata["fields"].get("bugzilla.bug-id") or "N/A"
