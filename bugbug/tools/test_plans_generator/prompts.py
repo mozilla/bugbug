@@ -16,14 +16,18 @@ Using the knowledge and information you are given, generate no more than 15 test
 -- This is the feature's scope of testing --:
 {test_scope}
 
+-- These are additional instructions for generating test cases --:
+{custom_instructions}
+
 -- Here are some tips for success --:
 1. Thoroughly understand the feature from the description, scope of testing and the existing test cases.
 2. Alter the wording while generating test cases.
 3. Check to see if each generated case is relevant to the feature.
 4. Check to see if each generated case is within the scope of testing.
 5. Check to see if each generated case is dissimilar to any existing test cases.
-6. Return only valid JSON with a "test_cases" key.
-7. Each entry in "test_cases" must have an "id" integer and a "test_case" string.
+6. Follow the additional instructions when they are provided.
+7. Return only valid JSON with a "test_cases" key.
+8. Each entry in "test_cases" must have an "id" integer and a "test_case" string.
 
 Avoid using a title, markdown formatting, comments, or any text outside the JSON object.
 
@@ -52,14 +56,18 @@ Using the knowledge and information you are given, generate test steps for each 
 -- These are the test cases for the feature --:
 {test_cases}
 
+-- These are additional instructions for generating test steps --:
+{custom_instructions}
+
 -- Here are some tips for success --:
 1. Thoroughly understand the feature from the description and the test cases.
 2. For each test case, generate clear and concise steps to execute the test case.
 3. Do not include the Launch Firefox step, as it is assumed to be the first step for every test case.
 4. Each test case should have its own set of steps.
-5. Return only valid JSON with a "test_cases" key.
-6. Keep the same "id" and "test_case" values from the input test cases.
-7. Each entry in "test_cases" must have an "id" integer, a "test_case" string, and a "test_steps" array of strings.
+5. Follow the additional instructions when they are provided.
+6. Return only valid JSON with a "test_cases" key.
+7. Keep the same "id" and "test_case" values from the input test cases.
+8. Each entry in "test_cases" must have an "id" integer, a "test_case" string, and a "test_steps" array of strings.
 Avoid using a title, markdown formatting, comments, or any text outside the JSON object.
 
 -- Here are some examples --:

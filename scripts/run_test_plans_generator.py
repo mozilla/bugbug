@@ -29,6 +29,17 @@ def parse_args() -> argparse.Namespace:
         help="Existing QA test cases to avoid duplicating.",
     )
     parser.add_argument(
+        "--custom-instructions",
+        default="",
+        help="Additional instructions to include in selected generation prompts.",
+    )
+    parser.add_argument(
+        "--custom-instructions-target",
+        choices=("test-cases", "test-steps", "both"),
+        default="both",
+        help="Generation prompt to receive the custom instructions.",
+    )
+    parser.add_argument(
         "--no-test-steps",
         dest="generate_steps",
         action="store_false",
@@ -48,9 +59,28 @@ def _load_json(output: str, output_name: str) -> dict:
     try:
         return json.loads(output)
     except json.JSONDecodeError as e:
+        decoder = json.JSONDecoder()
+        for index, character in enumerate(output):
+            if character not in "{[":
+                continue
+
+            try:
+                data, _ = decoder.raw_decode(output[index:])
+                return data
+            except json.JSONDecodeError:
+                continue
+
         raise SystemExit(
-            f"The model did not return valid {output_name} JSON: {e}"
+            f"The model did not return valid {output_name} JSON: {e}\n"
+            f"Model output:\n{output}"
         ) from e
+
+
+def _custom_instructions_for_target(args: argparse.Namespace, target: str) -> str:
+    if args.custom_instructions_target in (target, "both"):
+        return args.custom_instructions
+
+    return ""
 
 
 def _print_json(data: dict, json_lines: bool = False) -> None:
@@ -70,6 +100,7 @@ def main() -> None:
         feature_description=args.feature_description,
         test_scope=args.test_scope,
         qa_test_cases=args.qa_test_cases,
+        custom_instructions=_custom_instructions_for_target(args, "test-cases"),
     )
     test_cases = _load_json(generated_test_cases, "test cases")
 
@@ -85,7 +116,8 @@ def main() -> None:
 
     generated_test_steps = tool.generate_test_steps(
         feature_description=args.feature_description,
-        test_cases=generated_test_cases,
+        test_cases=json.dumps(test_cases),
+        custom_instructions=_custom_instructions_for_target(args, "test-steps"),
     )
     test_plan = _load_json(generated_test_steps, "test steps")
 
