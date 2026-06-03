@@ -1,0 +1,12 @@
+# The repo-root .gitignore ignores `lib/` (Python build artifacts). Re-include
+# this Next.js app's lib/ source directory.
+!/lib/
+/node_modules
+/.next
+/out
+/build
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts.bak
+.DS_Store
