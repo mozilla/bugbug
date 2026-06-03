@@ -11,7 +11,7 @@ RUN --mount=type=bind,source=pyproject.toml,target=/tmp/bugbug/pyproject.toml \
 	--mount=type=bind,source=uv.lock,target=/tmp/bugbug/uv.lock \
 	apt-get update && \
 	apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch git && \
-	cd /tmp/bugbug && uv sync --frozen --package bugbug --no-dev --no-install-project && \
+	cd /tmp/bugbug && uv sync --locked --package bugbug --no-dev --no-install-project && \
 	apt-get purge -y gcc g++ libffi-dev patch git && \
 	apt-get autoremove -y && \
 	rm -rf /var/lib/apt/lists/*
@@ -21,4 +21,4 @@ ENV LD_PRELOAD="libjemalloc.so.2"
 COPY infra/mozci_config.toml /root/.config/mozci/config.toml
 
 RUN --mount=type=bind,target=/tmp/bugbug,rw \
-	cd /tmp/bugbug && uv sync --frozen --package bugbug --no-dev --no-editable
+	cd /tmp/bugbug && uv sync --locked --package bugbug --no-dev --no-editable

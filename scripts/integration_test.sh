@@ -47,7 +47,7 @@ bugbug-train backout --limit 30000 --no-download
 # Then spin the http service up
 # This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
 # up on Taskcluster
-uv sync --frozen --package bugbug-http-service --no-dev
+uv sync --locked --package bugbug-http-service --no-dev
 
 export REDIS_URL=redis://localhost:6379/4
 
