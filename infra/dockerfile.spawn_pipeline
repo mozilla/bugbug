@@ -10,6 +10,10 @@ ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
 RUN --mount=type=bind,source=pyproject.toml,target=/tmp/bugbug/pyproject.toml \
 	--mount=type=bind,source=uv.lock,target=/tmp/bugbug/uv.lock \
 	--mount=type=bind,source=VERSION,target=/tmp/bugbug/VERSION \
+	--mount=type=bind,source=http_service/pyproject.toml,target=/tmp/bugbug/http_service/pyproject.toml \
+	--mount=type=bind,source=services/hackbot-api/pyproject.toml,target=/tmp/bugbug/services/hackbot-api/pyproject.toml \
+	--mount=type=bind,source=agents/bug-fix/pyproject.toml,target=/tmp/bugbug/agents/bug-fix/pyproject.toml \
+	--mount=type=bind,source=libs/hackbot-runtime/pyproject.toml,target=/tmp/bugbug/libs/hackbot-runtime/pyproject.toml \
 	cd /tmp/bugbug && uv sync --locked --package bugbug --no-dev --only-group spawn-pipeline --no-install-project
 
 ADD infra/spawn_pipeline.py /code/
