@@ -132,6 +132,15 @@ async def get_artifact_download_url(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
+    # Refresh artifacts for runs that may have completed since the last poll,
+    # so a freshly finished run's artifacts are visible here without first
+    # requiring a GET /runs/{run_id} call.
+    if (
+        run.status not in {s.value for s in TERMINAL_STATUSES}
+        and run.execution_name is not None
+    ):
+        await _reconcile(db, run)
+
     known = {a.get("name") for a in (run.artifacts or [])}
     if artifact_path not in known:
         raise HTTPException(status_code=404, detail="Artifact not found")
