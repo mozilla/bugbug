@@ -116,6 +116,33 @@ async def get_run(run_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> RunD
     return RunDoc.model_validate(run)
 
 
+@router.get("/runs/{run_id}/artifacts/{artifact_path:path}")
+async def get_artifact_download_url(
+    run_id: uuid.UUID,
+    artifact_path: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Return a short-lived signed URL to download one artifact.
+
+    The artifact must be one already listed on the run, which both scopes the
+    download to this run's results prefix and prevents path traversal / probing
+    of unrelated objects.
+    """
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    known = {a.get("name") for a in (run.artifacts or [])}
+    if artifact_path not in known:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    url = await gcs.generate_artifact_download_url(str(run_id), artifact_path)
+    if url is None:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    return {"url": url}
+
+
 async def _reconcile(db: AsyncSession, run: Run) -> None:
     assert run.execution_name is not None
     try:

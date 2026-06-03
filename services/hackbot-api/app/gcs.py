@@ -164,3 +164,35 @@ def _list_artifacts_sync(run_id: str) -> list[ArtifactRef]:
 
 async def list_artifacts(run_id: str) -> list[ArtifactRef]:
     return await asyncio.to_thread(_list_artifacts_sync, run_id)
+
+
+def _generate_artifact_download_url_sync(
+    run_id: str, artifact_name: str, expiration_seconds: int
+) -> str | None:
+    """Mint a V4 signed GET URL for a single artifact, or None if it's missing.
+
+    Reuses the impersonated signing credentials (same `sign_bytes` path as the
+    upload POST policy), so the browser can download the object directly from
+    GCS without the bucket being public.
+    """
+    bucket = _client().bucket(settings.results_bucket)
+    blob = bucket.blob(f"{run_prefix(run_id)}{artifact_name}")
+    if not blob.exists():
+        return None
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=datetime.timedelta(seconds=expiration_seconds),
+        method="GET",
+        credentials=_signing_credentials(),
+    )
+
+
+async def generate_artifact_download_url(
+    run_id: str, artifact_name: str, expiration_seconds: int = 600
+) -> str | None:
+    return await asyncio.to_thread(
+        _generate_artifact_download_url_sync,
+        run_id,
+        artifact_name,
+        expiration_seconds,
+    )
