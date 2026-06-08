@@ -167,7 +167,8 @@ def create_main_review_comment(
     review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
 ) -> str:
     """Create the main review comment that summarizes the review results."""
-    parts = []
+    diff_url = f"{settings.phabricator_url}/D{review_request.revision_id}?id={review_request.diff_id}"
+    parts = [f"(Reviewing [Diff {review_request.diff_id}]({diff_url}))"]
 
     if review_request.summary:
         parts.append(review_request.summary)
