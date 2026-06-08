@@ -436,14 +436,36 @@ async def get_function_at_line(
         return _tool_error(f"function lookup failed: {e}")
 
 
+def _make_non_strict(tool):
+    """Opt a tool out of Anthropic's strict schema mode.
+
+    Strict mode enforces additionalProperties:false and validates all params at
+    the API level, but every Optional param counts toward the 16-anyOf-parameter
+    limit that Anthropic enforces across all strict tools in a request. Tools
+    with Optional int/str params but no meaningful enum constraints are made
+    non-strict to stay under that limit. LangChain's create_agent hardcodes
+    strict=True for all tools, so we use provider_tool_definition to bypass it.
+    """
+    from langchain_anthropic.chat_models import convert_to_anthropic_tool
+
+    definition = convert_to_anthropic_tool(tool, strict=False)
+    definition.pop("strict", None)
+    tool.extras = {"provider_tool_definition": definition}
+    return tool
+
+
 SEARCHFOX_TOOLS = [
-    expand_context,
+    # Non-strict: Optional int/str params only — no enum validation lost.
+    _make_non_strict(expand_context),
+    _make_non_strict(find_definition),
+    # Strict: Literal enum params (langs, tests) — enum validation catches bad
+    # language codes and invalid tests values before they reach the searchfox API.
     search_text,
+    search_identifier,
+    # Strict: no Optional params.
     get_blame,
     get_field_layout,
-    find_definition,
     get_function_at_line,
-    search_identifier,
     calls_from,
     calls_to,
     calls_between,
