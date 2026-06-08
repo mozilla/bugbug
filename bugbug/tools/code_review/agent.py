@@ -159,7 +159,7 @@ class CodeReviewTool(GenerativeModelTool):
                 DEFAULT_ANTHROPIC_MODEL,
                 max_tokens=40_000,
                 temperature=None,
-                thinking={"type": "enabled", "budget_tokens": 10_000},
+                thinking={"type": "adaptive"},
             )
 
         if "patch_summarizer" not in kwargs:
