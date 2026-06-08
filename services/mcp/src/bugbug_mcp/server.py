@@ -18,6 +18,7 @@ from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     SanitizedPhabricatorPatch,
 )
+from libmozdata.phabricator import PhabricatorRevisionNotFoundException
 
 mcp = FastMCP("Firefox Development MCP Server")
 
@@ -139,6 +140,15 @@ def bugzilla_quick_search(
     return result
 
 
+def _get_revision_md(revision_id: int) -> str:
+    try:
+        return SanitizedPhabricatorPatch(revision_id=revision_id).to_md()
+    except PhabricatorRevisionNotFoundException:
+        raise ToolError(
+            f"Revision D{revision_id} was not found. It may not exist or may be private."
+        )
+
+
 @mcp.resource(
     uri="phabricator://revision/D{revision_id}",
     name="Phabricator Revision Content",
@@ -146,13 +156,13 @@ def bugzilla_quick_search(
 )
 def handle_revision_view_resource(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return SanitizedPhabricatorPatch(revision_id=revision_id).to_md()
+    return _get_revision_md(revision_id)
 
 
 @mcp.tool()
 def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return SanitizedPhabricatorPatch(revision_id=revision_id).to_md()
+    return _get_revision_md(revision_id)
 
 
 llms_txt = FileResource(
