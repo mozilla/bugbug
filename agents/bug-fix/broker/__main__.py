@@ -25,7 +25,6 @@ log = logging.getLogger("bugzilla-broker")
 class BrokerInputs(BaseSettings):
     bugzilla_api_url: str
     bugzilla_api_key: str
-    dry_run: bool = False
     host: str = "0.0.0.0"
     port: int = 8765
 
@@ -36,7 +35,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
     client = bugsy.Bugsy(
         api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
     )
-    ctx = BugzillaContext(client=client, dry_run=inputs.dry_run)
+    ctx = BugzillaContext(client=client)
     sdk_config = build_bugzilla_server(ctx)
     mcp_server = sdk_config["instance"]
 
@@ -46,10 +45,9 @@ def build_app(inputs: BrokerInputs) -> Starlette:
     async def lifespan(app):
         async with manager.run():
             log.info(
-                "bugzilla broker ready on %s:%d (dry_run=%s)",
+                "bugzilla broker ready on %s:%d (read-only)",
                 inputs.host,
                 inputs.port,
-                inputs.dry_run,
             )
             yield
 

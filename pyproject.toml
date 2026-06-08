@@ -71,6 +71,12 @@ nlp = [
     "spacy==3.8.14",
 ]
 nn = []
+# Tooling for the hackbot bug-fix agent (bugbug/tools/bug_fix). Not a base
+# dependency: hackbot-runtime is a workspace-only package, so a standalone
+# `pip install bugbug` must not require it.
+bug-fix = [
+    "hackbot-runtime[claude-sdk]",
+]
 
 [dependency-groups]
 test = [
@@ -134,6 +140,9 @@ artifacts = [
 
 [tool.uv.workspace]
 members = ["http_service", "services/hackbot-api", "agents/bug-fix", "libs/hackbot-runtime"]
+
+[tool.uv.sources]
+hackbot-runtime = { workspace = true }
 
 [tool.ruff]
 extend-exclude = ["data"]

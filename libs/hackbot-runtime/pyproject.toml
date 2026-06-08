@@ -7,3 +7,13 @@ dependencies = [
     "requests>=2.32.0",
     "pydantic-settings>=2.1.0",
 ]
+
+[project.optional-dependencies]
+# claude-agent-sdk adapter (hackbot_runtime.actions.claude_sdk) that exposes
+# the action registry as an in-process MCP server. Not needed by consumers
+# that only read the summary contract.
+claude-sdk = ["claude-agent-sdk>=0.1.30"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

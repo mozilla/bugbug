@@ -27,11 +27,15 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
+from hackbot_runtime import ActionsRecorder
+from hackbot_runtime.actions.claude_sdk import build_actions_sdk_server
+from hackbot_runtime.actions.naming import ACTIONS_SERVER_NAME
 
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.bug_fix.config import (
     BUGZILLA_READ_TOOLS,
-    BUGZILLA_WRITE_TOOLS,
+    ENABLED_ACTION_TOOLS,
+    ENABLED_ACTION_TYPES,
     FIREFOX_TOOLS,
     SOURCE_WRITE_TOOLS,
 )
@@ -224,6 +228,7 @@ class BugFixTool(GenerativeModelTool):
         effort: str | None = None,
         verbose: bool = False,
         log: Path | None = None,
+        actions_recorder: ActionsRecorder | None = None,
     ) -> BugFixResult:
         if rules_dir is None:
             rules_dir = HERE / "rules"
@@ -239,12 +244,24 @@ class BugFixTool(GenerativeModelTool):
         fx_ctx = FirefoxContext.from_source_repo(source_repo)
         firefox_server = build_firefox_server(fx_ctx)
 
+        # --- Action-recording MCP server (in-process) --------------------- #
+        if actions_recorder is None:
+            # Standalone/script runs have no uploader; copy attachments locally.
+            actions_recorder = ActionsRecorder(artifacts_dir=Path("artifacts"))
+        actions_server = build_actions_sdk_server(
+            actions_recorder, types=ENABLED_ACTION_TYPES
+        )
+
         # --- Build agent options ------------------------------------------ #
         system_prompt = load_system_prompt(rules_dir, instructions)
 
         options = ClaudeAgentOptions(
             system_prompt=system_prompt,
-            mcp_servers={"bugzilla": bugzilla_mcp_server, "firefox": firefox_server},
+            mcp_servers={
+                "bugzilla": bugzilla_mcp_server,
+                "firefox": firefox_server,
+                ACTIONS_SERVER_NAME: actions_server,
+            },
             agents={"investigator": make_investigator()},
             cwd=str(source_repo.resolve()),
             add_dirs=[str(rules_dir.resolve())],
@@ -257,7 +274,7 @@ class BugFixTool(GenerativeModelTool):
                 "Task",
                 *SOURCE_WRITE_TOOLS,
                 *BUGZILLA_READ_TOOLS,
-                *BUGZILLA_WRITE_TOOLS,
+                *ENABLED_ACTION_TOOLS,
                 *FIREFOX_TOOLS,
             ],
             model=model,

@@ -35,7 +35,6 @@ async def main():
                 api_key=settings.bugzilla_api_key,
                 bugzilla_url=settings.bugzilla_api_url,
             ),
-            dry_run=True,
         )
     )
 
