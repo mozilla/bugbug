@@ -20,7 +20,6 @@ dependencies = [
     "beautifulsoup4~=4.14.3",
     "boto3>=1.42.78,<1.44.0",
     "claude-agent-sdk>=0.1.30",
-    "hackbot-runtime[claude-sdk]",
     "httpx~=0.28.1",
     "imbalanced-learn~=0.14.1",
     "langchain~=1.2.13",
@@ -72,6 +71,12 @@ nlp = [
     "spacy==3.8.14",
 ]
 nn = []
+# Tooling for the hackbot bug-fix agent (bugbug/tools/bug_fix). Not a base
+# dependency: hackbot-runtime is a workspace-only package, so a standalone
+# `pip install bugbug` must not require it.
+bug-fix = [
+    "hackbot-runtime[claude-sdk]",
+]
 
 [dependency-groups]
 test = [

@@ -130,8 +130,7 @@ async def add_attachment(
         Field(
             default=False,
             description=(
-                "Mark as a patch (Bugzilla forces text/plain and enables "
-                "diff view)."
+                "Mark as a patch (Bugzilla forces text/plain and enables diff view)."
             ),
         ),
     ] = False,
@@ -182,9 +181,7 @@ async def create_bug(
     component: Annotated[str, Field(description="Bugzilla component.")],
     summary: Annotated[str, Field(description="Bug summary (title).")],
     version: Annotated[str, Field(description="Product version affected.")],
-    description: Annotated[
-        str, Field(description="Comment 0. Markdown is enabled.")
-    ],
+    description: Annotated[str, Field(description="Comment 0. Markdown is enabled.")],
     reasoning: Annotated[
         str, Field(description="Why you are filing this bug (for audit log).")
     ],

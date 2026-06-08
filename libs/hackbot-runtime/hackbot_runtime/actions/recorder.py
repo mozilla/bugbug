@@ -56,7 +56,10 @@ class ActionsRecorder:
             recorded_attachments: list[dict] = []
             for name, path in attachments.items():
                 key = publish_file(
-                    self._uploader, self._artifacts_dir, f"attachments/{idx}/{name}", path
+                    self._uploader,
+                    self._artifacts_dir,
+                    f"attachments/{idx}/{name}",
+                    path,
                 )
                 recorded_attachments.append({"name": name, "uploaded_key": key})
             action["attachments"] = recorded_attachments

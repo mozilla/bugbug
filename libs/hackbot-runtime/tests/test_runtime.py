@@ -63,7 +63,9 @@ def test_runs_are_namespaced_by_run_id(tmp_path):
 
     base = tmp_path / "artifacts"
     assert json.loads((base / "run-a" / "summary.json").read_text())["status"] == "ok"
-    assert json.loads((base / "run-b" / "summary.json").read_text())["status"] == "error"
+    assert (
+        json.loads((base / "run-b" / "summary.json").read_text())["status"] == "error"
+    )
 
 
 def test_publish_file_copies_locally_without_uploader(tmp_path):

@@ -514,7 +514,6 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "boto3" },
     { name = "claude-agent-sdk" },
-    { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "httpx" },
     { name = "imbalanced-learn" },
     { name = "langchain" },
@@ -562,6 +561,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+bug-fix = [
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+]
 nlp = [
     { name = "spacy" },
 ]
@@ -593,7 +595,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = "~=4.14.3" },
     { name = "boto3", specifier = ">=1.42.78,<1.44.0" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
-    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], marker = "extra == 'bug-fix'", editable = "libs/hackbot-runtime" },
     { name = "httpx", specifier = "~=0.28.1" },
     { name = "imbalanced-learn", specifier = "~=0.14.1" },
     { name = "langchain", specifier = "~=1.2.13" },
@@ -640,7 +642,7 @@ requires-dist = [
     { name = "xgboost", specifier = "~=3.2.0" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
-provides-extras = ["nlp", "nn"]
+provides-extras = ["bug-fix", "nlp", "nn"]
 
 [package.metadata.requires-dev]
 spawn-pipeline = [
@@ -2111,7 +2113,7 @@ dependencies = [
     { name = "bugsy" },
     { name = "claude-agent-sdk" },
     { name = "grizzly-framework" },
-    { name = "hackbot-runtime" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "mcp" },
     { name = "prefpicker" },
     { name = "starlette" },
@@ -2124,7 +2126,7 @@ requires-dist = [
     { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "grizzly-framework" },
-    { name = "hackbot-runtime", editable = "libs/hackbot-runtime" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "prefpicker" },
     { name = "starlette", specifier = ">=0.36.0" },

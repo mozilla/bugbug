@@ -5,7 +5,7 @@ description = "Cloud Run Job image that runs the bug-fix agent for hackbot-api"
 requires-python = ">=3.12"
 dependencies = [
     "bugbug",
-    "hackbot-runtime",
+    "hackbot-runtime[claude-sdk]",
     "bugsy",
     "grizzly-framework",
     "prefpicker",

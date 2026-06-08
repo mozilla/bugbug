@@ -21,7 +21,9 @@ def _server(recorder):
 
 async def _list(srv):
     return (
-        await srv.request_handlers[ListToolsRequest](ListToolsRequest(method="tools/list"))
+        await srv.request_handlers[ListToolsRequest](
+            ListToolsRequest(method="tools/list")
+        )
     ).root.tools
 
 
