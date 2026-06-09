@@ -1,13 +1,23 @@
-"""Run the bug_fix tool locally."""
+"""Run the bug-fix agent locally, without Docker or the broker sidecar.
+
+Builds the read-only Bugzilla MCP server in-process, so this script sees the
+Bugzilla API key directly — unlike the deployed agent, which reaches a broker
+sidecar over HTTP and never holds the key. Handy for quick iteration; for a
+faithful end-to-end run use ``docker compose -f compose.yml up``.
+"""
 
 import asyncio
+import sys
 from pathlib import Path
 
 import bugsy
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from bugbug.tools.bug_fix.agent import BugFixTool
-from bugbug.tools.bug_fix.bugzilla_mcp import BugzillaContext, build_server
+# Make the co-located `agent` package importable regardless of cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from agent import run_bug_fix  # noqa: E402
+from hackbot_runtime.mcp.bugzilla import BugzillaContext, build_server  # noqa: E402
 
 
 class Settings(BaseSettings):
@@ -38,8 +48,7 @@ async def main():
         )
     )
 
-    tool = BugFixTool.create()
-    result = await tool.run(
+    result = await run_bug_fix(
         bugzilla_mcp_server=bugzilla_mcp_server,
         source_repo=settings.source_repo,
         model=settings.model,

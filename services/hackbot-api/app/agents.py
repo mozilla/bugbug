@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -12,26 +13,31 @@ class AgentSpec:
     description: str
     job_name: str
     input_schema: type[BaseModel]
-    build_env: Callable[[BaseModel], dict[str, str]]
+    # Optional override for the rare agent whose env vars don't map 1:1 from
+    # its input schema. Defaults to ``model_to_env`` (field -> UPPER_SNAKE env).
+    build_env: Callable[[BaseModel], dict[str, str]] | None = None
 
 
-def _bug_fix_env(inputs: BaseModel) -> dict[str, str]:
-    assert isinstance(inputs, BugFixInputs)
-    # The bug-fix agent's Job is multi-container: an `agent` container
-    # (no tokens) and a `broker` sidecar (holds BZ_API_KEY at deploy time
-    # via Secret Manager). The orchestrator only overrides the `agent`
-    # container's env per execution — the broker is fully configured at
-    # deploy time. The agent reaches the broker on the task's loopback.
-    env: dict[str, str] = {
-        "BUG_ID": str(inputs.bug_id),
-        "BUGZILLA_MCP_URL": "http://127.0.0.1:8765/mcp",
-    }
-    if inputs.model is not None:
-        env["MODEL"] = inputs.model
-    if inputs.max_turns is not None:
-        env["MAX_TURNS"] = str(inputs.max_turns)
-    if inputs.effort is not None:
-        env["EFFORT"] = inputs.effort
+def model_to_env(inputs: BaseModel) -> dict[str, str]:
+    """Serialise validated inputs into Cloud Run Job env overrides.
+
+    Each schema field maps to an upper-cased env var (``bug_id`` -> ``BUG_ID``);
+    ``None`` fields are skipped, and the agent reads them back via
+    ``pydantic_settings.BaseSettings`` (which upper-cases field names by
+    default). Lists/dicts are JSON-encoded. Deploy-time constants (e.g. the
+    broker loopback URL) are NOT inputs — they belong in the Job's static env
+    config, not here.
+    """
+    env: dict[str, str] = {}
+    for name, value in inputs.model_dump(mode="json").items():
+        if value is None:
+            continue
+        if isinstance(value, str):
+            env[name.upper()] = value
+        elif isinstance(value, (list, dict)):
+            env[name.upper()] = json.dumps(value)
+        else:
+            env[name.upper()] = str(value)
     return env
 
 
@@ -41,6 +47,5 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Investigate a Bugzilla bug and produce a candidate fix patch against the Firefox source tree.",
         job_name="hackbot-agent-bug-fix",
         input_schema=BugFixInputs,
-        build_env=_bug_fix_env,
     ),
 }

@@ -11,13 +11,12 @@ from contextlib import asynccontextmanager
 
 import bugsy
 import uvicorn
+from hackbot_runtime.mcp.bugzilla import BugzillaContext
+from hackbot_runtime.mcp.bugzilla import build_server as build_bugzilla_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
 from starlette.routing import Mount
-
-from bugbug.tools.bug_fix.bugzilla_mcp import BugzillaContext
-from bugbug.tools.bug_fix.bugzilla_mcp import build_server as build_bugzilla_server
 
 log = logging.getLogger("bugzilla-broker")
 

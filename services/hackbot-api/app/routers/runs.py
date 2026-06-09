@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs
-from app.agents import AGENT_REGISTRY, AgentSpec
+from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
 from app.config import settings
 from app.database.connection import get_db
@@ -82,7 +82,7 @@ async def create_run(
         "RESULTS_PREFIX": results_prefix,
         "RESULTS_POLICY_URL": policy["url"],
         "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
-        **agent.build_env(inputs),
+        **(agent.build_env or model_to_env)(inputs),
     }
 
     try:

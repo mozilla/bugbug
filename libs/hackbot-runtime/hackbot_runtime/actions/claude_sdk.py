@@ -10,6 +10,8 @@ Requires the ``claude-sdk`` optional extra of hackbot-runtime.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from hackbot_runtime.actions.naming import ACTIONS_SERVER_NAME, tool_name_for
@@ -47,3 +49,22 @@ def build_actions_sdk_server(
         version="0.1.0",
         tools=[_make_tool(defn, recorder) for defn in get_actions(types)],
     )
+
+
+def actions_server_for(
+    recorder: ActionsRecorder | None,
+    types: list[str] | None = None,
+    *,
+    fallback_artifacts_dir: Path = Path("artifacts"),
+):
+    """Return ``(recorder, sdk_server)`` ready to plug into ``ClaudeAgentOptions``.
+
+    Convenience around :func:`build_actions_sdk_server` that supplies the common
+    fallback: standalone/script runs pass ``recorder=None`` and get a local
+    recorder that copies attachments under ``fallback_artifacts_dir`` (no
+    uploader). Agents running under the runtime pass ``ctx.actions`` and it is
+    used as-is.
+    """
+    if recorder is None:
+        recorder = ActionsRecorder(artifacts_dir=fallback_artifacts_dir)
+    return recorder, build_actions_sdk_server(recorder, types=types)

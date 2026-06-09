@@ -18,7 +18,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Workspace members the agent image actually needs (source included).
 COPY agents/bug-fix ./agents/bug-fix
-COPY bugbug ./bugbug
 COPY libs/hackbot-runtime ./libs/hackbot-runtime
 
 RUN --mount=type=cache,target=/root/.cache/uv \

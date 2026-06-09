@@ -71,7 +71,8 @@ nlp = [
     "spacy==3.8.14",
 ]
 nn = []
-# Tooling for the hackbot bug-fix agent (bugbug/tools/bug_fix). Not a base
+# hackbot runtime for bugbug tools that use it (e.g. tools/duplicate_bugs,
+# which builds the Bugzilla MCP via hackbot_runtime.mcp.bugzilla). Not a base
 # dependency: hackbot-runtime is a workspace-only package, so a standalone
 # `pip install bugbug` must not require it.
 bug-fix = [
@@ -132,9 +133,6 @@ include = ["/bugbug", "/scripts", "/VERSION"]
 [tool.hatch.build.targets.wheel]
 packages = ["bugbug", "scripts"]
 artifacts = [
-    "bugbug/tools/bug_fix/prompts/",
-    "bugbug/tools/bug_fix/rules/",
-    "bugbug/tools/bug_fix/memory/",
     "bugbug/tools/duplicate_bugs/prompts/",
 ]
 

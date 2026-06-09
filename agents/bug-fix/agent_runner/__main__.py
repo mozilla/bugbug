@@ -75,15 +75,14 @@ def ensure_firefox_source(source_repo: Path) -> None:
 
 
 async def main(ctx: Context) -> AgentResult:
-    from bugbug.tools.bug_fix.agent import BugFixTool
+    from agent import run_bug_fix
 
     inputs = AgentInputs()
     ensure_firefox_source(inputs.source_repo)
 
     log_path = Path(tempfile.mkdtemp(prefix="bug-fix-log-")) / "agent.log"
 
-    tool = BugFixTool.create()
-    result = await tool.run(
+    result = await run_bug_fix(
         task="Triage and fix the bug, and verify the fix",
         bugzilla_mcp_server={
             "type": "http",
