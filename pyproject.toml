@@ -71,13 +71,6 @@ nlp = [
     "spacy==3.8.14",
 ]
 nn = []
-# Reusable MCP tool servers for bugbug tools that use them (e.g.
-# tools/duplicate_bugs, which builds the Bugzilla MCP via agent_tools.bugzilla).
-# Not a base dependency: agent-tools is a workspace-only package, so a standalone
-# `pip install bugbug` must not require it.
-bug-fix = [
-    "agent-tools[bugzilla]",
-]
 
 [dependency-groups]
 test = [
@@ -132,9 +125,6 @@ include = ["/bugbug", "/scripts", "/VERSION"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["bugbug", "scripts"]
-artifacts = [
-    "bugbug/tools/duplicate_bugs/prompts/",
-]
 
 [tool.uv.workspace]
 members = ["http_service", "services/hackbot-api", "agents/bug-fix", "libs/hackbot-runtime", "libs/agent-tools"]
