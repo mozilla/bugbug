@@ -11,8 +11,9 @@ from contextlib import asynccontextmanager
 
 import bugsy
 import uvicorn
-from hackbot_runtime.mcp.bugzilla import BugzillaContext
-from hackbot_runtime.mcp.bugzilla import build_server as build_bugzilla_server
+from agent_tools import bugzilla
+from agent_tools.bugzilla import BugzillaContext
+from agent_tools.claude_sdk import build_sdk_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
@@ -35,7 +36,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
         api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
     )
     ctx = BugzillaContext(client=client)
-    sdk_config = build_bugzilla_server(ctx)
+    sdk_config = build_sdk_server("bugzilla", ctx, bugzilla.TOOLS)
     mcp_server = sdk_config["instance"]
 
     manager = StreamableHTTPSessionManager(app=mcp_server, stateless=True)

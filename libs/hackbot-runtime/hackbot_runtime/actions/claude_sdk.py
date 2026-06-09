@@ -1,54 +1,19 @@
-"""claude-agent-sdk adapter for runtime-registered actions.
+"""Build the claude-agent-sdk ``actions`` MCP server from recordable actions.
 
-Exposes the enabled actions as an in-process MCP server built with the
-SDK's own ``tool`` + ``create_sdk_mcp_server`` — guaranteed compatible with
-claude-agent-sdk. Other frameworks (LangChain, ...) get their own sibling
-adapter as needed; the action registry is shared and framework-neutral.
-
-Requires the ``claude-sdk`` optional extra of hackbot-runtime.
+Thin wrapper over agent-tools' generic adapter: the ``ActionsRecorder`` is the
+tool context, and tools are namespace-prefixed (one ``actions`` server hosts
+every domain). Requires the ``claude-sdk`` optional extra.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from claude_agent_sdk import create_sdk_mcp_server, tool
+from agent_tools.claude_sdk import build_sdk_server
+from agent_tools.registry import ACTIONS_SERVER_NAME
 
-from hackbot_runtime.actions.naming import ACTIONS_SERVER_NAME, tool_name_for
+from hackbot_runtime.actions import bugzilla as _bugzilla
 from hackbot_runtime.actions.recorder import ActionsRecorder
-from hackbot_runtime.actions.registry import ActionDefinition, get_actions
-
-
-def _text(message: str) -> dict:
-    """Wrap a message in the MCP tool-result content shape the SDK expects."""
-    return {"content": [{"type": "text", "text": message}]}
-
-
-def _make_tool(defn: ActionDefinition, recorder: ActionsRecorder):
-    @tool(tool_name_for(defn.type), defn.description, defn.input_schema)
-    async def run(args):
-        # The handler returns a short confirmation string. An ActionInputError
-        # raised inside it propagates and is rendered by the SDK as an
-        # is_error result with the message preserved.
-        return _text(await defn.handler(recorder, **args))
-
-    return run
-
-
-def build_actions_sdk_server(
-    recorder: ActionsRecorder,
-    types: list[str] | None = None,
-    name: str = ACTIONS_SERVER_NAME,
-):
-    """Return a claude-agent-sdk ``McpSdkServerConfig`` for the enabled actions.
-
-    ``types`` selects a subset of action types; ``None`` exposes all.
-    """
-    return create_sdk_mcp_server(
-        name=name,
-        version="0.1.0",
-        tools=[_make_tool(defn, recorder) for defn in get_actions(types)],
-    )
 
 
 def actions_server_for(
@@ -57,14 +22,19 @@ def actions_server_for(
     *,
     fallback_artifacts_dir: Path = Path("artifacts"),
 ):
-    """Return ``(recorder, sdk_server)`` ready to plug into ``ClaudeAgentOptions``.
+    """Return ``(recorder, sdk_server)`` for the enabled recordable actions.
 
-    Convenience around :func:`build_actions_sdk_server` that supplies the common
-    fallback: standalone/script runs pass ``recorder=None`` and get a local
-    recorder that copies attachments under ``fallback_artifacts_dir`` (no
-    uploader). Agents running under the runtime pass ``ctx.actions`` and it is
-    used as-is.
+    ``recorder=None`` creates a local recorder that copies attachments under
+    ``fallback_artifacts_dir`` (standalone/script runs with no uploader).
+    ``types`` selects a subset by dotted id (e.g. ``bugzilla.update_bug``);
+    ``None`` exposes all.
     """
     if recorder is None:
         recorder = ActionsRecorder(artifacts_dir=fallback_artifacts_dir)
-    return recorder, build_actions_sdk_server(recorder, types=types)
+    tools = _bugzilla.TOOLS
+    if types is not None:
+        wanted = set(types)
+        tools = [t for t in tools if t.dotted in wanted]
+    return recorder, build_sdk_server(
+        ACTIONS_SERVER_NAME, recorder, tools, prefix_namespace=True
+    )

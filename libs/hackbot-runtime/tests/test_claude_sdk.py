@@ -1,11 +1,8 @@
-"""Tests for the claude-agent-sdk actions adapter (guards issue #1)."""
+"""Tests for the actions MCP server (built via agent-tools' adapter)."""
 
 import mcp.server.lowlevel.server as low
 from hackbot_runtime.actions import ActionsRecorder
-from hackbot_runtime.actions.claude_sdk import (
-    actions_server_for,
-    build_actions_sdk_server,
-)
+from hackbot_runtime.actions.claude_sdk import actions_server_for
 from mcp.types import CallToolRequest, CallToolRequestParams, ListToolsRequest
 
 _ALL = [
@@ -17,7 +14,7 @@ _ALL = [
 
 
 def _server(recorder):
-    config = build_actions_sdk_server(recorder, types=_ALL)
+    _, config = actions_server_for(recorder, types=_ALL)
     assert config["type"] == "sdk"
     return config["instance"]
 

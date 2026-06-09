@@ -1,0 +1,22 @@
+[project]
+name = "agent-tools"
+version = "0.1.0"
+description = "Reusable, framework-neutral agent tools (declaration + per-framework adapters)"
+requires-python = ">=3.12"
+# Base is framework-neutral: the registry/decorator only needs pydantic for
+# signature-derived schemas. No agent framework here.
+dependencies = [
+    "pydantic>=2.6.0",
+]
+
+[project.optional-dependencies]
+# Per-tool domain deps and the framework adapter each sit behind their own extra
+# so a consumer pulls only what it uses (e.g. agent_tools.bugzilla without
+# grizzly, or the tools without claude-agent-sdk for a LangChain agent).
+bugzilla = ["bugsy"]
+firefox = ["grizzly-framework", "prefpicker"]
+claude-sdk = ["claude-agent-sdk>=0.1.30"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

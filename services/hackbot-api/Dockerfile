@@ -11,6 +11,7 @@ COPY http_service/pyproject.toml ./http_service/
 COPY services/hackbot-api/pyproject.toml ./services/hackbot-api/
 COPY agents/bug-fix/pyproject.toml ./agents/bug-fix/
 COPY libs/hackbot-runtime/pyproject.toml ./libs/hackbot-runtime/
+COPY libs/agent-tools/pyproject.toml ./libs/agent-tools/
 
 # Install external deps without building workspace members.
 RUN --mount=type=cache,target=/root/.cache/uv \

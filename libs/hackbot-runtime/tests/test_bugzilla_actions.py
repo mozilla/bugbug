@@ -1,7 +1,8 @@
 """Tests for the bugzilla action handlers (footers, mime, merge, errors)."""
 
 import pytest
-from hackbot_runtime.actions import ActionInputError, ActionsRecorder, bugzilla
+from agent_tools.registry import ToolError
+from hackbot_runtime.actions import ActionsRecorder, bugzilla
 
 
 async def test_add_comment_appends_footer():
@@ -37,7 +38,7 @@ async def test_add_attachment_guesses_mime(tmp_path):
 
 async def test_add_attachment_missing_file_raises():
     rec = ActionsRecorder()
-    with pytest.raises(ActionInputError):
+    with pytest.raises(ToolError):
         await bugzilla.add_attachment(
             rec, bug_id=1, file_path="/no/such.patch", reasoning="r"
         )

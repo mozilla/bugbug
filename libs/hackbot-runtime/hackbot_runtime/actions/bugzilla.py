@@ -1,10 +1,11 @@
 """Bugzilla-domain recordable actions.
 
-Each handler takes the ``ActionsRecorder`` as its first positional
-parameter (excluded from the agent-facing schema) plus the agent-facing
-args annotated with ``Annotated[T, Field(...)]`` so any adapter can derive
-the JSON Schema from the signature. Handlers return a short confirmation
-string and raise ``ActionInputError`` on invalid input.
+Each handler takes the ``ActionsRecorder`` as its first positional parameter
+(excluded from the agent-facing schema) plus the agent-facing args annotated
+with ``Annotated[T, Field(...)]``. Declared with the shared ``@tool`` decorator
+from agent-tools so the same mechanism backs read tools and write-actions.
+Handlers record an intended change (nothing is mutated) and return a short
+confirmation string, raising ``ToolError`` on invalid input.
 """
 
 from __future__ import annotations
@@ -14,10 +15,10 @@ import os
 from pathlib import Path
 from typing import Annotated, Any
 
+from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
-from hackbot_runtime.actions.registry import ActionDefinition, ActionInputError
 
 _COMMENT_FOOTER = (
     "*This is an automated analysis result. If this result is incorrect "
@@ -34,6 +35,7 @@ def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
     return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
 
 
+@tool
 async def update_bug(
     recorder: ActionsRecorder,
     bug_id: Annotated[int, Field(description="Bug ID to change.")],
@@ -60,6 +62,10 @@ async def update_bug(
         ),
     ],
 ) -> str:
+    """Record an intended change to a Bugzilla bug.
+
+    Recorded into the run summary for human review — does not modify Bugzilla.
+    """
     recorder.record(
         "bugzilla.update_bug",
         {"bug_id": bug_id, "changes": changes},
@@ -68,6 +74,7 @@ async def update_bug(
     return _confirm(recorder, "bugzilla.update_bug")
 
 
+@tool
 async def add_comment(
     recorder: ActionsRecorder,
     bug_id: Annotated[int, Field(description="Bug ID to comment on.")],
@@ -83,6 +90,11 @@ async def add_comment(
         ),
     ] = False,
 ) -> str:
+    """Record an intended comment on a bug.
+
+    Use is_private=true for security-sensitive notes. Recorded into the run
+    summary for human review — does not post to Bugzilla.
+    """
     text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
     recorder.record(
         "bugzilla.add_comment",
@@ -92,6 +104,7 @@ async def add_comment(
     return _confirm(recorder, "bugzilla.add_comment")
 
 
+@tool
 async def add_attachment(
     recorder: ActionsRecorder,
     bug_id: Annotated[int, Field(description="Bug ID to attach to.")],
@@ -142,8 +155,15 @@ async def add_attachment(
         ),
     ] = None,
 ) -> str:
+    """Record an intended file attachment on a bug.
+
+    Pass a local filesystem path — the runtime uploads a copy of the file
+    alongside summary.json so the apply step can fetch it. For patches, set
+    is_patch=true and omit content_type. Recorded into the run summary for human
+    review — does not upload to Bugzilla.
+    """
     if not os.path.isfile(file_path):
-        raise ActionInputError(f"file not found: {file_path}")
+        raise ToolError(f"file not found: {file_path}")
 
     file_name = os.path.basename(file_path)
     resolved_summary = summary or file_name
@@ -175,6 +195,7 @@ async def add_attachment(
     return _confirm(recorder, "bugzilla.add_attachment")
 
 
+@tool
 async def create_bug(
     recorder: ActionsRecorder,
     product: Annotated[str, Field(description="Bugzilla product.")],
@@ -199,6 +220,11 @@ async def create_bug(
         ),
     ] = None,
 ) -> str:
+    """Record an intended new-bug filing.
+
+    The description becomes comment 0 and is rendered as Markdown. Recorded into
+    the run summary for human review — does not file in Bugzilla.
+    """
     body: dict[str, Any] = {
         "product": product,
         "component": component,
@@ -214,43 +240,4 @@ async def create_bug(
     return _confirm(recorder, "bugzilla.create_bug")
 
 
-DEFINITIONS: list[ActionDefinition] = [
-    ActionDefinition(
-        type="bugzilla.update_bug",
-        description=(
-            "Record an intended change to a Bugzilla bug. Recorded into the "
-            "run summary for human review — does not modify Bugzilla."
-        ),
-        handler=update_bug,
-    ),
-    ActionDefinition(
-        type="bugzilla.add_comment",
-        description=(
-            "Record an intended comment on a bug. Use is_private=true for "
-            "security-sensitive notes. Recorded into the run summary for "
-            "human review — does not post to Bugzilla."
-        ),
-        handler=add_comment,
-    ),
-    ActionDefinition(
-        type="bugzilla.add_attachment",
-        description=(
-            "Record an intended file attachment on a bug. Pass a local "
-            "filesystem path — the runtime uploads a copy of the file "
-            "alongside summary.json so the apply step can fetch it. For "
-            "patches, set is_patch=true and omit content_type. Recorded "
-            "into the run summary for human review — does not upload to "
-            "Bugzilla."
-        ),
-        handler=add_attachment,
-    ),
-    ActionDefinition(
-        type="bugzilla.create_bug",
-        description=(
-            "Record an intended new-bug filing. The description becomes "
-            "comment 0 and is rendered as Markdown. Recorded into the run "
-            "summary for human review — does not file in Bugzilla."
-        ),
-        handler=create_bug,
-    ),
-]
+TOOLS = tools_in(__name__)

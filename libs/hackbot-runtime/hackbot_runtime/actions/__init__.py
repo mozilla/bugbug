@@ -1,26 +1,13 @@
 """Recordable actions for hackbot agents.
 
-The runtime exposes a generic ``ActionsRecorder`` plus a registry of
-domain-grouped declarative actions (``bugzilla.update_bug``,
-``bugzilla.add_comment``, ...). Per-framework wrappers (MCP today,
-LangChain later) wrap the registry without touching the action
-declarations themselves.
+``ActionsRecorder`` is the framework-neutral sink whose collected actions the
+runtime serialises into ``summary.json``. The action *declarations* live in
+domain modules (``bugzilla``, ...) and use the shared ``@tool`` decorator from
+agent-tools, so one mechanism backs both read tools and write-actions. The
+claude-sdk adapter is ``hackbot_runtime.actions.claude_sdk.actions_server_for``.
 """
 
-from hackbot_runtime.actions import bugzilla as _bugzilla
+from hackbot_runtime.actions import bugzilla
 from hackbot_runtime.actions.recorder import ActionsRecorder
-from hackbot_runtime.actions.registry import (
-    ActionDefinition,
-    ActionInputError,
-    get_actions,
-)
 
-ALL_ACTIONS: list[ActionDefinition] = [*_bugzilla.DEFINITIONS]
-
-__all__ = [
-    "ALL_ACTIONS",
-    "ActionDefinition",
-    "ActionInputError",
-    "ActionsRecorder",
-    "get_actions",
-]
+__all__ = ["ActionsRecorder", "bugzilla"]

@@ -12,6 +12,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent_tools import firefox
+from agent_tools.claude_sdk import build_sdk_server
+from agent_tools.registry import ACTIONS_SERVER_NAME
 from claude_agent_sdk import (
     AgentDefinition,
     ClaudeAgentOptions,
@@ -21,7 +24,6 @@ from claude_agent_sdk import (
 )
 from hackbot_runtime import ActionsRecorder
 from hackbot_runtime.actions.claude_sdk import actions_server_for
-from hackbot_runtime.actions.naming import ACTIONS_SERVER_NAME
 from hackbot_runtime.claude import Reporter
 
 from .config import (
@@ -31,8 +33,6 @@ from .config import (
     FIREFOX_TOOLS,
     SOURCE_WRITE_TOOLS,
 )
-from .firefox_mcp import FirefoxContext
-from .firefox_mcp import build_server as build_firefox_server
 
 HERE = Path(__file__).resolve().parent
 
@@ -122,8 +122,8 @@ async def run_bug_fix(
     print(f"[bug_fix] triaging {len(selected)} bug(s): {selected}", file=sys.stderr)
 
     # --- Firefox build/eval MCP server (in-process; no tokens) -------- #
-    fx_ctx = FirefoxContext.from_source_repo(source_repo)
-    firefox_server = build_firefox_server(fx_ctx)
+    fx_ctx = firefox.FirefoxContext.from_source_repo(source_repo)
+    firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
     # --- Action-recording MCP server (in-process) --------------------- #
     # Standalone/script runs pass actions_recorder=None and get a local
