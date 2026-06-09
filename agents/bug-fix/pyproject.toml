@@ -5,9 +5,8 @@ description = "Cloud Run Job image that runs the bug-fix agent for hackbot-api"
 requires-python = ">=3.12"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
+    "agent-tools[bugzilla,firefox]",
     "bugsy",
-    "grizzly-framework",
-    "prefpicker",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
     "starlette>=0.36.0",
@@ -16,3 +15,4 @@ dependencies = [
 
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
+agent-tools = { workspace = true }

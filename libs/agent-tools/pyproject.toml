@@ -1,0 +1,17 @@
+[project]
+name = "agent-tools"
+version = "0.1.0"
+description = "Reusable, framework-neutral agent tools (declaration + per-framework adapters)"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.6.0",
+]
+
+[project.optional-dependencies]
+bugzilla = ["bugsy"]
+firefox = ["grizzly-framework", "prefpicker"]
+claude-sdk = ["claude-agent-sdk>=0.1.30"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

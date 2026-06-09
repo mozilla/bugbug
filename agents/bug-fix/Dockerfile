@@ -11,6 +11,7 @@ COPY http_service/pyproject.toml ./http_service/
 COPY services/hackbot-api/pyproject.toml ./services/hackbot-api/
 COPY agents/bug-fix/pyproject.toml ./agents/bug-fix/
 COPY libs/hackbot-runtime/pyproject.toml ./libs/hackbot-runtime/
+COPY libs/agent-tools/pyproject.toml ./libs/agent-tools/
 
 # Install external deps without building workspace members.
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -19,6 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Workspace members the agent image actually needs (source included).
 COPY agents/bug-fix ./agents/bug-fix
 COPY libs/hackbot-runtime ./libs/hackbot-runtime
+COPY libs/agent-tools ./libs/agent-tools
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --package hackbot-agent-bug-fix

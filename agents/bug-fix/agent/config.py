@@ -1,4 +1,4 @@
-from hackbot_runtime.actions.naming import ACTIONS_SERVER_NAME, tool_name_for
+from agent_tools.registry import ACTIONS_SERVER_NAME, tool_name_for
 
 # Tools that can modify the source repo — blocked under dry-run.
 SOURCE_WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}

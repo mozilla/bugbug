@@ -71,12 +71,12 @@ nlp = [
     "spacy==3.8.14",
 ]
 nn = []
-# hackbot runtime for bugbug tools that use it (e.g. tools/duplicate_bugs,
-# which builds the Bugzilla MCP via hackbot_runtime.mcp.bugzilla). Not a base
-# dependency: hackbot-runtime is a workspace-only package, so a standalone
+# Reusable MCP tool servers for bugbug tools that use them (e.g.
+# tools/duplicate_bugs, which builds the Bugzilla MCP via agent_tools.bugzilla).
+# Not a base dependency: agent-tools is a workspace-only package, so a standalone
 # `pip install bugbug` must not require it.
 bug-fix = [
-    "hackbot-runtime[claude-sdk]",
+    "agent-tools[bugzilla]",
 ]
 
 [dependency-groups]
@@ -137,10 +137,11 @@ artifacts = [
 ]
 
 [tool.uv.workspace]
-members = ["http_service", "services/hackbot-api", "agents/bug-fix", "libs/hackbot-runtime"]
+members = ["http_service", "services/hackbot-api", "agents/bug-fix", "libs/hackbot-runtime", "libs/agent-tools"]
 
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
+agent-tools = { workspace = true }
 
 [tool.ruff]
 extend-exclude = ["data"]

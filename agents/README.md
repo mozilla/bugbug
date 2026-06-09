@@ -30,7 +30,12 @@ Don't re-implement these — import them:
   messages to stdout/log. Call `reporter.header("...")` per work item, `reporter.message(msg)` per message.
 - `from hackbot_runtime.actions.claude_sdk import actions_server_for` — returns
   `(recorder, mcp_server)`; write actions land in `summary.json` instead of mutating anything.
-- `from hackbot_runtime.mcp.bugzilla import BugzillaContext, build_server` — read-only Bugzilla MCP.
+
+Reusable MCP **tool servers** live in the separate `agent-tools` package, each
+behind its own optional extra (`agent-tools[bugzilla]`, `agent-tools[firefox]`):
+
+- `from agent_tools.bugzilla import BugzillaContext, build_server` — read-only Bugzilla MCP.
+- `from agent_tools.firefox import FirefoxContext, build_server` — Firefox build/test MCP.
 
 You still assemble your own `ClaudeAgentOptions` and drive the `ClaudeSDKClient`
 loop — those stay explicit and in your hands.

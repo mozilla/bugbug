@@ -7,7 +7,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts
-from hackbot_runtime.actions import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.uploader import SignedPolicyUploader
 
 
