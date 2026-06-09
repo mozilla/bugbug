@@ -592,9 +592,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-bug-fix = [
-    { name = "agent-tools", extra = ["bugzilla"] },
-]
 nlp = [
     { name = "spacy" },
 ]
@@ -621,7 +618,6 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-tools", extras = ["bugzilla"], marker = "extra == 'bug-fix'", editable = "libs/agent-tools" },
     { name = "amqp", specifier = "~=5.3.1" },
     { name = "async-lru", specifier = "~=2.3.0" },
     { name = "beautifulsoup4", specifier = "~=4.14.3" },
@@ -673,7 +669,7 @@ requires-dist = [
     { name = "xgboost", specifier = "~=3.2.0" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
-provides-extras = ["bug-fix", "nlp", "nn"]
+provides-extras = ["nlp", "nn"]
 
 [package.metadata.requires-dev]
 spawn-pipeline = [
