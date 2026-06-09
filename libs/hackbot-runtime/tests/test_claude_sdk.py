@@ -2,7 +2,10 @@
 
 import mcp.server.lowlevel.server as low
 from hackbot_runtime.actions import ActionsRecorder
-from hackbot_runtime.actions.claude_sdk import build_actions_sdk_server
+from hackbot_runtime.actions.claude_sdk import (
+    actions_server_for,
+    build_actions_sdk_server,
+)
 from mcp.types import CallToolRequest, CallToolRequestParams, ListToolsRequest
 
 _ALL = [
@@ -84,3 +87,24 @@ async def test_missing_file_surfaces_is_error():
     assert result.isError is True
     text = " ".join(getattr(c, "text", "") for c in result.content)
     assert "file not found" in text
+
+
+def test_actions_server_for_creates_fallback_recorder(tmp_path):
+    recorder, config = actions_server_for(
+        None, types=_ALL, fallback_artifacts_dir=tmp_path
+    )
+    assert isinstance(recorder, ActionsRecorder)
+    assert config["type"] == "sdk"
+
+
+def test_actions_server_for_reuses_given_recorder():
+    given = ActionsRecorder()
+    recorder, config = actions_server_for(given, types=_ALL)
+    assert recorder is given
+    assert config["type"] == "sdk"
+
+
+async def test_actions_server_for_exposes_selected_tools():
+    _, config = actions_server_for(ActionsRecorder(), types=["bugzilla.update_bug"])
+    tools = await _list(config["instance"])
+    assert {t.name for t in tools} == {"bugzilla_update_bug"}

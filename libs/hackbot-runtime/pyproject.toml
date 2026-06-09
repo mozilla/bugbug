@@ -9,10 +9,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# claude-agent-sdk adapter (hackbot_runtime.actions.claude_sdk) that exposes
-# the action registry as an in-process MCP server. Not needed by consumers
-# that only read the summary contract.
-claude-sdk = ["claude-agent-sdk>=0.1.30"]
+# claude-agent-sdk building blocks: the action-registry MCP adapter
+# (hackbot_runtime.actions.claude_sdk), the streamed-message Reporter
+# (hackbot_runtime.claude), and the read-only Bugzilla MCP server
+# (hackbot_runtime.mcp.bugzilla, which also needs bugsy). Not needed by
+# consumers that only read the summary contract.
+claude-sdk = ["claude-agent-sdk>=0.1.30", "bugsy"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

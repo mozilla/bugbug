@@ -8,7 +8,7 @@ from pathlib import Path
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
-from bugbug.tools.bug_fix.firefox_tools import (
+from .firefox_tools import (
     bootstrap_firefox,
     build_firefox,
     evaluate_testcase,

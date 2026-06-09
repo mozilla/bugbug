@@ -2109,7 +2109,6 @@ name = "hackbot-agent-bug-fix"
 version = "0.1.0"
 source = { virtual = "agents/bug-fix" }
 dependencies = [
-    { name = "bugbug" },
     { name = "bugsy" },
     { name = "claude-agent-sdk" },
     { name = "grizzly-framework" },
@@ -2122,7 +2121,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bugbug", editable = "." },
     { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "grizzly-framework" },
@@ -2188,11 +2186,13 @@ dependencies = [
 
 [package.optional-dependencies]
 claude-sdk = [
+    { name = "bugsy" },
     { name = "claude-agent-sdk" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "bugsy", marker = "extra == 'claude-sdk'" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },

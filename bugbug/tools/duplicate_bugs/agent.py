@@ -34,10 +34,10 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
+from hackbot_runtime.mcp.bugzilla import BugzillaContext
+from hackbot_runtime.mcp.bugzilla import build_server as build_bugzilla_server
 
 from bugbug.tools.base import GenerativeModelTool
-from bugbug.tools.bug_fix.bugzilla_mcp import BugzillaContext
-from bugbug.tools.bug_fix.bugzilla_mcp import build_server as build_bugzilla_server
 from bugbug.tools.duplicate_bugs.config import (
     BUGZILLA_READ_TOOLS,
     parse_dir_verdict,
