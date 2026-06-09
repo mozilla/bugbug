@@ -10,7 +10,12 @@ from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools
 from bugbug.tools.code_review.data_types import Skill, _strip_frontmatter
-from bugbug.tools.code_review.langchain_tools import _fetch_file, create_load_skill_tool
+from bugbug.tools.code_review.langchain_tools import (
+    _fetch_file,
+    create_load_skill_tool,
+    search_identifier,
+    search_text,
+)
 from bugbug.tools.code_review.utils import find_comment_scope
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
@@ -480,3 +485,42 @@ def test_fetch_file_skips_revision_when_none():
     result = asyncio.run(_fetch_file("f.txt", None, client, patch))
     assert result == "latest content"
     client.get_file_at_revision.assert_not_called()
+
+
+def _mock_search_client():
+    client = MagicMock()
+    client.search = AsyncMock(return_value=[("dom/a.cpp", 1, "match")])
+    return client
+
+
+@pytest.mark.asyncio
+async def test_search_text_accepts_double_encoded_tests_value():
+    """Models sometimes send '"exclude"' (quotes included); it must validate.
+
+    Regression test for https://github.com/mozilla/bugbug/issues/6140.
+    """
+    client = _mock_search_client()
+    with patch.object(langchain_tools, "_get_client", return_value=client):
+        result = await search_text.ainvoke({"query": "foo", "tests": '"exclude"'})
+    assert "dom/a.cpp:1: match" in result
+    assert client.search.await_args.kwargs["tests"] == "exclude"
+
+
+@pytest.mark.asyncio
+async def test_search_text_accepts_double_encoded_langs_value():
+    client = _mock_search_client()
+    with patch.object(langchain_tools, "_get_client", return_value=client):
+        result = await search_text.ainvoke({"query": "foo", "langs": ['"cpp"']})
+    assert "dom/a.cpp:1: match" in result
+    assert client.search.await_args.kwargs["langs"] == ["cpp"]
+
+
+@pytest.mark.asyncio
+async def test_search_identifier_accepts_double_encoded_tests_value():
+    client = _mock_search_client()
+    with patch.object(langchain_tools, "_get_client", return_value=client):
+        result = await search_identifier.ainvoke(
+            {"identifier": "Foo", "tests": "'only'"}
+        )
+    assert "dom/a.cpp:1: match" in result
+    assert client.search.await_args.kwargs["tests"] == "only"

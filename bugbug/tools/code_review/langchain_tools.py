@@ -8,7 +8,7 @@
 from dataclasses import dataclass
 from functools import cache
 from logging import getLogger
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 import httpx
 import tenacity
@@ -19,6 +19,7 @@ from searchfox import AsyncSearchfoxClient
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
+from bugbug.tools.core.validators import StripEnumQuotes
 
 logger = getLogger(__name__)
 
@@ -34,10 +35,13 @@ def _tool_error(message: str, *, fatal: bool = False) -> str:
     return f"{prefix}: {message}"
 
 
-LangStr = Literal[
-    "cpp", "c", "js", "webidl", "java", "kotlin", "rust", "python", "html", "css"
+LangStr = Annotated[
+    Literal[
+        "cpp", "c", "js", "webidl", "java", "kotlin", "rust", "python", "html", "css"
+    ],
+    StripEnumQuotes,
 ]
-Tests = Optional[Literal["only", "exclude"]]
+Tests = Optional[Annotated[Literal["only", "exclude"], StripEnumQuotes]]
 
 
 @dataclass
