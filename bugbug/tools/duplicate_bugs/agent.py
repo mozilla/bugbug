@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import bugsy
+from agent_tools import bugzilla as bugzilla_tools
+from agent_tools.bugzilla import BugzillaContext
+from agent_tools.claude_sdk import build_sdk_server
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -34,8 +37,6 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
-from hackbot_runtime.mcp.bugzilla import BugzillaContext
-from hackbot_runtime.mcp.bugzilla import build_server as build_bugzilla_server
 
 from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.duplicate_bugs.config import (
@@ -499,7 +500,7 @@ class DuplicateBugsTool(GenerativeModelTool):
 
         bz = bugsy.Bugsy(api_key=api_key, bugzilla_url=base_url)
         bz_ctx = BugzillaContext(client=bz)
-        bugzilla_server = build_bugzilla_server(bz_ctx)
+        bugzilla_server = build_sdk_server("bugzilla", bz_ctx, bugzilla_tools.TOOLS)
 
         if mode == "local":
             if local_dir is None:

@@ -17,7 +17,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from agent import run_bug_fix  # noqa: E402
-from hackbot_runtime.mcp.bugzilla import BugzillaContext, build_server  # noqa: E402
+from agent_tools import bugzilla  # noqa: E402
+from agent_tools.bugzilla import BugzillaContext  # noqa: E402
+from agent_tools.claude_sdk import build_sdk_server  # noqa: E402
 
 
 class Settings(BaseSettings):
@@ -39,13 +41,15 @@ class Settings(BaseSettings):
 async def main():
     settings = Settings()
 
-    bugzilla_mcp_server = build_server(
+    bugzilla_mcp_server = build_sdk_server(
+        "bugzilla",
         BugzillaContext(
             client=bugsy.Bugsy(
                 api_key=settings.bugzilla_api_key,
                 bugzilla_url=settings.bugzilla_api_url,
             ),
-        )
+        ),
+        bugzilla.TOOLS,
     )
 
     result = await run_bug_fix(
