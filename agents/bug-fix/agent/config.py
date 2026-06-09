@@ -1,8 +1,3 @@
-from __future__ import annotations
-
-from pathlib import Path
-
-import yaml
 from hackbot_runtime.actions.naming import ACTIONS_SERVER_NAME, tool_name_for
 
 # Tools that can modify the source repo — blocked under dry-run.
@@ -39,18 +34,3 @@ FIREFOX_TOOLS = [
     "mcp__firefox__evaluate_js_shell",
     "mcp__firefox__bootstrap_firefox",
 ]
-
-# Deployment-stable settings that may be supplied via config YAML.
-_CONFIG_KEYS = {"base_url", "source_repo", "rules_dir", "model", "max_turns", "effort"}
-
-
-def load_config(path: Path) -> dict:
-    with path.open() as f:
-        data = yaml.safe_load(f) or {}
-    unknown = set(data) - _CONFIG_KEYS
-    if unknown:
-        raise ValueError(
-            f"unknown config key(s) in {path}: {sorted(unknown)}\n"
-            f"allowed: {sorted(_CONFIG_KEYS)}"
-        )
-    return data
