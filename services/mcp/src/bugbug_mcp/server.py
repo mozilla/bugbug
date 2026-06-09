@@ -18,7 +18,6 @@ from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     SanitizedPhabricatorPatch,
 )
-from libmozdata.phabricator import PhabricatorRevisionNotFoundException
 
 mcp = FastMCP("Firefox Development MCP Server")
 
@@ -141,12 +140,12 @@ def bugzilla_quick_search(
 
 
 def _get_revision_md(revision_id: int) -> str:
-    try:
-        return SanitizedPhabricatorPatch(revision_id=revision_id).to_md()
-    except PhabricatorRevisionNotFoundException:
+    patch = SanitizedPhabricatorPatch(revision_id=revision_id)
+    if not patch.is_accessible() or not patch.is_public():
         raise ToolError(
             f"Revision D{revision_id} was not found. It may not exist or may be private."
         )
+    return patch.to_md()
 
 
 @mcp.resource(
