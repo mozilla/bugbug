@@ -4,7 +4,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from hackbot_runtime import AgentResult, Context, run_async
+from hackbot_runtime import AgentResult, Context
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 log = logging.getLogger("bug-fix-agent")
@@ -75,7 +75,7 @@ def ensure_firefox_source(source_repo: Path) -> None:
 
 
 async def main(ctx: Context) -> AgentResult:
-    from agent import run_bug_fix
+    from . import run_bug_fix
 
     inputs = AgentInputs()
     ensure_firefox_source(inputs.source_repo)
@@ -111,7 +111,3 @@ async def main(ctx: Context) -> AgentResult:
         },
         exit_code=result.exit_code,
     )
-
-
-if __name__ == "__main__":
-    raise SystemExit(run_async(main))

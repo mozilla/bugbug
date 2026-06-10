@@ -22,9 +22,11 @@ agent-tools = { workspace = true }
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# The importable packages (`agent_runner`, `broker`) don't match the project
-# name, so declare them explicitly. Without this a wheel build (e.g.
-# `uv sync --no-editable`) would bundle nothing and `python -m agent_runner`
-# would fail in a source-free image.
+# The importable packages don't match the project name, so declare them
+# explicitly. Without this a wheel build (e.g. `uv sync --no-editable`) would
+# bundle nothing and `python -m agent` would fail in a source-free image.
+# `agent` carries the prompt/rules .md assets it reads via
+# `Path(__file__).parent`; hatchling bundles all files under these dirs,
+# including the .md files.
 [tool.hatch.build.targets.wheel]
-packages = ["agent_runner", "broker"]
+packages = ["agent", "broker"]
