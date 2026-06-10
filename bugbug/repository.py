@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import collections
 import concurrent.futures
 import copy
 import io
@@ -1322,6 +1323,22 @@ def close_component_mapping():
     path_to_component = None
 
 
+def set_git_hash(commits: Iterable[CommitDict]) -> None:
+    def apply_git_hash(commit: CommitDict) -> None:
+        try:
+            commit["git_hash"] = utils.hg2git(commit["node"])
+        except requests.exceptions.HTTPError as e:
+            logger.error(
+                "Failure mapping hg commit hash (%s) to git commit hash %s",
+                commit["node"],
+                e,
+            )
+            commit["git_hash"] = None
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        collections.deque(executor.map(apply_git_hash, commits), maxlen=0)
+
+
 def hg_log_multi(
     repo_dir: str, revs: list[bytes], branch: str | None = "default"
 ) -> tuple[Commit, ...]:
@@ -1440,6 +1457,7 @@ def download_commits(
     commit_dicts = tuple(commit.to_dict() for commit in commits)
 
     set_commit_coverage(commit_dicts)
+    set_git_hash(commit_dicts)
 
     if save:
         db.append(COMMITS_DB, commit_dicts)
