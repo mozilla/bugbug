@@ -4,31 +4,26 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Workspace metadata first so the dep-download layer caches independently
-# of source changes.
+# Workspace root metadata first so the dep-download layer caches independently
+# of source changes. Member pyproject.toml files aren't needed here: --frozen
+# trusts uv.lock as-is, so no per-member lockfile validation is required.
 COPY pyproject.toml uv.lock VERSION ./
-COPY http_service/pyproject.toml ./http_service/
-COPY services/hackbot-api/pyproject.toml ./services/hackbot-api/
-COPY agents/bug-fix/pyproject.toml ./agents/bug-fix/
-COPY libs/hackbot-runtime/pyproject.toml ./libs/hackbot-runtime/
-COPY libs/agent-tools/pyproject.toml ./libs/agent-tools/
 
 # Install external deps without building workspace members.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-install-workspace --package hackbot-agent-bug-fix
+    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-bug-fix
 
-# Workspace members the agent image actually needs (source included).
-COPY agents/bug-fix ./agents/bug-fix
-COPY libs/hackbot-runtime ./libs/hackbot-runtime
-COPY libs/agent-tools ./libs/agent-tools
+# Bring in the full workspace and install the package itself non-editable, so
+# the build artifact lands in the venv and the final image needs no source tree.
+COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --package hackbot-agent-bug-fix
+    uv sync --locked --no-dev --no-editable --package hackbot-agent-bug-fix
 
 FROM python:3.12 AS base
 
-COPY --from=builder /app /app
-WORKDIR /app/agents/bug-fix
+COPY --from=builder /app/.venv /app/.venv
+WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1

@@ -16,3 +16,14 @@ dependencies = [
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# The importable packages (`agent_runner`, `broker`) don't match the project
+# name, so declare them explicitly. Without this a wheel build (e.g.
+# `uv sync --no-editable`) would bundle nothing and `python -m agent_runner`
+# would fail in a source-free image.
+[tool.hatch.build.targets.wheel]
+packages = ["agent_runner", "broker"]
