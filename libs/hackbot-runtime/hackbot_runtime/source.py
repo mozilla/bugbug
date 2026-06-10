@@ -17,7 +17,16 @@ def ensure_source_repo(source_repo: Path, repo_url: str) -> None:
     the remote HEAD. Recovers from a partial checkout left by an earlier failed
     run (e.g. the clone succeeded but the checkout ran out of disk).
     """
-    if (source_repo / ".git").exists():
+    git_dir = source_repo / ".git"
+    if git_dir.exists():
+        # An earlier run killed mid-fetch (e.g. the container was stopped)
+        # leaves stale lock files behind. Since each run drives git
+        # sequentially, any lock present at startup is stale and safe to
+        # remove.
+        for lock in (git_dir / "shallow.lock", git_dir / "index.lock"):
+            if lock.exists():
+                log.warning("removing stale git lock %s", lock)
+                lock.unlink()
         status = subprocess.run(
             ["git", "-C", str(source_repo), "status", "--porcelain"],
             check=True,
