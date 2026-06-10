@@ -37,7 +37,7 @@ RUN useradd --create-home --shell /bin/bash agent \
 
 USER agent
 
-CMD ["python", "-m", "agent_runner"]
+CMD ["python", "-m", "agent"]
 
 FROM base AS broker
 
