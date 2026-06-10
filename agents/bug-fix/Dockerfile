@@ -34,7 +34,7 @@ RUN useradd --create-home --shell /bin/bash agent \
 
 USER agent
 
-CMD ["python", "-m", "agent"]
+CMD ["python", "-m", "hackbot_agents.bug_fix"]
 
 FROM base AS broker
 
@@ -44,4 +44,4 @@ USER broker
 
 EXPOSE 8765
 
-CMD ["python", "-m", "broker"]
+CMD ["python", "-m", "hackbot_agents.bug_fix.broker"]

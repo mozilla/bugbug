@@ -13,13 +13,13 @@ from pathlib import Path
 import bugsy
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Make the co-located `agent` package importable regardless of cwd.
+# Make the co-located `hackbot_agents` namespace importable regardless of cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from agent import run_bug_fix  # noqa: E402
 from agent_tools import bugzilla  # noqa: E402
 from agent_tools.bugzilla import BugzillaContext  # noqa: E402
 from agent_tools.claude_sdk import build_sdk_server  # noqa: E402
+from hackbot_agents.bug_fix import run_bug_fix  # noqa: E402
 
 
 class Settings(BaseSettings):
