@@ -2134,7 +2134,7 @@ wheels = [
 [[package]]
 name = "hackbot-agent-bug-fix"
 version = "0.1.0"
-source = { virtual = "agents/bug-fix" }
+source = { editable = "agents/bug-fix" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
     { name = "bugsy" },
@@ -2159,7 +2159,7 @@ requires-dist = [
 [[package]]
 name = "hackbot-api"
 version = "0.1.0"
-source = { virtual = "services/hackbot-api" }
+source = { editable = "services/hackbot-api" }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },

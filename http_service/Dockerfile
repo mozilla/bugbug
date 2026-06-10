@@ -6,12 +6,7 @@ FROM mozilla/bugbug-base:$BUGBUG_VERSION
 RUN --mount=type=bind,source=pyproject.toml,target=/tmp/workspace/pyproject.toml \
 	--mount=type=bind,source=uv.lock,target=/tmp/workspace/uv.lock \
 	--mount=type=bind,source=VERSION,target=/tmp/workspace/VERSION \
-	--mount=type=bind,source=http_service/pyproject.toml,target=/tmp/workspace/http_service/pyproject.toml \
-	--mount=type=bind,source=services/hackbot-api/pyproject.toml,target=/tmp/workspace/services/hackbot-api/pyproject.toml \
-	--mount=type=bind,source=agents/bug-fix/pyproject.toml,target=/tmp/workspace/agents/bug-fix/pyproject.toml \
-	--mount=type=bind,source=libs/hackbot-runtime/pyproject.toml,target=/tmp/workspace/libs/hackbot-runtime/pyproject.toml \
-	--mount=type=bind,source=libs/agent-tools/pyproject.toml,target=/tmp/workspace/libs/agent-tools/pyproject.toml \
-	cd /tmp/workspace && uv sync --locked --no-dev --package bugbug-http-service --no-install-project
+	cd /tmp/workspace && uv sync --frozen --no-dev --package bugbug-http-service --no-install-workspace
 
 # Setup http service as package
 RUN --mount=type=bind,target=/tmp/workspace,rw \
