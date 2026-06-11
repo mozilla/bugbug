@@ -1,85 +1,89 @@
-# hackbot agents
+# Hackbot Agents
 
-Each subdirectory here is **one self-contained hackbot agent** — its logic,
-entrypoint, and deployment live together. `bug-fix/` is the reference example.
+Each subdirectory is a single, self-contained agent — its logic, its entrypoint,
+and its deployment all live together, so you can understand one agent without
+hunting around the repo.
 
-## Anatomy of an agent (`agents/<name>/`)
+New here? The best way to start is to read through **`bug-fix/`** — it's our reference
+agent, and the fastest path to your own is to copy it and adapt.
+
+## How an agent works (the important part)
+
+When the platform runs your agent, it calls `python -m hackbot_agents.<name>`, which runs
+your `__main__.py`. Your job is to fill in three small pieces:
+
+```python
+class AgentInputs(BaseSettings):          # per-run inputs, read from env (bug_id -> BUG_ID)
+    bug_id: int
+
+async def main(ctx: HackbotContext) -> BugFixResult:
+    inputs = AgentInputs()
+    return await run_bug_fix(bug=inputs.bug_id, ...)   # your real logic lives in agent.py
+
+run_async(main)                           # finds hackbot.toml, runs main, exits the process
+```
+
+Three rules are worth remembering:
+
+- **To report success,** return a `HackbotAgentResult` (subclass it with your own fields).
+  The runtime saves it to `summary.json` under `findings`.
+- **To report failure,** just raise. Use `AgentError("…")` when it's an expected, explainable
+  failure; let any other exception bubble up for an unexpected crash.
+- **`ctx` is your window to the platform** — everything it prepared for you hangs off it:
+  `ctx.source_repo`, `ctx.firefox`, `ctx.anthropic.api_key`, `ctx.actions`,
+  `ctx.publish_file`, `ctx.publish_json`. You never wire these up yourself.
+
+## What's in an agent folder (`agents/<name>/`)
 
 ```
 agents/<name>/
-  pyproject.toml          # dist "hackbot-agent-<name>"; packages = ["hackbot_agents"]; deps: hackbot-runtime[claude-sdk] + agent-specific
-  hackbot.toml            # declares platform capabilities: [source], [firefox]
-  Dockerfile              # multi-stage: builder / agent [/ broker]
-  compose.yml             # local run; sets static env (e.g. the broker URL)
-  hackbot_agents/         # shared PEP 420 namespace — NO __init__.py here
-    <name_snake>/         # the agent package (e.g. bug_fix)
-      __init__.py         # empty package marker
-      agent.py            # run_<name>() logic + helpers (the reusable agent library)
-      __main__.py         # entrypoint: AgentInputs(BaseSettings) + async def main(ctx) -> dict + run_async(main)
-      prompts/ rules/     # assets read via Path(__file__).parent
-      broker/             # OPTIONAL: secret-holding MCP sidecar (python -m hackbot_agents.<name>.broker)
+  pyproject.toml          # the distribution "hackbot-agent-<name>" and its dependencies
+  hackbot.toml            # what you need the platform to prepare: [source], [firefox]
+  Dockerfile              # how it ships
+  compose.yml             # how to run it locally
+  hackbot_agents/         # a shared namespace package — please don't add __init__.py here!
+    <name_snake>/         # your agent's package (e.g. bug_fix)
+      __init__.py         # empty
+      __main__.py         # AgentInputs + main(ctx) + run_async(main)
+      agent.py            # entrypoint: your prompts, logic, and HackbotAgentResult subclass
 ```
 
-## `hackbot.toml` — what the platform provides
+One thing to watch: **never create `hackbot_agents/__init__.py`.** Leaving it out is what
+lets several agents live side by side in one environment without overwriting each other (PEP 420).
+It's an easy mistake to make, and a confusing one to debug.
 
-Declare the capabilities your agent needs in a `hackbot.toml` at the agent root
-(alongside `pyproject.toml` / `Dockerfile`); the runtime prepares them and hands
-you a single `HackbotContext`. Every table is optional — omit `[source]` if you
-don't operate on a repo, omit `[firefox]` if you don't need a Firefox build.
+## Telling the platform what you need (`hackbot.toml`)
+
+Think of `hackbot.toml` as your request to the platform: "please have these ready for me."
+Everything is optional — only list what you actually use.
 
 ```toml
-[source]                                # the runtime clones/refreshes this for you
+[source]                                # the platform shallow-clones and refreshes this for you
 repo_url = "https://github.com/mozilla-firefox/firefox.git"
-checkout_path = "/workspace/firefox"    # default; env SOURCE_REPO overrides
 
 [firefox]                               # Firefox build paths, derived from the checkout
 enabled = true
 objdir = "objdir-ff-asan"
 ```
 
-Agent identity (name/description) stays in `pyproject.toml`; model defaults and
-tool allowlists stay in code; secrets and per-run inputs stay in the
-environment. The toml holds only platform-capability declarations.
+Everything else has a natural home: your agent's name and description go in `pyproject.toml`,
+model and tool choices stay in code, and secrets and per-run inputs come from the environment.
 
-Every agent ships its package under the shared **`hackbot_agents` PEP 420 namespace**
-(`hackbot_agents.<name_snake>`), so multiple agents installed into one environment never
-collide. **Never add `hackbot_agents/__init__.py`** — the missing namespace-level
-`__init__.py` is what lets the agent distributions merge instead of clobbering each other.
+## Building blocks you can reuse
 
-The runtime invokes the agent with `python -m hackbot_agents.<name>`, running
-`hackbot_agents/<name>/__main__.py`. That module is the thin deployment wrapper:
-it defines `AgentInputs(BaseSettings)`, an `async def main(ctx)`, and calls
-`run_async(main)`. `run_async` auto-discovers `hackbot.toml` (cwd first — the
-Dockerfile copies it into `/app` — then walks up from the entry module to the
-agent root in an editable checkout) and exits the process with the run's status.
-`main` validates inputs and calls the `run_<name>()` logic in `agent.py`,
-reading everything the platform provides off `ctx` (`ctx.source_repo`,
-`ctx.firefox`, `ctx.anthropic`, `ctx.actions`, `ctx.publish_file`).
+Please reach for these instead of rolling your own — they're shared on purpose.
 
-## Shared building blocks (in `hackbot-runtime`)
+From **`hackbot-runtime`**:
 
-Don't re-implement these — import them:
+- `HackbotContext, AgentError, HackbotAgentResult, run_async` — the pieces from the contract above.
+- `from hackbot_runtime.claude import Reporter` — pretty-prints the agent's streamed messages
+  to stdout and your log (call `reporter.header(...)` per work item, `reporter.message(msg)` per message).
+- `from hackbot_runtime.actions.claude_sdk import actions_server_for` — gives you
+  `(recorder, mcp_server)` so write-actions get recorded into `summary.json` rather than
+  silently mutating the world.
 
-- `from hackbot_runtime import HackbotContext, AgentError, run_async` — the entrypoint
-  contract. `main(ctx)` **returns a findings dict** (or `None`) on success, and **raises**
-  to fail — `AgentError("…")` for an expected failure, any exception for a crash. The
-  runtime turns that into `summary.json` (`status`/`error`/`findings`) and the process
-  exit code; `run_async(main)` exits the process itself, so the entrypoint is just that
-  one call. `HackbotContext` is the one object `main()` receives; it answers for the
-  platform: `ctx.source_repo` (prepared from `[source]` on first access), `ctx.firefox`
-  (a `FirefoxContext` from `[firefox]`), `ctx.anthropic.api_key` (validated), plus the
-  results/artifacts/actions plumbing (`ctx.actions`, `ctx.publish_file`,
-  `ctx.publish_json`).
-- `from hackbot_runtime import ensure_source_repo` — the lower-level shallow-clone/refresh
-  primitive (you normally don't call this directly; `ctx.source_repo` does it for you).
-- `from hackbot_runtime.claude import Reporter` — renders streamed claude-agent-sdk
-  messages to stdout/log. Call `reporter.header("...")` per work item, `reporter.message(msg)` per message.
-- `from hackbot_runtime.actions.claude_sdk import actions_server_for` — returns
-  `(recorder, mcp_server)`; write actions land in `summary.json` instead of mutating anything.
-
-Reusable MCP **tool servers** live in the separate `agent-tools` package, each behind its
-own optional extra (`agent-tools[bugzilla]`, `agent-tools[firefox]`). Import the domain
-module and build the server via the adapter:
+Your actual **tools** (the things the model can call) come from **`agent-tools`**, each behind
+its own extra (`[bugzilla]`, `[firefox]`):
 
 ```python
 from agent_tools import bugzilla
@@ -87,27 +91,20 @@ from agent_tools.claude_sdk import build_sdk_server
 server = build_sdk_server("bugzilla", BugzillaContext(client=...), bugzilla.TOOLS)
 ```
 
-You still assemble your own `ClaudeAgentOptions` and drive the `ClaudeSDKClient` loop —
-those stay explicit and in your hands.
+From there, you assemble your own `ClaudeAgentOptions` and drive the `ClaudeSDKClient` loop —
+that part stays in your hands, where you want it.
 
-## Adding a new agent
+## Creating your own agent
 
-1. `agents/<name>/hackbot.toml` — declare `[source]`/`[firefox]` if you need them
-   (omit either otherwise).
-2. `agents/<name>/hackbot_agents/<name_snake>/__main__.py` — define `AgentInputs(BaseSettings)`
-   (domain inputs only), an `async def main(ctx: HackbotContext) -> dict` that returns
-   findings on success and raises `AgentError` to fail, and end with `run_async(main)` (it
-   discovers `hackbot.toml` — cwd, then up to the agent root — and exits the process itself).
-3. `agents/<name>/hackbot_agents/<name_snake>/agent.py` — your prompts/logic, exposing the
-   `run_<name>()` entrypoint `main` calls (leave `<name_snake>/__init__.py` empty). Do **not**
-   create `agents/<name>/hackbot_agents/__init__.py`.
-4. Copy `pyproject.toml`, `Dockerfile`, `compose.yml` from `bug-fix/` and rename (the
-   Dockerfile CMDs become `python -m hackbot_agents.<name>` / `… .broker`, and it copy
-   `agents/<name>/hackbot.toml` into `/app`).
-5. In `services/hackbot-api/app/schemas.py`, add a Pydantic input model.
-6. In `services/hackbot-api/app/agents.py`, add one `AGENT_REGISTRY` entry
-   (`name` + `description` + `job_name` + `input_schema`). **No `build_env`** —
-   env vars are derived from the schema by `model_to_env` (field `bug_id` → `BUG_ID`).
-   Put deploy-time constants (broker URLs, etc.) in the Job's static env config, not the schema.
+1. **Copy `bug-fix/`** as your starting point. Rename the folder, the distribution name in
+   `pyproject.toml`, and the commands in `Dockerfile`/`compose.yml` (`python -m hackbot_agents.<name>`).
+2. **Trim `hackbot.toml`** to just the `[source]`/`[firefox]` tables you need.
+3. **Write your two modules:** `__main__.py` (`AgentInputs` + `main`) and `agent.py` (your logic
+   plus a `HackbotAgentResult` subclass). Keep `<name_snake>/__init__.py` empty.
+4. **Register it** in `services/hackbot-api/`: add a Pydantic input model in `app/schemas.py`,
+   and a single `AGENT_REGISTRY` entry in `app/agents.py` (`name`/`description`/`job_name`/
+   `input_schema`). Env vars are derived from your schema automatically (`bug_id` → `BUG_ID`),
+   so there's no `build_env` to write — put deploy-time constants like broker URLs in the Job's
+   static env instead.
 
-That's it: one folder + one schema + one registry line.
+And that's the whole recipe: one folder, one schema, one registry line. Welcome aboard!
