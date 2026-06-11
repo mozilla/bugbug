@@ -19,8 +19,6 @@ class AgentInputs(BaseSettings):
 
 async def main(ctx: HackbotContext) -> BugFixResult:
     inputs = AgentInputs()
-    # Fail fast if the platform did not provide Anthropic credentials.
-    ctx.anthropic.api_key
 
     log_path = Path(tempfile.mkdtemp(prefix="bug-fix-log-")) / "agent.log"
 
