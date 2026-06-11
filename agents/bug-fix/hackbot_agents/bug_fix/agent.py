@@ -38,20 +38,10 @@ from .config import (
 HERE = Path(__file__).resolve().parent
 
 
-# --------------------------------------------------------------------------- #
-# Result type
-# --------------------------------------------------------------------------- #
-
-
 @dataclass
 class BugFixResult:
     exit_code: int = 0
     bugs_processed: int = 0
-
-
-# --------------------------------------------------------------------------- #
-# Prompts & agents
-# --------------------------------------------------------------------------- #
 
 
 def load_system_prompt(rules_dir: Path, extra: str) -> str:
@@ -90,11 +80,6 @@ def make_investigator() -> AgentDefinition:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Agent entrypoint
-# --------------------------------------------------------------------------- #
-
-
 async def run_bug_fix(
     *,
     bugzilla_mcp_server: McpServerConfig,
@@ -123,19 +108,18 @@ async def run_bug_fix(
     selected = sorted(bugs, reverse=newest_first)
     print(f"[bug_fix] triaging {len(selected)} bug(s): {selected}", file=sys.stderr)
 
-    # --- Firefox build/eval MCP server (in-process; no tokens) -------- #
-    # The runtime derives fx_ctx from the prepared source checkout and the
-    # agent's hackbot.toml; here we only wrap its tools as an MCP server.
+    # Firefox build/eval MCP server (in-process; no tokens). The runtime
+    # derives fx_ctx from the prepared source checkout and the agent's
+    # hackbot.toml; here we only wrap its tools as an MCP server.
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
-    # --- Action-recording MCP server (in-process) --------------------- #
-    # Standalone/script runs pass actions_recorder=None and get a local
-    # recorder that copies attachments under ./artifacts (no uploader).
+    # Action-recording MCP server (in-process). Standalone/script runs pass
+    # actions_recorder=None and get a local recorder that copies attachments
+    # under ./artifacts (no uploader).
     actions_recorder, actions_server = actions_server_for(
         actions_recorder, types=ENABLED_ACTION_TYPES
     )
 
-    # --- Build agent options ------------------------------------------ #
     system_prompt = load_system_prompt(rules_dir, instructions)
 
     options = ClaudeAgentOptions(
@@ -166,7 +150,7 @@ async def run_bug_fix(
         setting_sources=[],
     )
 
-    # --- Run: one fresh agent context per bug ------------------------- #
+    # Run one fresh agent context per bug.
     exit_code = 0
     rules_path = rules_dir.resolve()
     with Reporter(verbose=verbose, log_path=log) as reporter:
