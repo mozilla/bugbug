@@ -18,7 +18,6 @@ agents/<name>/
       __main__.py         # entrypoint: AgentInputs(BaseSettings) + async def main(ctx) -> dict + run_async(main)
       prompts/ rules/     # assets read via Path(__file__).parent
       broker/             # OPTIONAL: secret-holding MCP sidecar (python -m hackbot_agents.<name>.broker)
-  run_local.py            # OPTIONAL: run without Docker/broker for quick iteration
 ```
 
 ## `hackbot.toml` — what the platform provides
