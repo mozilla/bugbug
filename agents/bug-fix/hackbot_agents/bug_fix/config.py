@@ -1,4 +1,4 @@
-from agent_tools.registry import ACTIONS_SERVER_NAME, tool_name_for
+from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 
 # Tools that can modify the source repo — blocked under dry-run.
 SOURCE_WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
@@ -11,21 +11,16 @@ BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__get_bug_attachments",
     "mcp__bugzilla__download_attachment",
 ]
-# Recording action types this agent enables. Served by the in-process
-# `actions` MCP server (hackbot_runtime.actions.claude_sdk). Tool calls land
-# in summary.json's `actions` array instead of mutating any external system.
-# New domains (phabricator, treeherder, ...) just append to this list.
-ENABLED_ACTION_TYPES = [
-    "bugzilla.update_bug",
-    "bugzilla.add_comment",
-    "bugzilla.add_attachment",
-    "bugzilla.create_bug",
-]
-# claude-agent-sdk tool identifiers derived from the above, using the shared
-# server name and tool-name helper so they stay in sync with the adapter.
-ENABLED_ACTION_TOOLS = [
-    f"mcp__{ACTIONS_SERVER_NAME}__{tool_name_for(t)}" for t in ENABLED_ACTION_TYPES
-]
+
+
+ENABLED_ACTION_TOOLS = actions_to_tool_names(
+    [
+        "bugzilla.update_bug",
+        "bugzilla.add_comment",
+        "bugzilla.add_attachment",
+        "bugzilla.create_bug",
+    ]
+)
 
 # Firefox build/test tools.
 FIREFOX_TOOLS = [
