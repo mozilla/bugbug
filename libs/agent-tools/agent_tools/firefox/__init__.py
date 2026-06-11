@@ -37,15 +37,17 @@ class FirefoxContext:
     js_binary: Path
 
     @classmethod
-    def from_source_repo(cls, source_repo: Path) -> "FirefoxContext":
+    def from_source_repo(
+        cls, source_repo: Path, objdir: str = "objdir-ff-asan"
+    ) -> "FirefoxContext":
         src = source_repo.resolve()
-        objdir = src / "objdir-ff-asan"
+        objdir_path = src / objdir
         return cls(
             source_dir=src,
             mozconfig=src / ".mozconfig",
-            objdir=objdir,
-            binary=objdir / "dist" / "bin" / "firefox",
-            js_binary=objdir / "dist" / "bin" / "js",
+            objdir=objdir_path,
+            binary=objdir_path / "dist" / "bin" / "firefox",
+            js_binary=objdir_path / "dist" / "bin" / "js",
         )
 
 

@@ -8,7 +8,7 @@ import requests
 class SignedPolicyUploader:
     """POST artifacts to a GCS V4 signed POST policy.
 
-    The orchestrator passes the policy via env vars consumed by `Context`.
+    The orchestrator passes the policy via env vars consumed by `HackbotContext`.
     The Job has no GCP identity; this signed policy is its only write
     capability.
     """
