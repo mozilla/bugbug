@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_tools.claude_sdk import build_sdk_server
-from agent_tools.registry import ACTIONS_SERVER_NAME
+from agent_tools.registry import ACTIONS_SERVER_NAME, tool_name_for
 
 from hackbot_runtime.actions import bugzilla as _bugzilla
 from hackbot_runtime.actions.recorder import ActionsRecorder
@@ -38,3 +38,13 @@ def actions_server_for(
     return recorder, build_sdk_server(
         ACTIONS_SERVER_NAME, recorder, tools, prefix_namespace=True
     )
+
+
+def actions_to_tool_names(types: list[str]) -> list[str]:
+    """claude-agent-sdk tool ids for the given action types.
+
+    e.g. ``"bugzilla.update_bug"`` -> ``"mcp__actions__bugzilla_update_bug"``.
+    Kept beside ``actions_server_for`` so the ids stay in sync with the server it
+    builds (same server name + tool-name mapping).
+    """
+    return [f"mcp__{ACTIONS_SERVER_NAME}__{tool_name_for(t)}" for t in types]
