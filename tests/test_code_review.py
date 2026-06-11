@@ -471,12 +471,12 @@ def test_fetch_file_falls_back_to_revision_on_http_error():
     client.get_file.assert_not_called()
 
 
-def test_fetch_file_falls_back_to_latest_when_revision_fails():
+def test_fetch_file_propagates_when_revision_fails():
     patch = make_patch_obj(old_file_exc=FileNotFoundError())
     client = make_client(latest="latest content")
     client.get_file_at_revision = AsyncMock(side_effect=Exception("searchfox error"))
-    result = asyncio.run(_fetch_file("f.txt", "abc123", client, patch))
-    assert result == "latest content"
+    with pytest.raises(Exception, match="searchfox error"):
+        asyncio.run(_fetch_file("f.txt", "abc123", client, patch))
 
 
 def test_fetch_file_skips_revision_when_none():
