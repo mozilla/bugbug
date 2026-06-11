@@ -18,8 +18,6 @@ from dataclasses import dataclass
 
 from pydantic import create_model
 
-ACTIONS_SERVER_NAME = "actions"
-
 
 def tool_name_for(dotted: str) -> str:
     """Map a dotted tool id to its MCP tool name: ``bugzilla.update_bug`` -> ``bugzilla_update_bug``."""

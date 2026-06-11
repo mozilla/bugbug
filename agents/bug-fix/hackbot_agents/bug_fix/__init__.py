@@ -14,7 +14,6 @@ from pathlib import Path
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
-from agent_tools.registry import ACTIONS_SERVER_NAME
 from claude_agent_sdk import (
     AgentDefinition,
     ClaudeAgentOptions,
@@ -23,6 +22,7 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 from hackbot_runtime import ActionsRecorder
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for
 from hackbot_runtime.claude import Reporter
 

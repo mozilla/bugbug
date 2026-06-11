@@ -10,8 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_tools.claude_sdk import build_sdk_server
-from agent_tools.registry import ACTIONS_SERVER_NAME, tool_name_for
+from agent_tools.registry import tool_name_for
 
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions import bugzilla as _bugzilla
 from hackbot_runtime.actions.recorder import ActionsRecorder
 

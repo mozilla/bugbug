@@ -10,4 +10,6 @@ claude-sdk adapter is ``hackbot_runtime.actions.claude_sdk.actions_server_for``.
 from hackbot_runtime.actions import bugzilla
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
-__all__ = ["ActionsRecorder", "bugzilla"]
+ACTIONS_SERVER_NAME = "actions"
+
+__all__ = ["ACTIONS_SERVER_NAME", "ActionsRecorder", "bugzilla"]
