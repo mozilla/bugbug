@@ -70,6 +70,10 @@ class CodeReviewTool(GenerativeModelTool):
         target_software: str = "Mozilla Firefox",
         todo_enabled: bool = True,
         skills: Optional[list[Skill]] = None,
+        review_context_repo: Optional[str] = None,
+        review_context_branch: str = "main",
+        extra_context_toml: Optional[str] = None,
+        content_overrides: Optional[dict[str, str]] = None,
     ) -> None:
         super().__init__()
 
@@ -125,6 +129,11 @@ class CodeReviewTool(GenerativeModelTool):
         self.show_patch_example = show_patch_example
 
         self.verbose = verbose
+
+        self._review_context_repo = review_context_repo
+        self._review_context_branch = review_context_branch
+        self._extra_context_toml = extra_context_toml
+        self._content_overrides = content_overrides
 
     @property
     def _agent_model_name(self) -> str:
@@ -196,8 +205,23 @@ class CodeReviewTool(GenerativeModelTool):
         )
 
     async def generate_review_comments(
-        self, patch: Patch, patch_summary: str, external_context: str = ""
-    ) -> list[GeneratedReviewComment]:
+        self, patch: Patch, patch_summary: str
+    ) -> tuple[list[GeneratedReviewComment], list[dict]]:
+        external_context = ""
+        manifest: list[dict] = []
+        if self._review_context_repo:
+            from bugbug.tools.code_review.review_context import (
+                load_external_context_for_review,
+            )
+
+            external_context, manifest = await load_external_context_for_review(
+                patch,
+                self._review_context_repo,
+                review_context_branch=self._review_context_branch,
+                extra_context_toml=self._extra_context_toml,
+                content_overrides=self._content_overrides,
+            )
+
         try:
             async for chunk in self.agent.astream(
                 {
@@ -217,50 +241,18 @@ class CodeReviewTool(GenerativeModelTool):
         except GraphRecursionError as e:
             raise ModelResultError("The model could not complete the review") from e
 
-        return result["structured_response"].comments
+        return result["structured_response"].comments, manifest
 
-    async def run(
-        self,
-        patch: Patch,
-        review_context_repo: Optional[str] = None,
-        review_context_branch: str = "main",
-        extra_context_toml: Optional[str] = None,
-        content_overrides: Optional[dict[str, str]] = None,
-    ) -> CodeReviewToolResponse:
+    async def run(self, patch: Patch) -> CodeReviewToolResponse:
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
         patch_summary = self.patch_summarizer.run(patch)
 
-        external_context = ""
-        external_content_manifest = []
-        if review_context_repo:
-            from bugbug.tools.code_review.review_context import (
-                external_content_manifest as build_external_content_manifest,
-            )
-            from bugbug.tools.code_review.review_context import (
-                format_external_content,
-                load_external_content_for_diff,
-            )
-
-            bug_id = getattr(patch, "bug_id", None)
-            content_items = await load_external_content_for_diff(
-                patch.raw_diff,
-                review_context_repo,
-                review_context_branch=review_context_branch,
-                bug_id=bug_id,
-                extra_context_toml=extra_context_toml,
-                content_overrides=content_overrides,
-            )
-            if content_items:
-                external_context = format_external_content(content_items)
-                external_content_manifest = build_external_content_manifest(
-                    content_items
-                )
-
-        unfiltered_suggestions = await self.generate_review_comments(
-            patch, patch_summary, external_context
-        )
+        (
+            unfiltered_suggestions,
+            external_content_manifest,
+        ) = await self.generate_review_comments(patch, patch_summary)
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
 

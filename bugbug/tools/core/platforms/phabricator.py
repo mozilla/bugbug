@@ -472,6 +472,30 @@ class PhabricatorPatch(Patch):
     def bug(self) -> Bug:
         return Bug.get(self.bug_id)
 
+    async def bug_component(self) -> Optional[str]:
+        if not self.has_bug:
+            return None
+        import asyncio
+
+        from libmozdata.bugzilla import Bugzilla
+
+        def _fetch() -> Optional[str]:
+            bugs: list[dict] = []
+            Bugzilla(
+                self.bug_id,
+                include_fields=["product", "component"],
+                bughandler=lambda bug, data: data.append(bug),
+                bugdata=bugs,
+            ).get_data().wait()
+            if not bugs:
+                return None
+            return f"{bugs[0]['product']}::{bugs[0]['component']}"
+
+        try:
+            return await asyncio.get_event_loop().run_in_executor(None, _fetch)
+        except Exception:
+            return None
+
     @property
     def bug_id(self) -> int:
         return int(self._revision_metadata["fields"]["bugzilla.bug-id"])

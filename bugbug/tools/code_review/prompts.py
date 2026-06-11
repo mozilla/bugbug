@@ -63,7 +63,10 @@ FIRST_MESSAGE_TEMPLATE = """Here is a summary of the patch:
 <patch_summary>
 {patch_summarization}
 </patch_summary>
+
+<external-resources>
 {external_context}
+</external-resources>
 
 
 Here are examples of good code review comments to guide your style and approach:

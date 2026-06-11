@@ -26,7 +26,6 @@ from bugbug.tools.code_review.review_context import (
     _merge_rules,
     external_content_manifest,
     format_external_content,
-    get_bug_component,
     github_repo_allowed,
     load_external_content_for_diff,
     parse_diff_files,
@@ -788,15 +787,30 @@ def test_rule_bugzilla_component_matches():
 
 
 @pytest.mark.asyncio
-async def test_get_bug_component():
+async def test_patch_bug_component():
+    from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
+
+    class FakePatch(PhabricatorPatch):
+        def __init__(self):
+            pass
+
+        @property
+        def has_bug(self):
+            return True
+
+        @property
+        def bug_id(self):
+            return 12345
+
     def fake_bugzilla(bug_id, include_fields, bughandler, bugdata):
         bughandler({"product": "Core", "component": "DOM: Web Audio"}, bugdata)
         mock = MagicMock()
         mock.get_data.return_value.wait = MagicMock()
         return mock
 
+    fake_patch = FakePatch()
     with patch("libmozdata.bugzilla.Bugzilla", side_effect=fake_bugzilla):
-        component = await get_bug_component(12345)
+        component = await fake_patch.bug_component()
 
     assert component == "Core::DOM: Web Audio"
 

@@ -150,29 +150,6 @@ def parse_diff_files(diff: str) -> set[str]:
         return files
 
 
-async def get_bug_component(bug_id: int) -> str | None:
-    """Return 'Product::Component' for the given Bugzilla bug, or None on failure."""
-    from libmozdata.bugzilla import Bugzilla
-
-    def _fetch() -> str | None:
-        bugs: list[dict] = []
-        Bugzilla(
-            bug_id,
-            include_fields=["product", "component"],
-            bughandler=lambda bug, data: data.append(bug),
-            bugdata=bugs,
-        ).get_data().wait()
-        if not bugs:
-            return None
-        return f"{bugs[0]['product']}::{bugs[0]['component']}"
-
-    try:
-        return await asyncio.get_event_loop().run_in_executor(None, _fetch)
-    except Exception:
-        logger.warning("Could not fetch component for bug %s", bug_id)
-        return None
-
-
 def rule_matches(
     rule: Rule, changed_files: set[str], bug_component: str | None = None
 ) -> bool:
@@ -521,7 +498,7 @@ async def load_external_content_for_diff(
     review_context_repo: str,
     review_context_branch: str = "main",
     review_context_path: str = DEFAULT_REVIEW_CONTEXT_PATH,
-    bug_id: int | None = None,
+    patch=None,
     extra_context_toml: str | None = None,
     content_overrides: dict[str, str] | None = None,
 ) -> list[ExternalContentItem]:
@@ -553,8 +530,8 @@ async def load_external_content_for_diff(
         return []
 
     bug_component: str | None = None
-    if bug_id is not None:
-        bug_component = await get_bug_component(bug_id)
+    if patch is not None:
+        bug_component = await patch.bug_component()
 
     try:
         actions = collect_actions(diff, config, bug_component, extra_context_toml)
@@ -588,4 +565,31 @@ def format_external_content(content_items: list[ExternalContentItem]) -> str:
         "\n\n<external_context>\n"
         f"{content}\n"
         "</external_context>"
+    )
+
+
+async def load_external_context_for_review(
+    patch,
+    review_context_repo: str,
+    review_context_branch: str = "main",
+    extra_context_toml: str | None = None,
+    content_overrides: dict[str, str] | None = None,
+) -> tuple[str, list[dict]]:
+    """Load and format external review context for a patch.
+
+    Returns (formatted_context_str, manifest_list). Both are empty if no repo
+    is configured or no rules match.
+    """
+    content_items = await load_external_content_for_diff(
+        patch.raw_diff,
+        review_context_repo,
+        review_context_branch=review_context_branch,
+        patch=patch,
+        extra_context_toml=extra_context_toml,
+        content_overrides=content_overrides,
+    )
+    if not content_items:
+        return "", []
+    return format_external_content(content_items), external_content_manifest(
+        content_items
     )
