@@ -29,6 +29,7 @@ ConfigArg = Path | HackbotConfig | None
 
 _CONFIG_NAME = "hackbot.toml"
 _SUMMARY_NAME = "summary.json"
+_AGENT_LOG_KEY = "logs/agent.log"
 
 
 def _configure_logging() -> None:
@@ -113,6 +114,12 @@ def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | N
         return None
 
 
+def _publish_log(ctx: HackbotContext) -> None:
+    """Publish the run log under the canonical key, if the agent wrote one."""
+    if ctx.log_path.exists():
+        ctx.publish_file(_AGENT_LOG_KEY, ctx.log_path, "text/plain")
+
+
 def _finish(ctx: HackbotContext, outcome: object) -> int:
     """Write summary.json from the agent's outcome and return the exit code.
 
@@ -135,6 +142,11 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
         log.error(msg)
         payload = _error_payload(ctx, msg)
         exit_code = 1
+
+    try:
+        _publish_log(ctx)
+    except Exception:
+        log.exception("Failed to publish agent log")
 
     # Upload when a signed policy is configured, else write into the local
     # artifacts dir (so local/compose/direct runs leave it on the host).

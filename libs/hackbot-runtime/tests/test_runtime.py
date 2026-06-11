@@ -88,6 +88,24 @@ def test_summary_written_for_agent_result(tmp_path):
     }
 
 
+def test_finish_publishes_agent_log_when_written(tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx.log_path.write_text("hello from the agent\n")
+
+    _finish(ctx, HackbotAgentResult(num_turns=1))
+
+    published = tmp_path / "artifacts" / "local-test" / "logs" / "agent.log"
+    assert published.read_text() == "hello from the agent\n"
+
+
+def test_finish_skips_log_when_none_written(tmp_path):
+    ctx = _ctx(tmp_path)  # never touch ctx.log_path -> no file written
+
+    _finish(ctx, HackbotAgentResult(num_turns=1))
+
+    assert not (tmp_path / "artifacts" / "local-test" / "logs" / "agent.log").exists()
+
+
 def test_runs_are_namespaced_by_run_id(tmp_path):
     ctx_a = _ctx(tmp_path, run_id="run-a")
     ctx_b = _ctx(tmp_path, run_id="run-b")
