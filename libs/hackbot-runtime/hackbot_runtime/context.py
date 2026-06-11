@@ -1,14 +1,36 @@
+"""The single object an agent's ``main()`` receives from the runtime.
+
+``HackbotContext`` is what an agent author touches. It answers for everything
+the platform provides — the prepared source checkout, Firefox build paths,
+model-provider credentials — plus the results/artifacts/actions plumbing, so the
+author never cares how or from where those come.
+
+Its platform fields are read from the environment (the orchestrator sets them);
+its capability declarations come from the agent's ``hackbot.toml``
+(:class:`HackbotConfig`), attached via :meth:`from_config`.
+"""
+
+from __future__ import annotations
+
 import datetime
+import os
 import uuid
 from functools import cached_property
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts
 from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.config import HackbotConfig, load_config
+from hackbot_runtime.providers import AnthropicAuth
+from hackbot_runtime.source import ensure_source_repo
 from hackbot_runtime.uploader import SignedPolicyUploader
+
+if TYPE_CHECKING:
+    from agent_tools.firefox import FirefoxContext
 
 
 def _default_run_id() -> str:
@@ -22,14 +44,14 @@ def _default_run_id() -> str:
     return f"local-{stamp}-{uuid.uuid4().hex[:6]}"
 
 
-class Context(BaseSettings):
-    """Platform context handed to every agent's main() by the runtime.
+class HackbotContext(BaseSettings):
+    """Platform capabilities + results plumbing handed to every agent's main().
 
-    `run_id` defaults to a generated unique id (the orchestrator overrides it
-    via ``RUN_ID`` in production). The results-upload fields are optional so
-    local-dev runs (compose, scripts) can start the agent without a
-    signed POST policy — in that case the runtime writes results into the
-    local artifacts dir rather than uploading.
+    `run_id` defaults to a generated unique id (the orchestrator overrides it via
+    ``RUN_ID`` in production). The results-upload fields are optional so local-dev
+    runs (compose, scripts) can start the agent without a signed POST policy — in
+    that case results are written into the local artifacts dir rather than
+    uploaded.
     """
 
     run_id: str = Field(default_factory=_default_run_id)
@@ -44,6 +66,71 @@ class Context(BaseSettings):
     artifacts_dir: Path = Path("artifacts")
 
     model_config = SettingsConfigDict(extra="ignore")
+
+    # Capability declarations from hackbot.toml (not env); attached after
+    # construction via from_config()/from_config_obj().
+    _config: HackbotConfig = PrivateAttr(default_factory=HackbotConfig)
+
+    @classmethod
+    def from_config(cls, config_path: Path) -> "HackbotContext":
+        """Build from ``hackbot.toml`` at ``config_path`` plus env-derived fields."""
+        return cls.from_config_obj(load_config(config_path))
+
+    @classmethod
+    def from_config_obj(cls, config: HackbotConfig) -> "HackbotContext":
+        """Build from an already-parsed config plus env-derived fields."""
+        obj = cls()
+        obj._config = config
+        return obj
+
+    @property
+    def config(self) -> HackbotConfig:
+        return self._config
+
+    # --- Platform capabilities (declared in hackbot.toml) ------------- #
+
+    @cached_property
+    def source_repo(self) -> Path:
+        """The prepared source checkout, cloned/refreshed on first access.
+
+        The path comes from ``SOURCE_REPO`` (set by the orchestrator) or, failing
+        that, the ``[source].checkout_path`` in ``hackbot.toml``. The checkout is
+        prepared lazily so agents that never touch source pay no git cost.
+        """
+        if self._config.source is None:
+            raise RuntimeError(
+                "This agent did not declare a [source] in hackbot.toml; "
+                "no source repository is available."
+            )
+        env_path = os.environ.get("SOURCE_REPO")
+        path = Path(env_path) if env_path else self._config.source.checkout_path
+        ensure_source_repo(path, self._config.source.repo_url)
+        return path
+
+    @cached_property
+    def firefox(self) -> "FirefoxContext":
+        """Firefox build paths derived from the prepared source checkout.
+
+        Importing ``agent_tools.firefox`` lazily keeps the base runtime free of
+        the ``agent-tools[firefox]`` extra for agents that don't need it.
+        """
+        if self._config.firefox is None or not self._config.firefox.enabled:
+            raise RuntimeError(
+                "This agent did not declare an enabled [firefox] in "
+                "hackbot.toml; no Firefox build is available."
+            )
+        from agent_tools.firefox import FirefoxContext
+
+        return FirefoxContext.from_source_repo(
+            self.source_repo, objdir=self._config.firefox.objdir
+        )
+
+    @cached_property
+    def anthropic(self) -> AnthropicAuth:
+        """Anthropic credentials (validated on first key access)."""
+        return AnthropicAuth()
+
+    # --- Results / artifacts / actions plumbing ----------------------- #
 
     @cached_property
     def uploader(self) -> SignedPolicyUploader | None:

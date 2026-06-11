@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from agent_tools import bugzilla  # noqa: E402
 from agent_tools.bugzilla import BugzillaContext  # noqa: E402
 from agent_tools.claude_sdk import build_sdk_server  # noqa: E402
-from hackbot_agents.bug_fix import run_bug_fix  # noqa: E402
+from agent_tools.firefox import FirefoxContext  # noqa: E402
+from hackbot_agents.bug_fix.agent import run_bug_fix  # noqa: E402
 
 
 class Settings(BaseSettings):
@@ -55,6 +56,7 @@ async def main():
     result = await run_bug_fix(
         bugzilla_mcp_server=bugzilla_mcp_server,
         source_repo=settings.source_repo,
+        fx_ctx=FirefoxContext.from_source_repo(settings.source_repo),
         model=settings.model,
         max_turns=settings.max_turns,
         effort=settings.effort,

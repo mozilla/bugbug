@@ -28,6 +28,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 FROM base AS agent
 
+# hackbot.toml lives at the agent root (not inside the package), so copy it into
+# the working dir; the runtime discovers it there (cwd) at startup.
+COPY agents/bug-fix/hackbot.toml /app/hackbot.toml
+
 RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace

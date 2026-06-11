@@ -1,19 +1,32 @@
 import asyncio
+import inspect
 import logging
 import sys
 import traceback
 from collections.abc import Awaitable, Callable
+from pathlib import Path
+from typing import Any, NoReturn
 
 from pydantic import ValidationError
 
-from hackbot_runtime.context import Context
-from hackbot_runtime.result import AgentResult
+from hackbot_runtime.config import HackbotConfig, load_config
+from hackbot_runtime.context import HackbotContext
 
 log = logging.getLogger("hackbot_runtime")
 
-AgentMain = Callable[[Context], AgentResult]
-AsyncAgentMain = Callable[[Context], Awaitable[AgentResult]]
+# An agent's main() returns its findings (a JSON-able dict) on success, or None
+# if it has nothing to report; to fail the run it raises (AgentError, or any
+# exception). The runtime turns that outcome into summary.json + an exit code.
+Findings = dict[str, Any] | None
+AgentMain = Callable[[HackbotContext], Findings]
+AsyncAgentMain = Callable[[HackbotContext], Awaitable[Findings]]
 
+# What run()/run_async() accept to locate an agent's hackbot.toml: a path to it,
+# an already-parsed config, or None to auto-discover ``hackbot.toml`` (in the
+# working directory or above the entry point's module).
+ConfigArg = Path | HackbotConfig | None
+
+_CONFIG_NAME = "hackbot.toml"
 _SUMMARY_NAME = "summary.json"
 
 
@@ -26,42 +39,102 @@ def _configure_logging() -> None:
         )
 
 
-def _summary_payload_from_result(result: AgentResult, ctx: Context) -> dict:
-    # Actions are recorded via Context.actions; the result never carries them.
+def _ok_payload(ctx: HackbotContext, findings: dict) -> dict:
+    # Actions are recorded via ctx.actions; the agent never carries them.
     return {
-        "status": result.status,
-        "error": result.error,
-        "findings": result.findings,
+        "status": "ok",
+        "error": None,
+        "findings": findings,
         "actions": ctx.actions.actions,
     }
 
 
-def _summary_payload_from_exception(exc: BaseException, ctx: Context) -> dict:
+def _error_payload(
+    ctx: HackbotContext, error: str, *, traceback_str: str | None = None
+) -> dict:
     return {
         "status": "error",
-        "error": f"{type(exc).__name__}: {exc}",
-        "findings": {"traceback": traceback.format_exc()},
+        "error": error,
+        "findings": {"traceback": traceback_str} if traceback_str else {},
         "actions": ctx.actions.actions,
     }
 
 
-def _load_context() -> Context | None:
+def _discover_config_path(entrypoint: Callable) -> Path | None:
+    """Locate ``hackbot.toml`` for an agent that didn't pass one explicitly.
+
+    Agents keep ``hackbot.toml`` at their agent root (alongside ``pyproject.toml``
+    / ``Dockerfile``), above the ``hackbot_agents`` package. Two layouts to cover:
+
+    - **Deployed image**: the package is installed into site-packages, but the
+      Dockerfile copies ``hackbot.toml`` into the working directory — so check
+      the cwd first.
+    - **Editable checkout / tests**: the entry point's module lives under the
+      agent root, so walk up from it until the toml turns up.
+    """
+    cwd_candidate = Path.cwd() / _CONFIG_NAME
+    if cwd_candidate.exists():
+        return cwd_candidate
     try:
-        return Context()
+        module_file = inspect.getsourcefile(entrypoint)
+    except TypeError:
+        module_file = None
+    if module_file:
+        for parent in Path(module_file).resolve().parents:
+            candidate = parent / _CONFIG_NAME
+            if candidate.exists():
+                return candidate
+    return None
+
+
+def _resolve_config(entrypoint: Callable, config: ConfigArg) -> HackbotConfig:
+    if isinstance(config, HackbotConfig):
+        return config
+    path = config if isinstance(config, Path) else _discover_config_path(entrypoint)
+    return load_config(path) if path else HackbotConfig()
+
+
+def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | None:
+    """Build the HackbotContext (and its inner env-derived Context).
+
+    ``config`` may be a path to a ``hackbot.toml``, an already-parsed
+    :class:`HackbotConfig`, or ``None`` to auto-discover the toml (cwd or above
+    the entry point's module), falling back to an empty config when there's none.
+    """
+    parsed = _resolve_config(entrypoint, config)
+    try:
+        return HackbotContext.from_config_obj(parsed)
     except ValidationError as exc:
         log.error(
-            "Failed to load Context from env; no summary can be written.\n%s",
+            "Failed to load HackbotContext from env; no summary can be written.\n%s",
             exc,
         )
         return None
 
 
-def _finish(ctx: Context, result_or_exc: AgentResult | BaseException) -> int:
-    if isinstance(result_or_exc, AgentResult):
-        payload = _summary_payload_from_result(result_or_exc, ctx)
-        exit_code = result_or_exc.exit_code
+def _finish(ctx: HackbotContext, outcome: object) -> int:
+    """Write summary.json from the agent's outcome and return the exit code.
+
+    ``outcome`` is the agent's return value (findings dict or None) on success,
+    or the exception it raised on failure.
+    """
+    if isinstance(outcome, BaseException):
+        payload = _error_payload(
+            ctx,
+            f"{type(outcome).__name__}: {outcome}",
+            traceback_str=traceback.format_exc(),
+        )
+        exit_code = 1
+    elif outcome is None or isinstance(outcome, dict):
+        payload = _ok_payload(ctx, outcome or {})
+        exit_code = 0
     else:
-        payload = _summary_payload_from_exception(result_or_exc, ctx)
+        # Contract violation: not a findings dict, None, or an exception.
+        msg = (
+            f"Agent returned {type(outcome).__name__}; expected a findings dict or None"
+        )
+        log.error(msg)
+        payload = _error_payload(ctx, msg)
         exit_code = 1
 
     # Upload when a signed policy is configured, else write into the local
@@ -81,46 +154,31 @@ def _finish(ctx: Context, result_or_exc: AgentResult | BaseException) -> int:
     return exit_code
 
 
-def _validate_result(result: object) -> AgentResult:
-    """Coerce arbitrary agent return values into an AgentResult.
-
-    Returning a synthetic AgentResult (rather than letting an exception
-    object flow into `_finish`) keeps the summary deterministic: the
-    exception path calls `traceback.format_exc()`, which evaluates to
-    "NoneType: None" when no exception is active.
-    """
-    if isinstance(result, AgentResult):
-        return result
-    msg = f"Agent returned {type(result).__name__}; expected AgentResult"
-    log.error(msg)
-    return AgentResult(status="error", error=msg, exit_code=1)
-
-
-def run(entrypoint: AgentMain) -> int:
+def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
     _configure_logging()
-    ctx = _load_context()
+    ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
-        return 2
+        raise SystemExit(2)
 
     try:
-        result = entrypoint(ctx)
+        outcome: object = entrypoint(ctx)
     except Exception as exc:
         log.exception("Agent raised an exception")
-        return _finish(ctx, exc)
+        outcome = exc
 
-    return _finish(ctx, _validate_result(result))
+    raise SystemExit(_finish(ctx, outcome))
 
 
-def run_async(entrypoint: AsyncAgentMain) -> int:
+def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
     _configure_logging()
-    ctx = _load_context()
+    ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
-        return 2
+        raise SystemExit(2)
 
     try:
-        result = asyncio.run(entrypoint(ctx))
+        outcome: object = asyncio.run(entrypoint(ctx))
     except Exception as exc:
         log.exception("Agent raised an exception")
-        return _finish(ctx, exc)
+        outcome = exc
 
-    return _finish(ctx, _validate_result(result))
+    raise SystemExit(_finish(ctx, outcome))
