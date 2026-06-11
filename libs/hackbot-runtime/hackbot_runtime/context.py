@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import tempfile
 import uuid
 from functools import cached_property
 from pathlib import Path
@@ -146,6 +147,16 @@ class HackbotContext(BaseSettings):
     def run_artifacts_dir(self) -> Path:
         """Per-run local artifacts directory: ``artifacts_dir / run_id``."""
         return self.artifacts_dir / self.run_id
+
+    @cached_property
+    def log_path(self) -> Path:
+        """A writable path for the agent's run log; published by the runtime.
+
+        The parent dir is created on first access (so a ``Reporter`` can open the
+        file straight away). Agents that never write a log just leave it absent,
+        and :meth:`publish_log` becomes a no-op.
+        """
+        return Path(tempfile.mkdtemp(prefix=f"hackbot-{self.run_id}-")) / "agent.log"
 
     @cached_property
     def actions(self) -> ActionsRecorder:
