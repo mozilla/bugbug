@@ -9,7 +9,6 @@ that holds the Bugzilla token — the agent process itself never sees it.
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 from agent_tools import firefox
@@ -22,14 +21,13 @@ from claude_agent_sdk import (
     McpServerConfig,
     ResultMessage,
 )
-from hackbot_runtime import ActionsRecorder
+from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
-from hackbot_runtime.actions.claude_sdk import actions_server_for
+from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 
 from .config import (
     BUGZILLA_READ_TOOLS,
-    ENABLED_ACTION_TOOLS,
     ENABLED_ACTION_TYPES,
     FIREFOX_TOOLS,
     SOURCE_WRITE_TOOLS,
@@ -38,10 +36,9 @@ from .config import (
 HERE = Path(__file__).resolve().parent
 
 
-@dataclass
-class BugFixResult:
-    exit_code: int = 0
-    bugs_processed: int = 0
+class BugFixResult(HackbotAgentResult):
+    bug_id: int
+    result: str | None = None
 
 
 def load_system_prompt(rules_dir: Path, extra: str) -> str:
@@ -85,11 +82,10 @@ async def run_bug_fix(
     bugzilla_mcp_server: McpServerConfig,
     source_repo: Path,
     fx_ctx: FirefoxContext,
-    bugs: list[int],
+    bug: int,
     instructions: str = "",
     task: str | None = None,
     rules_dir: Path | None = None,
-    newest_first: bool = False,
     model: str | None = None,
     max_turns: int | None = None,
     effort: str | None = None,
@@ -97,16 +93,15 @@ async def run_bug_fix(
     log: Path | None = None,
     actions_recorder: ActionsRecorder | None = None,
 ) -> BugFixResult:
-    """Triage and fix the given Bugzilla bug(s) with a claude-agent-sdk agent."""
+    """Triage and fix a single Bugzilla bug with a claude-agent-sdk agent.
+
+    Returns a :class:`BugFixResult` on success; raises :class:`AgentError` if the
+    agent ends in an error.
+    """
     if rules_dir is None:
         rules_dir = HERE / "rules"
 
-    if not bugs:
-        print("[bug_fix] no bug ids supplied — nothing to do", file=sys.stderr)
-        return BugFixResult(exit_code=0)
-
-    selected = sorted(bugs, reverse=newest_first)
-    print(f"[bug_fix] triaging {len(selected)} bug(s): {selected}", file=sys.stderr)
+    print(f"[bug_fix] triaging bug {bug}", file=sys.stderr)
 
     # Firefox build/eval MCP server (in-process; no tokens). The runtime
     # derives fx_ctx from the prepared source checkout and the agent's
@@ -119,6 +114,7 @@ async def run_bug_fix(
     actions_recorder, actions_server = actions_server_for(
         actions_recorder, types=ENABLED_ACTION_TYPES
     )
+    enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
 
     system_prompt = load_system_prompt(rules_dir, instructions)
 
@@ -141,7 +137,7 @@ async def run_bug_fix(
             "Task",
             *SOURCE_WRITE_TOOLS,
             *BUGZILLA_READ_TOOLS,
-            *ENABLED_ACTION_TOOLS,
+            *enabled_action_tools,
             *FIREFOX_TOOLS,
         ],
         model=model,
@@ -150,36 +146,40 @@ async def run_bug_fix(
         setting_sources=[],
     )
 
-    # Run one fresh agent context per bug.
-    exit_code = 0
     rules_path = rules_dir.resolve()
+    if task:
+        user_prompt = (
+            f"Bug to work on: {bug}\n\n"
+            f"Task: {task}\n\n"
+            f"The rules in {rules_path} are available if the task "
+            f"calls for them, but the task above is your primary "
+            f"directive — it overrides the default triage workflow."
+        )
+    else:
+        user_prompt = (
+            f"Triage bug {bug}.\n\nConsult the relevant rules in {rules_path}."
+        )
+
+    result_msg: ResultMessage | None = None
     with Reporter(verbose=verbose, log_path=log) as reporter:
-        for i, bug_id in enumerate(selected, 1):
-            print(f"[bug_fix] bug {i}/{len(selected)}: {bug_id}", file=sys.stderr)
-            reporter.header(f"bug {bug_id}")
+        reporter.header(f"bug {bug}")
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(user_prompt)
+            async for msg in client.receive_response():
+                reporter.message(msg)
+                if isinstance(msg, ResultMessage):
+                    result_msg = msg
 
-            if task:
-                user_prompt = (
-                    f"Bug to work on: {bug_id}\n\n"
-                    f"Task: {task}\n\n"
-                    f"The rules in {rules_path} are available if the task "
-                    f"calls for them, but the task above is your primary "
-                    f"directive — it overrides the default triage workflow."
-                )
-            else:
-                user_prompt = (
-                    f"Triage bug {bug_id}.\n\n"
-                    f"Consult the relevant rules in {rules_path}."
-                )
-
-            async with ClaudeSDKClient(options=options) as client:
-                await client.query(user_prompt)
-                async for msg in client.receive_response():
-                    reporter.message(msg)
-                    if isinstance(msg, ResultMessage) and msg.is_error:
-                        exit_code = 1
+    if result_msg is None:
+        raise AgentError(f"bug {bug}: agent produced no result message")
+    if result_msg.is_error:
+        raise AgentError(
+            f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
+        )
 
     return BugFixResult(
-        exit_code=exit_code,
-        bugs_processed=len(selected),
+        bug_id=bug,
+        result=result_msg.result,
+        num_turns=result_msg.num_turns,
+        total_cost_usd=result_msg.total_cost_usd,
     )

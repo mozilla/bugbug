@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from hackbot_runtime import AgentError, HackbotContext, run_async
+from hackbot_runtime import AgentError, HackbotAgentResult, HackbotContext, run_async
 from hackbot_runtime.runtime import _discover_config_path, _finish, _resolve_config
 
 
@@ -32,7 +32,7 @@ def test_summary_written_locally_without_uploader(tmp_path):
         reasoning="rule X",
     )
 
-    code = _finish(ctx, {"bugs_processed": 1})
+    code = _finish(ctx, HackbotAgentResult(num_turns=1))
 
     assert code == 0
     # Written under the per-run subdir: artifacts_dir / run_id.
@@ -40,7 +40,7 @@ def test_summary_written_locally_without_uploader(tmp_path):
         (tmp_path / "artifacts" / "local-test" / "summary.json").read_text()
     )
     assert summary["status"] == "ok"
-    assert summary["findings"] == {"bugs_processed": 1}
+    assert summary["findings"] == {"num_turns": 1, "total_cost_usd": None}
     assert summary["actions"][0]["type"] == "bugzilla.update_bug"
 
 
@@ -56,22 +56,42 @@ def test_summary_written_for_exception(tmp_path):
     assert "boom" in summary["error"]
 
 
-def test_non_dict_return_is_contract_error(tmp_path):
+def test_non_result_return_is_contract_error(tmp_path):
     ctx = _ctx(tmp_path)
-    code = _finish(ctx, "not a dict")
+    # A bare dict (or None) is no longer accepted — only a HackbotAgentResult.
+    code = _finish(ctx, {"bugs_processed": 1})
 
     assert code == 1
     summary = json.loads(
         (tmp_path / "artifacts" / "local-test" / "summary.json").read_text()
     )
     assert summary["status"] == "error"
-    assert "expected a findings dict" in summary["error"]
+    assert "expected a HackbotAgentResult" in summary["error"]
+
+
+def test_summary_written_for_agent_result(tmp_path):
+    class _Result(HackbotAgentResult):
+        bug_id: int
+
+    ctx = _ctx(tmp_path)
+    code = _finish(ctx, _Result(bug_id=42, num_turns=3, total_cost_usd=0.12))
+
+    assert code == 0
+    summary = json.loads(
+        (tmp_path / "artifacts" / "local-test" / "summary.json").read_text()
+    )
+    assert summary["status"] == "ok"
+    assert summary["findings"] == {
+        "num_turns": 3,
+        "total_cost_usd": 0.12,
+        "bug_id": 42,
+    }
 
 
 def test_runs_are_namespaced_by_run_id(tmp_path):
     ctx_a = _ctx(tmp_path, run_id="run-a")
     ctx_b = _ctx(tmp_path, run_id="run-b")
-    _finish(ctx_a, None)
+    _finish(ctx_a, HackbotAgentResult(num_turns=0))
     _finish(ctx_b, RuntimeError("x"))
 
     base = tmp_path / "artifacts"
@@ -141,7 +161,7 @@ def test_run_async_exits_zero_and_writes_summary(tmp_path, monkeypatch):
     _run_env(tmp_path, monkeypatch)
 
     async def main(ctx):
-        return {"did": "work"}
+        return HackbotAgentResult(num_turns=1)
 
     with pytest.raises(SystemExit) as exc:
         run_async(main)
@@ -149,7 +169,7 @@ def test_run_async_exits_zero_and_writes_summary(tmp_path, monkeypatch):
     assert exc.value.code == 0
     summary = json.loads((tmp_path / "t" / "summary.json").read_text())
     assert summary["status"] == "ok"
-    assert summary["findings"] == {"did": "work"}
+    assert summary["findings"] == {"num_turns": 1, "total_cost_usd": None}
 
 
 def test_run_async_exits_nonzero_when_agent_raises(tmp_path, monkeypatch):

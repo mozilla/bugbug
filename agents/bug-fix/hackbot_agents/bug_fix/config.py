@@ -1,5 +1,3 @@
-from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
-
 # Tools that can modify the source repo — blocked under dry-run.
 SOURCE_WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
@@ -13,14 +11,13 @@ BUGZILLA_READ_TOOLS = [
 ]
 
 
-ENABLED_ACTION_TOOLS = actions_to_tool_names(
-    [
-        "bugzilla.update_bug",
-        "bugzilla.add_comment",
-        "bugzilla.add_attachment",
-        "bugzilla.create_bug",
-    ]
-)
+# Recordable action types the agent may take, by dotted id.
+ENABLED_ACTION_TYPES = [
+    "bugzilla.update_bug",
+    "bugzilla.add_comment",
+    "bugzilla.add_attachment",
+    "bugzilla.create_bug",
+]
 
 # Firefox build/test tools.
 FIREFOX_TOOLS = [

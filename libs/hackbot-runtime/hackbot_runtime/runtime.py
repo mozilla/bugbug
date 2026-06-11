@@ -5,19 +5,20 @@ import sys
 import traceback
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import NoReturn
 
 from pydantic import ValidationError
 
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
+from hackbot_runtime.results import HackbotAgentResult
 
 log = logging.getLogger("hackbot_runtime")
 
-# An agent's main() returns its findings (a JSON-able dict) on success, or None
-# if it has nothing to report; to fail the run it raises (AgentError, or any
-# exception). The runtime turns that outcome into summary.json + an exit code.
-Findings = dict[str, Any] | None
+# An agent's main() returns a HackbotAgentResult on success; to fail the run it
+# raises (AgentError, or any exception). The runtime turns that outcome into
+# summary.json + an exit code.
+Findings = HackbotAgentResult
 AgentMain = Callable[[HackbotContext], Findings]
 AsyncAgentMain = Callable[[HackbotContext], Awaitable[Findings]]
 
@@ -115,8 +116,8 @@ def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | N
 def _finish(ctx: HackbotContext, outcome: object) -> int:
     """Write summary.json from the agent's outcome and return the exit code.
 
-    ``outcome`` is the agent's return value (findings dict or None) on success,
-    or the exception it raised on failure.
+    ``outcome`` is the agent's :class:`HackbotAgentResult` on success, or the
+    exception it raised on failure.
     """
     if isinstance(outcome, BaseException):
         payload = _error_payload(
@@ -125,14 +126,12 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
             traceback_str=traceback.format_exc(),
         )
         exit_code = 1
-    elif outcome is None or isinstance(outcome, dict):
-        payload = _ok_payload(ctx, outcome or {})
+    elif isinstance(outcome, HackbotAgentResult):
+        payload = _ok_payload(ctx, outcome.model_dump())
         exit_code = 0
     else:
-        # Contract violation: not a findings dict, None, or an exception.
-        msg = (
-            f"Agent returned {type(outcome).__name__}; expected a findings dict or None"
-        )
+        # Contract violation: not a HackbotAgentResult or an exception.
+        msg = f"Agent returned {type(outcome).__name__}; expected a HackbotAgentResult"
         log.error(msg)
         payload = _error_payload(ctx, msg)
         exit_code = 1
