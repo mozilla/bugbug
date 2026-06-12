@@ -52,6 +52,47 @@ One thing to watch: **never create `hackbot_agents/__init__.py`.** Leaving it ou
 lets several agents live side by side in one environment without overwriting each other (PEP 420).
 It's an easy mistake to make, and a confusing one to debug.
 
+## Running an agent locally
+
+Each agent ships a `compose.yml` so you can run it on your machine the same way it
+ships — no platform, no uploader. The reference `bug-fix` agent is already wired into
+the repo's root `docker-compose.yml`, so running it is three steps:
+
+1. **Create a `.env` file in the repo root** with the secrets the agent needs:
+
+   ```dotenv
+   # .env (repo root) — never commit this file
+   ANTHROPIC_API_KEY=sk-ant-...
+   BUGZILLA_API_URL=https://bugzilla.mozilla.org
+   BUGZILLA_API_KEY=...
+   ```
+
+   `docker compose` reads `.env` from the directory you run it in automatically, so
+   these values flow into the services defined in the agent's `compose.yml`.
+
+2. **Make sure the agent's `compose.yml` is included** from the root `docker-compose.yml`.
+   For `bug-fix` this is already in place:
+
+   ```yaml
+   # docker-compose.yml
+   include:
+     - path: agents/bug-fix/compose.yml
+   ```
+
+   When you add a new agent, add its `compose.yml` to this `include` list the same way.
+
+3. **Run it**, passing the per-run inputs inline. `BUG_ID` is the only input the
+   `bug-fix` agent requires:
+
+   ```sh
+   BUG_ID=1234567 docker compose up bug-fix-agent --build
+   ```
+
+   Here `bug-fix-agent` is the service name defined in the agent's `compose.yml` —
+   use that agent's own service name when you run a different one. Compose builds and
+   runs the agent against that bug. The run's `summary.json`, logs, and attachments are
+   written under `~/hackbot/artifacts/<run_id>` on your host (no uploader runs locally).
+
 ## Telling the platform what you need (`hackbot.toml`)
 
 Think of `hackbot.toml` as your request to the platform: "please have these ready for me."
