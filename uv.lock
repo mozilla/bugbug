@@ -2206,6 +2206,7 @@ version = "0.1.0"
 source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
+    { name = "google-auth" },
     { name = "pydantic-settings" },
     { name = "requests" },
 ]
@@ -2221,6 +2222,7 @@ requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
+    { name = "google-auth", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
 ]
