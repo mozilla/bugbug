@@ -70,6 +70,10 @@ class CodeReviewTool(GenerativeModelTool):
         target_software: str = "Mozilla Firefox",
         todo_enabled: bool = True,
         skills: Optional[list[Skill]] = None,
+        review_context_repo: Optional[str] = None,
+        review_context_branch: str = "main",
+        extra_context_toml: Optional[str] = None,
+        content_overrides: Optional[dict[str, str]] = None,
     ) -> None:
         super().__init__()
 
@@ -125,6 +129,11 @@ class CodeReviewTool(GenerativeModelTool):
         self.show_patch_example = show_patch_example
 
         self.verbose = verbose
+
+        self._review_context_repo = review_context_repo
+        self._review_context_branch = review_context_branch
+        self._extra_context_toml = extra_context_toml
+        self._content_overrides = content_overrides
 
     @property
     def _agent_model_name(self) -> str:
@@ -182,25 +191,45 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    def generate_initial_prompt(self, patch: Patch, patch_summary: str) -> str:
+    def generate_initial_prompt(
+        self, patch: Patch, patch_summary: str, external_context: str = ""
+    ) -> str:
         created_before = patch.date_created if self.is_experiment_env else None
 
         return FIRST_MESSAGE_TEMPLATE.format(
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
+            external_context=external_context,
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
         )
 
     async def generate_review_comments(
         self, patch: Patch, patch_summary: str
-    ) -> list[GeneratedReviewComment]:
+    ) -> tuple[list[GeneratedReviewComment], list[dict]]:
+        external_context = ""
+        manifest: list[dict] = []
+        if self._review_context_repo:
+            from bugbug.tools.code_review.review_context import (
+                load_external_context_for_review,
+            )
+
+            external_context, manifest = await load_external_context_for_review(
+                patch,
+                self._review_context_repo,
+                review_context_branch=self._review_context_branch,
+                extra_context_toml=self._extra_context_toml,
+                content_overrides=self._content_overrides,
+            )
+
         try:
             async for chunk in self.agent.astream(
                 {
                     "messages": [
                         HumanMessage(
-                            self.generate_initial_prompt(patch, patch_summary)
+                            self.generate_initial_prompt(
+                                patch, patch_summary, external_context
+                            )
                         ),
                     ]
                 },
@@ -212,7 +241,7 @@ class CodeReviewTool(GenerativeModelTool):
         except GraphRecursionError as e:
             raise ModelResultError("The model could not complete the review") from e
 
-        return result["structured_response"].comments
+        return result["structured_response"].comments, manifest
 
     async def run(self, patch: Patch) -> CodeReviewToolResponse:
         if self.count_tokens(patch.raw_diff) > 21000:
@@ -220,9 +249,10 @@ class CodeReviewTool(GenerativeModelTool):
 
         patch_summary = self.patch_summarizer.run(patch)
 
-        unfiltered_suggestions = await self.generate_review_comments(
-            patch, patch_summary
-        )
+        (
+            unfiltered_suggestions,
+            external_content_manifest,
+        ) = await self.generate_review_comments(patch, patch_summary)
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
 
@@ -238,6 +268,7 @@ class CodeReviewTool(GenerativeModelTool):
             details={
                 "model": self._agent_model_name,
                 "num_unfiltered_suggestions": len(unfiltered_suggestions),
+                "external_content": external_content_manifest,
             },
         )
 

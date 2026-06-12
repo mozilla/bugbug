@@ -73,6 +73,10 @@ class Patch(ABC):
         """Return the URL of the patch."""
         ...
 
+    async def bug_component(self) -> Optional[str]:
+        """Return 'Product::Component' for the associated bug, or None."""
+        return None
+
     @abstractmethod
     async def get_base_revision(self) -> Optional[str]:
         """Return the VCS revision the patch was written against, or None."""
