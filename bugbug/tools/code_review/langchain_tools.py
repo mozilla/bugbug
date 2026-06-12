@@ -14,7 +14,7 @@ import httpx
 import tenacity
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
-from searchfox import AsyncSearchfoxClient
+from searchfox import AsyncSearchfoxClient, SearchfoxNetworkError, SearchfoxRequestError
 
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
 from bugbug.tools.core.platforms.base import Patch
@@ -26,6 +26,7 @@ logger = getLogger(__name__)
 _retry = tenacity.retry(
     stop=tenacity.stop_after_attempt(3),
     wait=tenacity.wait_exponential(multiplier=1, min=1, max=4),
+    retry=tenacity.retry_if_exception_type(SearchfoxNetworkError),
     reraise=True,
 )
 
@@ -65,10 +66,7 @@ async def _fetch_file(
     except (FileNotFoundError, httpx.HTTPStatusError):
         pass
     if revision:
-        try:
-            return await _retry(client.get_file_at_revision)(path, revision)
-        except Exception:  # searchfox raises plain Exception
-            pass
+        return await _retry(client.get_file_at_revision)(path, revision)
     return await _retry(client.get_file)(path)
 
 
@@ -202,8 +200,19 @@ async def search_text(
         if not results:
             return "No results found."
         return "\n".join(f"{path}:{line}: {content}" for path, line, content in results)
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error searching for '%s': %s", query, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"search failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error(
+            "Bad request searching for %r (path=%r, langs=%r): %s",
+            query,
+            path_filter,
+            langs,
+            e,
+        )
+        return _tool_error(f"search failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error searching for %r: %s", query, e)
         return _tool_error(f"search failed: {e}")
 
 
@@ -221,8 +230,13 @@ async def get_field_layout(
     """
     try:
         return await _get_client().search_field_layout(class_name)
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error fetching field layout for '%s': %s", class_name, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"field layout fetch failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error("Bad request fetching field layout for %r: %s", class_name, e)
+        return _tool_error(f"field layout fetch failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error fetching field layout for %r: %s", class_name, e)
         return _tool_error(f"field layout fetch failed: {e}")
 
 
@@ -248,8 +262,15 @@ async def get_blame(
             f"{line}: {hash_} ({date}) {message}"
             for line, hash_, message, date in results
         )
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error fetching blame for '%s': %s", file_path, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"blame fetch failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error(
+            "Bad request fetching blame for %r lines %r: %s", file_path, lines, e
+        )
+        return _tool_error(f"blame fetch failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error fetching blame for %r: %s", file_path, e)
         return _tool_error(f"blame fetch failed: {e}")
 
 
@@ -280,8 +301,13 @@ async def check_can_gc(
                 line += f" (via {gc_path})"
             lines.append(line)
         return "\n".join(lines)
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error checking GC status for '%s': %s", symbol, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"GC check failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error("Bad request checking GC status for %r: %s", symbol, e)
+        return _tool_error(f"GC check failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error checking GC status for %r: %s", symbol, e)
         return _tool_error(f"GC check failed: {e}")
 
 
@@ -304,8 +330,15 @@ async def find_definition(
     """
     try:
         return await _get_client().get_definition(name, path_filter)
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error finding definition for '%s': %s", name, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"definition lookup failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error(
+            "Bad request finding definition for %r (path=%r): %s", name, path_filter, e
+        )
+        return _tool_error(f"definition lookup failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error finding definition for %r: %s", name, e)
         return _tool_error(f"definition lookup failed: {e}")
 
 
@@ -340,8 +373,19 @@ async def search_identifier(
         if not results:
             return "No results found."
         return "\n".join(f"{path}:{line}: {content}" for path, line, content in results)
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error searching for identifier '%s': %s", identifier, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"identifier search failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error(
+            "Bad request searching for identifier %r (path=%r, langs=%r): %s",
+            identifier,
+            path_filter,
+            langs,
+            e,
+        )
+        return _tool_error(f"identifier search failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error searching for identifier %r: %s", identifier, e)
         return _tool_error(f"identifier search failed: {e}")
 
 
@@ -361,8 +405,15 @@ async def calls_from(
     """
     try:
         return await _get_client().search_call_graph(calls_from=symbol, depth=depth)
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error fetching calls from '%s': %s", symbol, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"call graph fetch failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error(
+            "Bad request fetching calls from %r (depth=%d): %s", symbol, depth, e
+        )
+        return _tool_error(f"call graph fetch failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error fetching calls from %r: %s", symbol, e)
         return _tool_error(f"call graph fetch failed: {e}")
 
 
@@ -382,8 +433,15 @@ async def calls_to(
     """
     try:
         return await _get_client().search_call_graph(calls_to=symbol, depth=depth)
-    except Exception as e:  # searchfox raises plain Exception
-        logger.error("Error fetching calls to '%s': %s", symbol, e)
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"call graph fetch failed: {e}")
+    except SearchfoxRequestError as e:
+        logger.error(
+            "Bad request fetching calls to %r (depth=%d): %s", symbol, depth, e
+        )
+        return _tool_error(f"call graph fetch failed: {e}")
+    except Exception as e:
+        logger.error("Unexpected error fetching calls to %r: %s", symbol, e)
         return _tool_error(f"call graph fetch failed: {e}")
 
 
@@ -407,9 +465,23 @@ async def calls_between(
         return await _get_client().search_call_graph(
             calls_between=(symbol_a, symbol_b), depth=depth
         )
-    except Exception as e:  # searchfox raises plain Exception
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"call graph fetch failed: {e}")
+    except SearchfoxRequestError as e:
         logger.error(
-            "Error fetching calls between '%s' and '%s': %s", symbol_a, symbol_b, e
+            "Bad request fetching calls between %r and %r (depth=%d): %s",
+            symbol_a,
+            symbol_b,
+            depth,
+            e,
+        )
+        return _tool_error(f"call graph fetch failed: {e}")
+    except Exception as e:
+        logger.error(
+            "Unexpected error fetching calls between %r and %r: %s",
+            symbol_a,
+            symbol_b,
+            e,
         )
         return _tool_error(f"call graph fetch failed: {e}")
 
@@ -433,9 +505,19 @@ async def get_function_at_line(
     """
     try:
         return await _get_client().get_function_at_line(file_path, line)
-    except Exception as e:  # searchfox raises plain Exception
+    except SearchfoxNetworkError as e:
+        return _tool_error(f"function lookup failed: {e}")
+    except SearchfoxRequestError as e:
         logger.error(
-            "Error fetching function at line %d in '%s': %s", line, file_path, e
+            "Bad request fetching function at line %d in %r: %s", line, file_path, e
+        )
+        return _tool_error(f"function lookup failed: {e}")
+    except Exception as e:
+        logger.error(
+            "Unexpected error fetching function at line %d in %r: %s",
+            line,
+            file_path,
+            e,
         )
         return _tool_error(f"function lookup failed: {e}")
 
