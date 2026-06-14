@@ -14,11 +14,8 @@ garbage.
 """
 
 import re
-from logging import getLogger
 
 from bugbug.tools.core.exceptions import RunawayGenerationError
-
-logger = getLogger(__name__)
 
 # Upper bound on the length (in characters) of any LLM-generated text we post.
 # A genuine patch summary or review comment is comfortably within this; anything

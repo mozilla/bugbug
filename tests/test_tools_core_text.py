@@ -6,7 +6,11 @@
 import pytest
 
 from bugbug.tools.core.exceptions import RunawayGenerationError
-from bugbug.tools.core.text import check_runaway_generation, find_runaway_repetition
+from bugbug.tools.core.text import (
+    MAX_GENERATED_TEXT_LENGTH,
+    check_runaway_generation,
+    find_runaway_repetition,
+)
 
 
 def test_short_text_passes():
@@ -20,15 +24,18 @@ def test_empty_text_passes():
 
 
 def test_single_word_repetition_raises():
-    # The exact failure mode from issue #5995.
-    text = "The change is good. " + "prevent " * 5000
-    with pytest.raises(RunawayGenerationError):
+    # The exact failure mode from issue #5995. Kept under MAX_GENERATED_TEXT_LENGTH
+    # so the repetition detector (not the length guard) is what triggers.
+    text = "The change is good. " + "prevent " * 100
+    assert len(text) < MAX_GENERATED_TEXT_LENGTH
+    with pytest.raises(RunawayGenerationError, match="repetition"):
         check_runaway_generation(text)
 
 
 def test_phrase_repetition_raises():
-    text = "Here is the issue: " + "not converting " * 5000
-    with pytest.raises(RunawayGenerationError):
+    text = "Here is the issue: " + "not converting " * 100
+    assert len(text) < MAX_GENERATED_TEXT_LENGTH
+    with pytest.raises(RunawayGenerationError, match="repetition"):
         check_runaway_generation(text)
 
 
