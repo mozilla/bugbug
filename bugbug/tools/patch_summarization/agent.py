@@ -6,6 +6,7 @@ from bugbug.tools.base import GenerativeModelTool
 from bugbug.tools.code_review.utils import format_patch_set
 from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL
 from bugbug.tools.core.platforms.base import Patch
+from bugbug.tools.core.text import check_runaway_generation
 from bugbug.tools.patch_summarization.prompts import PROMPT_TEMPLATE_SUMMARIZATION
 
 
@@ -51,5 +52,7 @@ class PatchSummarizationTool(GenerativeModelTool):
         idx = summary.rfind("<budget:token")
         if idx != -1:
             summary = summary[:idx].strip()
+
+        check_runaway_generation(summary, label="patch summary")
 
         return summary
