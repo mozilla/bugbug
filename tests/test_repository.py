@@ -6,6 +6,7 @@
 import json
 import os
 import pickle
+import re
 import shutil
 import time
 from datetime import datetime, timezone
@@ -561,6 +562,16 @@ def test_download_commits(fake_hg_repo):
 
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
+
+    responses.add_callback(
+        responses.GET,
+        re.compile(r"https://lando\.moz\.tools/api/hg2git/firefox/(.+)"),
+        callback=lambda request: (
+            200,
+            {},
+            json.dumps({"git_hash": request.url.split("/hg2git/firefox/", 1)[1]}),
+        ),
+    )
 
     responses.add(
         responses.HEAD,

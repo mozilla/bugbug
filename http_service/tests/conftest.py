@@ -201,6 +201,16 @@ def mock_hgmo(mock_repo: tuple[str, str]) -> None:
         callback=fake_json_relevance,
     )
 
+    responses.add_callback(
+        responses.GET,
+        re.compile(r"https://lando\.moz\.tools/api/hg2git/firefox/(.+)"),
+        callback=lambda request: (
+            200,
+            {},
+            json.dumps({"git_hash": request.url.split("/hg2git/firefox/", 1)[1]}),
+        ),
+    )
+
 
 @pytest.fixture
 def mock_repo(
