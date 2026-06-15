@@ -722,7 +722,7 @@ requires-dist = [
     { name = "gunicorn", specifier = "~=25.1.0" },
     { name = "kombu", specifier = "~=5.6.2" },
     { name = "marshmallow", specifier = ">=3.18.0" },
-    { name = "rq", specifier = "~=2.7.0" },
+    { name = "rq", specifier = ">=2.7,<2.10" },
     { name = "rq-dashboard", specifier = "~=0.8.6" },
     { name = "sentry-sdk", extras = ["flask"], specifier = "~=2.55.0" },
 ]
@@ -5509,16 +5509,16 @@ wheels = [
 
 [[package]]
 name = "rq"
-version = "2.7.0"
+version = "2.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "croniter" },
     { name = "redis" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/9b/93b7180220fe462b4128425e687665bcdeffddc51683d41e7fbe509c2d2e/rq-2.7.0.tar.gz", hash = "sha256:c2156fc7249b5d43dda918c4355cfbf8d0d299a5cdd3963918e9c8daf4b1e0c0", size = 679396, upload-time = "2026-02-22T11:10:50.775Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/87/d8ce4fb6b969d11454cf6f5c6e10735ffe096e4a9e208b4cf4d501bec41d/rq-2.9.1.tar.gz", hash = "sha256:2ae30c452bd1e8e26b4a213340d4b6e3957cae23176a92f9132c661d73d0c179", size = 745898, upload-time = "2026-06-06T02:48:36.949Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/1a/3b64696bc0c33aa1d86d3e6add03c4e0afe51110264fd41208bd95c2665c/rq-2.7.0-py3-none-any.whl", hash = "sha256:4b320e95968208d2e249fa0d3d90ee309478e2d7ea60a116f8ff9aa343a4c117", size = 115728, upload-time = "2026-02-22T11:10:48.401Z" },
+    { url = "https://files.pythonhosted.org/packages/77/ae/99335807dde9ce8402d31666d385122a20ecd710a1fd62e5d7014265b783/rq-2.9.1-py3-none-any.whl", hash = "sha256:092624e1bc3b3ca9d2ce7ff4049bd7667f772f84695c9dc66a7a662f67f1939a", size = 120816, upload-time = "2026-06-06T02:48:38.587Z" },
 ]
 
 [[package]]
