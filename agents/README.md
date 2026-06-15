@@ -90,8 +90,15 @@ the repo's root `docker-compose.yml`, so running it is three steps:
 
    Here `bug-fix-agent` is the service name defined in the agent's `compose.yml` —
    use that agent's own service name when you run a different one. Compose builds and
-   runs the agent against that bug. The run's `summary.json`, logs, and attachments are
-   written under `~/hackbot/artifacts/<run_id>` on your host (no uploader runs locally).
+   runs the agent against that bug. The run's `summary.json`, logs, attachments, and
+   source changes are written under `~/hackbot/artifacts/<run_id>` on your host (no
+   uploader runs locally).
+
+   If your agent declares a `[source]`, the runtime automatically collects whatever it
+   changed in the checkout — committed locally or not — into `changes/changes.patch`
+   (an mbox that preserves each local commit's message and author, including binary and
+   untracked files) plus a `changes/changes.json` summary. Apply it with one command:
+   `git am changes/changes.patch`.
 
 ## Telling the platform what you need (`hackbot.toml`)
 

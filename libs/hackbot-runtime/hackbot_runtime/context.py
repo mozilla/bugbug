@@ -13,6 +13,7 @@ its capability declarations come from the agent's ``hackbot.toml``
 from __future__ import annotations
 
 import datetime
+import logging
 import os
 import tempfile
 import uuid
@@ -23,7 +24,7 @@ from typing import TYPE_CHECKING
 from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from hackbot_runtime import artifacts
+from hackbot_runtime import artifacts, changes
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
@@ -32,6 +33,8 @@ from hackbot_runtime.uploader import SignedPolicyUploader
 
 if TYPE_CHECKING:
     from agent_tools.firefox import FirefoxContext
+
+log = logging.getLogger("hackbot_runtime.context")
 
 
 def _default_run_id() -> str:
@@ -71,6 +74,10 @@ class HackbotContext(BaseSettings):
     # Capability declarations from hackbot.toml (not env); attached after
     # construction via from_config()/from_config_obj().
     _config: HackbotConfig = PrivateAttr(default_factory=HackbotConfig)
+    # The commit the source checkout started from, recorded when source_repo is
+    # prepared. Stays None for agents that never touch source, which is how
+    # publish_changes() knows there are no changes to collect.
+    _source_base: str | None = PrivateAttr(default=None)
 
     @classmethod
     def from_config(cls, config_path: Path) -> "HackbotContext":
@@ -106,6 +113,13 @@ class HackbotContext(BaseSettings):
         env_path = os.environ.get("SOURCE_REPO")
         path = Path(env_path) if env_path else self._config.source.checkout_path
         ensure_source_repo(path, self._config.source.repo_url)
+        # Record where the agent starts editing, so publish_changes() can later
+        # diff the final tree against it. Best-effort: a failure here must not
+        # break the agent's access to source — it only disables change capture.
+        try:
+            self._source_base = changes.base_commit(path)
+        except Exception:
+            log.warning("Could not record source base commit at %s", path)
         return path
 
     @cached_property
@@ -175,3 +189,30 @@ class HackbotContext(BaseSettings):
         return artifacts.publish_json(
             self.uploader, self.run_artifacts_dir, key, payload
         )
+
+    def publish_changes(
+        self,
+        patch_key: str = "changes/changes.patch",
+        meta_key: str = "changes/changes.json",
+    ) -> str | None:
+        """Collect the agent's source-tree changes and publish them as artifacts.
+
+        Produces an mbox patch (applied with ``git am``) that preserves any
+        local commits and wraps the uncommitted remainder, plus a JSON summary.
+        Returns the patch key, or ``None`` when the agent never prepared a source
+        checkout or made no changes at all.
+        """
+        if self._source_base is None:
+            return None
+        change_set = changes.collect(self.source_repo, self._source_base)
+        if change_set is None:
+            return None
+        artifacts.publish_bytes(
+            self.uploader,
+            self.run_artifacts_dir,
+            patch_key,
+            change_set.patch,
+            "text/x-patch",
+        )
+        self.publish_json(meta_key, change_set.metadata)
+        return patch_key
