@@ -28,9 +28,10 @@ logger = getLogger(__name__)
 # Trusted users group PHID (currently defined as MOCO group members)
 MOCO_GROUP_PHID = "PHID-PROJ-a2zxxknk7jm5nw4rtjsl"  # bmo-mozilla-employee-confidential
 REVIEWBOT_PHID = "PHID-USER-cje4weq32o3xyuegalpj"
+REVIEWHELPER_PHID = "PHID-USER-g7c2dpvg7k2uv6gacaqf"
 
 # Mozilla-operated bot accounts that should be treated as trusted
-TRUSTED_BOT_PHIDS = {REVIEWBOT_PHID}
+TRUSTED_BOT_PHIDS = {REVIEWBOT_PHID, REVIEWHELPER_PHID}
 
 # Messages used when redacting untrusted content
 UNTRUSTED_CONTENT_REDACTED = "[Content from untrusted user removed for security]"
