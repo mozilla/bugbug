@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-bugzilla = ["bugsy"]
+bugzilla = ["libmozdata~=0.2.12"]
 firefox = ["grizzly-framework", "prefpicker"]
 claude-sdk = ["claude-agent-sdk>=0.1.30"]
 

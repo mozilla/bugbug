@@ -1,9 +1,15 @@
-"""Read-only Bugzilla tools backed by bugsy.
+"""Read-only Bugzilla tools backed by libmozdata.
 
 Framework-neutral: each tool is a ``@tool``-decorated handler whose first
 parameter is a :class:`BugzillaContext`. Handlers return plain data and surface
 proxy-level restrictions (code 101: endpoint not exposed, code 102: access
 denied) as a structured :class:`~agent_tools.registry.ToolError`.
+
+libmozdata exposes no raw-request passthrough; every call goes through its
+handler-based ``Bugzilla(...).get_data().wait()`` API and its configuration is
+process-global (set on class attributes). :class:`BugzillaContext` applies that
+global configuration on construction, which is fine because the broker is a
+single-tenant sidecar holding exactly one API key and URL.
 """
 
 from __future__ import annotations
@@ -12,7 +18,8 @@ import base64
 from dataclasses import dataclass
 from typing import Annotated, Any
 
-import bugsy
+import requests
+from libmozdata.bugzilla import Bugzilla, BugzillaBase
 from pydantic import Field
 
 from agent_tools.registry import ToolError, tool, tools_in
@@ -20,24 +27,46 @@ from agent_tools.registry import ToolError, tool, tools_in
 
 @dataclass
 class BugzillaContext:
-    """Holds the live bugsy client.
+    """Carries the Bugzilla URL + API key and applies them to libmozdata.
 
-    Every tool receives the same instance, so they share auth and one TCP
-    connection pool.
+    libmozdata reads its credentials and endpoints from class attributes rather
+    than per-instance, so constructing the context configures the (process-wide)
+    libmozdata ``Bugzilla`` class. Every tool then builds short-lived
+    ``Bugzilla`` instances that share this auth.
     """
 
-    client: bugsy.Bugsy
+    api_url: str
+    api_key: str
+
+    def __post_init__(self) -> None:
+        base_url = self.api_url.rstrip("/")
+        BugzillaBase.TOKEN = self.api_key
+        BugzillaBase.URL = base_url
+        Bugzilla.API_URL = base_url + "/rest/bug"
+        Bugzilla.ATTACHMENT_API_URL = Bugzilla.API_URL + "/attachment"
 
 
-def _bugsy_error(e: bugsy.BugsyException) -> ToolError:
-    """Turn a bugsy exception into a structured ToolError.
+def _bugzilla_error(e: requests.HTTPError) -> ToolError:
+    """Turn a libmozdata HTTP error into a structured ToolError.
 
     The payload is friendly and machine-parseable so the agent can decide what
     to do (skip the bug, try a different endpoint, ...) rather than just seeing
-    a stack trace.
+    a stack trace. The Bugzilla proxy reports its restrictions in the JSON body
+    as ``{"code": ..., "message": ...}`` (code 101: endpoint not exposed, code
+    102: access denied), which we recover from the failing response.
     """
-    code = getattr(e, "code", None)
-    msg = getattr(e, "msg", str(e))
+    code = None
+    msg = str(e)
+    resp = getattr(e, "response", None)
+    if resp is not None:
+        try:
+            body = resp.json()
+        except ValueError:
+            body = None
+        if isinstance(body, dict):
+            code = body.get("code")
+            msg = body.get("message", msg)
+
     if code == 101:
         kind = "endpoint_not_exposed"
         hint = "This Bugzilla proxy does not expose this endpoint."
@@ -77,11 +106,21 @@ async def search_bugs(
     component, status, resolution, priority, severity, assigned_to, whiteboard,
     include_fields, limit.
     """
+    from urllib.parse import urlencode
+
+    bugs: list[dict] = []
+
+    def bughandler(bug: dict) -> None:
+        bugs.append(bug)
+
+    # Pass the query as a urlencoded string so libmozdata issues a single direct
+    # request (its dict-query path first fires a synchronous count_only probe
+    # the proxy may reject with code 101).
+    query = urlencode(params, doseq=True)
     try:
-        result = ctx.client.request("bug", params=params)
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
-    bugs = result.get("bugs", [])
+        Bugzilla(query, bughandler=bughandler).get_data().wait()
+    except requests.HTTPError as e:
+        raise _bugzilla_error(e) from e
     return {"count": len(bugs), "bugs": bugs}
 
 
@@ -123,38 +162,33 @@ async def get_bugs(
         "creation_time,last_change_time,blocks,depends_on,see_also,"
         "cf_crash_signature,url,version,op_sys,platform"
     )
-    id_csv = ",".join(str(i) for i in ids)
+
+    bugs_by_id: dict[int, dict] = {}
+
+    def bughandler(bug: dict) -> None:
+        bugs_by_id[bug["id"]] = bug
+
+    def commenthandler(data: dict, bug_id) -> None:
+        bug = bugs_by_id.get(int(bug_id))
+        if bug is not None:
+            bug["comments"] = data["comments"]
+
+    kwargs: dict[str, Any] = {
+        "include_fields": include.split(","),
+        "bughandler": bughandler,
+    }
+    if include_comments:
+        kwargs["commenthandler"] = commenthandler
+
     try:
-        result = ctx.client.request(
-            "bug", params={"id": id_csv, "include_fields": include}
-        )
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
-    bugs = result.get("bugs", [])
-    returned = {b["id"] for b in bugs}
+        Bugzilla([str(i) for i in ids], **kwargs).get_data().wait()
+    except requests.HTTPError as e:
+        raise _bugzilla_error(e) from e
+
+    bugs = list(bugs_by_id.values())
+    returned = set(bugs_by_id)
     inaccessible = [i for i in ids if i not in returned]
-
-    payload = {"count": len(bugs), "bugs": bugs, "inaccessible": inaccessible}
-
-    if include_comments and bugs:
-        # Bugzilla lets us fetch comments for many bugs in one call by hitting
-        # /bug/{first}/comment?ids=rest. One extra round trip total.
-        first, *rest = [b["id"] for b in bugs]
-        cparams = {"ids": ",".join(str(i) for i in rest)} if rest else {}
-        try:
-            cres = ctx.client.request(f"bug/{first}/comment", params=cparams)
-            comments_by_bug = {
-                int(bid): data["comments"] for bid, data in cres.get("bugs", {}).items()
-            }
-            for b in bugs:
-                b["comments"] = comments_by_bug.get(b["id"], [])
-        except bugsy.BugsyException as e:
-            payload["comments_error"] = {
-                "code": getattr(e, "code", None),
-                "message": getattr(e, "msg", str(e)),
-            }
-
-    return payload
+    return {"count": len(bugs), "bugs": bugs, "inaccessible": inaccessible}
 
 
 @tool
@@ -163,12 +197,16 @@ async def get_bug_comments(
     bug_id: Annotated[int, Field(description="Bug ID.")],
 ) -> dict:
     """Fetch all comments for a single bug."""
+    collected: list[dict] = []
+
+    def commenthandler(data: dict, _bug_id) -> None:
+        collected.extend(data["comments"])
+
     try:
-        result = ctx.client.request(f"bug/{bug_id}/comment")
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
-    comments = result.get("bugs", {}).get(str(bug_id), {}).get("comments", [])
-    return {"bug_id": bug_id, "count": len(comments), "comments": comments}
+        Bugzilla([str(bug_id)], commenthandler=commenthandler).get_data().wait()
+    except requests.HTTPError as e:
+        raise _bugzilla_error(e) from e
+    return {"bug_id": bug_id, "count": len(collected), "comments": collected}
 
 
 @tool
@@ -191,13 +229,42 @@ async def get_bug_attachments(
     include_data=true to also download the content — Bugzilla returns it
     base64-encoded in the 'data' field of each attachment.
     """
-    params = {} if include_data else {"exclude_fields": "data"}
+    collected: list[dict] = []
+
+    def attachmenthandler(attachments: list, _bug_id) -> None:
+        collected.extend(attachments)
+
+    # libmozdata has no exclude_fields; emulate it by requesting an explicit
+    # metadata-only field set unless the caller wants the (potentially large)
+    # base64 'data'.
+    include_fields = (
+        None
+        if include_data
+        else [
+            "id",
+            "file_name",
+            "content_type",
+            "size",
+            "creation_time",
+            "last_change_time",
+            "is_patch",
+            "is_obsolete",
+            "is_private",
+            "flags",
+            "summary",
+            "creator",
+        ]
+    )
+
     try:
-        result = ctx.client.request(f"bug/{bug_id}/attachment", params=params)
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
-    atts = result.get("bugs", {}).get(str(bug_id), [])
-    return {"bug_id": bug_id, "count": len(atts), "attachments": atts}
+        Bugzilla(
+            [str(bug_id)],
+            attachmenthandler=attachmenthandler,
+            attachment_include_fields=include_fields,
+        ).get_data().wait()
+    except requests.HTTPError as e:
+        raise _bugzilla_error(e) from e
+    return {"bug_id": bug_id, "count": len(collected), "attachments": collected}
 
 
 @tool
@@ -223,12 +290,21 @@ async def download_attachment(
     get_bug_attachments first to discover attachment IDs. Returns the written
     path, size, and content_type.
     """
-    try:
-        result = ctx.client.request(f"bug/attachment/{attachment_id}")
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
+    collected: list[dict] = []
 
-    att = result.get("attachments", {}).get(str(attachment_id))
+    def attachmenthandler(attachments: list) -> None:
+        collected.extend(attachments)
+
+    try:
+        Bugzilla(
+            attachmentids=[str(attachment_id)],
+            attachmenthandler=attachmenthandler,
+            attachment_include_fields=["id", "data", "file_name", "content_type"],
+        ).get_data().wait()
+    except requests.HTTPError as e:
+        raise _bugzilla_error(e) from e
+
+    att = next((a for a in collected if a.get("id") == attachment_id), None)
     if att is None:
         raise ToolError(
             f"attachment {attachment_id} not found",

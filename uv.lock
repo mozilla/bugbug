@@ -57,7 +57,7 @@ dependencies = [
 
 [package.optional-dependencies]
 bugzilla = [
-    { name = "bugsy" },
+    { name = "libmozdata" },
 ]
 claude-sdk = [
     { name = "claude-agent-sdk" },
@@ -69,9 +69,9 @@ firefox = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bugsy", marker = "extra == 'bugzilla'" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "grizzly-framework", marker = "extra == 'firefox'" },
+    { name = "libmozdata", marker = "extra == 'bugzilla'", specifier = "~=0.2.12" },
     { name = "prefpicker", marker = "extra == 'firefox'" },
     { name = "pydantic", specifier = ">=2.6.0" },
 ]
@@ -2137,7 +2137,6 @@ version = "0.1.0"
 source = { editable = "agents/bug-fix" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
-    { name = "bugsy" },
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "mcp" },
@@ -2148,7 +2147,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
-    { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
