@@ -159,6 +159,11 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
     except Exception:
         log.exception("Failed to publish agent log")
 
+    try:
+        ctx.publish_changes()
+    except Exception:
+        log.exception("Failed to publish source changes")
+
     # Upload when a signed policy is configured, else write into the local
     # artifacts dir (so local/compose/direct runs leave it on the host).
     try:
