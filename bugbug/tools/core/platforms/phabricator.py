@@ -25,8 +25,8 @@ from bugbug.tools.core.platforms.bugzilla import Bug
 
 logger = getLogger(__name__)
 
-# Trusted users group PHID (currently defined as MOCO group members)
-MOCO_GROUP_PHID = "PHID-PROJ-a2zxxknk7jm5nw4rtjsl"  # bmo-mozilla-employee-confidential
+# Trusted users group PHID (bmo-editbugs-team members)
+EDITBUGS_GROUP_PHID = "PHID-PROJ-njo5uuqyyq3oijbkhy55"  # bmo-editbugs-team
 REVIEWBOT_PHID = "PHID-USER-cje4weq32o3xyuegalpj"
 
 # Mozilla-operated bot accounts that should be treated as trusted
@@ -86,10 +86,10 @@ def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
         constraints={"phids": list(user_phids)},
     )
 
-    # Get MOCO group members
+    # Get bmo-editbugs-team members
     moco_response = phabricator.request(
         "project.search",
-        constraints={"phids": [MOCO_GROUP_PHID]},
+        constraints={"phids": [EDITBUGS_GROUP_PHID]},
         attachments={"members": True},
     )
 
@@ -139,7 +139,7 @@ def _get_users_info_batch(user_phids: set[str]) -> dict[str, dict]:
     Returns:
         Dictionary mapping user PHID to info dict with keys:
         - email: User's email address
-        - is_trusted: Whether user is in MOCO group
+        - is_trusted: Whether user is in bmo-editbugs-team
         - real_name: User's real name
     """
     return _get_users_info_batch_with_retry(user_phids)
@@ -161,7 +161,7 @@ def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[lis
     """
     from copy import copy
 
-    # Walk backwards to find last trusted comment (from MOCO)
+    # Walk backwards to find last trusted comment (from bmo-editbugs-team)
     last_trusted_index = -1
     for i in range(len(comments) - 1, -1, -1):
         comment_is_trusted = users_info.get(comments[i].author_phid, {}).get(

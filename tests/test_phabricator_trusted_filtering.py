@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bugbug.tools.core.platforms.phabricator import (
-    MOCO_GROUP_PHID,
+    EDITBUGS_GROUP_PHID,
     TRUSTED_BOT_PHIDS,
     UNTRUSTED_CONTENT_REDACTED,
     PhabricatorGeneralComment,
@@ -342,8 +342,8 @@ class TestToMdEndToEnd:
     MOCK_MOCO_GROUP = {
         "data": [
             {
-                "phid": MOCO_GROUP_PHID,
-                "fields": {"name": "bmo-mozilla-employee-confidential"},
+                "phid": EDITBUGS_GROUP_PHID,
+                "fields": {"name": "bmo-editbugs-team"},
                 "attachments": {
                     "members": {
                         "members": [
@@ -810,7 +810,7 @@ def test_get_users_info_batch_mixed_trust():
 )
 @pytest.mark.withoutresponses
 def test_moco_group_phid_is_valid():
-    """Test that `MOCO_GROUP_PHID` points to a valid project.
+    """Test that `EDITBUGS_GROUP_PHID` points to a valid project.
 
     This can only be run with an API key, to validate changes locally.
     """
@@ -818,12 +818,12 @@ def test_moco_group_phid_is_valid():
 
     resp = phabricator_client.request(
         "project.search",
-        constraints={"phids": [MOCO_GROUP_PHID]},
+        constraints={"phids": [EDITBUGS_GROUP_PHID]},
     )
 
     assert len(resp["data"]) == 1
-    assert resp["data"][0]["phid"] == MOCO_GROUP_PHID
-    assert "bmo-mozilla-employee-confidential" in resp["data"][0]["fields"]["name"]
+    assert resp["data"][0]["phid"] == EDITBUGS_GROUP_PHID
+    assert "bmo-editbugs-team" in resp["data"][0]["fields"]["name"]
 
 
 def test_phabricator_metadata_redacted_without_trusted_comment():
