@@ -42,6 +42,10 @@ def setup_bugzilla_mock(mocker, bugs):
     return mock_bugzilla_class
 
 
+@pytest.mark.skip(
+    reason="bugzilla_quick_search tool is temporarily disabled due to "
+    "https://github.com/mozilla/bugbug/issues/5890"
+)
 class TestBugzillaQuickSearch:
     """Test the bugzilla_quick_search tool."""
 
