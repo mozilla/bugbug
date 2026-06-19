@@ -21,6 +21,10 @@ from bugbug.tools.core.platforms.phabricator import (
 
 mcp = FastMCP("Firefox Development MCP Server")
 
+# Temporarily disabled due to https://github.com/mozilla/bugbug/issues/5890.
+# Once that issue is resolved, we should re-enable the Bugzilla search tool.
+mcp.disable(names={"bugzilla_quick_search"})
+
 
 @functools.cache
 def get_code_review_tool():
