@@ -134,9 +134,12 @@ class QdrantVectorDB(VectorDB):
     ) -> Iterable[PayloadScore]:
         qdrant_filter = filter.to_qdrant_filter() if filter else None
 
-        for item in self.client.search(
-            self.collection_name, query, qdrant_filter, limit=limit
-        ):
+        for item in self.client.query_points(
+            self.collection_name,
+            query=query,
+            query_filter=qdrant_filter,
+            limit=limit,
+        ).points:
             yield PayloadScore(item.score, item.id, item.payload)
 
     def get_existing_ids(self) -> Iterable[int]:
