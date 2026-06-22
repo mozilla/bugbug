@@ -23,7 +23,7 @@ steps:
       - services
       - update
       - $_SERVICE_NAME
-      - "--platform=managed"
+      - "--platform=$_PLATFORM"
       - "--image=$_IMAGE_URI"
       - "--labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID"
       - "--region=$_DEPLOY_REGION"
