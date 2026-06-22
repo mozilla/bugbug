@@ -203,7 +203,7 @@ async def search_text(
     except SearchfoxNetworkError as e:
         return _tool_error(f"search failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request searching for %r (path=%r, langs=%r): %s",
             query,
             path_filter,
@@ -233,7 +233,7 @@ async def get_field_layout(
     except SearchfoxNetworkError as e:
         return _tool_error(f"field layout fetch failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error("Bad request fetching field layout for %r: %s", class_name, e)
+        logger.warning("Bad request fetching field layout for %r: %s", class_name, e)
         return _tool_error(f"field layout fetch failed: {e}")
     except Exception as e:
         logger.error("Unexpected error fetching field layout for %r: %s", class_name, e)
@@ -265,7 +265,7 @@ async def get_blame(
     except SearchfoxNetworkError as e:
         return _tool_error(f"blame fetch failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request fetching blame for %r lines %r: %s", file_path, lines, e
         )
         return _tool_error(f"blame fetch failed: {e}")
@@ -304,7 +304,7 @@ async def check_can_gc(
     except SearchfoxNetworkError as e:
         return _tool_error(f"GC check failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error("Bad request checking GC status for %r: %s", symbol, e)
+        logger.warning("Bad request checking GC status for %r: %s", symbol, e)
         return _tool_error(f"GC check failed: {e}")
     except Exception as e:
         logger.error("Unexpected error checking GC status for %r: %s", symbol, e)
@@ -333,7 +333,7 @@ async def find_definition(
     except SearchfoxNetworkError as e:
         return _tool_error(f"definition lookup failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request finding definition for %r (path=%r): %s", name, path_filter, e
         )
         return _tool_error(f"definition lookup failed: {e}")
@@ -376,7 +376,7 @@ async def search_identifier(
     except SearchfoxNetworkError as e:
         return _tool_error(f"identifier search failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request searching for identifier %r (path=%r, langs=%r): %s",
             identifier,
             path_filter,
@@ -408,7 +408,7 @@ async def calls_from(
     except SearchfoxNetworkError as e:
         return _tool_error(f"call graph fetch failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request fetching calls from %r (depth=%d): %s", symbol, depth, e
         )
         return _tool_error(f"call graph fetch failed: {e}")
@@ -436,7 +436,7 @@ async def calls_to(
     except SearchfoxNetworkError as e:
         return _tool_error(f"call graph fetch failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request fetching calls to %r (depth=%d): %s", symbol, depth, e
         )
         return _tool_error(f"call graph fetch failed: {e}")
@@ -468,7 +468,7 @@ async def calls_between(
     except SearchfoxNetworkError as e:
         return _tool_error(f"call graph fetch failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request fetching calls between %r and %r (depth=%d): %s",
             symbol_a,
             symbol_b,
@@ -508,7 +508,7 @@ async def get_function_at_line(
     except SearchfoxNetworkError as e:
         return _tool_error(f"function lookup failed: {e}")
     except SearchfoxRequestError as e:
-        logger.error(
+        logger.warning(
             "Bad request fetching function at line %d in %r: %s", line, file_path, e
         )
         return _tool_error(f"function lookup failed: {e}")
