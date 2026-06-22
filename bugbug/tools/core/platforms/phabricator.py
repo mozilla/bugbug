@@ -561,11 +561,12 @@ class PhabricatorPatch(Patch):
         return self._revision_metadata["fields"]["authorPHID"]
 
     @cached_property
-    def reviewer_phids(self) -> list[str]:
-        """PHIDs of the revision's reviewers (a mix of users and projects).
+    def _reviewers(self) -> list[dict]:
+        """Raw reviewer entries from the revision's reviewers attachment.
 
         The reviewers attachment is not part of the default revision metadata,
         so we fetch it with a dedicated ``differential.revision.search`` call.
+        Each entry carries ``reviewerPHID`` and ``isBlocking``.
         """
         phabricator = get_phabricator_client()
         response = phabricator.request(
@@ -576,12 +577,12 @@ class PhabricatorPatch(Patch):
         data = response.get("data") or []
         if not data:
             return []
-        reviewers = data[0].get("attachments", {}).get("reviewers", {})
-        return [
-            r["reviewerPHID"]
-            for r in reviewers.get("reviewers", [])
-            if r.get("reviewerPHID")
-        ]
+        return data[0].get("attachments", {}).get("reviewers", {}).get("reviewers", [])
+
+    @property
+    def reviewer_phids(self) -> list[str]:
+        """PHIDs of the revision's reviewers (a mix of users and projects)."""
+        return [r["reviewerPHID"] for r in self._reviewers if r.get("reviewerPHID")]
 
     @property
     def reviewer_project_phids(self) -> list[str]:
@@ -632,6 +633,21 @@ class PhabricatorPatch(Patch):
                     _add(operation.get("phid") or "")
 
         return phids
+
+    @property
+    def blocking_reviewer_project_phids(self) -> list[str]:
+        """PHIDs of the revision's *blocking* reviewer groups."""
+        return [
+            r["reviewerPHID"]
+            for r in self._reviewers
+            if r.get("isBlocking")
+            and r.get("reviewerPHID", "").startswith("PHID-PROJ-")
+        ]
+
+    @property
+    def author_username(self) -> str | None:
+        """The revision author's Phabricator username (email), if resolvable."""
+        return self._users_info.get(self.author_phid, {}).get("email")
 
     @property
     def diff_author_phid(self) -> str:
