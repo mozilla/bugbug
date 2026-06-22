@@ -1,0 +1,31 @@
+services:
+  autowebcompat-repro-broker:
+    build:
+      context: ../..
+      dockerfile: agents/autowebcompat-repro/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+    expose:
+      - "8765"
+
+  autowebcompat-repro-agent:
+    build:
+      context: ../..
+      dockerfile: agents/autowebcompat-repro/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_DATA
+      - BUG_ID
+      - BUGZILLA_MCP_URL=http://autowebcompat-repro-broker:8765/mcp
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      autowebcompat-repro-broker:
+        condition: service_started

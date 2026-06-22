@@ -1,0 +1,3 @@
+# autowebcompat-repro needs no platform prep: no [source] checkout, no [firefox] build.
+# Subject comes from the request (bug_data / bug_id); the DevTools MCP drives a
+# Firefox instance installed in the image.

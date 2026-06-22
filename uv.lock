@@ -22,6 +22,7 @@ members = [
     "bugbug",
     "bugbug-http-service",
     "bugbug-mcp",
+    "hackbot-agent-autowebcompat-repro",
     "hackbot-agent-bug-fix",
     "hackbot-api",
     "hackbot-runtime",
@@ -2361,6 +2362,37 @@ wheels = [
 ]
 
 [[package]]
+name = "hackbot-agent-autowebcompat-repro"
+version = "0.1.0"
+source = { editable = "agents/autowebcompat-repro" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "bugsy" },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
+    { name = "mozdownload" },
+    { name = "mozinstall" },
+    { name = "six" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "bugsy" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "mozdownload" },
+    { name = "mozinstall" },
+    { name = "six" },
+    { name = "starlette", specifier = ">=0.36.0" },
+    { name = "uvicorn", specifier = ">=0.27.0" },
+]
+
+[[package]]
 name = "hackbot-agent-bug-fix"
 version = "0.1.0"
 source = { editable = "agents/bug-fix" }
@@ -3962,6 +3994,75 @@ wheels = [
 ]
 
 [[package]]
+name = "mozdownload"
+version = "1.30.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mozilla-version" },
+    { name = "mozinfo" },
+    { name = "progressbar2" },
+    { name = "redo" },
+    { name = "requests" },
+    { name = "treeherder-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9c/c4/a7d2fbb4ab3cb0910ab17ac6653122f0f1d1721eea5783fb895152b1feae/mozdownload-1.30.0.tar.gz", hash = "sha256:037a20d8f378bc5323ac6ca2e037bba756622156a4bb2a20bcfa64440cd54ece", size = 24608, upload-time = "2025-05-26T12:09:25.531Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/d8/c25fb7780cd75fef232e2f9749e6fe38d756c0b5a71aec7498c10970c13f/mozdownload-1.30.0-py3-none-any.whl", hash = "sha256:96f36b7741cb3d839b581801a1365434579cc36aa11905e08095c56066e18977", size = 26043, upload-time = "2025-05-26T12:09:22.628Z" },
+]
+
+[[package]]
+name = "mozfile"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/f8/a1f0076490d50dbe8bdcf15df97856a4734f459aaf0a4d42c64a11ab7231/mozfile-3.0.0.tar.gz", hash = "sha256:92ca1a786abbdf5e6a7aada62d3a4e28f441ef069c7623223add45268e53c789", size = 7699, upload-time = "2022-10-13T13:09:09.347Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/cd/fe6b0afa57fbf026631de1435682735dae0aa0ffbe3855f62806da31c55b/mozfile-3.0.0-py2.py3-none-any.whl", hash = "sha256:3b0afcda2fa8b802ef657df80a56f21619008f61fcc14b756124028d7b7adf5c", size = 8227, upload-time = "2022-10-13T13:09:08.03Z" },
+]
+
+[[package]]
+name = "mozilla-version"
+version = "5.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/36/7c/c23a10f59db273ed3f0dc078a1b1263e9f9126c4e36af86021e5bfaf9e24/mozilla_version-5.1.0.tar.gz", hash = "sha256:b09d56f0d7e66fa2ff3df5ad1299df456afd8a63e6c2b9521a94b4616a6cb1e8", size = 99616, upload-time = "2026-06-17T09:58:57.812Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/aa/cdf061be6b68f245c9405c17b899802b1ccc40eb77200579608936c14b33/mozilla_version-5.1.0-py3-none-any.whl", hash = "sha256:2e8de52712c3fbefac7f42f69319a664c6ba01d6e97bf07d5353a65ed34de94b", size = 44415, upload-time = "2026-06-17T09:58:56.595Z" },
+]
+
+[[package]]
+name = "mozinfo"
+version = "1.2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "distro" },
+    { name = "mozfile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/23/35/96cccb2244a08247f5c1b5e810d6117d35a30e4a3e29679ed0c7dd2406c6/mozinfo-1.2.3.tar.gz", hash = "sha256:5d2b8a5f1b362692f221e33eb3ff47454a580db1a1384614cdc637b31131b438", size = 6358, upload-time = "2023-07-28T13:50:55.068Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/28/b2/0efcb9aa6d1362aa00b567c8f355f028332a5a533f80c45e5dacd12a5466/mozinfo-1.2.3-py2.py3-none-any.whl", hash = "sha256:90e0cfb377fc2cc3fad023d38c1f6d60a9135400ff5684a04abf79ca5cc3c521", size = 7454, upload-time = "2023-07-28T13:50:52.402Z" },
+]
+
+[[package]]
+name = "mozinstall"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mozfile" },
+    { name = "mozinfo" },
+    { name = "requests" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/d7/436f8b4034bee94cc2d98842dd01af595a9b2745aa1b4eddee27869cecb4/mozInstall-2.1.0.tar.gz", hash = "sha256:40f18e0c4ef84e2d75cccda53c01c00214a3ef5e4cf5519dba5a926f131bcb0f", size = 6107, upload-time = "2023-07-28T13:43:25.52Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/93/2d/5cd9787f930f2a0cf4ab3d105ce15edc39733328e7606d97124877b70c4e/mozInstall-2.1.0-py2.py3-none-any.whl", hash = "sha256:8abc26e37b1976eb3d815ee2a42bb6bbb10926e16620eabb6f8f1ed764b0c0fe", size = 6687, upload-time = "2023-07-28T13:43:23.953Z" },
+]
+
+[[package]]
 name = "multidict"
 version = "6.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4799,6 +4900,18 @@ wheels = [
 ]
 
 [[package]]
+name = "progressbar2"
+version = "4.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-utils" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/24/3587e795fc590611434e4bcb9fbe0c3dddb5754ce1a20edfd86c587c0004/progressbar2-4.5.0.tar.gz", hash = "sha256:6662cb624886ed31eb94daf61e27583b5144ebc7383a17bae076f8f4f59088fb", size = 101449, upload-time = "2024-08-28T22:50:12.391Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ee/94/448f037fb0ffd0e8a63b625cf9f5b13494b88d15573a987be8aaa735579d/progressbar2-4.5.0-py3-none-any.whl", hash = "sha256:625c94a54e63915b3959355e6d4aacd63a00219e5f3e2b12181b76867bf6f628", size = 57132, upload-time = "2024-08-28T22:50:10.264Z" },
+]
+
+[[package]]
 name = "prompt-toolkit"
 version = "3.0.52"
 source = { registry = "https://pypi.org/simple" }
@@ -5438,6 +5551,18 @@ wheels = [
 ]
 
 [[package]]
+name = "python-utils"
+version = "3.9.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/4c/ef8b7b1046d65c1f18ca31e5235c7d6627ca2b3f389ab1d44a74d22f5cc9/python_utils-3.9.1.tar.gz", hash = "sha256:eb574b4292415eb230f094cbf50ab5ef36e3579b8f09e9f2ba74af70891449a0", size = 35403, upload-time = "2024-11-26T00:38:58.736Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/69/31c82567719b34d8f6b41077732589104883771d182a9f4ff3e71430999a/python_utils-3.9.1-py2.py3-none-any.whl", hash = "sha256:0273d7363c7ad4b70999b2791d5ba6b55333d6f7a4e4c8b6b39fb82b5fab4613", size = 32078, upload-time = "2024-11-26T00:38:57.488Z" },
+]
+
+[[package]]
 name = "pytz"
 version = "2026.2"
 source = { registry = "https://pypi.org/simple" }
@@ -5623,6 +5748,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/cc/e3/68de4c8aacbd9952667d7d0f5af55b873553a09a6227ac5b7f7c622610c9/Redis-Sentinel-Url-1.0.1.tar.gz", hash = "sha256:ec1854ab9379a28789423c3cd4082739fb69c7b4b11bb50ae7858697c131b13e", size = 7599, upload-time = "2017-04-05T07:47:55.456Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/35/20f997f367c87ef1e6ebf418af7c2450cb5da860d066d7229226031534ad/Redis_Sentinel_Url-1.0.1-py2.py3-none-any.whl", hash = "sha256:c6991e2000c5c7a5e2b95eb2d62fd5b0a6b02a59554caf0f9f79d18e152d9663", size = 4685, upload-time = "2017-04-05T07:47:53.545Z" },
+]
+
+[[package]]
+name = "redo"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/23/91/cd9b78aca21a3a5fb915582a9e8b727e2513e38732df45b2c3ee63cbe7be/redo-3.0.0.tar.gz", hash = "sha256:52a14200004d6708924a547b31b7d1c717cb36b944f3a5c7b176e0d61ab81eef", size = 20723, upload-time = "2024-07-17T18:31:13.739Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/67/128a17272a74f56da57cbae4a6f282a29d435d080cf80714c1137192b8c9/redo-3.0.0-py2.py3-none-any.whl", hash = "sha256:66905396b2882577fa4bf7edb90fee081db2b98992d303f12e3f898ac7f7bd56", size = 14006, upload-time = "2024-07-17T18:31:12.366Z" },
 ]
 
 [[package]]
@@ -6737,6 +6871,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/1b/22/40f55b26baeab80c2d7b3f1db0682f8954e4617fee7d90ce634022ef05c6/traitlets-5.15.0.tar.gz", hash = "sha256:4fead733f81cf1c4c938e06f8ca4633896833c9d89eff878159457f4d4392971", size = 163197, upload-time = "2026-05-06T08:05:58.016Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/98/a9937a969d018a23badfea0b381f66783649d48e0ea6c41923265c3cbeb3/traitlets-5.15.0-py3-none-any.whl", hash = "sha256:fb36a18867a6803deab09f3c5e0fa81bb7b26a5c9e82501c9933f759166eff40", size = 85877, upload-time = "2026-05-06T08:05:55.853Z" },
+]
+
+[[package]]
+name = "treeherder-client"
+version = "5.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/08/3b/4c8b5df16db5ed575db13b557455f219db115e4cbfa21871acac65aacbc5/treeherder-client-5.0.0.tar.gz", hash = "sha256:4020809424384574277232023c78bcee436ec5474020b4430b4770f0ddd8bba3", size = 4584, upload-time = "2019-02-20T08:29:22.2Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/98/78ab39dc8a96b3fc8b9dad6a6699395e3f834bd705ca259a592637a06e70/treeherder_client-5.0.0-py2.py3-none-any.whl", hash = "sha256:db25150480d0501c79b72966899e5c901a5a625e12739389f6bee03273e1d002", size = 5171, upload-time = "2019-02-20T08:29:20.861Z" },
 ]
 
 [[package]]
