@@ -3,6 +3,9 @@ from subprocess import check_output
 
 import sentry_sdk
 
+from bugbug.tools.core.platforms.bugzilla import BugNotFoundError
+from bugbug_mcp.exceptions import RevisionNotFoundError
+
 __version__ = "0.1.0"
 
 
@@ -15,4 +18,5 @@ sentry_sdk.init(
     # Add data like request headers and IP for users,
     # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
     send_default_pii=True,
+    ignore_errors=[BugNotFoundError, RevisionNotFoundError],
 )

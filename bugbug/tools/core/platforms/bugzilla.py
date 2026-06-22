@@ -18,6 +18,10 @@ from bugbug.tools.core.connection import get_user_agent
 logger = logging.getLogger(__name__)
 
 EDITBUGS_GROUP_ID = 9
+
+
+class BugNotFoundError(ValueError):
+    pass
 TRUST_BEFORE_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
 REDACTED_TITLE = "[Unvalidated bug title redacted for security]"
@@ -426,7 +430,9 @@ class Bug:
         ).get_data().wait()
 
         if not bugs or (not allow_private and bugs[0]["groups"]):
-            raise ValueError(f"Bug {bug_id} not found")
+            raise BugNotFoundError(
+                f"Bug {bug_id} was not found. It may not exist or may be a confidential security bug."
+            )
 
         bug_data = bugs[0]
         assert bug_data["id"] == bug_id

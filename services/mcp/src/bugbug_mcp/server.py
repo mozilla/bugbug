@@ -14,6 +14,7 @@ from pydantic import Field
 
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
+from bugbug_mcp.exceptions import RevisionNotFoundError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     SanitizedPhabricatorPatch,
@@ -146,7 +147,7 @@ def bugzilla_quick_search(
 def _get_revision_md(revision_id: int) -> str:
     patch = SanitizedPhabricatorPatch(revision_id=revision_id)
     if not patch.is_accessible() or not patch.is_public():
-        raise ToolError(
+        raise RevisionNotFoundError(
             f"Revision D{revision_id} was not found. It may not exist or may be private."
         )
     return patch.to_md()
