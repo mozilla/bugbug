@@ -349,9 +349,7 @@ def diff_failure_vs_fix(repo, failure_commits, fix_commits):
         return None
 
 
-def generate_diff_for_bug(
-    bug_id: str, obj: dict, upload: bool, repo_path: str
-) -> tuple[int, int]:
+def generate_diff_for_bug(bug_id: str, obj: dict, upload: bool, repo_path: str) -> int:
     """Generate and optionally upload the diff for a single bug.
 
     Returns:
@@ -361,26 +359,22 @@ def generate_diff_for_bug(
     diff_path = os.path.join("data", "ci_failures_diffs", f"{bug_id}.diff")
     diff_zst_path = f"{diff_path}.zst"
 
-    try:
-        diff = diff_failure_vs_fix(
-            repo_path,
-            [
-                utils.hg2git(commit["node"])
-                for commit in obj["commits"]
-                if commit["backedoutby"]
-            ],
-            [
-                utils.hg2git(commit["node"])
-                for commit in obj["commits"]
-                if not commit["backedoutby"] and not commit["backsout"]
-            ],
-        )
-    except requests.exceptions.HTTPError as e:
-        logger.error("Failure mapping hg commit hash to git commit hash %s", e)
-        return (1, 0)
+    diff = diff_failure_vs_fix(
+        repo_path,
+        [
+            utils.hg2git(commit["node"])
+            for commit in obj["commits"]
+            if commit["backedoutby"]
+        ],
+        [
+            utils.hg2git(commit["node"])
+            for commit in obj["commits"]
+            if not commit["backedoutby"] and not commit["backsout"]
+        ],
+    )
 
     if diff is None or len(diff) == 0:
-        return (0, 1)
+        return 1
 
     with open(diff_path, "wb") as f:
         f.write(diff)
@@ -392,7 +386,7 @@ def generate_diff_for_bug(
     if upload:
         utils.upload_s3([diff_zst_path])
 
-    return (0, 0)
+    return 0
 
 
 def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
@@ -415,7 +409,6 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         cached_keys = utils.list_s3("data/ci_failures_diffs/")
 
     diff_errors = 0
-    mapping_errors = 0
     diffs = []
     for bug_id, obj in tqdm(
         fixed_by_commit_pushes.items(),
@@ -440,11 +433,9 @@ def generate_diffs(repo_url, repo_path, fixed_by_commit_pushes, upload):
         ]
 
         for future in tqdm(as_completed(futures), total=len(futures)):
-            mapping_error, diff_error = future.result()
-            mapping_errors += mapping_error
+            diff_error = future.result()
             diff_errors += diff_error
 
-    logger.info("Failed mapping %s hashes", mapping_errors)
     logger.info("Failed generating %s diffs", diff_errors)
 
 
