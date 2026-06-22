@@ -83,9 +83,16 @@ The patch's associated bug ID is read from `patch.bug_id` (available on
 component string compared against the rule is `"Product::Component"`.
 
 The schema accepts `bugzilla`, `review`, and `patch` predicates. Runtime
-matching currently implements `bugzilla.component`; `bugzilla.product`,
-`bugzilla.keywords`, `bugzilla.severity`, `review.*`, and `patch.*` are parsed
-and validated but fail closed until trusted metadata is wired into the matcher.
+matching implements `bugzilla.component` and the `review` predicate
+(`review.reviewer`, `review.blocking_reviewer`, `review.author`); a `review`
+predicate matches when every facet it specifies matches, so a rule can target a
+reviewer group (e.g. `review = { reviewer = ["ip-protection-reviewers"] }`).
+Reviewer groups are matched by Phabricator project slug, resolved to the
+revision's requested reviewers. `bugzilla.product`, `bugzilla.keywords`,
+`bugzilla.severity`, and `patch.*` are parsed and validated but fail closed
+until the corresponding metadata is wired into the matcher. When the platform
+provides no reviewer information (e.g. a plain GitHub diff), `review` predicates
+fail closed.
 
 ### `fetch_revision`
 
