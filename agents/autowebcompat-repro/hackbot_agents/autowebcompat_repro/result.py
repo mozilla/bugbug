@@ -32,6 +32,14 @@ class ReproductionResult(BaseModel):
             "reader must be able to obtain the same inputs."
         ),
     )
+    chrome_mask_fixed: bool | None = Field(
+        description=(
+            "Whether enabling the Chrome Mask extension (spoofing a Chrome "
+            "User-Agent) fixed the reported behavior: true if it fixed it, "
+            "false if it did not, null if the Chrome Mask test was not run "
+            "(e.g. the issue did not reproduce at baseline)."
+        ),
+    )
 
 
 SUBMIT_RESULT_SCHEMA = {
