@@ -83,7 +83,7 @@ async def process_review(
         ) from e
     except RecursionLimitError as e:
         raise ReviewProcessingError(
-            "Review Helper could not complete the review within the steps limit."
+            "Review Helper could not complete the review within the configured agent step limit."
         ) from e
 
     generated_comments = [
