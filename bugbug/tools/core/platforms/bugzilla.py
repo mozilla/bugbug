@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timezone
 from functools import cached_property
 
+import requests
 from libmozdata.bugzilla import Bugzilla, BugzillaBase, BugzillaUser
 from libmozdata.config import set_default_value
 
@@ -22,6 +23,17 @@ EDITBUGS_GROUP_ID = 9
 
 class BugNotFoundError(ValueError):
     pass
+
+
+class BugzillaAPIError(IOError):
+    pass
+
+
+class BugzillaTransientError(BugzillaAPIError):
+    """Transient server-side error (5xx) from the Bugzilla API."""
+    pass
+
+
 TRUST_BEFORE_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
 REDACTED_TITLE = "[Unvalidated bug title redacted for security]"
@@ -422,12 +434,19 @@ class Bug:
     @classmethod
     def get(cls, bug_id: int, allow_private: bool = False) -> "Bug":
         bugs: list[dict] = []
-        Bugzilla(
-            bug_id,
-            include_fields=["_default", "comments", "history"],
-            bughandler=lambda bug, data: data.append(bug),
-            bugdata=bugs,
-        ).get_data().wait()
+        try:
+            Bugzilla(
+                bug_id,
+                include_fields=["_default", "comments", "history"],
+                bughandler=lambda bug, data: data.append(bug),
+                bugdata=bugs,
+            ).get_data().wait()
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code >= 500:
+                raise BugzillaTransientError(
+                    f"Bugzilla API error for bug {bug_id}: {e}"
+                ) from e
+            raise BugzillaAPIError(f"Bugzilla API error for bug {bug_id}: {e}") from e
 
         if not bugs or (not allow_private and bugs[0]["groups"]):
             raise BugNotFoundError(
