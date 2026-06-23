@@ -14,11 +14,11 @@ from pydantic import Field
 
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
-from bugbug_mcp.exceptions import RevisionNotFoundError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     SanitizedPhabricatorPatch,
 )
+from bugbug_mcp.exceptions import RevisionNotFoundError
 
 mcp = FastMCP("Firefox Development MCP Server")
 
