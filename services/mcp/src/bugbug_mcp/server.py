@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 
 import httpx
 from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
 from pydantic import Field
 
@@ -18,7 +17,7 @@ from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     SanitizedPhabricatorPatch,
 )
-from bugbug_mcp.exceptions import RevisionNotFoundError
+from bugbug_mcp.exceptions import InvalidDocPathError, RevisionNotFoundError
 
 mcp = FastMCP("Firefox Development MCP Server")
 
@@ -188,7 +187,7 @@ async def read_fx_doc_section(
 ) -> str:
     """Retrieve the content of a section from Firefox Source Tree Documentation."""
     if not doc_path.endswith(".md") and not doc_path.endswith(".rst"):
-        raise ToolError(
+        raise InvalidDocPathError(
             f"Invalid path: {doc_path}. Path must end with `.rst` or `.md`. Use the docs://llms.txt resource on this MCP to find valid paths."
         )
 
@@ -197,7 +196,7 @@ async def read_fx_doc_section(
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response.status_code == 404:
-            raise ToolError(
+            raise InvalidDocPathError(
                 f"Invalid path: {doc_path}. Use the docs://llms.txt resource on this MCP to find valid paths."
             )
 
