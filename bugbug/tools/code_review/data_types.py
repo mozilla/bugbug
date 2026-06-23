@@ -30,6 +30,17 @@ class AgentResponse(BaseModel):
     )
 
 
+class PatchScopeResponse(BaseModel):
+    """The response from the patch-scope assessment pass."""
+
+    comments: list[GeneratedReviewComment] = Field(
+        description=(
+            "At most one comment suggesting the patch be split into smaller, "
+            "independently reviewable pieces. Empty when no split is warranted."
+        )
+    )
+
+
 class CodeReviewToolResponse(BaseModel):
     """The response from the CodeReviewTool."""
 

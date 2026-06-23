@@ -24,6 +24,7 @@ from bugbug.tools.code_review.data_types import (
     AgentResponse,
     CodeReviewToolResponse,
     GeneratedReviewComment,
+    PatchScopeResponse,
     Skill,
 )
 from bugbug.tools.code_review.database import ReviewCommentsDB
@@ -36,6 +37,7 @@ from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
     CODE_REVIEW_TODO_TOOL_DESCRIPTION,
     FIRST_MESSAGE_TEMPLATE,
+    PATCH_SCOPE_PROMPT,
     STATIC_COMMENT_EXAMPLES,
     SYSTEM_PROMPT_TEMPLATE,
     TEMPLATE_COMMENT_EXAMPLE,
@@ -122,6 +124,13 @@ class CodeReviewTool(GenerativeModelTool):
             ),
             response_format=ProviderStrategy(AgentResponse),
             middleware=middleware,
+        )
+
+        # A separate, tool-less pass dedicated to assessing the patch's overall
+        # scope and suggesting a split when the patch is too large or unfocused.
+        self.scope_agent = create_agent(
+            llm,
+            response_format=ProviderStrategy(PatchScopeResponse),
         )
 
         self.review_comments_db = review_comments_db
@@ -243,6 +252,21 @@ class CodeReviewTool(GenerativeModelTool):
 
         return result["structured_response"].comments, manifest
 
+    async def assess_patch_scope(
+        self, patch: Patch, patch_summary: str
+    ) -> list[GeneratedReviewComment]:
+        """Run a separate pass that suggests splitting an overly large/unfocused patch.
+
+        Returns at most one comment. Empty when no split is warranted.
+        """
+        prompt = PATCH_SCOPE_PROMPT.format(
+            target_software=self.target_software,
+            patch=format_patch_set(patch.patch_set),
+            patch_summary=patch_summary,
+        )
+        result = await self.scope_agent.ainvoke({"messages": [HumanMessage(prompt)]})
+        return result["structured_response"].comments[:1]
+
     async def run(self, patch: Patch) -> CodeReviewToolResponse:
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
@@ -258,8 +282,16 @@ class CodeReviewTool(GenerativeModelTool):
 
         filtered_suggestions = self.suggestion_filterer.run(unfiltered_suggestions)
 
+        # The patch-scope suggestion is a deliberate, meta-level comment, so it
+        # bypasses the suggestion filterer and is always sorted last.
+        scope_suggestions = await self.assess_patch_scope(patch, patch_summary)
+        for offset, suggestion in enumerate(scope_suggestions):
+            suggestion.order = len(filtered_suggestions) + offset + 1
+
         inline_comments = list(
-            convert_generated_comments_to_inline(filtered_suggestions, patch.patch_set)
+            convert_generated_comments_to_inline(
+                filtered_suggestions + scope_suggestions, patch.patch_set
+            )
         )
 
         return CodeReviewToolResponse(
@@ -268,6 +300,7 @@ class CodeReviewTool(GenerativeModelTool):
             details={
                 "model": self._agent_model_name,
                 "num_unfiltered_suggestions": len(unfiltered_suggestions),
+                "num_scope_suggestions": len(scope_suggestions),
                 "external_content": external_content_manifest,
             },
         )
