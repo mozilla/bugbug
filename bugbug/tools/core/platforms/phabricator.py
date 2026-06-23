@@ -588,6 +588,51 @@ class PhabricatorPatch(Patch):
         """PHIDs of the revision's reviewer *groups* (Phabricator projects)."""
         return [phid for phid in self.reviewer_phids if phid.startswith("PHID-PROJ-")]
 
+    @cached_property
+    def historical_reviewer_project_phids(self) -> list[str]:
+        """Reviewer-group PHIDs that were *ever* added as reviewers.
+
+        A review rotation adds a group as a reviewer, assigns an individual
+        member, then removes the group — so by review time the group is no
+        longer in the current reviewer list. Scanning the ``reviewers``
+        transactions recovers any group that was added at any point, which is
+        what reviewer-group targeting should key on.
+
+        Groups still present are included first (order-preserving); groups that
+        were added and later removed follow, deduplicated.
+        """
+        phids: list[str] = []
+        seen: set[str] = set()
+
+        def _add(phid: str) -> None:
+            if phid.startswith("PHID-PROJ-") and phid not in seen:
+                seen.add(phid)
+                phids.append(phid)
+
+        for phid in self.reviewer_project_phids:
+            _add(phid)
+
+        try:
+            transactions = self._get_transactions()
+        except Exception:
+            logger.exception(
+                "Could not fetch transactions for D%s; using current reviewers only",
+                self.revision_id,
+            )
+            return phids
+
+        for transaction in transactions:
+            if transaction.get("type") != "reviewers":
+                continue
+            operations = (transaction.get("fields") or {}).get("operations") or []
+            for operation in operations:
+                # 'add' and 'update' both indicate the reviewer was present at
+                # some point; 'remove' alone never introduces a new group.
+                if operation.get("operation") in ("add", "update"):
+                    _add(operation.get("phid") or "")
+
+        return phids
+
     @property
     def diff_author_phid(self) -> str:
         return self._diff_metadata["authorPHID"]

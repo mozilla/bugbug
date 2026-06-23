@@ -322,3 +322,130 @@ def test_get_project_members_empty(monkeypatch) -> None:
     )
     assert phab_platform.get_project_members("PHID-PROJ-missing") == frozenset()
     phab_platform.get_project_members.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Rotation recovery: historical_reviewer_project_phids
+# ---------------------------------------------------------------------------
+
+
+def _patch_with(current_reviewers, transactions):
+    """A PhabricatorPatch whose current reviewers and transaction log are fixed."""
+
+    class FakePatch(phab_platform.PhabricatorPatch):
+        def __init__(self):
+            pass
+
+        @property
+        def revision_id(self):
+            return 308166
+
+        @property
+        def reviewer_phids(self):
+            return current_reviewers
+
+        def _get_transactions(self):
+            return transactions
+
+    return FakePatch()
+
+
+# The exact reviewer event sequence from D308166: Herald adds the rotation group
+# as a blocking reviewer, then phab-bot adds an individual and removes the group.
+_D308166_TRANSACTIONS = [
+    {
+        "type": "reviewers",
+        "fields": {
+            "operations": [
+                {
+                    "operation": "add",
+                    "phid": "PHID-PROJ-newtabrotation",
+                    "isBlocking": True,
+                }
+            ]
+        },
+    },
+    {
+        "type": "reviewers",
+        "fields": {
+            "operations": [
+                {"operation": "add", "phid": "PHID-USER-thecount"},
+                {"operation": "remove", "phid": "PHID-PROJ-newtabrotation"},
+            ]
+        },
+    },
+    # The group is re-added as a *subscriber*, which must be ignored.
+    {
+        "type": "subscribers",
+        "fields": {
+            "operations": [{"operation": "add", "phid": "PHID-PROJ-newtabrotation"}]
+        },
+    },
+]
+
+
+def test_historical_recovers_rotation_group_removed_after_assignment() -> None:
+    # By review time only the individual remains a reviewer.
+    patch = _patch_with(["PHID-USER-thecount"], _D308166_TRANSACTIONS)
+    assert patch.reviewer_project_phids == []
+    assert patch.historical_reviewer_project_phids == ["PHID-PROJ-newtabrotation"]
+
+
+def test_historical_includes_current_groups_first() -> None:
+    patch = _patch_with(
+        ["PHID-PROJ-current", "PHID-USER-x"],
+        [
+            {
+                "type": "reviewers",
+                "fields": {
+                    "operations": [
+                        {"operation": "add", "phid": "PHID-PROJ-older"},
+                    ]
+                },
+            }
+        ],
+    )
+    # Current group first, then the historically-added one, deduped.
+    assert patch.historical_reviewer_project_phids == [
+        "PHID-PROJ-current",
+        "PHID-PROJ-older",
+    ]
+
+
+def test_historical_ignores_users_and_remove_only() -> None:
+    patch = _patch_with(
+        [],
+        [
+            {
+                "type": "reviewers",
+                "fields": {
+                    "operations": [
+                        {"operation": "add", "phid": "PHID-USER-someone"},
+                        {"operation": "remove", "phid": "PHID-PROJ-neveradded"},
+                    ]
+                },
+            }
+        ],
+    )
+    assert patch.historical_reviewer_project_phids == []
+
+
+def test_historical_falls_back_on_transaction_error() -> None:
+    class FakePatch(phab_platform.PhabricatorPatch):
+        def __init__(self):
+            pass
+
+        @property
+        def revision_id(self):
+            return 1
+
+        @property
+        def reviewer_phids(self):
+            return ["PHID-PROJ-current"]
+
+        def _get_transactions(self):
+            raise RuntimeError("conduit down")
+
+    patch = FakePatch()
+    # Degrades to the current snapshot rather than raising.
+    assert patch.historical_reviewer_project_phids == ["PHID-PROJ-current"]
