@@ -30,7 +30,8 @@ class BugzillaAPIError(IOError):
 
 
 class BugzillaTransientError(BugzillaAPIError):
-    """Transient server-side error (5xx) from the Bugzilla API."""
+    """Transient error from the Bugzilla API (5xx or unexpected response format)."""
+
     pass
 
 
@@ -447,6 +448,10 @@ class Bug:
                     f"Bugzilla API error for bug {bug_id}: {e}"
                 ) from e
             raise BugzillaAPIError(f"Bugzilla API error for bug {bug_id}: {e}") from e
+        except KeyError as e:
+            raise BugzillaTransientError(
+                f"Unexpected Bugzilla API response for bug {bug_id}: {e}"
+            ) from e
 
         if not bugs or (not allow_private and bugs[0]["groups"]):
             raise BugNotFoundError(
