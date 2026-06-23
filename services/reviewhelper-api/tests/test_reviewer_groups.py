@@ -55,3 +55,43 @@ def test_matching_groups_empty_when_no_reviewer_projects(monkeypatch):
     )
     patch = SimpleNamespace(reviewer_project_phids=[])
     assert matching_groups(patch) == []
+
+
+def test_all_slugs_includes_aliases():
+    group = ReviewerGroup(
+        slug="home-newtab-reviewers", aliases=["home-newtab-reviewers-rotation"]
+    )
+    assert group.all_slugs() == [
+        "home-newtab-reviewers",
+        "home-newtab-reviewers-rotation",
+    ]
+
+
+def test_matching_groups_recovers_rotation_via_alias_and_history(monkeypatch):
+    # Models D308166: the rotation project was a reviewer, then removed and
+    # replaced by an individual — so it survives only in the historical list.
+    config = ReviewerGroupsConfig(
+        groups=[
+            ReviewerGroup(
+                slug="home-newtab-reviewers",
+                aliases=["home-newtab-reviewers-rotation"],
+            )
+        ]
+    )
+    monkeypatch.setattr(
+        "app.reviewer_groups.get_reviewer_groups_config", lambda: config
+    )
+    monkeypatch.setattr(
+        "bugbug.tools.core.platforms.phabricator.resolve_project_phid",
+        lambda slug: {
+            "home-newtab-reviewers": "PHID-PROJ-newtab",
+            "home-newtab-reviewers-rotation": "PHID-PROJ-newtabrotation",
+        }.get(slug),
+    )
+
+    patch = SimpleNamespace(
+        reviewer_project_phids=[],  # group already removed from current reviewers
+        historical_reviewer_project_phids=["PHID-PROJ-newtabrotation"],
+    )
+    matched = matching_groups(patch)
+    assert [g.slug for g in matched] == ["home-newtab-reviewers"]
