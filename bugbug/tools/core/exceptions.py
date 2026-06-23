@@ -27,5 +27,9 @@ class RunawayGenerationError(ModelResultError):
     """
 
 
+class RecursionLimitError(ModelResultError):
+    """Occurs when the agent exceeds the maximum number of recursive steps."""
+
+
 class LargeDiffError(Exception):
     """Occurs when the diff is too large to be processed."""
