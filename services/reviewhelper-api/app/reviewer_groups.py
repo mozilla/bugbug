@@ -34,9 +34,17 @@ class ReviewerGroup(BaseModel):
     """Configuration for a single Phabricator reviewer group (project)."""
 
     slug: str
+    # Additional project slugs that count as this same logical group — e.g. a
+    # review rotation's project (`<group>-rotation`), which is added as the
+    # reviewer and then swapped for an individual member.
+    aliases: list[str] = Field(default_factory=list)
     enabled: bool = False
     risk_threshold: int | None = None
     complexity_threshold: int | None = None
+
+    def all_slugs(self) -> list[str]:
+        """The group's own slug plus any alias slugs."""
+        return [self.slug, *self.aliases]
 
     def effective_risk_threshold(self, defaults: Defaults) -> int:
         return (
@@ -84,22 +92,29 @@ def get_reviewer_groups_config() -> ReviewerGroupsConfig:
 def matching_groups(patch) -> list[ReviewerGroup]:
     """Return the configured groups the patch is requesting review from.
 
-    A patch matches a group when one of its reviewer-group PHIDs resolves to the
-    same project as the group's slug. The result preserves config order so the
-    first match can act as the "primary" group.
+    A patch matches a group when any of the group's slugs (its own or an alias)
+    resolves to a project that was a reviewer of the revision. We match against
+    ``historical_reviewer_project_phids`` so a rotation group that was added and
+    later removed (replaced by an individual) still counts; falls back to the
+    current reviewer snapshot for patches that don't expose history. The result
+    preserves config order so the first match can act as the "primary" group.
     """
     # Imported here so the heavy Phabricator/searchfox import chain isn't pulled
     # in just to parse the config (and so tests can monkeypatch the resolver).
     from bugbug.tools.core.platforms import phabricator as phab
 
     config = get_reviewer_groups_config()
-    reviewer_projects = set(patch.reviewer_project_phids)
+    reviewer_projects = set(
+        getattr(patch, "historical_reviewer_project_phids", None)
+        or patch.reviewer_project_phids
+    )
     if not reviewer_projects:
         return []
 
     matched = []
     for group in config.groups:
-        phid = phab.resolve_project_phid(group.slug)
-        if phid and phid in reviewer_projects:
+        group_phids = {phab.resolve_project_phid(slug) for slug in group.all_slugs()}
+        group_phids.discard(None)
+        if group_phids & reviewer_projects:
             matched.append(group)
     return matched

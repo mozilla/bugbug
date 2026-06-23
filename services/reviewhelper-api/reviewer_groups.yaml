@@ -12,11 +12,16 @@ defaults:
   risk_threshold: 3
   complexity_threshold: 3
 
+# `aliases` lists extra project slugs that count as the same logical group —
+# notably a review rotation's `<group>-rotation` project, which is added as the
+# reviewer and then swapped for an individual member before review time.
 groups:
   - slug: ip-protection-reviewers
+    aliases: [ip-protection-reviewers-rotation]
     risk_threshold: 3
     complexity_threshold: 3
 
   - slug: home-newtab-reviewers
+    aliases: [home-newtab-reviewers-rotation]
     risk_threshold: 3
     complexity_threshold: 3
