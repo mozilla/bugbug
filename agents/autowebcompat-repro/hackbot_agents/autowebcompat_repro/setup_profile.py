@@ -3,17 +3,26 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
-import urllib.request
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
+import requests
+
+logger = logging.getLogger("autowebcompat-repro")
+
 AMO_API_TMPL = "https://addons.mozilla.org/api/v5/addons/addon/{slug}/"
+AMO_REQUEST_HEADERS = {"User-Agent": "webcompat-setup"}
+AMO_API_TIMEOUT = 30
+AMO_DOWNLOAD_TIMEOUT = 120
+
+REGISTER_TIMEOUT = 15
+REGISTER_POLL_INTERVAL = 0.5
 
 # The MCP doesn't use the passed profile directly: it copies it into a
 # firefox_devtools_mcp_profile/ subdir, but copies only prefs.js — not the
@@ -23,20 +32,34 @@ AMO_API_TMPL = "https://addons.mozilla.org/api/v5/addons/addon/{slug}/"
 MCP_PROFILE_DIR_NAME = "firefox_devtools_mcp_profile"
 
 
+def amo_get(
+    url: str, *, timeout: int = AMO_API_TIMEOUT, stream: bool = False
+) -> requests.Response:
+    """Make an AMO HTTP GET with shared defaults and status handling."""
+    resp = requests.get(
+        url,
+        headers=AMO_REQUEST_HEADERS,
+        timeout=timeout,
+        stream=stream,
+    )
+    resp.raise_for_status()
+    return resp
+
+
 def resolve_xpi_url(slug: str) -> tuple[str, str]:
     """Return (download_url, version) for the latest signed xpi of an AMO addon."""
-    url = AMO_API_TMPL.format(slug=slug)
-    req = urllib.request.Request(url, headers={"User-Agent": "webcompat-setup"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.load(resp)
+    with amo_get(AMO_API_TMPL.format(slug=slug)) as resp:
+        data = resp.json()
     ver = data["current_version"]
     return ver["file"]["url"], ver["version"]
 
 
 def download(url: str, dest: Path) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": "webcompat-setup"})
-    with urllib.request.urlopen(req, timeout=120) as resp, dest.open("wb") as f:
-        shutil.copyfileobj(resp, f)
+    with amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp:
+        with dest.open("wb") as f:
+            for chunk in resp.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    f.write(chunk)
 
 
 def extract_extension_id(xpi: Path) -> str:
@@ -75,18 +98,23 @@ def install_amo_extension(profile_dir: Path, staging_dir: Path, slug: str) -> st
     download artifact isn't mistaken for a profile file; it's removed afterwards.
     """
     url, version = resolve_xpi_url(slug)
-    print(f"downloading {slug} {version} from AMO", file=sys.stderr)
+    logger.info("downloading %s %s from AMO", slug, version)
     xpi_path = staging_dir / f".{slug}-download.xpi"
     download(url, xpi_path)
     ext_id = extract_extension_id(xpi_path)
-    print(f"installing {slug} ({ext_id})", file=sys.stderr)
+    logger.info("installing %s (%s)", slug, ext_id)
     install_xpi(profile_dir, xpi_path, ext_id)
     xpi_path.unlink(missing_ok=True)
     return ext_id
 
 
-def warm_launch(firefox: str, profile_dir: Path, timeout: int = 15) -> None:
-    """Run Firefox headless briefly so it scans + registers the dropped xpi."""
+def warm_launch(
+    firefox: str,
+    profile_dir: Path,
+    ext_ids: Sequence[str] = (),
+    timeout: int = REGISTER_TIMEOUT,
+) -> None:
+    """Run Firefox headless until the dropped xpis register or timeout expires."""
     proc = subprocess.Popen(
         [
             firefox,
@@ -100,8 +128,15 @@ def warm_launch(firefox: str, profile_dir: Path, timeout: int = 15) -> None:
         stderr=subprocess.DEVNULL,
     )
     try:
-        proc.wait(timeout=timeout)
+        if ext_ids:
+            wait_until_registered(profile_dir, ext_ids, timeout=timeout)
+        else:
+            proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
+        pass
+    finally:
+        if proc.poll() is not None:
+            return
         proc.terminate()
         try:
             proc.wait(timeout=5)
@@ -130,37 +165,57 @@ def verify_registered(profile_dir: Path, ext_id: str) -> bool:
     )
 
 
+def wait_until_registered(
+    profile_dir: Path,
+    ext_ids: Sequence[str],
+    timeout: int = REGISTER_TIMEOUT,
+) -> None:
+    """Poll until every extension is registered + enabled, or raise on timeout."""
+    deadline = time.monotonic() + timeout
+    pending = list(ext_ids)
+    while pending:
+        pending = [
+            ext_id for ext_id in pending if not verify_registered(profile_dir, ext_id)
+        ]
+        if not pending:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"{', '.join(pending)} did not register and enable in "
+                f"{profile_dir}/extensions.json within {timeout:g}s"
+            )
+        time.sleep(REGISTER_POLL_INTERVAL)
+
+
 def setup_profile(firefox_path: str, extensions: Sequence[str] = ()) -> Path:
     """Build a profile with the given AMO extensions; return its parent dir.
 
     ``extensions`` is a list of AMO addon slugs (e.g. ``["chrome-mask"]``); each
-    is downloaded and installed. With no extensions a plain profile is built and
-    no warm launch happens. The returned path is meant to be passed as the
+    is downloaded and installed. With no extensions an empty profile parent is
+    returned and no warm launch happens. The returned path is meant to be passed as the
     devtools MCP's ``--profile-path`` (``build_devtools_server(profile_path=...)``).
 
     Raises ``RuntimeError`` if an extension does not end up registered and
     enabled in the profile.
     """
     parent = Path(tempfile.mkdtemp(prefix="ff-profile-"))
-    profile_dir = parent / MCP_PROFILE_DIR_NAME
-    profile_dir.mkdir(parents=True, exist_ok=True)
 
-    installed = [
-        install_amo_extension(profile_dir, parent, slug) for slug in extensions
-    ]
-
-    if not installed:
+    if not extensions:
         return parent
 
-    print("warm-launching Firefox to register the extensions", file=sys.stderr)
-    warm_launch(firefox_path, profile_dir)
-    time.sleep(1)
+    try:
+        profile_dir = parent / MCP_PROFILE_DIR_NAME
+        profile_dir.mkdir(parents=True, exist_ok=True)
 
-    for ext_id in installed:
-        if not verify_registered(profile_dir, ext_id):
-            raise RuntimeError(
-                f"{ext_id} did not register and enable in {profile_dir}/extensions.json"
-            )
+        installed = [
+            install_amo_extension(profile_dir, parent, slug) for slug in extensions
+        ]
 
-    print(f"success — extensions registered in {profile_dir}", file=sys.stderr)
-    return parent
+        logger.info("warm-launching Firefox to register the extensions")
+        warm_launch(firefox_path, profile_dir, installed)
+
+        logger.info("extensions registered in %s", profile_dir)
+        return parent
+    except Exception:
+        shutil.rmtree(parent, ignore_errors=True)
+        raise

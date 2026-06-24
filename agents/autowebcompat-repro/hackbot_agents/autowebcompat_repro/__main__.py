@@ -1,3 +1,5 @@
+import shutil
+
 from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,24 +26,28 @@ async def main(ctx: HackbotContext) -> AutowebcompatReproResult:
     # current build; drive the binary the install reports back.
     firefox_path = str(install_firefox_nightly())
 
-    # Build a profile with Chrome Mask preinstalled
+    # Build a profile with Chrome Mask preinstalled.
     chrome_mask_profile = setup_profile(firefox_path, extensions=["chrome-mask"])
 
-    return await run_autowebcompat_repro(
-        bugzilla_mcp_server={
-            "type": "http",
-            "url": inputs.bugzilla_mcp_url,
-        },
-        bug_data=inputs.bug_data,
-        bug_id=inputs.bug_id,
-        model=inputs.model,
-        max_turns=inputs.max_turns,
-        effort=inputs.effort,
-        firefox_path=firefox_path,
-        chrome_mask_profile=chrome_mask_profile,
-        log=ctx.log_path,
-        verbose=True,
-    )
+    try:
+        return await run_autowebcompat_repro(
+            bugzilla_mcp_server={
+                "type": "http",
+                "url": inputs.bugzilla_mcp_url,
+            },
+            bug_data=inputs.bug_data,
+            bug_id=inputs.bug_id,
+            model=inputs.model,
+            max_turns=inputs.max_turns,
+            effort=inputs.effort,
+            firefox_path=firefox_path,
+            chrome_mask_profile=chrome_mask_profile,
+            log=ctx.log_path,
+            verbose=True,
+        )
+    finally:
+        if chrome_mask_profile is not None:
+            shutil.rmtree(chrome_mask_profile, ignore_errors=True)
 
 
 if __name__ == "__main__":
