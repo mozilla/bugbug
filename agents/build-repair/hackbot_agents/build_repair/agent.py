@@ -3,587 +3,324 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import subprocess
-import traceback
+"""Build-repair agent.
+
+Two-stage claude-agent-sdk agent that analyzes a Firefox build failure and
+implements a fix in the source tree. The runtime checks the tree out at the
+failure commit (via ``SOURCE_REF``) and collects the agent's edits into
+``changes.patch``; this module only orchestrates the agent and publishes the
+analysis artifacts.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
 from collections.abc import Callable
-from logging import getLogger
 from pathlib import Path
 
-from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
-from pydantic import BaseModel, Field
-from tenacity import (
-    retry,
-    retry_if_exception,
-    retry_if_exception_message,
-    stop_after_attempt,
-    wait_exponential_jitter,
+from agent_tools import firefox
+from agent_tools.claude_sdk import build_sdk_server
+from agent_tools.firefox import FirefoxContext
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    McpServerConfig,
+    ResultMessage,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
 )
+from hackbot_agents.build_repair.logs import download_failure_logs
+from hackbot_agents.build_repair.try_push import TRY_TOOLS
+from hackbot_runtime import AgentError, HackbotAgentResult
+from hackbot_runtime.claude import Reporter
 
-from bugbug.tools.base import GenerativeModelTool
-from bugbug.tools.build_repair.config import (
+from .config import (
     ADDITIONAL_DIRS,
     ALLOWED_TOOLS,
     ANALYSIS_MODEL,
-    FIREFOX_MCP_URL,
+    BUGZILLA_READ_TOOLS,
+    BUILD_TOOL,
+    FIREFOX_TOOLS,
     FIX_MODEL,
-    SANDBOX_CONFIG,
-    VERIFY_ALLOWED_TOOLS,
-    VERIFY_MODEL,
+    TRY_PUSH_TOOL,
 )
-from bugbug.tools.build_repair.prompts import (
+from .prompts import (
     ANALYSIS_TEMPLATE,
-    EVAL_PROMPT,
+    BUG_ANALYSIS_STEP,
+    BUG_CONTEXT,
     FIX_TEMPLATE,
-    VERIFY_TEMPLATE,
+    TRY_PUSH_INSTRUCTIONS,
 )
 
-logger = getLogger(__name__)
+TARGET_SOFTWARE = "Mozilla Firefox"
 
 
-class BuildFailure(BaseModel):
-    """Input describing a build failure from the dataset."""
-
-    bug_id: int = Field(description="The ID of the bug in Bugzilla.")
-    bug_title: str | None = Field(default=None, description="Optional bug title.")
-    bug_comments: list[str] | None = Field(
-        default=None, description="Optional bug comments."
-    )
-    git_commit: str = Field(description="Git revision to checkout.")
-    failure_tasks: list[dict] = Field(
-        description="List of {task_name, task_id, retry_id, failure_lines}."
-    )
+class BuildRepairResult(HackbotAgentResult):
+    bug_id: int | None = None
+    git_commit: str
+    summary: str = ""
+    analysis: str = ""
+    local_build_verified: bool | None = None
+    try_build_passed: bool | None = None
+    lando_job_id: str | None = None
+    treeherder_url: str | None = None
 
 
-class UsageStats(BaseModel):
-    cost_usd: float = Field(default=0.0)
-    num_turns: int = Field(default=0)
-    input_tokens: int = Field(default=0)
-    output_tokens: int = Field(default=0)
-    cache_read_input_tokens: int = Field(default=0)
-    cache_creation_input_tokens: int = Field(default=0)
+def _result_text(block: ToolResultBlock) -> str:
+    if isinstance(block.content, str):
+        return block.content
+    if isinstance(block.content, list):
+        return "\n".join(
+            c.get("text", "")
+            for c in block.content
+            if isinstance(c, dict) and c.get("type") == "text"
+        )
+    return str(block.content)
 
 
-class AgentResponse(UsageStats):
-    """Output from a build repair run, including analysis, diff, cost, and build results."""
-
-    summary: str = Field(default="")
-    analysis: str = Field(default="")
-    diff: str = Field(default="")
-    error: str | None = Field(default=None)
-    error_traceback: str | None = Field(default=None)
-    failure_stage: str | None = Field(default=None)
-    cost_usd: float = Field(default=0.0)
-    num_turns: int = Field(default=0)
-    input_tokens: int = Field(default=0)
-    output_tokens: int = Field(default=0)
-    cache_read_input_tokens: int = Field(default=0)
-    cache_creation_input_tokens: int = Field(default=0)
-    local_build_passed: bool | None = Field(default=None)
-    try_build_passed: bool | None = Field(default=None)
-    lando_job_id: str | None = Field(default=None)
-    treeherder_url: str | None = Field(default=None)
-    stage1_transcript: list[dict] = Field(default_factory=list)
-    stage2_transcript: list[dict] = Field(default_factory=list)
-
-
-class GroundTruth(BaseModel):
-    gh_fix_commits: list[str] = Field(
-        description="Git commit hashes of the ground truth fix."
+def _build_options(
+    *,
+    model: str | None,
+    effort: str,
+    cwd: Path,
+    scratch_dir: Path,
+    mcp_servers: dict[str, McpServerConfig],
+    allowed_tools: list[str],
+    max_turns: int | None,
+) -> ClaudeAgentOptions:
+    # The agent always runs inside an isolated Docker container, so there is no
+    # sandbox and tools run without per-command permission prompts.
+    return ClaudeAgentOptions(
+        model=model,
+        cwd=str(cwd),
+        mcp_servers=mcp_servers,
+        allowed_tools=allowed_tools,
+        disallowed_tools=["AskUserQuestion", "Task"],
+        add_dirs=[*ADDITIONAL_DIRS, str(scratch_dir)],
+        permission_mode="bypassPermissions",
+        effort=effort,
+        max_turns=max_turns,
+        setting_sources=[],
     )
 
 
-class Judgment(BaseModel):
-    analysis_correct: bool
-    analysis_quality: float
-    analysis_explanation: str
-    fix_matches_ground_truth: bool
-    fix_quality: float
-    fix_explanation: str
-    fix_acceptance_probability: float
-    fix_acceptance_explanation: str
+def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
+    """Write a mozconfig mirroring the failing CI build, unless one exists.
 
-
-class VerifyResponse(UsageStats):
-    judgment: Judgment | None = Field(default=None)
-    verification_transcript: list[dict] = Field(default_factory=list)
-
-
-class BuildRepairTool(GenerativeModelTool):
-    """Two-stage build repair agent using Claude Agent SDK.
-
-    Stage 1: Analyzes the failure and produces analysis/planning/summary docs.
-    Stage 2: Reads the analysis and implements a fix. Skipped in analysis-only mode.
-    After Stage 2, commits the fix, runs ./mach build, and optionally submits to try.
+    Verification only means something if the local build reproduces the failure
+    condition. Many failures (e.g. a variable used only inside a stripped
+    ``MOZ_DIAGNOSTIC_ASSERT``) compile fine in a default Nightly-style build and
+    fail only in a release-milestone build with warnings-as-errors. ``--enable-
+    release`` leaves ``MOZ_DIAGNOSTIC_ASSERT_ENABLED`` undefined and
+    ``--enable-warnings-as-errors`` promotes warnings to errors, so this config
+    surfaces that whole class locally.
     """
-
-    def __init__(
-        self,
-        target_software: str = "Mozilla Firefox",
-        analysis_only: bool = False,
-        eval_mode: bool = False,
-        analysis_model: str = ANALYSIS_MODEL,
-        fix_model: str = FIX_MODEL,
-        verify_model: str = VERIFY_MODEL,
-    ) -> None:
-        self.eval_mode = eval_mode
-        self.target_software = target_software
-        self.analysis_only = analysis_only
-        self.analysis_model = analysis_model
-        self.fix_model = fix_model
-        self.verify_model = verify_model
-
-    @classmethod
-    def create(cls, **kwargs):
-        return cls(**kwargs)
-
-    @staticmethod
-    def _usage_fields(usage: dict) -> dict:
-        return {
-            "input_tokens": usage.get("input_tokens", 0),
-            "output_tokens": usage.get("output_tokens", 0),
-            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
-            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
-        }
-
-    @staticmethod
-    def _serialize_message(message) -> dict:
-        data = {"type": type(message).__name__}
-        if hasattr(message, "model_dump"):
-            data.update(message.model_dump())
-        elif hasattr(message, "__dict__"):
-            data.update(vars(message))
-        else:
-            data["raw"] = str(message)
-        return data
-
-    async def _run_stage(
-        self,
-        stage_name: str,
-        prompt: str,
-        model: str,
-        options: ClaudeAgentOptions,
-        bug_id: int,
-        on_message: Callable[[str, dict], None] | None = None,
-    ) -> tuple[list[dict], float, int, dict]:
-        transcript: list[dict] = []
-        cost = 0.0
-        turns = 0
-        result_data: dict = {}
-        usage: dict = {}
-
-        @retry(
-            retry=(
-                retry_if_exception_message(match="Control request timeout")
-                | retry_if_exception_message(match="overloaded")
-                | retry_if_exception_message(match="529")
-                | retry_if_exception_message(match="exit code")
-                | retry_if_exception(
-                    lambda e: isinstance(e, (TimeoutError, ConnectionError, OSError))
-                )
-            ),
-            stop=stop_after_attempt(5),
-            wait=wait_exponential_jitter(initial=2, max=60, jitter=5),
-            before_sleep=lambda rs: logger.warning(
-                "Bug %s: %s transient error (attempt %d/5), retrying: %s",
-                bug_id,
-                stage_name,
-                rs.attempt_number,
-                rs.outcome.exception(),
-            ),
-            reraise=True,
-        )
-        async def _query():
-            nonlocal cost, turns, usage, result_data
-            async for message in query(prompt=prompt, options=options):
-                serialized = self._serialize_message(message)
-                transcript.append(serialized)
-                logger.debug("Bug %s: %s [%s]", bug_id, stage_name, serialized["type"])
-                if on_message:
-                    on_message(stage_name, serialized)
-                if isinstance(message, ResultMessage):
-                    cost += message.total_cost_usd or 0
-                    turns += message.num_turns or 0
-                    usage = getattr(message, "usage", {}) or {}
-                    result_data = serialized
-
-        if on_message:
-            on_message(
-                stage_name,
-                {
-                    "type": "stage_start",
-                    "prompt": prompt,
-                    "model": model,
-                },
-            )
-        try:
-            await _query()
-        finally:
-            if on_message:
-                on_message(
-                    stage_name,
-                    {
-                        "type": "stage_end",
-                        "cost_usd": cost,
-                        "num_turns": turns,
-                        "result_data": result_data,
-                    },
-                )
-
-        return transcript, cost, turns, usage
-
-    def _prepare_input_files(self, failure: BuildFailure, worktree_path: Path) -> None:
-        in_dir = worktree_path / "repair_agent" / "in" / str(failure.bug_id)
-        in_dir.mkdir(parents=True, exist_ok=True)
-
-        (in_dir / "bug_description.md").write_text(
-            f"# Bug {failure.bug_id}: {failure.bug_title}\n\n"
-            + "\n\n---\n\n".join(failure.bug_comments or [])
-        )
-
-        logs_content = ""
-        for task in failure.failure_tasks:
-            logs_content += f"## {task['task_name']} (task_id: {task['task_id']})\n\n"
-            logs_content += "\n".join(task["failure_lines"]) + "\n\n"
-        (in_dir / "build_failure_logs.md").write_text(logs_content)
-
-        out_dir = worktree_path / "repair_agent" / "out" / str(failure.bug_id)
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.info(
-            "Prepared input files for bug %s at %s (%d failure tasks)",
-            failure.bug_id,
-            in_dir,
-            len(failure.failure_tasks),
-        )
-
-    def _read_output(self, failure: BuildFailure, worktree_path: Path, key: str) -> str:
-        path = (
-            worktree_path / "repair_agent" / "out" / str(failure.bug_id) / f"{key}.md"
-        )
-        if path.exists():
-            return path.read_text()
-        return ""
-
-    async def run(
-        self,
-        failure: BuildFailure,
-        worktree_path: Path,
-        skip_try_push: bool = False,
-        on_message: Callable[[str, dict], None] | None = None,
-    ) -> AgentResponse:
-        logger.info(
-            "Starting build repair for bug %s "
-            "(commit=%s, worktree=%s, analysis_only=%s, skip_try_push=%s)",
-            failure.bug_id,
-            failure.git_commit,
-            worktree_path,
-            self.analysis_only,
-            skip_try_push,
-        )
-        self._prepare_input_files(failure, worktree_path)
-
-        mcp_servers = {"firefox": {"type": "http", "url": FIREFOX_MCP_URL}}
-        disallowed = ["AskUserQuestion", "Task"]
-        total_cost = 0.0
-        total_turns = 0
-        total_usage: dict = {}
-
-        logger.info(
-            "Bug %s: starting Stage 1 (analysis) with model=%s",
-            failure.bug_id,
-            self.analysis_model,
-        )
-        stage1_options = ClaudeAgentOptions(
-            model=self.analysis_model,
-            cwd=str(worktree_path),
-            allowed_tools=ALLOWED_TOOLS,
-            disallowed_tools=disallowed,
-            add_dirs=ADDITIONAL_DIRS,
-            sandbox=SANDBOX_CONFIG,
-            permission_mode="acceptEdits",
-            effort="high",
-            mcp_servers=mcp_servers,
-        )
-        analysis_prompt = ANALYSIS_TEMPLATE.format(
-            bug_id=failure.bug_id,
-            target_software=self.target_software,
-            worktree_path=worktree_path,
-            eval=EVAL_PROMPT if self.eval_mode else "",
-        )
-        try:
-            (
-                stage1_transcript,
-                stage1_cost,
-                stage1_turns,
-                stage1_usage,
-            ) = await self._run_stage(
-                "analysis",
-                analysis_prompt,
-                self.analysis_model,
-                stage1_options,
-                failure.bug_id,
-                on_message,
-            )
-            total_cost += stage1_cost
-            total_turns += stage1_turns
-            for k, v in stage1_usage.items():
-                if isinstance(v, (int, float)):
-                    total_usage[k] = total_usage.get(k, 0) + v
-        except Exception as e:
-            logger.error(
-                "Bug %s: starting Stage 2 (fix) with model=%s",
-                failure.bug_id,
-                self.fix_model,
-            )
-            return AgentResponse(
-                error=str(e),
-                error_traceback=traceback.format_exc(),
-                failure_stage="analysis",
-                cost_usd=total_cost,
-                num_turns=total_turns,
-                **self._usage_fields(total_usage),
-            )
-
-        logger.info(
-            "Bug %s: Stage 1 complete (cost=$%.4f, turns=%d)",
-            failure.bug_id,
-            total_cost,
-            total_turns,
-        )
-        summary = self._read_output(failure, worktree_path, "summary")
-        analysis = self._read_output(failure, worktree_path, "analysis")
-        logger.info(
-            "Bug %s: read output files (summary=%d chars, analysis=%d chars)",
-            failure.bug_id,
-            len(summary),
-            len(analysis),
-        )
-
-        if self.analysis_only:
-            logger.info("Bug %s: analysis-only mode, skipping Stage 2", failure.bug_id)
-            return AgentResponse(
-                summary=summary,
-                analysis=analysis,
-                cost_usd=total_cost,
-                num_turns=total_turns,
-                **self._usage_fields(total_usage),
-                stage1_transcript=stage1_transcript,
-            )
-
-        logger.info(
-            "Bug %s: starting Stage 2 (fix) with model=%s",
-            failure.bug_id,
-            self.fix_model,
-        )
-        stage2_options = ClaudeAgentOptions(
-            model=self.fix_model,
-            cwd=str(worktree_path),
-            allowed_tools=ALLOWED_TOOLS,
-            disallowed_tools=disallowed,
-            add_dirs=ADDITIONAL_DIRS,
-            sandbox=SANDBOX_CONFIG,
-            permission_mode="acceptEdits",
-            effort="low",
-            mcp_servers=mcp_servers,
-        )
-        fix_prompt = FIX_TEMPLATE.format(
-            target_software=self.target_software,
-            bug_id=failure.bug_id,
-            worktree_path=worktree_path,
-            eval=EVAL_PROMPT if self.eval_mode else "",
-        )
-        try:
-            (
-                stage2_transcript,
-                stage2_cost,
-                stage2_turns,
-                stage2_usage,
-            ) = await self._run_stage(
-                "fix",
-                fix_prompt,
-                self.fix_model,
-                stage2_options,
-                failure.bug_id,
-                on_message,
-            )
-            total_cost += stage2_cost
-            total_turns += stage2_turns
-            for k, v in stage2_usage.items():
-                if isinstance(v, (int, float)):
-                    total_usage[k] = total_usage.get(k, 0) + v
-        except Exception as e:
-            logger.exception(
-                "Bug %s: Stage 2 (fix) failed: %s",
-                failure.bug_id,
-                e,
-            )
-            return AgentResponse(
-                summary=summary,
-                analysis=analysis,
-                error=str(e),
-                error_traceback=traceback.format_exc(),
-                failure_stage="fix",
-                cost_usd=total_cost,
-                num_turns=total_turns,
-                **self._usage_fields(total_usage),
-            )
-
-        logger.info(
-            "Bug %s: Stage 2 complete (cost=$%.4f, turns=%d)",
-            failure.bug_id,
-            total_cost,
-            total_turns,
-        )
-
-        subprocess.run(
-            ["git", "add", "-A"],
-            cwd=worktree_path,
-            capture_output=True,
-        )
-        diff_result = subprocess.run(
-            ["git", "diff", "--staged", "HEAD"],
-            cwd=worktree_path,
-            capture_output=True,
-            text=True,
-        )
-        diff = diff_result.stdout
-        logger.info("Bug %s: git diff produced %d chars", failure.bug_id, len(diff))
-
-        if not diff.strip():
-            logger.warning("Bug %s: no diff produced, returning early", failure.bug_id)
-            return AgentResponse(
-                summary=summary,
-                analysis=analysis,
-                diff=diff,
-                cost_usd=total_cost,
-                num_turns=total_turns,
-                **self._usage_fields(total_usage),
-                stage1_transcript=stage1_transcript,
-                stage2_transcript=stage2_transcript,
-            )
-
-        from bugbug.tools.build_repair.try_server import run_try_verification
-
-        task_name = (
-            failure.failure_tasks[0]["task_name"] if failure.failure_tasks else ""
-        )
-        logger.info(
-            "Bug %s: starting try verification (task=%s, skip_try_push=%s)",
-            failure.bug_id,
-            task_name,
-            skip_try_push,
-        )
-        try_result = run_try_verification(
-            worktree_path=worktree_path,
-            bug_id=failure.bug_id,
-            task_name=task_name,
-            skip_try_push=skip_try_push,
-        )
-
-        logger.info(
-            "Bug %s: try verification done "
-            "(local_build=%s, try_build=%s, lando_job=%s, "
-            "total_cost=$%.4f, total_turns=%d)",
-            failure.bug_id,
-            try_result.local_build_passed,
-            try_result.try_build_passed,
-            try_result.lando_job_id,
-            total_cost,
-            total_turns,
-        )
-        return AgentResponse(
-            summary=summary,
-            analysis=analysis,
-            diff=diff,
-            cost_usd=total_cost,
-            num_turns=total_turns,
-            **self._usage_fields(total_usage),
-            local_build_passed=try_result.local_build_passed,
-            try_build_passed=try_result.try_build_passed,
-            lando_job_id=try_result.lando_job_id,
-            treeherder_url=try_result.treeherder_url,
-            stage1_transcript=stage1_transcript,
-            stage2_transcript=stage2_transcript,
-        )
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=2, max=30, jitter=5),
-        before_sleep=lambda rs: logger.warning(
-            "Verification failed (attempt %d/3), retrying: %s",
-            rs.attempt_number,
-            rs.outcome.exception(),
-        ),
-        reraise=True,
+    if fx_ctx.mozconfig.exists():
+        return
+    fx_ctx.mozconfig.write_text(
+        "ac_add_options --enable-application=browser\n"
+        "ac_add_options --disable-debug\n"
+        "ac_add_options --enable-release\n"
+        "ac_add_options --enable-warnings-as-errors\n"
+        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
     )
-    async def verify(
-        self,
-        failure: BuildFailure,
-        agent_diff: str,
-        ground_truth: GroundTruth,
-        worktree_path: Path,
-        on_message: Callable[[str, dict], None] | None = None,
-    ) -> VerifyResponse:
-        out_dir = worktree_path / "repair_agent" / "out" / str(failure.bug_id)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "agent_fix.diff").write_text(agent_diff, encoding="utf-8")
 
-        gt_commits = " ".join(ground_truth.gh_fix_commits)
-        prompt = VERIFY_TEMPLATE.format(
-            target_software=self.target_software,
-            bug_id=failure.bug_id,
-            failure_commit=failure.git_commit,
-            ground_truth_commits=gt_commits,
-            worktree_path=worktree_path,
-        )
 
-        options = ClaudeAgentOptions(
-            model=self.verify_model,
-            cwd=str(worktree_path),
-            allowed_tools=VERIFY_ALLOWED_TOOLS,
-            disallowed_tools=["AskUserQuestion", "Task"],
-            sandbox=SANDBOX_CONFIG,
-            permission_mode="acceptEdits",
+async def run_build_repair(
+    *,
+    bugzilla_mcp_server: McpServerConfig,
+    source_repo: Path,
+    fx_ctx: FirefoxContext,
+    bug_id: int | None = None,
+    git_commit: str,
+    failure_tasks: dict[str, str],
+    run_try_push: bool = False,
+    model: str | None = None,
+    max_turns: int | None = None,
+    verbose: bool = False,
+    log: Path | None = None,
+    publish_file: Callable[[str, Path, str | None], str] | None = None,
+) -> BuildRepairResult:
+    """Analyze a build failure and implement a fix in ``source_repo``.
+
+    Returns a :class:`BuildRepairResult`; raises :class:`AgentError` if a stage
+    ends in an error or produces no result.
+    """
+    label = f"bug {bug_id}" if bug_id is not None else f"commit {git_commit[:12]}"
+    print(f"[build_repair] repairing {label} at {git_commit}", file=sys.stderr)
+
+    scratch_dir = Path(tempfile.mkdtemp(prefix=f"build-repair-{bug_id or 'nobug'}-"))
+    scratch_in = scratch_dir / "in"
+    scratch_out = scratch_dir / "out"
+    scratch_in.mkdir(parents=True, exist_ok=True)
+    scratch_out.mkdir(parents=True, exist_ok=True)
+
+    task_logs = await download_failure_logs(failure_tasks, scratch_in)
+    failure_logs = "\n".join(
+        f"- {name}: sanitized errors at {tl.sanitized} (start here); "
+        f"full log at {tl.full}"
+        for name, tl in task_logs.items()
+    )
+
+    firefox_tools = [*firefox.TOOLS, *TRY_TOOLS] if run_try_push else firefox.TOOLS
+    firefox_server = build_sdk_server("firefox", fx_ctx, firefox_tools)
+    mcp_servers: dict[str, McpServerConfig] = {
+        "bugzilla": bugzilla_mcp_server,
+        "firefox": firefox_server,
+    }
+    allowed_tools = [
+        *ALLOWED_TOOLS,
+        *BUGZILLA_READ_TOOLS,
+        *FIREFOX_TOOLS,
+        *([TRY_PUSH_TOOL] if run_try_push else []),
+    ]
+
+    task_name = next(iter(failure_tasks), "")
+    analysis_prompt = ANALYSIS_TEMPLATE.format(
+        target_software=TARGET_SOFTWARE,
+        git_commit=git_commit,
+        failure_logs=failure_logs,
+        scratch_out=scratch_out,
+        bug_context=BUG_CONTEXT.format(bug_id=bug_id) if bug_id is not None else "",
+        bug_step=BUG_ANALYSIS_STEP.format(bug_id=bug_id) if bug_id is not None else "",
+        logs_num=3 if bug_id is not None else 2,
+    )
+    fix_prompt = FIX_TEMPLATE.format(
+        target_software=TARGET_SOFTWARE,
+        scratch_out=scratch_out,
+        try_push=(
+            TRY_PUSH_INSTRUCTIONS.format(task_name=task_name) if run_try_push else ""
+        ),
+    )
+
+    total_cost = 0.0
+    total_turns = 0
+    # Last JSON result of each tracked tool, keyed by tool name. Lets us report
+    # the actual local-build / try-push outcomes instead of guessing.
+    captured: dict[str, dict] = {}
+    tracked = {BUILD_TOOL, *([TRY_PUSH_TOOL] if run_try_push else [])}
+
+    with Reporter(verbose=verbose, log_path=log) as reporter:
+        # Stage 1: analysis (high effort, no source edits yet).
+        reporter.header(f"{label}: analysis")
+        analysis_opts = _build_options(
+            model=model or ANALYSIS_MODEL,
             effort="high",
-            output_format={
-                "type": "json_schema",
-                "schema": Judgment.model_json_schema(),
-            },
+            cwd=source_repo,
+            scratch_dir=scratch_dir,
+            mcp_servers=mcp_servers,
+            allowed_tools=allowed_tools,
+            max_turns=max_turns,
+        )
+        result_msg = await _run_session(
+            reporter, analysis_opts, analysis_prompt, captured, tracked
+        )
+        _check(result_msg, label, "analysis")
+        total_cost += result_msg.total_cost_usd or 0.0
+        total_turns += result_msg.num_turns or 0
+
+        # Stage 2: fix (lower effort, edits the source tree and verifies it
+        # builds against a mozconfig that mirrors the failing CI config).
+        _write_mozconfig(fx_ctx)
+        reporter.header(f"{label}: fix")
+        fix_opts = _build_options(
+            model=model or FIX_MODEL,
+            effort="low",
+            cwd=source_repo,
+            scratch_dir=scratch_dir,
+            mcp_servers=mcp_servers,
+            allowed_tools=allowed_tools,
+            max_turns=max_turns,
+        )
+        result_msg = await _run_session(
+            reporter, fix_opts, fix_prompt, captured, tracked
+        )
+        _check(result_msg, label, "fix")
+        total_cost += result_msg.total_cost_usd or 0.0
+        total_turns += result_msg.num_turns or 0
+
+    summary = _read_doc(scratch_out, "summary", publish_file)
+    analysis = _read_doc(scratch_out, "analysis", publish_file)
+
+    build_result = captured.get(BUILD_TOOL)
+    try_result = captured.get(TRY_PUSH_TOOL, {})
+
+    return BuildRepairResult(
+        bug_id=bug_id,
+        git_commit=git_commit,
+        summary=summary,
+        analysis=analysis,
+        local_build_verified=build_result.get("success") if build_result else None,
+        try_build_passed=try_result.get("try_build_passed"),
+        lando_job_id=try_result.get("lando_job_id"),
+        treeherder_url=try_result.get("treeherder_url"),
+        num_turns=total_turns,
+        total_cost_usd=total_cost,
+    )
+
+
+async def _run_session(
+    reporter: Reporter,
+    options: ClaudeAgentOptions,
+    prompt: str,
+    captured: dict[str, dict],
+    tracked: set[str],
+) -> ResultMessage | None:
+    """Drive one agent session, capturing the last result of each tracked tool.
+
+    ``captured`` is keyed by tool name and updated in place with the parsed JSON
+    of each successful call to a tool in ``tracked`` (e.g. the local build and
+    the try push), so the caller can report real outcomes.
+    """
+    pending: dict[str, str] = {}
+    result_msg: ResultMessage | None = None
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        async for msg in client.receive_response():
+            reporter.message(msg)
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, ToolUseBlock) and block.name in tracked:
+                        pending[block.id] = block.name
+            elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+                for block in msg.content:
+                    if (
+                        isinstance(block, ToolResultBlock)
+                        and block.tool_use_id in pending
+                        and not block.is_error
+                    ):
+                        name = pending.pop(block.tool_use_id)
+                        try:
+                            captured[name] = json.loads(_result_text(block))
+                        except (ValueError, TypeError):
+                            pass
+            elif isinstance(msg, ResultMessage):
+                result_msg = msg
+    return result_msg
+
+
+def _check(result_msg: ResultMessage | None, label: str, stage: str) -> None:
+    if result_msg is None:
+        raise AgentError(f"{label}: {stage} stage produced no result message")
+    if result_msg.is_error:
+        raise AgentError(
+            f"{label}: {stage} stage failed: {result_msg.result or result_msg.subtype}"
         )
 
-        logger.info(
-            "Bug %s: starting verification stage (model=%s, ground_truth=%s)",
-            failure.bug_id,
-            self.verify_model,
-            gt_commits,
-        )
 
-        transcript, cost, turns, usage = await self._run_stage(
-            "verification",
-            prompt,
-            self.verify_model,
-            options,
-            failure.bug_id,
-            on_message,
-        )
-
-        judgment: Judgment | None = None
-        for msg in reversed(transcript):
-            if msg.get("structured_output"):
-                judgment = Judgment.model_validate(msg["structured_output"])
-                break
-
-        if judgment is None:
-            result_msgs = [m for m in transcript if m.get("type") == "ResultMessage"]
-            raise RuntimeError(
-                f"Bug {failure.bug_id}: verification produced no structured output. "
-                f"Result messages: {result_msgs}"
-            )
-
-        return VerifyResponse(
-            judgment=judgment,
-            cost_usd=cost,
-            num_turns=turns,
-            verification_transcript=transcript,
-            **self._usage_fields(usage),
-        )
+def _read_doc(
+    scratch_out: Path,
+    key: str,
+    publish_file: Callable[[str, Path, str | None], str] | None,
+) -> str:
+    """Read a stage-1 output doc and, if a publisher is given, publish it."""
+    path = scratch_out / f"{key}.md"
+    if not path.exists():
+        return ""
+    if publish_file is not None:
+        publish_file(f"{key}.md", path, "text/markdown")
+    return path.read_text()

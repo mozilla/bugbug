@@ -1,0 +1,38 @@
+services:
+  build-repair-broker:
+    build:
+      context: ../..
+      dockerfile: agents/build-repair/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+    expose:
+      - "8765"
+
+  build-repair-agent:
+    build:
+      context: ../..
+      dockerfile: agents/build-repair/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      - GIT_COMMIT=${GIT_COMMIT:?error}
+      - FAILURE_TASKS=${FAILURE_TASKS:?error}
+      - RUN_TRY_PUSH=${RUN_TRY_PUSH:-false}
+      - BUGZILLA_MCP_URL=http://build-repair-broker:8765/mcp
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/artifacts are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      build-repair-broker:
+        condition: service_started
+
+volumes:
+  workspace:

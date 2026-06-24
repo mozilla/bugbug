@@ -128,7 +128,7 @@ include = ["/bugbug", "/scripts", "/VERSION"]
 packages = ["bugbug", "scripts"]
 
 [tool.uv.workspace]
-members = ["http_service", "services/hackbot-api", "agents/bug-fix", "libs/hackbot-runtime", "libs/agent-tools"]
+members = ["http_service", "services/hackbot-api", "agents/bug-fix", "agents/build-repair", "libs/hackbot-runtime", "libs/agent-tools"]
 
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }

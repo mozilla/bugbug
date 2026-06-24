@@ -1,0 +1,8 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+# The failure commit is supplied per run via SOURCE_REF (from the git_commit input).
+
+[firefox]
+enabled = true
+objdir = "objdir-build-repair"

@@ -1,137 +1,67 @@
-# -*- coding: utf-8 -*-
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this file,
-# You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Optional Firefox try-server push tool.
 
+Submits the current source checkout to the Firefox try server via ``./mach try``
+and, optionally, polls Treeherder for the build result. Exposed as a separate
+``TRY_TOOLS`` list (not the default firefox ``TOOLS``) so an agent only gains the
+capability when it explicitly wires it in — a try push is an outward-facing
+action that not every run should perform.
+"""
+
+from __future__ import annotations
+
+import asyncio
 import logging
-import os
 import re
 import subprocess
 import time
-from dataclasses import dataclass
-from logging import getLogger
 from pathlib import Path
+from typing import Annotated, Any
 
 import requests
+from agent_tools.registry import ToolError, tool, tools_in
+from pydantic import Field
 
-from bugbug.tools.build_repair.config import (
-    TREEHERDER_BASE_URL,
-    TRY_PUSH_POLL_INTERVAL_SECONDS,
-    TRY_PUSH_TIMEOUT_SECONDS,
-)
+logger = logging.getLogger(__name__)
 
-logger = getLogger(__name__)
-
-_HEADERS = {"User-Agent": "bugbug-build-repair-eval/1.0"}
+TREEHERDER_BASE_URL = "https://treeherder.mozilla.org"
+_HEADERS = {"User-Agent": "hackbot-build-repair/1.0"}
 _LANDO_JOB_ID_RE = re.compile(r"landoCommitID=([A-Za-z0-9_-]+)")
 
 
-def _mach_env(worktree_path: Path) -> dict[str, str]:
-    env = os.environ.copy()
-    env["MOZBUILD_STATE_PATH"] = str(worktree_path / ".mozbuild")
-    return env
-
-
-@dataclass
-class TryPushResult:
-    """Result of local build verification and optional try push submission."""
-
-    local_build_passed: bool
-    try_build_passed: bool | None
-    lando_job_id: str | None
-    treeherder_url: str | None
-
-
-def _commit_fix(worktree_path: Path, bug_id: int) -> None:
-    logger.info("Committing fix for bug %s in %s", bug_id, worktree_path)
-    subprocess.run(
-        ["git", "add", "-A"],
-        cwd=worktree_path,
-        check=True,
-    )
+def _commit_all(source_dir: Path) -> None:
+    """Commit the working tree so ``./mach try`` has a commit to push."""
+    subprocess.run(["git", "add", "-A"], cwd=source_dir, check=True)
     subprocess.run(
         [
             "git",
             "-c",
-            "user.name=bugbug",
+            "user.name=hackbot",
             "-c",
-            "user.email=bugbug@mozilla.com",
+            "user.email=hackbot@mozilla.com",
             "commit",
+            "--allow-empty",
             "-m",
-            f"Build repair fix for bug {bug_id}",
+            "Build repair candidate fix",
         ],
-        cwd=worktree_path,
+        cwd=source_dir,
         check=True,
     )
-    logger.info("Bug %s: fix committed", bug_id)
 
 
-def _run_subprocess(
-    cmd: list[str], worktree_path: Path, capture: bool
-) -> subprocess.CompletedProcess[str]:
-    if capture:
-        return subprocess.run(
-            cmd,
-            cwd=worktree_path,
-            env=_mach_env(worktree_path),
-            capture_output=True,
-            text=True,
-        )
-    return subprocess.run(
-        cmd,
-        cwd=worktree_path,
-        env=_mach_env(worktree_path),
-        text=True,
-    )
-
-
-def _run_local_build(worktree_path: Path) -> bool:
-    capture = not logger.isEnabledFor(logging.DEBUG)
-
-    logger.info("Running bootstrap in %s", worktree_path)
-    result = _run_subprocess(
-        ["./mach", "--no-interactive", "bootstrap"], worktree_path, capture
-    )
-    if result.returncode != 0:
-        if capture and result.stderr:
-            logger.warning("Bootstrap stderr:\n%s", result.stderr[-2000:])
-        raise RuntimeError(
-            f"Local bootstrap failed with return code {result.returncode}"
-        )
-
-    logger.info("Running local build in %s", worktree_path)
-    result = _run_subprocess(["./mach", "build"], worktree_path, capture)
-    passed = result.returncode == 0
-    status = "passed" if passed else "failed"
-    logger.info("Local build %s (returncode=%s)", status, result.returncode)
-    if not passed and capture and result.stderr:
-        logger.warning("Build stderr:\n%s", result.stderr[-2000:])
-    return passed
-
-
-def _submit_try(worktree_path: Path, task_name: str) -> tuple[str | None, str | None]:
-    logger.info("Submitting try push for task=%s in %s", task_name, worktree_path)
+def _submit_try(source_dir: Path, task_name: str) -> tuple[str | None, str | None]:
     result = subprocess.run(
         ["./mach", "try", "fuzzy", "--query", task_name],
-        cwd=worktree_path,
+        cwd=source_dir,
         capture_output=True,
         text=True,
-        env=_mach_env(worktree_path),
     )
     stdout = result.stdout + result.stderr
-    logger.debug("Try push output: %s", stdout)
     match = _LANDO_JOB_ID_RE.search(stdout)
     if not match:
         logger.warning("Could not parse Lando job ID from try output: %s", stdout)
         return None, None
-
     lando_job_id = match.group(1)
     treeherder_url = f"{TREEHERDER_BASE_URL}/jobs?repo=try&landoCommitID={lando_job_id}"
-    logger.info(
-        "Try push submitted: lando_job_id=%s, treeherder=%s",
-        lando_job_id,
-        treeherder_url,
-    )
     return lando_job_id, treeherder_url
 
 
@@ -152,7 +82,7 @@ def _get_push_revision(lando_job_id: str) -> str | None:
     return None
 
 
-def _get_push_by_revision(revision: str) -> dict | None:
+def _get_push_id(revision: str) -> int | None:
     try:
         resp = requests.get(
             f"{TREEHERDER_BASE_URL}/api/project/try/push/",
@@ -162,7 +92,7 @@ def _get_push_by_revision(revision: str) -> dict | None:
         )
         resp.raise_for_status()
         results = resp.json().get("results", [])
-        return results[0] if results else None
+        return results[0]["id"] if results else None
     except Exception:
         logger.exception("Error fetching push by revision %s", revision)
     return None
@@ -187,111 +117,100 @@ def _get_build_job_result(push_id: int, task_name: str) -> str | None:
     return None
 
 
-def _poll_treeherder(lando_job_id: str, task_name: str) -> bool | None:
-    logger.info(
-        "Polling Treeherder for lando_job_id=%s, task=%s (timeout=%ss, interval=%ss)",
-        lando_job_id,
-        task_name,
-        TRY_PUSH_TIMEOUT_SECONDS,
-        TRY_PUSH_POLL_INTERVAL_SECONDS,
-    )
-    deadline = time.monotonic() + TRY_PUSH_TIMEOUT_SECONDS
+def _poll_treeherder(
+    lando_job_id: str, task_name: str, timeout_seconds: int, interval_seconds: int
+) -> bool | None:
+    deadline = time.monotonic() + timeout_seconds
     push_id: int | None = None
-    poll_count = 0
-
     while time.monotonic() < deadline:
-        poll_count += 1
         if push_id is None:
             revision = _get_push_revision(lando_job_id)
             if revision:
-                logger.info(
-                    "Resolved revision=%s for lando_job_id=%s", revision, lando_job_id
-                )
-                push = _get_push_by_revision(revision)
-                if push:
-                    push_id = push["id"]
-                    logger.info(
-                        "Resolved push_id=%s for revision=%s", push_id, revision
-                    )
-
+                push_id = _get_push_id(revision)
         if push_id is not None:
             result = _get_build_job_result(push_id, task_name)
-            logger.debug(
-                "Poll #%s: job result=%s for push_id=%s", poll_count, result, push_id
-            )
             if result == "success":
-                logger.info("Try build succeeded for lando_job_id=%s", lando_job_id)
                 return True
             if result in ("busted", "testfailed", "exception"):
-                logger.info(
-                    "Try build failed (%s) for lando_job_id=%s", result, lando_job_id
-                )
                 return False
-        else:
-            logger.debug(
-                "Poll #%s: push not yet available for lando_job_id=%s",
-                poll_count,
-                lando_job_id,
-            )
-        time.sleep(TRY_PUSH_POLL_INTERVAL_SECONDS)
-
-    logger.warning(
-        "Try push polling timed out after %s polls for lando job %s",
-        poll_count,
-        lando_job_id,
-    )
+        time.sleep(interval_seconds)
+    logger.warning("Try push polling timed out for lando job %s", lando_job_id)
     return None
 
 
-def run_try_verification(
-    worktree_path: Path,
-    bug_id: int,
+def run_try_push(
+    source_dir: Path,
     task_name: str,
-    skip_try_push: bool = False,
-) -> TryPushResult:
-    logger.info(
-        "Starting try verification for bug %s (task=%s, skip_try_push=%s)",
-        bug_id,
-        task_name,
-        skip_try_push,
-    )
-    _commit_fix(worktree_path, bug_id)
-
-    local_passed = _run_local_build(worktree_path)
-    if not local_passed:
-        logger.warning("Bug %s: local build failed, skipping try push", bug_id)
-        return TryPushResult(
-            local_build_passed=False,
-            try_build_passed=None,
-            lando_job_id=None,
-            treeherder_url=None,
-        )
-
-    if skip_try_push:
-        logger.info(
-            "Bug %s: local build passed, skipping try push as requested", bug_id
-        )
-        return TryPushResult(
-            local_build_passed=True,
-            try_build_passed=None,
-            lando_job_id=None,
-            treeherder_url=None,
-        )
-
-    lando_job_id, treeherder_url = _submit_try(worktree_path, task_name)
+    poll: bool,
+    timeout_seconds: int,
+    interval_seconds: int,
+) -> dict[str, Any]:
+    """Commit the working tree, submit a try push, and optionally poll for the result."""
+    _commit_all(source_dir)
+    lando_job_id, treeherder_url = _submit_try(source_dir, task_name)
     if not lando_job_id:
-        logger.warning("Bug %s: try push submission failed, no lando job ID", bug_id)
-        return TryPushResult(
-            local_build_passed=True,
-            try_build_passed=None,
-            lando_job_id=None,
-            treeherder_url=None,
+        raise ToolError(
+            "Try push submission failed: no Lando job id in ./mach try output",
+            payload={"error": "try_submit_failed"},
         )
+    result: dict[str, Any] = {
+        "submitted": True,
+        "lando_job_id": lando_job_id,
+        "treeherder_url": treeherder_url,
+        "try_build_passed": None,
+    }
+    if poll:
+        result["try_build_passed"] = _poll_treeherder(
+            lando_job_id, task_name, timeout_seconds, interval_seconds
+        )
+    return result
 
-    try_passed = _poll_treeherder(lando_job_id, task_name)
-    return TryPushResult(
-        local_build_passed=True,
-        try_build_passed=try_passed,
-        lando_job_id=lando_job_id,
-        treeherder_url=treeherder_url,
+
+@tool
+async def submit_try_push(
+    ctx,
+    task_name: Annotated[
+        str,
+        Field(
+            description=(
+                "Treeherder task name to build/select on try, e.g. "
+                "'build-linux64/opt'. The failing task is the natural choice."
+            )
+        ),
+    ],
+    poll: Annotated[
+        bool,
+        Field(
+            description=(
+                "Poll Treeherder until the build job completes (up to timeout) "
+                "and report pass/fail. If false, submit and return immediately."
+            )
+        ),
+    ] = True,
+    timeout_seconds: Annotated[
+        int, Field(description="Max seconds to poll Treeherder (default 7200).")
+    ] = 7200,
+    poll_interval_seconds: Annotated[
+        int, Field(description="Seconds between Treeherder polls (default 60).")
+    ] = 60,
+) -> dict:
+    """Submit the current Firefox checkout to the try server and check the build.
+
+    Commits the working tree as a candidate fix, runs ``./mach try fuzzy --query
+    <task_name>`` to push it, and (when ``poll`` is true) watches Treeherder for
+    the named build job. Returns JSON: submitted (bool), lando_job_id (str),
+    treeherder_url (str), try_build_passed (bool|null — null when polling was
+    skipped or timed out). Slow: a try build can take well over an hour, so only
+    call this once you are confident the fix builds locally.
+    """
+    return await asyncio.to_thread(
+        run_try_push,
+        ctx.source_dir,
+        task_name,
+        poll,
+        timeout_seconds,
+        poll_interval_seconds,
     )
+
+
+TRY_TOOLS = tools_in(__name__)
