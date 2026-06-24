@@ -10,6 +10,7 @@ async def build_firefox(
     firefox_dir: Path,
     mozconfig_path: Path,
     objdir: Path,
+    target: str | None = None,
 ) -> dict[str, Any]:
     """Build Firefox using a specified mozconfig.
 
@@ -19,6 +20,9 @@ async def build_firefox(
         objdir: Expected build output directory (reported back on success;
             mozconfig actually determines where the build lands, so this
             should match what the mozconfig sets)
+        target: Optional build target (e.g. a directory like ``docshell/base``).
+            When set, only that target is built -- far faster than a full tree
+            build and enough to verify a localized fix compiles.
 
     Returns:
         Dict with build result information (success, build_dir, message,
@@ -41,9 +45,21 @@ async def build_firefox(
         env["MOZCONFIG"] = str(mozconfig_path.resolve())
         env["CLAUDECODE"] = "1"
 
+        # `mach bootstrap` installs rust under ~/.cargo/bin and clang under
+        # ~/.mozbuild/clang/bin, neither of which is on the default PATH. Without
+        # this the build fails with "Rust compiler not found" even right after a
+        # successful bootstrap.
+        home = Path.home()
+        toolchain_bins = [home / ".cargo" / "bin", home / ".mozbuild" / "clang" / "bin"]
+        env["PATH"] = os.pathsep.join(
+            [*(str(p) for p in toolchain_bins), env.get("PATH", "")]
+        )
+
+        mach_args = ["./mach", "build"]
+        if target:
+            mach_args.append(target)
         process = await asyncio.create_subprocess_exec(
-            "./mach",
-            "build",
+            *mach_args,
             cwd=firefox_dir,
             env=env,
             stdout=asyncio.subprocess.PIPE,
