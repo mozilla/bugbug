@@ -17,6 +17,10 @@ import re
 import sys
 from pathlib import Path
 
+from agent_tools import mozilla_vcs, searchfox
+from agent_tools.claude_sdk import build_sdk_server
+from agent_tools.mozilla_vcs import MozillaVcsContext
+from agent_tools.searchfox import SearchfoxContext
 from claude_agent_sdk import (
     AgentDefinition,
     ClaudeAgentOptions,
@@ -28,8 +32,14 @@ from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
+from searchfox import AsyncSearchfoxClient
 
-from .config import BUGZILLA_READ_TOOLS, ENABLED_ACTION_TYPES
+from .config import (
+    BUGZILLA_READ_TOOLS,
+    ENABLED_ACTION_TYPES,
+    MOZILLA_VCS_TOOLS,
+    SEARCHFOX_TOOLS,
+)
 
 HERE = Path(__file__).resolve().parent
 
@@ -82,6 +92,8 @@ def make_investigator() -> AgentDefinition:
             "Glob",
             "Bash",
             *BUGZILLA_READ_TOOLS,
+            *SEARCHFOX_TOOLS,
+            *MOZILLA_VCS_TOOLS,
         ],
         model="inherit",
     )
@@ -150,12 +162,22 @@ async def run_frontend_triage(
     )
     enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
 
+    # In-process MCP servers for read-only code investigation. Searchfox and HGMO
+    # are public (no credentials), so they run in-process rather than via a
+    # brokered sidecar.
+    searchfox_server = build_sdk_server(
+        "searchfox", SearchfoxContext(client=AsyncSearchfoxClient()), searchfox.TOOLS
+    )
+    vcs_server = build_sdk_server("mozilla_vcs", MozillaVcsContext(), mozilla_vcs.TOOLS)
+
     system_prompt = load_system_prompt(rules_dir, instructions)
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         mcp_servers={
             "bugzilla": bugzilla_mcp_server,
+            "searchfox": searchfox_server,
+            "mozilla_vcs": vcs_server,
             ACTIONS_SERVER_NAME: actions_server,
         },
         agents={"investigator": make_investigator()},
@@ -171,6 +193,8 @@ async def run_frontend_triage(
             "Bash",
             "Task",
             *BUGZILLA_READ_TOOLS,
+            *SEARCHFOX_TOOLS,
+            *MOZILLA_VCS_TOOLS,
             *enabled_action_tools,
         ],
         model=model,

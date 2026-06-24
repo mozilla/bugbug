@@ -5,7 +5,7 @@ description = "Cloud Run Job image that runs the frontend-triage agent for hackb
 requires-python = ">=3.12"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
-    "agent-tools[bugzilla]",
+    "agent-tools[bugzilla,searchfox,vcs]",
     "bugsy",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
