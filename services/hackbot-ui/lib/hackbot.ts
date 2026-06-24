@@ -87,6 +87,10 @@ export function getRun(runId: string): Promise<RunDoc> {
   return request<RunDoc>(`/runs/${encodeURIComponent(runId)}`);
 }
 
+export function listRuns(limit = 50): Promise<RunDoc[]> {
+  return request<RunDoc[]>(`/runs?limit=${limit}`);
+}
+
 // Ask hackbot-api for a short-lived signed download URL for one artifact.
 // `artifactName` may contain slashes; each segment is encoded individually so
 // the upstream `{artifact_path:path}` route still sees the directory structure.
