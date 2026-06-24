@@ -53,6 +53,29 @@ def _bugsy_error(e: bugsy.BugsyException) -> ToolError:
     return ToolError(msg, payload=payload)
 
 
+def _request(ctx: BugzillaContext, path: str, params: dict[str, Any] | None = None):
+    """Issue a Bugzilla request, normalizing every failure into a ToolError.
+
+    bugsy only raises ``BugsyException`` for Bugzilla-level errors; a bad proxy
+    URL, an auth redirect, or an empty body instead surfaces as a raw
+    ``JSONDecodeError``/connection error. Catching those here turns an opaque
+    "Expecting value: line 1 column 1" into an actionable message.
+    """
+    try:
+        return ctx.client.request(path, params=params or {})
+    except bugsy.BugsyException as e:
+        raise _bugsy_error(e) from e
+    except Exception as e:
+        raise ToolError(
+            f"Bugzilla request to '{path}' failed: {type(e).__name__}: {e}",
+            payload={
+                "error": "bugzilla_request_failed",
+                "path": path,
+                "message": str(e),
+            },
+        ) from e
+
+
 @tool
 async def search_bugs(
     ctx: BugzillaContext,
@@ -77,10 +100,7 @@ async def search_bugs(
     component, status, resolution, priority, severity, assigned_to, whiteboard,
     include_fields, limit.
     """
-    try:
-        result = ctx.client.request("bug", params=params)
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
+    result = _request(ctx, "bug", params)
     bugs = result.get("bugs", [])
     return {"count": len(bugs), "bugs": bugs}
 
@@ -124,12 +144,7 @@ async def get_bugs(
         "cf_crash_signature,url,version,op_sys,platform"
     )
     id_csv = ",".join(str(i) for i in ids)
-    try:
-        result = ctx.client.request(
-            "bug", params={"id": id_csv, "include_fields": include}
-        )
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
+    result = _request(ctx, "bug", {"id": id_csv, "include_fields": include})
     bugs = result.get("bugs", [])
     returned = {b["id"] for b in bugs}
     inaccessible = [i for i in ids if i not in returned]
@@ -153,6 +168,8 @@ async def get_bugs(
                 "code": getattr(e, "code", None),
                 "message": getattr(e, "msg", str(e)),
             }
+        except Exception as e:
+            payload["comments_error"] = {"message": f"{type(e).__name__}: {e}"}
 
     return payload
 
@@ -163,10 +180,7 @@ async def get_bug_comments(
     bug_id: Annotated[int, Field(description="Bug ID.")],
 ) -> dict:
     """Fetch all comments for a single bug."""
-    try:
-        result = ctx.client.request(f"bug/{bug_id}/comment")
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
+    result = _request(ctx, f"bug/{bug_id}/comment")
     comments = result.get("bugs", {}).get(str(bug_id), {}).get("comments", [])
     return {"bug_id": bug_id, "count": len(comments), "comments": comments}
 
@@ -192,10 +206,7 @@ async def get_bug_attachments(
     base64-encoded in the 'data' field of each attachment.
     """
     params = {} if include_data else {"exclude_fields": "data"}
-    try:
-        result = ctx.client.request(f"bug/{bug_id}/attachment", params=params)
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
+    result = _request(ctx, f"bug/{bug_id}/attachment", params)
     atts = result.get("bugs", {}).get(str(bug_id), [])
     return {"bug_id": bug_id, "count": len(atts), "attachments": atts}
 
@@ -223,10 +234,7 @@ async def download_attachment(
     get_bug_attachments first to discover attachment IDs. Returns the written
     path, size, and content_type.
     """
-    try:
-        result = ctx.client.request(f"bug/attachment/{attachment_id}")
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
+    result = _request(ctx, f"bug/attachment/{attachment_id}")
 
     att = result.get("attachments", {}).get(str(attachment_id))
     if att is None:
