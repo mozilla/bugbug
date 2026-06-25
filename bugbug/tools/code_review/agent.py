@@ -13,7 +13,7 @@ from typing import Optional
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import TodoListMiddleware
-from langchain.agents.structured_output import ProviderStrategy
+from langchain.agents.structured_output import ToolStrategy
 from langchain.chat_models import BaseChatModel, init_chat_model
 from langchain.messages import HumanMessage
 from langgraph.errors import GraphRecursionError
@@ -49,7 +49,10 @@ from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
     format_patch_set,
 )
-from bugbug.tools.core.exceptions import LargeDiffError, ModelResultError
+from bugbug.tools.core.exceptions import (
+    LargeDiffError,
+    RecursionLimitError,
+)
 from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL, get_tokenizer
 from bugbug.tools.core.platforms.base import Patch
 
@@ -120,7 +123,7 @@ class CodeReviewTool(GenerativeModelTool):
             system_prompt=SYSTEM_PROMPT_TEMPLATE.format(
                 target_software=self.target_software,
             ),
-            response_format=ProviderStrategy(AgentResponse),
+            response_format=ToolStrategy(AgentResponse),
             middleware=middleware,
         )
 
@@ -235,11 +238,11 @@ class CodeReviewTool(GenerativeModelTool):
                 },
                 context=CodeReviewContext(patch=patch),
                 stream_mode="values",
-                config={"recursion_limit": 50},
+                config={"recursion_limit": 100},
             ):
                 result = chunk
         except GraphRecursionError as e:
-            raise ModelResultError("The model could not complete the review") from e
+            raise RecursionLimitError("The model could not complete the review") from e
 
         return result["structured_response"].comments, manifest
 

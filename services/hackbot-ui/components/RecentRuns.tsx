@@ -10,11 +10,46 @@ import { StatusBadge } from "./StatusBadge";
 // Polls the status of any non-terminal tracked runs so the dashboard stays live.
 const POLL_MS = 5000;
 
+function labelFromInputs(inputs: Record<string, unknown>): string {
+  if (typeof inputs.bug_id === "number") return `bug ${inputs.bug_id}`;
+  return "inline report";
+}
+
+async function fetchRuns(): Promise<TrackedRun[]> {
+  const res = await fetch("/api/runs?limit=50");
+  if (!res.ok) return [];
+  const docs = (await res.json()) as Array<{
+    run_id: string;
+    agent: string;
+    status: TrackedRun["status"];
+    inputs: Record<string, unknown>;
+    created_at: string;
+  }>;
+  return docs.map((d) => ({
+    run_id: d.run_id,
+    agent: d.agent,
+    status: d.status,
+    label: labelFromInputs(d.inputs),
+    created_at: d.created_at,
+  }));
+}
+
+function mergeRuns(
+  apiRuns: TrackedRun[],
+  localRuns: TrackedRun[]
+): TrackedRun[] {
+  const seen = new Set(apiRuns.map((r) => r.run_id));
+  const extras = localRuns.filter((r) => !seen.has(r.run_id));
+  return [...extras, ...apiRuns];
+}
+
 export function RecentRuns() {
   const [runs, setRuns] = useState<TrackedRun[] | null>(null);
 
   useEffect(() => {
-    setRuns(loadRuns());
+    fetchRuns().then((apiRuns) => {
+      setRuns(mergeRuns(apiRuns, loadRuns()));
+    });
   }, []);
 
   useEffect(() => {
@@ -37,7 +72,11 @@ export function RecentRuns() {
           // transient; try again next tick
         }
       }
-      if (changed) setRuns(loadRuns());
+      if (changed) {
+        fetchRuns().then((apiRuns) => {
+          setRuns(mergeRuns(apiRuns, loadRuns()));
+        });
+      }
     }, POLL_MS);
 
     return () => clearInterval(timer);
@@ -50,7 +89,7 @@ export function RecentRuns() {
   if (runs.length === 0) {
     return (
       <p className="muted">
-        No runs yet. Trigger the bug-fix agent above to get started.
+        No runs yet. Use the form above to trigger an agent.
       </p>
     );
   }

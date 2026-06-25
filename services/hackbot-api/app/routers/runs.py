@@ -2,7 +2,8 @@ import json
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs
@@ -101,6 +102,15 @@ async def create_run(
     await db.commit()
 
     return RunRef.model_validate(run)
+
+
+@router.get("/runs", response_model=list[RunDoc])
+async def list_runs(
+    limit: int = Query(default=50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> list[RunDoc]:
+    result = await db.execute(select(Run).order_by(Run.created_at.desc()).limit(limit))
+    return [RunDoc.model_validate(r) for r in result.scalars()]
 
 
 @router.get("/runs/{run_id}", response_model=RunDoc)

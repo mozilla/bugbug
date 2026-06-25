@@ -1,6 +1,6 @@
 [project]
 name = "reviewhelper-api"
-version = "0.1.1"
+dynamic = ["version"]
 description = "The backend API for Mozilla's Review Helper"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,9 +23,19 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=9.0.3", "pytest-asyncio>=1.4.0", "httpx>=0.26.0"]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "app/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.uv.sources]
-bugbug = { git = "https://github.com/mozilla/bugbug", rev = "67078a7892d7998efb6238e75579a70b9985d30a" }
+bugbug = { workspace = true }

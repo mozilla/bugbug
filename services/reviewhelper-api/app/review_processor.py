@@ -7,7 +7,7 @@ from typing import Collection, Iterable
 from app.config import settings
 from app.database.models import GeneratedComment, ReviewRequest
 from app.enums import Platform
-from bugbug.tools.core.exceptions import LargeDiffError
+from bugbug.tools.core.exceptions import LargeDiffError, RecursionLimitError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
     get_phabricator_client,
@@ -80,6 +80,10 @@ async def process_review(
     except LargeDiffError as e:
         raise ReviewProcessingError(
             "The diff size exceeds the current processing limits."
+        ) from e
+    except RecursionLimitError as e:
+        raise ReviewProcessingError(
+            "Review Helper could not complete the review within the configured agent step limit."
         ) from e
 
     generated_comments = [
