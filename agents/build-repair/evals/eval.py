@@ -3,228 +3,86 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Standalone CLI for build repair evaluation.
+"""Build-repair evaluation harness.
+
+Runs the ported hackbot build-repair agent (``run_build_repair``) over a Weave
+dataset of Firefox build failures, then scores its output: deterministic build
+verification plus an LLM-as-a-judge comparison to the landed fix.
 
 Usage:
-    python scripts/build_repair_eval.py
-    python scripts/build_repair_eval.py --analysis-only
-    python scripts/build_repair_eval.py --trials 3
-    python scripts/build_repair_eval.py --limit 5
-    python scripts/build_repair_eval.py --parallelism 4
-    python scripts/build_repair_eval.py --no-try-push
-    python scripts/build_repair_eval.py --verbose
+    python -m evals.eval --no-try-push --limit 1
+    python -m evals.eval --trials 3 --parallelism 8
 """
+
+from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
+import subprocess
+import tempfile
 import uuid
-from datetime import datetime
 from functools import cached_property
-from typing import Any
+from pathlib import Path
 
+import bugsy
 import weave
+from agent_tools import bugzilla
+from agent_tools.bugzilla import BugzillaContext
+from agent_tools.claude_sdk import build_sdk_server
+from agent_tools.firefox import FirefoxContext
+from agent_tools.firefox.tools.build_firefox import build_firefox
+from hackbot_agents.build_repair.agent import run_build_repair
+from hackbot_agents.build_repair.config import ANALYSIS_MODEL, FIX_MODEL
 
-from bugbug.tools.build_repair.agent import (
-    AgentResponse,
-    BuildFailure,
-    BuildRepairTool,
-    GroundTruth,
-)
-from bugbug.tools.build_repair.config import MODEL_CUTOFF_DATES
-from bugbug.tools.build_repair.scorer import (
+from .scorer import (
     BasicMetricsScorer,
     BuildPassRateScorer,
     LLMFixMatchingScorer,
 )
-from bugbug.tools.build_repair.worktree import WorktreeManager
+from .verify import VERIFY_MODEL, GroundTruth, is_data_contaminated, run_verify
+from .worktree import WorktreeManager
 
 logger = logging.getLogger(__name__)
 
-# TODO: replace with native tracing for Anthropic Agents SDK when released by W&B
+
+def _collect_diff(worktree_path: Path, base_commit: str) -> str:
+    subprocess.run(["git", "add", "-A"], cwd=worktree_path, capture_output=True)
+    result = subprocess.run(
+        ["git", "diff", "--staged", base_commit],
+        cwd=worktree_path,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
 
 
-def _attr(obj, key, default=None):
-    if isinstance(obj, dict):
-        return obj.get(key, default)
-    return getattr(obj, key, default)
+def _bugzilla_server():
+    """Bugzilla MCP server for the agent.
 
-
-def _to_chat_message(data: dict) -> dict | None:
-    """Convert a serialized claude_agent_sdk message to OpenAI chat format.
-
-    Content blocks may be dicts (from model_dump) or dataclass instances
-    (from vars), so we use _attr() for uniform access.
+    Prefer the broker (``BUGZILLA_MCP_URL``) so the eval container holds no
+    Bugzilla credentials -- same isolation as production. Falls back to an
+    in-process server for local runs without a broker.
     """
-    msg_type = data.get("type", "")
-
-    if msg_type == "AssistantMessage":
-        blocks = data.get("content", [])
-        text_parts = []
-        tool_calls = []
-        for block in blocks:
-            text = _attr(block, "text")
-            if text is not None:
-                text_parts.append(text)
-                continue
-            name = _attr(block, "name")
-            block_id = _attr(block, "id")
-            if name is not None and block_id is not None:
-                tool_calls.append(
-                    {
-                        "id": block_id,
-                        "type": "function",
-                        "function": {
-                            "name": name,
-                            "arguments": json.dumps(_attr(block, "input", {})),
-                        },
-                    }
-                )
-        if not text_parts and not tool_calls:
-            return None
-        msg: dict = {"role": "assistant"}
-        if text_parts:
-            msg["content"] = "\n".join(text_parts)
-        if tool_calls:
-            msg["tool_calls"] = tool_calls
-        return msg
-
-    if msg_type == "UserMessage":
-        content = data.get("content", "")
-        if isinstance(content, list):
-            for block in content:
-                tool_use_id = _attr(block, "tool_use_id")
-                if tool_use_id:
-                    block_content = _attr(block, "content", "")
-                    return {
-                        "role": "tool",
-                        "tool_call_id": tool_use_id,
-                        "content": str(block_content) if block_content else "",
-                    }
-
-    return None
-
-
-@weave.op(kind="llm")
-def trace_llm_stage(
-    stage: str,
-    messages: list[dict],
-    model: str,
-    result_data: dict | None = None,
-) -> dict:
-    last_assistant = ""
-    for msg in reversed(messages):
-        if msg.get("role") == "assistant" and msg.get("content"):
-            last_assistant = msg["content"]
-            break
-
-    result: dict[str, Any] = {
-        "model": model,
-        "choices": [
-            {
-                "message": {"role": "assistant", "content": last_assistant},
-            }
-        ],
-    }
-    if result_data:
-        raw_usage = result_data.get("usage", {}) or {}
-        input_tokens = raw_usage.get("input_tokens", 0)
-        output_tokens = raw_usage.get("output_tokens", 0)
-        result["usage"] = {
-            "prompt_tokens": input_tokens,
-            "completion_tokens": output_tokens,
-            "total_tokens": input_tokens + output_tokens,
-            "cache_read_input_tokens": raw_usage.get("cache_read_input_tokens", 0),
-            "cache_creation_input_tokens": raw_usage.get(
-                "cache_creation_input_tokens", 0
-            ),
-            "total_cost_usd": result_data.get("total_cost_usd", 0),
-            "num_turns": result_data.get("num_turns", 0),
-        }
-    return result
-
-
-# Per-token costs in USD (standard, non-cached rates).
-# Weave uses these for its built-in cost UI; the SDK's total_cost_usd
-# (which accounts for cache pricing) is tracked separately as the authoritative cost.
-ANTHROPIC_TOKEN_COSTS: dict[str, tuple[float, float]] = {
-    "claude-opus-4-6": (15.0e-6, 75.0e-6),
-    "claude-sonnet-4-6": (3.0e-6, 15.0e-6),
-    "claude-haiku-4-5-20251001": (0.8e-6, 4.0e-6),
-    "claude-sonnet-4-5-20250929": (3.0e-6, 15.0e-6),
-    "claude-opus-4-5-20251101": (15.0e-6, 75.0e-6),
-    "claude-opus-4-1-20250805": (15.0e-6, 75.0e-6),
-    "claude-sonnet-4-20250514": (3.0e-6, 15.0e-6),
-    "claude-3-7-sonnet-20250219": (3.0e-6, 15.0e-6),
-    "claude-opus-4-20250514": (15.0e-6, 75.0e-6),
-}
-
-
-def _register_model_costs(client) -> None:
-    for model_id, (prompt_cost, completion_cost) in ANTHROPIC_TOKEN_COSTS.items():
-        try:
-            client.add_cost(
-                llm_id=model_id,
-                prompt_token_cost=prompt_cost,
-                completion_token_cost=completion_cost,
-            )
-        except Exception as e:
-            logger.debug("Could not register cost for %s: %s", model_id, e)
-
-
-def _make_weave_callback():
-    stages: dict[str, dict] = {}
-
-    def on_message(stage: str, data: dict) -> None:
-        msg_type = data["type"]
-        if msg_type == "stage_start":
-            messages = []
-            if "system_prompt" in data:
-                messages.append({"role": "system", "content": data["system_prompt"]})
-            messages.append({"role": "user", "content": data["prompt"]})
-
-            stages[stage] = {
-                "model": data["model"],
-                "messages": messages,
-            }
-        elif msg_type == "stage_end":
-            if stage in stages:
-                s = stages.pop(stage)
-                trace_llm_stage(
-                    stage=stage,
-                    messages=s["messages"],
-                    model=s["model"],
-                    result_data=data.get("result_data") or None,
-                )
-        else:
-            if stage in stages:
-                chat_msg = _to_chat_message(data)
-                if chat_msg:
-                    stages[stage]["messages"].append(chat_msg)
-
-    return on_message
-
-
-class BuildRepairError(Exception):
-    """Raised when the agent completes but reports an error."""
-
-    def __init__(self, output: dict):
-        self.output = output
-        super().__init__(output.get("error", "Unknown error"))
+    mcp_url = os.environ.get("BUGZILLA_MCP_URL")
+    if mcp_url:
+        return {"type": "http", "url": mcp_url}
+    client = bugsy.Bugsy(
+        bugzilla_url=os.environ.get(
+            "BUGZILLA_API_URL", "https://bugzilla.mozilla.org/rest"
+        ),
+        api_key=os.environ.get("BUGZILLA_API_KEY"),
+    )
+    return build_sdk_server("bugzilla", BugzillaContext(client=client), bugzilla.TOOLS)
 
 
 class BuildRepairModel(weave.Model):
-    """Weave Model wrapper that creates a worktree per example and runs BuildRepairTool."""
+    """Weave Model: one worktree per example, runs the ported build-repair agent."""
 
     firefox_repo: str
-    analysis_only: bool = False
     no_try_push: bool = False
-
-    @cached_property
-    def tool(self) -> BuildRepairTool:
-        return BuildRepairTool.create(analysis_only=self.analysis_only, eval_mode=True)
+    judge_model: str = VERIFY_MODEL
 
     @cached_property
     def worktree_mgr(self) -> WorktreeManager:
@@ -241,78 +99,64 @@ class BuildRepairModel(weave.Model):
         fix_commit_date: str,
         **kwargs,
     ) -> dict:
-        wt_name = f"bug-{bug_id}-{uuid.uuid4().hex[:8]}"
-        logger.info(
-            "Invoking bug %s (commit=%s, %s failures)",
-            bug_id,
-            gh_failure_commits[0][:12],
-            len(failures),
-        )
-
-        worktree_created = False
-        try:
-            cutoff = max(
-                MODEL_CUTOFF_DATES[self.tool.analysis_model],
-                MODEL_CUTOFF_DATES[self.tool.fix_model],
-            )
-            if datetime.fromisoformat(fix_commit_date).date() < cutoff:
-                logger.warning(
-                    "Skipping bug %s: fix date %s is before model cutoff %s",
-                    bug_id,
-                    fix_commit_date,
-                    cutoff,
-                )
-                raise ValueError("skipped_data_contamination")
-
-            worktree_path = self.worktree_mgr.create(gh_failure_commits[0], wt_name)
-            worktree_created = True
-
-            on_message = _make_weave_callback()
-            failure = BuildFailure(
-                bug_id=bug_id,
-                bug_title=pre_fix_bug["title"],
-                bug_comments=pre_fix_bug["comments"],
-                git_commit=gh_failure_commits[0],
-                failure_tasks=failures,
-            )
-            result: AgentResponse = await self.tool.run(
-                failure,
-                worktree_path=worktree_path,
-                skip_try_push=self.no_try_push,
-                on_message=on_message,
-            )
-            logger.info(
-                "Bug %s completed: error=%s, diff_len=%s, cost=$%.4f, turns=%s, "
-                "local_build=%s, try_build=%s",
+        if is_data_contaminated(fix_commit_date, ANALYSIS_MODEL, FIX_MODEL):
+            logger.warning(
+                "Skipping bug %s: fix date %s precedes model cutoff",
                 bug_id,
-                result.error,
-                len(result.diff),
-                result.cost_usd,
-                result.num_turns,
-                result.local_build_passed,
-                result.try_build_passed,
+                fix_commit_date,
+            )
+            raise ValueError("skipped_data_contamination")
+
+        failure_commit = gh_failure_commits[0]
+        wt_name = f"bug-{bug_id}-{uuid.uuid4().hex[:8]}"
+        worktree_path = self.worktree_mgr.create(failure_commit, wt_name)
+        try:
+            fx_ctx = FirefoxContext.from_source_repo(worktree_path)
+            result = await run_build_repair(
+                bugzilla_mcp_server=_bugzilla_server(),
+                source_repo=worktree_path,
+                fx_ctx=fx_ctx,
+                bug_id=bug_id,
+                git_commit=failure_commit,
+                failure_tasks={f["task_name"]: f["task_id"] for f in failures},
+                run_try_push=not self.no_try_push,
             )
 
-            output = result.model_dump()
+            diff = _collect_diff(worktree_path, failure_commit)
+            output: dict = {
+                "error": None,
+                "diff": diff,
+                "cost_usd": result.total_cost_usd or 0.0,
+                "num_turns": result.num_turns,
+                "local_build_passed": None,
+                "try_build_passed": result.try_build_passed,
+            }
 
-            if result.analysis or result.summary:
-                ground_truth = GroundTruth(gh_fix_commits=gh_fix_commits)
-                verify_result = await self.tool.verify(
-                    failure,
-                    result.diff,
-                    ground_truth,
-                    worktree_path,
-                    on_message,
+            if diff.strip():
+                build_result = await build_firefox(
+                    worktree_path, fx_ctx.mozconfig, fx_ctx.objdir
                 )
-                output["verify"] = verify_result.model_dump()
+                output["local_build_passed"] = build_result["success"]
 
-            if result.error:
-                raise BuildRepairError(output)
+            scratch_out = Path(tempfile.mkdtemp(prefix=f"verify-{bug_id}-"))
+            (scratch_out / "analysis.md").write_text(result.analysis)
+            (scratch_out / "summary.md").write_text(result.summary)
+            judgment, judge_cost = await run_verify(
+                worktree_path=worktree_path,
+                scratch_out=scratch_out,
+                bug_id=bug_id,
+                failure_commit=failure_commit,
+                ground_truth=GroundTruth(gh_fix_commits=gh_fix_commits),
+                agent_diff=diff,
+                model=self.judge_model,
+            )
+            output["verify"] = {
+                "judgment": judgment.model_dump(),
+                "cost_usd": judge_cost,
+            }
             return output
         finally:
-            if worktree_created:
-                logger.info("Bug %s: cleaning up worktree %s", bug_id, wt_name)
-                self.worktree_mgr.cleanup(wt_name)
+            self.worktree_mgr.cleanup(wt_name)
 
 
 def main() -> None:
@@ -322,7 +166,7 @@ def main() -> None:
     parser.add_argument("--parallelism", type=int, default=8)
     parser.add_argument("--firefox-repo", default=os.environ.get("FIREFOX_GIT_REPO"))
     parser.add_argument("--dataset", default="build_repair_one_commit_eval")
-    parser.add_argument("--analysis-only", action="store_true")
+    parser.add_argument("--judge-model", default=VERIFY_MODEL)
     parser.add_argument("--no-try-push", action="store_true")
     parser.add_argument("--verbose", action="store_true", help="Enable DEBUG logging")
     args = parser.parse_args()
@@ -330,52 +174,28 @@ def main() -> None:
     if not args.firefox_repo:
         parser.error("--firefox-repo or FIREFOX_GIT_REPO env var is required")
 
-    log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
-        level=log_level,
+        level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-    if not args.verbose:
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("httpcore").setLevel(logging.WARNING)
-        logging.getLogger("hgitaly").setLevel(logging.WARNING)
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-    logger.info(
-        "Starting evaluation: dataset=%s, limit=%s, trials=%s, parallelism=%s, "
-        "analysis_only=%s, no_try_push=%s, firefox_repo=%s",
-        args.dataset,
-        args.limit,
-        args.trials,
-        args.parallelism,
-        args.analysis_only,
-        args.no_try_push,
-        args.firefox_repo,
     )
 
     os.environ["WEAVE_PARALLELISM"] = str(args.parallelism)
-    os.environ["WEAVE_LOG_LEVEL"] = "INFO" if args.verbose else "WARNING"
-    client = weave.init("bugbug-build-repair-eval")
-    _register_model_costs(client)
+    weave.init("bugbug-build-repair-eval")
 
     dataset = weave.ref(args.dataset).get()
-    logger.info("Loaded dataset %s with %s rows", args.dataset, len(dataset.rows))
     if args.limit:
         dataset.rows = dataset.rows[: args.limit]
-        logger.info("Limited to %s rows", len(dataset.rows))
+    logger.info("Loaded dataset %s (%s rows)", args.dataset, len(dataset.rows))
 
     scorers = [
         BasicMetricsScorer(num_trials=args.trials),
+        BuildPassRateScorer(num_trials=args.trials),
         LLMFixMatchingScorer(num_trials=args.trials),
     ]
-    if not args.analysis_only:
-        scorers.insert(1, BuildPassRateScorer(num_trials=args.trials))
-    logger.info("Scorers: %s", [type(s).__name__ for s in scorers])
-
     model = BuildRepairModel(
         firefox_repo=args.firefox_repo,
-        analysis_only=args.analysis_only,
         no_try_push=args.no_try_push,
+        judge_model=args.judge_model,
     )
     evaluation = weave.Evaluation(
         name="build-repair",
