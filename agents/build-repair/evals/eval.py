@@ -92,6 +92,9 @@ class BuildRepairModel(weave.Model):
     async def invoke(
         self,
         bug_id: int,
+        # Bug fields before the fix. This filed is a part of the dataset.
+        # The new Hackbot agent is not using it. It pulls the Bugzilla bug itself.
+        # TODO: investigate how to hide the fix in evals for the new agent
         pre_fix_bug: dict,
         gh_failure_commits: list[str],
         gh_fix_commits: list[str],
