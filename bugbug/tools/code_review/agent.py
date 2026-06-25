@@ -13,7 +13,7 @@ from typing import Optional
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import TodoListMiddleware
-from langchain.agents.structured_output import ProviderStrategy
+from langchain.agents.structured_output import ToolStrategy
 from langchain.chat_models import BaseChatModel, init_chat_model
 from langchain.messages import HumanMessage
 from langgraph.errors import GraphRecursionError
@@ -123,7 +123,7 @@ class CodeReviewTool(GenerativeModelTool):
             system_prompt=SYSTEM_PROMPT_TEMPLATE.format(
                 target_software=self.target_software,
             ),
-            response_format=ProviderStrategy(AgentResponse),
+            response_format=ToolStrategy(AgentResponse),
             middleware=middleware,
         )
 
