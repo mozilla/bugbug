@@ -51,7 +51,10 @@ For each run, in `~/hackbot/artifacts/<run_id>/`:
 - **`summary.json`** — the machine-readable result:
   - `findings` → the structured plan: `summary`, `root_cause`, `proposed_fix`,
     `target_files`, `confidence` (`high|medium|low`), plus `num_turns` and
-    `total_cost_usd`.
+    `total_cost_usd`. Handoff fields for a downstream executor: `actionable`
+    (`false` for out-of-scope/skipped bugs), `regressor_node` (hg node of the
+    introducing changeset when found), and `relevant_tests` (existing tests
+    covering the area — the executor's verification anchor; `[]` if none exist).
   - `actions` → a single **recorded** `bugzilla.add_comment` (the human-readable
     triage comment). "Recorded" means written to this file for review — **it is
     not posted to Bugzilla.**

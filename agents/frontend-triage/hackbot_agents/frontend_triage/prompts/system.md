@@ -30,6 +30,8 @@ Use **only** these tools for accessing Bugzilla, nothing else.
 
 Your working directory is the Firefox source repository. You have Read, Grep, Glob, and Bash (read-only — do not modify files) to inspect it. Use this to localize the bug: find the components, JS/JSM modules, CSS, and XUL/HTML involved, the relevant prefs (often under `modules/libpref/init/all.js`), and any existing tests that cover the area. Frontend code mostly lives under `browser/`, `toolkit/`, and `devtools/`.
 
+**Always look for an existing test that exercises the affected area** (browser-chrome mochitests usually live in a component's `tests/browser/` directory; also check `tests/`/`test/` and xpcshell tests). Record what you find in the `relevant_tests` field — it is the downstream executor's verification anchor. If you searched and there is no covering test, say so (empty `relevant_tests`).
+
 When you reference a cause or a fix target, cite concrete paths (and ideally functions/selectors), e.g. `browser/components/tabbrowser/content/tabgroup.js`.
 
 # Code-search & history tools
@@ -84,7 +86,7 @@ Always be **brief** and to the point. Developers have limited time. Do **not** r
 
 # Final message: structured plan
 
-After recording your comment, end your final message with a fenced ```json block carrying the structured plan, so it can be consumed programmatically. Use exactly these keys:
+After recording your comment, end your final message with a fenced ```json block carrying the structured plan, so it can be consumed programmatically (a downstream executor agent reads these fields). Use exactly these keys:
 
 ```json
 {{
@@ -92,11 +94,20 @@ After recording your comment, end your final message with a fenced ```json block
   "root_cause": "the likely cause, or null if undetermined",
   "proposed_fix": "the approach a developer should take",
   "target_files": ["path/one.js", "path/two.css"],
-  "confidence": "high | medium | low"
+  "confidence": "high | medium | low",
+  "actionable": true,
+  "regressor_node": "hg node of the introducing changeset, or null",
+  "relevant_tests": ["browser/.../tests/browser/browser_foo.js"]
 }}
 ```
 
-If you could not localize a root cause, set `root_cause` to null, keep `confidence` low, and have your comment ask the specific open questions that block triage.
+Field guidance for the handoff:
+
+- **`actionable`** — `false` when the bug is out of scope or skipped per the scoping rules (meta/tracking, intermittent/test-infra, enhancement/task), or when there is simply nothing to fix-plan; `true` when you produced a real fix plan. The executor uses this to decide whether to act.
+- **`regressor_node`** — when the bug is a regression and you identified/confirmed the introducing changeset (via the `mozilla_vcs` tools or `get_blame`), put its hg node here so the executor has a direct pointer; otherwise `null`.
+- **`relevant_tests`** — existing tests that cover the affected area (typically browser-chrome mochitests under a component's `tests/browser/` dir, or xpcshell tests). These are the executor's **verification anchor** — it can run them. Use `[]` if you searched and found none (a signal that the executor should add a test).
+
+If you could not localize a root cause, set `root_cause` to null, keep `confidence` low, set `actionable` accordingly, and have your comment ask the specific open questions that block triage.
 
 # Additional instructions for this run
 

@@ -7,7 +7,8 @@ fix plan) on bugs that aren't actionable frontend defects.
 ## Skip-or-flag (do not produce a fix plan)
 
 For these, record a brief comment stating why it's out of scope and set the structured
-output's `confidence` to `low` with `root_cause` = null. Do **not** invent a fix plan.
+output's `actionable` to `false`, `confidence` to `low`, and `root_cause` to null. Do
+**not** invent a fix plan.
 
 - **Not a defect.** `type` is `enhancement` or `task` — this agent triages defects
   (bugs in existing behavior), not feature work or chores.

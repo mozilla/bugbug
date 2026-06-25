@@ -57,6 +57,10 @@ class FrontendTriageResult(HackbotAgentResult):
     proposed_fix: str | None = None
     target_files: list[str] | None = None
     confidence: str | None = None
+    # Handoff fields for a downstream executor agent.
+    actionable: bool | None = None  # false => out of scope / nothing to fix-plan
+    regressor_node: str | None = None  # hg node of the introducing changeset, if found
+    relevant_tests: list[str] | None = None  # existing tests covering the area (verify anchor)
     # The agent's full final message, always present as a fallback.
     result: str | None = None
 
@@ -116,17 +120,23 @@ def parse_plan(text: str | None) -> dict:
         return {}
     if not isinstance(data, dict):
         return {}
-    files = data.get("target_files")
-    if isinstance(files, str):
-        files = [files]
-    elif not isinstance(files, list):
-        files = None
+    def _as_list(value):
+        if isinstance(value, str):
+            return [value]
+        return value if isinstance(value, list) else None
+
+    actionable = data.get("actionable")
+    if not isinstance(actionable, bool):
+        actionable = None
     return {
         "summary": data.get("summary"),
         "root_cause": data.get("root_cause"),
         "proposed_fix": data.get("proposed_fix"),
-        "target_files": files,
+        "target_files": _as_list(data.get("target_files")),
         "confidence": data.get("confidence"),
+        "actionable": actionable,
+        "regressor_node": data.get("regressor_node"),
+        "relevant_tests": _as_list(data.get("relevant_tests")),
     }
 
 
