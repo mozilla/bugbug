@@ -53,3 +53,33 @@ USER broker
 EXPOSE 8765
 
 CMD ["python", "-m", "hackbot_agents.build_repair.broker"]
+
+# Evaluation image: the production agent image plus the eval-only Python deps
+# (weave, wandb, tenacity). Deriving FROM agent means the harness runs the agent
+# in the identical production runtime (same user, HOME, PATH, mach toolchain). The
+# prod `agent` target never pulls these deps, since this stage builds only when
+# targeted.
+FROM agent AS eval
+
+USER root
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Add the `eval` extra into the existing venv. `--no-install-workspace` avoids
+# rebuilding the already-installed agent package; `--inexact` keeps it (and every
+# other prod package) rather than pruning it as extraneous.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=VERSION,target=VERSION \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    uv sync --frozen --no-dev --no-install-workspace --inexact --extra eval --package hackbot-agent-build-repair
+
+# The harness creates worktrees and runs `./mach build` against a bind-mounted
+# Firefox checkout owned by a different uid; allow git to operate on it.
+RUN git config --system --add safe.directory '*'
+
+USER agent
+ENV FIREFOX_GIT_REPO=/firefox
+
+ENTRYPOINT ["python", "-m", "evals.eval"]
+CMD ["--no-try-push", "--limit", "1"]

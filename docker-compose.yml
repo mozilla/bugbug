@@ -5,6 +5,7 @@ version: "3.8"
 include:
   - path: agents/bug-fix/compose.yml
   - path: agents/build-repair/compose.yml
+  - path: agents/build-repair/compose.eval.yml
 
 services:
   bugbug-base:

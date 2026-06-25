@@ -3,13 +3,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+"""Git worktree management for parallel evaluation trials.
+
+Each trial runs the agent against an isolated checkout of the Firefox repo at a
+specific failure commit, so trials don't conflict. (Production runs are already
+isolated per container, so the agent itself needs no worktrees.)
+"""
+
 import subprocess
 from logging import getLogger
 from pathlib import Path
 
-from bugbug.tools.build_repair.config import WORKTREE_BASE_DIR
-
 logger = getLogger(__name__)
+
+WORKTREE_BASE_DIR = "/tmp/build_repair_worktrees"
 
 
 class WorktreeManager:
