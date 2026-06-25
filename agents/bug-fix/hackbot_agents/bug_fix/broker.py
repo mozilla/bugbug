@@ -9,7 +9,6 @@ The agent container itself binds no Bugzilla credentials.
 import logging
 from contextlib import asynccontextmanager
 
-import bugsy
 import uvicorn
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
@@ -32,10 +31,9 @@ class BrokerInputs(BaseSettings):
 
 
 def build_app(inputs: BrokerInputs) -> Starlette:
-    client = bugsy.Bugsy(
-        api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
+    ctx = BugzillaContext(
+        api_url=inputs.bugzilla_api_url, api_key=inputs.bugzilla_api_key
     )
-    ctx = BugzillaContext(client=client)
     sdk_config = build_sdk_server("bugzilla", ctx, bugzilla.TOOLS)
     mcp_server = sdk_config["instance"]
 

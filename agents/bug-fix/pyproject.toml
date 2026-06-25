@@ -6,7 +6,6 @@ requires-python = ">=3.12"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
     "agent-tools[bugzilla,firefox]",
-    "bugsy",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
     "starlette>=0.36.0",
