@@ -4,8 +4,29 @@ Two-stage Claude agent that diagnoses a Firefox build failure and edits the sour
 tree to fix it. Agent logic in `hackbot_agents/build_repair/`; the Weave eval
 harness in `evals/`.
 
-Run the Docker commands below from this folder, with secrets in a local `.env`
+Run the Docker commands below from the repo root, with secrets in a local `.env`
 (`ANTHROPIC_API_KEY`, `BUGZILLA_API_KEY`, plus `WANDB_API_KEY` for evals).
+
+The second stage attempts building Firefox to verify the fix and iterate on it if it fails.
+It also optionally bootstraps Firefox build if needed.
+
+## Input
+
+- `BUG_ID` - Optional Bugzilla bug ID
+- `GIT_COMMIT` - Firefox Git commit that failed the build
+- `FAILURE_TASKS` - a dictionary of failed Taskcluster tasks {task_name: taskcluster_task_id}
+
+## Output
+
+First stage - analysis:
+
+- `summary.md` - a quick summary for a developer
+- `analysis.md` - detailed analysis
+- `planning.md` - intermediate file that outlines fixing steps for the second stage
+
+Second stage - fixing:
+
+- A patch in Hackbot format
 
 ## Test the agent
 
@@ -17,13 +38,17 @@ FAILURE_TASKS='{"build-linux":"XyU4b_BIRdO_IeK6z_kcQg"}' \
 
 Artifacts are written to `~/hackbot/artifacts/`.
 
-## Run evals
+## Evaluation
 
-Each dataset row is a Firefox build failure; per trial the harness runs the agent
+The evaluation dataset is prepared with [build_repair_create_dataset.ipynb](../../notebooks/build_repair_create_dataset.ipynb) and saved to Weights and Biases Weave.
+
+### Run evals
+
+Each dataset row is a Firefox build failure. The harness runs the agent
 on a git worktree at the failure commit, builds the fix, and LLM-judges it against
 the landed commits. Needs a bootstrapped Firefox checkout.
 
-Local:
+Local (use only for debugging as new agent is not sandboxed):
 
 ```sh
 FIREFOX_GIT_REPO=/path/to/firefox \
@@ -31,22 +56,37 @@ FIREFOX_GIT_REPO=/path/to/firefox \
   python -m evals.eval --no-try-push --limit 1
 ```
 
-Docker (reuses the broker, so no Bugzilla creds in the eval container):
+Docker (reuses the broker container, so no Bugzilla creds passed to the eval container):
 
 ```sh
 FIREFOX_GIT_REPO=/path/to/firefox \
-  docker compose run --rm build-repair-eval --no-try-push --limit 1
+  docker compose --env-file .env -f agents/build-repair/compose.yml run --rm --build build-repair-eval --no-try-push --limit 1
 ```
 
-Flags: `--trials N`, `--parallelism N`, `--judge-model <id>`, `--dataset <ref>`,
-`--no-try-push`, `--verbose`.
+Flags:
 
-The agent reads the bug live from Bugzilla, so the harness skips examples whose fix
+`--trials N` - the number of times to run each example
+
+`--parallelism N` - the number of runs to parallelize with Weave
+
+`--judge-model <id>` - Claude model ID for LLM-as-a-judge
+
+`--dataset <ref>` - Weave dataset name
+
+`--no-try-push` - do not run TRY push to verify the results, only local build
+
+`--verbose` - debugging log level
+
+The harness skips examples whose fix
 landed before the production model's training cutoff (`MODEL_CUTOFF_DATES` in
 `evals/verify.py`) to avoid contamination.
 
-## W&B metrics
+Change the models in [config.py](hackbot_agents/build_repair/config.py) to older ones (`claude-opus-4-6`) to test on older datasets.
 
-`weave.init` + `weave.Evaluation` log success and diff rates, local and try build
+### W&B metrics
+
+`weave.init` + `weave.Evaluation` log success and diff rates, local and TRY build
 pass rates, LLM fix-matching (analysis/fix quality, ground-truth match,
 acceptance), and `total_cost_usd`.
+
+See https://wandb.ai/moz-bugbug/bugbug-build-repair-eval/weave/evaluations
