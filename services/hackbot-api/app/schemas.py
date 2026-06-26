@@ -81,3 +81,12 @@ class AutowebcompatReproInputs(BaseModel):
         if self.bug_data is None and self.bug_id is None:
             raise ValueError("provide at least one of bug_data or bug_id")
         return self
+
+
+class BuildRepairInputs(BaseModel):
+    bug_id: int | None = None
+    git_commit: str
+    failure_tasks: dict[str, str]
+    run_try_push: bool = False
+    model: str | None = None
+    max_turns: int | None = None

@@ -56,27 +56,17 @@ class BasicMetricsScorer(weave.Scorer):
                 "has_diff": False,
                 "cost_usd": 0,
                 "num_turns": 0,
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "cache_read_input_tokens": 0,
-                "cache_creation_input_tokens": 0,
             }
         return {
             "successful": output.get("error") is None,
             "has_diff": bool(output.get("diff", "").strip()),
             "cost_usd": output.get("cost_usd", 0),
             "num_turns": output.get("num_turns", 0),
-            "input_tokens": output.get("input_tokens", 0),
-            "output_tokens": output.get("output_tokens", 0),
-            "cache_read_input_tokens": output.get("cache_read_input_tokens", 0),
-            "cache_creation_input_tokens": output.get("cache_creation_input_tokens", 0),
         }
 
     def summarize(self, score_rows: list[dict]) -> dict:
         n = len(score_rows)
         costs = [r.get("cost_usd", 0) for r in score_rows]
-        input_toks = [r.get("input_tokens", 0) for r in score_rows]
-        output_toks = [r.get("output_tokens", 0) for r in score_rows]
         summary = {
             "success_rate": sum(r.get("successful", False) for r in score_rows) / n
             if n
@@ -86,14 +76,6 @@ class BasicMetricsScorer(weave.Scorer):
             else 0,
             "avg_cost_usd": sum(costs) / n if n else 0,
             "total_cost_usd": sum(costs),
-            "total_input_tokens": sum(input_toks),
-            "total_output_tokens": sum(output_toks),
-            "total_cache_read_tokens": sum(
-                r.get("cache_read_input_tokens", 0) for r in score_rows
-            ),
-            "total_cache_creation_tokens": sum(
-                r.get("cache_creation_input_tokens", 0) for r in score_rows
-            ),
             "num_examples": n,
         }
         if self.num_trials > 1:

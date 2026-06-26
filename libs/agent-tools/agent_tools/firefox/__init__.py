@@ -122,17 +122,28 @@ async def build_firefox(
             description="MOZCONFIG to use. Optional — defaults to the configured mozconfig."
         ),
     ] = None,
+    target: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional build target, e.g. a directory like 'docshell/base'. "
+                "When set, only that target is built — much faster than a full "
+                "tree build and enough to confirm a localized fix compiles."
+            )
+        ),
+    ] = None,
 ) -> dict:
     """Build Firefox using the configured mozconfig.
 
-    Slow (tens of minutes on a cold build, faster incremental). Returns JSON:
-    success (bool), build_dir (str), message (str), stdout/stderr. Only call this
-    if you've changed source or the binary is missing — check if the binary
-    exists first.
+    Slow on a full tree build (tens of minutes cold, faster incremental); pass a
+    `target` directory to build just the part you changed. Returns JSON: success
+    (bool), build_dir (str), message (str), stdout/stderr. Only call this if
+    you've changed source or the binary is missing — check if the binary exists
+    first.
     """
     firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
     mozconfig_p = Path(mozconfig_path) if mozconfig_path else ctx.mozconfig
-    return await _build_firefox(firefox_dir_p, mozconfig_p, ctx.objdir)
+    return await _build_firefox(firefox_dir_p, mozconfig_p, ctx.objdir, target=target)
 
 
 @tool
