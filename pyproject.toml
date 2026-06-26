@@ -62,7 +62,7 @@ dependencies = [
     "tqdm>=4.67.3,<4.69.0",
     "unidiff~=0.7.5",
     "weave>=0.50.0",
-    "xgboost~=3.2.0",
+    "xgboost>=3.2,<3.4",
     "zstandard~=0.25.0",
 ]
 
