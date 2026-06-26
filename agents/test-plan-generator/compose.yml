@@ -1,0 +1,19 @@
+services:
+  test-plan-generator-agent:
+    build:
+      context: ../..
+      dockerfile: agents/test-plan-generator/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - FEATURE
+      - FEATURE_DETAILS
+      - MODEL
+      - MAX_TURNS
+      - EFFORT
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts

@@ -1,7 +1,14 @@
 """Tests for the agent registry and generic env serialization."""
 
+import pytest
 from app.agents import AGENT_REGISTRY, model_to_env
-from app.schemas import BugFixInputs
+from app.schemas import (
+    BugFixInputs,
+)
+from app.schemas import (
+    TestPlanGeneratorInputs as PlanGeneratorInputs,
+)
+from pydantic import ValidationError
 
 
 def test_model_to_env_uppercases_and_stringifies():
@@ -30,3 +37,30 @@ def test_bug_fix_registry_uses_default_env_serializer():
     # No hand-written build_env: the router falls back to model_to_env.
     assert spec.build_env is None
     assert spec.input_schema is BugFixInputs
+
+
+def test_test_plan_generator_inputs_require_feature_details():
+    with pytest.raises(ValidationError):
+        PlanGeneratorInputs(feature="Bookmarks and History")
+
+
+def test_test_plan_generator_env_serialization():
+    env = model_to_env(
+        PlanGeneratorInputs(
+            feature="Bookmarks and History",
+            feature_details="Bookmarks toolbar behavior",
+        )
+    )
+
+    assert env == {
+        "FEATURE": "Bookmarks and History",
+        "FEATURE_DETAILS": "Bookmarks toolbar behavior",
+    }
+
+
+def test_test_plan_generator_registry_uses_default_env_serializer():
+    spec = AGENT_REGISTRY["test-plan-generator"]
+
+    assert spec.build_env is None
+    assert spec.job_name == "hackbot-agent-test-plan-generator"
+    assert spec.input_schema is PlanGeneratorInputs

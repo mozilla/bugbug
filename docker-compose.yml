@@ -4,6 +4,7 @@ version: "3.8"
 
 include:
   - path: agents/bug-fix/compose.yml
+  - path: agents/test-plan-generator/compose.yml
 
 services:
   bugbug-base:

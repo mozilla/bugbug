@@ -4,7 +4,11 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from app.schemas import AutowebcompatReproInputs, BugFixInputs
+from app.schemas import (
+    AutowebcompatReproInputs,
+    BugFixInputs,
+    TestPlanGeneratorInputs,
+)
 
 
 @dataclass(frozen=True)
@@ -56,5 +60,14 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-autowebcompat-repro",
         input_schema=AutowebcompatReproInputs,
+    ),
+    "test-plan-generator": AgentSpec(
+        name="test-plan-generator",
+        description=(
+            "Generate 10 concise Firefox QA test cases from feature details, "
+            "run them in Firefox through DevTools MCP, and report pass/fail results."
+        ),
+        job_name="hackbot-agent-test-plan-generator",
+        input_schema=TestPlanGeneratorInputs,
     ),
 }

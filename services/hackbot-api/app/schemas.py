@@ -81,3 +81,11 @@ class AutowebcompatReproInputs(BaseModel):
         if self.bug_data is None and self.bug_id is None:
             raise ValueError("provide at least one of bug_data or bug_id")
         return self
+
+
+class TestPlanGeneratorInputs(BaseModel):
+    feature: str
+    feature_details: str
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None
