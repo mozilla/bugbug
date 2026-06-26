@@ -14,7 +14,13 @@ SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
 class GeneratedTestCase(BaseModel):
     id: int = Field(description="Sequential case id starting at 1.")
     title: str
-    context: Literal["chrome", "content"]
+    context: Literal["chrome", "content"] = Field(
+        description=(
+            "Primary context label for what the case mainly exercises. This is "
+            "guidance for tool selection, not a restriction on which available "
+            "DevTools MCP tools may be used for individual steps."
+        )
+    )
     preconditions: str | None = None
     steps: list[str] = Field(
         description="Concise test steps for this case; between 1 and 6 steps."
