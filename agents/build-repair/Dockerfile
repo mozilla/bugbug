@@ -74,10 +74,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     uv sync --frozen --no-dev --no-install-workspace --inexact --extra eval --package hackbot-agent-build-repair
 
-# The harness creates worktrees and runs `./mach build` against a bind-mounted
-# Firefox checkout owned by a different uid; allow git to operate on it.
-RUN git config --system --add safe.directory '*'
-
 USER agent
 ENV FIREFOX_GIT_REPO=/firefox
 
