@@ -30,6 +30,5 @@ def build_devtools_server(
         args=args,
         env={
             "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1",
-            "ENABLE_PRIVILEGED_CONTEXT": "true",
         },
     )

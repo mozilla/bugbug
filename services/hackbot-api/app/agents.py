@@ -64,8 +64,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",
         description=(
-            "Generate 10 concise Firefox QA test cases from feature details, "
-            "run them in Firefox through DevTools MCP, and report pass/fail results."
+            "Generate Firefox QA test cases from feature details (up to 20 test cases), "
+            "run them in Firefox through DevTools MCP, and report pass/fail/unsuitable results."
         ),
         job_name="hackbot-agent-test-plan-generator",
         input_schema=TestPlanGeneratorInputs,
