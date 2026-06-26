@@ -12,7 +12,7 @@ SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
 
 
 class GeneratedTestCase(BaseModel):
-    id: int = Field(description="Sequential case id from 1 through 10.")
+    id: int = Field(description="Sequential case id starting at 1.")
     title: str
     context: Literal["chrome", "content"]
     preconditions: str | None = None
@@ -31,6 +31,19 @@ class StepResult(BaseModel):
     step_number: int
     status: Literal["passed", "failed", "not_run"]
     observation: str
+    failure_reason: str | None = Field(
+        default=None,
+        description=(
+            "Required when status is failed. A concise reason why the step failed, "
+            "based only on what was observed during execution."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_failure_reason(self) -> "StepResult":
+        if self.status == "failed" and not self.failure_reason:
+            raise ValueError("failed steps must include failure_reason")
+        return self
 
 
 class TestCaseResult(BaseModel):
@@ -38,6 +51,19 @@ class TestCaseResult(BaseModel):
     status: Literal["passed", "failed", "unsuitable"]
     step_results: list[StepResult]
     summary: str
+    failure_reason: str | None = Field(
+        default=None,
+        description=(
+            "Required when status is failed or unsuitable. A concise reason why "
+            "the case failed or could not be run, useful for later developer review."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_failure_reason(self) -> "TestCaseResult":
+        if self.status in {"failed", "unsuitable"} and not self.failure_reason:
+            raise ValueError("failed or unsuitable cases must include failure_reason")
+        return self
 
 
 class TestPlanResult(BaseModel):
@@ -48,17 +74,19 @@ class TestPlanResult(BaseModel):
 
     @model_validator(mode="after")
     def _validate_result(self) -> "TestPlanResult":
-        if len(self.generated_test_cases) != 10:
-            raise ValueError("generated_test_cases must contain exactly 10 cases")
+        case_count = len(self.generated_test_cases)
+        if not 1 <= case_count <= 20:
+            raise ValueError("generated_test_cases must contain 1 to 20 cases")
 
         case_ids = [case.id for case in self.generated_test_cases]
-        if case_ids != list(range(1, 11)):
-            raise ValueError("generated test case ids must be 1 through 10")
+        expected_ids = list(range(1, case_count + 1))
+        if case_ids != expected_ids:
+            raise ValueError("generated test case ids must be sequential starting at 1")
 
         result_ids = [result.id for result in self.results]
-        if result_ids != list(range(1, 11)):
+        if result_ids != expected_ids:
             raise ValueError(
-                "results must contain one result for each case id 1 through 10"
+                "results must contain one result for each generated test case id"
             )
 
         return self
@@ -83,7 +111,7 @@ def build_result_server(collector: ResultCollector) -> McpServerConfig:
     @tool(
         "submit_result",
         "Submit the final generated Firefox QA test plan and execution result. "
-        "Call exactly once, after all 10 test cases have been generated and run.",
+        "Call exactly once, after all generated test cases have been run.",
         SUBMIT_RESULT_SCHEMA,
     )
     async def submit_result(args: dict) -> dict:

@@ -7,7 +7,8 @@ diagnose, fix, patch, or propose changes.
 
 ## Required workflow
 
-1. Generate exactly 10 test cases before running any case.
+1. Generate the appropriate number of test cases before running any case.
+   Generate no more than 20 test cases.
    - Use only the feature name, feature description, and test scope as your
      source material.
    - Use the provided feature name as the structured result feature.
@@ -16,7 +17,7 @@ diagnose, fix, patch, or propose changes.
    - A short title.
    - A selected execution context: `chrome` or `content`.
    - Use concise ordered test steps.
-3. Run the 10 test cases in order.
+3. Run the test cases and test steps in order.
 4. Submit the final structured result with `submit_result`.
 
 ## Context selection
@@ -61,9 +62,13 @@ any case where you are unsure which context is correct.
 - Call only the tools needed for the current step.
 - If a step fails, mark that step failed, mark the case failed, stop that case,
   and move to the next case.
+- When a step fails, include a concise failure reason based only on observed
+  behavior. The reason should help developers understand what failed later, but
+  it must not speculate beyond the evidence or propose a fix.
+- When a case fails or is unsuitable, include a concise case-level failure
+  reason.
 - Do not try alternate approaches to make a failing step pass.
-- Do not debug or explain root cause.
-- Do not propose fixes.
+- Do not debug deeply, infer root cause, or propose fixes.
 
 ## Test case style examples
 
@@ -103,5 +108,8 @@ Mark a case as `unsuitable` only if it requires:
 ## Reporting
 
 The final answer must be submitted through `submit_result` exactly once. A prose
-message is not enough. Include exactly 10 generated test cases and exactly 10
-case results.
+message is not enough. Include one case result for every generated test case.
+
+For failed steps, set `failure_reason` to a short explanation of the observed
+failure. For failed or unsuitable cases, set the case-level `failure_reason` as
+well. Leave `failure_reason` empty for passed steps and passed cases.

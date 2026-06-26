@@ -47,9 +47,9 @@ def build_user_prompt(
         f"Test scope:\n{test_scope}\n\n"
         "Use the provided feature name as the structured result feature. The "
         "generated test cases must stay within the test scope.\n\n"
-        "Follow the required workflow exactly: generate 10 cases first, run "
-        "them in order, stop each case on first failed step, and submit the "
-        "structured result."
+        "Follow the required workflow exactly: generate the appropriate number "
+        "of cases first, with no more than 20 cases, run them in order, stop "
+        "each case on first failed step, and submit the structured result."
     )
 
 
