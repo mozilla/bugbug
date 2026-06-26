@@ -6,8 +6,9 @@ from .firefox_install import install_firefox_nightly
 
 
 class AgentInputs(BaseSettings):
-    feature: str
-    feature_details: str
+    feature_name: str
+    feature_description: str
+    test_scope: str
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
@@ -21,8 +22,9 @@ async def main(ctx: HackbotContext) -> TestPlanGeneratorResult:
     firefox_path = str(install_firefox_nightly())
 
     return await run_test_plan_generator(
-        feature=inputs.feature,
-        feature_details=inputs.feature_details,
+        feature_name=inputs.feature_name,
+        feature_description=inputs.feature_description,
+        test_scope=inputs.test_scope,
         model=inputs.model,
         max_turns=inputs.max_turns,
         effort=inputs.effort,

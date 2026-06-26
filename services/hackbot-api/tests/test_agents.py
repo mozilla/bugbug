@@ -39,22 +39,27 @@ def test_bug_fix_registry_uses_default_env_serializer():
     assert spec.input_schema is BugFixInputs
 
 
-def test_test_plan_generator_inputs_require_feature_details():
+def test_test_plan_generator_inputs_require_feature_description():
     with pytest.raises(ValidationError):
-        PlanGeneratorInputs(feature="Bookmarks and History")
+        PlanGeneratorInputs(
+            feature_name="Bookmarks and History",
+            test_scope="Bookmarks toolbar behavior.",
+        )
 
 
 def test_test_plan_generator_env_serialization():
     env = model_to_env(
         PlanGeneratorInputs(
-            feature="Bookmarks and History",
-            feature_details="Bookmarks toolbar behavior",
+            feature_name="Bookmarks and History",
+            feature_description="Bookmarks and history controls in Firefox.",
+            test_scope="Bookmarks toolbar behavior.",
         )
     )
 
     assert env == {
-        "FEATURE": "Bookmarks and History",
-        "FEATURE_DETAILS": "Bookmarks toolbar behavior",
+        "FEATURE_NAME": "Bookmarks and History",
+        "FEATURE_DESCRIPTION": "Bookmarks and history controls in Firefox.",
+        "TEST_SCOPE": "Bookmarks toolbar behavior.",
     }
 
 

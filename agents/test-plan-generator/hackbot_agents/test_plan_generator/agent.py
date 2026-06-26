@@ -37,11 +37,16 @@ def load_system_prompt() -> str:
     return (HERE / "prompts" / "system.md").read_text()
 
 
-def build_user_prompt(feature: str, feature_details: str) -> str:
+def build_user_prompt(
+    feature_name: str, feature_description: str, test_scope: str
+) -> str:
     return (
-        "Generate and run a Firefox QA test plan for this feature.\n\n"
-        f"Feature:\n{feature}\n\n"
-        f"Feature details:\n{feature_details}\n\n"
+        "Generate and run a Firefox QA test plan from these inputs.\n\n"
+        f"Feature name:\n{feature_name}\n\n"
+        f"Feature description:\n{feature_description}\n\n"
+        f"Test scope:\n{test_scope}\n\n"
+        "Use the provided feature name as the structured result feature. The "
+        "generated test cases must stay within the test scope.\n\n"
         "Follow the required workflow exactly: generate 10 cases first, run "
         "them in order, stop each case on first failed step, and submit the "
         "structured result."
@@ -50,8 +55,9 @@ def build_user_prompt(feature: str, feature_details: str) -> str:
 
 async def run_test_plan_generator(
     *,
-    feature: str,
-    feature_details: str,
+    feature_name: str,
+    feature_description: str,
+    test_scope: str,
     model: str | None = None,
     max_turns: int | None = None,
     effort: str | None = None,
@@ -60,7 +66,8 @@ async def run_test_plan_generator(
     log: Path | None = None,
 ) -> TestPlanGeneratorResult:
     """Generate and run a Firefox QA test plan for one feature."""
-    logger.info("generating Firefox QA test plan for %s", feature)
+    subject = feature_name
+    logger.info("generating Firefox QA test plan for %s", subject)
 
     devtools_server = build_devtools_server(
         firefox_path=Path(firefox_path) if firefox_path else None,
@@ -93,24 +100,26 @@ async def run_test_plan_generator(
 
     result_msg: ResultMessage | None = None
     with Reporter(verbose=verbose, log_path=log) as reporter:
-        reporter.header(feature)
+        reporter.header(subject)
         async with ClaudeSDKClient(options=options) as client:
-            await client.query(build_user_prompt(feature, feature_details))
+            await client.query(
+                build_user_prompt(feature_name, feature_description, test_scope)
+            )
             async for msg in client.receive_response():
                 reporter.message(msg)
                 if isinstance(msg, ResultMessage):
                     result_msg = msg
 
     if result_msg is None:
-        raise AgentError(f"{feature}: agent produced no result message")
+        raise AgentError(f"{subject}: agent produced no result message")
     if result_msg.is_error:
         raise AgentError(
-            f"{feature} test-plan generation failed: "
+            f"{subject} test-plan generation failed: "
             f"{result_msg.result or result_msg.subtype}"
         )
     if result_collector.result is None:
         raise AgentError(
-            f"{feature}: agent finished without submitting a result via submit_result"
+            f"{subject}: agent finished without submitting a result via submit_result"
         )
 
     return TestPlanGeneratorResult(

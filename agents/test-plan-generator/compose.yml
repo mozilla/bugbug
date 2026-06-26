@@ -6,8 +6,9 @@ services:
       target: agent
     environment:
       - RUN_ID
-      - FEATURE
-      - FEATURE_DETAILS
+      - FEATURE_NAME
+      - FEATURE_DESCRIPTION
+      - TEST_SCOPE
       - MODEL
       - MAX_TURNS
       - EFFORT
