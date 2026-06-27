@@ -1,9 +1,12 @@
 """Tests for the agent registry and generic env serialization."""
 
+import json
+
 import pytest
 from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
+    BuildRepairInputs,
 )
 from app.schemas import (
     TestPlanGeneratorInputs as PlanGeneratorInputs,
@@ -37,6 +40,25 @@ def test_bug_fix_registry_uses_default_env_serializer():
     # No hand-written build_env: the router falls back to model_to_env.
     assert spec.build_env is None
     assert spec.input_schema is BugFixInputs
+
+
+def test_build_repair_registry_entry():
+    spec = AGENT_REGISTRY["build-repair"]
+    assert spec.build_env is None
+    assert spec.input_schema is BuildRepairInputs
+    assert spec.job_name == "hackbot-agent-build-repair"
+
+
+def test_model_to_env_json_encodes_failure_tasks_and_bool():
+    tasks = {"build-linux64/opt": "OyF95j0oQ-CF_YuBM1b7vg"}
+    env = model_to_env(
+        BuildRepairInputs(
+            bug_id=1, git_commit="deadbeef", failure_tasks=tasks, run_try_push=True
+        )
+    )
+    assert env["GIT_COMMIT"] == "deadbeef"
+    assert json.loads(env["FAILURE_TASKS"]) == tasks
+    assert env["RUN_TRY_PUSH"] == "True"
 
 
 def test_test_plan_generator_inputs_require_feature_description():

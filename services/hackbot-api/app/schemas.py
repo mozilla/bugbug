@@ -83,6 +83,15 @@ class AutowebcompatReproInputs(BaseModel):
         return self
 
 
+class BuildRepairInputs(BaseModel):
+    bug_id: int | None = None
+    git_commit: str
+    failure_tasks: dict[str, str]
+    run_try_push: bool = False
+    model: str | None = None
+    max_turns: int | None = None
+
+
 class TestPlanGeneratorInputs(BaseModel):
     feature_name: str
     feature_description: str

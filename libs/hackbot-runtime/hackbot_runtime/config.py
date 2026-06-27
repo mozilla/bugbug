@@ -21,6 +21,9 @@ class SourceConfig(BaseModel):
     # Where the checkout lands. The env var SOURCE_REPO overrides this at runtime
     # (the orchestrator points it at the task-local workspace).
     checkout_path: Path = Path("/workspace/source")
+    # Optional commit/branch/tag to check out instead of remote HEAD. The env var
+    # SOURCE_REF overrides this at runtime (per-run inputs like a failure commit).
+    ref: str | None = None
 
 
 class FirefoxConfig(BaseModel):
