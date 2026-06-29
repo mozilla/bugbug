@@ -12,6 +12,7 @@ dependencies = [
     "mcp>=1.0.0",
     "mozdownload",
     "mozinstall",
+    "requests>=2.32.0",
     "starlette>=0.36.0",
     "uvicorn>=0.27.0",
 ]
