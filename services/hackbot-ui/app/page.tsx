@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { RecentRuns } from "@/components/RecentRuns";
 import { TriggerForm } from "@/components/TriggerForm";
 
@@ -6,7 +8,9 @@ export default function HomePage() {
     <>
       <div className="panel">
         <h2>Trigger a run</h2>
-        <TriggerForm />
+        <Suspense fallback={null}>
+          <TriggerForm />
+        </Suspense>
       </div>
 
       <div className="panel">
