@@ -6,8 +6,8 @@
 """Download and sanitize Taskcluster build-failure logs.
 
 The agent is given a mapping of ``task-name -> Taskcluster task ID``. Before the
-Claude SDK is invoked we fetch each task's ``live_backing.log`` and write two
-files to the scratch dir: the full log and a sanitized companion that keeps only
+Claude SDK is invoked we fetch each task's latest-run ``live_backing.log`` and
+write two files to the scratch dir: the full log and a sanitized companion that keeps only
 the ``ERROR -`` / ``FATAL -`` lines. The agent is told to start from the
 sanitized log (so its context isn't drowned by tens of MB of build output) and
 fall back to the full log for surrounding detail.
@@ -25,11 +25,13 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Use the queue's getLatestArtifact endpoint (no run index): it 303-redirects to
+# the most recent run's artifact, so we get the failing run's log even when the
+# task was retried (run 0 was an infra exception with no live_backing.log, etc.).
 ARTIFACT_URL = (
-    "https://firefoxci.taskcluster-artifacts.net/"
-    "{task_id}/{run_id}/public/logs/live_backing.log"
+    "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/"
+    "task/{task_id}/artifacts/public/logs/live_backing.log"
 )
-RUN_ID = 0
 _HEADERS = {"User-Agent": "hackbot-build-repair/1.0"}
 _TIMEOUT = 120
 _MAX_LINES = 2000
@@ -70,7 +72,7 @@ def _fetch_and_write(task_name: str, task_id: str, dest_dir: Path) -> TaskLogs:
     safe = _safe_filename(task_name)
     full_path = dest_dir / f"{safe}.log"
     sanitized_path = dest_dir / f"{safe}.errors.txt"
-    url = ARTIFACT_URL.format(task_id=task_id, run_id=RUN_ID)
+    url = ARTIFACT_URL.format(task_id=task_id)
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
         resp.raise_for_status()

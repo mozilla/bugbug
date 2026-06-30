@@ -9,6 +9,7 @@ import type { RunRef } from "@/lib/types";
 const AGENTS = [
   { value: "bug-fix", label: "bug-fix" },
   { value: "autowebcompat-repro", label: "autowebcompat-repro" },
+  { value: "build-repair", label: "build-repair" },
 ] as const;
 
 type AgentValue = (typeof AGENTS)[number]["value"];
@@ -18,6 +19,9 @@ export function TriggerForm() {
   const [agent, setAgent] = useState<AgentValue>("bug-fix");
   const [bugId, setBugId] = useState("");
   const [bugData, setBugData] = useState("");
+  const [gitCommit, setGitCommit] = useState("");
+  const [failureTasks, setFailureTasks] = useState("");
+  const [runTryPush, setRunTryPush] = useState(false);
   const [model, setModel] = useState("");
   const [maxTurns, setMaxTurns] = useState("");
   const [effort, setEffort] = useState("");
@@ -25,6 +29,7 @@ export function TriggerForm() {
   const [error, setError] = useState<string | null>(null);
 
   const isReproAgent = agent === "autowebcompat-repro";
+  const isBuildRepairAgent = agent === "build-repair";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,7 +41,39 @@ export function TriggerForm() {
     const hasBugId = Number.isInteger(parsedBugId) && parsedBugId > 0;
     const hasBugData = isReproAgent && bugData.trim().length > 0;
 
-    if (!isReproAgent) {
+    if (isBuildRepairAgent) {
+      if (hasBugId) inputs.bug_id = parsedBugId;
+      if (!gitCommit.trim()) {
+        setError("Enter a git commit hash.");
+        return;
+      }
+      inputs.git_commit = gitCommit.trim();
+      if (!failureTasks.trim()) {
+        setError("Enter failure tasks as a JSON object.");
+        return;
+      }
+      let parsedTasks: unknown;
+      try {
+        parsedTasks = JSON.parse(failureTasks.trim());
+      } catch {
+        setError(
+          'Failure tasks must be valid JSON (e.g. {"task-name": "task-id"}).'
+        );
+        return;
+      }
+      if (
+        typeof parsedTasks !== "object" ||
+        parsedTasks === null ||
+        Array.isArray(parsedTasks)
+      ) {
+        setError(
+          "Failure tasks must be a JSON object mapping task names to task IDs."
+        );
+        return;
+      }
+      inputs.failure_tasks = parsedTasks;
+      inputs.run_try_push = runTryPush;
+    } else if (!isReproAgent) {
       if (!hasBugId) {
         setError("Enter a valid Bugzilla bug ID.");
         return;
@@ -56,7 +93,7 @@ export function TriggerForm() {
       const n = Number.parseInt(maxTurns, 10);
       if (Number.isInteger(n) && n > 0) inputs.max_turns = n;
     }
-    if (effort.trim()) inputs.effort = effort.trim();
+    if (!isBuildRepairAgent && effort.trim()) inputs.effort = effort.trim();
 
     setSubmitting(true);
     try {
@@ -70,7 +107,11 @@ export function TriggerForm() {
         throw new Error(body?.error ?? `Request failed (${res.status})`);
       }
       const run = body as RunRef;
-      const label = hasBugId ? `bug ${parsedBugId}` : "inline report";
+      const label = isBuildRepairAgent
+        ? `commit ${gitCommit.trim().slice(0, 12)}`
+        : hasBugId
+          ? `bug ${parsedBugId}`
+          : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -107,21 +148,23 @@ export function TriggerForm() {
         </select>
       </div>
 
-      <div className="field">
-        <label htmlFor="bugId">
-          {isReproAgent
-            ? "Bugzilla bug ID (optional if report text provided)"
-            : "Bugzilla bug ID *"}
-        </label>
-        <input
-          id="bugId"
-          inputMode="numeric"
-          placeholder="e.g. 1846789"
-          value={bugId}
-          onChange={(e) => setBugId(e.target.value)}
-          required={!isReproAgent}
-        />
-      </div>
+      {!isBuildRepairAgent && (
+        <div className="field">
+          <label htmlFor="bugId">
+            {isReproAgent
+              ? "Bugzilla bug ID (optional if report text provided)"
+              : "Bugzilla bug ID *"}
+          </label>
+          <input
+            id="bugId"
+            inputMode="numeric"
+            placeholder="e.g. 1846789"
+            value={bugId}
+            onChange={(e) => setBugId(e.target.value)}
+            required={!isReproAgent}
+          />
+        </div>
+      )}
 
       {isReproAgent && (
         <div className="field">
@@ -136,6 +179,57 @@ export function TriggerForm() {
             onChange={(e) => setBugData(e.target.value)}
           />
         </div>
+      )}
+
+      {isBuildRepairAgent && (
+        <>
+          <div className="field">
+            <label htmlFor="bugId">Bugzilla bug ID (optional)</label>
+            <input
+              id="bugId"
+              inputMode="numeric"
+              placeholder="e.g. 1846789"
+              value={bugId}
+              onChange={(e) => setBugId(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="gitCommit">Git commit *</label>
+            <input
+              id="gitCommit"
+              placeholder="e.g. abc123def456"
+              value={gitCommit}
+              onChange={(e) => setGitCommit(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="failureTasks">
+              Failure tasks * (JSON object: task name to task ID)
+            </label>
+            <textarea
+              id="failureTasks"
+              placeholder={'e.g. {"build-linux64": "Abc123XYZ"}'}
+              rows={4}
+              value={failureTasks}
+              onChange={(e) => setFailureTasks(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={runTryPush}
+                onChange={(e) => setRunTryPush(e.target.checked)}
+              />{" "}
+              Run try push after fix
+            </label>
+          </div>
+        </>
       )}
 
       <div className="row">
@@ -158,15 +252,17 @@ export function TriggerForm() {
             onChange={(e) => setMaxTurns(e.target.value)}
           />
         </div>
-        <div className="field">
-          <label htmlFor="effort">Effort (optional)</label>
-          <input
-            id="effort"
-            placeholder="default"
-            value={effort}
-            onChange={(e) => setEffort(e.target.value)}
-          />
-        </div>
+        {!isBuildRepairAgent && (
+          <div className="field">
+            <label htmlFor="effort">Effort (optional)</label>
+            <input
+              id="effort"
+              placeholder="default"
+              value={effort}
+              onChange={(e) => setEffort(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       <button type="submit" disabled={submitting}>
