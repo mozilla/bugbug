@@ -13,6 +13,8 @@ from unidiff import PatchSet
 from bugbug.tools.code_review import data_types, langchain_tools, review_context
 from bugbug.tools.code_review.data_types import (
     ExternalContent,
+    GeneratedReviewComment,
+    PatchScopeResponse,
     Skill,
     _strip_frontmatter,
 )
@@ -1258,3 +1260,95 @@ load = [{ type = "file", path = ".claude/skills/dom-media-v2.md" }]
     assert len(results) == 1
     assert results[0].name == ".claude/skills/dom-media-v2.md"
     assert results[0].body == "Updated guidelines.\n"
+
+
+# ---------------------------------------------------------------------------
+# patch-scope assessment pass (split suggestion)
+# ---------------------------------------------------------------------------
+
+
+def _make_scope_tool(scope_response):
+    """Build a CodeReviewTool without running __init__ (avoids create_agent).
+
+    The scope_agent is mocked to return the given PatchScopeResponse.
+    """
+    pytest.importorskip("langchain")
+    from bugbug.tools.code_review.agent import CodeReviewTool
+
+    tool = CodeReviewTool.__new__(CodeReviewTool)
+    tool.target_software = "Mozilla Firefox"
+    tool.scope_agent = MagicMock()
+    tool.scope_agent.ainvoke = AsyncMock(
+        return_value={"structured_response": scope_response}
+    )
+    return tool
+
+
+def test_assess_patch_scope_returns_at_most_one_comment():
+    # The model returns two comments; the pass must keep only the first.
+    comments = [
+        GeneratedReviewComment(
+            file="b/f.txt",
+            code_line=1,
+            comment=f"Split this patch {i}",
+            explanation="bundles unrelated changes",
+            order=1,
+        )
+        for i in range(2)
+    ]
+    tool = _make_scope_tool(PatchScopeResponse(comments=comments))
+
+    patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
+    result = asyncio.run(tool.assess_patch_scope(patch, "summary"))
+
+    assert len(result) == 1
+    assert result[0].comment == "Split this patch 0"
+
+
+def test_assess_patch_scope_returns_empty_when_no_split_warranted():
+    tool = _make_scope_tool(PatchScopeResponse(comments=[]))
+
+    patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
+    result = asyncio.run(tool.assess_patch_scope(patch, "summary"))
+
+    assert result == []
+
+
+def test_run_appends_scope_suggestion_last():
+    pytest.importorskip("langchain")
+
+    regular = GeneratedReviewComment(
+        file="b/f.txt",
+        code_line=1,
+        comment="Fix the bug",
+        explanation="off-by-one",
+        order=1,
+    )
+    scope = GeneratedReviewComment(
+        file="b/f.txt",
+        code_line=2,
+        comment="Split this patch into smaller pieces",
+        explanation="bundles unrelated changes",
+        order=1,
+    )
+    tool = _make_scope_tool(PatchScopeResponse(comments=[scope]))
+
+    patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
+    patch.raw_diff = "diff"
+
+    tool.count_tokens = MagicMock(return_value=10)
+    tool._agent_model = "model-x"
+    tool.patch_summarizer = MagicMock()
+    tool.patch_summarizer.run = MagicMock(return_value="summary")
+    tool.generate_review_comments = AsyncMock(return_value=([regular], []))
+    tool.suggestion_filterer = MagicMock()
+    tool.suggestion_filterer.run = MagicMock(return_value=[regular])
+
+    result = asyncio.run(tool.run(patch))
+
+    assert result.details["num_scope_suggestions"] == 1
+    assert len(result.review_comments) == 2
+    # The split suggestion is sorted last (order = len(filtered) + 1).
+    last = result.review_comments[-1]
+    assert last.content == "Split this patch into smaller pieces"
+    assert last.order == 2
