@@ -11,6 +11,8 @@ dependencies = [
 bugzilla = ["bugsy"]
 firefox = ["grizzly-framework", "prefpicker"]
 claude-sdk = ["claude-agent-sdk>=0.1.30"]
+searchfox = ["searchfox>=0.16.0"]
+vcs = ["httpx"]
 
 [build-system]
 requires = ["hatchling"]
