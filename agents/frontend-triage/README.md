@@ -13,7 +13,7 @@ cause, and proposes how to fix it — then hands that off to a human (or a
 downstream execution agent) to actually implement and verify.
 
 It is a sibling of the reference [`bug-fix`](../bug-fix/) agent, which targets
-*crash/sanitizer* bugs and goes all the way to a verified patch. `frontend-triage`
+_crash/sanitizer_ bugs and goes all the way to a verified patch. `frontend-triage`
 deliberately stops at a plan, because visual/interaction bugs can't be verified
 by the crash-reproduction loop `bug-fix` relies on.
 
@@ -32,7 +32,7 @@ Poor fits (use a different agent / manual triage):
 
 - Crashes, hangs, assertions, sanitizer reports → these belong to [`bug-fix`](../bug-fix/).
 - Backend/platform bugs with no frontend component.
-- Bugs whose fix can only be judged by *seeing* the rendered result — the agent
+- Bugs whose fix can only be judged by _seeing_ the rendered result — the agent
   can localize and propose, but cannot visually confirm.
 
 **Scoping (handled automatically):** a built-in `rules/scoping.md` ruleset, applied
@@ -142,11 +142,12 @@ forbids private comments and `RESOLVED` status changes.
    to read a regressor's diff, local `Read`/`Grep` for exact bytes; deep searches
    delegated to a read-only `investigator` subagent) → record one comment with the
    fix plan.
-4. **Structured output.** The agent ends its final message with a fenced ```json
-   block. `agent.py` parses that into the typed `FrontendTriageResult`
-   (`root_cause`, `proposed_fix`, `target_files`, `confidence`), which the runtime
-   writes to `summary.json` under `findings`. If the block is missing/unparseable,
-   the structured fields are left null and the raw text is preserved in `result`.
+4. **Structured output.** The agent ends its final message with a fenced
+   ` ```json ` block. `agent.py` parses that into the typed
+   `FrontendTriageResult` (`root_cause`, `proposed_fix`, `target_files`,
+   `confidence`), which the runtime writes to `summary.json` under `findings`.
+   If the block is missing/unparsable, the structured fields are left null and
+   the raw text is preserved in `result`.
 
 **Confidence semantics:** confidence reflects how clearly the agent could pin a
 **root cause** in the code, not whether the fix is verified (it never runs the
@@ -162,7 +163,7 @@ gap; they live in the shared `libs/agent-tools/` library (`searchfox.py`,
 - **`searchfox` server** (backed by the `searchfox` client → `searchfox.org`):
   `search_identifier`, `search_text`, `find_definition`, `get_function_at_line`,
   `get_blame`, `get_file`. This is the agent's main localization aid — symbol/usage
-  lookup across the *whole* tree, far better than grep for the multi-module JS that
+  lookup across the _whole_ tree, far better than grep for the multi-module JS that
   dominates frontend bugs. The prompt directs the agent to prefer it over local
   `Grep` when tracing how a symbol/pref/state flows across files.
 - **`mozilla_vcs` server** (HTTP to `hg.mozilla.org`): `get_commit_info`,
@@ -171,7 +172,7 @@ gap; they live in the shared `libs/agent-tools/` library (`searchfox.py`,
   `get_blame`) to pinpoint what changed, which the shallow clone can't provide.
 
 Both are read-only (see Safety guarantees). Note Searchfox/HGMO reflect
-mozilla-central *tip*, which can differ slightly from the checkout — the prompt
+mozilla-central _tip_, which can differ slightly from the checkout — the prompt
 tells the agent to use them for search/history and local `Read` for exact bytes.
 
 ### File layout
@@ -206,15 +207,15 @@ explicitly), so adding them did not affect `bug-fix` or `autowebcompat-repro`.
 Set as environment variables (the API derives these automatically from the input
 schema; locally you pass them via `.env` / the command line):
 
-| Env var | Required | Meaning |
-|---|---|---|
-| `BUG_ID` | yes | The Bugzilla bug to triage |
-| `ANTHROPIC_API_KEY` | yes | Drives the Claude agent (billed per token) |
-| `BUGZILLA_API_URL` | yes | Bugzilla instance, e.g. `https://bugzilla.mozilla.org` |
-| `BUGZILLA_API_KEY` | yes | Held by the broker; used for **reads only** |
-| `MODEL` | no | Override the agent model (cost/quality dial) |
-| `MAX_TURNS` | no | Hard cap on agent loop iterations (runaway/cost guard; cut off if exceeded) |
-| `EFFORT` | no | Reasoning effort level |
+| Env var             | Required | Meaning                                                                     |
+| ------------------- | -------- | --------------------------------------------------------------------------- |
+| `BUG_ID`            | yes      | The Bugzilla bug to triage                                                  |
+| `ANTHROPIC_API_KEY` | yes      | Drives the Claude agent (billed per token)                                  |
+| `BUGZILLA_API_URL`  | yes      | Bugzilla instance, e.g. `https://bugzilla.mozilla.org`                      |
+| `BUGZILLA_API_KEY`  | yes      | Held by the broker; used for **reads only**                                 |
+| `MODEL`             | no       | Override the agent model (cost/quality dial)                                |
+| `MAX_TURNS`         | no       | Hard cap on agent loop iterations (runaway/cost guard; cut off if exceeded) |
+| `EFFORT`            | no       | Reasoning effort level                                                      |
 
 A **turn** is one iteration of the agent loop (model thinks → calls tools →
 observes results). It is not a number of fix attempts; more turns just means more
@@ -262,6 +263,7 @@ cat ~/hackbot/artifacts/$LATEST/summary.json
 ```
 
 Check:
+
 - `findings` → the structured plan (`root_cause`, `proposed_fix`, `target_files`,
   `confidence`).
 - `actions` → exactly one `bugzilla.add_comment`, recorded (not posted). It carries
@@ -274,11 +276,11 @@ Check:
 
 **Good bugs to test** (validated across the three classes this agent handles):
 
-| Bug | Class | Notes |
-|---|---|---|
-| `2014702` | Behavioral | New Tab weather widget vanishing |
-| `2014629` | Pure visual | Split View group-line CSS gap |
-| `2004297` | Regression | Print Preview shift; traces the named regressor |
+| Bug       | Class       | Notes                                           |
+| --------- | ----------- | ----------------------------------------------- |
+| `2014702` | Behavioral  | New Tab weather widget vanishing                |
+| `2014629` | Pure visual | Split View group-line CSS gap                   |
+| `2004297` | Regression  | Print Preview shift; traces the named regressor |
 
 **A note on line numbers:** the agent cites approximate line numbers
 (e.g. `~L1234`). Those are model-asserted and can drift — trust the files and
@@ -323,7 +325,7 @@ This agent is registered with `hackbot-api` for orchestrated runs:
 - **Evaluate the official Mozilla MCP server (`moz`).** Firefox's `.mcp.json`
   defines a hosted HTTP MCP server (`https://mcp-dev.moz.tools/mcp`) exposing
   `get_bugzilla_bug` (with **change history**, which our broker lacks),
-  `get_phabricator_revision`, and `read_fx_doc_section`. These are *complementary*
+  `get_phabricator_revision`, and `read_fx_doc_section`. These are _complementary_
   to (not duplicated by) our Searchfox/VCS tools — it has no code-search or VCS
   tools. Wiring it in as an extra `http` MCP server could add Phabricator-patch
   awareness ("has a fix already landed?"), Firefox docs, and Bugzilla bug history.

@@ -77,12 +77,15 @@ async def search_text(
         str, Field(description="Text or regular expression to search for.")
     ],
     path_filter: Annotated[
-        str | None, Field(description="Optional path prefix, e.g. 'browser/components'.")
+        str | None,
+        Field(description="Optional path prefix, e.g. 'browser/components'."),
     ] = None,
     regexp: Annotated[
         bool, Field(description="Treat the query as a regular expression.")
     ] = False,
-    case_sensitive: Annotated[bool, Field(description="Case-sensitive matching.")] = False,
+    case_sensitive: Annotated[
+        bool, Field(description="Case-sensitive matching.")
+    ] = False,
     limit: Annotated[int, Field(description="Max results.")] = 50,
 ) -> str:
     """Full-text / regex search across mozilla-central.
@@ -169,8 +172,7 @@ async def get_blame(
     if not results:
         return "No blame information found."
     return "\n".join(
-        f"{line}: {hash_} ({date}) {message}"
-        for line, hash_, message, date in results
+        f"{line}: {hash_} ({date}) {message}" for line, hash_, message, date in results
     )
 
 

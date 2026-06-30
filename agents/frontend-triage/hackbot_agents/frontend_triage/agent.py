@@ -60,7 +60,9 @@ class FrontendTriageResult(HackbotAgentResult):
     # Handoff fields for a downstream executor agent.
     actionable: bool | None = None  # false => out of scope / nothing to fix-plan
     regressor_node: str | None = None  # hg node of the introducing changeset, if found
-    relevant_tests: list[str] | None = None  # existing tests covering the area (verify anchor)
+    relevant_tests: list[str] | None = (
+        None  # existing tests covering the area (verify anchor)
+    )
     # The agent's full final message, always present as a fallback.
     result: str | None = None
 
@@ -120,6 +122,7 @@ def parse_plan(text: str | None) -> dict:
         return {}
     if not isinstance(data, dict):
         return {}
+
     def _as_list(value):
         if isinstance(value, str):
             return [value]
