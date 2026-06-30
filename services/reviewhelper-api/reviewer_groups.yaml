@@ -1,0 +1,37 @@
+# Per-reviewer-group configuration for automated code review.
+#
+# `defaults` apply to any revision whose reviewer group isn't listed below, and
+# to listed groups that don't override a value. A review runs only when BOTH the
+# risk and complexity scores are strictly below their thresholds, so raising a
+# threshold widens what gets auto-reviewed ("easing in").
+#
+# Thresholds are 0-10. Start conservative (3/3 → only scores of 0,1,2 pass) and
+# raise as the team grows comfortable.
+
+defaults:
+  risk_threshold: 3
+  complexity_threshold: 3
+
+# Only revisions whose reviewer group is listed AND `enabled: true` get an
+# automated review. Roll out one group at a time by flipping `enabled`.
+# `restrict_to_member_authors` (default true) limits review to patches authored
+# by a member of the group; add a member's PHID to `opt_out` to exclude them.
+# `aliases` lists extra project slugs that count as the same logical group —
+# notably a review rotation's `<group>-rotation` project, which is added as the
+# reviewer and then swapped for an individual member before review time.
+groups:
+  - slug: ip-protection-reviewers
+    aliases: [ip-protection-reviewers-rotation]
+    enabled: true
+    risk_threshold: 3
+    complexity_threshold: 3
+    restrict_to_member_authors: true
+    opt_out: []
+
+  - slug: home-newtab-reviewers
+    aliases: [home-newtab-reviewers-rotation]
+    enabled: false
+    risk_threshold: 3
+    complexity_threshold: 3
+    restrict_to_member_authors: true
+    opt_out: []

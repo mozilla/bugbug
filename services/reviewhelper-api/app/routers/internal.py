@@ -13,6 +13,7 @@ from app.database.models import ReviewRequest
 from app.enums import ReviewStatus
 from app.review_processor import (
     ReviewProcessingError,
+    ReviewSkipped,
     RevisionNotYetPublicError,
     process_review,
     submit_review_to_platform,
@@ -137,6 +138,14 @@ async def process_review_request(
             review_request.status = ReviewStatus.RETRY_PENDING
             await db.commit()
             return Response(status_code=status.HTTP_409_CONFLICT)
+        except ReviewSkipped as e:
+            logger.info("Review request %s skipped: %s", review_request_id, e.reason)
+            review_request.status = ReviewStatus.SKIPPED
+            review_request.skipped_reason = e.reason
+            review_request.details = e.details
+            await db.commit()
+            # Terminal, like a failure: 204 so Cloud Tasks doesn't retry.
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
         except ReviewProcessingError as e:
             review_request.error = str(e)
             review_request.status = ReviewStatus.FAILED
