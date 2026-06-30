@@ -13,7 +13,7 @@ from typing import Optional
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import TodoListMiddleware
-from langchain.agents.structured_output import ToolStrategy
+from langchain.agents.structured_output import ProviderStrategy, ToolStrategy
 from langchain.chat_models import BaseChatModel, init_chat_model
 from langchain.messages import HumanMessage
 from langgraph.errors import GraphRecursionError
