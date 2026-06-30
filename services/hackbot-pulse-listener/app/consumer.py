@@ -1,11 +1,10 @@
 import logging
-from concurrent.futures import Executor
 
 from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, taskcluster, worker
+from app import client, taskcluster
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,7 @@ _seen: TTLCache = TTLCache(
 )
 
 
-def process(body: dict, executor: Executor) -> str | None:
+def process(body: dict) -> str | None:
     """Handle one Taskcluster failure message. Returns the triggered run id."""
     tags = (body.get("task") or {}).get("tags") or {}
 
@@ -34,7 +33,6 @@ def process(body: dict, executor: Executor) -> str | None:
 
     task_id = body["status"]["taskId"]
     task_name = tags.get("label") or task_id
-    developer_email = tags.get("createdForUser")
 
     revision = taskcluster.get_revision(task_id)
     if not revision:
@@ -64,17 +62,13 @@ def process(body: dict, executor: Executor) -> str | None:
         return None
 
     logger.info("Triggered build-repair run %s for %s@%s", run_id, project, revision)
-    if run_id is not None:
-        executor.submit(
-            worker.poll_and_notify, run_id, revision, project, developer_email
-        )
     return run_id
 
 
-def make_handler(executor: Executor):
+def make_handler():
     def on_message(body, message):
         try:
-            process(body, executor)
+            process(body)
         except Exception:
             logger.exception("Error handling pulse message")
         finally:
@@ -109,10 +103,10 @@ class BuildFailureConsumer(ConsumerMixin):
         return [Consumer(queues=self.queues, callbacks=[self.on_message])]
 
 
-def build_consumer(executor: Executor) -> BuildFailureConsumer:
+def build_consumer() -> BuildFailureConsumer:
     connection = Connection(
         CONNECTION_URL.format(settings.pulse_user, settings.pulse_password)
     )
     return BuildFailureConsumer(
-        connection, _build_queues(settings.pulse_user), make_handler(executor)
+        connection, _build_queues(settings.pulse_user), make_handler()
     )
