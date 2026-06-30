@@ -92,6 +92,13 @@ class BuildRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
+class FrontendTriageInputs(BaseModel):
+    bug_id: int
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None
+
+
 class TestPlanGeneratorInputs(BaseModel):
     feature_name: str
     feature_description: str

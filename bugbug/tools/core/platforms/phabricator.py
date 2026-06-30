@@ -69,6 +69,46 @@ def get_phabricator_client(
     return PhabricatorAPI(api_key, api_url)
 
 
+@cache
+def resolve_project_phid(slug: str) -> Optional[str]:
+    """Resolve a Phabricator project slug to its PHID.
+
+    Returns None if no project matches the slug. Cached for the process
+    lifetime since project PHIDs are stable; a cold start re-resolves.
+    """
+    phabricator = get_phabricator_client()
+    response = phabricator.request(
+        "project.search",
+        constraints={"slugs": [slug]},
+    )
+    data = response.get("data") or []
+    if not data:
+        return None
+    return data[0]["phid"]
+
+
+@cache
+def get_project_members(project_phid: str) -> frozenset[str]:
+    """Return the set of user PHIDs that are members of a Phabricator project.
+
+    Cached for the process lifetime; a process restart re-fetches and picks up
+    membership changes.
+    """
+    phabricator = get_phabricator_client()
+    response = phabricator.request(
+        "project.search",
+        constraints={"phids": [project_phid]},
+        attachments={"members": True},
+    )
+    data = response.get("data") or []
+    if not data:
+        return frozenset()
+    members_data = data[0].get("attachments", {}).get("members", {})
+    return frozenset(
+        m["phid"] for m in members_data.get("members", []) if m.get("phid")
+    )
+
+
 def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
     """Internal implementation for fetching user information.
 
@@ -87,27 +127,14 @@ def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
         constraints={"phids": list(user_phids)},
     )
 
-    # Get bmo-editbugs-team members
-    moco_response = phabricator.request(
-        "project.search",
-        constraints={"phids": [EDITBUGS_GROUP_PHID]},
-        attachments={"members": True},
-    )
-
-    # Turn it into a set for speed, and perform membership check to determine
-    # trusted status.
-    moco_members = set()
-    if moco_response.get("data"):
-        members_data = (
-            moco_response["data"][0].get("attachments", {}).get("members", {})
-        )
-        moco_members = {m["phid"] for m in members_data.get("members", [])}
+    # Determine trusted status via bmo-editbugs-team membership.
+    trusted_members = get_project_members(EDITBUGS_GROUP_PHID)
 
     result = {}
     for user_data in users_response.get("data", []):
         user_phid = user_data["phid"]
         fields = user_data.get("fields", {})
-        is_trusted = user_phid in moco_members
+        is_trusted = user_phid in trusted_members
         is_trusted_bot = user_phid in TRUSTED_BOT_PHIDS
 
         result[user_phid] = {
@@ -532,6 +559,79 @@ class PhabricatorPatch(Patch):
     @property
     def author_phid(self) -> str:
         return self._revision_metadata["fields"]["authorPHID"]
+
+    @cached_property
+    def reviewer_phids(self) -> list[str]:
+        """PHIDs of the revision's reviewers (a mix of users and projects).
+
+        The reviewers attachment is not part of the default revision metadata,
+        so we fetch it with a dedicated ``differential.revision.search`` call.
+        """
+        phabricator = get_phabricator_client()
+        response = phabricator.request(
+            "differential.revision.search",
+            constraints={"phids": [self.revision_phid]},
+            attachments={"reviewers": True},
+        )
+        data = response.get("data") or []
+        if not data:
+            return []
+        reviewers = data[0].get("attachments", {}).get("reviewers", {})
+        return [
+            r["reviewerPHID"]
+            for r in reviewers.get("reviewers", [])
+            if r.get("reviewerPHID")
+        ]
+
+    @property
+    def reviewer_project_phids(self) -> list[str]:
+        """PHIDs of the revision's reviewer *groups* (Phabricator projects)."""
+        return [phid for phid in self.reviewer_phids if phid.startswith("PHID-PROJ-")]
+
+    @cached_property
+    def historical_reviewer_project_phids(self) -> list[str]:
+        """Reviewer-group PHIDs that were *ever* added as reviewers.
+
+        A review rotation adds a group as a reviewer, assigns an individual
+        member, then removes the group — so by review time the group is no
+        longer in the current reviewer list. Scanning the ``reviewers``
+        transactions recovers any group that was added at any point, which is
+        what reviewer-group targeting should key on.
+
+        Groups still present are included first (order-preserving); groups that
+        were added and later removed follow, deduplicated.
+        """
+        phids: list[str] = []
+        seen: set[str] = set()
+
+        def _add(phid: str) -> None:
+            if phid.startswith("PHID-PROJ-") and phid not in seen:
+                seen.add(phid)
+                phids.append(phid)
+
+        for phid in self.reviewer_project_phids:
+            _add(phid)
+
+        try:
+            transactions = self._get_transactions()
+        except Exception:
+            logger.exception(
+                "Could not fetch transactions for D%s; using current reviewers only",
+                self.revision_id,
+            )
+            return phids
+
+        for transaction in transactions:
+            if transaction.get("type") != "reviewers":
+                continue
+            operations = (transaction.get("fields") or {}).get("operations") or []
+            for operation in operations:
+                # 'add' and 'update' both indicate the reviewer was present at
+                # some point; 'remove' alone never introduces a new group.
+                if operation.get("operation") in ("add", "update"):
+                    _add(operation.get("phid") or "")
+
+        return phids
 
     @property
     def diff_author_phid(self) -> str:

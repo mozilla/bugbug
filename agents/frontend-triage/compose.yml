@@ -1,0 +1,36 @@
+services:
+  frontend-triage-broker:
+    build:
+      context: ../..
+      dockerfile: agents/frontend-triage/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+    expose:
+      - "8765"
+
+  frontend-triage-agent:
+    build:
+      context: ../..
+      dockerfile: agents/frontend-triage/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      - BUGZILLA_MCP_URL=http://frontend-triage-broker:8765/mcp
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts so
+      # compose and direct runs land in the same user-scoped location.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      frontend-triage-broker:
+        condition: service_started
+
+volumes:
+  workspace:

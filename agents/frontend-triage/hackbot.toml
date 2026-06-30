@@ -1,0 +1,6 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+
+# No [firefox] table: this agent does read-only triage and planning. It never
+# builds Firefox or runs testcases, so the build toolchain is not prepared.

@@ -1,18 +1,14 @@
 [project]
-name = "hackbot-agent-autowebcompat-repro"
+name = "hackbot-agent-frontend-triage"
 version = "0.1.0"
-description = "Cloud Run Job image that runs the autowebcompat-repro agent for hackbot-api"
+description = "Cloud Run Job image that runs the frontend-triage agent for hackbot-api"
 requires-python = ">=3.12"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
-    "agent-tools[bugzilla]",
+    "agent-tools[bugzilla,searchfox,vcs]",
     "bugsy",
-    "six",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
-    "mozdownload",
-    "mozinstall",
-    "requests>=2.32.0",
     "starlette>=0.36.0",
     "uvicorn>=0.27.0",
 ]
