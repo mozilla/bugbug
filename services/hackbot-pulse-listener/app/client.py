@@ -23,10 +23,3 @@ def trigger_run(inputs: dict) -> str | None:
     resp = httpx.post(url, json=inputs, headers=_headers(), timeout=_TIMEOUT)
     resp.raise_for_status()
     return resp.json()["run_id"]
-
-
-def get_run(run_id: str) -> dict:
-    url = f"{settings.hackbot_api_url}/runs/{run_id}"
-    resp = httpx.get(url, headers=_headers(), timeout=_TIMEOUT)
-    resp.raise_for_status()
-    return resp.json()

@@ -10,7 +10,6 @@ class Settings(BaseSettings):
     # hackbot-api
     hackbot_api_url: str = ""
     hackbot_api_key: str = ""
-    hackbot_ui_url: str = ""
     agent_name: str = "build-repair"
 
     # Failure filtering and agent inputs.
@@ -23,15 +22,6 @@ class Settings(BaseSettings):
     # Dedupe (in-memory, by git revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60
     dedupe_max_size: int = 4096
-
-    # Polling the API for run completion
-    poll_interval_seconds: int = 60
-    run_max_age_minutes: int = 12 * 60
-    poll_max_workers: int = 8
-
-    # Email notifications (SendGrid)
-    sendgrid_api_key: str | None = None
-    notification_sender: str | None = None
 
     dry_run: bool = False
     environment: str = "development"
