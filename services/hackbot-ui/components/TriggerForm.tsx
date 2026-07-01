@@ -10,6 +10,7 @@ const AGENTS = [
   { value: "bug-fix", label: "bug-fix" },
   { value: "autowebcompat-repro", label: "autowebcompat-repro" },
   { value: "build-repair", label: "build-repair" },
+  { value: "frontend-triage", label: "frontend-triage" },
 ] as const;
 
 type AgentValue = (typeof AGENTS)[number]["value"];
