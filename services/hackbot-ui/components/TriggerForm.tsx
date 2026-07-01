@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { saveRun } from "@/lib/store";
@@ -15,17 +15,32 @@ const AGENTS = [
 
 type AgentValue = (typeof AGENTS)[number]["value"];
 
+function parseAgent(value: string | null): AgentValue {
+  return AGENTS.some((a) => a.value === value)
+    ? (value as AgentValue)
+    : "bug-fix";
+}
+
 export function TriggerForm() {
   const router = useRouter();
-  const [agent, setAgent] = useState<AgentValue>("bug-fix");
-  const [bugId, setBugId] = useState("");
-  const [bugData, setBugData] = useState("");
-  const [gitCommit, setGitCommit] = useState("");
-  const [failureTasks, setFailureTasks] = useState("");
-  const [runTryPush, setRunTryPush] = useState(false);
-  const [model, setModel] = useState("");
-  const [maxTurns, setMaxTurns] = useState("");
-  const [effort, setEffort] = useState("");
+  const params = useSearchParams();
+  const [agent, setAgent] = useState<AgentValue>(() =>
+    parseAgent(params.get("agent"))
+  );
+  const [bugId, setBugId] = useState(() => params.get("bug_id") ?? "");
+  const [bugData, setBugData] = useState(() => params.get("bug_data") ?? "");
+  const [gitCommit, setGitCommit] = useState(
+    () => params.get("git_commit") ?? ""
+  );
+  const [failureTasks, setFailureTasks] = useState(
+    () => params.get("failure_tasks") ?? ""
+  );
+  const [runTryPush, setRunTryPush] = useState(
+    () => params.get("run_try_push") === "true"
+  );
+  const [model, setModel] = useState(() => params.get("model") ?? "");
+  const [maxTurns, setMaxTurns] = useState(() => params.get("max_turns") ?? "");
+  const [effort, setEffort] = useState(() => params.get("effort") ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
