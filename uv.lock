@@ -64,6 +64,7 @@ dependencies = [
 [package.optional-dependencies]
 bugzilla = [
     { name = "bugsy" },
+    { name = "six" },
 ]
 claude-sdk = [
     { name = "claude-agent-sdk" },
@@ -88,6 +89,7 @@ requires-dist = [
     { name = "prefpicker", marker = "extra == 'firefox'" },
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "searchfox", marker = "extra == 'searchfox'", specifier = ">=0.16.0" },
+    { name = "six", marker = "extra == 'bugzilla'" },
 ]
 provides-extras = ["bugzilla", "firefox", "claude-sdk", "searchfox", "vcs"]
 

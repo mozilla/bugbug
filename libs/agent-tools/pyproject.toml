@@ -8,7 +8,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-bugzilla = ["bugsy"]
+bugzilla = [
+    "bugsy",
+    # Workaround: bugsy imports six at runtime but doesn't declare it as a
+    # dependency (its setup.py only lists requests).
+    "six",
+]
 firefox = ["grizzly-framework", "prefpicker"]
 claude-sdk = ["claude-agent-sdk>=0.1.30"]
 searchfox = ["searchfox>=0.16.0"]
