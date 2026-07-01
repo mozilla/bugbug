@@ -97,3 +97,12 @@ class FrontendTriageInputs(BaseModel):
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
+
+
+class TestPlanGeneratorInputs(BaseModel):
+    feature_name: str
+    feature_description: str
+    test_scope: str
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None

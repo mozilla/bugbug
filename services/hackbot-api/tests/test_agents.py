@@ -2,8 +2,16 @@
 
 import json
 
+import pytest
 from app.agents import AGENT_REGISTRY, model_to_env
-from app.schemas import BugFixInputs, BuildRepairInputs
+from app.schemas import (
+    BugFixInputs,
+    BuildRepairInputs,
+)
+from app.schemas import (
+    TestPlanGeneratorInputs as PlanGeneratorInputs,
+)
+from pydantic import ValidationError
 
 
 def test_model_to_env_uppercases_and_stringifies():
@@ -51,3 +59,35 @@ def test_model_to_env_json_encodes_failure_tasks_and_bool():
     assert env["GIT_COMMIT"] == "deadbeef"
     assert json.loads(env["FAILURE_TASKS"]) == tasks
     assert env["RUN_TRY_PUSH"] == "True"
+
+
+def test_test_plan_generator_inputs_require_feature_description():
+    with pytest.raises(ValidationError):
+        PlanGeneratorInputs(
+            feature_name="Bookmarks and History",
+            test_scope="Bookmarks toolbar behavior.",
+        )
+
+
+def test_test_plan_generator_env_serialization():
+    env = model_to_env(
+        PlanGeneratorInputs(
+            feature_name="Bookmarks and History",
+            feature_description="Bookmarks and history controls in Firefox.",
+            test_scope="Bookmarks toolbar behavior.",
+        )
+    )
+
+    assert env == {
+        "FEATURE_NAME": "Bookmarks and History",
+        "FEATURE_DESCRIPTION": "Bookmarks and history controls in Firefox.",
+        "TEST_SCOPE": "Bookmarks toolbar behavior.",
+    }
+
+
+def test_test_plan_generator_registry_uses_default_env_serializer():
+    spec = AGENT_REGISTRY["test-plan-generator"]
+
+    assert spec.build_env is None
+    assert spec.job_name == "hackbot-agent-test-plan-generator"
+    assert spec.input_schema is PlanGeneratorInputs

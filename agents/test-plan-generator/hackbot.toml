@@ -1,0 +1,3 @@
+# test-plan-generator needs no platform prep: no [source] checkout and no
+# [firefox] build. It downloads a fresh Firefox Nightly at startup and drives it
+# through the Firefox DevTools MCP server.

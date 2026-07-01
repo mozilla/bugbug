@@ -9,6 +9,7 @@ from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
     FrontendTriageInputs,
+    TestPlanGeneratorInputs,
 )
 
 
@@ -73,5 +74,14 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Triage a Firefox desktop frontend bug (read-only) and produce a root-cause analysis and proposed fix plan.",
         job_name="hackbot-agent-frontend-triage",
         input_schema=FrontendTriageInputs,
+    ),
+    "test-plan-generator": AgentSpec(
+        name="test-plan-generator",
+        description=(
+            "Generate Firefox QA test cases from feature details (up to 20 test cases), "
+            "run them in Firefox through DevTools MCP, and report pass/fail/unsuitable results."
+        ),
+        job_name="hackbot-agent-test-plan-generator",
+        input_schema=TestPlanGeneratorInputs,
     ),
 }
