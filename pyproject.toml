@@ -57,7 +57,7 @@ dependencies = [
     "sendgrid~=6.12.5",
     "shap[plots]>=0.51,<0.53",
     "tabulate~=0.10.0",
-    "taskcluster>=97.1,<100.4",
+    "taskcluster>=97.1,<100.5",
     "tenacity~=9.1.4",
     "tqdm>=4.67.3,<4.69.0",
     "unidiff~=0.7.5",
@@ -89,7 +89,7 @@ spawn-pipeline = [
     "json-e==4.8.2",
     "pyyaml==6.0.3",
     "requests==2.34.2",
-    "taskcluster==100.3.0",
+    "taskcluster==100.4.0",
 ]
 
 [project.scripts]
