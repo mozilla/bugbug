@@ -1,13 +1,7 @@
 module.exports = {
-  plugins: [
-    /* ... */
-  ],
-  packageOptions: {
-    /* ... */
-  },
-  devOptions: {
-    /* ... */
-  },
+  plugins: [/* ... */],
+  packageOptions: {/* ... */},
+  devOptions: {/* ... */},
   buildOptions: {
     out: "dist",
     /* ... */
@@ -16,7 +10,5 @@ module.exports = {
     src: "/",
     /* ... */
   },
-  alias: {
-    /* ... */
-  },
+  alias: {/* ... */},
 };
