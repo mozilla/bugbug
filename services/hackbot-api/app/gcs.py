@@ -11,6 +11,7 @@ import google.auth
 from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request as AuthRequest
 from google.cloud import storage
+from pydantic import Json
 
 from app.config import settings
 from app.schemas import ArtifactRef, RunSummary
@@ -24,6 +25,10 @@ def run_prefix(run_id: str) -> str:
 
 def summary_blob_name(run_id: str) -> str:
     return f"{run_prefix(run_id)}summary.json"
+
+
+def inputs_blob_name(run_id: str) -> str:
+    return f"{run_prefix(run_id)}inputs.json"
 
 
 @lru_cache(maxsize=1)
@@ -124,6 +129,34 @@ def _generate_post_policy_sync(run_id: str) -> dict[str, Any]:
 
 async def generate_results_policy(run_id: str) -> dict[str, Any]:
     return await asyncio.to_thread(_generate_post_policy_sync, run_id)
+
+
+def _put_run_inputs_sync(run_id: str, config: dict[str, Json]) -> str:
+    """Upload the run's inputs and return the URL to fetch them.
+
+    This reuses the GCS bucket configured for the agent results.
+    """
+    bucket = _client().bucket(settings.results_bucket)
+    blob = bucket.blob(inputs_blob_name(run_id))
+    blob.upload_from_string(
+        json.dumps(config),
+        content_type="application/json",
+    )
+    # Valid for the whole run: the agent fetches config at startup, but matching
+    # the upload policy's window keeps a retried/slow-starting task covered.
+    expiration_seconds = (
+        settings.job_execution_timeout_seconds + settings.signed_policy_grace_seconds
+    )
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=datetime.timedelta(seconds=expiration_seconds),
+        method="GET",
+        credentials=_signing_credentials(),
+    )
+
+
+async def put_run_inputs(run_id: str, config: dict[str, Json]) -> str:
+    return await asyncio.to_thread(_put_run_inputs_sync, run_id, config)
 
 
 def _read_summary_sync(run_id: str) -> RunSummary | None:
