@@ -25,6 +25,10 @@ ruleset does not apply — note that and stop.
 3. **Write a fix plan**: root cause, the specific files/functions/selectors to
    change, and the approach. Prefer a comprehensive fix at the right level over a
    spot fix.
+4. **Verify the product/component and assess severity.** Using the file paths you
+   localized, apply the `component-verification` and `severity-assessment` rules to
+   confirm the bug is filed correctly and to judge its severity. Both belong in your
+   comment and structured output.
 
 ## Comment
 
@@ -36,8 +40,9 @@ restate the whole bug. Do not claim the fix is verified — you did not run it.
 
 - **High** (you found the specific code and the cause is clear): record the
   plan comment. If a rule or convention clearly applies, you may also record a
-  `bugzilla_update_bug` for an obviously-correct field (e.g. adding a relevant
-  keyword). Do not change `status`/`resolution`.
+  `bugzilla_update_bug` for an obviously-correct field — e.g. adding a relevant
+  keyword, a corrected `component`/`product` (per `component-verification`), or a
+  `severity` (per `severity-assessment`). Do not change `status`/`resolution`.
 - **Medium** (plausible area, cause not pinned down): record the comment with
   your best hypothesis and the open questions that would confirm it.
 - **Low** (could not localize): record a comment stating what you checked and
