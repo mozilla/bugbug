@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # API auth
     external_api_key: str = ""
 
+    # Email notifications (optional; notifications are skipped if unset)
+    sendgrid_api_key: str = ""
+    notification_sender_email: str = ""
+    hackbot_ui_base_url: str = ""
+
     # Server
     port: int = 8080
     environment: str = "development"

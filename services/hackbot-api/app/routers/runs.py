@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import gcs, jobs
+from app import gcs, jobs, notifications
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
 from app.config import settings
@@ -53,6 +53,10 @@ async def list_agents() -> list[AgentDescriptor]:
 async def create_run(
     agent_name: str,
     payload: dict,
+    notify_email: str | None = Query(
+        default=None,
+        description="Optional email address to notify when this run finishes.",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> RunRef:
     agent = _lookup_agent(agent_name)
@@ -60,6 +64,11 @@ async def create_run(
         inputs = agent.input_schema.model_validate(payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if notify_email is not None and not notifications.is_valid_email(notify_email):
+        raise HTTPException(
+            status_code=422, detail=f"Invalid notify_email: {notify_email!r}"
+        )
 
     run_id = uuid.uuid4()
     results_prefix = gcs.run_prefix(str(run_id))
@@ -71,6 +80,7 @@ async def create_run(
         agent=agent.name,
         status=RunStatus.pending.value,
         inputs=inputs.model_dump(mode="json"),
+        notify_email=notify_email,
         results_prefix=results_prefix,
         artifacts=[],
     )
@@ -192,6 +202,7 @@ async def _reconcile(db: AsyncSession, run: Run) -> None:
         run.error = error
 
     await db.commit()
+    await notifications.notify_run_complete(run)
 
 
 def _terminal_status(

@@ -15,6 +15,7 @@ dependencies = [
     "google-cloud-storage>=2.16.0",
     "google-cloud-run>=0.10.0",
     "sentry-sdk>=2.51.0",
+    "sendgrid>=6.12.5",
 ]
 
 [project.optional-dependencies]
