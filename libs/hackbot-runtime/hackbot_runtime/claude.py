@@ -32,10 +32,14 @@ def _truncate(s: str, n: int = 500) -> str:
 class Reporter:
     """Routes streamed claude-agent-sdk messages to stdout and/or a log file."""
 
-    def __init__(self, verbose: bool, log_path: Path | None):
+    def __init__(
+        self, verbose: bool, log_path: Path | None, max_turns: int | None = None
+    ):
         self.verbose = verbose
         self._log = log_path.open("w", encoding="utf-8") if log_path else None
+        self.max_turns = max_turns
         self._turn = 0
+        self._last_msg_id: str | None = None
 
     def __enter__(self):
         return self
@@ -47,6 +51,7 @@ class Reporter:
     def header(self, title: str) -> None:
         """Emit a section header (e.g. ``"bug 12345"``) and reset the turn count."""
         self._turn = 0
+        self._last_msg_id = None
         banner = f"\n{'#' * 60}\n# {title}\n{'#' * 60}"
         self._emit(banner, always=True)
 
@@ -62,8 +67,19 @@ class Reporter:
             is_main = msg.parent_tool_use_id is None
             label = "agent" if is_main else "subagent"
             if is_main:
-                self._turn += 1
-                self._emit(f"\n--- turn {self._turn} ---")
+                msg_id = msg.message_id
+                # The CLI streams one logical model response as several
+                # AssistantMessages (thinking / text / tool_use), all sharing
+                # one message_id. Count a turn only when a new id appears so the
+                # live marker matches ResultMessage.num_turns. If message_id is
+                # unavailable (older CLI), fall back to counting every message.
+                if msg_id is None or msg_id != self._last_msg_id:
+                    self._turn += 1
+                    self._last_msg_id = msg_id
+                    if self.max_turns:
+                        self._emit(f"\n--- turn {self._turn}/{self.max_turns} ---")
+                    else:
+                        self._emit(f"\n--- turn {self._turn} ---")
             for block in msg.content:
                 if isinstance(block, TextBlock):
                     self._emit(f"\n[{label}] {block.text}", always=is_main)

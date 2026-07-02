@@ -131,7 +131,7 @@ async def run_autowebcompat_repro(
     user_prompt = build_user_prompt(bug_data, bug_id)
 
     result_msg: ResultMessage | None = None
-    with Reporter(verbose=verbose, log_path=log) as reporter:
+    with Reporter(verbose=verbose, log_path=log, max_turns=max_turns) as reporter:
         reporter.header(subject)
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)

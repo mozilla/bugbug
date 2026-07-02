@@ -231,7 +231,7 @@ async def run_frontend_triage(
         )
 
     result_msg: ResultMessage | None = None
-    with Reporter(verbose=verbose, log_path=log) as reporter:
+    with Reporter(verbose=verbose, log_path=log, max_turns=max_turns) as reporter:
         reporter.header(f"bug {bug}")
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
