@@ -215,3 +215,107 @@ def test_publish_file_copies_locally_without_uploader(tmp_path):
     assert key == "logs/agent.log"
     written = tmp_path / "artifacts" / "local-test" / "logs" / "agent.log"
     assert written.read_text() == "hello log"
+
+
+# --- Reporter turn counting (requires the claude-sdk extra) -----------------
+
+
+def _asst(*, message_id, parent=None):
+    """A main- or sub-agent AssistantMessage carrying a single text block.
+
+    The block content is irrelevant to turn counting; only ``message_id`` and
+    ``parent_tool_use_id`` (main vs subagent) matter here.
+    """
+    from claude_agent_sdk import AssistantMessage, TextBlock
+
+    return AssistantMessage(
+        content=[TextBlock(text="x")],
+        model="claude-test",
+        parent_tool_use_id=parent,
+        message_id=message_id,
+    )
+
+
+def _turn_lines(text):
+    return [ln for ln in text.splitlines() if ln.startswith("--- turn ")]
+
+
+def test_reporter_counts_one_turn_per_message_id(capsys):
+    """Stream fragments sharing a message_id collapse into a single turn."""
+    pytest.importorskip("claude_agent_sdk")
+    from hackbot_runtime.claude import Reporter
+
+    with Reporter(verbose=True, log_path=None) as reporter:
+        # One logical response streamed as three fragments (id "m1"), then a
+        # response with two parallel tool fragments (id "m2"), then "m3".
+        for mid in ["m1", "m1", "m1", "m2", "m2", "m3"]:
+            reporter.message(_asst(message_id=mid))
+
+    assert _turn_lines(capsys.readouterr().out) == [
+        "--- turn 1 ---",
+        "--- turn 2 ---",
+        "--- turn 3 ---",
+    ]
+
+
+def test_reporter_ignores_subagent_messages(capsys):
+    pytest.importorskip("claude_agent_sdk")
+    from hackbot_runtime.claude import Reporter
+
+    with Reporter(verbose=True, log_path=None) as reporter:
+        reporter.message(_asst(message_id="m1"))
+        # Subagent (parent_tool_use_id set) must not bump the turn counter,
+        # even with a fresh message_id.
+        reporter.message(_asst(message_id="s1", parent="tool_1"))
+        reporter.message(_asst(message_id="m2"))
+
+    assert _turn_lines(capsys.readouterr().out) == [
+        "--- turn 1 ---",
+        "--- turn 2 ---",
+    ]
+
+
+def test_reporter_falls_back_when_message_id_missing(capsys):
+    """Older CLI without message_id: every main message counts as a turn."""
+    pytest.importorskip("claude_agent_sdk")
+    from hackbot_runtime.claude import Reporter
+
+    with Reporter(verbose=True, log_path=None) as reporter:
+        for _ in range(3):
+            reporter.message(_asst(message_id=None))
+
+    assert _turn_lines(capsys.readouterr().out) == [
+        "--- turn 1 ---",
+        "--- turn 2 ---",
+        "--- turn 3 ---",
+    ]
+
+
+def test_reporter_header_resets_turn_and_id(capsys):
+    pytest.importorskip("claude_agent_sdk")
+    from hackbot_runtime.claude import Reporter
+
+    with Reporter(verbose=True, log_path=None) as reporter:
+        reporter.message(_asst(message_id="m1"))
+        reporter.header("bug 2")
+        # Same id as before the reset must still open a fresh turn 1.
+        reporter.message(_asst(message_id="m1"))
+
+    assert _turn_lines(capsys.readouterr().out) == [
+        "--- turn 1 ---",
+        "--- turn 1 ---",
+    ]
+
+
+def test_reporter_shows_max_turns_budget(capsys):
+    pytest.importorskip("claude_agent_sdk")
+    from hackbot_runtime.claude import Reporter
+
+    with Reporter(verbose=True, log_path=None, max_turns=30) as reporter:
+        reporter.message(_asst(message_id="m1"))
+        reporter.message(_asst(message_id="m2"))
+
+    assert _turn_lines(capsys.readouterr().out) == [
+        "--- turn 1/30 ---",
+        "--- turn 2/30 ---",
+    ]
