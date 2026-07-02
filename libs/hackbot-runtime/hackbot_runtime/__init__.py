@@ -1,6 +1,6 @@
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.config import HackbotConfig
-from hackbot_runtime.context import HackbotContext
+from hackbot_runtime.context import BaseAgentInputs, HackbotContext
 from hackbot_runtime.errors import AgentError
 from hackbot_runtime.results import HackbotAgentResult
 from hackbot_runtime.runtime import run, run_async
@@ -13,6 +13,7 @@ __all__ = [
     "HackbotAgentResult",
     "HackbotConfig",
     "HackbotContext",
+    "BaseAgentInputs",
     "SignedPolicyUploader",
     "ensure_source_repo",
     "run",

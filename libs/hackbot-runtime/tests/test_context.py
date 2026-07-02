@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from hackbot_runtime import HackbotContext
+from hackbot_runtime import BaseAgentInputs, HackbotContext
 from hackbot_runtime.config import FirefoxConfig, HackbotConfig, SourceConfig
 
 
@@ -11,6 +11,11 @@ def _hb(tmp_path, config: HackbotConfig) -> HackbotContext:
     hb = HackbotContext(run_id="local-test", artifacts_dir=tmp_path / "artifacts")
     hb._config = config
     return hb
+
+
+class _SampleInputs(BaseAgentInputs):
+    bug_id: int
+    model: str | None = None
 
 
 def test_source_repo_without_declaration_raises(tmp_path):
@@ -101,3 +106,51 @@ def test_results_plumbing(tmp_path):
 
     hb.actions.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="r")
     assert hb.actions.actions[0]["type"] == "bugzilla.update_bug"
+
+
+def test_load_inputs_without_url_reads_env(tmp_path, monkeypatch):
+    # Local/docker path: no RUN_INPUTS_URL, so inputs come from the environment.
+    monkeypatch.setenv("BUG_ID", "42")
+    monkeypatch.setenv("MODEL", "claude-opus")
+    hb = _hb(tmp_path, HackbotConfig())
+    assert hb.run_inputs_url is None
+
+    inputs = hb.load_inputs(_SampleInputs)
+
+    assert inputs.bug_id == 42
+    assert inputs.model == "claude-opus"
+
+
+def test_load_inputs_uses_remote_config(tmp_path, monkeypatch):
+    # Production path: the required field is supplied by the fetched file, not env.
+    monkeypatch.delenv("BUG_ID", raising=False)
+    monkeypatch.delenv("MODEL", raising=False)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.load_remote_config",
+        lambda url: {"bug_id": 7, "model": "from-config"},
+    )
+    hb = _hb(tmp_path, HackbotConfig())
+    hb.run_inputs_url = "https://signed.example/inputs.json"
+
+    inputs = hb.load_inputs(_SampleInputs)
+
+    assert inputs.bug_id == 7
+    assert inputs.model == "from-config"
+
+
+def test_load_inputs_env_overrides_remote_config(tmp_path, monkeypatch):
+    # An env var wins over the same key in the config, while keys absent from the
+    # environment still fall through to the config.
+    monkeypatch.setenv("MODEL", "from-env")
+    monkeypatch.delenv("BUG_ID", raising=False)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.load_remote_config",
+        lambda url: {"bug_id": 7, "model": "from-config"},
+    )
+    hb = _hb(tmp_path, HackbotConfig())
+    hb.run_inputs_url = "https://signed.example/inputs.json"
+
+    inputs = hb.load_inputs(_SampleInputs)
+
+    assert inputs.model == "from-env"  # env overrides config
+    assert inputs.bug_id == 7  # config supplies what env doesn't

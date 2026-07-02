@@ -1,12 +1,11 @@
 import os
 
-from hackbot_runtime import HackbotContext, run_async
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from hackbot_runtime import BaseAgentInputs, HackbotContext, run_async
 
 from .agent import BuildRepairResult, run_build_repair
 
 
-class AgentInputs(BaseSettings):
+class AgentInputs(BaseAgentInputs):
     bug_id: int | None = None
     git_commit: str
     failure_tasks: dict[str, str]
@@ -15,11 +14,9 @@ class AgentInputs(BaseSettings):
     model: str | None = None
     max_turns: int | None = None
 
-    model_config = SettingsConfigDict(extra="ignore")
-
 
 async def main(ctx: HackbotContext) -> BuildRepairResult:
-    inputs = AgentInputs()
+    inputs = ctx.load_inputs(AgentInputs)
 
     # The build failure lives at this commit; pin the checkout there before the
     # runtime prepares the source tree (consumed in HackbotContext.source_repo).

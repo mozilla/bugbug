@@ -1,21 +1,18 @@
-from hackbot_runtime import HackbotContext, run_async
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from hackbot_runtime import BaseAgentInputs, HackbotContext, run_async
 
 from .agent import BugFixResult, run_bug_fix
 
 
-class AgentInputs(BaseSettings):
+class AgentInputs(BaseAgentInputs):
     bug_id: int
     bugzilla_mcp_url: str
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
 
-    model_config = SettingsConfigDict(extra="ignore")
-
 
 async def main(ctx: HackbotContext) -> BugFixResult:
-    inputs = AgentInputs()
+    inputs = ctx.load_inputs(AgentInputs)
 
     return await run_bug_fix(
         task="Triage and fix the bug, and verify the fix",

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs
-from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
+from app.agents import AGENT_REGISTRY, AgentSpec
 from app.auth import require_api_key
 from app.config import settings
 from app.database.connection import get_db
@@ -77,13 +77,17 @@ async def create_run(
     db.add(run)
     await db.flush()
 
+    run_inputs_url = await gcs.put_run_inputs(
+        str(run_id), inputs.model_dump(mode="json")
+    )
+
     env_overrides: dict[str, str] = {
         "RUN_ID": str(run_id),
         "RESULTS_BUCKET": settings.results_bucket,
         "RESULTS_PREFIX": results_prefix,
         "RESULTS_POLICY_URL": policy["url"],
         "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
-        **(agent.build_env or model_to_env)(inputs),
+        "RUN_INPUTS_URL": run_inputs_url,
     }
 
     try:
