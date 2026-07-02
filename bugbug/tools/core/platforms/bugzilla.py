@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timezone
 from functools import cached_property
 
+import requests
 from libmozdata.bugzilla import Bugzilla, BugzillaBase, BugzillaUser
 from libmozdata.config import set_default_value
 
@@ -18,6 +19,22 @@ from bugbug.tools.core.connection import get_user_agent
 logger = logging.getLogger(__name__)
 
 EDITBUGS_GROUP_ID = 9
+
+
+class BugNotFoundError(ValueError):
+    pass
+
+
+class BugzillaAPIError(IOError):
+    pass
+
+
+class BugzillaTransientError(BugzillaAPIError):
+    """Transient error from the Bugzilla API (5xx or unexpected response format)."""
+
+    pass
+
+
 TRUST_BEFORE_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
 REDACTED_TITLE = "[Unvalidated bug title redacted for security]"
@@ -418,15 +435,28 @@ class Bug:
     @classmethod
     def get(cls, bug_id: int, allow_private: bool = False) -> "Bug":
         bugs: list[dict] = []
-        Bugzilla(
-            bug_id,
-            include_fields=["_default", "comments", "history"],
-            bughandler=lambda bug, data: data.append(bug),
-            bugdata=bugs,
-        ).get_data().wait()
+        try:
+            Bugzilla(
+                bug_id,
+                include_fields=["_default", "comments", "history"],
+                bughandler=lambda bug, data: data.append(bug),
+                bugdata=bugs,
+            ).get_data().wait()
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code >= 500:
+                raise BugzillaTransientError(
+                    f"Bugzilla API error for bug {bug_id}: {e}"
+                ) from e
+            raise BugzillaAPIError(f"Bugzilla API error for bug {bug_id}: {e}") from e
+        except KeyError as e:
+            raise BugzillaTransientError(
+                f"Unexpected Bugzilla API response for bug {bug_id}: {e}"
+            ) from e
 
         if not bugs or (not allow_private and bugs[0]["groups"]):
-            raise ValueError(f"Bug {bug_id} not found")
+            raise BugNotFoundError(
+                f"Bug {bug_id} was not found. It may not exist or may be a confidential security bug."
+            )
 
         bug_data = bugs[0]
         assert bug_data["id"] == bug_id
