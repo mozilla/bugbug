@@ -16,11 +16,13 @@ def _get_queue() -> taskcluster.Queue:
     return _queue
 
 
-def get_revision(task_id: str) -> str | None:
-    """Return the GECKO_HEAD_REV (git SHA) for a task, or None if unavailable.
+def get_hg_revision(task_id: str) -> str | None:
+    """Return the GECKO_HEAD_REV (Mercurial revision) for a task, or None.
 
     The revision is not in the pulse message, so we fetch the full task
     definition. Task definitions are public, so no credentials are needed.
+    GECKO_HEAD_REV is an hg revision; the build-repair agent needs a git SHA,
+    so callers must convert it (see app.lando.hg_to_git).
     """
     task = _get_queue().task(task_id)
     return task.get("payload", {}).get("env", {}).get("GECKO_HEAD_REV")

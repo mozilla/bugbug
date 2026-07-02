@@ -4,7 +4,7 @@ from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, taskcluster
+from app import client, lando, taskcluster
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
 
-# In-memory dedupe of git revisions already handed to the agent. Only the
+# In-memory dedupe of hg revisions already handed to the agent. Only the
 # single consumer thread touches it, so no lock is needed.
 _seen: TTLCache = TTLCache(
     maxsize=settings.dedupe_max_size, ttl=settings.dedupe_ttl_seconds
@@ -34,18 +34,29 @@ def process(body: dict) -> str | None:
     task_id = body["status"]["taskId"]
     task_name = tags.get("label") or task_id
 
-    revision = taskcluster.get_revision(task_id)
-    if not revision:
+    hg_revision = taskcluster.get_hg_revision(task_id)
+    if not hg_revision:
         logger.warning("No GECKO_HEAD_REV for task %s; skipping", task_id)
         return None
 
-    if revision in _seen:
-        logger.info("Revision %s already processed; skipping", revision)
+    if hg_revision in _seen:
+        logger.info("Revision %s already processed; skipping", hg_revision)
         return None
-    _seen[revision] = True
+    _seen[hg_revision] = True
+
+    git_commit = lando.hg_to_git(hg_revision)
+    if not git_commit:
+        logger.warning(
+            "Could not map hg revision %s to git for task %s (%s); skipping",
+            hg_revision,
+            task_id,
+            project,
+        )
+        _seen.pop(hg_revision, None)
+        return None
 
     inputs: dict = {
-        "git_commit": revision,
+        "git_commit": git_commit,
         "failure_tasks": {task_name: task_id},
         "run_try_push": settings.run_try_push,
     }
@@ -57,11 +68,17 @@ def process(body: dict) -> str | None:
     try:
         run_id = client.trigger_run(inputs)
     except Exception:
-        logger.exception("Failed to trigger build-repair run for %s", revision)
-        _seen.pop(revision, None)
+        logger.exception("Failed to trigger build-repair run for %s", hg_revision)
+        _seen.pop(hg_revision, None)
         return None
 
-    logger.info("Triggered build-repair run %s for %s@%s", run_id, project, revision)
+    logger.info(
+        "Triggered build-repair run %s for %s@%s (git %s)",
+        run_id,
+        project,
+        hg_revision,
+        git_commit,
+    )
     return run_id
 
 
