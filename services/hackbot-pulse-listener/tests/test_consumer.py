@@ -34,7 +34,7 @@ def _build_msg(task_id="ABC", project="try", label="build-linux64/opt"):
 
 def test_sample_messages_are_all_tests_and_skipped():
     with (
-        patch.object(consumer.taskcluster, "get_revision") as get_rev,
+        patch.object(consumer.taskcluster, "get_hg_revision") as get_rev,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
         for body in _sample_bodies():
@@ -45,7 +45,8 @@ def test_sample_messages_are_all_tests_and_skipped():
 
 def test_build_failure_triggers_run():
     with (
-        patch.object(consumer.taskcluster, "get_revision", return_value="deadbeef"),
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
         run_id = consumer.process(_build_msg())
@@ -59,7 +60,8 @@ def test_build_failure_triggers_run():
 
 def test_same_revision_triggers_once():
     with (
-        patch.object(consumer.taskcluster, "get_revision", return_value="deadbeef"),
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
         consumer.process(_build_msg(task_id="T1"))
@@ -70,7 +72,7 @@ def test_same_revision_triggers_once():
 
 def test_unwatched_project_skipped_before_api_call():
     with (
-        patch.object(consumer.taskcluster, "get_revision") as get_rev,
+        patch.object(consumer.taskcluster, "get_hg_revision") as get_rev,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
         assert consumer.process(_build_msg(project="mozilla-central")) is None
@@ -79,9 +81,21 @@ def test_unwatched_project_skipped_before_api_call():
     trigger.assert_not_called()
 
 
+def test_unmappable_revision_skipped():
+    with (
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.lando, "hg_to_git", return_value=None),
+        patch.object(consumer.client, "trigger_run") as trigger,
+    ):
+        assert consumer.process(_build_msg()) is None
+
+    trigger.assert_not_called()
+
+
 def test_trigger_failure_releases_revision_for_retry():
     with (
-        patch.object(consumer.taskcluster, "get_revision", return_value="deadbeef"),
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
         patch.object(
             consumer.client, "trigger_run", side_effect=[RuntimeError("boom"), "run-2"]
         ) as trigger,
