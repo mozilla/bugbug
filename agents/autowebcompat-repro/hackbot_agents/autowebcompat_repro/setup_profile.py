@@ -109,7 +109,7 @@ def install_amo_extension(profile_dir: Path, staging_dir: Path, slug: str) -> st
 
 
 def warm_launch(
-    firefox: str,
+    firefox: Path,
     profile_dir: Path,
     ext_ids: Sequence[str] = (),
     timeout: int = REGISTER_TIMEOUT,
@@ -117,7 +117,7 @@ def warm_launch(
     """Run Firefox headless until the dropped xpis register or timeout expires."""
     proc = subprocess.Popen(
         [
-            firefox,
+            str(firefox),
             "--profile",
             str(profile_dir),
             "-headless",
@@ -187,7 +187,7 @@ def wait_until_registered(
         time.sleep(REGISTER_POLL_INTERVAL)
 
 
-def setup_profile(firefox_path: str, extensions: Sequence[str] = ()) -> Path:
+def setup_profile(firefox_path: Path, extensions: Sequence[str] = ()) -> Path:
     """Build a profile with the given AMO extensions; return its parent dir.
 
     ``extensions`` is a list of AMO addon slugs (e.g. ``["chrome-mask"]``); each
