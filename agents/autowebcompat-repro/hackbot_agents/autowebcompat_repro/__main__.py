@@ -1,9 +1,23 @@
-from hackbot_runtime import HackbotContext, run_async
+import logging
+from datetime import datetime
+
+from hackbot_runtime import (
+    HackbotAgentResult,
+    HackbotContext,
+    run_async,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .agent import AutowebcompatReproResult, run_autowebcompat_repro
-from .firefox_install import install_firefox_nightly
-from .setup_profile import setup_profile
+from .agent import (
+    AutowebcompatReproResult,
+    BugDataInput,
+    BugIdInput,
+    RunTracker,
+    TaskConfig,
+    run_autowebcompat_repro,
+)
+
+logger = logging.getLogger("autowebcompat-repro")
 
 
 class AgentInputs(BaseSettings):
@@ -17,31 +31,48 @@ class AgentInputs(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
 
-async def main(ctx: HackbotContext) -> AutowebcompatReproResult:
-    inputs = AgentInputs()
+class AutowebcompatResult(HackbotAgentResult):
+    result: AutowebcompatReproResult
+    start_time: datetime
+    end_time: datetime
 
-    # Provision a fresh Nightly at startup so each run reproduces against a
-    # current build; drive the binary the install reports back.
-    firefox_path = str(install_firefox_nightly())
 
-    # Build a profile with Chrome Mask preinstalled.
-    chrome_mask_profile = setup_profile(firefox_path, extensions=["chrome-mask"])
+async def main(ctx: HackbotContext) -> AutowebcompatResult:
+    start_time = datetime.now()
+    inputs = AgentInputs()  # type: ignore
 
-    return await run_autowebcompat_repro(
+    if inputs.bug_data is not None:
+        input_data = BugDataInput(bug_data=inputs.bug_data)
+    elif inputs.bug_id is not None:
+        input_data = BugIdInput(bug_id=inputs.bug_id)
+
+    tracker = RunTracker()
+    result = await run_autowebcompat_repro(
+        TaskConfig(
+            model=inputs.model,
+            max_turns=inputs.max_turns,
+            effort=inputs.effort,
+            log=ctx.log_path,
+            verbose=True,
+        ),
+        tracker,
+        input_data,
         bugzilla_mcp_server={
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
         },
-        bug_data=inputs.bug_data,
-        bug_id=inputs.bug_id,
-        model=inputs.model,
-        max_turns=inputs.max_turns,
-        effort=inputs.effort,
-        firefox_path=firefox_path,
-        chrome_mask_profile=chrome_mask_profile,
-        log=ctx.log_path,
-        verbose=True,
     )
+    end_time = datetime.now()
+
+    result = AutowebcompatResult(
+        result=result,
+        num_turns=tracker.num_turns,
+        total_cost_usd=tracker.total_cost_usd,
+        start_time=start_time,
+        end_time=end_time,
+    )
+    logger.info("Run completed with result: %s", result)
+    return result
 
 
 if __name__ == "__main__":
