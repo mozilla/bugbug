@@ -62,7 +62,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
-    inputs = BrokerInputs()
+    inputs = BrokerInputs()  # type: ignore
     app = build_app(inputs)
     uvicorn.run(app, host=inputs.host, port=inputs.port, log_config=None)
 

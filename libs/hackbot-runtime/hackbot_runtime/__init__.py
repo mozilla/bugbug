@@ -10,6 +10,7 @@ from hackbot_runtime.uploader import SignedPolicyUploader
 __all__ = [
     "ActionsRecorder",
     "AgentError",
+    "BaseAgentInputs",
     "HackbotAgentResult",
     "HackbotConfig",
     "HackbotContext",
