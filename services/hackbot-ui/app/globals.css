@@ -283,3 +283,127 @@ dl.kv dd {
     opacity: 1;
   }
 }
+
+/* Findings panel: header with an inline view toggle */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.panel-head h2 {
+  margin: 0;
+}
+
+/* Segmented control (Friendly / Raw JSON) */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented button {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-radius: 0;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.segmented button:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+.segmented button.active {
+  background: var(--accent);
+  color: #fff;
+}
+.segmented button.active:hover {
+  background: var(--accent-hover);
+}
+
+/* Friendly findings: reuse dl.kv, top-align tall values; narrow nested labels */
+dl.kv.findings-kv > dt {
+  padding-top: 2px;
+}
+dl.kv dd > dl.kv {
+  grid-template-columns: 140px 1fr;
+}
+
+/* Long / multi-line string values */
+.finding-text {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #0a0c12;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  max-height: 420px;
+  overflow: auto;
+  margin: 0 0 8px;
+}
+.finding-text:last-child {
+  margin-bottom: 0;
+}
+
+/* String / scalar arrays rendered as chips (e.g. target_files) */
+ul.chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+}
+ul.chips li.chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  word-break: break-all;
+}
+
+/* Nested object / array-of-objects cards */
+.finding-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: var(--panel-2);
+}
+.finding-card:last-child {
+  margin-bottom: 0;
+}
+.finding-card > .finding-index {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+/* Boolean + confidence badge variants (reuse .badge pill) */
+.badge.bool-true,
+.badge.conf-high {
+  background: rgba(46, 160, 67, 0.18);
+  color: var(--green);
+}
+.badge.bool-false,
+.badge.conf-low {
+  background: rgba(229, 83, 75, 0.18);
+  color: var(--red);
+}
+.badge.conf-medium {
+  background: rgba(210, 153, 42, 0.16);
+  color: var(--amber);
+}
