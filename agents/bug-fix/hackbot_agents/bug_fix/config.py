@@ -17,6 +17,7 @@ ENABLED_ACTION_TYPES = [
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
+    "phabricator.submit_patch",
 ]
 
 # Firefox build/test tools.
