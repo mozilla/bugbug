@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     # API auth
     external_api_key: str = ""
 
+    # Internal event routes (Eventarc / Pub/Sub push targets).
+    # Event topics follow a per-domain convention, `<domain>-events` (the GCP
+    # project is hackbot-only, so no `hackbot-` prefix); this is the agent-run
+    # domain. New domains add their own topic + setting rather than overloading
+    # this one (see app/pubsub.py).
+    run_events_topic: str = "agent-run-events"
+    push_auth_audience: str = ""
+    push_auth_service_account: str = ""
+
     # Server
     port: int = 8080
     environment: str = "development"

@@ -14,11 +14,17 @@ dependencies = [
     "alembic>=1.13.1",
     "google-cloud-storage>=2.16.0",
     "google-cloud-run>=0.10.0",
+    "google-cloud-pubsub>=2.21.0",
+    "google-auth>=2.29.0",
     "sentry-sdk>=2.51.0",
+    "hackbot-runtime",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "httpx>=0.26.0"]
+
+[tool.uv.sources]
+hackbot-runtime = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

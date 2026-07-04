@@ -1,8 +1,13 @@
 import hmac
+import logging
 
 from fastapi import Header, HTTPException, status
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 
 from app.config import settings
+
+log = logging.getLogger(__name__)
 
 
 async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
@@ -17,4 +22,40 @@ async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-API-Key",
+        )
+
+
+async def require_push_auth(authorization: str | None = Header(default=None)) -> None:
+    """Verify a Google-signed OIDC token from an Eventarc/Pub/Sub push request.
+
+    Cloud Run allows unauthenticated invocations for this service (that's how
+    `require_api_key` callers reach it at all), so platform-level IAM checks on
+    the push subscription/Eventarc trigger don't protect these routes on their
+    own — the token still needs verifying here, same as GCP's own docs recommend
+    for push endpoints on a service that isn't otherwise locked down.
+    """
+    if not settings.push_auth_audience or not settings.push_auth_service_account:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Push auth not configured",
+        )
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+        )
+    token = authorization.removeprefix("Bearer ")
+    try:
+        claims = id_token.verify_oauth2_token(
+            token, google_requests.Request(), audience=settings.push_auth_audience
+        )
+    except ValueError:
+        log.warning("Rejected push request with invalid OIDC token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        ) from None
+    if claims.get("email") != settings.push_auth_service_account:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token not from the expected service account",
         )
