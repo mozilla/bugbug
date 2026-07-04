@@ -5,6 +5,7 @@ from hackbot_runtime.actions.handlers.bugzilla_handler import (
     CreateBugHandler,
     UpdateBugHandler,
 )
+from hackbot_runtime.actions.handlers.phabricator_handler import SubmitPatchHandler
 
 # Maps a recorded action's dotted `type` to the handler that applies it.
 # Adding a new action type later is a one-line addition here — the dispatch
@@ -14,6 +15,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "bugzilla.add_comment": AddCommentHandler(),
     "bugzilla.add_attachment": AddAttachmentHandler(),
     "bugzilla.create_bug": CreateBugHandler(),
+    "phabricator.submit_patch": SubmitPatchHandler(),
 }
 
 

@@ -195,6 +195,7 @@ class HackbotContext(BaseSettings):
         self,
         patch_key: str = "changes/changes.patch",
         meta_key: str = "changes/changes.json",
+        phabricator_diff_key: str = "changes/phabricator_diff.json",
     ) -> str | None:
         """Collect the agent's source-tree changes and publish them as artifacts.
 
@@ -202,10 +203,18 @@ class HackbotContext(BaseSettings):
         local commits and wraps the uncommitted remainder, plus a JSON summary.
         Returns the patch key, or ``None`` when the agent never prepared a source
         checkout or made no changes at all.
+
+        If the agent recorded a ``phabricator.submit_patch`` action, also builds
+        and publishes the Phabricator submission payload here — while the
+        checkout the agent already has is still around — so the downstream
+        apply step never needs its own checkout (see
+        ``changes.build_phabricator_diff``).
         """
         if self._source_base is None:
             return None
-        change_set = changes.collect(self.source_repo, self._source_base)
+        change_set = changes.collect(
+            self.source_repo, self._source_base, self._config.source.repo_url
+        )
         if change_set is None:
             return None
         artifacts.publish_bytes(
@@ -216,4 +225,16 @@ class HackbotContext(BaseSettings):
             "text/x-patch",
         )
         self.publish_json(meta_key, change_set.metadata)
+
+        wants_phabricator = any(
+            action["type"] == "phabricator.submit_patch"
+            for action in self.actions.actions
+        )
+        if wants_phabricator:
+            diff_payload = changes.build_phabricator_diff(
+                self.source_repo, self._source_base, self._config.source.repo_url
+            )
+            if diff_payload is not None:
+                self.publish_json(phabricator_diff_key, diff_payload)
+
         return patch_key

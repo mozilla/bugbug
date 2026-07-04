@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Cloud Run Job image that runs the bug-fix agent for hackbot-api"
 requires-python = ">=3.12"
 dependencies = [
-    "hackbot-runtime[claude-sdk]",
+    "hackbot-runtime[claude-sdk,phabricator]",
     "agent-tools[bugzilla,firefox]",
     "bugsy",
     "claude-agent-sdk>=0.1.30",

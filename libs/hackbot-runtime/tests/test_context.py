@@ -1,9 +1,11 @@
 """Tests for HackbotContext capabilities and results plumbing."""
 
+import json
 from pathlib import Path
 
 import pytest
 from hackbot_runtime import HackbotContext
+from hackbot_runtime.changes import ChangeSet
 from hackbot_runtime.config import FirefoxConfig, HackbotConfig, SourceConfig
 
 
@@ -101,3 +103,60 @@ def test_results_plumbing(tmp_path):
 
     hb.actions.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="r")
     assert hb.actions.actions[0]["type"] == "bugzilla.update_bug"
+
+
+def _hb_with_source(tmp_path, monkeypatch):
+    """Wire a context to publish changes without a real checkout.
+
+    Sets a recorded source base and mocks changes.collect so
+    publish_changes() runs its body.
+    """
+    cfg = HackbotConfig(source=SourceConfig(repo_url="https://example.com/r.git"))
+    hb = _hb(tmp_path, cfg)
+    hb._source_base = "basecommit"
+    # source_repo would normally clone; publish_changes only passes it through
+    # to the (mocked) changes helpers, so a bare path is enough here.
+    monkeypatch.setattr(
+        type(hb), "source_repo", property(lambda self: tmp_path / "src")
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.collect",
+        lambda repo, base, repo_url: ChangeSet(patch=b"x", metadata={"base": base}),
+    )
+    return hb
+
+
+def test_publish_changes_builds_phabricator_diff_when_action_recorded(
+    tmp_path, monkeypatch
+):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_phabricator_diff",
+        lambda repo, base, repo_url: {"changes": [], "sourceControlBaseRevision": base},
+    )
+    hb.actions.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
+
+    hb.publish_changes()
+
+    written = (
+        tmp_path / "artifacts" / "local-test" / "changes" / "phabricator_diff.json"
+    )
+    assert json.loads(written.read_text())["sourceControlBaseRevision"] == "basecommit"
+
+
+def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeypatch):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    called = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_phabricator_diff",
+        lambda *a, **k: called.append(a) or {},
+    )
+    hb.actions.record("bugzilla.add_comment", {"bug_id": 1}, reasoning="r")
+
+    hb.publish_changes()
+
+    assert called == []
+    written = (
+        tmp_path / "artifacts" / "local-test" / "changes" / "phabricator_diff.json"
+    )
+    assert not written.exists()

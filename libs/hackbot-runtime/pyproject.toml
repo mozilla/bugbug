@@ -12,6 +12,10 @@ dependencies = [
 
 [project.optional-dependencies]
 claude-sdk = ["claude-agent-sdk>=0.1.30", "agent-tools[claude-sdk]"]
+# Pinned exactly: mozphab.git/mozphab.diff are internal implementation
+# classes of a CLI tool, not a published library API — a minor/patch bump
+# could change their behavior without notice.
+phabricator = ["MozPhab==2.15.3"]
 
 [tool.uv.sources]
 agent-tools = { workspace = true }
