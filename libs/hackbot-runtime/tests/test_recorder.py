@@ -76,3 +76,15 @@ def test_attachment_key_uses_action_index(tmp_path):
     rec.record("bugzilla.update_bug", {"bug_id": 1})
     rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src})
     assert rec.actions[1]["attachments"][0]["uploaded_key"] == "attachments/1/file"
+
+
+def test_ref_included_when_given():
+    rec = ActionsRecorder()
+    rec.record("phabricator.submit_patch", {"bug_id": 1}, ref="patch")
+    assert rec.actions[0]["ref"] == "patch"
+
+
+def test_ref_omitted_when_not_given():
+    rec = ActionsRecorder()
+    rec.record("bugzilla.update_bug", {"bug_id": 1})
+    assert "ref" not in rec.actions[0]

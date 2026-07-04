@@ -32,6 +32,7 @@ class ActionsRecorder:
         *,
         reasoning: str | None = None,
         attachments: dict[str, Path] | None = None,
+        ref: str | None = None,
     ) -> dict:
         """Record an intended action.
 
@@ -44,6 +45,13 @@ class ActionsRecorder:
         artifacts directory (so it is retrievable from compose/direct runs).
         The recorded action references it by that key; the original local
         path is not persisted (it disappears with the container).
+
+        ``ref`` optionally labels this action so a *later* action in the same
+        run can reference its apply-time result (e.g. a Bugzilla comment's
+        text containing ``{{actions.patch.url}}`` after a
+        ``phabricator.submit_patch`` action recorded with ``ref="patch"``).
+        Resolved by the apply step, since the result doesn't exist yet at
+        record time.
         """
         idx = len(self._actions)
         action: dict = {
@@ -51,6 +59,8 @@ class ActionsRecorder:
             "params": params,
             "reasoning": reasoning,
         }
+        if ref is not None:
+            action["ref"] = ref
 
         if attachments:
             recorded_attachments: list[dict] = []
