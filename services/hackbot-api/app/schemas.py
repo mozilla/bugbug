@@ -14,9 +14,6 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
-TERMINAL_STATUSES = {RunStatus.succeeded, RunStatus.failed, RunStatus.timed_out}
-
-
 class ArtifactRef(BaseModel):
     name: str
     size: int
@@ -27,6 +24,7 @@ class RunSummary(BaseModel):
     status: str
     error: str | None = None
     findings: dict[str, Any] = Field(default_factory=dict)
+    actions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentDescriptor(BaseModel):

@@ -144,6 +144,23 @@ async def read_summary(run_id: str) -> RunSummary | None:
     return await asyncio.to_thread(_read_summary_sync, run_id)
 
 
+def _download_artifact_bytes_sync(run_id: str, key: str) -> bytes:
+    bucket = _client().bucket(settings.results_bucket)
+    blob = bucket.blob(f"{run_prefix(run_id)}{key}")
+    return blob.download_as_bytes()
+
+
+async def download_artifact_bytes(run_id: str, key: str) -> bytes:
+    """Fetch the raw bytes of one artifact under a run's prefix.
+
+    Backs `hackbot_runtime.actions.handlers.base.ApplyContext.download_artifact`
+    for the action-applier — handlers ask for an artifact by its recorded key
+    (e.g. "attachments/0/file", "changes/changes.patch") without knowing GCS
+    is behind it.
+    """
+    return await asyncio.to_thread(_download_artifact_bytes_sync, run_id, key)
+
+
 def _list_artifacts_sync(run_id: str) -> list[ArtifactRef]:
     bucket = _client().bucket(settings.results_bucket)
     prefix = run_prefix(run_id)

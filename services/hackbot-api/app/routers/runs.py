@@ -1,12 +1,13 @@
 import json
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import gcs, jobs
+from app import gcs, jobs, pubsub
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
 from app.config import settings
@@ -14,7 +15,6 @@ from app.database.connection import get_db
 from app.database.models import Run
 from app.jobs import ExecutionStatus
 from app.schemas import (
-    TERMINAL_STATUSES,
     AgentDescriptor,
     RunDoc,
     RunRef,
@@ -115,14 +115,12 @@ async def list_runs(
 
 @router.get("/runs/{run_id}", response_model=RunDoc)
 async def get_run(run_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> RunDoc:
+    # A plain DB read: completion is detected out-of-band by finalize_run,
+    # invoked from the Eventarc-triggered /internal/events/agent-run-finished
+    # route (see app/routers/events.py), not from this request.
     run = await db.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-
-    if run.status in {s.value for s in TERMINAL_STATUSES} or run.execution_name is None:
-        return RunDoc.model_validate(run)
-
-    await _reconcile(db, run)
     return RunDoc.model_validate(run)
 
 
@@ -142,15 +140,6 @@ async def get_artifact_download_url(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    # Refresh artifacts for runs that may have completed since the last poll,
-    # so a freshly finished run's artifacts are visible here without first
-    # requiring a GET /runs/{run_id} call.
-    if (
-        run.status not in {s.value for s in TERMINAL_STATUSES}
-        and run.execution_name is not None
-    ):
-        await _reconcile(db, run)
-
     known = {a.get("name") for a in (run.artifacts or [])}
     if artifact_path not in known:
         raise HTTPException(status_code=404, detail="Artifact not found")
@@ -162,7 +151,16 @@ async def get_artifact_download_url(
     return {"url": url}
 
 
-async def _reconcile(db: AsyncSession, run: Run) -> None:
+async def finalize_run(db: AsyncSession, run: Run) -> None:
+    """Bring `run` to its terminal state and publish RunCompleted, once.
+
+    Invoked from the Eventarc-triggered agent-run-finished route instead
+    of from a client request. Idempotent via `finalized_at`, since Eventarc's
+    at-least-once delivery can call this more than once for the same run.
+    """
+    if run.finalized_at is not None:
+        return
+
     assert run.execution_name is not None
     try:
         exec_status = await jobs.get_execution_status(run.execution_name)
@@ -190,8 +188,10 @@ async def _reconcile(db: AsyncSession, run: Run) -> None:
         run.summary = summary.model_dump(mode="json")
     if error is not None:
         run.error = error
+    run.finalized_at = datetime.now(timezone.utc)
 
     await db.commit()
+    await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
 
 
 def _terminal_status(
