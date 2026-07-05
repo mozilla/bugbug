@@ -1,9 +1,16 @@
-"""Tests for the Pub/Sub push envelope decoding used by both internal event routes (agent-run-finished, apply-run-actions)."""
+"""Tests for the internal event routes (agent-run-finished, apply-run-actions).
+
+Covers the Pub/Sub push envelope decode and extracting the execution name from
+a Cloud Run Jobs `system_event` completion LogEntry (routed via a logging sink).
+"""
 
 import base64
 import json
 
-from app.routers.events import _cloud_run_execution_name, _decode_pubsub_push_body
+from app.routers.events import (
+    _decode_pubsub_push_body,
+    _execution_name_from_completion_log,
+)
 
 
 def _push_envelope(payload: dict) -> dict:
@@ -24,18 +31,45 @@ def test_decode_pubsub_push_body_missing_data():
     assert _decode_pubsub_push_body({"message": {}}) == {}
 
 
-def test_cloud_run_execution_name_from_proto_payload():
-    event = {
+def _completion_log(status: str) -> dict:
+    """A Cloud Run Jobs execution-completion system_event LogEntry."""
+    return {
         "protoPayload": {
             "resourceName": "projects/p/locations/l/jobs/j/executions/e",
-            "methodName": "google.cloud.run.v2.Executions.RunExecution",
+            "response": {
+                "status": {"conditions": [{"type": "Completed", "status": status}]}
+            },
+        },
+        "resource": {
+            "type": "cloud_run_job",
+            "labels": {"job_name": "hackbot-agent-bug-fix"},
+        },
+    }
+
+
+def test_execution_name_from_completion_log_success_and_failure():
+    # Both terminal outcomes carry the same execution resourceName.
+    for status in ("True", "False"):
+        assert (
+            _execution_name_from_completion_log(_completion_log(status))
+            == "projects/p/locations/l/jobs/j/executions/e"
+        )
+
+
+def test_execution_name_falls_back_to_response_metadata_name():
+    entry = {
+        "protoPayload": {
+            "response": {"metadata": {"name": "namespaces/p/executions/e"}}
         }
     }
-    assert (
-        _cloud_run_execution_name(event) == "projects/p/locations/l/jobs/j/executions/e"
-    )
+    assert _execution_name_from_completion_log(entry) == "namespaces/p/executions/e"
 
 
-def test_cloud_run_execution_name_missing():
-    assert _cloud_run_execution_name({"protoPayload": {}}) is None
-    assert _cloud_run_execution_name({}) is None
+def test_execution_name_falls_back_to_labels():
+    entry = {"labels": {"run.googleapis.com/execution_name": "e-123"}}
+    assert _execution_name_from_completion_log(entry) == "e-123"
+
+
+def test_execution_name_missing():
+    assert _execution_name_from_completion_log({"protoPayload": {}}) is None
+    assert _execution_name_from_completion_log({}) is None
