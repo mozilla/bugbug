@@ -24,7 +24,7 @@ router = APIRouter(
 def _decode_pubsub_push_body(body: dict) -> dict:
     """Decode a standard Pub/Sub push envelope's `message.data` as JSON.
 
-    Both the Eventarc trigger below (agent-run-finished) and the
+    Both the completion-log push subscription feeding agent-run-finished and the
     `agent-run-events` action-applier subscription deliver via this same
     envelope shape.
     """
@@ -35,21 +35,51 @@ def _decode_pubsub_push_body(body: dict) -> dict:
     return json.loads(base64.b64decode(data))
 
 
-def _cloud_run_execution_name(audit_log_entry: dict) -> str | None:
-    """Cloud Run Jobs adapter: pull the Execution resource name from an audit log.
+def _execution_name_from_completion_log(entry: dict) -> str | None:
+    """Cloud Run Jobs adapter: pull the Execution name from a completion LogEntry.
 
-    Eventarc wraps the raw Audit Log entry as the CloudEvent payload; the
-    entry's `protoPayload.resourceName` is the full Execution resource name
-    (e.g. `projects/P/locations/L/jobs/J/executions/E`), matching what
-    `app.jobs.get_execution_status` and `Run.execution_name` already use.
+    A logging sink routes the control-plane `system_event` audit log that fires
+    when an execution's `Completed` condition changes (success or failure);
+    Pub/Sub delivers that LogEntry as the message body. The execution resource
+    name can appear in a few places depending on the log format, so check the
+    likely ones. Correlation to `Run.execution_name` (set from the run_v2
+    execution name) tolerates prefix differences via a suffix match in the
+    route, so returning any of these forms is fine.
 
-    This is the platform-specific half of `agent_run_finished`. Running agents
-    on another platform (e.g. Cloud Batch) later means adding a sibling parser
-    that extracts that platform's job identifier from its event, without
-    touching the platform-neutral finalize path below.
+    Only this half is Cloud-Run-specific: a future platform adds a sibling
+    parser feeding the same platform-neutral finalize path below.
     """
-    proto_payload = audit_log_entry.get("protoPayload") or audit_log_entry
-    return proto_payload.get("resourceName")
+    proto_payload = entry.get("protoPayload") or {}
+    response = proto_payload.get("response") or {}
+    metadata = response.get("metadata") or {}
+    labels = entry.get("labels") or {}
+    return (
+        proto_payload.get("resourceName")
+        or metadata.get("name")
+        or labels.get("run.googleapis.com/execution_name")
+    )
+
+
+async def _find_run_for_execution(db: AsyncSession, execution_name: str) -> Run | None:
+    """Find the Run for a completion event's execution name.
+
+    Prefers an exact match on the stored execution_name; falls back to matching
+    the execution short-name (last path segment) as a suffix, so a v1
+    (`namespaces/...`) vs v2 (`projects/.../executions/E`) prefix mismatch
+    between the log entry and what run_v2 stored doesn't break correlation.
+    """
+    result = await db.execute(select(Run).where(Run.execution_name == execution_name))
+    run = result.scalar_one_or_none()
+    if run is not None:
+        return run
+
+    short = execution_name.rsplit("/", 1)[-1]
+    if short and short != execution_name:
+        result = await db.execute(
+            select(Run).where(Run.execution_name.like(f"%/{short}"))
+        )
+        run = result.scalar_one_or_none()
+    return run
 
 
 @router.post("/agent-run-finished", status_code=204)
@@ -58,21 +88,22 @@ async def agent_run_finished(
 ) -> None:
     """Ingress for 'an agent run's underlying execution reached a terminal state'.
 
-    Named by the domain outcome, not the platform mechanism: it's currently
-    fed by an Eventarc trigger on Cloud Run Jobs execution state, but the name
-    and the finalize path stay valid if agents move to / add another execution
-    platform — only the payload parsing (see `_cloud_run_execution_name`) is
-    platform-specific.
+    Named by the domain outcome, not the platform mechanism: it's fed by a
+    Cloud Logging sink on Cloud Run Jobs `system_event` completion logs (which
+    fire for success and failure alike, incl. OOM/crash). The name and the
+    finalize path stay valid if agents move to / add another execution platform
+    — only the payload parsing (see `_execution_name_from_completion_log`) is
+    platform-specific. `finalize_run` re-queries the authoritative status, so
+    this route just needs to identify which run finished.
     """
     body = await request.json()
     event = _decode_pubsub_push_body(body)
-    execution_name = _cloud_run_execution_name(event)
+    execution_name = _execution_name_from_completion_log(event)
     if not execution_name:
-        log.warning("agent-run-finished event missing resourceName: %s", event)
+        log.warning("agent-run-finished event missing execution name: %s", event)
         return
 
-    result = await db.execute(select(Run).where(Run.execution_name == execution_name))
-    run = result.scalar_one_or_none()
+    run = await _find_run_for_execution(db, execution_name)
     if run is None:
         log.warning("No run found for execution %s", execution_name)
         return
