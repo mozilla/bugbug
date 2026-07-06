@@ -9,7 +9,7 @@ from typing import NoReturn
 
 from pydantic import ValidationError
 
-from hackbot_runtime import anthropic_wif
+from hackbot_runtime import anthropic_wif, tracing
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.results import HackbotAgentResult
@@ -189,7 +189,8 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
 
     try:
         _configure_auth()
-        outcome: object = entrypoint(ctx)
+        with tracing.trace_agent(entrypoint):
+            outcome: object = entrypoint(ctx)
     except Exception as exc:
         log.exception("Agent raised an exception")
         outcome = exc
@@ -205,7 +206,8 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
 
     try:
         _configure_auth()
-        outcome: object = asyncio.run(entrypoint(ctx))
+        with tracing.trace_agent(entrypoint):
+            outcome: object = asyncio.run(entrypoint(ctx))
     except Exception as exc:
         log.exception("Agent raised an exception")
         outcome = exc
