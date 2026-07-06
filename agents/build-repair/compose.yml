@@ -28,6 +28,7 @@ services:
       - BUGZILLA_MCP_URL=http://build-repair-broker:8765/mcp
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
       # No uploader locally: summary/logs/artifacts are written under
       # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
       - ARTIFACTS_DIR=/artifacts
