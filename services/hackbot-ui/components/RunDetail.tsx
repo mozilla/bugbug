@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { updateRunStatus } from "@/lib/store";
 import { isTerminal, type RunDoc } from "@/lib/types";
+import { FindingsView } from "./FindingsView";
 import { StatusBadge } from "./StatusBadge";
 
 const POLL_MS = 4000;
@@ -142,12 +143,7 @@ export function RunDetail({ runId }: { runId: string }) {
         </div>
       )}
 
-      {hasFindings && (
-        <div className="panel">
-          <h2>Findings</h2>
-          <pre className="log">{JSON.stringify(findings, null, 2)}</pre>
-        </div>
-      )}
+      {hasFindings && <FindingsView findings={findings} />}
 
       <div className="panel">
         <h2>Artifacts ({run.artifacts.length})</h2>
