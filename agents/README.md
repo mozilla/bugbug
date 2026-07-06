@@ -100,6 +100,36 @@ the repo's root `docker-compose.yml`, so running it is three steps:
    untracked files) plus a `changes/changes.json` summary. Apply it with one command:
    `git am changes/changes.patch`.
 
+## Tracing (Weave)
+
+Tracing is handled once in the runtime (`hackbot_runtime.tracing`), so every agent
+gets it for free — there's nothing to add per agent. On startup the runtime calls
+`weave.init()`, which autopatches the Claude Agent SDK (ant other frameworks) and captures each query,
+model response, and tool call, and it labels the traces with the agent's name (so
+the Weave **Agents** view shows `build-repair`, `bug-fix`, etc.
+
+It is **opt-in**: the runtime only enables tracing when `WANDB_API_KEY` is set, and
+never fails a run if Weave can't start. Two env vars control it:
+
+- `WANDB_API_KEY` — enables tracing. Absent → no-op.
+- `WEAVE_PROJECT` — the project traces land in (defaults to `hackbot-test`).
+
+**Locally**, add the key to your root `.env`; the agent's `compose.yml` should
+pass `WANDB_API_KEY` through to the agent container.
+
+`.env`:
+
+```dotenv
+WANDB_API_KEY=...
+```
+
+`compose.yml`:
+
+```yaml
+environment:
+  - WANDB_API_KEY=${WANDB_API_KEY:-}
+```
+
 ## Telling the platform what you need (`hackbot.toml`)
 
 Think of `hackbot.toml` as your request to the platform: "please have these ready for me."
