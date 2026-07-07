@@ -1,5 +1,6 @@
 import logging
 import signal
+from concurrent.futures import ThreadPoolExecutor
 
 from app import consumer
 from app.config import settings
@@ -18,7 +19,8 @@ def main() -> None:
         logger.warning("PULSE_USER/PULSE_PASSWORD not set; listener will not start")
         return
 
-    consumer_obj = consumer.build_consumer()
+    executor = ThreadPoolExecutor(max_workers=settings.poll_max_workers)
+    consumer_obj = consumer.build_consumer(executor)
 
     def shutdown(signum, _frame):
         logger.info("Received signal %s; shutting down", signum)
@@ -32,7 +34,10 @@ def main() -> None:
         ", ".join(consumer.EXCHANGES),
         sorted(settings.watched_repos_set),
     )
-    consumer_obj.run()
+    try:
+        consumer_obj.run()
+    finally:
+        executor.shutdown(wait=False)
 
 
 if __name__ == "__main__":

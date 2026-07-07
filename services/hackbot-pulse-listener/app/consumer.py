@@ -1,10 +1,11 @@
 import logging
+from concurrent.futures import Executor
 
 from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, lando, taskcluster
+from app import client, lando, taskcluster, worker
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ _seen: TTLCache = TTLCache(
 )
 
 
-def process(body: dict) -> str | None:
+def process(body: dict, executor: Executor) -> str | None:
     """Handle one Taskcluster failure message. Returns the triggered run id."""
     tags = (body.get("task") or {}).get("tags") or {}
 
@@ -33,6 +34,7 @@ def process(body: dict) -> str | None:
 
     task_id = body["status"]["taskId"]
     task_name = tags.get("label") or task_id
+    developer_email = tags.get("createdForUser")
 
     hg_revision = taskcluster.get_hg_revision(task_id)
     if not hg_revision:
@@ -79,13 +81,17 @@ def process(body: dict) -> str | None:
         hg_revision,
         git_commit,
     )
+    if run_id is not None:
+        executor.submit(
+            worker.poll_and_notify, run_id, git_commit, project, developer_email
+        )
     return run_id
 
 
-def make_handler():
+def make_handler(executor: Executor):
     def on_message(body, message):
         try:
-            process(body)
+            process(body, executor)
         except Exception:
             logger.exception("Error handling pulse message")
         finally:
@@ -120,10 +126,10 @@ class BuildFailureConsumer(ConsumerMixin):
         return [Consumer(queues=self.queues, callbacks=[self.on_message])]
 
 
-def build_consumer() -> BuildFailureConsumer:
+def build_consumer(executor: Executor) -> BuildFailureConsumer:
     connection = Connection(
         CONNECTION_URL.format(settings.pulse_user, settings.pulse_password)
     )
     return BuildFailureConsumer(
-        connection, _build_queues(settings.pulse_user), make_handler()
+        connection, _build_queues(settings.pulse_user), make_handler(executor)
     )

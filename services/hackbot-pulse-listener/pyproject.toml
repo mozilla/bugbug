@@ -8,6 +8,7 @@ dependencies = [
     "taskcluster>=97.1,<100.4",
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
+    "sendgrid>=6.12.5",
     "cachetools>=5.3.0",
     "sentry-sdk>=2.51.0",
 ]

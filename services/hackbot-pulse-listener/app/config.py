@@ -10,18 +10,30 @@ class Settings(BaseSettings):
     # hackbot-api
     hackbot_api_url: str = ""
     hackbot_api_key: str = ""
+    hackbot_ui_url: str = ""
     agent_name: str = "build-repair"
 
     # Failure filtering and agent inputs.
     # ``watched_repos`` is a comma-separated list of Taskcluster ``project`` tags.
-    watched_repos: str = "try,autoland"
+    watched_repos: str = "autoland"
     run_try_push: bool = False
     model: str | None = None
     max_turns: int | None = None
 
-    # Dedupe (in-memory, by git revision)
+    # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60
     dedupe_max_size: int = 4096
+
+    # Polling the API for run completion
+    poll_interval_seconds: int = 60
+    run_max_age_minutes: int = 12 * 60
+    poll_max_workers: int = 8
+
+    # Email notifications (SendGrid)
+    sendgrid_api_key: str | None = None
+    notification_sender: str | None = None
+    # Send all notifications to this address instead of the developer (local testing).
+    notification_override_email: str | None = None
 
     dry_run: bool = False
     environment: str = "development"

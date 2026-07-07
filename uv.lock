@@ -2594,6 +2594,7 @@ dependencies = [
     { name = "httpx" },
     { name = "kombu" },
     { name = "pydantic-settings" },
+    { name = "sendgrid" },
     { name = "sentry-sdk" },
     { name = "taskcluster" },
 ]
@@ -2610,6 +2611,7 @@ requires-dist = [
     { name = "kombu", specifier = ">=5.6,<6" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
     { name = "taskcluster", specifier = ">=97.1,<100.4" },
 ]
