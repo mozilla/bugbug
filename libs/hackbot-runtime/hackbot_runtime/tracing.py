@@ -2,16 +2,15 @@
 
 ``weave.init()`` autopatches the Claude Agent SDK, so calling it once in the
 runtime before an agent's ``main()`` runs captures every query, model response,
-and tool call as a trace with no per-agent instrumentation. Tracing is opt-in:
-it activates only when ``WANDB_API_KEY`` is set (the orchestrator injects it from
-Secret Manager) and never fails the run if Weave can't start.
+and tool call as a trace with no per-agent instrumentation. It authenticates
+either from ``WANDB_API_KEY`` (local/dev) or, in deployment, from the short-lived
+identity token that :mod:`hackbot_runtime.wandb_wif` writes -- so the agent
+container needs no long-lived W&B credential. Tracing is opt-in: it activates
+only when one of those is present, and never fails the run if Weave can't start.
 
-The SDK integration emits OpenTelemetry ``invoke_agent`` spans and, since the
-Claude Agent SDK has no agent-name concept, labels them ``claude_agent_sdk`` for
-every agent. ``weave.conversation.agent_name_override`` relabels those spans (it
-is resolved per span at creation, so it holds across the async SDK calls), which
-is what lets the dashboard tell the hackbot agents apart. Weave resolves it from
-its OTel span path, so init-level ``attributes`` do not reach these spans.
+The SDK integration otherwise labels every agent ``claude_agent_sdk``;
+``agent_name_override`` relabels the spans with the running agent's name so the
+dashboard can tell the agents apart.
 """
 
 import contextlib
@@ -21,9 +20,12 @@ import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
+from hackbot_runtime import wandb_wif
+
 log = logging.getLogger("hackbot_runtime")
 
-# Weave project traces land in when the orchestrator doesn't set WEAVE_PROJECT.
+# Weave project traces land in when the deploy doesn't set WEAVE_PROJECT. Accepts
+# either "project" or "entity/project".
 DEFAULT_WEAVE_PROJECT = "hackbot-test"
 
 
@@ -41,8 +43,14 @@ def resolve_agent_name(entrypoint: Callable) -> str:
 
 
 def _init_weave() -> bool:
-    """Initialize Weave when configured; return whether tracing is enabled."""
-    if not os.environ.get("WANDB_API_KEY"):
+    """Initialize Weave when credentials are available; return whether enabled.
+
+    Credentials come from ``WANDB_API_KEY`` (local) or the identity token file set
+    by :mod:`wandb_wif` (deployment via federation). No-op when neither is present.
+    """
+    if not (
+        os.environ.get("WANDB_API_KEY") or os.environ.get(wandb_wif.TOKEN_FILE_ENV)
+    ):
         return False
 
     project = os.environ.get("WEAVE_PROJECT", DEFAULT_WEAVE_PROJECT)
@@ -60,7 +68,7 @@ def _init_weave() -> bool:
 def trace_agent(entrypoint: Callable) -> Iterator[None]:
     """Trace the agent run and label its Weave spans with the agent's name.
 
-    A no-op when tracing isn't configured (no ``WANDB_API_KEY``).
+    A no-op when tracing isn't configured (no W&B credentials).
     """
     if not _init_weave():
         yield
