@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Generic, Literal
 
@@ -82,19 +83,58 @@ class TaskConfig:
 
 
 @dataclass
-class RunTracker:
-    num_turns: int = 0
-    total_cost_usd: float = 0.0
-    tasks: list[str] = field(default_factory=lambda: [])
+class TaskRun:
+    name: str
+    start_time: datetime
+    end_time: datetime
+    num_turns: int
+    total_cost_usd: float | None
 
-    def update(self, result_msg: ResultMessage) -> None:
-        self.num_turns += result_msg.num_turns
-        if result_msg.total_cost_usd is not None:
-            self.total_cost_usd += result_msg.total_cost_usd
+
+class RunTracker:
+    def __init__(self):
+        self.task_runs: list[TaskRun] = field(default_factory=lambda: [])
+        self.current_task: tuple[str, datetime] | None = None
+
+    @property
+    def num_turns(self) -> int:
+        return sum(item.num_turns for item in self.task_runs)
+
+    @property
+    def total_cost_usd(self) -> float:
+        return sum(
+            item.total_cost_usd
+            for item in self.task_runs
+            if item.total_cost_usd is not None
+        )
+
+    def start_task(self, name: str) -> None:
+        self.current_task = name, datetime.now()
+
+    def end_task(self, name: str, result_msg: ResultMessage) -> None:
+        if self.current_task is None:
+            logger.warning("Got end_task without start_task")
+            return
+        current_name, start_time = self.current_task
+        if current_name != name:
+            logger.warning(
+                "Got end_task with name %s but current_task was %s", name, current_name
+            )
+            self.current_task = None
+            return
+        self.task_runs.append(
+            TaskRun(
+                name=name,
+                start_time=start_time,
+                end_time=datetime.now(),
+                num_turns=result_msg.num_turns,
+                total_cost_usd=result_msg.total_cost_usd,
+            )
+        )
 
 
 class Task(ABC, Generic[ResultT]):
-    name: str
+    name: str = "unnamed-task"
     result_server_name: str = RESULT_SERVER_NAME
     submit_result_tool: str = SUBMIT_RESULT_TOOL
     result_cls: type[ResultT]
@@ -144,7 +184,7 @@ class Task(ABC, Generic[ResultT]):
         )
 
     async def run(self) -> ResultT:
-        self.run_tracker.tasks.append(self.name)
+        self.run_tracker.start_task(self.name)
         subject = self.subject()
         preview = str(subject)
         if len(preview) > 200:
@@ -165,7 +205,7 @@ class Task(ABC, Generic[ResultT]):
 
         if result_msg is None:
             raise AgentError(f"{subject}: agent produced no result message")
-        self.run_tracker.update(result_msg)
+        self.run_tracker.end_task(self.name, result_msg)
         if result_msg.is_error:
             raise AgentError(
                 f"{subject} investigation failed: {result_msg.result or result_msg.subtype}"
@@ -193,7 +233,7 @@ class Reproduction(Task):
         super().__init__(task_config, run_tracker)
         self.input_data = input_data
         self.add_mcp_server(
-            "firefox_devtools",
+            "firefox-devtools",
             build_devtools_server(
                 firefox_path=firefox_path,
                 headless=True,
