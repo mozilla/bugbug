@@ -30,3 +30,15 @@ def get_run(run_id: str) -> dict:
     resp = httpx.get(url, headers=_headers(), timeout=_TIMEOUT)
     resp.raise_for_status()
     return resp.json()
+
+
+def get_artifact(run_id: str, name: str) -> str | None:
+    """Download a run artifact's text content, or None if it is missing."""
+    url = f"{settings.hackbot_api_url}/runs/{run_id}/artifacts/{name}"
+    resp = httpx.get(url, headers=_headers(), timeout=_TIMEOUT)
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    download = httpx.get(resp.json()["url"], timeout=_TIMEOUT)
+    download.raise_for_status()
+    return download.text

@@ -22,6 +22,7 @@
 #   HACKBOT_API_URL=https://hackbot-api-xxxx.run.app \
 #   HACKBOT_UI_URL=https://hackbot-ui-xxxx.run.app \
 #   PULSE_USER=my-pulse-user NOTIFICATION_SENDER=<verified SendGrid sender> \
+#   NOTIFICATION_TEAM_EMAIL=hackbot-developers@mozilla.com \
 #   ./deploy.sh
 set -euo pipefail
 
@@ -34,6 +35,7 @@ HACKBOT_UI_URL="${HACKBOT_UI_URL:?set HACKBOT_UI_URL to the hackbot-ui base URL}
 PULSE_USER="${PULSE_USER:?set PULSE_USER (https://pulseguardian.mozilla.org)}"
 WATCHED_REPOS="${WATCHED_REPOS:-autoland}"
 NOTIFICATION_SENDER="${NOTIFICATION_SENDER:?set NOTIFICATION_SENDER (verified SendGrid sender)}"
+NOTIFICATION_TEAM_EMAIL="${NOTIFICATION_TEAM_EMAIL:-}"
 
 SA_NAME="${SA_NAME:-hackbot-pulse-listener-run}"
 SA_EMAIL="${SA_EMAIL:-${SA_NAME}@${PROJECT}.iam.gserviceaccount.com}"
@@ -72,6 +74,7 @@ echo "==> Deploying worker pool"
 ENV_VARS="HACKBOT_API_URL=${HACKBOT_API_URL},HACKBOT_UI_URL=${HACKBOT_UI_URL}"
 ENV_VARS="${ENV_VARS},PULSE_USER=${PULSE_USER},WATCHED_REPOS=${WATCHED_REPOS}"
 ENV_VARS="${ENV_VARS},NOTIFICATION_SENDER=${NOTIFICATION_SENDER}"
+ENV_VARS="${ENV_VARS},NOTIFICATION_TEAM_EMAIL=${NOTIFICATION_TEAM_EMAIL}"
 
 gcloud run worker-pools deploy "${SERVICE}" \
   --image "${IMAGE}" \

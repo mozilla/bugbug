@@ -88,7 +88,7 @@ def test_unwatched_project_skipped_before_api_call():
         patch.object(consumer.taskcluster, "get_hg_revision") as get_rev,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
-        assert consumer.process(_build_msg(project="mozilla-central"), executor) is None
+        assert consumer.process(_build_msg(project="try"), executor) is None
 
     get_rev.assert_not_called()
     trigger.assert_not_called()

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # Email notifications (SendGrid)
     sendgrid_api_key: str | None = None
     notification_sender: str | None = None
+    # Team address CC'd on every notification alongside the revision author.
+    notification_team_email: str | None = None
     # Send all notifications to this address instead of the developer (local testing).
     notification_override_email: str | None = None
 

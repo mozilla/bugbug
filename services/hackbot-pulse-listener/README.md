@@ -31,7 +31,7 @@ uv run --package hackbot-pulse-listener python -m app
 ```
 
 Email is sent only when `SENDGRID_API_KEY` and `NOTIFICATION_SENDER` are set; otherwise it
-is logged and skipped. Set `NOTIFICATION_OVERRIDE_EMAIL` to route every notification to a
+is logged and skipped. Notifications go to the revision author and, if set, the `NOTIFICATION_TEAM_EMAIL` team address. Set `NOTIFICATION_OVERRIDE_EMAIL` to route every notification to a
 single address (useful for local testing).
 
 ## Test
