@@ -3,6 +3,7 @@ import re
 
 from app import client
 from app.config import settings
+from app.models import RunContext
 
 logger = logging.getLogger(__name__)
 
@@ -10,24 +11,18 @@ PATCH_ARTIFACT = "changes/changes.patch"
 MAX_PATCH_LINES = 400
 
 
-def send_email(
-    developer_email: str | None,
-    revision: str,
-    repo: str,
-    run_id: str,
-    run_doc: dict,
-) -> None:
-    """Email the developer the fix. Only succeeded runs are notified."""
+def send_email(ctx: RunContext, run_doc: dict) -> None:
+    """Email the developer and team the fix. Only succeeded runs are notified."""
     if run_doc.get("status") != "succeeded":
-        logger.info("Run %s did not succeed; skipping notification", run_id)
+        logger.info("Run %s did not succeed; skipping notification", ctx.run_id)
         return
 
-    recipients = _recipients(developer_email)
+    recipients = _recipients(ctx.developer_email)
     if not recipients:
-        logger.info("No recipients for run %s; skipping notification", run_id)
+        logger.info("No recipients for run %s; skipping notification", ctx.run_id)
         return
     if not (settings.sendgrid_api_key and settings.notification_sender):
-        logger.info("SendGrid not configured; skipping email for run %s", run_id)
+        logger.info("SendGrid not configured; skipping email for run %s", ctx.run_id)
         return
 
     import markdown2
@@ -42,10 +37,10 @@ def send_email(
         To,
     )
 
-    subject = f"[build-repair] fix for {repo}@{revision[:12]}"
+    subject = f"[build-repair] fix for {ctx.repo}@{ctx.git_commit[:12]}"
 
-    patch = _fetch_patch(run_id, run_doc)
-    body_md = _build_body(revision, repo, run_id, run_doc, patch)
+    patch = _fetch_patch(ctx.run_id, run_doc)
+    body_md = _build_body(ctx, run_doc, patch)
     html = markdown2.markdown(body_md, extras=["fenced-code-blocks", "tables"])
 
     sg = sendgrid.SendGridAPIClient(api_key=settings.sendgrid_api_key)
@@ -92,20 +87,41 @@ def _fetch_patch(run_id: str, run_doc: dict) -> str | None:
         return None
 
 
-def _build_body(
-    revision: str, repo: str, run_id: str, run_doc: dict, patch: str | None = None
-) -> str:
+def _git_url(git_commit: str) -> str:
+    return f"{settings.firefox_git_url.rstrip('/')}/commit/{git_commit}"
+
+
+def _hg_url(hg_revision: str) -> str:
+    return f"{settings.firefox_hg_url.rstrip('/')}/rev/{hg_revision}"
+
+
+def _task_url(task_id: str) -> str:
+    return f"{settings.taskcluster_root_url.rstrip('/')}/tasks/{task_id}"
+
+
+def _bug_url(bug_id: object) -> str:
+    return f"{settings.bugzilla_url.rstrip('/')}/show_bug.cgi?id={bug_id}"
+
+
+def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str:
     summary = run_doc.get("summary") or {}
     findings = summary.get("findings") or {}
 
     lines = [
         "# Build-repair fix ready",
         "",
-        f"- **Repository:** {repo}",
-        f"- **Revision:** `{revision}`",
+        f"- **Repository:** {ctx.repo}",
+        f"- **Revision (git):** [`{ctx.git_commit[:12]}`]({_git_url(ctx.git_commit)})",
+        f"- **Revision (hg):** [`{ctx.hg_revision[:12]}`]({_hg_url(ctx.hg_revision)})",
+        f"- **Failed task:** [`{ctx.task_id}`]({_task_url(ctx.task_id)})",
     ]
+
+    bug_id = findings.get("bug_id") or (run_doc.get("inputs") or {}).get("bug_id")
+    if bug_id:
+        lines.append(f"- **Bug:** [{bug_id}]({_bug_url(bug_id)})")
+
     if settings.hackbot_ui_url:
-        run_url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{run_id}"
+        run_url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
         lines.append(f"- **Run details:** {run_url}")
 
     if findings.get("summary"):

@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     hackbot_ui_url: str = ""
     agent_name: str = "build-repair"
 
+    # Source links shown in notifications.
+    firefox_git_url: str = "https://github.com/mozilla-firefox/firefox"
+    firefox_hg_url: str = "https://hg.mozilla.org/mozilla-unified"
+    bugzilla_url: str = "https://bugzilla.mozilla.org"
+
     # Failure filtering and agent inputs.
     # ``watched_repos`` is a comma-separated list of Taskcluster ``project`` tags.
     watched_repos: str = "autoland"

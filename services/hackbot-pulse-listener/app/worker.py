@@ -3,37 +3,36 @@ import time
 
 from app import client, notify
 from app.config import settings
+from app.models import RunContext
 
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = {"succeeded", "failed", "timed_out"}
 
 
-def poll_and_notify(
-    run_id: str, revision: str, repo: str, developer_email: str | None
-) -> None:
-    """Poll the run until terminal, then notify the developer.
+def poll_and_notify(ctx: RunContext) -> None:
+    """Poll the run until terminal, then notify.
 
     Runs on a background executor thread; never lets an exception escape.
     """
     try:
-        run_doc = _poll_until_terminal(run_id)
+        run_doc = _poll_until_terminal(ctx.run_id)
     except Exception:
-        logger.exception("Polling failed for run %s", run_id)
+        logger.exception("Polling failed for run %s", ctx.run_id)
         return
 
     if run_doc is None:
         logger.warning(
             "Run %s did not finish within %s minutes; giving up",
-            run_id,
+            ctx.run_id,
             settings.run_max_age_minutes,
         )
         return
 
     try:
-        notify.send_email(developer_email, revision, repo, run_id, run_doc)
+        notify.send_email(ctx, run_doc)
     except Exception:
-        logger.exception("Failed to send notification for run %s", run_id)
+        logger.exception("Failed to send notification for run %s", ctx.run_id)
 
 
 def _poll_until_terminal(run_id: str) -> dict | None:

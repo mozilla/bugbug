@@ -7,6 +7,7 @@ from kombu.mixins import ConsumerMixin
 
 from app import client, lando, taskcluster, worker
 from app.config import settings
+from app.models import RunContext
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +83,15 @@ def process(body: dict, executor: Executor) -> str | None:
         git_commit,
     )
     if run_id is not None:
-        executor.submit(
-            worker.poll_and_notify, run_id, git_commit, project, developer_email
+        ctx = RunContext(
+            run_id=run_id,
+            repo=project,
+            git_commit=git_commit,
+            hg_revision=hg_revision,
+            task_id=task_id,
+            developer_email=developer_email,
         )
+        executor.submit(worker.poll_and_notify, ctx)
     return run_id
 
 

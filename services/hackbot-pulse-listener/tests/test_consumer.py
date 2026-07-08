@@ -60,13 +60,14 @@ def test_build_failure_triggers_run_and_submits_poll():
     assert inputs["git_commit"] == "deadbeef"
     assert inputs["failure_tasks"] == {"build-linux64/opt": "ABC"}
     executor.submit.assert_called_once()
-    assert executor.submit.call_args.args == (
-        consumer.worker.poll_and_notify,
-        "run-1",
-        "deadbeef",
-        "autoland",
-        "dev@mozilla.com",
-    )
+    fn, ctx = executor.submit.call_args.args
+    assert fn is consumer.worker.poll_and_notify
+    assert ctx.run_id == "run-1"
+    assert ctx.git_commit == "deadbeef"
+    assert ctx.hg_revision == "hgrev"
+    assert ctx.task_id == "ABC"
+    assert ctx.repo == "autoland"
+    assert ctx.developer_email == "dev@mozilla.com"
 
 
 def test_same_revision_triggers_once():
