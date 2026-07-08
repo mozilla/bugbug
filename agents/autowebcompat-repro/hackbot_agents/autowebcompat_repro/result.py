@@ -62,15 +62,17 @@ class ReproductionResult(BaseModel):
             "provide (a file, image, account, or any other test data), state its "
             "exact origin — the URL you fetched it from, the command you ran, or "
             'how you generated it — not just that you "used" or "saved" it. A '
-            "reader must be able to obtain the same inputs."
+            "reader must be able to obtain the same inputs. Omit the reproduction "
+            "screenshot step."
         ),
     )
-    screenshot: str | None = Field(
+    screenshot_path: str | None = Field(
         description=(
-            """A base64 encoded screenshot showing the issue. This must only be
-            set for issues where the breakage is visual in nature
-            i.e. incorrect site layout rather than broken interaction.
-            Otherwise it must be null"""
+            """The file path you saved a screenshot to via the `screenshot_page`
+            `saveTo` parameter, showing the issue. Use the exact path you passed
+            as `saveTo` (do NOT paste image data). This must only be set for
+            issues where the breakage is visual in nature i.e. incorrect site
+            layout rather than broken interaction. Otherwise it must be null."""
         ),
     )
 
