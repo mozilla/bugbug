@@ -204,7 +204,7 @@ async def run_build_repair(
     captured: dict[str, dict] = {}
     tracked = {BUILD_TOOL, *([TRY_PUSH_TOOL] if run_try_push else [])}
 
-    with Reporter(verbose=verbose, log_path=log) as reporter:
+    with Reporter(verbose=verbose, log_path=log, max_turns=max_turns) as reporter:
         # Stage 1: analysis (high effort, no source edits yet).
         reporter.header(f"{label}: analysis")
         analysis_opts = _build_options(
