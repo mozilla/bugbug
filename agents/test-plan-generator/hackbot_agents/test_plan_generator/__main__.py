@@ -1,11 +1,10 @@
-from hackbot_runtime import HackbotContext, run_async
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from hackbot_runtime import BaseAgentInputs, HackbotContext, run_async
 
 from .agent import TestPlanGeneratorResult, run_test_plan_generator
 from .firefox_install import install_firefox_nightly
 
 
-class AgentInputs(BaseSettings):
+class AgentInputs(BaseAgentInputs):
     feature_name: str
     feature_description: str
     test_scope: str
@@ -13,11 +12,9 @@ class AgentInputs(BaseSettings):
     max_turns: int | None = None
     effort: str | None = None
 
-    model_config = SettingsConfigDict(extra="ignore")
-
 
 async def main(ctx: HackbotContext) -> TestPlanGeneratorResult:
-    inputs = AgentInputs()
+    inputs = ctx.load_inputs(AgentInputs)
 
     firefox_path = str(install_firefox_nightly())
 

@@ -19,15 +19,20 @@ import tempfile
 import uuid
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import Field, PrivateAttr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from hackbot_runtime import artifacts, changes
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
+from hackbot_runtime.remote_config import load_remote_config
 from hackbot_runtime.source import ensure_source_repo
 from hackbot_runtime.uploader import SignedPolicyUploader
 
@@ -35,6 +40,26 @@ if TYPE_CHECKING:
     from agent_tools.firefox import FirefoxContext
 
 log = logging.getLogger("hackbot_runtime.context")
+
+
+class BaseAgentInputs(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Environment variables override settings passed through
+        # as init parameters
+        return (env_settings, dotenv_settings, init_settings, file_secret_settings)
+
+
+InputsType = TypeVar("InputsType", bound=BaseAgentInputs)
 
 
 def _default_run_id() -> str:
@@ -62,6 +87,7 @@ class HackbotContext(BaseSettings):
     results_prefix: str = ""
     results_policy_url: str | None = None
     results_policy_fields: dict[str, str] = {}
+    run_inputs_url: str | None = None
     # Base for locally-persisted artifacts when no uploader is configured
     # (compose/direct runs). Each run is namespaced under it by run_id (see
     # `run_artifacts_dir`). Overridable via ARTIFACTS_DIR — compose points this
@@ -176,6 +202,14 @@ class HackbotContext(BaseSettings):
     @cached_property
     def actions(self) -> ActionsRecorder:
         return ActionsRecorder(self.uploader, artifacts_dir=self.run_artifacts_dir)
+
+    def load_inputs(self, inputs_cls: type[InputsType]) -> InputsType:
+        remote_config = load_remote_config(self.run_inputs_url)
+        if remote_config:
+            kwargs = remote_config
+        else:
+            kwargs = {}
+        return inputs_cls(**kwargs)
 
     def publish_file(
         self, key: str, path: Path, content_type: str | None = None
