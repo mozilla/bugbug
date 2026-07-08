@@ -2593,13 +2593,13 @@ dependencies = [
     { name = "google-auth" },
     { name = "pydantic-settings" },
     { name = "requests" },
+    { name = "weave" },
 ]
 
 [package.optional-dependencies]
 claude-sdk = [
     { name = "agent-tools", extra = ["claude-sdk"] },
     { name = "claude-agent-sdk" },
-    { name = "weave" },
 ]
 
 [package.metadata]
@@ -2610,7 +2610,7 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "weave", marker = "extra == 'claude-sdk'", specifier = ">=0.53.1" },
+    { name = "weave", specifier = ">=0.53.1" },
 ]
 provides-extras = ["claude-sdk"]
 
