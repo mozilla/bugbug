@@ -26,7 +26,8 @@ def process(body: dict, executor: Executor) -> str | None:
     """Handle one Taskcluster failure message. Returns the triggered run id."""
     tags = (body.get("task") or {}).get("tags") or {}
 
-    if tags.get("kind") != "build":
+    task_label = tags.get("label") or ""
+    if "build" not in task_label or "test" in task_label:
         return None
 
     project = tags.get("project")

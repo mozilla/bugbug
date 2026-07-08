@@ -45,6 +45,14 @@ def test_sample_messages_are_all_tests_and_skipped():
     executor.submit.assert_not_called()
 
 
+def test_missing_label_is_skipped_not_crashed():
+    executor = MagicMock()
+    body = {"status": {"taskId": "XYZ"}, "task": {"tags": {"project": "autoland"}}}
+    with patch.object(consumer.client, "trigger_run") as trigger:
+        assert consumer.process(body, executor) is None
+    trigger.assert_not_called()
+
+
 def test_build_failure_triggers_run_and_submits_poll():
     executor = MagicMock()
     with (
