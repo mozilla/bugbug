@@ -1,3 +1,4 @@
+import base64
 from unittest.mock import MagicMock, patch
 
 from app import notify
@@ -163,3 +164,25 @@ def test_recipients_dedupes_and_skips_empty(monkeypatch):
     assert notify._recipients("dev@mozilla.com") == ["dev@mozilla.com"]
     monkeypatch.setattr(notify.settings, "notification_team_email", None)
     assert notify._recipients(None) == []
+
+
+def test_attaches_patch_file(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    run_doc = {
+        "status": "succeeded",
+        "artifacts": [{"name": notify.PATCH_ARTIFACT}],
+        "summary": {"findings": {}},
+    }
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with (
+        patch("sendgrid.SendGridAPIClient", return_value=fake_client),
+        patch.object(notify.client, "get_artifact", return_value="DIFF-CONTENT"),
+    ):
+        notify.send_email(_ctx(), run_doc)
+
+    attachments = fake_client.send.call_args.kwargs["message"].get()["attachments"]
+    assert len(attachments) == 1
+    assert attachments[0]["filename"] == "changes.patch"
+    assert base64.b64decode(attachments[0]["content"]).decode() == "DIFF-CONTENT"

@@ -1,3 +1,4 @@
+import base64
 import logging
 import re
 
@@ -28,8 +29,13 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
     import markdown2
     import sendgrid
     from sendgrid.helpers.mail import (
+        Attachment,
         Cc,
         Content,
+        Disposition,
+        FileContent,
+        FileName,
+        FileType,
         From,
         HtmlContent,
         Mail,
@@ -52,6 +58,13 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         Content("text/plain", body_md),
         HtmlContent(html),
     )
+    if patch:
+        message.attachment = Attachment(
+            FileContent(base64.b64encode(patch.encode()).decode()),
+            FileName("changes.patch"),
+            FileType("text/x-patch"),
+            Disposition("attachment"),
+        )
     response = sg.send(message=message)
     logger.info(
         "Sent build-repair notification to %s (status %s)",
@@ -171,6 +184,6 @@ def _patch_block(patch: str) -> str:
     if len(patch_lines) > MAX_PATCH_LINES:
         block.append(
             f"\n_Patch truncated to {MAX_PATCH_LINES} lines; "
-            "see run details for the full diff._"
+            "see the attached changes.patch for the full diff._"
         )
     return "\n".join(block)
