@@ -61,6 +61,7 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
         },
+        publish_file=ctx.publish_file,
     )
     end_time = datetime.now()
 

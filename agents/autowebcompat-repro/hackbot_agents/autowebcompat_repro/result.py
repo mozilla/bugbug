@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import imghdr
+from pathlib import Path
 from typing import Generic, Literal, TypeVar
 
 from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 RESULT_SERVER_NAME = "autowebcompat-repro"
 SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
@@ -62,17 +64,31 @@ class ReproductionResult(BaseModel):
             "provide (a file, image, account, or any other test data), state its "
             "exact origin — the URL you fetched it from, the command you ran, or "
             'how you generated it — not just that you "used" or "saved" it. A '
-            "reader must be able to obtain the same inputs."
+            "reader must be able to obtain the same inputs. Omit the reproduction "
+            "screenshot step."
         ),
     )
-    screenshot: str | None = Field(
+    screenshot_path: Path | None = Field(
         description=(
-            """A base64 encoded screenshot showing the issue. This must only be
-            set for issues where the breakage is visual in nature
-            i.e. incorrect site layout rather than broken interaction.
-            Otherwise it must be null"""
+            """The file path you saved a screenshot to via the `screenshot_page`
+            `saveTo` parameter, showing the issue. Use the exact path you passed
+            as `saveTo` (do NOT paste image data). This must only be set for
+            issues where the breakage is visual in nature i.e. incorrect site
+            layout rather than broken interaction. Otherwise it must be null."""
         ),
     )
+
+    @field_validator("screenshot_path", mode="after")
+    @classmethod
+    def validate_screenshot_path(cls, path: Path | None) -> Path | None:
+        if path is None:
+            return None
+
+        if not path.exists():
+            raise ValueError(f"Screenshot path {path} doesn't exist")
+        if imghdr.what(str(path)) != "png":
+            raise ValueError(f"Screenshot path {path} is not a valid PNG image")
+        return path
 
 
 class ChromeMaskResult(BaseModel):

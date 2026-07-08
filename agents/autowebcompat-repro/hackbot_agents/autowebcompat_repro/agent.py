@@ -8,8 +8,11 @@ text or a Bugzilla ``bug_id`` (read via Bugzilla broker).
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Generic, Literal
@@ -43,6 +46,9 @@ HERE = Path(__file__).resolve().parent
 logger = logging.getLogger("autowebcompat-repro")
 
 
+PublishFile = Callable[[str, Path, str | None], str]
+
+
 @dataclass
 class BugIdInput:
     bug_id: int
@@ -69,7 +75,7 @@ class AutowebcompatReproResult(BaseModel):
     summary: str
     failure_reason: str | None
     steps: str
-    screenshot: str | None
+    screenshot_path: str | None
     chrome_mask_fixed: bool | None = None
 
 
@@ -93,7 +99,7 @@ class TaskRun:
 
 class RunTracker:
     def __init__(self):
-        self.task_runs: list[TaskRun] = field(default_factory=lambda: [])
+        self.task_runs: list[TaskRun] = []
         self.current_task: tuple[str, datetime] | None = None
 
     @property
@@ -177,8 +183,8 @@ class Task(ABC, Generic[ResultT]):
             max_turns=self.task_config.max_turns,
             **({"effort": self.task_config.effort} if self.task_config.effort else {}),
             setting_sources=[],
-            # DevTools snapshots/screenshots of complex pages serialize to JSON that
-            # can exceed the SDK's default 1 MiB message buffer (the reader dies
+            # DevTools snapshots of complex pages serialize to JSON that can
+            # exceed the SDK's default 1 MiB message buffer (the reader dies
             # fatally if it does). Raise it well above that ceiling.
             max_buffer_size=10 * 1024 * 1024,
         )
@@ -217,6 +223,13 @@ class Task(ABC, Generic[ResultT]):
         return self.result_collector.result
 
 
+def make_empty_temp_file(dir: Path, prefix: str | None, suffix: str) -> Path:
+    fd, path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=dir)
+    f = os.fdopen(fd)
+    f.close()
+    return Path(path)
+
+
 class Reproduction(Task):
     name = "reproduction"
     result_cls = ReproductionResult
@@ -229,9 +242,13 @@ class Reproduction(Task):
         profile_path: Path,
         input_data: AutoWebcompatInput,
         bugzilla_mcp_server: McpServerConfig,
+        screenshot_dir: Path,
     ):
         super().__init__(task_config, run_tracker)
         self.input_data = input_data
+        self.screenshot_path = make_empty_temp_file(
+            screenshot_dir, "reproduction=", ".png"
+        )
         self.add_mcp_server(
             "firefox-devtools",
             build_devtools_server(
@@ -254,11 +271,18 @@ class Reproduction(Task):
             super()
             .system_prompt()
             .format(
-                task_details="""
+                task_details=f"""
 1. Identify the affected URL and the described broken behavior.
 2. Baseline: Navigate to the URL with the Firefox DevTools MCP and
    try to reproduce the described broken behaviour.
-3. Submit your findings via `submit_result` (see "Reporting your result").
+3. If the issue reproduces AND the breakage is visual in nature (incorrect
+   layout or rendering, not broken interaction), capture a screenshot showing
+   it: call `screenshot_page` with `saveTo` set to `{self.screenshot_path}`.
+   This writes the image to that file instead of returning it — do not capture
+   or paste the image data yourself. Then set `screenshot_path` in your result
+   to exactly `{self.screenshot_path}`. For non-visual issues, take no
+   screenshot and leave `screenshot_path` null.
+4. Submit your findings via `submit_result` (see "Reporting your result").
 """
             )
         )
@@ -340,6 +364,7 @@ async def run_autowebcompat_repro(
     tracker: RunTracker,
     input_data: AutoWebcompatInput,
     bugzilla_mcp_server: McpServerConfig,
+    publish_file: PublishFile,
 ) -> AutowebcompatReproResult:
     """Reproduce a web-compat issue and return the agent's findings.
 
@@ -347,6 +372,8 @@ async def run_autowebcompat_repro(
     :class:`AgentError` if the agent ends in an error.
     """
     nightly_path = install_firefox_nightly()
+
+    screenshots_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-screenshots-"))
 
     # Always try in nightly first
     repro_task = Reproduction(
@@ -356,15 +383,23 @@ async def run_autowebcompat_repro(
         setup_profile(nightly_path, extensions=[]),
         input_data,
         bugzilla_mcp_server,
+        screenshots_dir,
     )
     repro_result = await repro_task.run()
+
+    if repro_result.screenshot_path is not None:
+        screenshot_path = publish_file(
+            "screenshot-nightly.png", repro_result.screenshot_path, "image/png"
+        )
+    else:
+        screenshot_path = None
 
     result = AutowebcompatReproResult(
         reproduced=repro_result.reproduced,
         summary=repro_result.summary,
         failure_reason=repro_result.failure_reason,
         steps=repro_result.steps,
-        screenshot=repro_result.screenshot,
+        screenshot_path=screenshot_path,
     )
 
     if repro_result.reproduced:
