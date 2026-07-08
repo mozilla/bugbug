@@ -1767,34 +1767,3 @@ tasks:
         description: bugbug docker http push
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
-
-    - ID: http-deploy
-      dependencies:
-        - docker-build
-        - integration-test
-      scopes:
-        - secrets:get:project/bugbug/deploy
-      created: { $fromNow: "" }
-      deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 year" }
-      provisionerId: proj-bugbug
-      workerType: compute-smaller
-      payload:
-        features:
-          taskclusterProxy: true
-        maxRunTime: 3600
-        image: ${taskboot_image}
-        env:
-          TASKCLUSTER_SECRET: project/bugbug/deploy
-        command:
-          - "/bin/sh"
-          - "-cxe"
-          - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar.zst' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar.zst'"
-
-      routes:
-        - notify.email.bugbug-team@mozilla.com.on-failed
-      metadata:
-        name: bugbug docker http service deploy
-        description: bugbug docker http service deploy
-        owner: bugbug-team@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
