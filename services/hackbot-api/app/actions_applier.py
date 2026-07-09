@@ -17,7 +17,13 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from hackbot_runtime.actions.handlers import ApplyContext, get_handler
+from hackbot_runtime.actions.handlers import (
+    ActionResult,
+    ApplyContext,
+    get_handler,
+    merge_resolved,
+    plan_coalesced_groups,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -88,10 +94,45 @@ async def ensure_action_rows(
     return rows
 
 
+async def _dispatch(
+    run: Run, action_type: str, params: dict, attachments: list[dict]
+) -> ActionResult:
+    """Run one handler call, converting failures into a failed `ActionResult`.
+
+    A missing handler or a raised exception becomes a failed result so callers
+    can stamp the affected row(s) uniformly.
+    """
+    handler = get_handler(action_type)
+    if handler is None:
+        return ActionResult.failed(
+            f"No handler registered for action type '{action_type}'"
+        )
+
+    ctx = ApplyContext(
+        run_id=str(run.run_id),
+        download_artifact=lambda key, run_id=str(run.run_id): (
+            gcs.download_artifact_bytes(run_id, key)
+        ),
+        attachments=attachments,
+    )
+    try:
+        return await handler.apply(params, ctx)
+    except Exception as exc:
+        log.exception(
+            "Handler for %s raised while applying run %s", action_type, run.run_id
+        )
+        return ActionResult.failed(str(exc))
+
+
 async def _apply_pending_rows(
     db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
 ) -> None:
     """Apply every not-yet-`applied` row in `rows`, committing per action.
+
+    Same-bug Bugzilla field changes are coalesced with the closest comment into
+    a single `PUT /bug/{id}` so Bugzilla applies them as one transaction (one
+    bugmail, one history entry); any other comments on that bug still apply
+    separately. See `plan_coalesced_groups`/`merge_resolved` in the runtime lib.
 
     Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
@@ -104,51 +145,58 @@ async def _apply_pending_rows(
         if row.ref and row.status == "applied" and row.result is not None
     }
 
-    for row, attachments in rows:
-        if row.status == "applied":
-            continue
+    pending = [(row, att) for row, att in rows if row.status != "applied"]
 
-        handler = get_handler(row.type)
-        if handler is None:
-            row.status = "failed"
-            row.error = f"No handler registered for action type '{row.type}'"
-            await db.commit()
-            continue
-
-        params = resolve_placeholders(row.params, results_by_ref)
-        ctx = ApplyContext(
-            run_id=str(run.run_id),
-            download_artifact=lambda key, run_id=str(run.run_id): (
-                gcs.download_artifact_bytes(run_id, key)
-            ),
-            attachments=attachments,
+    # Plan which pending rows coalesce into one bug PUT (indices into `pending`).
+    # Drop any group whose rows carry a `ref`: nothing should reference a
+    # coalesced member's result, and this keeps that invariant if a ref is ever
+    # added to a bug action. Everything else applies one row at a time as before.
+    groups = [
+        group
+        for group in plan_coalesced_groups(
+            [(row.type, row.params) for row, _ in pending]
         )
+        if all(pending[i][0].ref is None for i in group)
+    ]
+    # Rows sit in idx order, so a group's last member is its max idx: apply the
+    # whole group there, once every earlier (backward) dependency is resolved.
+    anchor_of = {i: max(group) for group in groups for i in group}
+    group_at = {max(group): group for group in groups}
 
-        try:
-            outcome = await handler.apply(params, ctx)
-        except Exception as exc:
-            log.exception(
-                "Handler for %s raised while applying run %s action #%d",
-                row.type,
-                run.run_id,
-                row.idx,
+    for pos, (row, attachments) in enumerate(pending):
+        anchor = anchor_of.get(pos)
+        if anchor is not None and pos != anchor:
+            continue  # non-anchor member: applied together with its anchor
+
+        if anchor is not None:
+            member_rows = [pending[i][0] for i in group_at[anchor]]
+            entries = [
+                (member.type, resolve_placeholders(member.params, results_by_ref))
+                for member in member_rows
+            ]
+            outcome = await _dispatch(
+                run, "bugzilla.update_bug", merge_resolved(entries), []
             )
-            row.status = "failed"
-            row.error = str(exc)
-            await db.commit()
-            continue
+        else:
+            member_rows = [row]
+            params = resolve_placeholders(row.params, results_by_ref)
+            outcome = await _dispatch(run, row.type, params, attachments)
 
-        row.status = outcome.status
-        row.result = outcome.result
-        row.error = outcome.error
         # Only stamp applied_at on a real success, so a failed row isn't
         # mistaken for one that was applied.
-        if outcome.status == "applied":
-            row.applied_at = datetime.now(timezone.utc)
+        applied_at = datetime.now(timezone.utc) if outcome.status == "applied" else None
+        for member in member_rows:
+            member.status = outcome.status
+            member.result = outcome.result
+            member.error = outcome.error
+            if applied_at is not None:
+                member.applied_at = applied_at
         await db.commit()
 
-        if row.status == "applied" and row.ref and row.result is not None:
-            results_by_ref[row.ref] = row.result
+        if outcome.status == "applied" and outcome.result is not None:
+            for member in member_rows:
+                if member.ref:
+                    results_by_ref[member.ref] = outcome.result
 
 
 async def on_run_completed(db: AsyncSession, run: Run) -> None:
