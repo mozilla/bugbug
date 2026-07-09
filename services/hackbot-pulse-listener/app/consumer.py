@@ -5,7 +5,7 @@ from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, lando, taskcluster, worker
+from app import client, lando, regression, taskcluster, worker
 from app.config import settings
 from app.models import RunContext
 
@@ -15,8 +15,11 @@ CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
 
-# In-memory dedupe of hg revisions already handed to the agent. Only the
-# single consumer thread touches it, so no lock is needed.
+# In-memory dedupe of hg revisions already handed to the agent. A revision is
+# recorded only once we actually trigger a run, so an inherited failure on one
+# build label never suppresses a genuine regression on another label of the
+# same push, while a revision that breaks many builds still triggers only once.
+# Only the single consumer thread touches it, so no lock is needed.
 _seen: TTLCache = TTLCache(
     maxsize=settings.dedupe_max_size, ttl=settings.dedupe_ttl_seconds
 )
@@ -44,7 +47,15 @@ def process(body: dict, executor: Executor) -> str | None:
         return None
 
     if hg_revision in _seen:
-        logger.info("Revision %s already processed; skipping", hg_revision)
+        logger.info("Revision %s already triggered a run; skipping", hg_revision)
+        return None
+
+    if not regression.is_new_build_failure(project, hg_revision, task_label):
+        logger.info(
+            "Build %s at %s inherited from an ancestor push; skipping",
+            task_label,
+            hg_revision,
+        )
         return None
     _seen[hg_revision] = True
 

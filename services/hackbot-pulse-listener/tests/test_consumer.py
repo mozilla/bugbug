@@ -58,6 +58,7 @@ def test_build_failure_triggers_run_and_submits_poll():
     with (
         patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
         run_id = consumer.process(_build_msg(), executor)
@@ -83,10 +84,68 @@ def test_same_revision_triggers_once():
     with (
         patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
         consumer.process(_build_msg(task_id="T1"), executor)
         consumer.process(_build_msg(task_id="T2"), executor)
+
+    trigger.assert_called_once()
+
+
+def test_inherited_failure_is_skipped_before_mapping():
+    executor = MagicMock()
+    with (
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.regression, "is_new_build_failure", return_value=False),
+        patch.object(consumer.lando, "hg_to_git") as hg_to_git,
+        patch.object(consumer.client, "trigger_run") as trigger,
+    ):
+        assert consumer.process(_build_msg(), executor) is None
+
+    hg_to_git.assert_not_called()
+    trigger.assert_not_called()
+    executor.submit.assert_not_called()
+
+
+def test_multiple_builds_same_revision_trigger_once():
+    executor = MagicMock()
+    with (
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.regression, "is_new_build_failure", return_value=True),
+        patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
+    ):
+        consumer.process(_build_msg(task_id="T1", label="build-linux64/opt"), executor)
+        consumer.process(_build_msg(task_id="T2", label="build-macosx64/opt"), executor)
+
+    trigger.assert_called_once()
+
+
+def test_inherited_label_does_not_suppress_new_label_on_same_revision():
+    executor = MagicMock()
+    with (
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(
+            consumer.regression, "is_new_build_failure", side_effect=[False, True]
+        ),
+        patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
+    ):
+        # Inherited failure on the first label must not mark the revision seen.
+        assert (
+            consumer.process(
+                _build_msg(task_id="T1", label="build-linux64/opt"), executor
+            )
+            is None
+        )
+        # A genuine regression on another label of the same push still runs.
+        assert (
+            consumer.process(
+                _build_msg(task_id="T2", label="build-macosx64/opt"), executor
+            )
+            == "run-1"
+        )
 
     trigger.assert_called_once()
 
@@ -107,6 +166,7 @@ def test_unmappable_revision_skipped():
     executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.lando, "hg_to_git", return_value=None),
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
@@ -121,6 +181,7 @@ def test_trigger_failure_releases_revision_for_retry():
     with (
         patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(
             consumer.client, "trigger_run", side_effect=[RuntimeError("boom"), "run-2"]
         ) as trigger,
@@ -130,3 +191,15 @@ def test_trigger_failure_releases_revision_for_retry():
         assert consumer.process(_build_msg(task_id="T2"), executor) == "run-2"
 
     assert trigger.call_count == 2
+
+
+def test_queue_name_includes_non_production_environment():
+    with patch.object(consumer.settings, "environment", "development"):
+        (queue,) = consumer._build_queues("guest")
+    assert queue.name == "queue/guest/build-repair-development-task-failed"
+
+
+def test_queue_name_omits_production_environment():
+    with patch.object(consumer.settings, "environment", "production"):
+        (queue,) = consumer._build_queues("guest")
+    assert queue.name == "queue/guest/build-repair-task-failed"
