@@ -1,0 +1,5 @@
+*                                    @mozilla/bugbug-leads
+
+# Code owners for specific Hackbot agents
+/agents/frontend-triage/             @mozilla/hackbot-frontend
+/agents/autowebcompat-repro/         @mozilla/hackbot-webcompat
