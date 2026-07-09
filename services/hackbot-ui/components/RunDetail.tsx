@@ -126,6 +126,19 @@ export function RunDetail({ runId }: { runId: string }) {
   const findings = run.summary?.findings ?? {};
   const hasFindings = Object.keys(findings).length > 0;
 
+  // Both pending and failed actions are (re)applied by the apply endpoint — it
+  // skips only already-applied ones — so one button covers applying and retry.
+  const pendingActions =
+    actions?.filter((a) => a.status === "pending").length ?? 0;
+  const failedActions =
+    actions?.filter((a) => a.status === "failed").length ?? 0;
+  const applyLabel =
+    pendingActions && failedActions
+      ? "Apply pending & retry failed actions"
+      : failedActions
+        ? "Retry failed actions"
+        : "Apply pending actions";
+
   return (
     <>
       <div className="toolbar">
@@ -195,9 +208,9 @@ export function RunDetail({ runId }: { runId: string }) {
               </li>
             ))}
           </ul>
-          {actions.some((a) => a.status === "pending") && (
+          {pendingActions + failedActions > 0 && (
             <button type="button" onClick={applyActions} disabled={applying}>
-              {applying ? "Applying…" : "Apply all pending actions"}
+              {applying ? "Applying…" : applyLabel}
             </button>
           )}
         </div>

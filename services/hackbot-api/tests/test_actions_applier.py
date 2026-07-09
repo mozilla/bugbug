@@ -144,3 +144,54 @@ async def test_apply_all_pending_always_applies(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=False)
     await apply_all_pending(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value))
     assert calls == {"ensured": True, "applied": True}
+
+
+# --- retry semantics: _apply_pending_rows re-attempts failed rows ------ #
+
+
+class _RecordingHandler:
+    def __init__(self, outcome):
+        self.outcome = outcome
+        self.calls = []
+
+    async def apply(self, params, ctx):
+        self.calls.append(params)
+        return self.outcome
+
+
+def _row(idx, status, **kw):
+    return SimpleNamespace(
+        idx=idx,
+        type="bugzilla.add_comment",
+        params={},
+        ref=None,
+        status=status,
+        result=kw.get("result"),
+        error=kw.get("error"),
+        applied_at=kw.get("applied_at"),
+    )
+
+
+async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
+    # A manual re-apply retries a previously-failed action (this is what the
+    # UI's retry button relies on) while leaving already-applied rows alone.
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"ok": 1}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    applied = _row(0, "applied", result={"pre": 1}, applied_at="then")
+    failed = _row(1, "failed", error="boom")
+    pending = _row(2, "pending")
+    rows = [(applied, []), (failed, []), (pending, [])]
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+    )
+
+    # The already-applied row is untouched; its handler never runs.
+    assert applied.status == "applied" and applied.result == {"pre": 1}
+    # The failed and pending rows are both (re)applied, clearing the stale error.
+    assert len(handler.calls) == 2
+    assert failed.status == "applied" and failed.error is None
+    assert pending.status == "applied"
