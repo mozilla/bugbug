@@ -11,6 +11,7 @@ const AGENTS = [
   { value: "autowebcompat-repro", label: "autowebcompat-repro" },
   { value: "build-repair", label: "build-repair" },
   { value: "frontend-triage", label: "frontend-triage" },
+  { value: "test-plan-generator", label: "test-plan-generator" },
 ] as const;
 
 type AgentValue = (typeof AGENTS)[number]["value"];
@@ -38,6 +39,15 @@ export function TriggerForm() {
   const [runTryPush, setRunTryPush] = useState(
     () => params.get("run_try_push") === "true"
   );
+  const [featureName, setFeatureName] = useState(
+    () => params.get("feature_name") ?? ""
+  );
+  const [featureDescription, setFeatureDescription] = useState(
+    () => params.get("feature_description") ?? ""
+  );
+  const [testScope, setTestScope] = useState(
+    () => params.get("test_scope") ?? ""
+  );
   const [model, setModel] = useState(() => params.get("model") ?? "");
   const [maxTurns, setMaxTurns] = useState(() => params.get("max_turns") ?? "");
   const [effort, setEffort] = useState(() => params.get("effort") ?? "");
@@ -46,6 +56,7 @@ export function TriggerForm() {
 
   const isReproAgent = agent === "autowebcompat-repro";
   const isBuildRepairAgent = agent === "build-repair";
+  const isTestPlanAgent = agent === "test-plan-generator";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -89,6 +100,22 @@ export function TriggerForm() {
       }
       inputs.failure_tasks = parsedTasks;
       inputs.run_try_push = runTryPush;
+    } else if (isTestPlanAgent) {
+      if (!featureName.trim()) {
+        setError("Enter a feature name.");
+        return;
+      }
+      if (!featureDescription.trim()) {
+        setError("Enter a feature description.");
+        return;
+      }
+      if (!testScope.trim()) {
+        setError("Enter a test scope.");
+        return;
+      }
+      inputs.feature_name = featureName.trim();
+      inputs.feature_description = featureDescription.trim();
+      inputs.test_scope = testScope.trim();
     } else if (!isReproAgent) {
       if (!hasBugId) {
         setError("Enter a valid Bugzilla bug ID.");
@@ -125,9 +152,11 @@ export function TriggerForm() {
       const run = body as RunRef;
       const label = isBuildRepairAgent
         ? `commit ${gitCommit.trim().slice(0, 12)}`
-        : hasBugId
-          ? `bug ${parsedBugId}`
-          : "inline report";
+        : isTestPlanAgent
+          ? featureName.trim()
+          : hasBugId
+            ? `bug ${parsedBugId}`
+            : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -164,7 +193,7 @@ export function TriggerForm() {
         </select>
       </div>
 
-      {!isBuildRepairAgent && (
+      {!isBuildRepairAgent && !isTestPlanAgent && (
         <div className="field">
           <label htmlFor="bugId">
             {isReproAgent
@@ -244,6 +273,45 @@ export function TriggerForm() {
               />{" "}
               Run try push after fix
             </label>
+          </div>
+        </>
+      )}
+
+      {isTestPlanAgent && (
+        <>
+          <div className="field">
+            <label htmlFor="featureName">Feature name *</label>
+            <input
+              id="featureName"
+              placeholder="e.g. Tab Groups"
+              value={featureName}
+              onChange={(e) => setFeatureName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="featureDescription">Feature description *</label>
+            <textarea
+              id="featureDescription"
+              placeholder="Describe the feature to generate test cases for…"
+              rows={5}
+              value={featureDescription}
+              onChange={(e) => setFeatureDescription(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="testScope">Test scope *</label>
+            <textarea
+              id="testScope"
+              placeholder="Describe what the test plan should cover…"
+              rows={3}
+              value={testScope}
+              onChange={(e) => setTestScope(e.target.value)}
+              required
+            />
           </div>
         </>
       )}
