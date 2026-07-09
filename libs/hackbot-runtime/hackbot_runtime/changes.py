@@ -13,8 +13,12 @@ and creating that commit is safe.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 import subprocess
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import NamedTuple
 
@@ -147,6 +151,34 @@ def _synthetic_commit(repo: Path, base: str) -> str:
     ).strip()
 
 
+@contextlib.contextmanager
+def _ambient_git_identity() -> Iterator[None]:
+    """Give moz-phab an ambient git identity for its `git config --list` check.
+
+    moz-phab's git client reads ``user.email`` from the *ambient* git config
+    (not the target repo's local config) and refuses to run without it. Agent
+    containers and CI often have no global identity, so point
+    ``GIT_CONFIG_GLOBAL`` at a throwaway config carrying a hackbot identity for
+    the duration of the call (moz-phab copies ``os.environ`` when it builds its
+    git client). The identity is cosmetic — only the diff is used, never a
+    commit moz-phab would author.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".gitconfig") as gc:
+        gc.write(f"[user]\n\temail = {_WIP_EMAIL}\n\tname = {_WIP_NAME}\n")
+        gc.flush()
+        overrides = {"GIT_CONFIG_GLOBAL": gc.name, "GIT_CONFIG_SYSTEM": os.devnull}
+        previous = {k: os.environ.get(k) for k in overrides}
+        os.environ.update(overrides)
+        try:
+            yield
+        finally:
+            for key, prev in previous.items():
+                if prev is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = prev
+
+
 def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     """Build the payload for Phabricator's ``differential.creatediff`` API.
 
@@ -178,14 +210,15 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
 
     try:
         node = _synthetic_commit(repo, base)
-        mozphab_repo = Git(str(repo))
-        # `set_args` needs a fully-populated argparse.Namespace matching what
-        # moz-phab's own CLI would build (several unrelated code paths read
-        # attributes off it) — going through its real parser instead of
-        # hand-listing the handful of attributes get_diff() happens to touch
-        # today, which would silently bit-rot on a moz-phab upgrade.
-        mozphab_repo.set_args(parse_args(["submit", "--yes"]))
-        diff = mozphab_repo.get_diff(Commit(node=node))
+        with _ambient_git_identity():
+            mozphab_repo = Git(str(repo))
+            # `set_args` needs a fully-populated argparse.Namespace matching what
+            # moz-phab's own CLI would build (several unrelated code paths read
+            # attributes off it) — going through its real parser instead of
+            # hand-listing the handful of attributes get_diff() happens to touch
+            # today, which would silently bit-rot on a moz-phab upgrade.
+            mozphab_repo.set_args(parse_args(["submit", "--yes"]))
+            diff = mozphab_repo.get_diff(Commit(node=node))
     except Exception:
         log.warning("Could not build Phabricator diff for %s", repo, exc_info=True)
         return None
