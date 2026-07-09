@@ -148,7 +148,7 @@ tasks:
                     cd libs/agent-tools &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra bugzilla --extra firefox --extra claude-sdk pytest --cov=agent_tools --cov-append tests/ &&
                     cd ../hackbot-runtime &&
-                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra claude-sdk pytest --cov=hackbot_runtime --cov-append tests/ &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra claude-sdk --extra phabricator pytest --cov=hackbot_runtime --cov-append tests/ &&
                     cd ../.. &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
