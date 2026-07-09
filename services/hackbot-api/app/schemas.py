@@ -27,6 +27,21 @@ class RunSummary(BaseModel):
     actions: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class RunActionDoc(BaseModel):
+    """A recorded action and its apply state, as shown/driven by the UI."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    idx: int
+    type: str
+    params: dict[str, Any]
+    ref: str | None = None
+    status: str
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    applied_at: datetime | None = None
+
+
 class AgentDescriptor(BaseModel):
     name: str
     description: str

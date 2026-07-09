@@ -8,14 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
+from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
 from app.config import settings
 from app.database.connection import get_db
-from app.database.models import Run
+from app.database.models import Run, RunAction
 from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
+    RunActionDoc,
     RunDoc,
     RunRef,
     RunStatus,
@@ -149,6 +151,39 @@ async def get_artifact_download_url(
         raise HTTPException(status_code=404, detail="Artifact not found")
 
     return {"url": url}
+
+
+async def _list_actions(db: AsyncSession, run_id: uuid.UUID) -> list[RunActionDoc]:
+    result = await db.execute(
+        select(RunAction).where(RunAction.run_id == run_id).order_by(RunAction.idx)
+    )
+    return [RunActionDoc.model_validate(r) for r in result.scalars()]
+
+
+@router.get("/runs/{run_id}/actions", response_model=list[RunActionDoc])
+async def list_run_actions(
+    run_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> list[RunActionDoc]:
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return await _list_actions(db, run_id)
+
+
+@router.post("/runs/{run_id}/actions/apply", response_model=list[RunActionDoc])
+async def apply_run_actions(
+    run_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> list[RunActionDoc]:
+    """Manually apply all of a run's pending actions (apply-all).
+
+    Idempotent — already-applied actions are skipped — so this is safe to
+    click again after a partial failure. Returns the actions' updated state.
+    """
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    await apply_all_pending(db, run)
+    return await _list_actions(db, run_id)
 
 
 async def finalize_run(db: AsyncSession, run: Run) -> None:

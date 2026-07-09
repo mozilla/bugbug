@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.actions_applier import apply_pending_actions
+from app.actions_applier import on_run_completed
 from app.auth import require_push_auth
 from app.database.connection import get_db
 from app.database.models import Run
@@ -115,7 +115,7 @@ async def agent_run_finished(
 async def apply_run_actions(
     request: Request, db: AsyncSession = Depends(get_db)
 ) -> None:
-    """Consumer of the `run.completed` event: apply the run's recorded actions.
+    """Consumer of `run.completed`: record the run's actions, auto-apply if opted in.
 
     Named for what it does, not the event it consumes, because the same
     `run.completed` event will feed other consumers later (notifications,
@@ -134,4 +134,4 @@ async def apply_run_actions(
         log.warning("No run found for run_id %s", run_id)
         return
 
-    await apply_pending_actions(db, run)
+    await on_run_completed(db, run)

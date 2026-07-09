@@ -22,6 +22,10 @@ class AgentSpec:
     # Optional override for the rare agent whose env vars don't map 1:1 from
     # its input schema. Defaults to ``model_to_env`` (field -> UPPER_SNAKE env).
     build_env: Callable[[BaseModel], dict[str, str]] | None = None
+    # Whether this agent's recorded actions are applied AUTOMATICALLY when a run
+    # succeeds. Off by default: actions are still recorded and can always be
+    # applied manually from the UI; only opted-in agents auto-apply.
+    auto_apply_actions: bool = False
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
