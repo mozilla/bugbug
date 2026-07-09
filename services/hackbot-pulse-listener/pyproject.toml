@@ -5,7 +5,7 @@ description = "Listens to Taskcluster build failures and triggers the build-repa
 requires-python = ">=3.12"
 dependencies = [
     "kombu>=5.6,<6",
-    "taskcluster>=97.1,<100.4",
+    "taskcluster>=97.1,<100.6",
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
     "sendgrid>=6.12.5",
