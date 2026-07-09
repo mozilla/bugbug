@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { updateRunStatus } from "@/lib/store";
-import { isTerminal, type RunDoc } from "@/lib/types";
+import { isTerminal, type RunAction, type RunDoc } from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { StatusBadge } from "./StatusBadge";
 
@@ -40,6 +40,9 @@ export function RunDetail({ runId }: { runId: string }) {
   const [run, setRun] = useState<RunDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(true);
+  const [actions, setActions] = useState<RunAction[] | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchRun = useCallback(async () => {
@@ -77,6 +80,40 @@ export function RunDetail({ runId }: { runId: string }) {
       if (timer.current) clearTimeout(timer.current);
     };
   }, [fetchRun]);
+
+  const fetchActions = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/runs/${runId}/actions`);
+      const body = await res.json();
+      if (!res.ok)
+        throw new Error(body?.error ?? `Request failed (${res.status})`);
+      setActions(body as RunAction[]);
+    } catch (err) {
+      // Non-fatal: the actions section just stays hidden.
+      setApplyError((err as Error).message);
+    }
+  }, [runId]);
+
+  // Actions are recorded once the run completes; fetch them then.
+  useEffect(() => {
+    if (run && isTerminal(run.status)) fetchActions();
+  }, [run, fetchActions]);
+
+  const applyActions = useCallback(async () => {
+    setApplying(true);
+    setApplyError(null);
+    try {
+      const res = await fetch(`/api/runs/${runId}/actions`, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok)
+        throw new Error(body?.error ?? `Request failed (${res.status})`);
+      setActions(body as RunAction[]);
+    } catch (err) {
+      setApplyError((err as Error).message);
+    } finally {
+      setApplying(false);
+    }
+  }, [runId]);
 
   if (!run && error) {
     return <div className="error-banner">{error}</div>;
@@ -144,6 +181,27 @@ export function RunDetail({ runId }: { runId: string }) {
       )}
 
       {hasFindings && <FindingsView findings={findings} />}
+
+      {actions && actions.length > 0 && (
+        <div className="panel">
+          <h2>Actions ({actions.length})</h2>
+          {applyError && <div className="error-banner">{applyError}</div>}
+          <ul className="action-list">
+            {actions.map((a) => (
+              <li key={a.idx}>
+                <span className={`badge ${a.status}`}>{a.status}</span>
+                <code>{a.type}</code>
+                {a.error && <span className="muted">{a.error}</span>}
+              </li>
+            ))}
+          </ul>
+          {actions.some((a) => a.status === "pending") && (
+            <button type="button" onClick={applyActions} disabled={applying}>
+              {applying ? "Applying…" : "Apply all pending actions"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="panel">
         <h2>Artifacts ({run.artifacts.length})</h2>

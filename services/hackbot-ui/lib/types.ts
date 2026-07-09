@@ -36,6 +36,21 @@ export interface RunSummary {
   findings: Record<string, unknown>;
 }
 
+export type RunActionStatus = "pending" | "applied" | "failed";
+
+// Mirror of RunActionDoc (services/hackbot-api/app/schemas.py): a recorded
+// agent action and its apply state.
+export interface RunAction {
+  idx: number;
+  type: string;
+  params: Record<string, unknown>;
+  ref: string | null;
+  status: RunActionStatus;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  applied_at: string | null;
+}
+
 export interface RunRef {
   run_id: string;
   agent: string;

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { AgentDescriptor, RunDoc, RunRef } from "./types";
+import type { AgentDescriptor, RunAction, RunDoc, RunRef } from "./types";
 
 // Thin server-side client for the hackbot-api. The API key lives here and is
 // never exposed to the browser — every browser request goes through the
@@ -89,6 +89,18 @@ export function getRun(runId: string): Promise<RunDoc> {
 
 export function listRuns(limit = 50): Promise<RunDoc[]> {
   return request<RunDoc[]>(`/runs?limit=${limit}`);
+}
+
+export function listRunActions(runId: string): Promise<RunAction[]> {
+  return request<RunAction[]>(`/runs/${encodeURIComponent(runId)}/actions`);
+}
+
+// Manually apply all of a run's pending actions; returns their updated state.
+export function applyRunActions(runId: string): Promise<RunAction[]> {
+  return request<RunAction[]>(
+    `/runs/${encodeURIComponent(runId)}/actions/apply`,
+    { method: "POST" },
+  );
 }
 
 // Ask hackbot-api for a short-lived signed download URL for one artifact.
