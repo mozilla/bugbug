@@ -104,6 +104,7 @@ def test_demote_headings_leaves_code_fences_and_includes_alone():
 def test_sends_email_when_configured(monkeypatch):
     monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
     monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", False)
 
     fake_client = MagicMock()
     fake_client.send.return_value = MagicMock(status_code=202)
@@ -119,6 +120,7 @@ def test_override_sends_even_without_developer_email(monkeypatch):
     monkeypatch.setattr(
         notify.settings, "notification_override_email", "me@mozilla.com"
     )
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", False)
 
     fake_client = MagicMock()
     fake_client.send.return_value = MagicMock(status_code=202)
@@ -126,6 +128,29 @@ def test_override_sends_even_without_developer_email(monkeypatch):
         notify.send_email(
             _ctx(developer_email=None), {"status": "succeeded", "summary": {}}
         )
+
+    fake_client.send.assert_called_once()
+
+
+def test_skips_when_no_patch_and_notify_only_with_patch(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", True)
+
+    with patch("sendgrid.SendGridAPIClient") as sg:
+        notify.send_email(_ctx(), {"status": "succeeded", "summary": {}})
+    sg.assert_not_called()
+
+
+def test_sends_without_patch_when_gate_disabled(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", False)
+
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with patch("sendgrid.SendGridAPIClient", return_value=fake_client):
+        notify.send_email(_ctx(), {"status": "succeeded", "summary": {}})
 
     fake_client.send.assert_called_once()
 

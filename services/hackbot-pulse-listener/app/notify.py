@@ -13,9 +13,17 @@ MAX_PATCH_LINES = 400
 
 
 def send_email(ctx: RunContext, run_doc: dict) -> None:
-    """Email the developer and team the fix. Only succeeded runs are notified."""
+    """Email the developer and team the build failure analysis.
+
+    Only succeeded runs are notified.
+    """
     if run_doc.get("status") != "succeeded":
         logger.info("Run %s did not succeed; skipping notification", ctx.run_id)
+        return
+
+    patch = _fetch_patch(ctx.run_id, run_doc)
+    if settings.notify_only_with_patch and not patch:
+        logger.info("Run %s produced no patch; skipping notification", ctx.run_id)
         return
 
     recipients = _recipients(ctx.developer_email)
@@ -43,9 +51,10 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         To,
     )
 
-    subject = f"[build-repair] fix for {ctx.repo}@{ctx.git_commit[:12]}"
+    subject = (
+        f"[build-repair] Build failure analysis for {ctx.repo}@{ctx.git_commit[:12]}"
+    )
 
-    patch = _fetch_patch(ctx.run_id, run_doc)
     body_md = _build_body(ctx, run_doc, patch)
     html = markdown2.markdown(body_md, extras=["fenced-code-blocks", "tables"])
 
@@ -121,7 +130,7 @@ def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str
     findings = summary.get("findings") or {}
 
     lines = [
-        "# Build-repair fix ready",
+        "# Build failure analysis",
         "",
         f"- **Repository:** {ctx.repo}",
         f"- **Revision (git):** [`{ctx.git_commit[:12]}`]({_git_url(ctx.git_commit)})",

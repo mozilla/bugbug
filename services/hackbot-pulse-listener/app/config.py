@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     notification_team_email: str | None = None
     # Send all notifications to this address instead of the developer (local testing).
     notification_override_email: str | None = None
+    # Only notify when the run produced a patch (skip transient / not-to-blame runs).
+    notify_only_with_patch: bool = True
 
     dry_run: bool = False
     environment: str = "development"
