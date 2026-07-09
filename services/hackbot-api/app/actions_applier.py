@@ -141,7 +141,10 @@ async def _apply_pending_rows(
         row.status = outcome.status
         row.result = outcome.result
         row.error = outcome.error
-        row.applied_at = datetime.now(timezone.utc)
+        # Only stamp applied_at on a real success, so a failed row isn't
+        # mistaken for one that was applied.
+        if outcome.status == "applied":
+            row.applied_at = datetime.now(timezone.utc)
         await db.commit()
 
         if row.status == "applied" and row.ref and row.result is not None:
