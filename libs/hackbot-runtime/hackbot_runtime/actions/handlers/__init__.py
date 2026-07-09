@@ -12,6 +12,10 @@ from hackbot_runtime.actions.handlers.base import (
     ActionResult,
     ApplyContext,
 )
+from hackbot_runtime.actions.handlers.bugzilla_handler import (
+    merge_resolved,
+    plan_coalesced_groups,
+)
 from hackbot_runtime.actions.handlers.registry import HANDLERS, get_handler
 
 __all__ = [
@@ -20,4 +24,6 @@ __all__ = [
     "ApplyContext",
     "HANDLERS",
     "get_handler",
+    "merge_resolved",
+    "plan_coalesced_groups",
 ]

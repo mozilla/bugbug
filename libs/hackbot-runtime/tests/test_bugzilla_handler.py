@@ -100,3 +100,99 @@ async def test_create_bug_handler_success(monkeypatch):
     )
     assert result.status == "applied"
     assert result.result["bug_id"] == 42
+
+
+async def test_update_bug_handler_merges_changes_and_comment(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda m, p, b: calls.append((m, p, b))
+    )
+    changes = {"status": "RESOLVED"}
+    await bugzilla_handler.UpdateBugHandler().apply(
+        {
+            "bug_id": 7,
+            "changes": changes,
+            "comment": {"body": "done", "is_private": False},
+        },
+        _ctx(),
+    )
+    assert calls == [
+        (
+            "PUT",
+            "bug/7",
+            {"status": "RESOLVED", "comment": {"body": "done", "is_private": False}},
+        )
+    ]
+    # The caller's `changes` dict must not be mutated by folding in the comment.
+    assert changes == {"status": "RESOLVED"}
+
+
+async def test_update_bug_handler_comment_only(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda m, p, b: calls.append((m, p, b))
+    )
+    await bugzilla_handler.UpdateBugHandler().apply(
+        {"bug_id": 7, "changes": {}, "comment": {"body": "hi", "is_private": True}},
+        _ctx(),
+    )
+    assert calls == [("PUT", "bug/7", {"comment": {"body": "hi", "is_private": True}})]
+
+
+def test_plan_coalesced_groups_update_plus_comment():
+    actions = [
+        ("bugzilla.update_bug", {"bug_id": 5, "changes": {"status": "RESOLVED"}}),
+        ("bugzilla.add_comment", {"bug_id": 5, "text": "done"}),
+    ]
+    assert bugzilla_handler.plan_coalesced_groups(actions) == [[0, 1]]
+
+
+def test_plan_coalesced_groups_closest_comment_wins():
+    # update@0 is nearer comment@1 than comment@3; comment@3 stays standalone.
+    actions = [
+        ("bugzilla.update_bug", {"bug_id": 5, "changes": {}}),
+        ("bugzilla.add_comment", {"bug_id": 5, "text": "near"}),
+        ("bugzilla.add_comment", {"bug_id": 9, "text": "other bug"}),
+        ("bugzilla.add_comment", {"bug_id": 5, "text": "far"}),
+    ]
+    assert bugzilla_handler.plan_coalesced_groups(actions) == [[0, 1]]
+
+
+def test_plan_coalesced_groups_multiple_updates_merge_without_comment():
+    actions = [
+        ("bugzilla.update_bug", {"bug_id": 5, "changes": {"a": 1}}),
+        ("bugzilla.update_bug", {"bug_id": 5, "changes": {"b": 2}}),
+    ]
+    assert bugzilla_handler.plan_coalesced_groups(actions) == [[0, 1]]
+
+
+def test_plan_coalesced_groups_ignores_unmergeable_and_lonely():
+    actions = [
+        ("bugzilla.add_comment", {"bug_id": 5, "text": "lone comment"}),
+        ("bugzilla.update_bug", {"bug_id": 6, "changes": {}}),  # lone update
+        ("bugzilla.add_attachment", {"bug_id": 6}),  # different endpoint
+        ("bugzilla.create_bug", {"summary": "x"}),  # POST, no bug_id
+        ("bugzilla.update_bug", {"changes": {}}),  # missing bug_id
+    ]
+    assert bugzilla_handler.plan_coalesced_groups(actions) == []
+
+
+def test_merge_resolved_combines_changes_and_single_comment():
+    entries = [
+        ("bugzilla.update_bug", {"bug_id": 5, "changes": {"a": 1}}),
+        ("bugzilla.update_bug", {"bug_id": 5, "changes": {"a": 2, "b": 3}}),
+        ("bugzilla.add_comment", {"bug_id": 5, "text": "hi", "is_private": True}),
+    ]
+    assert bugzilla_handler.merge_resolved(entries) == {
+        "bug_id": 5,
+        "changes": {"a": 2, "b": 3},  # later update wins on conflict
+        "comment": {"body": "hi", "is_private": True},
+    }
+
+
+def test_merge_resolved_changes_only():
+    entries = [("bugzilla.update_bug", {"bug_id": 5, "changes": {"a": 1}})]
+    assert bugzilla_handler.merge_resolved(entries) == {
+        "bug_id": 5,
+        "changes": {"a": 1},
+    }

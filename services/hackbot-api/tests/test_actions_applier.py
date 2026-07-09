@@ -159,16 +159,26 @@ class _RecordingHandler:
         return self.outcome
 
 
-def _row(idx, status, **kw):
+def _row(
+    idx,
+    status,
+    *,
+    action_type="bugzilla.add_comment",
+    params=None,
+    ref=None,
+    result=None,
+    error=None,
+    applied_at=None,
+):
     return SimpleNamespace(
         idx=idx,
-        type="bugzilla.add_comment",
-        params={},
-        ref=None,
+        type=action_type,
+        params=params if params is not None else {},
+        ref=ref,
         status=status,
-        result=kw.get("result"),
-        error=kw.get("error"),
-        applied_at=kw.get("applied_at"),
+        result=result,
+        error=error,
+        applied_at=applied_at,
     )
 
 
@@ -195,3 +205,205 @@ async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
     assert len(handler.calls) == 2
     assert failed.status == "applied" and failed.error is None
     assert pending.status == "applied"
+
+
+# --- coalescing same-bug Bugzilla mutations into one PUT ---------------- #
+
+
+async def test_coalesces_update_and_comment_into_one_put(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"bug_id": 5}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    update = _row(
+        0,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"status": "RESOLVED"}},
+    )
+    other = _row(
+        1,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 99, "text": "different bug"},
+    )
+    comment = _row(
+        2,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "done"},
+    )
+    rows = [(update, []), (other, []), (comment, [])]
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+    )
+
+    # Two calls: the standalone comment on bug 99, then ONE combined PUT for
+    # bug 5 (applied at the group's max idx) carrying field change + comment.
+    assert handler.calls == [
+        {"bug_id": 99, "text": "different bug"},
+        {
+            "bug_id": 5,
+            "changes": {"status": "RESOLVED"},
+            "comment": {"body": "done", "is_private": False},
+        },
+    ]
+    assert update.status == "applied" and comment.status == "applied"
+    assert update.result == {"bug_id": 5} and comment.result == {"bug_id": 5}
+
+
+async def test_extra_comments_applied_separately(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    update = _row(
+        0,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"status": "RESOLVED"}},
+    )
+    near = _row(
+        1,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "near"},
+    )
+    far = _row(
+        2,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "far"},
+    )
+    rows = [(update, []), (near, []), (far, [])]
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+    )
+
+    # Field change rides with the closest comment ("near"); "far" is its own PUT.
+    assert handler.calls == [
+        {
+            "bug_id": 5,
+            "changes": {"status": "RESOLVED"},
+            "comment": {"body": "near", "is_private": False},
+        },
+        {"bug_id": 5, "text": "far"},
+    ]
+
+
+async def test_lone_same_type_actions_on_different_bugs_not_merged(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    u5 = _row(
+        0,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"a": 1}},
+    )
+    u6 = _row(
+        1,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 6, "changes": {"b": 2}},
+    )
+    rows = [(u5, []), (u6, [])]
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+    )
+    # Different bugs, one update each -> no coalescing, two raw PUTs.
+    assert handler.calls == [
+        {"bug_id": 5, "changes": {"a": 1}},
+        {"bug_id": 6, "changes": {"b": 2}},
+    ]
+
+
+async def test_coalesced_group_failure_marks_all_then_retries(monkeypatch):
+    failing = _RecordingHandler(
+        SimpleNamespace(status="failed", result=None, error="boom")
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: failing)
+
+    update = _row(
+        0,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"a": 1}},
+    )
+    comment = _row(
+        1,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "c"},
+    )
+    done = _row(
+        2,
+        "applied",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "already"},
+        result={"x": 1},
+        applied_at="then",
+    )
+    rows = [(update, []), (comment, []), (done, [])]
+    run = _FakeRun(status=RunStatus.succeeded.value)
+
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows)
+    # One combined call; both members failed; the already-applied row untouched.
+    assert len(failing.calls) == 1
+    assert update.status == "failed" and comment.status == "failed"
+    assert done.status == "applied" and done.result == {"x": 1}
+
+    # Retry: only the still-failed members re-group; the applied one is skipped.
+    ok = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"bug_id": 5}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: ok)
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows)
+    assert len(ok.calls) == 1
+    assert update.status == "applied" and comment.status == "applied"
+
+
+async def test_backward_placeholder_resolves_in_coalesced_comment(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"url": "http://x/D1"}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    patch = _row(
+        0, "pending", action_type="phabricator.submit_patch", params={}, ref="patch"
+    )
+    update = _row(
+        1,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"a": 1}},
+    )
+    comment = _row(
+        2,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "see {{actions.patch.url}}"},
+    )
+    rows = [(patch, []), (update, []), (comment, [])]
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+    )
+
+    # The patch applies first (its own idx), seeding results_by_ref; the
+    # coalesced comment then resolves {{actions.patch.url}} at the group anchor.
+    assert handler.calls == [
+        {},
+        {
+            "bug_id": 5,
+            "changes": {"a": 1},
+            "comment": {"body": "see http://x/D1", "is_private": False},
+        },
+    ]
