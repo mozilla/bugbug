@@ -28,6 +28,7 @@ members = [
     "hackbot-agent-frontend-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-api",
+    "hackbot-pulse-listener",
     "hackbot-runtime",
     "reviewhelper-api",
 ]
@@ -2581,6 +2582,40 @@ requires-dist = [
     { name = "sentry-sdk", specifier = ">=2.51.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.25" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "hackbot-pulse-listener"
+version = "0.1.0"
+source = { editable = "services/hackbot-pulse-listener" }
+dependencies = [
+    { name = "cachetools" },
+    { name = "httpx" },
+    { name = "kombu" },
+    { name = "markdown2" },
+    { name = "pydantic-settings" },
+    { name = "sendgrid" },
+    { name = "sentry-sdk" },
+    { name = "taskcluster" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cachetools", specifier = ">=5.3.0" },
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "kombu", specifier = ">=5.6,<6" },
+    { name = "markdown2", specifier = ">=2.4.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "sendgrid", specifier = ">=6.12.5" },
+    { name = "sentry-sdk", specifier = ">=2.51.0" },
+    { name = "taskcluster", specifier = ">=97.1,<100.4" },
 ]
 provides-extras = ["dev"]
 
