@@ -1,12 +1,13 @@
-"""Apply a run's recorded actions once it has finished.
+"""Record and (optionally) apply a run's actions once it has finished.
 
-Triggered by the `agent-run-events` push subscription (see
-`app/routers/events.py`), after `finalize_run` has already persisted the
-run's terminal status and `summary.json`. Reads `summary["actions"]`, upserts
-one `RunAction` row per entry, and runs each pending one through the handler
-registry in `hackbot_runtime.actions.handlers` — idempotent per action, so a
-Pub/Sub retry of the same message only re-attempts actions that didn't reach
-`applied` last time.
+On run completion the recorded actions from `summary["actions"]` are always
+upserted as `run_actions` rows (one per entry) so they're visible and
+manageable in the UI. Whether they're then applied *automatically* depends on
+the agent's `auto_apply_actions` opt-in (see `app/agents.py`); either way they
+can be applied on demand (manual apply-all from the UI). Application runs each
+pending row through the handler registry in `hackbot_runtime.actions.handlers`
+and is idempotent per action — an already-`applied` row is never re-applied, so
+Pub/Sub retries and repeated manual applies are safe.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs
+from app.agents import AGENT_REGISTRY
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
 
@@ -54,13 +56,14 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     return value
 
 
-async def _ensure_rows(
+async def ensure_action_rows(
     db: AsyncSession, run: Run
 ) -> list[tuple[RunAction, list[dict]]]:
-    """Upsert one `RunAction` per recorded action.
+    """Upsert one `RunAction` per recorded action (does not apply them).
 
     Returns each row paired with its (not persisted) attachments list from
-    summary.json.
+    summary.json. Idempotent: existing rows are reused, so this can run on
+    every completion and again on each manual apply.
     """
     actions: list[dict] = (run.summary or {}).get("actions", [])
 
@@ -85,27 +88,16 @@ async def _ensure_rows(
     return rows
 
 
-async def apply_pending_actions(db: AsyncSession, run: Run) -> None:
-    # Only a successful run's actions are applied. A failed/timed-out run may
-    # have recorded actions before it errored, but submitting a patch or
-    # posting a comment from a run that never reached a verified-good state
-    # isn't wanted. The applier's Pub/Sub subscription filters to
-    # status="succeeded" as the primary routing (failed runs never reach here),
-    # so this check is defense-in-depth: it keeps the applier correct when
-    # invoked directly (tests, future callers) and documents the policy in
-    # code. `RunCompleted` is still published for every terminal status (see
-    # finalize_run), so a future failure-notifier consumer can filter for the
-    # ones this applier ignores.
-    if run.status != RunStatus.succeeded.value:
-        log.info(
-            "Skipping action application for run %s (status=%s)",
-            run.run_id,
-            run.status,
-        )
-        return
+async def _apply_pending_rows(
+    db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
+) -> None:
+    """Apply every not-yet-`applied` row in `rows`, committing per action.
 
-    rows = await _ensure_rows(db, run)
-
+    Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
+    that are already `applied` (seeded from prior applies) plus ones applied
+    earlier in this pass, so a later (even manual) apply can still reference an
+    earlier action's result.
+    """
     results_by_ref: dict[str, dict] = {
         row.ref: row.result
         for row, _ in rows
@@ -154,3 +146,45 @@ async def apply_pending_actions(db: AsyncSession, run: Run) -> None:
 
         if row.status == "applied" and row.ref and row.result is not None:
             results_by_ref[row.ref] = row.result
+
+
+async def on_run_completed(db: AsyncSession, run: Run) -> None:
+    """Record a completed run's actions, and auto-apply them if the agent opts in.
+
+    Called from the `apply-run-actions` push route. Actions are always recorded
+    (so the UI can show/manually apply them); they're applied automatically only
+    when the run's agent has `auto_apply_actions=True`.
+    """
+    # Defense-in-depth: only a succeeded run's actions are recorded/applied. A
+    # failed/timed-out run may have recorded actions before erroring, but acting
+    # on a run that never reached a verified-good state isn't wanted. The
+    # Pub/Sub subscription already filters to status="succeeded"; this keeps the
+    # function correct if invoked directly.
+    if run.status != RunStatus.succeeded.value:
+        log.info("Skipping actions for run %s (status=%s)", run.run_id, run.status)
+        return
+
+    rows = await ensure_action_rows(db, run)
+    await db.commit()
+
+    spec = AGENT_REGISTRY.get(run.agent)
+    if spec and spec.auto_apply_actions:
+        await _apply_pending_rows(db, run, rows)
+    else:
+        log.info(
+            "Recorded %d action(s) for run %s; auto-apply off for agent %s",
+            len(rows),
+            run.run_id,
+            run.agent,
+        )
+
+
+async def apply_all_pending(db: AsyncSession, run: Run) -> None:
+    """Apply all of a run's not-yet-`applied` actions on demand (manual).
+
+    Ensures the rows exist first, so this works whether or not they were
+    recorded automatically on completion.
+    """
+    rows = await ensure_action_rows(db, run)
+    await db.commit()
+    await _apply_pending_rows(db, run, rows)
