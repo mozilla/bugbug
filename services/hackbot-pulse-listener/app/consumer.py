@@ -120,12 +120,18 @@ def make_handler(executor: Executor):
 
 
 def _build_queues(user: str) -> list[Queue]:
+    # Both local and prod authenticate as the same pulse user, so the queue name
+    # must also vary by environment; otherwise both consumers bind to the same
+    # durable queue and steal each other's messages. Production keeps the plain
+    # name for continuity.
+    env = settings.environment
+    env_segment = "" if env == "production" else f"{env}-"
     queues = []
     for exchange in EXCHANGES:
         suffix = exchange.rsplit("/", 1)[-1]
         queues.append(
             Queue(
-                name=f"queue/{user}/build-repair-{suffix}",
+                name=f"queue/{user}/build-repair-{env_segment}{suffix}",
                 exchange=Exchange(exchange, type="topic", no_declare=True),
                 routing_key="#",
                 durable=True,
