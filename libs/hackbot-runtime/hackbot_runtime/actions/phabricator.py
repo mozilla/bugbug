@@ -67,17 +67,23 @@ async def submit_patch(
         ),
     ] = None,
 ) -> str:
-    """Record an intended Phabricator patch submission.
+    """Submit your fix for review as a Phabricator revision.
 
-    Submits whatever the run's final source-tree changes turn out to be — the
-    same diff the runtime already collects into ``changes/changes.patch`` once
-    the agent finishes, not a separately-supplied file. There's no local patch
-    path to give here because that diff isn't final until after this call
-    returns (it's computed once from the checkout's end state).
+    This is how you deliver a code fix. Do not attach the patch to a bug: a
+    Phabricator revision is the correct destination for a fix, not a bug
+    attachment.
 
-    Recorded into the run summary for human review — does not submit to
-    Phabricator. Set revision_id to update an existing revision with a new
-    diff, or omit it (and provide a title) to create a new one.
+    You do not supply a patch file. Your final code changes in the working
+    directory are submitted as the revision's diff, so make and verify all your
+    edits first, then call this once you are done. Calling it records the
+    submission as a proposed action for review; it is not sent to Phabricator
+    during the run.
+
+    To create a new revision, pass a `title` (and ideally a `summary`). To add a
+    new diff to an existing revision instead, pass that revision's `revision_id`.
+    Set `ref` if you want to reference the new revision's URL from another action
+    in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
+    bug comment).
     """
     if revision_id is None and not title:
         raise ToolError("title is required when creating a new revision")

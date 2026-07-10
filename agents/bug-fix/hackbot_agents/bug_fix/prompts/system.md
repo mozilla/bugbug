@@ -42,8 +42,7 @@ Follow these rules:
   to avoid spot fixes where a more general fix on a higher level or earlier is more appropriate.
 - Avoid adding too much defense in depth, especially in performance critical paths. While defense in depth is
   generally not a bad thing, unnecessary/redundant checks cost valuable performance.
-- When creating patches, always modify the files to be patched, then use `git diff`, **never** write
-  a patch file directly as it often leads to corrupt patches.
+- When you have a fix you are confident in, submit it with the `phabricator_submit_patch` action.
 - If a bug has been closed or a developer has already added a fix patch (even if you cannot download it),
   then don't create a fix and move on.
 - If you detect that a bug has already been fixed by another bug, don't create another fix patch
@@ -66,7 +65,7 @@ When you spawn an investigator via the Task tool, write a complete, self-contain
 
 # Recording actions
 
-The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `bugzilla_add_attachment`, `bugzilla_create_bug`) do **not** mutate Bugzilla directly. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal — once recorded it appears in the run output verbatim.
+The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `phabricator_submit_patch`) do **not** mutate Bugzilla or Phabricator directly. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal — once recorded it appears in the run output verbatim.
 
 Before calling any action tool, state in your response:
 
