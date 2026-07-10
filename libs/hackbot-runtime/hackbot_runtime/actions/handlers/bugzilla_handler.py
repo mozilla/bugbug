@@ -36,10 +36,10 @@ def _bug_url(bug_id: int) -> str:
 
 
 def _headers() -> dict[str, str]:
-    token = os.environ.get("BUGZILLA_TOKEN", "")
-    if not token:
-        raise RuntimeError("BUGZILLA_TOKEN is not configured")
-    return {"X-Bugzilla-API-Key": token, "Content-Type": "application/json"}
+    api_key = os.environ.get("BUGZILLA_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("BUGZILLA_API_KEY is not configured")
+    return {"X-Bugzilla-API-Key": api_key, "Content-Type": "application/json"}
 
 
 def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any]:
