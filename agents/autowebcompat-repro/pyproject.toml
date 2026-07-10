@@ -17,6 +17,13 @@ dependencies = [
     "uvicorn>=0.27.0",
 ]
 
+[project.optional-dependencies]
+test = [
+  "mypy==2.1.0",
+  "ty==0.0.54",
+  "ruff==0.15.21",
+]
+
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
@@ -27,3 +34,20 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hackbot_agents"]
+
+[tool.mypy]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "agent_tools",
+    "agent_tools.bugzilla",
+    "agent_tools.claude_sdk",
+    "bugsy",
+    "hackbot_runtime",
+    "hackbot_runtime.claude",
+    "imghdr",
+    "mozdownload",
+    "mozinstall",
+]
+ignore_missing_imports = true
