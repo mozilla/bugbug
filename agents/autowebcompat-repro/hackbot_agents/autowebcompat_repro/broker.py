@@ -8,13 +8,19 @@ The agent container itself binds no Bugzilla credentials.
 
 import logging
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 import bugsy
 import uvicorn
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.streamable_http_manager import (
+    Receive,
+    Scope,
+    Send,
+    StreamableHTTPSessionManager,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
 from starlette.routing import Mount
@@ -42,7 +48,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
     manager = StreamableHTTPSessionManager(app=mcp_server, stateless=True)
 
     @asynccontextmanager
-    async def lifespan(app):
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:
         async with manager.run():
             log.info(
                 "bugzilla broker ready on %s:%d (read-only)",
@@ -51,7 +57,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
             )
             yield
 
-    async def mcp_handler(scope, receive, send):
+    async def mcp_handler(scope: Scope, receive: Receive, send: Send) -> None:
         await manager.handle_request(scope, receive, send)
 
     return Starlette(routes=[Mount("/mcp", app=mcp_handler)], lifespan=lifespan)
