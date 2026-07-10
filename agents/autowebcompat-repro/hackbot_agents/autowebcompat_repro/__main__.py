@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Literal
 
 from hackbot_runtime import (
     HackbotAgentResult,
@@ -26,7 +27,14 @@ class AgentInputs(BaseSettings):
     bug_id: int | None = None
     model: str | None = None
     max_turns: int | None = None
-    effort: str | None = None
+    effort: (
+        Literal["low"]
+        | Literal["medium"]
+        | Literal["high"]
+        | Literal["xhigh"]
+        | Literal["max"]
+        | None
+    ) = None
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -42,7 +50,7 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
     inputs = AgentInputs()  # type: ignore
 
     if inputs.bug_data is not None:
-        input_data = BugDataInput(bug_data=inputs.bug_data)
+        input_data: BugDataInput | BugIdInput = BugDataInput(bug_data=inputs.bug_data)
     elif inputs.bug_id is not None:
         input_data = BugIdInput(bug_id=inputs.bug_id)
 

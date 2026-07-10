@@ -23,51 +23,71 @@ class ResultCollector(Generic[ResultT]):
         self.result: ResultT | None = None
 
 
-class ReproductionResult(BaseModel):
-    """Canonical result the agent produces for a web-compat investigation."""
+class TestPlanResult(BaseModel):
+    is_webcompat: bool = Field(
+        description=("true if the input describes a webcompat issue, otherwise false."),
+    )
 
+    affects_platforms: list[
+        Literal["ios"] | Literal["android"] | Literal["desktop"]
+    ] = Field(description="List of platforms which seem to be affected by the issue")
+
+    affects_os: (
+        None
+        | Literal["all"]
+        | list[Literal["windows"] | Literal["linux"] | Literal["macos"]]
+    ) = Field(
+        description="""List of desktop issues known to be affected.
+        - `null` if the issue does not affect desktop.
+        - "all" if there is no strong evidence that the issue is platform specific"
+        - Otherwise a list of platform names which are likely affected
+        """
+    )
+
+    affects_channels: list[Literal["nightly"] | Literal["stable"] | Literal["esr"]] = (
+        Field(
+            description="""List of channels affected
+        - "esr" if the issue is reported as specific to ESR builds.
+        - "stable" if the issue is reported as reproducing on stable builds, or there is no evidence for which channels are affected
+        - "nightly" if the issue is reported as reproducing on nightly builds, or there is no evidence for which channels are affected
+        """
+        )
+    )
+
+
+class ReproductionResult(BaseModel):
     reproduced: bool = Field(
         description=(
             "true if the reported issue reproduced in Firefox, otherwise false."
         ),
     )
-    summary: str = Field(
-        description="""A concise account of whether the issue represents a real
-        webcompat issue i.e. it can be reproduced in Firefox."""
-    )
 
     failure_reason: (
-        Literal["not_reproduced"]
+        Literal["not_reproducable"]
         | Literal["non_compat"]
+        | Literal["unsupported_platform"]
         | Literal["blocked"]
+        | Literal["blocked_captcha"]
+        | Literal["blocked_geo"]
         | Literal["login"]
         | Literal["down"]
         | Literal["other"]
         | None
     ) = Field(
-        description="""When an issue could not be reproduced, one of
+        description="""If an issue was reproduced then `null`. When an issue could not be reproduced, one of
         following categories describing the reason for the failure:
-          * not_reproduced - When it was possible to run all the steps to reproduce, but no issue was found
+          * not_reproducable - When it was possible to run all the steps to reproduce, but no issue was found
           * non_compat - When the report doesn't refer to site breakage for example for issues with the Firefox UI or product features such as reader mode
-          * blocked - When access to the site was blocked (e.g. due to geoblocking or because the page requires solving a captcha)
+          * unsupported_platform - When the report is specific to a platform that isn't available e.g. iOS
+          * blocked_captcha - When access to the site was blocked because the page requires solving a captcha
+          * blocked_geo - When access to the site was blocked based on location ("geoblocking")
+          * blocked - When access to the site was blocked for some reason that couldn't be identified as a captcha or geoblocking
           * login - When reproducing the issue requires completing a login flow
-          * down - Site down or unavailable
+          * down - When the site down or unavailable in a way that is unrelated to the issue report
           * other - When the issue could not be reproduced for some other reason (please give details in the summary text)
-""",
+"""
     )
-    steps: str = Field(
-        description=(
-            "The ordered steps you took, as a single numbered list (1., 2., 3., "
-            "... one step per line), written so another agent could reproduce "
-            "them with no extra context. Each step must be self-contained: "
-            "whenever you introduce an input or artifact the report did not "
-            "provide (a file, image, account, or any other test data), state its "
-            "exact origin — the URL you fetched it from, the command you ran, or "
-            'how you generated it — not just that you "used" or "saved" it. A '
-            "reader must be able to obtain the same inputs. Omit the reproduction "
-            "screenshot step."
-        ),
-    )
+
     screenshot_path: Path | None = Field(
         description=(
             """The file path you saved a screenshot to via the `screenshot_page`
@@ -89,6 +109,29 @@ class ReproductionResult(BaseModel):
         if imghdr.what(str(path)) != "png":
             raise ValueError(f"Screenshot path {path} is not a valid PNG image")
         return path
+
+
+class BugReproductionResult(ReproductionResult):
+    """Canonical result the agent produces for a web-compat investigation."""
+
+    summary: str = Field(
+        description="""A concise account of whether the issue represents a real
+        webcompat issue i.e. it can be reproduced in Firefox."""
+    )
+
+    steps: str = Field(
+        description=(
+            "The ordered steps you took, as a single numbered list (1., 2., 3., "
+            "... one step per line), written so another agent could reproduce "
+            "them with no extra context. Each step must be self-contained: "
+            "whenever you introduce an input or artifact the report did not "
+            "provide (a file, image, account, or any other test data), state its "
+            "exact origin — the URL you fetched it from, the command you ran, or "
+            'how you generated it — not just that you "used" or "saved" it. A '
+            "reader must be able to obtain the same inputs. Omit the reproduction "
+            "screenshot step."
+        ),
+    )
 
 
 class ChromeMaskResult(BaseModel):
