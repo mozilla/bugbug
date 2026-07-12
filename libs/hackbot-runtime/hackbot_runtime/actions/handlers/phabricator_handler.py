@@ -81,6 +81,91 @@ def _repository_phid() -> str:
     raise RuntimeError(f"Could not find a Phabricator repository named '{name}'")
 
 
+# moz-phab's arc commit-message template (see mozphab.commits) — replicated so
+# the local:commits message we store matches what moz-phab itself would write.
+_ARC_COMMIT_MESSAGE_TEMPLATE = """
+{title}
+
+Summary:
+{body}
+
+Test Plan:
+{test_plan}
+
+Reviewers: {reviewers}
+
+Subscribers:
+
+Bug #: {bug_id}
+""".strip()
+
+
+def _revision_fields(revision_id: int) -> dict:
+    """The current title/summary of an existing revision (for update-with-no-title)."""
+    result = _conduit_request(
+        "differential.revision.search", constraints={"ids": [int(revision_id)]}
+    )
+    data = result.get("data") or []
+    return data[0].get("fields", {}) if data else {}
+
+
+def _arc_commit_message(
+    title: str, summary: str | None, reviewers: list | None, bug_id: Any, url: str
+) -> str:
+    """Build moz-phab's arc commit message, with the Differential Revision URL.
+
+    Mirrors ``Commit.build_arc_commit_message`` + ``amend_revision_url`` so the
+    reconstructed commit reads identically to a moz-phab submission.
+    """
+    body = summary or ""
+    if body:
+        body += "\n"
+    body += f"\nDifferential Revision: {url}"
+    return _ARC_COMMIT_MESSAGE_TEMPLATE.format(
+        title=title,
+        body=body,
+        test_plan="",
+        reviewers=", ".join(reviewers or []),
+        bug_id=bug_id if bug_id is not None else "",
+    )
+
+
+def _set_local_commits(
+    diff_id: Any,
+    local_commits: dict,
+    params: dict[str, Any],
+    bug_id: Any,
+    revision_id: int,
+) -> None:
+    """Complete and store moz-phab's ``local:commits`` diff property.
+
+    The git-derived fields (author/time/tree/parents/node) come from the
+    agent-built artifact; ``summary`` (the revision title) and the arc-formatted
+    ``message`` are filled in here, since they need the revision URL.
+    """
+    title = params.get("title")
+    summary = params.get("summary")
+    if not title:
+        fields = _revision_fields(revision_id)
+        title = fields.get("title") or f"Bug {bug_id}"
+        if summary is None:
+            summary = fields.get("summary")
+
+    message = _arc_commit_message(
+        title, summary, params.get("reviewers"), bug_id, _revision_url(revision_id)
+    )
+    for commit_info in local_commits.values():
+        commit_info["summary"] = title
+        commit_info["message"] = message
+
+    _conduit_request(
+        "differential.setdiffproperty",
+        diff_id=diff_id,
+        name="local:commits",
+        data=json.dumps(local_commits),
+    )
+
+
 class SubmitPatchHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
@@ -88,14 +173,20 @@ class SubmitPatchHandler:
 
         try:
             raw = await ctx.download_artifact(_DIFF_ARTIFACT_KEY)
-            diff_payload = json.loads(raw)
+            submission = json.loads(raw)
         except Exception as exc:
             log.exception(
-                "Failed to load Phabricator diff artifact for run %s", ctx.run_id
+                "Failed to load Phabricator submission artifact for run %s", ctx.run_id
             )
             return ActionResult.failed(
-                f"No Phabricator diff artifact for this run: {exc}"
+                f"No Phabricator submission artifact for this run: {exc}"
             )
+
+        # The creatediff payload plus the git side of the local:commits property
+        # (completed and stored after the revision edit). Tolerate a bare diff
+        # payload without the wrapper too.
+        diff_payload = submission.get("diff", submission)
+        local_commits = submission.get("local_commits")
 
         try:
             diff_result = _conduit_request(
@@ -128,12 +219,26 @@ class SubmitPatchHandler:
             revision_result = _conduit_request(
                 "differential.revision.edit", **edit_args
             )
+
+            object_data = revision_result.get("object") or {}
+            new_revision_id = object_data.get("id") or revision_id
+
+            # Store commit info on the diff, exactly as moz-phab does *after*
+            # creating the revision (so the message can embed the Differential
+            # Revision URL). Without this, `moz-phab patch` on the revision
+            # fails with "a diff without commit information detected".
+            if local_commits and new_revision_id:
+                _set_local_commits(
+                    diff_result["diffid"],
+                    local_commits,
+                    params,
+                    bug_id,
+                    new_revision_id,
+                )
         except Exception as exc:
             log.exception("Failed to submit Phabricator diff for bug %s", bug_id)
             return ActionResult.failed(str(exc))
 
-        object_data = revision_result.get("object") or {}
-        new_revision_id = object_data.get("id") or revision_id
         return ActionResult.ok(
             {
                 "revision_id": new_revision_id,

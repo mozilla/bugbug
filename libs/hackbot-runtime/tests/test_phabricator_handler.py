@@ -20,10 +20,14 @@ _DIFF_PAYLOAD = {
 }
 
 
-def _ctx(artifact=_DIFF_PAYLOAD):
+def _ctx(diff=_DIFF_PAYLOAD, local_commits=None):
+    submission = {"diff": diff}
+    if local_commits is not None:
+        submission["local_commits"] = local_commits
+
     async def download(key):
         assert key == "changes/phabricator_diff.json"
-        return json.dumps(artifact).encode()
+        return json.dumps(submission).encode()
 
     return ApplyContext(run_id="run-1", download_artifact=download)
 
@@ -76,6 +80,100 @@ async def test_submit_patch_create_success(monkeypatch):
     assert transactions["title"] == "Fix"
     assert transactions["reviewers.add"] == ["alice"]
     assert transactions["bugzilla.bug-id"] == "1"
+
+
+async def test_submit_patch_sets_local_commits_property(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-9", "diffid": 9},
+            "differential.revision.edit": {"object": {"id": 77}},
+            "differential.setdiffproperty": {},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+
+    # Only the git-derived fields exist in the artifact; summary + message are
+    # filled in apply-side, mirroring moz-phab's set_diff_property.
+    git_fields = {
+        "author": "Hackbot Agent",
+        "authorEmail": "hackbot@mozilla.tld",
+        "time": 1,
+        "commit": "node1",
+        "parents": ["base1"],
+        "tree": "tree1",
+    }
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {
+            "bug_id": 5,
+            "title": "Fix the thing",
+            "summary": "does it",
+            "reviewers": ["alice"],
+        },
+        _ctx(local_commits={"node1": dict(git_fields)}),
+    )
+    assert result.status == "applied"
+
+    # The property is set AFTER the revision edit, so the message can embed the
+    # revision URL (matching moz-phab's ordering).
+    methods = [c[0] for c in calls]
+    assert methods.index("differential.revision.edit") < methods.index(
+        "differential.setdiffproperty"
+    )
+
+    prop_call = next(c for c in calls if c[0] == "differential.setdiffproperty")
+    assert prop_call[1]["diff_id"] == 9
+    assert prop_call[1]["name"] == "local:commits"
+    stored = json.loads(prop_call[1]["data"])["node1"]
+    # git-derived fields are preserved untouched
+    assert stored["author"] == "Hackbot Agent"
+    assert stored["tree"] == "tree1"
+    assert stored["parents"] == ["base1"]
+    # summary is the revision title; message is arc-formatted with the URL
+    assert stored["summary"] == "Fix the thing"
+    assert stored["message"].startswith("Fix the thing\n\nSummary:\ndoes it")
+    assert (
+        "Differential Revision: https://phabricator.services.mozilla.com/D77"
+        in stored["message"]
+    )
+    assert "Reviewers: alice" in stored["message"]
+    assert "Bug #: 5" in stored["message"]
+
+    # creatediff gets the raw diff payload; local_commits never leaks into it.
+    creatediff_call = next(c for c in calls if c[0] == "differential.creatediff")
+    assert creatediff_call[1]["changes"] == _DIFF_PAYLOAD["changes"]
+    assert "local_commits" not in creatediff_call[1]
+
+
+async def test_submit_patch_local_commits_fetches_title_on_update(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 3},
+            "differential.revision.edit": {"object": {"id": 42}},
+            "differential.revision.search": {
+                "data": [{"fields": {"title": "Existing title", "summary": "old sum"}}]
+            },
+            "differential.setdiffproperty": {},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 9, "revision_id": 42},
+        _ctx(local_commits={"n": {"author": "A"}}),
+    )
+    assert result.status == "applied"
+
+    # No title on the action -> fall back to the existing revision's title.
+    stored = json.loads(
+        next(c for c in calls if c[0] == "differential.setdiffproperty")[1]["data"]
+    )["n"]
+    assert stored["summary"] == "Existing title"
+    assert (
+        "Differential Revision: https://phabricator.services.mozilla.com/D42"
+        in stored["message"]
+    )
 
 
 async def test_submit_patch_update_sets_object_identifier(monkeypatch):
