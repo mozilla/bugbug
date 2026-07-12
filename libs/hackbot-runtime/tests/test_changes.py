@@ -8,7 +8,11 @@ already-checked-out repo (see hackbot_runtime.context.publish_changes).
 
 import builtins
 
-from hackbot_runtime.changes import _git, _synthetic_commit, build_phabricator_diff
+from hackbot_runtime.changes import (
+    _git,
+    _synthetic_commit,
+    build_phabricator_diff,
+)
 
 
 def _init_repo(repo, with_arcconfig=True):
@@ -87,9 +91,10 @@ def test_build_phabricator_diff_with_real_change(tmp_path):
     base = _init_repo(tmp_path)
     _commit_change(tmp_path, "line1\nline2 modified\nline3\n")
 
-    payload = build_phabricator_diff(tmp_path, base, "https://example.com/repo.git")
+    result = build_phabricator_diff(tmp_path, base, "https://example.com/repo.git")
 
-    assert payload is not None
+    assert result is not None
+    payload = result["diff"]
     assert payload["sourceControlBaseRevision"] == base
     assert payload["sourceControlSystem"] == "git"
     assert payload["sourceMachine"] == "https://example.com/repo.git"
@@ -97,6 +102,21 @@ def test_build_phabricator_diff_with_real_change(tmp_path):
     change = payload["changes"][0]
     assert change["currentPath"] == "file.txt"
     assert change["hunks"][0]["corpus"] == " line1\n-line2\n+line2 modified\n line3\n"
+
+    # local:commits carries the git-side commit info moz-phab needs to rebuild
+    # a commit; without it `moz-phab patch` fails with "a diff without commit
+    # information". summary/message are filled in apply-side (they need the
+    # revision URL), so they aren't present yet here.
+    local_commits = result["local_commits"]
+    assert len(local_commits) == 1
+    node, entry = next(iter(local_commits.items()))
+    assert entry["commit"] == node
+    assert entry["parents"] == [base]
+    assert entry["authorEmail"]  # populated from the synthesized commit
+    assert entry["tree"]
+    assert isinstance(entry["time"], int)
+    assert "summary" not in entry
+    assert "message" not in entry
 
 
 def test_build_phabricator_diff_without_arcconfig_returns_none(tmp_path):

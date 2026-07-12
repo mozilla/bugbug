@@ -132,16 +132,23 @@ def test_publish_changes_builds_phabricator_diff_when_action_recorded(
     hb = _hb_with_source(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "hackbot_runtime.context.changes.build_phabricator_diff",
-        lambda repo, base, repo_url: {"changes": [], "sourceControlBaseRevision": base},
+        lambda repo, base, repo_url: {
+            "diff": {"changes": [], "sourceControlBaseRevision": base},
+            "local_commits": {"node": {"author": "A"}},
+        },
     )
     hb.actions.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
 
     hb.publish_changes()
 
-    written = (
-        tmp_path / "artifacts" / "local-test" / "changes" / "phabricator_diff.json"
+    # One artifact holds both the creatediff payload and the local:commits data.
+    submission = json.loads(
+        (
+            tmp_path / "artifacts" / "local-test" / "changes" / "phabricator_diff.json"
+        ).read_text()
     )
-    assert json.loads(written.read_text())["sourceControlBaseRevision"] == "basecommit"
+    assert submission["diff"]["sourceControlBaseRevision"] == "basecommit"
+    assert submission["local_commits"]["node"]["author"] == "A"
 
 
 def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeypatch):

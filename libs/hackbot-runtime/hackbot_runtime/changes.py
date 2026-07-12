@@ -151,6 +151,32 @@ def _synthetic_commit(repo: Path, base: str) -> str:
     ).strip()
 
 
+def _local_commits_property(repo: Path, node: str, base: str) -> dict:
+    """The git side of moz-phab's ``local:commits`` diff property for ``node``.
+
+    Phabricator stores this alongside the diff so ``moz-phab patch`` can
+    reconstruct a real local commit from the revision; without it, patching a
+    hackbot-created revision fails with "a diff without commit information
+    detected". Only the fields knowable from git are set here (author, time,
+    tree, node, parents); the apply-side handler fills in ``summary`` and the
+    arc-formatted ``message`` once it has the revision URL, matching moz-phab's
+    ``conduit.set_diff_property``.
+    """
+    fmt = _FIELD_SEP.join(["%an", "%ae", "%at", "%T"])
+    out = _git(repo, "show", "-s", f"--format={fmt}", node)
+    author_name, author_email, epoch, tree = out.rstrip("\n").split(_FIELD_SEP)
+    return {
+        node: {
+            "author": author_name,
+            "authorEmail": author_email,
+            "time": int(epoch),
+            "commit": node,
+            "parents": [base],
+            "tree": tree,
+        }
+    }
+
+
 @contextlib.contextmanager
 def _ambient_git_identity() -> Iterator[None]:
     """Give moz-phab an ambient git identity for its `git config --list` check.
@@ -180,7 +206,15 @@ def _ambient_git_identity() -> Iterator[None]:
 
 
 def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
-    """Build the payload for Phabricator's ``differential.creatediff`` API.
+    """Build the artifact for submitting a Phabricator revision.
+
+    Returns ``{"diff": <differential.creatediff payload>, "local_commits":
+    <partial local:commits property>}`` (or ``None`` on failure), published as a
+    single ``phabricator_diff.json`` artifact. The apply-side handler sends
+    ``diff`` to ``differential.creatediff``, completes ``local_commits`` (summary
+    + message), and stores it on the resulting diff via
+    ``differential.setdiffproperty`` so ``moz-phab patch`` can reconstruct a real
+    commit from the revision (see `_local_commits_property`).
 
     Uses ``moz-phab``'s own diff-building code (``mozphab.git``/``mozphab.diff``,
     imported as a library — requires the ``hackbot-runtime[phabricator]``
@@ -227,7 +261,7 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     if not changes_payload:
         return None
 
-    return {
+    diff_payload = {
         "changes": changes_payload,
         "sourceMachine": repo_url,
         "sourcePath": str(repo),
@@ -238,6 +272,10 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
         "creationMethod": "hackbot",
         "lintStatus": "none",
         "unitStatus": "none",
+    }
+    return {
+        "diff": diff_payload,
+        "local_commits": _local_commits_property(repo, node, base),
     }
 
 
