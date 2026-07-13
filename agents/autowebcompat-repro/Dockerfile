@@ -28,23 +28,31 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 FROM base AS agent
 
-# The Firefox and Chrome DevTools MCP servers are npm packages launched via
-# `npx`, so the agent image needs Node.js + npm (the python base ships neither).
-# It also needs the shared libraries the browsers require to run headless. The
-# browser binaries themselves are downloaded at agent startup (a fresh build per
-# run): Firefox via mozdownload/mozinstall and Chrome for Testing via the
-# Chrome-for-Testing JSON API (see browser.py). The first `lib*` group below is
-# Firefox's runtime deps; the rest are the extra deps headless Chrome needs.
+# The agent needs Node.js + npm to run the DevTools MCP servers (npm packages;
+# the python base ships neither) and the shared libraries the browsers require
+# to run headless. The browser binaries themselves are downloaded at agent
+# startup (a fresh build per run): Firefox via mozdownload/mozinstall and Chrome
+# for Testing via the Chrome-for-Testing JSON API (see browser.py).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        # Node.js, to run the Firefox and Chrome DevTools MCP servers.
         nodejs npm \
+        # Shared by both browsers.
         ca-certificates \
+        # Firefox runtime deps.
         libgtk-3-0 libdbus-glib-1-2 libx11-xcb1 libxtst6 libxt6 libpci3 \
+        # Chrome runtime deps.
         libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 \
         libcups2t64 libdbus-1-3 libgbm1 libxcomposite1 libxdamage1 libxfixes3 \
         libxrandr2 libxkbcommon0 libasound2t64 libpango-1.0-0 libcairo2 \
         fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
+
+# Install the DevTools MCP servers from the pinned package.json/lockfile
+COPY agents/autowebcompat-repro/package.json \
+     agents/autowebcompat-repro/package-lock.json \
+     /app/node/
+RUN cd /app/node && npm ci --omit=dev
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.

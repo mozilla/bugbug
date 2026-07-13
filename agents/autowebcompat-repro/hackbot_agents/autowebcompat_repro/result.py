@@ -74,10 +74,12 @@ class ReproductionResult(BaseModel):
         | Literal["other"]
         | None
     ) = Field(
-        description="""If an issue was reproduced then `null`. When an issue could not be reproduced, one of
-        following categories describing the reason for the failure:
+        description="""If an issue was reproduced as a Firefox web-compat issue then `null`.
+        Otherwise, one of the following categories describing the reason for the failure:
           * not_reproducable - When it was possible to run all the steps to reproduce, but no issue was found
-          * non_compat - When the report doesn't refer to site breakage for example for issues with the Firefox UI or product features such as reader mode
+          * non_compat - When the issue is not a Firefox web-compat issue. This covers reports that don't refer
+          to site breakage (e.g. issues with the Firefox UI or product features such as reader mode) and reports
+          whose behavior reproduces identically in both Firefox and Chrome.
           * unsupported_platform - When the report is specific to a platform that isn't available e.g. iOS
           * blocked_captcha - When access to the site was blocked because the page requires solving a captcha
           * blocked_geo - When access to the site was blocked based on location ("geoblocking")
@@ -127,9 +129,8 @@ class BugReproductionResult(ReproductionResult):
         description=(
             "Result of running the cross-check step in Chrome: "
             "true if the issue also reproduces in Chrome, false if the "
-            "issue does not reproduce, or null if this task had "
-            "no Chrome DevTools MCP. When the issue reproduces "
-            "in Firefox but not in Chrome, that indicates a Firefox-specific webcompat issue."
+            "issue does not reproduce in Chrome, or null if the Chrome "
+            "cross-check wasn't able to confirm reproduction."
         ),
     )
 

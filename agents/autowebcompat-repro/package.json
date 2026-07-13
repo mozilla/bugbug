@@ -1,0 +1,10 @@
+{
+  "name": "hackbot-agent-autowebcompat-repro-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP servers the autowebcompat-repro agent drives.",
+  "dependencies": {
+    "@mozilla/firefox-devtools-mcp-moz": "0.9.12",
+    "chrome-devtools-mcp": "1.5.0"
+  }
+}
