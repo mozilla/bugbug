@@ -112,11 +112,25 @@ class ReproductionResult(BaseModel):
 
 
 class BugReproductionResult(ReproductionResult):
-    """Canonical result the agent produces for a web-compat investigation."""
+    """Canonical result the agent produces for a web-compat investigation.
+
+    Produced by the initial reproduction task, which drives both Firefox and
+    Chrome so it can cross-check the two browsers in a single context.
+    """
 
     summary: str = Field(
         description="""A concise account of whether the issue represents a real
         webcompat issue i.e. it can be reproduced in Firefox."""
+    )
+
+    chrome_reproduced: bool | None = Field(
+        description=(
+            "Result of running the cross-check step in Chrome: "
+            "true if the issue also reproduces in Chrome, false if the "
+            "issue does not reproduce, or null if this task had "
+            "no Chrome DevTools MCP. When the issue reproduces "
+            "in Firefox but not in Chrome, that indicates a Firefox-specific webcompat issue."
+        ),
     )
 
     steps: str = Field(
@@ -128,8 +142,8 @@ class BugReproductionResult(ReproductionResult):
             "provide (a file, image, account, or any other test data), state its "
             "exact origin — the URL you fetched it from, the command you ran, or "
             'how you generated it — not just that you "used" or "saved" it. A '
-            "reader must be able to obtain the same inputs. Omit the reproduction "
-            "screenshot step."
+            "reader must be able to obtain the same inputs. Omit the Chrome cross-check "
+            "reproduction and screenshot steps."
         ),
     )
 

@@ -28,8 +28,9 @@ from hackbot_runtime import AgentError
 from hackbot_runtime.claude import Reporter
 from pydantic import BaseModel
 
-from .browser import FirefoxBrowsers
-from .config import BUGZILLA_READ_TOOLS, DEVTOOLS_TOOLS
+from .browser import ChromeBrowsers, FirefoxBrowsers
+from .chrome_devtools_mcp import build_chrome_devtools_server
+from .config import BUGZILLA_READ_TOOLS, CHROME_DEVTOOLS_TOOLS, DEVTOOLS_TOOLS
 from .devtools_mcp import build_devtools_server
 from .result import (
     RESULT_SERVER_NAME,
@@ -82,6 +83,7 @@ class AutowebcompatReproResult(BaseModel):
     plan_result: TestPlanResult
     reproductions: list[tuple[str, BugReproductionResult | ReproductionResult]]
     chrome_mask_fixed: bool | None
+    chrome_reproduced: bool | None
 
 
 @dataclass
@@ -317,9 +319,13 @@ class BugReproduction(Task):
         input_data: AutoWebcompatInput,
         bugzilla_mcp_server: McpServerConfig,
         screenshot_dir: Path,
+        chrome_path: Path | None = None,
     ):
         super().__init__(task_config, run_tracker)
         self.input_data = input_data
+        # Chrome cross-check is only added when a Chrome binary is supplied
+        # (the initial nightly attempt). Later channel attempts run Firefox-only.
+        self.cross_check_chrome = chrome_path is not None
         self.screenshot_path = make_empty_temp_file(
             screenshot_dir, "reproduction=", ".png"
         )
@@ -334,6 +340,16 @@ class BugReproduction(Task):
             ),
             DEVTOOLS_TOOLS,
         )
+        # The initial reproduction also drives Chrome, so the agent can
+        # cross-check both browsers in one context: if the same steps behave
+        # identically in Firefox and Chrome it can iterate on whether the steps
+        # are wrong versus it genuinely not being a compat issue.
+        if chrome_path is not None:
+            self.add_mcp_server(
+                "chrome-devtools",
+                build_chrome_devtools_server(chrome_path=chrome_path, headless=True),
+                CHROME_DEVTOOLS_TOOLS,
+            )
         if self.input_data.type == "bug_id" != None:
             self.add_mcp_server("bugzilla", bugzilla_mcp_server, BUGZILLA_READ_TOOLS)
 
@@ -341,22 +357,47 @@ class BugReproduction(Task):
         return self.input_data.subject()
 
     def system_prompt(self) -> str:
+        if self.cross_check_chrome:
+            chrome_step = """
+3. Cross-check in Chrome: run the same steps in Chrome using the Chrome DevTools
+   MCP. A genuine web-compat issue reproduces in Firefox but not in in Chrome.
+   - If the behavior is identical in both browsers, your steps may be wrong or
+     this may not be a compat issue. Iterate: refine the steps and re-check both
+     browsers before concluding. Use the difference (or lack of it) between the
+     two browsers to decide whether you have really reproduced the reported
+     issue.
+   - Set `reproduced` for the Firefox outcome and `chrome_reproduced` for the
+     Chrome outcome (`true` if the issue also reproduces in Chrome, `false` if
+     the issue is not reproducible in Chrome)."""
+        else:
+            chrome_step = """
+3. No Chrome cross-check is available for this task: leave `chrome_reproduced`
+   null."""
+
         return (
             super()
             .system_prompt()
             .format(
                 task_details=f"""
 1. Identify the affected URL and the described broken behavior.
-2. Baseline: Navigate to the URL with the Firefox DevTools MCP and
-   try to reproduce the described broken behaviour.
-3. If the issue reproduces AND the breakage is visual in nature (incorrect
-   layout or rendering, not broken interaction), capture a screenshot showing
-   it: call `screenshot_page` with `saveTo` set to `{self.screenshot_path}`.
-   This writes the image to that file instead of returning it — do not capture
-   or paste the image data yourself. Then set `screenshot_path` in your result
-   to exactly `{self.screenshot_path}`. For non-visual issues, take no
-   screenshot and leave `screenshot_path` null.
-4. Submit your findings via `submit_result` (see "Reporting your result").
+2. Baseline: Navigate to the URL with the Firefox DevTools MCP
+   and try to reproduce the described broken behaviour.
+   - Reproduce against the actual reported site. If you cannot reach or
+     reproduce on that site — e.g. it is behind a login wall, blocked,
+     gated by a captcha, or down — do not substitute a reduced testcase,
+     minimal example, or other bug attachment as a stand-in reproduction.
+     Report `reproduced` as false with the appropriate `failure_reason`. A
+     testcase may inform your analysis, but reproducing on it does not count
+     as reproducing the reported site issue.
+{chrome_step}
+4. If the issue reproduces AND the breakage is visual in nature (incorrect
+   layout or rendering, not broken interaction), capture a screenshot in Firefox
+   showing it: call `screenshot_page` with `saveTo` set to
+   `{self.screenshot_path}`. This writes the image to that file instead of
+   returning it — do not capture or paste the image data yourself. Then set
+   `screenshot_path` in your result to exactly `{self.screenshot_path}`. For
+   non-visual issues, take no screenshot and leave `screenshot_path` null.
+5. Submit your findings via `submit_result` (see "Reporting your result").
 """
             )
         )
@@ -502,6 +543,7 @@ class ReproductionResults:
         ] = {}
         self.initial_repro: InitialReproduction | None = None
         self.chrome_mask_fixed: bool | None = None
+        self.chrome_reproduced: bool | None = None
 
     @property
     def reproduced(self) -> bool:
@@ -551,12 +593,19 @@ class ReproductionResults:
         key = (channel, extra)
         if key in self.results:
             raise ValueError(f"Got duplicate results for {channel}, {extra}")
-        if isinstance(result, BugReproductionResult) and result.reproduced:
-            if self.initial_repro is not None:
-                raise ValueError("Got duplicate steps / summary")
-            self.initial_repro = InitialReproduction(
-                channel, result.steps, result.summary, result.screenshot_path
-            )
+        if isinstance(result, BugReproductionResult):
+            if result.reproduced:
+                if self.initial_repro is not None:
+                    raise ValueError("Got duplicate steps / summary")
+                self.initial_repro = InitialReproduction(
+                    channel, result.steps, result.summary, result.screenshot_path
+                )
+            # Only the Chrome-enabled (initial nightly) reproduction reports a
+            # Chrome verdict; other attempts leave it null.
+            if result.chrome_reproduced is not None:
+                if self.chrome_reproduced is not None:
+                    raise ValueError("Got duplicate chrome cross-check results")
+                self.chrome_reproduced = result.chrome_reproduced
         elif isinstance(result, ChromeMaskResult):
             if self.chrome_mask_fixed is not None:
                 raise ValueError("Got duplicate results for chrome mask")
@@ -578,6 +627,7 @@ class ReproductionResults:
                 if isinstance(value, ReproductionResult)
             ],
             chrome_mask_fixed=self.chrome_mask_fixed,
+            chrome_reproduced=self.chrome_reproduced,
         )
 
 
@@ -594,6 +644,7 @@ async def run_autowebcompat_repro(
     :class:`AgentError` if the agent ends in an error.
     """
     firefox_browser = FirefoxBrowsers()
+    chrome_browser = ChromeBrowsers()
 
     test_plan_task = TestPlan(default_config, tracker, input_data, bugzilla_mcp_server)
     test_plan_result = await test_plan_task.run()
@@ -614,6 +665,7 @@ async def run_autowebcompat_repro(
         channel: FirefoxChannel,
         extra: str | None = None,
         config: TaskConfig = default_config,
+        cross_check_chrome: bool = False,
     ) -> None:
         browser = getattr(firefox_browser, channel.value)
         profile = setup_profile(browser)
@@ -626,6 +678,9 @@ async def run_autowebcompat_repro(
                 input_data,
                 bugzilla_mcp_server,
                 screenshots_dir,
+                # Only cross-check Chrome when asked (the initial nightly
+                # attempt); later channel attempts stay Firefox-only.
+                chrome_path=chrome_browser.stable if cross_check_chrome else None,
             )
         else:
             task = StepsReproduction(
@@ -644,8 +699,8 @@ async def run_autowebcompat_repro(
 
     screenshots_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-screenshots-"))
 
-    # Always try in nightly first
-    await next_repro_task(FirefoxChannel.nightly)
+    # Always try in nightly first, cross-checking in Chrome.
+    await next_repro_task(FirefoxChannel.nightly, cross_check_chrome=True)
 
     if not repro_results.reproduced and test_plan_result.affects_platforms == [
         "android"
