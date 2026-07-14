@@ -19,11 +19,10 @@ MAX_DEPTH = 20
 POLL_INTERVAL_SECONDS = 120
 MAX_WAIT_SECONDS = 60 * 60
 
-# mozci results vary by data source (Taskcluster vs Treeherder), so match both
-# vocabularies. Only genuine build failures count as failed; results like
-# "canceled"/"superseded" are non-decisive so they never suppress a regression.
+# A green build; mozci reports it as "passed" (Taskcluster) or "success"
+# (Treeherder). Failures are read from mozci's Task.failed attribute instead of
+# reimplementing the vocabulary.
 _PASSED_RESULTS = ("passed", "success")
-_FAILED_RESULTS = ("busted", "failed")
 
 # A build in one of these states, or with one of these (infra) results, has not
 # settled: it is still running or was retried after an exception, so its outcome
@@ -53,10 +52,12 @@ def _build_status(push: Push, label: str):
     """
     label_tasks = [t for t in push.tasks if t.label == label]
     if label_tasks:
-        results = [t.result for t in label_tasks]
-        if any(r in _PASSED_RESULTS for r in results):
+        if any(t.result in _PASSED_RESULTS for t in label_tasks):
             return "passed"
-        if any(r in _FAILED_RESULTS for r in results):
+        # mozci's Task.failed also counts `exception` as a failure, but we treat
+        # an exceptioned build as unsettled (infra, likely auto-retried) and wait
+        # for the retry rather than declaring the parent failed.
+        if any(t.failed and t.result not in _UNSETTLED_RESULTS for t in label_tasks):
             return "failed"
         if any(
             t.state in _UNSETTLED_STATES or t.result in _UNSETTLED_RESULTS
