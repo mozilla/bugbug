@@ -9,7 +9,8 @@ from typing import NoReturn
 
 from pydantic import ValidationError
 
-from hackbot_runtime import anthropic_wif, tracing, wandb_wif
+from hackbot_runtime import anthropic_wif, wandb_wif
+from hackbot_runtime.tracing import trace_agent
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.results import HackbotAgentResult
