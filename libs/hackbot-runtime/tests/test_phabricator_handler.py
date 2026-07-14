@@ -42,6 +42,21 @@ def _fake_conduit(responses):
     return fake, calls
 
 
+def test_revision_title_strips_and_reprefixes():
+    rt = phabricator_handler._revision_title
+    assert rt("Fix bug", wip=True) == "WIP: Fix bug"
+    assert rt("WIP: Fix bug", wip=True) == "WIP: Fix bug"  # not doubled
+    assert rt("WIP: Fix bug", wip=False) == "Fix bug"  # prefix stripped
+
+
+def test_revision_title_never_blank_for_bare_wip_marker():
+    # A title that is only a WIP marker must fall back to the original, not go
+    # blank (which would be an invalid Phabricator title).
+    rt = phabricator_handler._revision_title
+    assert rt("WIP:", wip=True) == "WIP: WIP"
+    assert rt("WIP", wip=False) == "WIP"
+
+
 async def test_submit_patch_create_wip_by_default(monkeypatch):
     fake, calls = _fake_conduit(
         {

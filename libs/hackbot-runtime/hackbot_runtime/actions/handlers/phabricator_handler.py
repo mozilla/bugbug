@@ -107,7 +107,8 @@ _WIP_PREFIX_RE = re.compile(r"^(?:WIP[: ]|WIP$)", re.IGNORECASE)
 
 
 def _revision_title(title: str, wip: bool) -> str:
-    title = _WIP_PREFIX_RE.sub("", title).lstrip()
+    title = _WIP_PREFIX_RE.sub("", title) or "WIP"
+    title = title.strip()
     return f"WIP: {title}" if wip else title
 
 
