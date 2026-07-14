@@ -399,11 +399,52 @@ async def test_backward_placeholder_resolves_in_coalesced_comment(monkeypatch):
 
     # The patch applies first (its own idx), seeding results_by_ref; the
     # coalesced comment then resolves {{actions.patch.url}} at the group anchor.
+    # The patch call carries the hackbot-api-injected `wip` flag.
     assert handler.calls == [
-        {},
+        {"wip": True},
         {
             "bug_id": 5,
             "changes": {"a": 1},
             "comment": {"body": "see http://x/D1", "is_private": False},
         },
     ]
+
+
+async def test_phabricator_submit_patch_gets_wip_injected(monkeypatch):
+    # WIP is a hackbot-api policy injected at dispatch, not part of the recorded
+    # action — the agent never sets it.
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    row = _row(
+        0,
+        "pending",
+        action_type="phabricator.submit_patch",
+        params={"bug_id": 1, "title": "x"},
+    )
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), [(row, [])]
+    )
+
+    assert handler.calls[0]["wip"] is actions_applier.SUBMIT_PATCHES_AS_WIP
+
+
+async def test_non_phabricator_action_gets_no_wip(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    row = _row(
+        0,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 1, "text": "hi"},
+    )
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), [(row, [])]
+    )
+
+    assert "wip" not in handler.calls[0]

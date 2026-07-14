@@ -36,6 +36,11 @@ log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 
+# Whether Phabricator patches are submitted as work-in-progress is hardcoded
+# here for now; later this should come from per-agent config (hackbot.toml),
+# which isn't wired into hackbot-api yet.
+SUBMIT_PATCHES_AS_WIP = True
+
 
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     """Substitute `{{actions.<ref>.<field>}}` in `value` using prior results.
@@ -107,6 +112,10 @@ async def _dispatch(
         return ActionResult.failed(
             f"No handler registered for action type '{action_type}'"
         )
+
+    if action_type == "phabricator.submit_patch":
+        # WIP is a hackbot-api policy, not an agent choice; inject it here.
+        params = {**params, "wip": SUBMIT_PATCHES_AS_WIP}
 
     ctx = ApplyContext(
         run_id=str(run.run_id),

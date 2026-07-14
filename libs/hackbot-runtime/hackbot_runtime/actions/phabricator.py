@@ -39,10 +39,6 @@ async def submit_patch(
             ),
         ),
     ] = None,
-    reviewers: Annotated[
-        list[str] | None,
-        Field(default=None, description="Reviewers to request on the revision."),
-    ] = None,
     title: Annotated[
         str | None,
         Field(
@@ -91,7 +87,6 @@ async def submit_patch(
     params: dict[str, Any] = {
         "bug_id": bug_id,
         "revision_id": revision_id,
-        "reviewers": reviewers or [],
         "title": title,
         "summary": summary,
     }
