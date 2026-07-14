@@ -10,14 +10,10 @@ from pathlib import Path
 
 from claude_agent_sdk.types import McpStdioServerConfig
 
-NODE_PROJECT_DIR = Path("/app/node")
-FIREFOX_DEVTOOLS_BIN = "firefox-devtools-mcp-moz"
-CHROME_DEVTOOLS_BIN = "chrome-devtools-mcp"
-
 
 def resolve_bin(bin_name: str) -> str:
     """Resolve an installed MCP server binary to an absolute path."""
-    binary = NODE_PROJECT_DIR / "node_modules" / ".bin" / bin_name
+    binary = Path("/app/node") / "node_modules" / ".bin" / bin_name
     if not binary.exists():
         raise RuntimeError(
             f"MCP server binary not found at {binary}; the image should install "
@@ -66,7 +62,7 @@ def build_firefox_devtools_server(
     if profile_path is not None:
         args += ["--profile-path", str(profile_path)]
 
-    command = resolve_bin(FIREFOX_DEVTOOLS_BIN)
+    command = resolve_bin("firefox-devtools-mcp-moz")
     if enable_privileged_context:
         return McpStdioServerConfig(
             command=command, args=args, env={"MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1"}
@@ -106,4 +102,4 @@ def build_chrome_devtools_server(
     if no_sandbox:
         args += ["--chromeArg=--no-sandbox", "--chromeArg=--disable-setuid-sandbox"]
 
-    return McpStdioServerConfig(command=resolve_bin(CHROME_DEVTOOLS_BIN), args=args)
+    return McpStdioServerConfig(command=resolve_bin("chrome-devtools-mcp"), args=args)

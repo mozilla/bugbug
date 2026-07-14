@@ -532,19 +532,16 @@ class ReproductionResults:
 
     @property
     def chrome_reproduced(self) -> bool | None:
-        # Prefer the Chrome verdict from the channel that reproduced in Firefox,
-        # since that is the meaningful cross-check. If nothing reproduced in
-        # Firefox, still surface the first Chrome verdict we got (since the cross-check
-        # ran on every BugReproduction attempt).
         if self.initial_repro is not None:
             return self.initial_repro.chrome_reproduced
-        for result in self.results.values():
-            if (
-                isinstance(result, BugReproductionResult)
-                and result.chrome_reproduced is not None
-            ):
-                return result.chrome_reproduced
-        return None
+
+        chrome_reproductions = [
+            result.chrome_reproduced
+            for result in self.results.values()
+            if isinstance(result, BugReproductionResult)
+            and result.chrome_reproduced is not None
+        ]
+        return any(chrome_reproductions) if chrome_reproductions else None
 
     @property
     def summary(self) -> str:
@@ -697,6 +694,12 @@ async def run_autowebcompat_repro(
     # Firefox web-compat issue: stop early.
     if repro_results.reproduced and repro_results.chrome_reproduced:
         result = repro_results.into_result()
+        if result.failure_reason != "non_compat":
+            logger.warning(
+                "Issue reproduced in both Firefox and Chrome but failure_reason "
+                "was %r, should have been non_compat",
+                result.failure_reason,
+            )
         result.failure_reason = "non_compat"
         return result
 
