@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from functools import lru_cache
 from typing import Any
 
@@ -100,8 +101,18 @@ Bug #: {bug_id}
 """.strip()
 
 
+# Mirrors moz-phab's WIP_RE / revision_title (mozphab.commits): strip any
+# existing WIP prefix, then prepend "WIP: " for a work-in-progress revision.
+_WIP_PREFIX_RE = re.compile(r"^(?:WIP[: ]|WIP$)", re.IGNORECASE)
+
+
+def _revision_title(title: str, wip: bool) -> str:
+    title = _WIP_PREFIX_RE.sub("", title).lstrip()
+    return f"WIP: {title}" if wip else title
+
+
 def _revision_fields(revision_id: int) -> dict:
-    """The current title/summary of an existing revision (for update-with-no-title)."""
+    """The current fields (title/summary/status) of an existing revision."""
     result = _conduit_request(
         "differential.revision.search", constraints={"ids": [int(revision_id)]}
     )
@@ -109,13 +120,12 @@ def _revision_fields(revision_id: int) -> dict:
     return data[0].get("fields", {}) if data else {}
 
 
-def _arc_commit_message(
-    title: str, summary: str | None, reviewers: list | None, bug_id: Any, url: str
-) -> str:
+def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) -> str:
     """Build moz-phab's arc commit message, with the Differential Revision URL.
 
     Mirrors ``Commit.build_arc_commit_message`` + ``amend_revision_url`` so the
-    reconstructed commit reads identically to a moz-phab submission.
+    reconstructed commit reads identically to a moz-phab submission. Reviewers
+    are always empty: hackbot never assigns them (WIP submissions omit them).
     """
     body = summary or ""
     if body:
@@ -125,7 +135,7 @@ def _arc_commit_message(
         title=title,
         body=body,
         test_plan="",
-        reviewers=", ".join(reviewers or []),
+        reviewers="",
         bug_id=bug_id if bug_id is not None else "",
     )
 
@@ -133,27 +143,19 @@ def _arc_commit_message(
 def _set_local_commits(
     diff_id: Any,
     local_commits: dict,
-    params: dict[str, Any],
+    title: str,
+    summary: str | None,
     bug_id: Any,
     revision_id: int,
 ) -> None:
     """Complete and store moz-phab's ``local:commits`` diff property.
 
     The git-derived fields (author/time/tree/parents/node) come from the
-    agent-built artifact; ``summary`` (the revision title) and the arc-formatted
-    ``message`` are filled in here, since they need the revision URL.
+    agent-built artifact; ``summary`` (the resolved, possibly ``WIP:``-prefixed
+    revision title) and the arc-formatted ``message`` are filled in here, since
+    they need the revision URL.
     """
-    title = params.get("title")
-    summary = params.get("summary")
-    if not title:
-        fields = _revision_fields(revision_id)
-        title = fields.get("title") or f"Bug {bug_id}"
-        if summary is None:
-            summary = fields.get("summary")
-
-    message = _arc_commit_message(
-        title, summary, params.get("reviewers"), bug_id, _revision_url(revision_id)
-    )
+    message = _arc_commit_message(title, summary, bug_id, _revision_url(revision_id))
     for commit_info in local_commits.values():
         commit_info["summary"] = title
         commit_info["message"] = message
@@ -188,6 +190,8 @@ class SubmitPatchHandler:
         diff_payload = submission.get("diff", submission)
         local_commits = submission.get("local_commits")
 
+        wip = params.get("wip", True)
+
         try:
             diff_result = _conduit_request(
                 "differential.creatediff",
@@ -196,22 +200,45 @@ class SubmitPatchHandler:
             )
             diff_phid = diff_result["phid"]
 
+            # Resolve title/summary (and, for updates, the current status) once;
+            # reused for the transactions and the local:commits property.
+            raw_title = params.get("title")
+            raw_summary = params.get("summary")
+            existing_status = None
+            if revision_id:
+                fields = _revision_fields(revision_id)
+                existing_status = (fields.get("status") or {}).get("value")
+                if not raw_title:
+                    raw_title = fields.get("title")
+                if raw_summary is None:
+                    raw_summary = fields.get("summary")
+            title = _revision_title(raw_title or f"Bug {bug_id}", wip)
+
+            # Reviewers are never assigned by hackbot: a WIP draft gets them at
+            # promotion time, and the agent doesn't choose them.
             transactions: list[dict[str, Any]] = [
-                {"type": "update", "value": diff_phid}
+                {"type": "update", "value": diff_phid},
+                {"type": "title", "value": title},
             ]
-            if params.get("title"):
-                transactions.append({"type": "title", "value": params["title"]})
-            if params.get("summary"):
-                transactions.append({"type": "summary", "value": params["summary"]})
-            if params.get("reviewers"):
-                # Assumes Phabricator resolves these identifiers directly;
-                # if Mozilla's instance requires PHIDs instead of usernames
-                # for this transaction, a user.search-based resolution step
-                # needs adding here — not verified against a live instance.
-                transactions.append(
-                    {"type": "reviewers.add", "value": params["reviewers"]}
-                )
+            if raw_summary:
+                transactions.append({"type": "summary", "value": raw_summary})
             transactions.append({"type": "bugzilla.bug-id", "value": str(bug_id)})
+
+            # Mark WIP via a `plan-changes` transaction, mirroring moz-phab. If
+            # the revision is already `changes-planned`, Phabricator errors on a
+            # no-op status change, so send it in a separate follow-up edit.
+            post_transactions: list[dict[str, Any]] = []
+            if wip:
+                plan_changes = {"type": "plan-changes", "value": True}
+                if existing_status == "changes-planned":
+                    post_transactions.append(plan_changes)
+                else:
+                    transactions.append(plan_changes)
+            elif existing_status and existing_status not in (
+                "needs-review",
+                "accepted",
+            ):
+                transactions.append({"type": "request-review", "value": True})
 
             edit_args: dict[str, Any] = {"transactions": transactions}
             if revision_id:
@@ -223,6 +250,13 @@ class SubmitPatchHandler:
             object_data = revision_result.get("object") or {}
             new_revision_id = object_data.get("id") or revision_id
 
+            if post_transactions and new_revision_id:
+                _conduit_request(
+                    "differential.revision.edit",
+                    objectIdentifier=new_revision_id,
+                    transactions=post_transactions,
+                )
+
             # Store commit info on the diff, exactly as moz-phab does *after*
             # creating the revision (so the message can embed the Differential
             # Revision URL). Without this, `moz-phab patch` on the revision
@@ -231,7 +265,8 @@ class SubmitPatchHandler:
                 _set_local_commits(
                     diff_result["diffid"],
                     local_commits,
-                    params,
+                    title,
+                    raw_summary,
                     bug_id,
                     new_revision_id,
                 )

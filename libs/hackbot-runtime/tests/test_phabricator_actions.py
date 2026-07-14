@@ -21,7 +21,6 @@ async def test_create_records_without_revision_id():
     assert action["params"] == {
         "bug_id": 1,
         "revision_id": None,
-        "reviewers": [],
         "title": "Fix the thing",
         "summary": "Details",
     }
@@ -40,9 +39,3 @@ async def test_ref_is_recorded():
         rec, bug_id=1, reasoning="r", title="Fix", ref="patch"
     )
     assert rec.actions[0]["ref"] == "patch"
-
-
-async def test_reviewers_default_to_empty_list():
-    rec = ActionsRecorder()
-    await phabricator.submit_patch(rec, bug_id=1, reasoning="r", title="Fix")
-    assert rec.actions[0]["params"]["reviewers"] == []
