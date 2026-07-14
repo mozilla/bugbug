@@ -513,6 +513,7 @@ class InitialReproduction:
     steps: str
     summary: str
     screenshot_path: Path | None
+    chrome_reproduced: bool | None
 
 
 class ReproductionResults:
@@ -524,11 +525,26 @@ class ReproductionResults:
         ] = {}
         self.initial_repro: InitialReproduction | None = None
         self.chrome_mask_fixed: bool | None = None
-        self.chrome_reproduced: bool | None = None
 
     @property
     def reproduced(self) -> bool:
         return self.initial_repro is not None
+
+    @property
+    def chrome_reproduced(self) -> bool | None:
+        # Prefer the Chrome verdict from the channel that reproduced in Firefox,
+        # since that is the meaningful cross-check. If nothing reproduced in
+        # Firefox, still surface the first Chrome verdict we got (since the cross-check
+        # ran on every BugReproduction attempt).
+        if self.initial_repro is not None:
+            return self.initial_repro.chrome_reproduced
+        for result in self.results.values():
+            if (
+                isinstance(result, BugReproductionResult)
+                and result.chrome_reproduced is not None
+            ):
+                return result.chrome_reproduced
+        return None
 
     @property
     def summary(self) -> str:
@@ -574,19 +590,16 @@ class ReproductionResults:
         key = (channel, extra)
         if key in self.results:
             raise ValueError(f"Got duplicate results for {channel}, {extra}")
-        if isinstance(result, BugReproductionResult):
-            if result.reproduced:
-                if self.initial_repro is not None:
-                    raise ValueError("Got duplicate steps / summary")
-                self.initial_repro = InitialReproduction(
-                    channel, result.steps, result.summary, result.screenshot_path
-                )
-            # Only the Chrome-enabled (initial nightly) reproduction reports a
-            # Chrome verdict; other attempts leave it null.
-            if result.chrome_reproduced is not None:
-                if self.chrome_reproduced is not None:
-                    raise ValueError("Got duplicate chrome cross-check results")
-                self.chrome_reproduced = result.chrome_reproduced
+        if isinstance(result, BugReproductionResult) and result.reproduced:
+            if self.initial_repro is not None:
+                raise ValueError("Got duplicate steps / summary")
+            self.initial_repro = InitialReproduction(
+                channel,
+                result.steps,
+                result.summary,
+                result.screenshot_path,
+                result.chrome_reproduced,
+            )
         elif isinstance(result, ChromeMaskResult):
             if self.chrome_mask_fixed is not None:
                 raise ValueError("Got duplicate results for chrome mask")
@@ -650,9 +663,6 @@ async def run_autowebcompat_repro(
         browser = getattr(firefox_browser, channel.value)
         profile = setup_profile(browser)
         if repro_results.initial_repro is None:
-            # The initial reproduction drives Chrome as a baseline as well as
-            # Firefox, so it can tell a Firefox-specific issue apart from one
-            # that reproduces in both browsers.
             task: Task = BugReproduction(
                 config,
                 tracker,
@@ -680,7 +690,7 @@ async def run_autowebcompat_repro(
 
     screenshots_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-screenshots-"))
 
-    # Always try in nightly first.
+    # Always try in nightly first
     await next_repro_task(FirefoxChannel.nightly)
 
     # If the reported behavior reproduced in both Firefox and Chrome it is not a
