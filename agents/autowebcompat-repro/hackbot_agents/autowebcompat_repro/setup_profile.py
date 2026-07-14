@@ -193,7 +193,7 @@ def setup_profile(firefox_path: Path, extensions: Sequence[str] = ()) -> Path:
     ``extensions`` is a list of AMO addon slugs (e.g. ``["chrome-mask"]``); each
     is downloaded and installed. With no extensions an empty profile parent is
     returned and no warm launch happens. The returned path is meant to be passed as the
-    devtools MCP's ``--profile-path`` (``build_devtools_server(profile_path=...)``).
+    devtools MCP's ``--profile-path`` (``build_firefox_devtools_server(profile_path=...)``).
 
     Raises ``RuntimeError`` if an extension does not end up registered and
     enabled in the profile.
