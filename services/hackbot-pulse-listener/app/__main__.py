@@ -19,7 +19,7 @@ def main() -> None:
         logger.warning("PULSE_USER/PULSE_PASSWORD not set; listener will not start")
         return
 
-    executor = ThreadPoolExecutor(max_workers=settings.poll_max_workers)
+    executor = ThreadPoolExecutor(max_workers=settings.max_workers)
     consumer_obj = consumer.build_consumer(executor)
 
     def shutdown(signum, _frame):
