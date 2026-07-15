@@ -2700,6 +2700,7 @@ dependencies = [
     { name = "google-auth" },
     { name = "pydantic-settings" },
     { name = "requests" },
+    { name = "weave" },
 ]
 
 [package.optional-dependencies]
@@ -2720,6 +2721,7 @@ requires-dist = [
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
+    { name = "weave", specifier = ">=0.53.1" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
 
@@ -7563,7 +7565,7 @@ wheels = [
 
 [[package]]
 name = "weave"
-version = "0.52.43"
+version = "0.53.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -7574,7 +7576,6 @@ dependencies = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
-    { name = "opentelemetry-semantic-conventions" },
     { name = "packaging" },
     { name = "polyfile-weave" },
     { name = "pydantic" },
@@ -7582,9 +7583,9 @@ dependencies = [
     { name = "tenacity" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9d/df/dcb32bf366eca5e11d345a8e15238256396a9ff7346a29b3290a358b9cd8/weave-0.52.43.tar.gz", hash = "sha256:3c4abcb4da33e0db8a03bd52739503d99c90bdb1922b704ca2b2df8a0f6d561e", size = 977397, upload-time = "2026-06-15T21:29:23.062Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/34/c9ddb250e27708b581f52fd75f94ca04edbe7ed287560fe13995e042521d/weave-0.53.1.tar.gz", hash = "sha256:623c1918394e8493a3344fb89ffc71b3e1e96c3bd247a77309aa2b6e78475cb9", size = 1113042, upload-time = "2026-07-02T21:17:45.087Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c1/a0/e823f714e337c6342a831307d21d2a12c87bc6a6015fc0ac62be9dd8e01f/weave-0.52.43-py3-none-any.whl", hash = "sha256:d7fb10e893c9da57c7663c8c51a1a67eb59216f9da0e4056a244a41de63faf19", size = 1199217, upload-time = "2026-06-15T21:29:21.267Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/87/99d77ddb9f1008a92e36e6d72b0ff63e17fbe22abe6b383bbfb80001d70b/weave-0.53.1-py3-none-any.whl", hash = "sha256:95c45e22fe38cf241f4ff26d120c86bcff3652e4c813e0bcf5950ec26e7f5db8", size = 1349841, upload-time = "2026-07-02T21:17:42.969Z" },
 ]
 
 [[package]]

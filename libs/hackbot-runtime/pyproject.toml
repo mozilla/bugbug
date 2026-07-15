@@ -8,6 +8,7 @@ dependencies = [
     "pydantic-settings>=2.1.0",
     "google-auth>=2.0.0",
     "agent-tools",
+    "weave>=0.53.1"
 ]
 
 [project.optional-dependencies]
