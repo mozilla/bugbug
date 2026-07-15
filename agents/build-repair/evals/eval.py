@@ -120,7 +120,7 @@ class BuildRepairModel(weave.Model):
                 source_repo=worktree_path,
                 fx_ctx=fx_ctx,
                 bug_id=bug_id,
-                git_commit=failure_commit,
+                git_commits=gh_failure_commits,
                 failure_tasks={f["task_name"]: f["task_id"] for f in failures},
                 run_try_push=not self.no_try_push,
             )

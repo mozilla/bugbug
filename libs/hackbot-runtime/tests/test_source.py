@@ -92,3 +92,23 @@ def test_pinned_ref_includes_parent_for_diff(tmp_path):
     )
     assert "hello" in show.stdout
     assert "world" in show.stdout
+
+
+def test_depth_reaches_older_push_ancestors(tmp_path):
+    remote = tmp_path / "remote"
+    _make_remote(remote)
+    (remote / "README.md").write_text("second")
+    _commit(remote, "second")
+    (remote / "README.md").write_text("third")
+    third = _commit(remote, "third")
+    dest = tmp_path / "dest"
+    # depth=3 fetches the whole 3-commit chain, so the root commit is present and
+    # showable -- a depth=2 fetch (the default for a pinned ref) would not reach it.
+    ensure_source_repo(dest, f"file://{remote}", ref=third, depth=3)
+    count = subprocess.run(
+        ["git", "-C", str(dest), "rev-list", "--count", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert int(count.stdout.strip()) == 3

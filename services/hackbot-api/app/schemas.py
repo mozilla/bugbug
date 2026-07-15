@@ -97,9 +97,11 @@ class AutowebcompatReproInputs(BaseModel):
 
 
 class BuildRepairInputs(BaseModel):
-    bug_id: int | None = None
-    git_commit: str
+    # Failing Taskcluster build tasks {task_name: task_id}; the agent resolves the
+    # push commits from them. git_commit / bug_id are optional overrides.
     failure_tasks: dict[str, str]
+    git_commit: str | None = None
+    bug_id: int | None = None
     run_try_push: bool = False
     model: str | None = None
     max_turns: int | None = None

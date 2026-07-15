@@ -12,9 +12,11 @@ It also optionally bootstraps Firefox build if needed.
 
 ## Input
 
-- `BUG_ID` - Optional Bugzilla bug ID
-- `GIT_COMMIT` - Firefox Git commit that failed the build
-- `FAILURE_TASKS` - a dictionary of failed Taskcluster tasks {task_name: taskcluster_task_id}
+- `FAILURE_TASKS` - a dictionary of failed Taskcluster tasks {task_name: taskcluster_task_id}.
+  The agent resolves the push from them: the failure commit (checked out) plus the other
+  commits in the push, and blames the one that introduced the failure.
+- `GIT_COMMIT` - Optional override for the failure commit (skips the hg->git lookup).
+- `BUG_ID` - Optional Bugzilla bug id.
 
 ## Output
 
@@ -23,17 +25,19 @@ First stage - analysis:
 - `summary.md` - a quick summary for a developer
 - `analysis.md` - detailed analysis
 - `planning.md` - intermediate file that outlines fixing steps for the second stage
+- `blame.json` - the commit that introduced the failure (`blamed_commit`, `reason`); written
+  only when the push has more than one commit
 
 Second stage - fixing:
 
 - A patch in Hackbot format
 
+The result reports `blamed_commit` so the caller can attribute the failure to a developer.
+
 ## Test the agent
 
 ```sh
-BUG_ID=1987675 GIT_COMMIT=5477e3882d4e18f93de9f56b31e90533fd23b0d1 \
-FAILURE_TASKS='{"build-linux":"XyU4b_BIRdO_IeK6z_kcQg"}' \
-  docker compose up build-repair-agent --build
+FAILURE_TASKS='{"build-linux":"XyU4b_BIRdO_IeK6z_kcQg"}' docker compose up build-repair-agent --build
 ```
 
 Artifacts are written to `~/hackbot/artifacts/`.

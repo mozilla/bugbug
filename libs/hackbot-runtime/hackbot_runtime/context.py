@@ -113,7 +113,9 @@ class HackbotContext(BaseSettings):
         env_path = os.environ.get("SOURCE_REPO")
         path = Path(env_path) if env_path else self._config.source.checkout_path
         ref = os.environ.get("SOURCE_REF") or self._config.source.ref
-        ensure_source_repo(path, self._config.source.repo_url, ref)
+        depth_env = os.environ.get("SOURCE_DEPTH")
+        depth = int(depth_env) if depth_env else None
+        ensure_source_repo(path, self._config.source.repo_url, ref, depth)
         # Record where the agent starts editing, so publish_changes() can later
         # diff the final tree against it. Best-effort: a failure here must not
         # break the agent's access to source — it only disables change capture.

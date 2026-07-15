@@ -50,9 +50,12 @@ from .config import (
 )
 from .prompts import (
     ANALYSIS_TEMPLATE,
+    BLAME_STEP,
     BUG_ANALYSIS_STEP,
     BUG_CONTEXT,
     FIX_TEMPLATE,
+    PUSH_COMMIT_LINE,
+    PUSH_CONTEXT,
     TRY_PUSH_INSTRUCTIONS,
 )
 
@@ -68,6 +71,9 @@ class BuildRepairResult(HackbotAgentResult):
     try_build_passed: bool | None = None
     lando_job_id: str | None = None
     treeherder_url: str | None = None
+    # Which commit in the push introduced the failure. Equals ``git_commit`` when
+    # the push has a single commit; chosen by the agent otherwise.
+    blamed_commit: str | None = None
 
 
 def _result_text(block: ToolResultBlock) -> str:
@@ -136,7 +142,7 @@ async def run_build_repair(
     source_repo: Path,
     fx_ctx: FirefoxContext,
     bug_id: int | None = None,
-    git_commit: str,
+    git_commits: list[str],
     failure_tasks: dict[str, str],
     run_try_push: bool = False,
     model: str | None = None,
@@ -150,8 +156,11 @@ async def run_build_repair(
     Returns a :class:`BuildRepairResult`; raises :class:`AgentError` if a stage
     ends in an error or produces no result.
     """
-    label = f"bug {bug_id}" if bug_id is not None else f"commit {git_commit[:12]}"
-    print(f"[build_repair] repairing {label} at {git_commit}", file=sys.stderr)
+    if not git_commits:
+        raise AgentError("git_commits must contain at least one commit")
+    failure_commit = git_commits[0]
+    label = f"bug {bug_id}" if bug_id is not None else f"commit {failure_commit[:12]}"
+    print(f"[build_repair] repairing {label} at {failure_commit}", file=sys.stderr)
 
     scratch_dir = Path(tempfile.mkdtemp(prefix=f"build-repair-{bug_id or 'nobug'}-"))
     scratch_in = scratch_dir / "in"
@@ -182,7 +191,9 @@ async def run_build_repair(
     task_name = next(iter(failure_tasks), "")
     analysis_prompt = ANALYSIS_TEMPLATE.format(
         target_software=TARGET_SOFTWARE,
-        git_commit=git_commit,
+        git_commit=failure_commit,
+        push_context=_push_context(git_commits),
+        blame_step=_blame_step(git_commits, scratch_out),
         failure_logs=failure_logs,
         scratch_out=scratch_out,
         bug_context=BUG_CONTEXT.format(bug_id=bug_id) if bug_id is not None else "",
@@ -248,16 +259,18 @@ async def run_build_repair(
 
     build_result = captured.get(BUILD_TOOL)
     try_result = captured.get(TRY_PUSH_TOOL, {})
+    blamed_commit = _resolve_blame(scratch_out, git_commits)
 
     return BuildRepairResult(
         bug_id=bug_id,
-        git_commit=git_commit,
+        git_commit=failure_commit,
         summary=summary,
         analysis=analysis,
         local_build_verified=build_result.get("success") if build_result else None,
         try_build_passed=try_result.get("try_build_passed"),
         lando_job_id=try_result.get("lando_job_id"),
         treeherder_url=try_result.get("treeherder_url"),
+        blamed_commit=blamed_commit,
         num_turns=total_turns,
         total_cost_usd=total_cost,
     )
@@ -324,3 +337,52 @@ def _read_doc(
     if publish_file is not None:
         publish_file(f"{key}.md", path, "text/markdown")
     return path.read_text()
+
+
+def _push_context(git_commits: list[str]) -> str:
+    """List the push commits for the analysis prompt, or "" for a single commit."""
+    if len(git_commits) <= 1:
+        return ""
+    commit_lines = "\n".join(PUSH_COMMIT_LINE.format(commit=c) for c in git_commits)
+    return PUSH_CONTEXT.format(commit_lines=commit_lines)
+
+
+def _blame_step(git_commits: list[str], scratch_out: Path) -> str:
+    """The blame.json instruction, only when the push has more than one commit."""
+    if len(git_commits) <= 1:
+        return ""
+    return BLAME_STEP.format(scratch_out=scratch_out)
+
+
+def _match_commit(sha: str | None, git_commits: list[str]) -> str | None:
+    """Match a (possibly abbreviated) git sha against the push commits."""
+    if not sha:
+        return None
+    for c in git_commits:
+        if c.startswith(sha) or sha.startswith(c):
+            return c
+    return None
+
+
+def _resolve_blame(scratch_out: Path, git_commits: list[str]) -> str | None:
+    """Return the commit the agent blamed for the failure.
+
+    Single-commit pushes are trivially blamed on that commit. Otherwise the agent
+    records its choice in ``blame.json``; we normalize it to a full hash from
+    ``git_commits`` and fall back to the failure commit when the file is missing
+    or unparsable.
+    """
+    if not git_commits:
+        return None
+    failure_commit = git_commits[0]
+    if len(git_commits) == 1:
+        return failure_commit
+
+    blamed: str | None = None
+    path = scratch_out / "blame.json"
+    if path.exists():
+        try:
+            blamed = (json.loads(path.read_text()).get("blamed_commit") or "").strip()
+        except (ValueError, OSError):
+            blamed = None
+    return _match_commit(blamed, git_commits) or failure_commit

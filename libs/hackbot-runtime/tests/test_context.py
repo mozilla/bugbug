@@ -39,8 +39,10 @@ def test_firefox_disabled_raises(tmp_path):
 def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):
     calls = []
 
-    def fake_ensure(path: Path, repo_url: str, ref: str | None = None) -> None:
-        calls.append((path, repo_url, ref))
+    def fake_ensure(
+        path: Path, repo_url: str, ref: str | None = None, depth: int | None = None
+    ) -> None:
+        calls.append((path, repo_url, ref, depth))
 
     monkeypatch.setattr("hackbot_runtime.context.ensure_source_repo", fake_ensure)
     monkeypatch.setenv("SOURCE_REPO", str(tmp_path / "from-env"))
@@ -55,14 +57,16 @@ def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):
     hb = _hb(tmp_path, cfg)
 
     assert hb.source_repo == tmp_path / "from-env"
-    assert calls == [(tmp_path / "from-env", "https://example.com/r.git", None)]
+    assert calls == [(tmp_path / "from-env", "https://example.com/r.git", None, None)]
 
 
 def test_source_repo_honors_source_ref_env(tmp_path, monkeypatch):
     calls = []
 
-    def fake_ensure(path: Path, repo_url: str, ref: str | None = None) -> None:
-        calls.append((path, repo_url, ref))
+    def fake_ensure(
+        path: Path, repo_url: str, ref: str | None = None, depth: int | None = None
+    ) -> None:
+        calls.append((path, repo_url, ref, depth))
 
     monkeypatch.setattr("hackbot_runtime.context.ensure_source_repo", fake_ensure)
     monkeypatch.delenv("SOURCE_REPO", raising=False)
@@ -74,7 +78,7 @@ def test_source_repo_honors_source_ref_env(tmp_path, monkeypatch):
     hb = _hb(tmp_path, cfg)
 
     assert hb.source_repo == Path("/from/toml")
-    assert calls == [(Path("/from/toml"), "r", "deadbeef")]
+    assert calls == [(Path("/from/toml"), "r", "deadbeef", None)]
 
 
 def test_source_repo_uses_toml_path_without_env(tmp_path, monkeypatch):

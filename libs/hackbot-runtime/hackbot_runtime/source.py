@@ -11,7 +11,7 @@ log = logging.getLogger("hackbot_runtime.source")
 
 
 def ensure_source_repo(
-    source_repo: Path, repo_url: str, ref: str | None = None
+    source_repo: Path, repo_url: str, ref: str | None = None, depth: int | None = None
 ) -> None:
     """Ensure a shallow checkout of ``repo_url`` exists at ``source_repo``.
 
@@ -29,8 +29,12 @@ def ensure_source_repo(
     fetch_target = ref if ref else "HEAD"
     # A pinned commit needs its parent too so the commit's own diff can be
     # computed (e.g. `git show <commit>`); depth=1 would fetch only the commit
-    # itself with no parent to diff against.
-    depth = "--depth=2" if ref else "--depth=1"
+    # itself with no parent to diff against. An explicit ``depth`` (e.g. to cover
+    # every commit in a push so each is showable) overrides the default.
+    if depth is not None:
+        depth_flag = f"--depth={depth}"
+    else:
+        depth_flag = "--depth=2" if ref else "--depth=1"
     git_dir = source_repo / ".git"
     if git_dir.exists():
         # An earlier run killed mid-fetch (e.g. the container was stopped)
@@ -66,7 +70,7 @@ def ensure_source_repo(
                 "-C",
                 str(source_repo),
                 "fetch",
-                depth,
+                depth_flag,
                 "origin",
                 fetch_target,
             ],
@@ -99,7 +103,7 @@ def ensure_source_repo(
             stderr=sys.stderr,
         )
         subprocess.run(
-            ["git", "-C", str(source_repo), "fetch", depth, "origin", ref],
+            ["git", "-C", str(source_repo), "fetch", depth_flag, "origin", ref],
             check=True,
             stdout=sys.stderr,
             stderr=sys.stderr,
