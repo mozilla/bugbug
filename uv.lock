@@ -725,7 +725,7 @@ requires-dist = [
     { name = "shap", extras = ["plots"], specifier = ">=0.51,<0.53" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = "==3.8.14" },
     { name = "tabulate", specifier = "~=0.10.0" },
-    { name = "taskcluster", specifier = ">=97.1,<100.4" },
+    { name = "taskcluster", specifier = ">=97.1,<100.6" },
     { name = "tenacity", specifier = "~=9.1.4" },
     { name = "tqdm", specifier = ">=4.67.3,<4.69.0" },
     { name = "unidiff", specifier = "~=0.7.5" },
@@ -740,7 +740,7 @@ spawn-pipeline = [
     { name = "json-e", specifier = "==4.8.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "requests", specifier = "==2.34.2" },
-    { name = "taskcluster", specifier = "==100.3.0" },
+    { name = "taskcluster", specifier = "==100.5.0" },
 ]
 test = [
     { name = "coverage", specifier = "==7.14.1" },
@@ -2687,7 +2687,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
-    { name = "taskcluster", specifier = ">=97.1,<100.4" },
+    { name = "taskcluster", specifier = ">=97.1,<100.6" },
 ]
 provides-extras = ["dev"]
 
@@ -6944,7 +6944,7 @@ wheels = [
 
 [[package]]
 name = "taskcluster"
-version = "100.3.0"
+version = "100.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -6955,9 +6955,9 @@ dependencies = [
     { name = "slugid" },
     { name = "taskcluster-urls" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/57/89/b809400a31d06b8a323289db0ad747118d923c77edcedc22cbb208eeca9c/taskcluster-100.3.0.tar.gz", hash = "sha256:72c1d1a27be49f70732711f16d7555669399d5fd5ab4c3f6cc3ba63fb62c79dc", size = 254833, upload-time = "2026-06-09T10:42:04.689Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/38/c5/823ca59868de80f05f6992482dfb1b0106bd106b9eb410e1c3dd2990f7a3/taskcluster-100.5.0.tar.gz", hash = "sha256:5b2dc2624e7e1a1ca8352b63cf9c4734e9edfab4452a4b3adaa45ce09b19f444", size = 254859, upload-time = "2026-06-25T08:25:48.89Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/02/11c44cc059c8edd87a788b5734265b8964eb56042a975085d3c115fc0279/taskcluster-100.3.0-py3-none-any.whl", hash = "sha256:127893d98e5b81ad937480fe7ae5d8b97f3c3b84b6fec09eb5ab1bac8e01d9d1", size = 150897, upload-time = "2026-06-09T10:42:03.374Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/e6/459aeffc43c6d7266d34388ec167c34ccf02dab20970365ab499602134d2/taskcluster-100.5.0-py3-none-any.whl", hash = "sha256:b56b385da136024cb0f7326a545156bc0d9827194930636bd2d4a9dde2e7d59f", size = 150887, upload-time = "2026-06-25T08:25:47.427Z" },
 ]
 
 [[package]]
