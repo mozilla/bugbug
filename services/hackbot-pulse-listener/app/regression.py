@@ -2,13 +2,10 @@ import logging
 import time
 
 from mozci.errors import ParentPushNotFound
-from mozci.push import Push
+from mozci.push import MAX_DEPTH, Push
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of ancestor pushes to walk back over coalescing gaps before
-# giving up. Mirrors mozci's own MAX_DEPTH.
-MAX_DEPTH = 20
 
 # When the nearest ancestor that ran the build has not produced a decisive
 # result yet, wait for it in-process instead of racing ahead and misreporting an
