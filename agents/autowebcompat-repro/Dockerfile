@@ -19,7 +19,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.12 AS base
 
-COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
@@ -64,6 +63,8 @@ RUN useradd --create-home --shell /bin/bash agent \
 
 USER agent
 
+COPY --from=builder /opt/venv /opt/venv
+
 CMD ["python", "-m", "hackbot_agents.autowebcompat_repro"]
 
 FROM base AS broker
@@ -73,5 +74,7 @@ RUN useradd --create-home --shell /bin/bash broker
 USER broker
 
 EXPOSE 8765
+
+COPY --from=builder /opt/venv /opt/venv
 
 CMD ["python", "-m", "hackbot_agents.autowebcompat_repro.broker"]
