@@ -47,6 +47,7 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         From,
         HtmlContent,
         Mail,
+        ReplyTo,
         Subject,
         To,
     )
@@ -74,6 +75,8 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
             FileType("text/x-patch"),
             Disposition("attachment"),
         )
+    if settings.notification_team_email:
+        message.reply_to = ReplyTo(settings.notification_team_email)
     response = sg.send(message=message)
     logger.info(
         "Sent build-repair notification to %s (status %s)",
@@ -170,6 +173,15 @@ def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str
 
     if patch:
         lines += ["", "## Proposed patch", "", _patch_block(patch)]
+
+    if settings.notification_team_email:
+        lines += [
+            "",
+            "---",
+            "",
+            "_Reply to this email with any feedback on this analysis; it reaches "
+            "the hackbot team._",
+        ]
 
     return "\n".join(lines)
 
