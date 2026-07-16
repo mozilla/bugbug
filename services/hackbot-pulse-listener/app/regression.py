@@ -51,16 +51,20 @@ def _build_status(push: Push, label: str):
     if label_tasks:
         if any(t.result in _PASSED_RESULTS for t in label_tasks):
             return "passed"
-        # mozci's Task.failed also counts `exception` as a failure, but we treat
-        # an exceptioned build as unsettled (infra, likely auto-retried) and wait
-        # for the retry rather than declaring the parent failed.
-        if any(t.failed and t.result not in _UNSETTLED_RESULTS for t in label_tasks):
-            return "failed"
+        # Checked before failure: a retrigger that is still running or was
+        # exceptioned and auto-retried may yet turn green, and any green run wins,
+        # so we wait for it rather than prematurely inheriting a failure.
         if any(
             t.state in _UNSETTLED_STATES or t.result in _UNSETTLED_RESULTS
             for t in label_tasks
         ):
             return _PENDING
+        # Not "not t.failed": a run can be neither passed nor failed (canceled,
+        # superseded, ...). mozci's Task.failed also counts `exception`, but those
+        # are unsettled and already returned above, so only genuine build failures
+        # reach here.
+        if any(t.failed for t in label_tasks):
+            return "failed"
         # Ran but reached a non-decisive terminal state (canceled, ...): skip.
         return None
 

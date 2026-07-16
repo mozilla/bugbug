@@ -12,6 +12,10 @@ class FakeTask:
         self.state = state
         self.result = result
 
+    @property
+    def failed(self):
+        return self.result in ("busted", "failed", "exception")
+
 
 class FakePush:
     def __init__(self, rev, tasks, parent=None):
@@ -51,8 +55,22 @@ def _chain(*task_lists):
 
 
 def _run(observed):
-    with patch.object(regression, "Push", return_value=observed):
+    with (
+        patch.object(regression, "Push", return_value=observed),
+        patch.object(regression.time, "sleep"),
+    ):
         return regression.is_new_build_failure("autoland", observed.rev, LABEL)
+
+
+def _run_polling(observed_sequence):
+    """Feed a fresh observed-push chain on each poll, simulating builds settling."""
+    with (
+        patch.object(regression, "Push", side_effect=observed_sequence),
+        patch.object(regression.time, "sleep"),
+    ):
+        return regression.is_new_build_failure(
+            "autoland", observed_sequence[0].rev, LABEL
+        )
 
 
 def test_parent_passed_is_new_failure():
@@ -79,12 +97,37 @@ def test_coalesced_parent_then_failed_grandparent_is_inherited():
     assert _run(_chain(_failed(), [], _failed())) is False
 
 
-def test_infra_only_parent_is_skipped_then_green():
-    assert _run(_chain(_failed(), _infra(), _passed())) is True
+def test_infra_parent_is_waited_then_new_failure():
+    # An exceptioned parent build is polled, not skipped; once its retry lands
+    # green the observed push introduced the failure.
+    assert (
+        _run_polling([_chain(_failed(), _infra()), _chain(_failed(), _passed())])
+        is True
+    )
 
 
-def test_running_parent_is_skipped_then_failed():
-    assert _run(_chain(_failed(), _running(), _failed())) is False
+def test_running_parent_is_waited_then_inherited():
+    # A still-running parent is polled until it settles; a failure there means
+    # the observed push inherited it.
+    assert (
+        _run_polling([_chain(_failed(), _running()), _chain(_failed(), _failed())])
+        is False
+    )
+
+
+def test_unsettled_parent_past_deadline_runs_agent():
+    # An ancestor build that never settles fails open once the deadline passes.
+    observed = _chain(_failed(), _running())
+    with (
+        patch.object(regression, "Push", return_value=observed),
+        patch.object(regression.time, "sleep"),
+        patch.object(
+            regression.time,
+            "monotonic",
+            side_effect=[0.0, regression.MAX_WAIT_SECONDS + 1],
+        ),
+    ):
+        assert regression.is_new_build_failure("autoland", observed.rev, LABEL) is True
 
 
 def test_no_parent_runs_agent():
@@ -106,11 +149,12 @@ def test_other_label_on_parent_ignored():
     assert _run(_chain(_failed(), parent_tasks)) is True
 
 
-def test_completed_exception_parent_is_not_treated_as_failed():
-    # A completed task with an infra result must not suppress a real regression:
-    # it is non-decisive, so we walk past it to the green grandparent.
+def test_exception_parent_is_waited_not_failed():
+    # A completed task with an infra `exception` result is unsettled, not a
+    # failure: we wait for the retry rather than declaring the parent failed.
     exception_parent = [FakeTask(state="completed", result="exception")]
-    assert _run(_chain(_failed(), exception_parent, _passed())) is True
+    settled = _chain(_failed(), _passed())
+    assert _run_polling([_chain(_failed(), exception_parent), settled]) is True
 
 
 def test_treeherder_result_vocabulary():
