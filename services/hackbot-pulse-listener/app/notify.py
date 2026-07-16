@@ -121,6 +121,13 @@ def _task_url(task_id: str) -> str:
     return f"{settings.taskcluster_root_url.rstrip('/')}/tasks/{task_id}"
 
 
+def _treeherder_url(repo: str, hg_revision: str, task_id: str) -> str:
+    return (
+        f"{settings.treeherder_url.rstrip('/')}/#/jobs"
+        f"?repo={repo}&revision={hg_revision}&selectedTaskRun={task_id}"
+    )
+
+
 def _bug_url(bug_id: object) -> str:
     return f"{settings.bugzilla_url.rstrip('/')}/show_bug.cgi?id={bug_id}"
 
@@ -136,6 +143,8 @@ def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str
         f"- **Revision (git):** [`{ctx.git_commit[:12]}`]({_git_url(ctx.git_commit)})",
         f"- **Revision (hg):** [`{ctx.hg_revision[:12]}`]({_hg_url(ctx.hg_revision)})",
         f"- **Failed task:** [`{ctx.task_id}`]({_task_url(ctx.task_id)})",
+        f"- **Treeherder:** "
+        f"[jobs]({_treeherder_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
     ]
 
     bug_id = findings.get("bug_id") or (run_doc.get("inputs") or {}).get("bug_id")
