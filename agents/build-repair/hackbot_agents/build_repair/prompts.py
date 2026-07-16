@@ -7,22 +7,37 @@
 
 ANALYSIS_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing and fixing a build failure.
 
-Investigate why commit {git_commit} broke the {target_software} build. The source tree
+Investigate why the {target_software} build broke at commit {git_commit}. The source tree
 is already checked out at that commit (your working directory).
-{bug_context}
+{push_context}{bug_context}
 Analyze the following:
 1. The git diff of commit {git_commit} (use `git show {git_commit}`).
 {bug_step}{logs_num}. The Taskcluster build failure logs. Each failing task has a sanitized log (only the ERROR -/FATAL - lines) and the full log. Start from the sanitized log -- it usually pinpoints the failing file and line. The full log can be tens of thousands of lines, so grep it for that file/line rather than reading it sequentially:
 {failure_logs}
 
-Create three separate documents:
+Create these documents:
 1. {scratch_out}/analysis.md with your detailed analysis of what caused the failure
 2. {scratch_out}/planning.md with a fixing plan
 3. {scratch_out}/summary.md with a brief one-paragraph summary of the analysis and plan
    that can point a developer in the right direction
-
+{blame_step}
 Do not prompt to edit those documents. Do not write any code yet. Work fully
 autonomously and do not ask any questions.
+"""
+
+PUSH_CONTEXT = """
+This commit landed in the same push as the commits below. Any of them may have
+introduced the failure -- the checked-out commit is not necessarily the culprit:
+{commit_lines}
+Inspect each commit (`git show <commit>`) and correlate with the failure logs to
+determine which single commit introduced the build failure.
+"""
+
+PUSH_COMMIT_LINE = "- {commit}"
+
+BLAME_STEP = """4. {scratch_out}/blame.json identifying the single commit that introduced the failure,
+   as JSON: {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Choose
+   blamed_commit from the push commits listed above.
 """
 
 BUG_CONTEXT = "\nThe commit attempted to fix Bugzilla bug {bug_id}.\n"
