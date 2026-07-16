@@ -142,8 +142,7 @@ def make_handler(executor: Executor):
 def _build_queues(user: str) -> list[Queue]:
     # Both local and prod authenticate as the same pulse user, so the queue name
     # must also vary by environment; otherwise both consumers bind to the same
-    # durable queue and steal each other's messages. Production keeps the plain
-    # name for continuity.
+    # durable queue and steal each other's messages.
     env = settings.environment
     env_segment = "" if env == "production" else f"{env}-"
     queues = []
