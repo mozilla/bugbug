@@ -138,6 +138,9 @@ async def process_review_request(
             await db.commit()
             return Response(status_code=status.HTTP_409_CONFLICT)
         except ReviewProcessingError as e:
+            logger.exception(
+                "Failed to process review request %s: %s", review_request_id, e
+            )
             review_request.error = str(e)
             review_request.status = ReviewStatus.FAILED
             await db.commit()
