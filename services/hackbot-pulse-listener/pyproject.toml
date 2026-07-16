@@ -5,6 +5,7 @@ description = "Listens to Taskcluster build failures and triggers the build-repa
 requires-python = ">=3.12"
 dependencies = [
     "kombu>=5.6,<6",
+    "mozci~=2.4.8",
     "taskcluster>=97.1,<100.6",
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
@@ -12,6 +13,9 @@ dependencies = [
     "markdown2>=2.4.0",
     "cachetools>=5.3.0",
     "sentry-sdk>=2.51.0",
+    # mozci imports zstandard eagerly (default cache serializer) but only
+    # declares it under its optional `cache` extra, so pull it in explicitly.
+    "zstandard~=0.25.0",
 ]
 
 [project.optional-dependencies]

@@ -32,7 +32,12 @@ class Settings(BaseSettings):
     # Polling the API for run completion
     poll_interval_seconds: int = 60
     run_max_age_minutes: int = 12 * 60
-    poll_max_workers: int = 8
+    # Shared worker pool for message processing and run polling. A
+    # regression check may block for a few minutes waiting for a parent
+    # build to settle, so the pool is sized well above the number of
+    # builds/runs in flight at once. Threads are cheap and mostly idle
+    # while waiting.
+    max_workers: int = 256
 
     # Email notifications (SendGrid)
     sendgrid_api_key: str | None = None

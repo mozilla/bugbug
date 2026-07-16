@@ -1,11 +1,12 @@
 import logging
+import threading
 from concurrent.futures import Executor
 
 from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, lando, taskcluster, worker
+from app import client, lando, regression, taskcluster, worker
 from app.config import settings
 from app.models import RunContext
 
@@ -15,11 +16,16 @@ CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
 
-# In-memory dedupe of hg revisions already handed to the agent. Only the
-# single consumer thread touches it, so no lock is needed.
+# In-memory dedupe of hg revisions already handed to the agent. A revision is
+# recorded only once we actually trigger a run, so an inherited failure on one
+# build label never suppresses a genuine regression on another label of the
+# same push, while a revision that breaks many builds still triggers only once.
+# Messages are handled on worker threads, so the check-and-record is done under
+# a lock.
 _seen: TTLCache = TTLCache(
     maxsize=settings.dedupe_max_size, ttl=settings.dedupe_ttl_seconds
 )
+_seen_lock = threading.Lock()
 
 
 def process(body: dict, executor: Executor) -> str | None:
@@ -43,10 +49,25 @@ def process(body: dict, executor: Executor) -> str | None:
         logger.warning("No GECKO_HEAD_REV for task %s; skipping", task_id)
         return None
 
-    if hg_revision in _seen:
-        logger.info("Revision %s already processed; skipping", hg_revision)
+    with _seen_lock:
+        already_seen = hg_revision in _seen
+    if already_seen:
+        logger.info("Revision %s already triggered a run; skipping", hg_revision)
         return None
-    _seen[hg_revision] = True
+
+    if not regression.is_new_build_failure(project, hg_revision, task_label):
+        logger.info(
+            "Build %s at %s inherited from an ancestor push; skipping",
+            task_label,
+            hg_revision,
+        )
+        return None
+
+    with _seen_lock:
+        if hg_revision in _seen:
+            logger.info("Revision %s already triggered a run; skipping", hg_revision)
+            return None
+        _seen[hg_revision] = True
 
     git_commit = lando.hg_to_git(hg_revision)
     if not git_commit:
@@ -56,7 +77,8 @@ def process(body: dict, executor: Executor) -> str | None:
             task_id,
             project,
         )
-        _seen.pop(hg_revision, None)
+        with _seen_lock:
+            _seen.pop(hg_revision, None)
         return None
 
     inputs: dict = {
@@ -73,7 +95,8 @@ def process(body: dict, executor: Executor) -> str | None:
         run_id = client.trigger_run(inputs)
     except Exception:
         logger.exception("Failed to trigger build-repair run for %s", hg_revision)
-        _seen.pop(hg_revision, None)
+        with _seen_lock:
+            _seen.pop(hg_revision, None)
         return None
 
     logger.info(
@@ -97,11 +120,19 @@ def process(body: dict, executor: Executor) -> str | None:
 
 
 def make_handler(executor: Executor):
-    def on_message(body, message):
+    def run(body: dict) -> None:
         try:
             process(body, executor)
         except Exception:
             logger.exception("Error handling pulse message")
+
+    def on_message(body, message):
+        # Process on a worker thread so a regression check that blocks waiting
+        # for a parent build to settle never stalls the consumer thread.
+        try:
+            executor.submit(run, body)
+        except Exception:
+            logger.exception("Failed to dispatch pulse message")
         finally:
             message.ack()
 
@@ -109,12 +140,17 @@ def make_handler(executor: Executor):
 
 
 def _build_queues(user: str) -> list[Queue]:
+    # Both local and prod authenticate as the same pulse user, so the queue name
+    # must also vary by environment; otherwise both consumers bind to the same
+    # durable queue and steal each other's messages.
+    env = settings.environment
+    env_segment = "" if env == "production" else f"{env}-"
     queues = []
     for exchange in EXCHANGES:
         suffix = exchange.rsplit("/", 1)[-1]
         queues.append(
             Queue(
-                name=f"queue/{user}/build-repair-{suffix}",
+                name=f"queue/{user}/build-repair-{env_segment}{suffix}",
                 exchange=Exchange(exchange, type="topic", no_declare=True),
                 routing_key="#",
                 durable=True,
