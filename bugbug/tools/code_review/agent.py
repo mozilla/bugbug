@@ -267,7 +267,9 @@ class CodeReviewTool(GenerativeModelTool):
             patch=format_patch_set(patch.patch_set),
             patch_summary=patch_summary,
         )
-        result = await self.scope_agent.ainvoke({"messages": [HumanMessage(prompt)]})
+        result = await self.scope_agent.ainvoke(
+            {"messages": [HumanMessage(prompt)]}, config={"recursion_limit": 100}
+        )
         return result["structured_response"].comments[:1]
 
     async def run(self, patch: Patch) -> CodeReviewToolResponse:
