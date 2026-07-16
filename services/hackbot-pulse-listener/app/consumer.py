@@ -82,7 +82,6 @@ def process(body: dict, executor: Executor) -> str | None:
         return None
 
     inputs: dict = {
-        "git_commit": git_commit,
         "failure_tasks": {task_name: task_id},
         "run_try_push": settings.run_try_push,
     }

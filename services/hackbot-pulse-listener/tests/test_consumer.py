@@ -66,8 +66,8 @@ def test_build_failure_triggers_run_and_submits_poll():
     assert run_id == "run-1"
     trigger.assert_called_once()
     inputs = trigger.call_args.args[0]
-    assert inputs["git_commit"] == "deadbeef"
     assert inputs["failure_tasks"] == {"build-linux64/opt": "ABC"}
+    assert "git_commits" not in inputs
     executor.submit.assert_called_once()
     fn, ctx = executor.submit.call_args.args
     assert fn is consumer.worker.poll_and_notify
@@ -77,6 +77,23 @@ def test_build_failure_triggers_run_and_submits_poll():
     assert ctx.task_id == "ABC"
     assert ctx.repo == "autoland"
     assert ctx.developer_email == "dev@mozilla.com"
+
+
+def test_only_failure_tasks_sent_to_agent():
+    executor = MagicMock()
+    with (
+        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
+        patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.regression, "is_new_build_failure", return_value=True),
+        patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
+    ):
+        consumer.process(_build_msg(), executor)
+
+    # The agent resolves the push (and its authors) itself; the listener
+    # only hands it the failing tasks.
+    inputs = trigger.call_args.args[0]
+    assert inputs["failure_tasks"] == {"build-linux64/opt": "ABC"}
+    assert "git_commit" not in inputs
 
 
 def test_same_revision_triggers_once():
