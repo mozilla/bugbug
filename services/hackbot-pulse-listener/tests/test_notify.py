@@ -44,6 +44,97 @@ def test_body_contains_source_links():
     assert "https://firefox-ci-tc.services.mozilla.com/tasks/TASK123" in body
 
 
+def test_body_contains_treeherder_link():
+    body = notify._build_body(_ctx(), {"status": "succeeded", "summary": {}})
+    assert (
+        "https://treeherder.mozilla.org/#/jobs?repo=autoland"
+        "&revision=0123456789ab&selectedTaskRun=TASK123" in body
+    )
+
+
+def test_body_contains_culprit_when_blamed():
+    run_doc = {
+        "status": "succeeded",
+        "summary": {"findings": {"blamed_commit": "abcdef123456789"}},
+    }
+    body = notify._build_body(_ctx(), run_doc, blamed_author="culprit@mozilla.com")
+    assert "Likely culprit" in body
+    assert "https://github.com/mozilla-firefox/firefox/commit/abcdef123456789" in body
+    assert "by culprit@mozilla.com" in body
+
+
+def test_body_omits_culprit_when_absent():
+    body = notify._build_body(_ctx(), {"status": "succeeded", "summary": {}})
+    assert "Likely culprit" not in body
+
+
+def test_recipients_blamed_author_is_primary(monkeypatch):
+    monkeypatch.setattr(notify.settings, "notification_override_email", None)
+    monkeypatch.setattr(notify.settings, "notification_team_email", "team@mozilla.com")
+    assert notify._recipients("culprit@mozilla.com", "pusher@mozilla.com") == [
+        "culprit@mozilla.com",
+        "pusher@mozilla.com",
+        "team@mozilla.com",
+    ]
+
+
+def test_email_goes_to_blamed_author_first(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notification_override_email", None)
+    monkeypatch.setattr(notify.settings, "notification_team_email", None)
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", False)
+
+    run_doc = {
+        "status": "succeeded",
+        "summary": {"findings": {"blamed_commit": "cafe1234"}},
+    }
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with (
+        patch("sendgrid.SendGridAPIClient", return_value=fake_client),
+        patch.object(
+            notify.github, "commit_author_email", return_value="culprit@mozilla.com"
+        ) as author,
+    ):
+        notify.send_email(
+            _ctx(developer_email="pusher@mozilla.com"),
+            run_doc,
+        )
+
+    author.assert_called_once_with("cafe1234")
+
+    personalizations = fake_client.send.call_args.kwargs["message"].get()[
+        "personalizations"
+    ][0]
+    assert personalizations["to"] == [{"email": "culprit@mozilla.com"}]
+    assert personalizations["cc"] == [{"email": "pusher@mozilla.com"}]
+
+
+def test_email_sets_team_reply_to(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notification_override_email", None)
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", False)
+    monkeypatch.setattr(
+        notify.settings, "notification_team_email", "hackbot-developers@mozilla.com"
+    )
+
+    run_doc = {"status": "succeeded", "summary": {"findings": {}}}
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with (
+        patch("sendgrid.SendGridAPIClient", return_value=fake_client),
+        patch.object(notify.github, "commit_author_email", return_value=None),
+    ):
+        notify.send_email(_ctx(), run_doc)
+
+    message = fake_client.send.call_args.kwargs["message"].get()
+    assert message["reply_to"] == {"email": "hackbot-developers@mozilla.com"}
+    body = message["content"][0]["value"]
+    assert "reaches the hackbot team" in body
+
+
 def test_body_contains_bug_link_when_present():
     run_doc = {"status": "succeeded", "summary": {"findings": {"bug_id": 12345}}}
     body = notify._build_body(_ctx(), run_doc)

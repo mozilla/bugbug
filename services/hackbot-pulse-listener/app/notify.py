@@ -2,7 +2,7 @@ import base64
 import logging
 import re
 
-from app import client
+from app import client, github
 from app.config import settings
 from app.models import RunContext
 
@@ -26,7 +26,10 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         logger.info("Run %s produced no patch; skipping notification", ctx.run_id)
         return
 
-    recipients = _recipients(ctx.developer_email)
+    findings = (run_doc.get("summary") or {}).get("findings") or {}
+    blamed_commit = findings.get("blamed_commit")
+    blamed_author = github.commit_author_email(blamed_commit) if blamed_commit else None
+    recipients = _recipients(blamed_author, ctx.developer_email)
     if not recipients:
         logger.info("No recipients for run %s; skipping notification", ctx.run_id)
         return
@@ -56,7 +59,7 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         f"[build-repair] Build failure analysis for {ctx.repo}@{ctx.git_commit[:12]}"
     )
 
-    body_md = _build_body(ctx, run_doc, patch)
+    body_md = _build_body(ctx, run_doc, patch, blamed_author)
     html = markdown2.markdown(body_md, extras=["fenced-code-blocks", "tables"])
 
     sg = sendgrid.SendGridAPIClient(api_key=settings.sendgrid_api_key)
@@ -85,16 +88,20 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
     )
 
 
-def _recipients(developer_email: str | None) -> list[str]:
-    """Recipients for a run: the revision author plus the team address, deduped.
+def _recipients(
+    author_email: str | None, developer_email: str | None = None
+) -> list[str]:
+    """Recipients for a run, deduped and ordered by priority.
 
+    The blamed commit's author is the primary To (the person who introduced the
+    failure), then the pushing developer, then the team address.
     ``notification_override_email`` short-circuits to a single address so local
     testing never mails real developers or the team.
     """
     if settings.notification_override_email:
         return [settings.notification_override_email]
     recipients: list[str] = []
-    for addr in (developer_email, settings.notification_team_email):
+    for addr in (author_email, developer_email, settings.notification_team_email):
         if addr and addr not in recipients:
             recipients.append(addr)
     return recipients
@@ -135,9 +142,15 @@ def _bug_url(bug_id: object) -> str:
     return f"{settings.bugzilla_url.rstrip('/')}/show_bug.cgi?id={bug_id}"
 
 
-def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str:
+def _build_body(
+    ctx: RunContext,
+    run_doc: dict,
+    patch: str | None = None,
+    blamed_author: str | None = None,
+) -> str:
     summary = run_doc.get("summary") or {}
     findings = summary.get("findings") or {}
+    blamed_commit = findings.get("blamed_commit")
 
     lines = [
         "# Build failure analysis",
@@ -150,6 +163,13 @@ def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str
         f"[jobs]({_treeherder_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
     ]
 
+    if blamed_commit:
+        by = f" by {blamed_author}" if blamed_author else ""
+        lines.append(
+            f"- **Likely culprit:** "
+            f"[`{blamed_commit[:12]}`]({_git_url(blamed_commit)}){by}"
+        )
+
     bug_id = findings.get("bug_id") or (run_doc.get("inputs") or {}).get("bug_id")
     if bug_id:
         lines.append(f"- **Bug:** [{bug_id}]({_bug_url(bug_id)})")
@@ -157,6 +177,8 @@ def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str
     if settings.hackbot_ui_url:
         run_url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
         lines.append(f"- **Run details:** {run_url}")
+
+    lines += _recipients_note(ctx, blamed_commit, blamed_author)
 
     if findings.get("summary"):
         lines += ["", "## Summary", "", _demote_headings(findings["summary"])]
@@ -184,6 +206,37 @@ def _build_body(ctx: RunContext, run_doc: dict, patch: str | None = None) -> str
         ]
 
     return "\n".join(lines)
+
+
+def _recipients_note(
+    ctx: RunContext, blamed_commit: str | None, blamed_author: str | None
+) -> list[str]:
+    """Explain why each recipient is on the email.
+
+    The notification goes to the developer who pushed the failing change, the
+    author the agent blamed for the failure, and the team; spell out both roles
+    so the recipient list is self-explanatory.
+    """
+    notes: list[str] = []
+    if ctx.developer_email:
+        notes.append(
+            f"- **{ctx.developer_email}** pushed the change whose build failed."
+        )
+    if blamed_commit and blamed_author:
+        notes.append(
+            f"- **{blamed_author}** authored "
+            f"[`{blamed_commit[:12]}`]({_git_url(blamed_commit)}), which the "
+            "build-repair agent believes introduced the failure."
+        )
+    elif blamed_commit:
+        notes.append(
+            f"- The build-repair agent believes "
+            f"[`{blamed_commit[:12]}`]({_git_url(blamed_commit)}) introduced the "
+            "failure."
+        )
+    if not notes:
+        return []
+    return ["", "## Why you're receiving this", "", *notes]
 
 
 def _demote_headings(md: str, by: int = 2) -> str:
