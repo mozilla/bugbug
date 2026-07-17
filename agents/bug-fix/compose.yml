@@ -17,7 +17,7 @@ services:
       target: agent
     environment:
       - RUN_ID
-      - BUG_ID=${BUG_ID:?error}
+      - BUG_ID=${BUG_ID:-}
       - BUGZILLA_MCP_URL=http://bug-fix-broker:8765/mcp
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
