@@ -6,9 +6,9 @@ import {
   isPlainObject,
   isScalar,
   isStringArray,
-  renderMarkdownish,
   titleize,
 } from "@/lib/findings-format";
+import { Markdown } from "./Markdown";
 
 type ViewMode = "friendly" | "raw";
 
@@ -41,7 +41,7 @@ function StringValue({ value }: { value: string }) {
   if (!trimmed.includes("\n") && trimmed.length <= INLINE_STRING_MAX) {
     return <span>{trimmed}</span>;
   }
-  return <>{renderMarkdownish(value)}</>;
+  return <Markdown text={value} />;
 }
 
 function StringChips({ items }: { items: string[] }) {
