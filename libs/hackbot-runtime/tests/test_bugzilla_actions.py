@@ -11,7 +11,26 @@ async def test_add_comment_appends_footer():
     text = rec.actions[0]["params"]["text"]
     assert text.startswith("Looks invalid.")
     assert "automated analysis result" in text
+    # No needinfo_target set -> generic wording.
+    assert "please add a needinfo" in text
     assert rec.actions[0]["params"]["is_private"] is False
+
+
+async def test_add_comment_footer_names_needinfo_target():
+    rec = ActionsRecorder()
+    rec.needinfo_target = "jwein@mozilla.com"
+    await bugzilla.add_comment(rec, bug_id=1, text="Root cause: ...", reasoning="r")
+    text = rec.actions[0]["params"]["text"]
+    assert "please needinfo jwein@mozilla.com" in text
+    assert "please add a needinfo" not in text
+
+
+async def test_add_comment_footer_triage_owner_target():
+    rec = ActionsRecorder()
+    rec.needinfo_target = "the triage owner"
+    await bugzilla.add_comment(rec, bug_id=1, text="Root cause: ...", reasoning="r")
+    text = rec.actions[0]["params"]["text"]
+    assert "please needinfo the triage owner" in text
 
 
 async def test_add_attachment_patch_forces_text_plain(tmp_path):

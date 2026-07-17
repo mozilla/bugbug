@@ -16,6 +16,9 @@ TRIAGE_TASK = (
 class AgentInputs(BaseSettings):
     bug_id: int
     bugzilla_mcp_url: str
+    # Submitter email when the run was triggered manually from the demo site;
+    # None for automatically triggered runs (see needinfo_target below).
+    triggered_by: str | None = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
@@ -25,6 +28,10 @@ class AgentInputs(BaseSettings):
 
 async def main(ctx: HackbotContext) -> FrontendTriageResult:
     inputs = AgentInputs()
+
+    # Manual runs needinfo the person who triggered them; automatic runs (no
+    # submitter) needinfo the triage owner.
+    needinfo_target = inputs.triggered_by or "the triage owner"
 
     return await run_frontend_triage(
         task=TRIAGE_TASK,
@@ -37,6 +44,7 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
         model=inputs.model,
         max_turns=inputs.max_turns,
         effort=inputs.effort,
+        needinfo_target=needinfo_target,
         log=ctx.log_path,
         verbose=True,
         actions_recorder=ctx.actions,

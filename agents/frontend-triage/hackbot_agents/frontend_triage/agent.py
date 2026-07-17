@@ -191,6 +191,7 @@ async def run_frontend_triage(
     model: str | None = None,
     max_turns: int | None = None,
     effort: str | None = None,
+    needinfo_target: str | None = None,
     verbose: bool = False,
     log: Path | None = None,
     actions_recorder: ActionsRecorder | None = None,
@@ -210,6 +211,9 @@ async def run_frontend_triage(
     actions_recorder, actions_server = actions_server_for(
         actions_recorder, types=ENABLED_ACTION_TYPES
     )
+    # Direct the comment footer's needinfo at a specific person (the submitter
+    # for manual runs, the triage owner otherwise).
+    actions_recorder.needinfo_target = needinfo_target
     enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
 
     # In-process MCP servers for read-only code investigation. Searchfox and HGMO
