@@ -6,7 +6,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { updateRunStatus } from "@/lib/store";
 import { isTerminal, type RunAction, type RunDoc } from "@/lib/types";
 import { FindingsView } from "./FindingsView";
+import { Markdown } from "./Markdown";
 import { StatusBadge } from "./StatusBadge";
+
+// Proposed bugzilla.add_comment actions carry the comment body in params.text;
+// pull it out so we can preview what would be posted to the bug.
+function commentPreview(a: RunAction): string | null {
+  if (a.type !== "bugzilla.add_comment") return null;
+  const text = a.params?.text;
+  return typeof text === "string" && text.trim() ? text : null;
+}
 
 const POLL_MS = 4000;
 
@@ -200,13 +209,24 @@ export function RunDetail({ runId }: { runId: string }) {
           <h2>Actions ({actions.length})</h2>
           {applyError && <div className="error-banner">{applyError}</div>}
           <ul className="action-list">
-            {actions.map((a) => (
-              <li key={a.idx}>
-                <span className={`badge ${a.status}`}>{a.status}</span>
-                <code>{a.type}</code>
-                {a.error && <span className="muted">{a.error}</span>}
-              </li>
-            ))}
+            {actions.map((a) => {
+              const preview = commentPreview(a);
+              return (
+                <li key={a.idx}>
+                  <div className="action-row">
+                    <span className={`badge ${a.status}`}>{a.status}</span>
+                    <code>{a.type}</code>
+                    {a.error && <span className="muted">{a.error}</span>}
+                  </div>
+                  {preview && (
+                    <div className="action-preview">
+                      <span className="muted">Comment preview</span>
+                      <Markdown text={preview} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {pendingActions + failedActions > 0 && (
             <button type="button" onClick={applyActions} disabled={applying}>
