@@ -162,8 +162,8 @@ export function FindingsView({
 }: {
   findings: Record<string, unknown>;
 }) {
-  // Default to raw JSON so the existing view is unchanged; Friendly is opt-in.
-  const [mode, setMode] = useState<ViewMode>("raw");
+  // Default to the friendly, readable view; raw JSON is opt-in.
+  const [mode, setMode] = useState<ViewMode>("friendly");
   return (
     <div className="panel">
       <div className="panel-head">
