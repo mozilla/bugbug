@@ -25,7 +25,9 @@ from bugbug.tools.code_review.langchain_tools import (
     search_text,
 )
 from bugbug.tools.code_review.review_context import (
+    ReviewInfo,
     _merge_rules,
+    build_review_info,
     external_content_manifest,
     format_external_content,
     github_repo_allowed,
@@ -39,6 +41,7 @@ from bugbug.tools.code_review.review_context_schema import (
     BugzillaPredicate,
     FilePredicate,
     ReviewContextValidationError,
+    ReviewPredicate,
     Rule,
 )
 from bugbug.tools.code_review.review_context_schema import (
@@ -788,6 +791,87 @@ def test_rule_bugzilla_component_matches():
     )
 
 
+def _patch_resolver(monkeypatch, slug_to_phid):
+    monkeypatch.setattr(
+        "bugbug.tools.core.platforms.phabricator.resolve_project_phid",
+        lambda slug: slug_to_phid.get(slug),
+    )
+
+
+def test_rule_review_reviewer_group_matches(monkeypatch):
+    _patch_resolver(monkeypatch, {"ip-protection-reviewers": "PHID-PROJ-ip"})
+    rule = Rule(
+        name="ip",
+        when=ReviewPredicate(reviewer=["ip-protection-reviewers"]),
+        load=[],
+    )
+    review = ReviewInfo(reviewer_groups=frozenset({"PHID-PROJ-ip"}))
+    assert rule_matches(rule, {"any/file.cpp"}, review=review)
+
+
+def test_rule_review_reviewer_group_no_match(monkeypatch):
+    _patch_resolver(monkeypatch, {"ip-protection-reviewers": "PHID-PROJ-ip"})
+    rule = Rule(
+        name="ip",
+        when=ReviewPredicate(reviewer=["ip-protection-reviewers"]),
+        load=[],
+    )
+    review = ReviewInfo(reviewer_groups=frozenset({"PHID-PROJ-other"}))
+    assert not rule_matches(rule, {"any/file.cpp"}, review=review)
+
+
+def test_rule_review_fails_closed_without_review_info(monkeypatch):
+    _patch_resolver(monkeypatch, {"ip-protection-reviewers": "PHID-PROJ-ip"})
+    rule = Rule(
+        name="ip",
+        when=ReviewPredicate(reviewer=["ip-protection-reviewers"]),
+        load=[],
+    )
+    # No review info (e.g. a GitHub diff) → never matches.
+    assert not rule_matches(rule, {"any/file.cpp"})
+
+
+def test_rule_review_blocking_reviewer(monkeypatch):
+    _patch_resolver(monkeypatch, {"security-reviewers": "PHID-PROJ-sec"})
+    rule = Rule(
+        name="sec",
+        when=ReviewPredicate(blocking_reviewer=["security-reviewers"]),
+        load=[],
+    )
+    # Present as a reviewer but not blocking → no match.
+    non_blocking = ReviewInfo(reviewer_groups=frozenset({"PHID-PROJ-sec"}))
+    assert not rule_matches(rule, {"f.cpp"}, review=non_blocking)
+    # Blocking → match.
+    blocking = ReviewInfo(
+        reviewer_groups=frozenset({"PHID-PROJ-sec"}),
+        blocking_reviewer_groups=frozenset({"PHID-PROJ-sec"}),
+    )
+    assert rule_matches(rule, {"f.cpp"}, review=blocking)
+
+
+def test_rule_review_author():
+    rule = Rule(name="a", when=ReviewPredicate(author=["alice@mozilla.com"]), load=[])
+    assert rule_matches(rule, {"f.cpp"}, review=ReviewInfo(author="alice@mozilla.com"))
+    assert not rule_matches(
+        rule, {"f.cpp"}, review=ReviewInfo(author="bob@mozilla.com")
+    )
+
+
+@pytest.mark.asyncio
+async def test_build_review_info_from_patch():
+    from types import SimpleNamespace
+
+    patch = SimpleNamespace(
+        reviewer_project_phids=["PHID-PROJ-ip", "PHID-PROJ-newtab"],
+        blocking_reviewer_project_phids=["PHID-PROJ-ip"],
+        author_username="alice@mozilla.com",
+    )
+    info = await build_review_info(patch)
+    assert info.author == "alice@mozilla.com"
+    assert info.reviewer_groups == frozenset({"PHID-PROJ-ip", "PHID-PROJ-newtab"})
+    assert info.blocking_reviewer_groups == frozenset({"PHID-PROJ-ip"})
+
+
 @pytest.mark.asyncio
 async def test_patch_bug_component():
     from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
@@ -1340,7 +1424,15 @@ def test_run_appends_scope_suggestion_last():
     tool._agent_model = "model-x"
     tool.patch_summarizer = MagicMock()
     tool.patch_summarizer.run = MagicMock(return_value="summary")
-    tool.generate_review_comments = AsyncMock(return_value=([regular], []))
+    tool.generate_review_comments = AsyncMock(
+        return_value=(
+            {
+                "messages": [],
+                "structured_response": SimpleNamespace(comments=[regular]),
+            },
+            [],
+        )
+    )
     tool.suggestion_filterer = MagicMock()
     tool.suggestion_filterer.run = MagicMock(return_value=[regular])
 
