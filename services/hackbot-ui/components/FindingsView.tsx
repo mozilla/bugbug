@@ -6,9 +6,9 @@ import {
   isPlainObject,
   isScalar,
   isStringArray,
-  renderMarkdownish,
   titleize,
 } from "@/lib/findings-format";
+import { Markdown } from "./Markdown";
 
 type ViewMode = "friendly" | "raw";
 
@@ -41,7 +41,7 @@ function StringValue({ value }: { value: string }) {
   if (!trimmed.includes("\n") && trimmed.length <= INLINE_STRING_MAX) {
     return <span>{trimmed}</span>;
   }
-  return <>{renderMarkdownish(value)}</>;
+  return <Markdown text={value} />;
 }
 
 function StringChips({ items }: { items: string[] }) {
@@ -162,8 +162,8 @@ export function FindingsView({
 }: {
   findings: Record<string, unknown>;
 }) {
-  // Default to raw JSON so the existing view is unchanged; Friendly is opt-in.
-  const [mode, setMode] = useState<ViewMode>("raw");
+  // Default to the friendly, readable view; raw JSON is opt-in.
+  const [mode, setMode] = useState<ViewMode>("friendly");
   return (
     <div className="panel">
       <div className="panel-head">

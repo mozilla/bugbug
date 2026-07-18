@@ -1,9 +1,7 @@
 // Pure helpers for the friendly Findings renderer (components/FindingsView.tsx).
 // Findings have a variable schema, so these stay generic: label formatting,
-// runtime type guards, and a lightweight text renderer that pretty-prints
-// embedded ```json fenced blocks without any markdown dependency.
-
-import type { ReactNode } from "react";
+// runtime type guards, and JSON pretty-printing for fenced code blocks (reused
+// by the shared Markdown renderer in components/Markdown.tsx).
 
 // Polished labels for known/acronym keys; everything else falls back to titleize.
 const LABEL_OVERRIDES: Record<string, string> = {
@@ -39,8 +37,8 @@ export function isScalar(v: unknown): v is string | number | boolean {
 }
 
 // Pretty-print a fenced code block body when it is (or claims to be) JSON;
-// otherwise return it verbatim.
-function formatFence(lang: string, body: string): string {
+// otherwise return it verbatim (trimmed).
+export function formatFence(lang: string, body: string): string {
   const trimmed = body.trim();
   if (lang === "json" || trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
@@ -50,39 +48,4 @@ function formatFence(lang: string, body: string): string {
     }
   }
   return trimmed;
-}
-
-// Render a possibly-long string: prose segments keep their newlines (pre-wrap
-// via .finding-text) and ```fenced``` blocks become code blocks, with JSON
-// pretty-printed. Inline markdown (e.g. **bold**) is shown literally — safe by
-// construction (all React text nodes, no dangerouslySetInnerHTML).
-export function renderMarkdownish(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const fence = /```(\w*)\n?([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let key = 0;
-  let match: RegExpExecArray | null;
-
-  const pushProse = (chunk: string) => {
-    if (chunk.trim()) {
-      nodes.push(
-        <div className="finding-text" key={key++}>
-          {chunk.trim()}
-        </div>,
-      );
-    }
-  };
-
-  while ((match = fence.exec(text)) !== null) {
-    pushProse(text.slice(lastIndex, match.index));
-    nodes.push(
-      <pre className="log" key={key++}>
-        {formatFence(match[1], match[2])}
-      </pre>,
-    );
-    lastIndex = match.index + match[0].length;
-  }
-  pushProse(text.slice(lastIndex));
-
-  return nodes;
 }
