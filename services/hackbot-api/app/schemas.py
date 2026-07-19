@@ -77,6 +77,11 @@ class RunDoc(BaseModel):
 
 class BugFixInputs(BaseModel):
     bug_id: int
+    # When following up on an existing Phabricator revision (e.g. triggered by a
+    # webhook), the revision to update and the reviewer's comment to act on. Both
+    # optional: omitted for a plain "fix this bug" run.
+    revision_id: int | None = None
+    instructions: str | None = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None

@@ -17,7 +17,10 @@ dependencies = [
     "google-cloud-pubsub>=2.21.0",
     "google-auth>=2.29.0",
     "sentry-sdk>=2.51.0",
+    "cachetools>=5.3.0",
+    "httpx>=0.26.0",
     "hackbot-runtime",
+    "phabricator-client",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +28,7 @@ dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "httpx>=0.26.0"]
 
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
+phabricator-client = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
