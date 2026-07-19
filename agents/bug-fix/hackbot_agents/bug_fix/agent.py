@@ -85,6 +85,7 @@ async def run_bug_fix(
     bug: int,
     instructions: str = "",
     task: str | None = None,
+    revision_id: int | None = None,
     rules_dir: Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
@@ -147,7 +148,21 @@ async def run_bug_fix(
     )
 
     rules_path = rules_dir.resolve()
-    if task:
+    if revision_id:
+        # Follow-up mode: a reviewer commented on an existing revision (the
+        # comment is in the system prompt's extra instructions). Address it and
+        # update that same revision rather than opening a new one.
+        user_prompt = (
+            f"Follow up on Phabricator revision D{revision_id} for bug {bug}.\n\n"
+            f"A reviewer left a comment (see the instructions in your system "
+            f"prompt). Address it: investigate, make the necessary source "
+            f"changes, and verify the fix. When you are done, submit your "
+            f"changes by calling submit_patch with revision_id={revision_id} so "
+            f"the existing revision D{revision_id} is updated — do not create a "
+            f"new revision.\n\n"
+            f"Consult the relevant rules in {rules_path} if they apply."
+        )
+    elif task:
         user_prompt = (
             f"Bug to work on: {bug}\n\n"
             f"Task: {task}\n\n"
