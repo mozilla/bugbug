@@ -9,7 +9,24 @@ subprocess work at all; that happens agent-side (see test_changes.py's
 
 import json
 
+import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, phabricator_handler
+
+
+@pytest.fixture(autouse=True)
+def _phabricator_env(monkeypatch):
+    """Provide a dummy Phabricator API key for the handler's client.
+
+    The handler builds a PhabricatorClient, whose settings now require an API
+    key (Conduit calls themselves are mocked, so the value is irrelevant beyond
+    matching the required format). Reset the cached client so each test builds a
+    fresh one.
+    """
+    monkeypatch.setenv("PHABRICATOR_API_KEY", "api-" + "a" * 28)
+    phabricator_handler._client.cache_clear()
+    yield
+    phabricator_handler._client.cache_clear()
+
 
 _DIFF_PAYLOAD = {
     "changes": [{"currentPath": "file.txt"}],

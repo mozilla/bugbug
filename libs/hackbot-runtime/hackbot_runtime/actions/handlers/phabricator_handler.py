@@ -3,10 +3,10 @@
 Pairs with the recording side in ``actions/phabricator.py`` and the payload
 built agent-side in ``hackbot_runtime.changes.build_phabricator_diff`` (while
 the agent still has its own checkout — nothing here ever touches git, a
-local repo, or ``moz-phab``). Talks to Phabricator's Conduit API directly
-with a small ``requests``-based client, mirroring ``bugzilla_handler.py``'s
-choice to avoid ``libmozdata``'s heavier, bulk/futures-oriented client for a
-single lightweight call.
+local repo, or ``moz-phab``). Talks to Phabricator's Conduit API through the
+shared ``phabricator_client`` lib, a small ``httpx``-based client that avoids
+``libmozdata``'s heavier, bulk/futures-oriented client for these single
+lightweight calls.
 """
 
 from __future__ import annotations
@@ -18,46 +18,26 @@ import re
 from functools import lru_cache
 from typing import Any
 
-import requests
+from phabricator_client import PhabricatorClient
 
 from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_PHABRICATOR_URL = "https://phabricator.services.mozilla.com"
 _DIFF_ARTIFACT_KEY = "changes/phabricator_diff.json"
-_TIMEOUT_SECONDS = 60
 
 
-def _base_url() -> str:
-    return os.environ.get("PHABRICATOR_URL", _DEFAULT_PHABRICATOR_URL).rstrip("/")
-
-
-def _revision_url(revision_id: int) -> str:
-    return f"{_base_url()}/D{revision_id}"
-
-
-def _api_key() -> str:
-    token = os.environ.get("PHABRICATOR_API_KEY", "")
-    if not token:
-        raise RuntimeError("PHABRICATOR_API_KEY is not configured")
-    return token
+@lru_cache(maxsize=1)
+def _client() -> PhabricatorClient:
+    return PhabricatorClient()
 
 
 def _conduit_request(method: str, **payload: Any) -> dict:
-    payload["__conduit__"] = {"token": _api_key()}
-    response = requests.post(
-        f"{_base_url()}/api/{method}",
-        data={"params": json.dumps(payload), "output": "json"},
-        timeout=_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    data = response.json()
-    if data.get("error_code"):
-        raise RuntimeError(
-            f"Conduit error {data['error_code']}: {data.get('error_info')}"
-        )
-    return data["result"]
+    return _client().conduit_request(method, **payload)
+
+
+def _revision_url(revision_id: int) -> str:
+    return _client().revision_url(revision_id)
 
 
 @lru_cache(maxsize=1)

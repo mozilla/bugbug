@@ -30,6 +30,7 @@ members = [
     "hackbot-api",
     "hackbot-pulse-listener",
     "hackbot-runtime",
+    "phabricator-client",
     "reviewhelper-api",
 ]
 
@@ -2702,6 +2703,7 @@ source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
     { name = "google-auth" },
+    { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
     { name = "weave" },
@@ -2723,6 +2725,7 @@ requires-dist = [
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
     { name = "weave", specifier = ">=0.53.1" },
@@ -4954,6 +4957,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523", size = 63772, upload-time = "2023-11-25T06:56:14.81Z" },
+]
+
+[[package]]
+name = "phabricator-client"
+version = "0.1.0"
+source = { editable = "libs/phabricator-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
 ]
 
 [[package]]
