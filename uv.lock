@@ -2136,7 +2136,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-tasks"
-version = "2.22.0"
+version = "2.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
@@ -2146,9 +2146,9 @@ dependencies = [
     { name = "proto-plus" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cb/14/1280678c443bb418c97f6ea002a7cae6e27c33b77871fd8f74bc6bd239fe/google_cloud_tasks-2.22.0.tar.gz", hash = "sha256:bc97d847f1dfbf1b602b67b929b7baf570fea35dcedaadabb5adfdf816a67841", size = 353858, upload-time = "2026-03-26T22:17:55.741Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/a2/adec373a05a569baf52d41b374994b5d3ed4a9dab52bb96ed3536bcbe334/google_cloud_tasks-2.23.0.tar.gz", hash = "sha256:a6da2c114a4db5a59593eba64987a4bf6973a0f48b1a31a3d4acffb6f4c7beb9", size = 352038, upload-time = "2026-06-22T23:22:33.928Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/bb/1c4d86b46678343c8b419203ef5c4b9c1d90fbd9ca97025517d04f9da0d0/google_cloud_tasks-2.22.0-py3-none-any.whl", hash = "sha256:10700bcf2d72bbc08dbfaddfd28b3de1a6c5dcb6bd05fa2e7bd258bdfeaa160a", size = 297204, upload-time = "2026-03-26T22:15:10.657Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/03/f7a0dde9b971940fec9441141ab1581624434546dc8dd42f18f5703a2899/google_cloud_tasks-2.23.0-py3-none-any.whl", hash = "sha256:2a3e35c22b37947f829d62c50276a6f47c9ac1a789ec8ba0b646f31131b3c894", size = 296564, upload-time = "2026-06-22T23:20:32.66Z" },
 ]
 
 [[package]]
