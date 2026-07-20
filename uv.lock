@@ -6518,14 +6518,13 @@ wheels = [
 
 [[package]]
 name = "searchfox"
-version = "0.17.0"
+version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/e6/5d0c308788c6252e20a50d072d60973149a7613cbb47787639e2e163e5e8/searchfox-0.17.0-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:758c2febfab9646c981d75c6fde93fc6d228ec7673a27f3daa2c441f5f99d115", size = 6123924, upload-time = "2026-06-11T14:10:13.843Z" },
-    { url = "https://files.pythonhosted.org/packages/f9/e2/e80f9dacd232a2c33275ddb935d411083337d2eb29c75a76bae40dff482a/searchfox-0.17.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:ea7e77f1af547b421085d97c65b7f62dd86a26faecf822c531a723cffd77fd53", size = 5993405, upload-time = "2026-06-11T14:10:15.855Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/19/365eea34f849e5cd7b2208aca4cf52f67e8c70b9996aa50e29a40083e921/searchfox-0.17.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:af93723055474bc334f970a44ca517c0c3922bd2c00a7476efe52333c33e3a29", size = 3939554, upload-time = "2026-06-11T14:10:17.969Z" },
-    { url = "https://files.pythonhosted.org/packages/99/32/db1bec59368945e33d23050d4d29c04a145b78ccf56d5a3e64ee23f772a7/searchfox-0.17.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a86dfc94d3bdfef467fa45c6a1018b11460a913df3c9ca72637c56ac486bccdc", size = 4173723, upload-time = "2026-06-11T14:10:19.717Z" },
-    { url = "https://files.pythonhosted.org/packages/59/d1/519a9c10388b50ded30186d75295470b1f8dbdf0b0eb8679add236f2fec7/searchfox-0.17.0-cp38-abi3-win_amd64.whl", hash = "sha256:615b216a99b51275784e4b1b178bd431e748ad0f6aa478f3c07b3cb6b9260ec8", size = 5414810, upload-time = "2026-06-11T14:10:21.52Z" },
+    { url = "https://files.pythonhosted.org/packages/21/97/44efffea01dbea6d04b7cce4b106e8786a4f219434a9192560a28a70145c/searchfox-0.18.0-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:a830f6f402181d583bb74eb14a77b1ed10113bf33a3d4a66261643ca9782f73d", size = 4424005, upload-time = "2026-06-24T12:22:54.635Z" },
+    { url = "https://files.pythonhosted.org/packages/be/7e/62284ab6a6de1902808acbb3dc4acb02aab3c8d9e77948739c9a7da3c246/searchfox-0.18.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:ee97997ea4054453476d3fba9300c39e983148554667e2665317dc6cd9e7bd50", size = 4252033, upload-time = "2026-06-24T12:22:56.83Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/b6/4610f8b96969c5ac75e98ede5a92f41d36bc63c9cf26f086fa0d070ad5cd/searchfox-0.18.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6049323ad6e7135cb37a4992fba1dca71213b536369f879717e695537622e523", size = 4751784, upload-time = "2026-06-24T12:22:58.268Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/5d/d00991af907ea3ac526c037eb4b255ca63f36dbd7e200708f6258b38f8e6/searchfox-0.18.0-cp38-abi3-win_amd64.whl", hash = "sha256:839c0ee0b9214ad8f9845d81f52796efb0523e7d375a7ac109fac4055c678353", size = 4111344, upload-time = "2026-06-24T12:22:59.754Z" },
 ]
 
 [[package]]
