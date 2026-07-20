@@ -324,6 +324,15 @@ wheels = [
 ]
 
 [[package]]
+name = "ansicon"
+version = "1.89.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b6/e2/1c866404ddbd280efedff4a9f15abfe943cb83cde6e895022370f3a61f85/ansicon-1.89.0.tar.gz", hash = "sha256:e4d039def5768a47e4afec8e89e83ec3ae5a26bf00ad851f914d1240b444d2b1", size = 67312, upload-time = "2019-04-29T20:23:57.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/f9/f1c10e223c7b56a38109a3f2eb4e7fe9a757ea3ed3a166754fb30f65e466/ansicon-1.89.0-py2.py3-none-any.whl", hash = "sha256:f1def52d17f65c2c9682cf8370c03f541f410c1752d6a14029f97318e4b9dfec", size = 63675, upload-time = "2019-04-29T20:23:53.83Z" },
+]
+
+[[package]]
 name = "anthropic"
 version = "0.120.2"
 source = { registry = "https://pypi.org/simple" }
@@ -524,6 +533,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/43/65/318323f98dbee45d42dff61d8f047181bc6f2268a9068cfad035a46be5af/beautifulsoup4-4.15.0.tar.gz", hash = "sha256:288e3ca7d54b06f2ac191970bc275c1939cb46d450b255bf6718b04aa37ab4f7", size = 632571, upload-time = "2026-06-07T16:44:20.453Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/c6/92fcd42f1ba33e1184263f25bfabf3d27c383410470f169e4b8163bf9c17/beautifulsoup4-4.15.0-py3-none-any.whl", hash = "sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9", size = 109924, upload-time = "2026-06-07T16:44:21.566Z" },
+]
+
+[[package]]
+name = "blessed"
+version = "1.48.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinxed" },
+    { name = "wcwidth" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/23/1b/b7c3971c1b34e6fe32ffcb00be769769cbb8ccaf0678aa9bb6f23aea677a/blessed-1.48.0.tar.gz", hash = "sha256:5ed4c0d40d0121669ef949e4f23465982614eb821bd110d1d5a98ed97dea13d8", size = 14036135, upload-time = "2026-08-07T17:35:44.794Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a3/3e/6e6ba6c809688332d2f8450371e672c76f7e8e73574aba9dfe89b55eb900/blessed-1.48.0-py3-none-any.whl", hash = "sha256:c4ce01cba220f41d2ff244e9829cb4ef2390a26ace8ce1687b8bced1613676e5", size = 131267, upload-time = "2026-08-07T17:35:42.469Z" },
 ]
 
 [[package]]
@@ -1215,6 +1237,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ca/65/efd0fe8a936fc8ca2978cb7b82581fb20d901c6039e746a808f746b7647b/confection-1.3.3.tar.gz", hash = "sha256:f0f6810d567ff73993fe74d218ca5e1ffb6a44fb03f391257fc5d033546cbfaa", size = 54895, upload-time = "2026-03-24T18:45:24.331Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8d/e4/d66708bdf0d92fb4d49b22cdff4b10cec38aca5dcd7e81d909bb55c65cd7/confection-1.3.3-py3-none-any.whl", hash = "sha256:b9fef9ee84b237ef4611ec3eb5797b70e13063e6310ad9f15536373f5e313c82", size = 35902, upload-time = "2026-03-24T18:45:22.664Z" },
+]
+
+[[package]]
+name = "configobj"
+version = "5.0.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/c4/c7f9e41bc2e5f8eeae4a08a01c91b2aea3dfab40a3e14b25e87e7db8d501/configobj-5.0.9.tar.gz", hash = "sha256:03c881bbf23aa07bccf1b837005975993c4ab4427ba57f959afdd9d1a2386848", size = 101518, upload-time = "2024-09-21T12:47:46.315Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/c4/0679472c60052c27efa612b4cd3ddd2a23e885dcdc73461781d2c802d39e/configobj-5.0.9-py2.py3-none-any.whl", hash = "sha256:1ba10c5b6ee16229c79a05047aeda2b55eb4e80d7c7d8ecf17ec1ca600c79882", size = 35615, upload-time = "2024-11-26T14:03:32.972Z" },
 ]
 
 [[package]]
@@ -2634,6 +2665,7 @@ dependencies = [
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "mcp" },
+    { name = "mozregression" },
     { name = "starlette" },
     { name = "uvicorn" },
 ]
@@ -2651,6 +2683,7 @@ requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
+    { name = "mozregression", git = "https://github.com/msujaws/mozregression.git?rev=fdf6bd4f3ea4ad47219bcce058c744f559ac0400" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "starlette", specifier = ">=0.36.0" },
@@ -3152,6 +3185,15 @@ wheels = [
 ]
 
 [[package]]
+name = "importlib-resources"
+version = "7.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/06/b56dfa750b44e86157093bc8fca0ab81dccbf5260510de4eaf1cb69b5b99/importlib_resources-7.1.0.tar.gz", hash = "sha256:0722d4c6212489c530f2a145a34c0a7a3b4721bc96a15fada5930e2a0b760708", size = 44985, upload-time = "2026-04-12T16:36:09.232Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/db/55a262f3606bebcae07cc14095338471ad7c0bbcaa37707e6f0ee49725b7/importlib_resources-7.1.0-py3-none-any.whl", hash = "sha256:1bd7b48b4088eddb2cd16382150bb515af0bd2c70128194392725f82ad2c96a1", size = 37232, upload-time = "2026-04-12T16:36:08.219Z" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3278,6 +3320,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
+]
+
+[[package]]
+name = "jinxed"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ansicon", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/39/d7/6e6d474ec5eaeca6a61acc17766bb19563b3a372b4b9d92910078f5fe49f/jinxed-2.1.0.tar.gz", hash = "sha256:7e755b831faa2443d44fb4ce7c0202eb9c3ed39bd5bf1193365888f4f6092b54", size = 61287, upload-time = "2026-07-03T15:46:48.153Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/1d/0a6be99b69bb448448403a45a241aff0dca751832ae54f027ed940d2eb52/jinxed-2.1.0-py2.py3-none-any.whl", hash = "sha256:43b802d18b70e405d410fb66eb2837d1101e7e5ea922e666507bb43f34d11d09", size = 104999, upload-time = "2026-07-03T15:46:47.114Z" },
 ]
 
 [[package]]
@@ -4434,6 +4488,18 @@ wheels = [
 ]
 
 [[package]]
+name = "mozdevice"
+version = "4.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mozlog" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/65/a2/130ea771cecff7e03fe1b2366c93a2a58f52a7bd14ee36b370acabc0f5b6/mozdevice-4.2.0.tar.gz", hash = "sha256:d04bd5bb0105d906c9516f58000edece8d397df9726d18c3fda9eb06c4246c21", size = 44713, upload-time = "2024-11-07T21:35:45.99Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/3c/02d47e719505af2745df5c0d5083305850ccd02fc56cbee4c4eca8fa321f/mozdevice-4.2.0-py2.py3-none-any.whl", hash = "sha256:7fbb961cda951b2c2dd4abc2e8aef73dfd99aa0ffd852da707f9b631ad760647", size = 44473, upload-time = "2024-11-07T21:35:43.722Z" },
+]
+
+[[package]]
 name = "mozdownload"
 version = "1.30.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4503,6 +4569,21 @@ wheels = [
 ]
 
 [[package]]
+name = "mozlog"
+version = "8.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "blessed" },
+    { name = "mozfile" },
+    { name = "mozsystemmonitor" },
+    { name = "mozterm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4e/e6/a6886a2b5ad91f96abf9460ff4f1acb45435600eedfb4440b740f278a5b2/mozlog-8.1.0.tar.gz", hash = "sha256:89a2a9b3b54d71ab3572b7fb3b3af13100bd447ac3d980eb173d2da56498bac4", size = 70389, upload-time = "2026-03-23T11:14:37.607Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d5/d0/2b4570c6328aefe8060f950577ff660bac1b4e57e9ba9821977c06f03f43/mozlog-8.1.0-py2.py3-none-any.whl", hash = "sha256:bc4a715e03896ebdb727d4df133d188cb53bcce18a1bbb90baa6bba6b83b007a", size = 72222, upload-time = "2026-03-23T11:14:38.836Z" },
+]
+
+[[package]]
 name = "mozphab"
 version = "2.15.3"
 source = { registry = "https://pypi.org/simple" }
@@ -4519,6 +4600,108 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d7/f8/af97c0db47ef85ea801d782fcc6a3f6cbf2ee7c06ef75946fdf40ed28e3c/mozphab-2.15.3.tar.gz", hash = "sha256:2eb9e3fb4b936acc8d340b49739905b4d8f2f5d7450e519cfdd2cebf13bb8226", size = 278633, upload-time = "2026-06-25T16:31:57.812Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/00/32/512ae30c4ef7fa2c606a24fc1f9a331a215988f4819328233d427f3269de/mozphab-2.15.3-py3-none-any.whl", hash = "sha256:3265eb9ddd03e08c44c8ea784912790f60a8ec0a1f104fdc64eea410f4dff23e", size = 124401, upload-time = "2026-06-25T16:31:55.998Z" },
+]
+
+[[package]]
+name = "mozprocess"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mozinfo" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/72/ecf7be35e24065c5780412627f4269a8bdae71eb42823d1416ea6968db11/mozprocess-1.4.0.tar.gz", hash = "sha256:6dbb6ebb5e01d6bdf1b24202719ad298331885aee088375e7e4372cdf9d5bb98", size = 21642, upload-time = "2024-08-19T15:40:38.39Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/a3/354e9f0c8b629319e6f6334beaf42e38eeb5ddc821c77e9082752b037d3f/mozprocess-1.4.0-py2.py3-none-any.whl", hash = "sha256:9a3b218dab0f1277275be7d89d673cd55b062519043a88a1a1a77eacefdfdf5e", size = 23105, upload-time = "2024-08-19T15:40:36.691Z" },
+]
+
+[[package]]
+name = "mozprofile"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mozfile" },
+    { name = "mozlog" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/00/eb/9de383c0ccfa3ac7ca21fe5d8fd861579c83c119d72ae1fe2d25e787c5b3/mozprofile-3.0.0.tar.gz", hash = "sha256:af661290cc91b15b6a6943d2bf5a2b0f708bc9e0289a8e0bf1da7593eaaab6d0", size = 28864, upload-time = "2024-04-26T08:16:45.197Z" }
+
+[[package]]
+name = "mozregression"
+version = "0.1.dev1929+gfdf6bd4f3"
+source = { git = "https://github.com/msujaws/mozregression.git?rev=fdf6bd4f3ea4ad47219bcce058c744f559ac0400#fdf6bd4f3ea4ad47219bcce058c744f559ac0400" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "colorama" },
+    { name = "configobj" },
+    { name = "distro" },
+    { name = "glean-sdk" },
+    { name = "importlib-resources" },
+    { name = "mozdevice" },
+    { name = "mozfile" },
+    { name = "mozinfo" },
+    { name = "mozinstall" },
+    { name = "mozlog" },
+    { name = "mozprocess" },
+    { name = "mozprofile" },
+    { name = "mozrunner" },
+    { name = "mozversion" },
+    { name = "redo" },
+    { name = "requests" },
+    { name = "taskcluster" },
+]
+
+[[package]]
+name = "mozrunner"
+version = "8.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mozdevice" },
+    { name = "mozfile" },
+    { name = "mozinfo" },
+    { name = "mozlog" },
+    { name = "mozprocess" },
+    { name = "mozprofile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/32/5a/3b1d7eddcf82d4a0897b20ca0a0db5bf70e50e3edf9d3f1a0c2cf50f730d/mozrunner-8.4.0.tar.gz", hash = "sha256:06aa9b809a4853b7ad4fdd0b90c707352532e06ecc047ea2ff5541bc93debcdc", size = 41414, upload-time = "2026-03-26T10:30:16.674Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/68/3a/2953c91c54a4e4e63658f239eec31cd7a2820870fb80ddbb7bf3f15ef1ac/mozrunner-8.4.0-py2.py3-none-any.whl", hash = "sha256:fa5fc6edfc501ebf2dd0faf24934a626e2e0f67abb26d4878651fea54275b14f", size = 47219, upload-time = "2026-03-26T10:30:15.41Z" },
+]
+
+[[package]]
+name = "mozsystemmonitor"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "psutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a1/92/0ddc5e635a5a8452b6335e63d28a55bf3a107af7ec294d38c55db36e8658/mozsystemmonitor-1.0.1.tar.gz", hash = "sha256:7610ee209f4284d16780d5de2945de8e0fb528dba71682434fee44cd33c8ae24", size = 8810, upload-time = "2022-11-14T22:05:00.489Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/95/59/7a5f8f48946281c7a24bcecd722925493c0e67dabbc0826d215f2f45da9c/mozsystemmonitor-1.0.1-py2.py3-none-any.whl", hash = "sha256:ab30a7587fdfee6041287f7b953911b07d0441d22bfa04bb4d82541c48bdcb02", size = 8546, upload-time = "2022-11-14T22:04:58.364Z" },
+]
+
+[[package]]
+name = "mozterm"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a0/69/5ff6001df98cf1894e6fb4aa74eda1504f830515e52fc6b0a3acc8c1a788/mozterm-1.0.0.tar.gz", hash = "sha256:b1e91acec188de07c704dbb7b0100a7be5c1e06567b3beb67f6ea11d00a483a4", size = 3121, upload-time = "2018-07-03T13:00:33.377Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/eb/0c53684f5821d666372c6ea03d8c64558c8f74fda0fd5b24ae3dd2ab6a95/mozterm-1.0.0-py2.py3-none-any.whl", hash = "sha256:f5eafa25c23d391e2a2bb1dd45ee928fc9e3c811977a3856b5a5a0778011053c", size = 3428, upload-time = "2018-07-03T13:00:34.231Z" },
+]
+
+[[package]]
+name = "mozversion"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mozlog" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/64/1f/d6a90f6da9b362642d6d4301202f20c8750322b2b365823b0362d4505821/mozversion-2.4.0.tar.gz", hash = "sha256:5b11ceb280c519cd92f450b91a750ae8b7f7c8258f6e93c7e520592d85ffbf07", size = 3121, upload-time = "2023-07-28T13:53:14.715Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/86/7ec5f7c4edee8929523dc9c07d1aba4a89d8f53a99b0fcaa3d71c71f99cc/mozversion-2.4.0-py2.py3-none-any.whl", hash = "sha256:d9a0b997ff48a979f694af9e6fd3fb819f411e8199045a0b362d6ba112cb5676", size = 4281, upload-time = "2023-07-28T13:53:13.153Z" },
 ]
 
 [[package]]

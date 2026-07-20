@@ -12,8 +12,9 @@ TRIAGE_TASK = (
     "READ-ONLY (Read/Grep/Glob/Bash) to determine the likely root cause, then "
     "produce a concrete proposed fix plan: the target files and the approach. "
     "Do NOT build, run, or modify the source, and do NOT attempt to reproduce "
-    "the bug by running Firefox. Record your findings and plan as a single brief "
-    "Bugzilla comment."
+    "the bug by running Firefox yourself; the `bisector` subagent, when your "
+    "instructions allow it, is the only exception. Record your findings and plan "
+    "as a single brief Bugzilla comment."
 )
 
 
@@ -26,6 +27,8 @@ class AgentInputs(BaseSettings):
     model: str = DEFAULT_MODEL
     max_turns: int | None = None
     effort: str | None = None
+    # Off turns the `bisector` subagent and its field change off entirely.
+    bisect: bool = True
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -72,6 +75,7 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
         log=ctx.log_path,
         verbose=True,
         actions_recorder=ctx.actions,
+        bisect=inputs.bisect,
     )
 
     # Recorded last, so it applies after the Bugzilla writes it reports. Only an

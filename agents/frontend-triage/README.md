@@ -3,7 +3,9 @@
 Triages a user-facing Firefox bug from Bugzilla and produces a **root-cause
 analysis plus a proposed fix plan**. It reads the source tree, navigates the
 codebase with Searchfox, and inspects regressor changesets on hg.mozilla.org. It
-does **not** build Firefox, edit source, or reproduce the bug. It writes to
+does **not** build Firefox, edit source, or reproduce the bug from the checkout;
+the one thing it runs is a mozregression bisection of downloaded builds, for a
+regression nobody has a range for yet (see [Bisection](#bisection)). It writes to
 Bugzilla only after the run, and only when it rated itself confident — see [What
 it writes back to Bugzilla](#what-it-writes-back-to-bugzilla).
 
@@ -136,6 +138,29 @@ they come from `.env`, `compose.yml`, or the command line.
 | `MODEL`             | no       | Defaults to `claude-opus-5` (`DEFAULT_MODEL` in `__main__.py`); pinned so runs are reproducible and comparable |
 | `MAX_TURNS`         | no       | Hard cap on loop iterations — a runaway guard, cut off if hit                                                  |
 | `EFFORT`            | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`; only passed when set                                          |
+| `BISECT`            | no       | Defaults to `true`. `false` removes the `bisector` subagent and the field-change tool from the run             |
+
+## Bisection
+
+For a bug with the `regression` or `regressionwindow-wanted` keyword, no
+`regressed_by`, and `cf_has_regression_range` not `yes`, the agent spawns a
+`bisector` subagent (`prompts/bisector.md`). It picks good/bad bounds from the
+bug, resolves any prefs the repro needs through Searchfox, and runs
+`libs/agent-tools/agent_tools/mozregression.py`, which drives mozregression's
+`--prompt` mode (mozilla/mozregression#2197): a nested Claude CLI judges each
+downloaded build through the Firefox DevTools MCP. That PR is unreleased, so
+`pyproject.toml` pins mozregression to a fork commit, and the agent image carries
+Node, the Claude CLI, the DevTools MCP and the Firefox runtime libraries.
+
+Neither the builds nor the per-build judge can reach the network, because bug
+text anyone can write decides what they open. `firefox-policies.json`, installed
+as a Firefox enterprise policy, locks every build behind a dead proxy, and
+`run_mozregression` denies the judge every built-in tool (Bash, WebFetch, file
+access) so it keeps only the DevTools MCP. Bugs that need a live
+website are therefore not bisected.
+
+A bisection takes an hour or more. The range goes into the triage comment and
+`findings.regression_range`.
 
 ## Output
 
@@ -145,8 +170,8 @@ Each run writes to `~/hackbot/artifacts/<run_id>/`:
   `proposed_fix`, `target_files`, `confidence`) plus the executor handoff fields
   `actionable`, `regressor_node` and `relevant_tests`, plus `auto_apply` — the
   run's own verdict on whether it may be posted without review. `actions` holds
-  the **recorded** Bugzilla comment (and, at high confidence, possibly a field
-  change). Recording is not posting, but see below: an `auto_apply` run's actions
+  the **recorded** Bugzilla comment (and, after a high-confidence bisection, one
+  regression-range field change). Recording is not posting, but see below: an `auto_apply` run's actions
   do reach the bug unattended.
 - **`logs/agent.log`** — the streamed reasoning and every tool call, and the only
   record of which model actually ran.
@@ -168,7 +193,8 @@ Two caveats before acting on a plan:
 ## What it writes back to Bugzilla
 
 **Nothing, during a run.** `ENABLED_ACTION_TYPES` in `config.py` allows
-`bugzilla.add_comment` and nothing else, and that tool comes from an in-process
+`bugzilla.add_comment`, plus `bugzilla.update_bug` when bisection is on
+(`BISECT_ACTION_TYPES`), and those tools come from an in-process
 actions server that appends to `summary.json` and makes no network calls. The only Bugzilla access the agent has is through the broker sidecar,
 which exposes five read tools and holds the API key.
 
@@ -187,12 +213,15 @@ hackbot-api applies whatever it finds in `summary.json`, dispatching it against 
 handler registry far wider than the tools this agent was given.
 
 - `add_comment_hook` — one comment, public, on the bug being triaged.
+- `update_bug_hook` — one field change, on the bug being triaged, limited to
+  setting `cf_has_regression_range` to `yes`, adding to `regressed_by`, and
+  removing the `regressionwindow-wanted` keyword. The prompt asks for it only after
+  a high-confidence bisection.
 
-That is the whole list, because a comment is the only thing this agent can write.
-It has no tool that changes a bug's fields: `severity` was the one field a ruleset
-directed it to set, and that is now a suggestion at the end of the comment for a
-human to apply, so `bugzilla.update_bug` left `ENABLED_ACTION_TYPES` rather than
-staying on with no caller.
+`severity` and every other field stay suggestions in the comment for a human to
+apply. The field change brings back the `editbugs` requirement on the apply
+account: the apply step coalesces it with the comment into one PUT, so a rejected
+field change would take the comment down with it.
 
 A refusal reaches the agent as a tool error it can correct in the same run, and the
 action never lands in `summary.json`. The action _type_ needs no check:
