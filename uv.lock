@@ -751,7 +751,7 @@ test = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-asyncio", specifier = "==1.4.0" },
     { name = "pytest-cov", specifier = "==7.1.0" },
-    { name = "pytest-responses", specifier = "==0.5.1" },
+    { name = "pytest-responses", specifier = "==0.6.0" },
     { name = "responses", specifier = "==0.26.2" },
 ]
 
@@ -5735,14 +5735,14 @@ wheels = [
 
 [[package]]
 name = "pytest-responses"
-version = "0.5.1"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest" },
     { name = "responses" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c4/0a/81b8cc3cf4b6605d97ed37217af9e2f82c97ebe130f60cf85fe82edfe0e1/pytest_responses-0.5.1-py2.py3-none-any.whl", hash = "sha256:4172e565b94ac1ea3b10aba6e40855ad60cd7f141476b2d8a47e4b5f250be734", size = 6693, upload-time = "2022-10-11T17:15:40.889Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/e7/b4712a52ac5a4a87186a57bc974b3eadd5b7253a413edd41ff3f966dc2ce/pytest_responses-0.6.0-py3-none-any.whl", hash = "sha256:e94717b5235a2e1f66b27bcfc895dfa6705e79678e5c05eae9bb06fcf95a0182", size = 6782, upload-time = "2026-06-29T19:45:23.604Z" },
 ]
 
 [[package]]

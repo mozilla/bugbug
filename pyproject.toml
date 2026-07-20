@@ -82,7 +82,7 @@ test = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "pytest-responses==0.5.1",
+    "pytest-responses==0.6.0",
     "responses==0.26.2",
 ]
 spawn-pipeline = [
