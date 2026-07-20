@@ -18,6 +18,7 @@ import re
 from functools import lru_cache
 from typing import Any
 
+from async_lru import alru_cache
 from phabricator_client import PhabricatorClient
 
 from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
@@ -32,16 +33,16 @@ def _client() -> PhabricatorClient:
     return PhabricatorClient()
 
 
-def _conduit_request(method: str, **payload: Any) -> dict:
-    return _client().conduit_request(method, **payload)
+async def _conduit_request(method: str, **payload: Any) -> dict:
+    return await _client().conduit_request(method, **payload)
 
 
 def _revision_url(revision_id: int) -> str:
     return _client().revision_url(revision_id)
 
 
-@lru_cache(maxsize=1)
-def _repository_phid() -> str:
+@alru_cache(maxsize=1)
+async def _repository_phid() -> str:
     """The target repository's PHID, needed on every `differential.creatediff` call.
 
     Prefers an explicit `PHABRICATOR_REPOSITORY_PHID` (simplest, most robust —
@@ -54,7 +55,7 @@ def _repository_phid() -> str:
         return configured
 
     name = os.environ.get("PHABRICATOR_REPOSITORY_NAME", "mozilla-central")
-    result = _conduit_request("diffusion.repository.search")
+    result = await _conduit_request("diffusion.repository.search")
     for repository in result.get("data", []):
         fields = repository.get("fields", {})
         if fields.get("shortName") == name or fields.get("name") == name:
@@ -92,9 +93,9 @@ def _revision_title(title: str, wip: bool) -> str:
     return f"WIP: {title}" if wip else title
 
 
-def _revision_fields(revision_id: int) -> dict:
+async def _revision_fields(revision_id: int) -> dict:
     """The current fields (title/summary/status) of an existing revision."""
-    result = _conduit_request(
+    result = await _conduit_request(
         "differential.revision.search", constraints={"ids": [int(revision_id)]}
     )
     data = result.get("data") or []
@@ -121,7 +122,7 @@ def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) 
     )
 
 
-def _set_local_commits(
+async def _set_local_commits(
     diff_id: Any,
     local_commits: dict,
     title: str,
@@ -141,7 +142,7 @@ def _set_local_commits(
         commit_info["summary"] = title
         commit_info["message"] = message
 
-    _conduit_request(
+    await _conduit_request(
         "differential.setdiffproperty",
         diff_id=diff_id,
         name="local:commits",
@@ -174,9 +175,9 @@ class SubmitPatchHandler:
         wip = params.get("wip", True)
 
         try:
-            diff_result = _conduit_request(
+            diff_result = await _conduit_request(
                 "differential.creatediff",
-                repositoryPHID=_repository_phid(),
+                repositoryPHID=await _repository_phid(),
                 **diff_payload,
             )
             diff_phid = diff_result["phid"]
@@ -187,7 +188,7 @@ class SubmitPatchHandler:
             raw_summary = params.get("summary")
             existing_status = None
             if revision_id:
-                fields = _revision_fields(revision_id)
+                fields = await _revision_fields(revision_id)
                 existing_status = (fields.get("status") or {}).get("value")
                 if not raw_title:
                     raw_title = fields.get("title")
@@ -224,7 +225,7 @@ class SubmitPatchHandler:
             edit_args: dict[str, Any] = {"transactions": transactions}
             if revision_id:
                 edit_args["objectIdentifier"] = revision_id
-            revision_result = _conduit_request(
+            revision_result = await _conduit_request(
                 "differential.revision.edit", **edit_args
             )
 
@@ -232,7 +233,7 @@ class SubmitPatchHandler:
             new_revision_id = object_data.get("id") or revision_id
 
             if post_transactions and new_revision_id:
-                _conduit_request(
+                await _conduit_request(
                     "differential.revision.edit",
                     objectIdentifier=new_revision_id,
                     transactions=post_transactions,
@@ -243,7 +244,7 @@ class SubmitPatchHandler:
             # Revision URL). Without this, `moz-phab patch` on the revision
             # fails with "a diff without commit information detected".
             if local_commits and new_revision_id:
-                _set_local_commits(
+                await _set_local_commits(
                     diff_result["diffid"],
                     local_commits,
                     title,

@@ -2702,6 +2702,7 @@ version = "0.1.0"
 source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
+    { name = "async-lru" },
     { name = "google-auth" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
@@ -2722,6 +2723,7 @@ phabricator = [
 requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
+    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
@@ -4968,11 +4970,20 @@ dependencies = [
     { name = "pydantic-settings" },
 ]
 
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
 ]
+provides-extras = ["dev"]
 
 [[package]]
 name = "pillow"

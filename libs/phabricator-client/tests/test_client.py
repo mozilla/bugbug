@@ -28,22 +28,31 @@ def _client(api_key: str = VALID_TOKEN, **kwargs) -> PhabricatorClient:
 
 
 def _capture_post(monkeypatch, payload: dict) -> dict:
-    """Stub httpx.post to return `payload`; return a dict capturing the call."""
+    """Stub httpx.AsyncClient to return `payload`; return a dict capturing the call."""
     captured: dict = {}
 
-    def _post(url, data=None, timeout=None):
-        captured["url"] = url
-        captured["params"] = json.loads(data["params"])
-        captured["timeout"] = timeout
-        return _FakeResponse(payload)
+    class _FakeAsyncClient:
+        def __init__(self, timeout=None):
+            captured["timeout"] = timeout
 
-    monkeypatch.setattr(client_module.httpx, "post", _post)
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, data=None):
+            captured["url"] = url
+            captured["params"] = json.loads(data["params"])
+            return _FakeResponse(payload)
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
     return captured
 
 
-def test_conduit_request_returns_result(monkeypatch):
+async def test_conduit_request_returns_result(monkeypatch):
     captured = _capture_post(monkeypatch, {"result": {"data": [1, 2]}})
-    result = _client().conduit_request("some.method", foo="bar")
+    result = await _client().conduit_request("some.method", foo="bar")
     assert result == {"data": [1, 2]}
     # Token is injected into the request body, not a header.
     assert captured["params"]["__conduit__"] == {"token": VALID_TOKEN}
@@ -52,10 +61,10 @@ def test_conduit_request_returns_result(monkeypatch):
     assert captured["timeout"] == 60
 
 
-def test_conduit_request_raises_on_error_code(monkeypatch):
+async def test_conduit_request_raises_on_error_code(monkeypatch):
     _capture_post(monkeypatch, {"error_code": "ERR-CONDUIT", "error_info": "nope"})
     with pytest.raises(RuntimeError, match="ERR-CONDUIT"):
-        _client().conduit_request("some.method")
+        await _client().conduit_request("some.method")
 
 
 def test_valid_api_key_accepted():
@@ -94,19 +103,21 @@ def test_api_key_wrong_length_rejected():
         PhabricatorSettings(api_key="too-short")
 
 
-def test_search_transactions(monkeypatch):
+async def test_search_transactions(monkeypatch):
     _capture_post(monkeypatch, {"result": {"data": [{"phid": "PHID-XACT-1"}]}})
-    assert _client().search_transactions("PHID-DREV-1") == [{"phid": "PHID-XACT-1"}]
+    assert await _client().search_transactions("PHID-DREV-1") == [
+        {"phid": "PHID-XACT-1"}
+    ]
 
 
-def test_search_revision_found(monkeypatch):
+async def test_search_revision_found(monkeypatch):
     _capture_post(monkeypatch, {"result": {"data": [{"id": 42}]}})
-    assert _client().search_revision("PHID-DREV-1") == {"id": 42}
+    assert await _client().search_revision("PHID-DREV-1") == {"id": 42}
 
 
-def test_search_revision_missing(monkeypatch):
+async def test_search_revision_missing(monkeypatch):
     _capture_post(monkeypatch, {"result": {"data": []}})
-    assert _client().search_revision("PHID-DREV-1") is None
+    assert await _client().search_revision("PHID-DREV-1") is None
 
 
 def test_revision_url_default_base():
@@ -118,9 +129,9 @@ def test_revision_url_injected_base():
     assert client.revision_url(7) == "https://phab.example.com/D7"
 
 
-def test_custom_timeout_is_passed(monkeypatch):
+async def test_custom_timeout_is_passed(monkeypatch):
     captured = _capture_post(monkeypatch, {"result": {}})
-    _client(timeout_seconds=5).conduit_request("some.method")
+    await _client(timeout_seconds=5).conduit_request("some.method")
     assert captured["timeout"] == 5
 
 
