@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "kombu>=5.6,<6",
     "mozci~=2.4.8",
-    "taskcluster>=97.1,<100.6",
+    "taskcluster>=97.1,<101.1",
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
     "sendgrid>=6.12.5",
