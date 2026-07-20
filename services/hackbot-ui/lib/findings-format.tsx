@@ -9,6 +9,13 @@ const LABEL_OVERRIDES: Record<string, string> = {
   total_cost_usd: "Total Cost (USD)",
   num_turns: "Turns",
   regressor_node: "Regressor Node",
+  pushlog_url: "Pushlog Range",
+  first_bad_changeset: "First Bad Changeset",
+  last_good_changeset: "Last Good Changeset",
+  regressed_by_bug: "Regressed By (Bug)",
+  good_bound: "Good Bound",
+  bad_bound: "Bad Bound",
+  prompt_used: "Reproduction Directive",
 };
 
 export function titleize(key: string): string {

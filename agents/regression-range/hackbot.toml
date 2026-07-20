@@ -1,0 +1,5 @@
+# This agent declares no [source] and no [firefox] table: it never needs a
+# Firefox source checkout or a local build. mozregression downloads the builds
+# it bisects, and its --prompt mode launches them through the Firefox DevTools
+# MCP. All the agent needs from the platform is Anthropic credentials (provided
+# automatically) and the brokered Bugzilla MCP (wired via env).
