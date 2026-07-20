@@ -7,6 +7,7 @@ from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
+    FrontendTriageInputs,
     TestRepairInputs,
 )
 from app.schemas import (
@@ -86,6 +87,12 @@ def test_build_repair_registry_entry():
     assert spec.build_env is None
     assert spec.input_schema is BuildRepairInputs
     assert spec.job_name == "hackbot-agent-build-repair"
+
+
+def test_frontend_triage_bisect_reaches_the_env_only_when_set():
+    assert "BISECT" not in model_to_env(FrontendTriageInputs(bug_id=1))
+    env = model_to_env(FrontendTriageInputs(bug_id=1, bisect=False))
+    assert env["BISECT"] == "False"
 
 
 def test_model_to_env_json_encodes_failure_tasks_and_bool():

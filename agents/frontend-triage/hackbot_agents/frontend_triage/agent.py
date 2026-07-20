@@ -5,7 +5,9 @@ frontend, Firefox for Android, and the Windows installer and application updater
 according to rulesets in the rules/ directory. The agent investigates the
 source repository READ-ONLY (no build, no source edits, no reproduction) and
 produces a root-cause analysis plus a proposed fix plan, which it records as a
-Bugzilla comment for a human (or a downstream execution agent) to act on.
+Bugzilla comment for a human (or a downstream execution agent) to act on. For a
+regression with no known range, a `bisector` subagent runs mozregression against
+downloaded builds to find one.
 
 It reaches Bugzilla via an out-of-process MCP broker (HTTP transport) that holds
 the Bugzilla token -- the agent process itself never sees it.
@@ -19,9 +21,10 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from agent_tools import mozilla_vcs, searchfox
+from agent_tools import mozilla_vcs, mozregression, searchfox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.mozilla_vcs import MozillaVcsContext
+from agent_tools.mozregression import MozregressionContext
 from agent_tools.searchfox import SearchfoxContext
 from claude_agent_sdk import (
     AgentDefinition,
@@ -49,10 +52,12 @@ from searchfox import AsyncSearchfoxClient
 
 from . import guidance as guidance_tools
 from .config import (
+    BISECT_ACTION_TYPES,
     BUGZILLA_READ_TOOLS,
     ENABLED_ACTION_TYPES,
     GUIDANCE_TOOLS,
     MOZILLA_VCS_TOOLS,
+    MOZREGRESSION_TOOLS,
     SEARCHFOX_TOOLS,
     TRIAGE_SCOPE,
     TRIAGE_SEVERITIES,
@@ -61,7 +66,12 @@ from .config import (
 )
 from .docs import DocRef, docs_for, registrations
 from .guidance import GuidanceContext
-from .hooks import add_comment_hook, component_guidance_hook, severity_block_hook
+from .hooks import (
+    add_comment_hook,
+    component_guidance_hook,
+    severity_block_hook,
+    update_bug_hook,
+)
 
 HERE = Path(__file__).resolve().parent
 
@@ -114,6 +124,16 @@ class DuplicateAssessment(BaseModel):
     rationale: str | None = None
 
 
+class RegressionRange(BaseModel):
+    """What the `bisector` subagent reported (see prompts/bisector.md)."""
+
+    status: str | None = None  # range_found | inconclusive | not_automatable | ...
+    pushlog_url: str | None = None
+    last_good: str | None = None
+    first_bad: str | None = None
+    prompt_used: str | None = None  # the good/bad directive mozregression ran
+
+
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
     # Where the bug lives, as the agent read it off Bugzilla. Reported rather than
@@ -138,6 +158,8 @@ class FrontendTriageResult(HackbotAgentResult):
     # None when the hunt did not run; a populated object with `duplicate_of: null`
     # means it ran and found nothing, which is the answer we are measuring.
     duplicate_assessment: DuplicateAssessment | None = None
+    # None when the bisector did not run.
+    regression_range: RegressionRange | None = None
     # This run's verdict on whether its recorded actions may reach the bug without a
     # human, computed by `may_apply_unattended`. hackbot-api reads it and still has
     # the final say.
@@ -311,8 +333,17 @@ def load_system_prompt(
     extra: str,
     components: Sequence[ScopedComponent],
     known_docs: tuple[DocRef, ...],
+    bisect: bool = False,
 ) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
+    # Substituted rather than inlined so the section can be switched off per run, and so
+    # its JSON examples need no brace doubling.
+    bisection = (
+        (HERE / "prompts" / "bisection.md").read_text()
+        if bisect
+        else "Bisection is off for this run. Do not spawn `bisector`, and leave "
+        "`regression_range` null."
+    )
 
     return tmpl.format(
         rules_dir=str(rules_dir.resolve()),
@@ -321,6 +352,7 @@ def load_system_prompt(
         triaged_components=render_scope(),
         component_index=render_component_index(),
         guidance=render_guidance(components, known_docs),
+        bisection=bisection,
     )
 
 
@@ -423,6 +455,30 @@ def make_duplicate_hunter() -> AgentDefinition:
     )
 
 
+def make_bisector() -> AgentDefinition:
+    """Create the subagent that bisects a regression with mozregression.
+
+    A subagent so that the bisection's long tool output and pref hunting stay out of
+    the triage context. Read-only Bugzilla tools: it reports a range, and the triage
+    agent decides what reaches the bug.
+    """
+    return AgentDefinition(
+        description=(
+            "Bisects a Firefox regression with mozregression and returns the "
+            "pushlog range. Give it the bug id and what you know about when it "
+            "broke. Slow: it downloads and tests many builds. Returns a RANGE line."
+        ),
+        prompt=(HERE / "prompts" / "bisector.md").read_text(),
+        tools=[
+            *BUGZILLA_READ_TOOLS,
+            *SEARCHFOX_TOOLS,
+            *MOZILLA_VCS_TOOLS,
+            *MOZREGRESSION_TOOLS,
+        ],
+        model="inherit",
+    )
+
+
 CONFIDENCE_LEVELS = ("high", "medium", "low")
 
 
@@ -502,6 +558,28 @@ def parse_duplicate_assessment(value: object) -> DuplicateAssessment | None:
     )
 
 
+def parse_regression_range(value: object) -> RegressionRange | None:
+    """A :class:`RegressionRange` with each field kept only if it is usable.
+
+    Same contract as :func:`parse_duplicate_assessment`: fields degrade on their own.
+    ``status`` is reported, not checked, because nothing decides anything on it.
+    """
+    if not isinstance(value, dict):
+        return None
+
+    def _str(key: str) -> str | None:
+        v = value.get(key)
+        return v.strip() or None if isinstance(v, str) else None
+
+    return RegressionRange(
+        status=_str("status"),
+        pushlog_url=_str("pushlog_url"),
+        last_good=_str("last_good"),
+        first_bad=_str("first_bad"),
+        prompt_used=_str("prompt_used"),
+    )
+
+
 def may_apply_unattended(plan: dict) -> bool:
     """Whether this run's recorded actions may reach the bug without a human.
 
@@ -569,6 +647,7 @@ def parse_plan(text: str | None) -> dict:
         "duplicate_assessment": parse_duplicate_assessment(
             data.get("duplicate_assessment")
         ),
+        "regression_range": parse_regression_range(data.get("regression_range")),
     }
 
 
@@ -586,6 +665,7 @@ async def run_frontend_triage(
     verbose: bool = False,
     log: Path | None = None,
     actions_recorder: ActionsRecorder | None = None,
+    bisect: bool = True,
 ) -> FrontendTriageResult:
     """Triage and plan a fix for a single Bugzilla frontend bug (read-only).
 
@@ -599,10 +679,11 @@ async def run_frontend_triage(
 
     # Action-recording MCP server (in-process). Standalone/script runs pass
     # actions_recorder=None and get a local recorder (no uploader).
+    action_types = ENABLED_ACTION_TYPES + (BISECT_ACTION_TYPES if bisect else [])
     actions_recorder, actions_server = actions_server_for(
-        actions_recorder, types=ENABLED_ACTION_TYPES
+        actions_recorder, types=action_types
     )
-    enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
+    enabled_action_tools = actions_to_tool_names(action_types)
 
     # In-process MCP servers for read-only code investigation. Searchfox and HGMO
     # are public (no credentials), so they run in-process rather than via a
@@ -630,6 +711,9 @@ async def run_frontend_triage(
         "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
     )
     actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
+    actions_recorder.add_hook(
+        "bugzilla.update_bug", update_bug_hook(actions_recorder, bug)
+    )
 
     # Whose guidance goes in the prompt. Falls back to every component when the bug's
     # component is unknown or the lookup failed, which is what the prompt carried before
@@ -666,26 +750,39 @@ async def run_frontend_triage(
         guidance_tools.TOOLS,
     )
 
-    system_prompt = load_system_prompt(rules_dir, instructions, components, known_docs)
+    system_prompt = load_system_prompt(
+        rules_dir, instructions, components, known_docs, bisect=bisect
+    )
+
+    mcp_servers: dict[str, McpServerConfig] = {
+        "bugzilla": bugzilla_mcp_server,
+        "searchfox": searchfox_server,
+        "mozilla_vcs": vcs_server,
+        "guidance": guidance_server,
+        ACTIONS_SERVER_NAME: actions_server,
+    }
+    agents = {
+        "investigator": make_investigator(),
+        "duplicate_hunter": make_duplicate_hunter(),
+    }
+    if bisect:
+        mcp_servers["mozregression"] = build_sdk_server(
+            "mozregression",
+            MozregressionContext(default_model=model),
+            mozregression.TOOLS,
+        )
+        agents["bisector"] = make_bisector()
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        mcp_servers={
-            "bugzilla": bugzilla_mcp_server,
-            "searchfox": searchfox_server,
-            "mozilla_vcs": vcs_server,
-            "guidance": guidance_server,
-            ACTIONS_SERVER_NAME: actions_server,
-        },
-        agents={
-            "investigator": make_investigator(),
-            "duplicate_hunter": make_duplicate_hunter(),
-        },
+        mcp_servers=mcp_servers,
+        agents=agents,
         cwd=str(source_repo.resolve()),
         add_dirs=[str(rules_dir.resolve())],
         permission_mode="bypassPermissions",
         # Read-only investigation tools only: no Write/Edit (source is never
-        # modified) and no firefox build/eval tools.
+        # modified) and no firefox build/eval tools. mozregression runs downloaded
+        # builds, never the checkout.
         allowed_tools=[
             "Read",
             "Grep",
@@ -696,6 +793,7 @@ async def run_frontend_triage(
             *SEARCHFOX_TOOLS,
             *MOZILLA_VCS_TOOLS,
             *GUIDANCE_TOOLS,
+            *(MOZREGRESSION_TOOLS if bisect else []),
             *enabled_action_tools,
         ],
         model=model,

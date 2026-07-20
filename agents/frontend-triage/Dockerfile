@@ -28,6 +28,31 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 FROM base AS agent
 
+# The `bisector` subagent runs mozregression's --prompt mode, which shells out to
+# the Claude CLI, which launches the Firefox DevTools MCP via npx to judge each
+# build. So the agent image needs Node.js, both of those, and the shared libraries
+# a downloaded Firefox needs to run headless. mozregression fetches the builds.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        nodejs npm \
+        ca-certificates \
+        libgtk-3-0 libdbus-glib-1-2 libx11-xcb1 libxtst6 libxt6 libpci3 \
+        libnss3 libnspr4 libasound2t64 libpango-1.0-0 libcairo2 \
+        fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+
+# mozregression launches the MCP with `npx --prefer-offline`, which resolves a
+# global install before touching the network.
+RUN npm install -g @anthropic-ai/claude-code @mozilla/firefox-devtools-mcp
+
+# Cut every Firefox the bisection runs off from the network. Bug text decides what
+# the builds open, so an open build would let a bug aim us at any site. A policy
+# rather than prefs, because the DevTools MCP launches each build with a fresh
+# profile that mozregression's --pref never reaches; Firefox reads this file for
+# every build and profile, and "Locked" keeps the judge from changing it through
+# the MCP. about:, chrome: and data: pages still load.
+COPY agents/frontend-triage/firefox-policies.json /etc/firefox/policies/policies.json
+
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
 COPY agents/frontend-triage/hackbot.toml /app/hackbot.toml

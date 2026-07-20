@@ -14,6 +14,7 @@ from hackbot_agents.frontend_triage.agent import (
     parse_confidence,
     parse_duplicate_assessment,
     parse_plan,
+    parse_regression_range,
     parse_severity,
     parse_severity_assessment,
     render_scope,
@@ -459,3 +460,51 @@ def test_ordinary_desktop_chrome_is_owned_by_nobody():
         "widget/cocoa/nsCocoaWindow.mm",
     ):
         assert owners_for_path(path) == (), path
+
+
+def test_the_system_prompt_renders_with_bisection_on():
+    # bisection.md is substituted, not formatted, so its JSON braces stay single.
+    prompt = load_system_prompt(
+        Path("rules"), "", guidance_for("Firefox", "New Tab Page"), (), bisect=True
+    )
+    assert "`bisector`" in prompt
+    assert '"regressed_by": {"add": [1234567]}' in prompt
+    assert '"regression_range": {' in prompt
+
+
+def test_the_system_prompt_says_when_bisection_is_off():
+    prompt = load_system_prompt(
+        Path("rules"), "", guidance_for("Firefox", "New Tab Page"), ()
+    )
+    assert "Bisection is off for this run" in prompt
+
+
+def test_the_regression_range_is_normalized():
+    rr = parse_regression_range(
+        {
+            "status": " range_found ",
+            "pushlog_url": "https://hg.mozilla.org/x",
+            "last_good": "aaa",
+            "first_bad": "bbb",
+            "prompt_used": "GOOD if ...",
+        }
+    )
+    assert rr.status == "range_found"
+    assert rr.pushlog_url == "https://hg.mozilla.org/x"
+
+
+def test_each_regression_range_field_degrades_on_its_own():
+    rr = parse_regression_range({"status": 5, "pushlog_url": " ", "last_good": "a"})
+    assert rr.status is None
+    assert rr.pushlog_url is None
+    assert rr.last_good == "a"
+
+
+def test_an_unusable_regression_range_is_none():
+    assert parse_regression_range("range_found") is None
+    assert parse_plan(_block("{}"))["regression_range"] is None
+
+
+def test_parse_plan_carries_the_regression_range():
+    plan = parse_plan(_block('{"regression_range": {"status": "inconclusive"}}'))
+    assert plan["regression_range"].status == "inconclusive"
