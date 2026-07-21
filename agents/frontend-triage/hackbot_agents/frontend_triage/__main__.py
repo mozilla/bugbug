@@ -26,13 +26,15 @@ class AgentInputs(BaseSettings):
 async def main(ctx: HackbotContext) -> FrontendTriageResult:
     inputs = AgentInputs()
 
+    await ctx.prepare_repo()
+
     return await run_frontend_triage(
         task=TRIAGE_TASK,
         bugzilla_mcp_server={
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
         },
-        source_repo=ctx.source_repo,
+        source_repo=ctx.repo_path,
         bug=inputs.bug_id,
         model=inputs.model,
         max_turns=inputs.max_turns,
