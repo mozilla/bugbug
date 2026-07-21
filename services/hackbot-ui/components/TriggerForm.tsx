@@ -3,24 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import { saveRun } from "@/lib/store";
+import { AGENTS, type AgentValue, parseAgent } from "@/lib/agents";
 import type { RunRef } from "@/lib/types";
-
-const AGENTS = [
-  { value: "bug-fix", label: "bug-fix" },
-  { value: "autowebcompat-repro", label: "autowebcompat-repro" },
-  { value: "build-repair", label: "build-repair" },
-  { value: "frontend-triage", label: "frontend-triage" },
-  { value: "test-plan-generator", label: "test-plan-generator" },
-] as const;
-
-type AgentValue = (typeof AGENTS)[number]["value"];
-
-function parseAgent(value: string | null): AgentValue {
-  return AGENTS.some((a) => a.value === value)
-    ? (value as AgentValue)
-    : "bug-fix";
-}
 
 export function TriggerForm() {
   const router = useRouter();
@@ -53,6 +37,16 @@ export function TriggerForm() {
   const [effort, setEffort] = useState(() => params.get("effort") ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reflect the selected agent in the URL so the recent-runs panel can filter
+  // to it without any shared client state.
+  function selectAgent(value: AgentValue) {
+    setAgent(value);
+    setError(null);
+    const next = new URLSearchParams(params.toString());
+    next.set("agent", value);
+    router.replace(`?${next.toString()}`, { scroll: false });
+  }
 
   const isReproAgent = agent === "autowebcompat-repro";
   const isBuildRepairAgent = agent === "build-repair";
@@ -150,20 +144,6 @@ export function TriggerForm() {
         throw new Error(body?.error ?? `Request failed (${res.status})`);
       }
       const run = body as RunRef;
-      const label = isBuildRepairAgent
-        ? `commit ${gitCommit.trim().slice(0, 12)}`
-        : isTestPlanAgent
-          ? featureName.trim()
-          : hasBugId
-            ? `bug ${parsedBugId}`
-            : "inline report";
-      saveRun({
-        run_id: run.run_id,
-        agent: run.agent,
-        status: run.status,
-        label,
-        created_at: new Date().toISOString(),
-      });
       router.push(`/runs/${run.run_id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -180,10 +160,7 @@ export function TriggerForm() {
         <select
           id="agent"
           value={agent}
-          onChange={(e) => {
-            setAgent(e.target.value as AgentValue);
-            setError(null);
-          }}
+          onChange={(e) => selectAgent(e.target.value as AgentValue)}
         >
           {AGENTS.map((a) => (
             <option key={a.value} value={a.value}>

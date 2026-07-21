@@ -109,9 +109,13 @@ async def create_run(
 @router.get("/runs", response_model=list[RunDoc])
 async def list_runs(
     limit: int = Query(default=50, ge=1, le=100),
+    agent: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
-    result = await db.execute(select(Run).order_by(Run.created_at.desc()).limit(limit))
+    query = select(Run).order_by(Run.created_at.desc())
+    if agent is not None:
+        query = query.where(Run.agent == agent)
+    result = await db.execute(query.limit(limit))
     return [RunDoc.model_validate(r) for r in result.scalars()]
 
 

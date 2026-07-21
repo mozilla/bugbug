@@ -5,8 +5,8 @@ import { getAuthedEmail } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/runs?limit=50
-// Returns the most recent runs from hackbot-api (no reconciliation).
+// GET /api/runs?limit=50&agent=bug-fix
+// Returns the most recent runs from hackbot-api, optionally filtered by agent.
 export async function GET(req: NextRequest) {
   if (!(await getAuthedEmail())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const raw = Number(searchParams.get("limit") ?? 50);
     const limit = Number.isFinite(raw) && raw > 0 ? raw : 50;
-    const runs = await listRuns(limit);
+    const agent = searchParams.get("agent") ?? undefined;
+    const runs = await listRuns(limit, agent);
     return NextResponse.json(runs);
   } catch (err) {
     const status = err instanceof HackbotError ? err.status : 500;

@@ -1,27 +1,44 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { isTerminal } from "@/lib/types";
-import { loadRuns, type TrackedRun, updateRunStatus } from "@/lib/store";
+import { parseAgent } from "@/lib/agents";
+import { isTerminal, type RunStatus } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
 
-// Polls the status of any non-terminal tracked runs so the dashboard stays live.
+// Polls while any run is non-terminal so the dashboard stays live.
 const POLL_MS = 5000;
+
+interface RunRow {
+  run_id: string;
+  agent: string;
+  status: RunStatus;
+  // Human-readable summary of the inputs, e.g. "bug 1846789".
+  label: string;
+  created_at: string;
+}
 
 function labelFromInputs(inputs: Record<string, unknown>): string {
   if (typeof inputs.bug_id === "number") return `bug ${inputs.bug_id}`;
+  if (typeof inputs.git_commit === "string") {
+    return `commit ${inputs.git_commit.slice(0, 12)}`;
+  }
+  if (typeof inputs.feature_name === "string") return inputs.feature_name;
   return "inline report";
 }
 
-async function fetchRuns(): Promise<TrackedRun[]> {
-  const res = await fetch("/api/runs?limit=50");
+// The runs list is sourced entirely from hackbot-api (no localStorage), filtered
+// server-side to the agent selected in the trigger form (carried in `?agent=`).
+async function fetchRuns(agent: string): Promise<RunRow[]> {
+  const params = new URLSearchParams({ limit: "50", agent });
+  const res = await fetch(`/api/runs?${params.toString()}`);
   if (!res.ok) return [];
   const docs = (await res.json()) as Array<{
     run_id: string;
     agent: string;
-    status: TrackedRun["status"];
+    status: RunStatus;
     inputs: Record<string, unknown>;
     created_at: string;
   }>;
@@ -34,53 +51,33 @@ async function fetchRuns(): Promise<TrackedRun[]> {
   }));
 }
 
-function mergeRuns(
-  apiRuns: TrackedRun[],
-  localRuns: TrackedRun[]
-): TrackedRun[] {
-  const seen = new Set(apiRuns.map((r) => r.run_id));
-  const extras = localRuns.filter((r) => !seen.has(r.run_id));
-  return [...extras, ...apiRuns];
-}
-
 export function RecentRuns() {
-  const [runs, setRuns] = useState<TrackedRun[] | null>(null);
+  const params = useSearchParams();
+  const agent = parseAgent(params.get("agent"));
+  const [runs, setRuns] = useState<RunRow[] | null>(null);
 
   useEffect(() => {
-    fetchRuns().then((apiRuns) => {
-      setRuns(mergeRuns(apiRuns, loadRuns()));
+    let cancelled = false;
+    setRuns(null);
+    fetchRuns(agent).then((rows) => {
+      if (!cancelled) setRuns(rows);
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [agent]);
 
   useEffect(() => {
     if (!runs) return;
-    const active = runs.filter((r) => !isTerminal(r.status));
-    if (active.length === 0) return;
+    if (!runs.some((r) => !isTerminal(r.status))) return;
 
     const timer = setInterval(async () => {
-      let changed = false;
-      for (const r of active) {
-        try {
-          const res = await fetch(`/api/runs/${r.run_id}`);
-          if (!res.ok) continue;
-          const doc = await res.json();
-          if (doc.status && doc.status !== r.status) {
-            updateRunStatus(r.run_id, doc.status);
-            changed = true;
-          }
-        } catch {
-          // transient; try again next tick
-        }
-      }
-      if (changed) {
-        fetchRuns().then((apiRuns) => {
-          setRuns(mergeRuns(apiRuns, loadRuns()));
-        });
-      }
+      const rows = await fetchRuns(agent);
+      setRuns(rows);
     }, POLL_MS);
 
     return () => clearInterval(timer);
-  }, [runs]);
+  }, [runs, agent]);
 
   if (runs === null) {
     return <p className="muted">Loading…</p>;
@@ -89,7 +86,7 @@ export function RecentRuns() {
   if (runs.length === 0) {
     return (
       <p className="muted">
-        No runs yet. Use the form above to trigger an agent.
+        No runs yet for the {agent} agent. Use the form above to trigger one.
       </p>
     );
   }

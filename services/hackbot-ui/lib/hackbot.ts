@@ -87,8 +87,10 @@ export function getRun(runId: string): Promise<RunDoc> {
   return request<RunDoc>(`/runs/${encodeURIComponent(runId)}`);
 }
 
-export function listRuns(limit = 50): Promise<RunDoc[]> {
-  return request<RunDoc[]>(`/runs?limit=${limit}`);
+export function listRuns(limit = 50, agent?: string): Promise<RunDoc[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (agent) params.set("agent", agent);
+  return request<RunDoc[]>(`/runs?${params.toString()}`);
 }
 
 export function listRunActions(runId: string): Promise<RunAction[]> {
