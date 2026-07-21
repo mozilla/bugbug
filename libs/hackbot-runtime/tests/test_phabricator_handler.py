@@ -75,7 +75,6 @@ async def test_submit_patch_create_wip_by_default(monkeypatch):
     assert result.status == "applied"
     assert result.result == {
         "revision_id": 555,
-        "revision_url": "https://phabricator.services.mozilla.com/D555",
         "url": "https://phabricator.services.mozilla.com/D555",
     }
 

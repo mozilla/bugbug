@@ -20,8 +20,8 @@ from app.schemas import RunStatus
 
 def test_resolves_known_ref_and_field():
     out = resolve_placeholders(
-        "Fix submitted: {{actions.patch.revision_url}}",
-        {"patch": {"revision_url": "https://phabricator.services.mozilla.com/D1"}},
+        "Fix submitted: {{actions.patch.url}}",
+        {"patch": {"url": "https://phabricator.services.mozilla.com/D1"}},
     )
     assert out == "Fix submitted: https://phabricator.services.mozilla.com/D1"
 
@@ -32,20 +32,16 @@ def test_unknown_ref_left_as_is():
 
 
 def test_unknown_field_left_as_is():
-    out = resolve_placeholders(
-        "See {{actions.patch.nope}}", {"patch": {"revision_url": "x"}}
-    )
+    out = resolve_placeholders("See {{actions.patch.nope}}", {"patch": {"url": "x"}})
     assert out == "See {{actions.patch.nope}}"
 
 
 def test_recurses_into_dict_and_list():
     value = {
-        "text": "{{actions.patch.revision_url}}",
+        "text": "{{actions.patch.url}}",
         "items": ["{{actions.patch.revision_id}}", "plain"],
     }
-    out = resolve_placeholders(
-        value, {"patch": {"revision_url": "u", "revision_id": 5}}
-    )
+    out = resolve_placeholders(value, {"patch": {"url": "u", "revision_id": 5}})
     assert out == {"text": "u", "items": ["5", "plain"]}
 
 
