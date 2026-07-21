@@ -527,3 +527,109 @@ ul.chips li.chip {
   background: rgba(210, 153, 42, 0.16);
   color: var(--amber);
 }
+
+/* Purpose-built test-plan findings view. */
+.test-plan-section {
+  margin-bottom: 24px;
+}
+.test-plan-label {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.test-plan-feature {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.test-case-list {
+  margin: 0;
+  padding-left: 32px;
+}
+.test-case {
+  padding: 4px 0 24px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.test-case:last-child {
+  margin-bottom: 0;
+}
+.test-case::marker {
+  font-size: 18px;
+  font-weight: 700;
+}
+.test-case-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.test-case-heading h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+}
+.test-case h4,
+.test-plan-summary h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.test-case-preconditions {
+  margin-bottom: 20px;
+}
+.test-case-reason {
+  padding: 10px 12px;
+  border-left: 3px solid var(--border);
+  border-radius: 4px;
+  margin: -8px 0 20px;
+  font-size: 13px;
+}
+.test-case-reason.test-failed {
+  background: rgba(229, 83, 75, 0.1);
+  border-left-color: var(--red);
+}
+.test-case-reason.test-unsuitable {
+  background: rgba(210, 153, 42, 0.1);
+  border-left-color: var(--amber);
+}
+.test-case-reason strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.test-case-reason p {
+  margin: 0;
+}
+.test-case-preconditions p,
+.test-plan-summary p {
+  margin: 0;
+}
+.test-step-list {
+  margin: 0;
+  padding-left: 28px;
+}
+.test-step-list li {
+  padding-left: 6px;
+  margin-bottom: 10px;
+}
+.test-step-list li:last-child {
+  margin-bottom: 0;
+}
+.badge.test-passed {
+  background: rgba(46, 160, 67, 0.18);
+  color: var(--green);
+}
+.badge.test-failed {
+  background: rgba(229, 83, 75, 0.18);
+  color: var(--red);
+}
+.badge.test-unsuitable {
+  background: rgba(210, 153, 42, 0.16);
+  color: var(--amber);
+}
+.test-plan-summary {
+  margin-top: 24px;
+}

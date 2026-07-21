@@ -9,8 +9,9 @@ import {
   titleize,
 } from "@/lib/findings-format";
 import { Markdown } from "./Markdown";
+import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
-type ViewMode = "friendly" | "raw";
+type ViewMode = "test-plan" | "friendly" | "raw";
 
 const BUGZILLA_URL = "https://bugzilla.mozilla.org/show_bug.cgi?id=";
 const MAX_DEPTH = 6;
@@ -162,8 +163,12 @@ export function FindingsView({
 }: {
   findings: Record<string, unknown>;
 }) {
-  // Default to the friendly, readable view; raw JSON is opt-in.
-  const [mode, setMode] = useState<ViewMode>("friendly");
+  const testPlan = parseTestPlan(findings);
+  // Structured test plans get a purpose built default view; all findings can
+  // still be inspected through the generic friendly and raw JSON views.
+  const [mode, setMode] = useState<ViewMode>(
+    testPlan ? "test-plan" : "friendly"
+  );
   return (
     <div className="panel">
       <div className="panel-head">
@@ -187,9 +192,22 @@ export function FindingsView({
           >
             Friendly
           </button>
+          {testPlan && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "test-plan"}
+              className={mode === "test-plan" ? "active" : ""}
+              onClick={() => setMode("test-plan")}
+            >
+              Test Plan
+            </button>
+          )}
         </div>
       </div>
-      {mode === "friendly" ? (
+      {mode === "test-plan" && testPlan ? (
+        <TestPlanView testPlan={testPlan} />
+      ) : mode === "friendly" ? (
         <FriendlyFindings findings={findings} />
       ) : (
         <pre className="log">{JSON.stringify(findings, null, 2)}</pre>
