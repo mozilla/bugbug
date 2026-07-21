@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import {
+  dropHoistedDuplicates,
   isPlainObject,
   isScalar,
   isStringArray,
@@ -42,7 +43,7 @@ function StringValue({ value }: { value: string }) {
   if (!trimmed.includes("\n") && trimmed.length <= INLINE_STRING_MAX) {
     return <span>{trimmed}</span>;
   }
-  return <Markdown text={value} />;
+  return <Markdown text={value} dropJsonBlocks />;
 }
 
 function StringChips({ items }: { items: string[] }) {
@@ -55,6 +56,23 @@ function StringChips({ items }: { items: string[] }) {
       ))}
     </ul>
   );
+}
+
+// A `[label, details]` pair (e.g. reproductions' `["nightly", {...}]`) reads
+// better as a card headed by the label than as a nested #1/#2 pair. Returns the
+// unpacked pair when `value` matches that shape, otherwise null.
+function asLabeledTuple(
+  value: unknown,
+): { label: string; body: Record<string, unknown> } | null {
+  if (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === "string" &&
+    isPlainObject(value[1])
+  ) {
+    return { label: value[0], body: value[1] as Record<string, unknown> };
+  }
+  return null;
 }
 
 // Recursive dispatcher: narrows `unknown` at runtime and renders each value
@@ -98,13 +116,16 @@ function FindingValue({
       return <StringChips items={value.map((v) => String(v))} />;
     }
     return (
-      <div>
-        {value.map((item, i) => (
-          <div className="finding-card" key={i}>
-            <div className="finding-index">#{i + 1}</div>
-            <FindingValue value={item} depth={depth + 1} />
-          </div>
-        ))}
+      <div className="finding-cards">
+        {value.map((item, i) => {
+          const tuple = asLabeledTuple(item);
+          return (
+            <div className="finding-card" key={i}>
+              <div className="finding-index">{tuple ? tuple.label : `#${i + 1}`}</div>
+              <FindingValue value={tuple ? tuple.body : item} depth={depth + 1} />
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -125,6 +146,17 @@ function FindingValue({
   return <span>{String(value)}</span>;
 }
 
+// A value that renders as a large block (a nested object, or an array of
+// objects → cards) reads better as a full-width titled section than as a
+// label|value row. Scalars, text, and scalar/string arrays (chips) stay rows.
+function rendersAsBlock(value: unknown): boolean {
+  if (isPlainObject(value)) return Object.keys(value).length > 0;
+  if (Array.isArray(value)) {
+    return value.length > 0 && !isStringArray(value) && !value.every(isScalar);
+  }
+  return false;
+}
+
 function FindingRow({
   fieldKey,
   value,
@@ -134,10 +166,13 @@ function FindingRow({
   value: unknown;
   depth: number;
 }) {
+  const section = rendersAsBlock(value);
   return (
     <>
-      <dt>{titleize(fieldKey)}</dt>
-      <dd>
+      <dt className={section ? "kv-section-title" : undefined}>
+        {titleize(fieldKey)}
+      </dt>
+      <dd className={section ? "kv-section-body" : undefined}>
         <FindingValue value={value} fieldKey={fieldKey} depth={depth} />
       </dd>
     </>
@@ -145,7 +180,18 @@ function FindingRow({
 }
 
 function FriendlyFindings({ findings }: { findings: Record<string, unknown> }) {
-  const entries = Object.entries(findings);
+  // Drop hoisted duplicate text (e.g. autowebcompat-repro copies a
+  // reproduction's steps/summary onto `result`); the in-context copy is kept.
+  const deduped = dropHoistedDuplicates(findings);
+  let entries = Object.entries(deduped);
+  // When the agent emits a full `result` narrative (e.g. frontend-triage), it
+  // already leads with the summary, so the separate top-level `summary` field
+  // just repeats it — drop it. (Still visible via the JSON toggle.)
+  const hasNarrativeResult =
+    typeof deduped.result === "string" && deduped.result.trim().length > 0;
+  if (hasNarrativeResult) {
+    entries = entries.filter(([k]) => k !== "summary");
+  }
   if (entries.length === 0) {
     return <p className="muted">No findings.</p>;
   }
