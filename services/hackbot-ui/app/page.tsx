@@ -15,7 +15,9 @@ export default function HomePage() {
 
       <div className="panel">
         <h2>Recent runs</h2>
-        <RecentRuns />
+        <Suspense fallback={null}>
+          <RecentRuns />
+        </Suspense>
       </div>
     </>
   );

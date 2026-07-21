@@ -12,8 +12,9 @@ It lets you:
   artifacts written to the results bucket, each a **download link** (the browser
   is redirected to a short-lived signed GCS URL).
 
-> This is a demo surface, not a system of record. It has no list-runs endpoint
-> upstream, so the browser remembers the runs you triggered in `localStorage`.
+> This is a demo surface, not a system of record. The recent-runs panel is
+> sourced entirely from the upstream `GET /runs` endpoint and filtered to the
+> agent selected in the trigger form (carried in the `?agent=` URL param).
 
 ## Architecture
 

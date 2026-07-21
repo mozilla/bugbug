@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { updateRunStatus } from "@/lib/store";
 import { isTerminal, type RunAction, type RunDoc } from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
@@ -63,7 +62,6 @@ export function RunDetail({ runId }: { runId: string }) {
       const doc = body as RunDoc;
       setRun(doc);
       setError(null);
-      updateRunStatus(runId, doc.status);
       if (isTerminal(doc.status)) {
         setPolling(false);
         return false;
