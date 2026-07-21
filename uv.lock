@@ -2509,8 +2509,15 @@ dependencies = [
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
+    { name = "phabricator-client" },
     { name = "starlette" },
     { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
 ]
 
 [package.metadata]
@@ -2520,9 +2527,13 @@ requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "starlette", specifier = ">=0.36.0" },
     { name = "uvicorn", specifier = ">=0.27.0" },
 ]
+provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-build-repair"
@@ -2710,6 +2721,7 @@ dependencies = [
     { name = "agent-tools" },
     { name = "async-lru" },
     { name = "google-auth" },
+    { name = "httpx" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
@@ -2732,6 +2744,7 @@ requires-dist = [
     { name = "async-lru", specifier = ">=2.0.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
+    { name = "httpx", specifier = ">=0.26.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
