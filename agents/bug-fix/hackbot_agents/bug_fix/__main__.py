@@ -21,6 +21,8 @@ class AgentInputs(BaseSettings):
 async def main(ctx: HackbotContext) -> BugFixResult:
     inputs = AgentInputs()
 
+    await ctx.prepare_repo()
+
     # A plain run triages and fixes the bug; a follow-up run lets run_bug_fix
     # build a revision-specific task from the reviewer's comment instead.
     task = None if inputs.revision_id else "Triage and fix the bug, and verify the fix"
@@ -31,7 +33,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
         },
-        source_repo=ctx.source_repo,
+        source_repo=ctx.repo_path,
         fx_ctx=ctx.firefox,
         bug=inputs.bug_id,
         revision_id=inputs.revision_id,
