@@ -202,7 +202,7 @@ export function RunDetail({ runId }: { runId: string }) {
         </div>
       )}
 
-      {hasFindings && <FindingsView findings={findings} />}
+      {hasFindings && <FindingsView findings={findings} agent={run.agent} />}
 
       {actions && actions.length > 0 && (
         <div className="panel">
