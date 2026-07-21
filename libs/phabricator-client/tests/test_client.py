@@ -120,6 +120,31 @@ async def test_search_revision_missing(monkeypatch):
     assert await _client().search_revision("PHID-DREV-1") is None
 
 
+async def test_query_latest_diff_picks_highest_id(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "7": {"id": "7", "sourceControlBaseRevision": "old"},
+                "9": {"id": "9", "sourceControlBaseRevision": "base9"},
+            }
+        },
+    )
+    diff = await _client().query_latest_diff(42)
+    assert diff.id == 9
+    assert diff.base_commit == "base9"
+
+
+async def test_query_latest_diff_none_when_no_diffs(monkeypatch):
+    _capture_post(monkeypatch, {"result": {}})
+    assert await _client().query_latest_diff(42) is None
+
+
+async def test_get_raw_diff(monkeypatch):
+    _capture_post(monkeypatch, {"result": "diff --git a/f b/f\n@@ -1 +1 @@\n-a\n+b\n"})
+    assert (await _client().get_raw_diff(9)).startswith("diff --git a/f b/f")
+
+
 def test_revision_url_default_base():
     assert _client().revision_url(42) == "https://phabricator.services.mozilla.com/D42"
 

@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 
 from phabricator_client.config import PhabricatorSettings
+from phabricator_client.models import PhabricatorDiff
 
 
 class PhabricatorClient:
@@ -63,3 +64,23 @@ class PhabricatorClient:
         )
         data = result.get("data") or []
         return data[0] if data else None
+
+    async def query_latest_diff(self, revision_id: int) -> PhabricatorDiff | None:
+        """The most recent diff for a revision, or ``None`` if it has none.
+
+        Uses ``differential.querydiffs`` because, unlike ``diff.search``, it
+        exposes ``sourceControlBaseRevision`` (the commit the diff was built on),
+        which callers need to reproduce the revision's tree. The result is keyed
+        by diff id; the highest id is the latest diff.
+        """
+        result = await self.conduit_request(
+            "differential.querydiffs", revisionIDs=[revision_id]
+        )
+        if not result:
+            return None
+        latest = max(result.values(), key=lambda raw: int(raw["id"]))
+        return PhabricatorDiff.model_validate(latest)
+
+    async def get_raw_diff(self, diff_id: int) -> str:
+        """The raw unified-diff text for a diff (``differential.getrawdiff``)."""
+        return await self.conduit_request("differential.getrawdiff", diffID=diff_id)
