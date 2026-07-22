@@ -65,7 +65,7 @@ When you spawn an investigator via the Task tool, write a complete, self-contain
 
 # Recording actions
 
-The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `phabricator_submit_patch`) do **not** mutate Bugzilla or Phabricator directly. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal — once recorded it appears in the run output verbatim.
+The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `phabricator_submit_patch`, `phabricator_add_comment`) do **not** mutate Bugzilla or Phabricator directly. Use `phabricator_add_comment` to reply on a Differential revision (for example, to answer a reviewer's question when no code change is needed); use `phabricator_submit_patch` to deliver a code fix. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal — once recorded it appears in the run output verbatim.
 
 Before calling any action tool, state in your response:
 

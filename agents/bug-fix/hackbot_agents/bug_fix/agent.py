@@ -150,16 +150,26 @@ async def run_bug_fix(
     rules_path = rules_dir.resolve()
     if revision_id:
         # Follow-up mode: a reviewer commented on an existing revision (the
-        # comment is in the system prompt's extra instructions). Address it and
-        # update that same revision rather than opening a new one.
+        # comment is in the system prompt's extra instructions). The comment may
+        # ask for a code change or may just be a question — decide which, and
+        # respond accordingly, without opening a new revision.
         user_prompt = (
             f"Follow up on Phabricator revision D{revision_id} for bug {bug}.\n\n"
             f"A reviewer left a comment (see the instructions in your system "
-            f"prompt). Address it: investigate, make the necessary source "
-            f"changes, and verify the fix. When you are done, submit your "
-            f"changes by calling submit_patch with revision_id={revision_id} so "
-            f"the existing revision D{revision_id} is updated — do not create a "
-            f"new revision.\n\n"
+            f"prompt). First investigate to understand what it is asking for, "
+            f"then take the matching path:\n\n"
+            f"- If the comment requests a code change (a fix, tweak, or "
+            f"follow-up to the patch): make the necessary source changes, "
+            f"verify them, and call phabricator_submit_patch with revision_id={revision_id} "
+            f"so the existing revision D{revision_id} is updated — do not create "
+            f"a new revision.\n"
+            f"- If the comment is only a question or a request for clarification "
+            f"(no code change is warranted): do not edit the source or submit a "
+            f"patch. Investigate, then reply on the revision by calling "
+            f"phabricator_add_comment with revision_id={revision_id} (this posts "
+            f"on D{revision_id} itself — do not answer via a Bugzilla comment).\n\n"
+            f"If you are unsure, prefer answering with a comment over making "
+            f"speculative code changes.\n\n"
             f"Consult the relevant rules in {rules_path} if they apply."
         )
     elif task:
