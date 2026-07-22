@@ -150,6 +150,23 @@ async def _set_local_commits(
     )
 
 
+class AddCommentHandler:
+    async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        revision_id = params["revision_id"]
+        try:
+            await _conduit_request(
+                "differential.revision.edit",
+                objectIdentifier=revision_id,
+                transactions=[{"type": "comment", "value": params["text"]}],
+            )
+        except Exception as exc:
+            log.exception("Failed to comment on revision D%s", revision_id)
+            return ActionResult.failed(str(exc))
+        return ActionResult.ok(
+            {"revision_id": revision_id, "revision_url": _revision_url(revision_id)}
+        )
+
+
 class SubmitPatchHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]

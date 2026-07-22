@@ -15,6 +15,11 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
+_COMMENT_FOOTER = (
+    "*This is an automated response. If it is incorrect, reply on this "
+    "revision to correct it.*"
+)
+
 
 def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
     return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
@@ -97,6 +102,33 @@ async def submit_patch(
         ref=ref,
     )
     return _confirm(recorder, "phabricator.submit_patch")
+
+
+@tool
+async def add_comment(
+    recorder: ActionsRecorder,
+    revision_id: Annotated[
+        int, Field(description="Differential revision to comment on (the D number).")
+    ],
+    text: Annotated[str, Field(description="Comment body (Remarkup supported).")],
+    reasoning: Annotated[
+        str, Field(description="Why you are recording this comment (for audit log).")
+    ],
+) -> str:
+    """Record an intended comment on a Phabricator revision.
+
+    Use this to reply on a revision — for example, to answer a reviewer's
+    question — when no code change is required. This does not deliver a fix: to
+    submit code changes, use ``submit_patch`` instead. Recorded into the run
+    summary for human review; nothing is posted to Phabricator during the run.
+    """
+    text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
+    recorder.record(
+        "phabricator.add_comment",
+        {"revision_id": revision_id, "text": text_with_footer},
+        reasoning=reasoning,
+    )
+    return _confirm(recorder, "phabricator.add_comment")
 
 
 TOOLS = tools_in(__name__)

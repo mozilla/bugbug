@@ -371,6 +371,41 @@ async def test_submit_patch_conduit_error_fails(monkeypatch):
     assert "ERR-CONDUIT-CORE" in result.error
 
 
+async def test_add_comment_posts_comment_transaction(monkeypatch):
+    fake, calls = _fake_conduit({"differential.revision.edit": {"object": {"id": 42}}})
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    result = await phabricator_handler.AddCommentHandler().apply(
+        {"revision_id": 42, "text": "Answering your question."},
+        ApplyContext(run_id="run-1", download_artifact=None),
+    )
+
+    assert result.status == "applied"
+    assert result.result == {
+        "revision_id": 42,
+        "revision_url": "https://phabricator.services.mozilla.com/D42",
+    }
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    assert edit_call[1]["objectIdentifier"] == 42
+    assert edit_call[1]["transactions"] == [
+        {"type": "comment", "value": "Answering your question."}
+    ]
+
+
+async def test_add_comment_conduit_error_fails(monkeypatch):
+    async def fake(method, **payload):
+        raise RuntimeError("Conduit error ERR-CONDUIT-CORE: nope")
+
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    result = await phabricator_handler.AddCommentHandler().apply(
+        {"revision_id": 42, "text": "x"},
+        ApplyContext(run_id="run-1", download_artifact=None),
+    )
+    assert result.status == "failed"
+    assert "ERR-CONDUIT-CORE" in result.error
+
+
 async def test_repository_phid_prefers_env_var(monkeypatch):
     monkeypatch.setenv("PHABRICATOR_REPOSITORY_PHID", "PHID-FROM-ENV")
     assert await phabricator_handler._repository_phid() == "PHID-FROM-ENV"
