@@ -6,15 +6,15 @@ report only pass/fail/unsuitable results. Do not try to fix, patch or make chang
 
 ## Required workflow
 
-1. Generate the appropriate number of test cases before running any case.
-   - Use the provided feature name as the structured result feature.
-   - Stay within the test scope.
+1. Generate enough test cases to cover all distinct behaviors,
+   variations, and negative scenarios before running any case.
 2. Each test case must have:
-   - A descriptive manual-QA title written as an observable acceptance criterion.
+   - A title.
    - A primary execution context label: `chrome` or `content`.
    - Ordered test steps.
 3. Run the generated cases and steps in order.
 4. Submit one final structured result with `submit_result`.
+   - Use the provided feature name as the structured result feature.
 
 ## Context guidance
 
@@ -40,87 +40,13 @@ bypass a failing content interaction.
 - When a case fails or is unsuitable, include a concise case-level reason.
 - Do not try alternate approaches to make a failing step pass.
 
-## Test-case generation style
+## Test case and steps style
 
-Generate Firefox manual QA test cases that are concise, realistic, and directly
-executable by a tester familiar with Firefox.
-
-### Scenario selection
-
-- Create one test case for each distinct user visible behavior or meaningful
-  state transition in the requested scope.
-- Each test case must have one primary testing purpose.
-- Split scenarios into separate cases when they exercise different:
-  - user workflows.
-  - entry points.
-  - browser modes or configurations.
-  - positive and negative behaviors.
-  - boundary conditions.
-  - error or recovery paths.
-  - accessibility interactions.
-  - telemetry behaviors.
-- Do not create multiple cases that repeat the same workflow without verifying a
-  materially different behavior.
-- Do not add generic coverage categories unless they are relevant to the
-  provided feature description and test scope.
-
-### Test-case titles
-
-Write each title as a complete, observable acceptance criterion.
-
-- State what behavior is being verified, not the sequence used to verify it.
-- Keep the title focused on one scenario or capability.
-- Prefer a direct declarative statement describing the expected observable
-  behavior.
-- Include a condition or environment in the title only when it materially
-  distinguishes the case, such as Private Browsing, keyboard navigation, an
-  error state, or a disabled preference.
-- Use the exact Firefox feature, panel, menu, preference, or control name when
-  it is known.
-- Put exact input values, websites, queries, and detailed action sequences in
-  the steps rather than the title.
-- Do not use category prefixes, identifiers, colon separated labels, or
-  automated test style shorthand.
-
-Examples:
-
-- `Verify that suggested tabs can be dismissed using keyboard navigation`
-- `Semantic results are displayed in Private Browsing Mode`
-- `Disabling the feature preference removes unit conversion results from the address bar`
-- `The link preview closes when Escape is pressed`
-
-### Test steps
-
-Write concise, ordered manual testing actions.
-
-- Write steps in the order a tester must perform them.
-- Use the exact Firefox UI label, preference name, URL, command, or test value
-  when it is known.
-- Keep each step limited to one principal action.
-- A step may include a tightly coupled secondary action only when separating it
-  would make the workflow unnatural.
-- Separate actions when each action could fail independently or when the
-  intermediate state matters.
-- Include enough navigation context for the tester to find the target:
-  `Open Settings > Privacy & Security` is better than `Open Settings`.
-- Introduce concrete test data when the behavior depends on it.
-- Use representative examples rather than abstract placeholders when suitable.
-
-Examples:
-
-- `Press Tab until the "Suggest more tabs" button is focused.`
-- `Open three Amazon product pages in separate tabs.`
-- `Enter "10 km to miles" in the address bar.`
-- `Select "Organize Similar Tabs" from the tab context menu.`
-
-### Workflow quality
-
-- Use the shortest sequence that reliably reaches and exercises the target
-  behavior.
-- Do not repeat an action already established in the same case.
-- Do not restate the title as a step.
-- Do not combine separate scenarios into one long case merely because they
-  concern the same feature.
+- Use manual-QA-style titles and steps.
+- Write each title as a clear, direct declarative statement describing the
+  expected observable behavior. Keep exact inputs, actions, and detailed
+  conditions in the test steps.
+- Write concise, ordered test steps.
 
 ## Unsuitable cases
 
