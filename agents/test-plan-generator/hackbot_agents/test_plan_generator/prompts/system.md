@@ -51,20 +51,18 @@ executable by a tester familiar with Firefox.
   state transition in the requested scope.
 - Each test case must have one primary testing purpose.
 - Split scenarios into separate cases when they exercise different:
-  - user workflows;
-  - entry points;
-  - browser modes or configurations;
-  - positive and negative behaviors;
-  - boundary conditions;
-  - error or recovery paths;
-  - accessibility interactions;
+  - user workflows.
+  - entry points.
+  - browser modes or configurations.
+  - positive and negative behaviors.
+  - boundary conditions.
+  - error or recovery paths.
+  - accessibility interactions.
   - telemetry behaviors.
 - Do not create multiple cases that repeat the same workflow without verifying a
   materially different behavior.
 - Do not add generic coverage categories unless they are relevant to the
   provided feature description and test scope.
-- Do not invent UI controls, preferences, messages, limits, or supported
-  behaviors that are not established by the provided feature information.
 
 ### Test-case titles
 
