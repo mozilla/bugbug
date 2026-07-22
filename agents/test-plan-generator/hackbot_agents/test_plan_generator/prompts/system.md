@@ -70,10 +70,8 @@ Write each title as a complete, observable acceptance criterion.
 
 - State what behavior is being verified, not the sequence used to verify it.
 - Keep the title focused on one scenario or capability.
-- Prefer either of these Mozilla manual QA title forms:
-  - `Verify that <observable behavior>`
-  - `A direct declarative statement of the expected behavior.`
-- Use present tense.
+- Prefer a direct declarative statement describing the expected observable
+  behavior.
 - Include a condition or environment in the title only when it materially
   distinguishes the case, such as Private Browsing, keyboard navigation, an
   error state, or a disabled preference.
@@ -96,9 +94,6 @@ Examples:
 Write concise, ordered manual testing actions.
 
 - Write steps in the order a tester must perform them.
-- Start each step with a direct imperative verb, such as:
-  `Open`, `Navigate`, `Click`, `Select`, `Type`, `Enter`, `Press`, `Enable`,
-  `Disable`, `Focus`, `Hover`, `Wait`, or `Inspect`.
 - Use the exact Firefox UI label, preference name, URL, command, or test value
   when it is known.
 - Keep each step limited to one principal action.
