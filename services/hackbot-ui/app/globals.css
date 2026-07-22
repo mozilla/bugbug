@@ -172,6 +172,24 @@ button.secondary {
 table.runs {
   width: 100%;
   border-collapse: collapse;
+  /* Fixed layout keeps the columns from re-balancing (and the last column from
+     ballooning) when the visible rows change, e.g. when a filter is applied. */
+  table-layout: fixed;
+}
+table.runs th:nth-child(1) {
+  width: 12%;
+}
+table.runs th:nth-child(2) {
+  width: 22%;
+}
+table.runs th:nth-child(3) {
+  width: 28%;
+}
+table.runs th:nth-child(4) {
+  width: 14%;
+}
+table.runs th:nth-child(5) {
+  width: 24%;
 }
 table.runs th,
 table.runs td {
@@ -179,6 +197,7 @@ table.runs td {
   padding: 10px 8px;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 table.runs th {
   color: var(--muted);
@@ -190,6 +209,71 @@ table.runs th {
 table.runs td.mono {
   font-family: var(--mono);
   font-size: 13px;
+}
+/* Wide runs table scrolls horizontally inside its panel on narrow screens,
+   so it never forces a page-level horizontal scrollbar. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Failed runs show their error on a full-width row beneath the run, so the
+   columns stay roomy and the message can wrap in full. */
+table.runs tr.has-error > td {
+  border-bottom: none;
+}
+table.runs tr.run-error-row > td {
+  padding-top: 2px;
+  padding-bottom: 12px;
+  white-space: normal;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+/* Clamp the error preview to a few lines so a huge message (e.g. a stack
+   trace) can't fill the page — the full text lives on the run's detail page.
+   A dim left accent marks it as an error without the loud red text. */
+.run-error-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  padding-left: 10px;
+  border-left: 2px solid rgba(229, 83, 75, 0.4);
+}
+.run-error-tag {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* Recent-runs filter controls: sit on the right of the panel header, inline
+   with the "Recent runs" title and the Clear button. */
+.runs-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.runs-filters select {
+  width: auto;
+  min-width: 150px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.runs-filters button.secondary {
+  padding: 6px 12px;
+}
+
+/* "Load more" affordance under the runs table. */
+.runs-loadmore {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 
 .muted {
@@ -222,7 +306,7 @@ pre.log {
 
 dl.kv {
   display: grid;
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: 160px minmax(0, 1fr);
   gap: 8px 16px;
   margin: 0;
 }
@@ -232,6 +316,7 @@ dl.kv dt {
 }
 dl.kv dd {
   margin: 0;
+  min-width: 0;
   font-family: var(--mono);
   font-size: 13px;
   word-break: break-word;
@@ -359,8 +444,30 @@ dl.kv dd {
 dl.kv.findings-kv > dt {
   padding-top: 2px;
 }
-dl.kv dd > dl.kv {
-  grid-template-columns: 140px 1fr;
+/* Nested key/value lists keep a normal label|value grid (a slightly narrower
+   label column than the top level). They have room because an object-valued
+   field renders as a full-width section rather than sitting in a value column
+   (see .kv-section-* below). */
+dl.kv dd > dl.kv,
+.finding-card > dl.kv {
+  grid-template-columns: 140px minmax(0, 1fr);
+}
+
+/* An object- or array-of-objects-valued field renders as a full-width titled
+   SECTION: the key becomes a heading spanning both columns, and its (often
+   large) contents flow beneath it using the whole panel width, indented with a
+   rule to show nesting — instead of being pushed into the narrow value column. */
+dl.kv > dt.kv-section-title {
+  grid-column: 1 / -1;
+  color: var(--text);
+  font-weight: 600;
+  padding-top: 6px;
+}
+dl.kv > dd.kv-section-body {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
 }
 
 /* Long / multi-line string values, rendered as markdown */
@@ -491,18 +598,25 @@ ul.chips li.chip {
   border-radius: 6px;
   padding: 2px 8px;
   word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 /* Nested object / array-of-objects cards */
+.finding-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .finding-card {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 14px;
-  margin-bottom: 8px;
   background: var(--panel-2);
 }
-.finding-card:last-child {
-  margin-bottom: 0;
+/* Cards nested inside cards: tighter and one shade lighter to convey hierarchy. */
+.finding-card .finding-card {
+  padding: 10px 12px;
+  background: var(--panel);
 }
 .finding-card > .finding-index {
   font-size: 11px;
