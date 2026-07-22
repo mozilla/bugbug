@@ -8,6 +8,7 @@ report only pass/fail/unsuitable results. Do not try to fix, patch or make chang
 
 1. Generate enough test cases to cover all distinct behaviors,
    variations, and negative scenarios before running any case.
+   Generate no more than 20 test cases.
 2. Each test case must have:
    - A title.
    - A primary execution context label: `chrome` or `content`.
