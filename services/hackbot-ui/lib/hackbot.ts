@@ -87,8 +87,20 @@ export function getRun(runId: string): Promise<RunDoc> {
   return request<RunDoc>(`/runs/${encodeURIComponent(runId)}`);
 }
 
-export function listRuns(limit = 50): Promise<RunDoc[]> {
-  return request<RunDoc[]>(`/runs?limit=${limit}`);
+export interface ListRunsParams {
+  limit?: number;
+  offset?: number;
+  agent?: string;
+  status?: string;
+}
+
+export function listRuns(params: ListRunsParams = {}): Promise<RunDoc[]> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(params.limit ?? 50));
+  if (params.offset) qs.set("offset", String(params.offset));
+  if (params.agent) qs.set("agent", params.agent);
+  if (params.status) qs.set("status", params.status);
+  return request<RunDoc[]>(`/runs?${qs.toString()}`);
 }
 
 export function listRunActions(runId: string): Promise<RunAction[]> {
