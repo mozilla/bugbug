@@ -20,10 +20,26 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
-_COMMENT_FOOTER = (
-    "*This is an automated analysis result. If this result is incorrect "
-    "please add a needinfo and feel free to correct the error.* "
-)
+
+def _comment_footer(needinfo_target: str | None) -> str:
+    """Footer appended to a recorded comment.
+
+    When a ``needinfo_target`` is set (e.g. the submitter's email for a manually
+    triggered run, or a phrase like "the triage owner"), the footer names it so
+    the reader knows exactly who to needinfo; otherwise it falls back to the
+    generic wording.
+    """
+    if needinfo_target:
+        return (
+            "*This is an automated analysis result. If this result is incorrect, "
+            f"please needinfo {needinfo_target} and feel free to correct the error.* "
+        )
+    return (
+        "*This is an automated analysis result. If this result is incorrect "
+        "please add a needinfo and feel free to correct the error.* "
+    )
+
+
 _ATTACHMENT_COMMENT_FOOTER = (
     "*This is the analysis tool's suggested fix. Feel welcome to adopt "
     "it as a starting point and evolve it as needed to meet our coding "
@@ -95,7 +111,9 @@ async def add_comment(
     Use is_private=true for security-sensitive notes. Recorded into the run
     summary for human review — does not post to Bugzilla.
     """
-    text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
+    text_with_footer = (
+        text.rstrip() + "\n\n" + _comment_footer(recorder.needinfo_target)
+    )
     recorder.record(
         "bugzilla.add_comment",
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},

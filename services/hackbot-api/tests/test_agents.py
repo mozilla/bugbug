@@ -7,6 +7,7 @@ from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
+    FrontendTriageInputs,
 )
 from app.schemas import (
     TestPlanGeneratorInputs as PlanGeneratorInputs,
@@ -83,6 +84,18 @@ def test_test_plan_generator_env_serialization():
         "FEATURE_DESCRIPTION": "Bookmarks and history controls in Firefox.",
         "TEST_SCOPE": "Bookmarks toolbar behavior.",
     }
+
+
+def test_frontend_triage_env_includes_triggered_by():
+    env = model_to_env(FrontendTriageInputs(bug_id=1, triggered_by="jwein@mozilla.com"))
+    assert env["BUG_ID"] == "1"
+    assert env["TRIGGERED_BY"] == "jwein@mozilla.com"
+
+
+def test_frontend_triage_env_omits_triggered_by_when_unset():
+    env = model_to_env(FrontendTriageInputs(bug_id=1))
+    assert env == {"BUG_ID": "1"}
+    assert "TRIGGERED_BY" not in env
 
 
 def test_test_plan_generator_registry_uses_default_env_serializer():

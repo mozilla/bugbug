@@ -31,7 +31,8 @@ export async function GET(req: NextRequest) {
 // POST /api/runs  { agent: string, inputs: object }
 // Triggers a new agent run via hackbot-api.
 export async function POST(req: NextRequest) {
-  if (!(await getAuthedEmail())) {
+  const email = await getAuthedEmail();
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,7 +56,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const run = await createRun(agent, inputs ?? {});
+    // Inject the authenticated submitter server-side (trusted; never taken from
+    // the browser) so agents can attribute the run to who triggered it. Agents
+    // whose input schema omits `triggered_by` simply drop it on validation.
+    const run = await createRun(agent, {
+      ...(inputs ?? {}),
+      triggered_by: email,
+    });
     return NextResponse.json(run, { status: 201 });
   } catch (err) {
     const status = err instanceof HackbotError ? err.status : 500;

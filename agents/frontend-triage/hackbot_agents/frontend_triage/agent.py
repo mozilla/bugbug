@@ -32,6 +32,7 @@ from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
+from pydantic import BaseModel, ValidationError
 from searchfox import AsyncSearchfoxClient
 
 from .config import (
@@ -49,6 +50,25 @@ HERE = Path(__file__).resolve().parent
 _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 
+class ComponentAssessment(BaseModel):
+    """Product/component verification result (see component-verification rules)."""
+
+    current: str | None = None  # the bug's current "Product :: Component"
+    correct: bool | None = None  # whether the current component is right
+    suggested_product: str | None = None  # correction, if correct is false
+    suggested_component: str | None = None
+    confidence: str | None = None  # high | medium | low
+    rationale: str | None = None
+
+
+class SeverityAssessment(BaseModel):
+    """Severity judgment (see severity-assessment rules)."""
+
+    suggested: str | None = None  # S1 | S2 | S3 | S4
+    confidence: str | None = None  # high | medium | low
+    rationale: str | None = None
+
+
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
     # Structured plan (best-effort, parsed from the agent's final message).
@@ -63,6 +83,9 @@ class FrontendTriageResult(HackbotAgentResult):
     relevant_tests: list[str] | None = (
         None  # existing tests covering the area (verify anchor)
     )
+    # Triage judgments (best-effort, parsed from the agent's final message).
+    component_assessment: ComponentAssessment | None = None
+    severity_assessment: SeverityAssessment | None = None
     # The agent's full final message, always present as a fallback.
     result: str | None = None
 
@@ -128,6 +151,14 @@ def parse_plan(text: str | None) -> dict:
             return [value]
         return value if isinstance(value, list) else None
 
+    def _as_model(model, value):
+        if not isinstance(value, dict):
+            return None
+        try:
+            return model.model_validate(value)
+        except ValidationError:
+            return None
+
     actionable = data.get("actionable")
     if not isinstance(actionable, bool):
         actionable = None
@@ -140,6 +171,12 @@ def parse_plan(text: str | None) -> dict:
         "actionable": actionable,
         "regressor_node": data.get("regressor_node"),
         "relevant_tests": _as_list(data.get("relevant_tests")),
+        "component_assessment": _as_model(
+            ComponentAssessment, data.get("component_assessment")
+        ),
+        "severity_assessment": _as_model(
+            SeverityAssessment, data.get("severity_assessment")
+        ),
     }
 
 
@@ -154,6 +191,7 @@ async def run_frontend_triage(
     model: str | None = None,
     max_turns: int | None = None,
     effort: str | None = None,
+    needinfo_target: str | None = None,
     verbose: bool = False,
     log: Path | None = None,
     actions_recorder: ActionsRecorder | None = None,
@@ -173,6 +211,9 @@ async def run_frontend_triage(
     actions_recorder, actions_server = actions_server_for(
         actions_recorder, types=ENABLED_ACTION_TYPES
     )
+    # Direct the comment footer's needinfo at a specific person (the submitter
+    # for manual runs, the triage owner otherwise).
+    actions_recorder.needinfo_target = needinfo_target
     enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
 
     # In-process MCP servers for read-only code investigation. Searchfox and HGMO

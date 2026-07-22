@@ -24,6 +24,9 @@ class ActionsRecorder:
         self._actions: list[dict] = []
         self._uploader = uploader
         self._artifacts_dir = artifacts_dir
+        # Optional per-run needinfo target for the bugzilla comment footer. Left
+        # None by default so callers that don't set it get the generic footer.
+        self.needinfo_target: str | None = None
 
     def record(
         self,

@@ -109,6 +109,8 @@ class BuildRepairInputs(BaseModel):
 
 class FrontendTriageInputs(BaseModel):
     bug_id: int
+    # Submitter email for a manual trigger; None => automatic (needinfo the owner).
+    triggered_by: str | None = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
