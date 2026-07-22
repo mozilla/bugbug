@@ -134,9 +134,9 @@ export function RecentRuns() {
                 ? prev.map((x) =>
                     x.run_id === r.run_id
                       ? { ...x, status: doc.status, error: doc.error }
-                      : x,
+                      : x
                   )
-                : prev,
+                : prev
             );
           }
         } catch {
@@ -156,7 +156,7 @@ export function RecentRuns() {
       const qs = params.toString();
       router.push(qs ? `${pathname}?${qs}` : pathname);
     },
-    [router, pathname, searchParams],
+    [router, pathname, searchParams]
   );
 
   const loadMore = useCallback(async () => {

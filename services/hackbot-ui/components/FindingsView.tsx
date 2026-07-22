@@ -62,7 +62,7 @@ function StringChips({ items }: { items: string[] }) {
 // better as a card headed by the label than as a nested #1/#2 pair. Returns the
 // unpacked pair when `value` matches that shape, otherwise null.
 function asLabeledTuple(
-  value: unknown,
+  value: unknown
 ): { label: string; body: Record<string, unknown> } | null {
   if (
     Array.isArray(value) &&
@@ -121,8 +121,13 @@ function FindingValue({
           const tuple = asLabeledTuple(item);
           return (
             <div className="finding-card" key={i}>
-              <div className="finding-index">{tuple ? tuple.label : `#${i + 1}`}</div>
-              <FindingValue value={tuple ? tuple.body : item} depth={depth + 1} />
+              <div className="finding-index">
+                {tuple ? tuple.label : `#${i + 1}`}
+              </div>
+              <FindingValue
+                value={tuple ? tuple.body : item}
+                depth={depth + 1}
+              />
             </div>
           );
         })}

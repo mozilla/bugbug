@@ -1,5 +1,4 @@
-"""Tests for GET /runs listing: agent/status filtering, offset paging, ordering,
-and finalized_at exposure.
+"""Tests for GET /runs listing: filtering, offset paging, and ordering.
 
 Follows this suite's fake-DB style — the handler is called directly with a fake
 session that captures the SQLAlchemy statement, so we can assert the query it
