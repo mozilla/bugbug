@@ -81,8 +81,8 @@ class TestPlanResult(BaseModel):
     @model_validator(mode="after")
     def _validate_result(self) -> "TestPlanResult":
         case_count = len(self.generated_test_cases)
-        if not 1 <= case_count <= 20:
-            raise ValueError("generated_test_cases must contain 1 to 20 cases")
+        if not 1 <= case_count <= 30:
+            raise ValueError("generated_test_cases must contain 1 to 30 cases")
 
         case_ids = [case.id for case in self.generated_test_cases]
         expected_ids = list(range(1, case_count + 1))

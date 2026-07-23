@@ -47,8 +47,7 @@ def build_user_prompt(
         f"Test scope:\n{test_scope}\n\n"
         "Use the provided feature name as the structured result feature. "
         "Keep all generated test cases within the provided test scope.\n\n"
-        "Follow the required workflow exactly: before execution, generate enough test "
-        "cases to cover all distinct behaviors, meaningful variations, and "
+        "Follow the required workflow exactly: before execution, generate no more than 30 test cases to cover all distinct behaviors, meaningful variations, and "
         "negative scenarios. Run the cases in order, stop each case after its first "
         "failed step, and submit exactly one structured result."
     )
