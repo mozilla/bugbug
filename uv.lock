@@ -27,6 +27,7 @@ members = [
     "hackbot-agent-build-repair",
     "hackbot-agent-frontend-triage",
     "hackbot-agent-test-plan-generator",
+    "hackbot-agent-test-repair",
     "hackbot-api",
     "hackbot-pulse-listener",
     "hackbot-runtime",
@@ -2605,6 +2606,31 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "mozdownload" },
     { name = "mozinstall" },
+]
+
+[[package]]
+name = "hackbot-agent-test-repair"
+version = "0.1.0"
+source = { editable = "agents/test-repair" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla", "firefox"] },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
+    { name = "mozci" },
+    { name = "requests" },
+    { name = "zstandard" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "mozci", specifier = "~=2.4.8" },
+    { name = "requests" },
+    { name = "zstandard", specifier = "~=0.25.0" },
 ]
 
 [[package]]

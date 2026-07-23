@@ -1,0 +1,24 @@
+services:
+  test-repair-agent:
+    build:
+      context: ../..
+      dockerfile: agents/test-repair/Dockerfile
+      target: agent
+    # Per-run inputs are interpolated by the listener/hackbot-api as env; pydantic
+    # AgentInputs validates them at runtime. BUGZILLA_MCP_URL is optional (Bugzilla
+    # is supplementary context) and left unset here.
+    environment:
+      - RUN_ID
+      - FAILURE_TASKS=${FAILURE_TASKS:-}
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      # No uploader locally: summary/logs/artifacts are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+
+volumes:
+  workspace:

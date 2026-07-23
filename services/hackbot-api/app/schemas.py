@@ -107,6 +107,15 @@ class BuildRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
+class TestRepairInputs(BaseModel):
+    # Failing Taskcluster test tasks {task_name: task_id}. The agent resolves the
+    # push, the last-green revision and the candidate commit range itself from the
+    # task id (the listener only filters which failures are worth investigating).
+    failure_tasks: dict[str, str]
+    model: str | None = None
+    max_turns: int | None = None
+
+
 class FrontendTriageInputs(BaseModel):
     bug_id: int
     model: str | None = None
