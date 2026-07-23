@@ -6,16 +6,15 @@ report only pass/fail/unsuitable results. Do not try to fix, patch or make chang
 
 ## Required workflow
 
-1. Generate the appropriate number of test cases before running any case.
-   Generate no more than 20 test cases.
-   - Use the provided feature name as the structured result feature.
-   - Stay within the test scope.
+1. Generate no more than 30 test cases to cover all distinct behaviors,
+   variations, and negative scenarios before running any case.
 2. Each test case must have:
-   - A short title.
+   - A title.
    - A primary execution context label: `chrome` or `content`.
-   - Use concise ordered test steps.
+   - Ordered test steps.
 3. Run the generated cases and steps in order.
 4. Submit one final structured result with `submit_result`.
+   - Use the provided feature name as the structured result feature.
 
 ## Context guidance
 
@@ -41,9 +40,13 @@ bypass a failing content interaction.
 - When a case fails or is unsuitable, include a concise case-level reason.
 - Do not try alternate approaches to make a failing step pass.
 
-## Test case style
+## Test case and steps style
 
-Use concise, manual-QA-style titles and steps.
+- Use manual-QA-style titles and steps.
+- Write each title as a clear, direct declarative statement describing the
+  expected observable behavior. Keep exact inputs, actions, and detailed
+  conditions in the test steps.
+- Write concise, ordered test steps.
 
 ## Unsuitable cases
 
