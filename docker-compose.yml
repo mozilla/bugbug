@@ -3,12 +3,12 @@
 version: "3.8"
 
 include:
-  #  - path: agents/autowebcompat-repro/compose.yml
-  #  - path: agents/bug-fix/compose.yml
+  - path: agents/autowebcompat-repro/compose.yml
+  - path: agents/bug-fix/compose.yml
   - path: agents/build-repair/compose.yml
   - path: agents/test-repair/compose.yml
-#  - path: agents/frontend-triage/compose.yml
-#  - path: agents/test-plan-generator/compose.yml
+  - path: agents/frontend-triage/compose.yml
+  - path: agents/test-plan-generator/compose.yml
 
 services:
   bugbug-base:
