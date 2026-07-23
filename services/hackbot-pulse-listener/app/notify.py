@@ -13,14 +13,22 @@ MAX_PATCH_LINES = 400
 
 
 def send_email(ctx: RunContext, run_doc: dict) -> None:
-    """Email the developer and team the build failure analysis.
+    """Email the failure analysis. Only succeeded runs are notified.
 
-    Only succeeded runs are notified.
+    Routes on the agent that produced the run: test-repair sends a
+    verdict-led body to the test-repair notification address; build-repair keeps its
+    existing behavior.
     """
     if run_doc.get("status") != "succeeded":
         logger.info("Run %s did not succeed; skipping notification", ctx.run_id)
         return
+    if ctx.agent == settings.test_repair_agent_name:
+        _send_test_repair_email(ctx, run_doc)
+    else:
+        _send_build_repair_email(ctx, run_doc)
 
+
+def _send_build_repair_email(ctx: RunContext, run_doc: dict) -> None:
     patch = _fetch_patch(ctx.run_id, run_doc)
     if settings.notify_only_with_patch and not patch:
         logger.info("Run %s produced no patch; skipping notification", ctx.run_id)
@@ -37,6 +45,43 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         logger.info("SendGrid not configured; skipping email for run %s", ctx.run_id)
         return
 
+    subject = (
+        f"[build-repair] Build failure analysis for {ctx.repo}@{ctx.git_commit[:12]}"
+    )
+    body_md = _build_body(ctx, run_doc, patch, blamed_author)
+    _deliver(subject, body_md, recipients, patch)
+
+
+def _send_test_repair_email(ctx: RunContext, run_doc: dict) -> None:
+    findings = (run_doc.get("summary") or {}).get("findings") or {}
+    culprit = findings.get("culprit_commit")
+    culprit_author = (
+        github.commit_author_email(culprit)
+        if culprit and findings.get("classification") == "regression"
+        else None
+    )
+    # test-repair verdicts are always notified (including do-not-backout verdicts), so
+    # the build-repair notify_only_with_patch gate does not apply here.
+    recipients = _test_repair_recipients(culprit_author)
+    if not recipients:
+        logger.info(
+            "No recipients for test-repair run %s; skipping notification", ctx.run_id
+        )
+        return
+    if not (settings.sendgrid_api_key and settings.notification_sender):
+        logger.info("SendGrid not configured; skipping email for run %s", ctx.run_id)
+        return
+
+    patch = _fetch_patch(ctx.run_id, run_doc)
+    banner = _RECOMMENDATION_BANNER.get(
+        findings.get("recommendation"), findings.get("recommendation") or "analysis"
+    )
+    subject = f"[test-repair] {banner} - {ctx.test_name} ({ctx.repo})"
+    body_md = _build_test_repair_body(ctx, findings, patch, culprit_author)
+    _deliver(subject, body_md, recipients, patch)
+
+
+def _deliver(subject: str, body_md: str, recipients: list[str], patch: str | None):
     import markdown2
     import sendgrid
     from sendgrid.helpers.mail import (
@@ -55,13 +100,7 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         To,
     )
 
-    subject = (
-        f"[build-repair] Build failure analysis for {ctx.repo}@{ctx.git_commit[:12]}"
-    )
-
-    body_md = _build_body(ctx, run_doc, patch, blamed_author)
     html = markdown2.markdown(body_md, extras=["fenced-code-blocks", "tables"])
-
     sg = sendgrid.SendGridAPIClient(api_key=settings.sendgrid_api_key)
     to_emails = [To(recipients[0])] + [Cc(addr) for addr in recipients[1:]]
     message = Mail(
@@ -82,7 +121,7 @@ def send_email(ctx: RunContext, run_doc: dict) -> None:
         message.reply_to = ReplyTo(settings.notification_team_email)
     response = sg.send(message=message)
     logger.info(
-        "Sent build-repair notification to %s (status %s)",
+        "Sent notification to %s (status %s)",
         ", ".join(recipients),
         response.status_code,
     )
@@ -105,6 +144,94 @@ def _recipients(
         if addr and addr not in recipients:
             recipients.append(addr)
     return recipients
+
+
+_RECOMMENDATION_BANNER = {
+    "backout": "BACK OUT the culprit",
+    "do_not_backout": "DO NOT back out (intermittent)",
+    "land_fix": "LAND the proposed fix",
+}
+
+
+def _test_repair_recipients(culprit_author: str | None) -> list[str]:
+    """The test-repair notification address (primary To), the culprit author, then the team.
+
+    ``notification_override_email`` short-circuits to a single address for testing.
+    """
+    if settings.notification_override_email:
+        return [settings.notification_override_email]
+    recipients: list[str] = []
+    for addr in (
+        settings.test_repair_notification_email,
+        culprit_author,
+        settings.notification_team_email,
+    ):
+        if addr and addr not in recipients:
+            recipients.append(addr)
+    return recipients
+
+
+def _build_test_repair_body(
+    ctx: RunContext,
+    findings: dict,
+    patch: str | None,
+    culprit_author: str | None,
+) -> str:
+    recommendation = findings.get("recommendation")
+    banner = _RECOMMENDATION_BANNER.get(recommendation, recommendation or "analysis")
+    lines = [
+        "# Test failure analysis",
+        "",
+        f"- **Recommendation:** {banner}",
+        f"- **Failing test:** `{ctx.test_name}`",
+        f"- **Classification:** {findings.get('classification')}",
+        f"- **Repository:** {ctx.repo}",
+        f"- **Revision (git):** [`{ctx.git_commit[:12]}`]({_git_url(ctx.git_commit)})",
+        f"- **Revision (hg):** [`{ctx.hg_revision[:12]}`]({_hg_url(ctx.hg_revision)})",
+        f"- **Failed task:** [`{ctx.task_id}`]({_task_url(ctx.task_id)})",
+        f"- **Treeherder:** "
+        f"[jobs]({_treeherder_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
+    ]
+
+    confidence = findings.get("confidence")
+    if confidence is not None:
+        lines.append(f"- **Confidence:** {confidence}")
+
+    culprit = findings.get("culprit_commit")
+    if culprit:
+        by = f" by {culprit_author}" if culprit_author else ""
+        lines.append(
+            f"- **Culprit commit:** [`{culprit[:12]}`]({_git_url(culprit)}){by}"
+        )
+
+    last_green = findings.get("last_green_revision")
+    if last_green:
+        lines.append(f"- **Last green revision:** `{last_green}`")
+
+    bug = findings.get("culprit_bug")
+    if bug:
+        lines.append(f"- **Bug:** [{bug}]({_bug_url(bug)})")
+
+    if settings.hackbot_ui_url:
+        run_url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
+        lines.append(f"- **Run details:** {run_url}")
+
+    if findings.get("summary"):
+        lines += ["", "## Summary", "", _demote_headings(findings["summary"])]
+    if findings.get("analysis"):
+        lines += ["", "## Analysis", "", _demote_headings(findings["analysis"])]
+    if patch:
+        lines += ["", "## Proposed patch", "", _patch_block(patch)]
+
+    if settings.notification_team_email:
+        lines += [
+            "",
+            "---",
+            "",
+            "_Reply to this email with any feedback on this analysis; it reaches "
+            "the hackbot team._",
+        ]
+    return "\n".join(lines)
 
 
 def _fetch_patch(run_id: str, run_doc: dict) -> str | None:

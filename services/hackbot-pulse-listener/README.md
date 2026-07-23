@@ -1,27 +1,33 @@
 # Hackbot Pulse Listener
 
-Listens to Taskcluster build-failure pulse messages, and for failed **Firefox build
-tasks** triggers the `build-repair` hackbot agent through the hackbot-api. When a run
-finishes (minutes later) it emails a link to the hackbot UI, a summary of the analysis
-and fix, a Treeherder link to the failing job, and the commit the agent blamed for the
-failure. The email's primary recipient is the author of that blamed commit.
+Its job is to **subscribe** to Taskcluster failure messages, **filter** them down to
+failures worth acting on, **dedupe** them, and dispatch a hackbot agent through the
+hackbot-api. It deliberately holds no investigation logic: each agent resolves the push
+and commits itself, so the listener only decides _what to hand off_. When a run finishes
+(minutes later) the listener polls the result and emails a report.
+
+Failed **build** tasks go to `build-repair`; failed **test** tasks go to
+`test-repair` (test-repair).
 
 ## How it works
 
-1. Consume `task-failed` messages from `pulse.mozilla.org`.
-2. Keep only **build-kind** tasks (`tags.kind == "build"`) on a watched `project`
-   (`WATCHED_REPOS`, default `try`). Build tasks don't run tests, so a failure is a
-   compilation/link error.
-3. Fetch the task definition to read `GECKO_HEAD_REV` (the revision is not in the message).
-4. Dedupe by revision with an in-memory TTL cache, so only one agent run is triggered per
-   revision even when many build tasks fail for the same push.
-5. Trigger the agent with the failing tasks -- it resolves the push commits itself and
-   returns the commit it blamed for the failure, so the listener does no pushlog lookups.
-6. `POST /agents/build-repair/runs`, then poll `GET /runs/{run_id}` until terminal. Look the
-   blamed commit up in the firefox GitHub mirror to get its author's email and send the
-   report email to that developer.
+1. **Subscribe.** Consume `task-failed` messages from `pulse.mozilla.org`.
+2. **Filter** to a watched `project` (`WATCHED_REPOS`, default `autoland`), then by task
+   kind: build tasks (compile/link errors) take the build-repair path; test tasks take the
+   test-repair path. Fetch the task definition for `GECKO_HEAD_REV` (not in the message).
+   - _Build:_ keep only failures this push introduced (not inherited from an ancestor).
+   - _Test:_ resolve the failing test groups (mozci), then keep only groups that are a
+     genuine regression (not inherited) and not intermittent (tests.firefox.dev flakiness
+     below `FLAKINESS_THRESHOLD`).
+3. **Dedupe** with in-memory TTL caches: build-repair once per revision; test-repair once per
+   `(push, test group)`, so a manifest failing across chunks is investigated once. One
+   test-repair run per task carries only the task id.
+4. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
+   terminal, then email a hackbot UI link, the analysis summary, a Treeherder link, and the
+   commit the agent blamed. Build-repair mails the blamed commit's author; test-repair mails
+   the notification address (`TEST_REPAIR_NOTIFICATION_EMAIL`).
 
-The dedupe cache and pending-run tracking are in-memory (reset on restart).
+The dedupe caches and pending-run tracking are in-memory (reset on restart).
 
 ## Run locally
 
@@ -29,18 +35,19 @@ The dedupe cache and pending-run tracking are in-memory (reset on restart).
 export PULSE_USER=... PULSE_PASSWORD=...          # https://pulseguardian.mozilla.org
 export HACKBOT_API_URL=https://hackbot-api.../ HACKBOT_API_KEY=...
 export HACKBOT_UI_URL=https://hackbot-ui.../
-export WATCHED_REPOS=try
+export WATCHED_REPOS=autoland
 export DRY_RUN=true                               # log intended calls, don't POST
 uv run --package hackbot-pulse-listener python -m app
 ```
 
 Email is sent only when `SENDGRID_API_KEY` and `NOTIFICATION_SENDER` are set; otherwise it
-is logged and skipped. The blamed commit's author (looked up in the firefox GitHub mirror),
-the pushing developer, and, if set, the
-`NOTIFICATION_TEAM_EMAIL` team address all get the email, which spells out why each
-recipient is on it. Set `NOTIFICATION_OVERRIDE_EMAIL` to route every notification to a
-single address (useful for local testing). By default only runs that produced a patch are
-emailed; set `NOTIFY_ONLY_WITH_PATCH=false` to also notify on transient / not-to-blame runs.
+is logged and skipped. Build-repair mails the blamed commit's author (looked up in the
+firefox GitHub mirror), the pushing developer, and the `NOTIFICATION_TEAM_EMAIL` team
+address if set; test-repair mails `TEST_REPAIR_NOTIFICATION_EMAIL` (with the culprit author CC'd). Set
+`NOTIFICATION_OVERRIDE_EMAIL` to route every notification to a single address (useful for
+local testing). By default only build-repair runs that produced a patch are emailed; set
+`NOTIFY_ONLY_WITH_PATCH=false` to also notify on transient / not-to-blame runs (test-repair always
+notifies).
 When `NOTIFICATION_TEAM_EMAIL` is set, notifications use it as `Reply-To` so recipients can
 reply with feedback on the analysis.
 

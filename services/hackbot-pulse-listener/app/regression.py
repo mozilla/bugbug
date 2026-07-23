@@ -3,75 +3,49 @@ import time
 
 from mozci.errors import ParentPushNotFound
 from mozci.push import MAX_DEPTH, Push
+from mozci.task import Status
 
 logger = logging.getLogger(__name__)
 
-
-# When the nearest ancestor that ran the build has not produced a decisive
-# result yet, wait for it in-process instead of racing ahead and misreporting an
-# inherited failure as new. A build can take tens of minutes and may hit an
-# infra exception and be auto-retried, so we poll until it settles or the
-# deadline elapses (well above a normal build + one retry). Fails open after the
-# deadline so a real regression is never silently dropped.
+# Poll an unsettled ancestor for up to MAX_WAIT_SECONDS before giving up.
 POLL_INTERVAL_SECONDS = 120
 MAX_WAIT_SECONDS = 60 * 60
 
-# A green build; mozci reports it as "passed" (Taskcluster) or "success"
-# (Treeherder). Failures are read from mozci's Task.failed attribute instead of
-# reimplementing the vocabulary.
+# mozci spells a green result "passed" (Taskcluster) or "success" (Treeherder).
 _PASSED_RESULTS = ("passed", "success")
 
-# A build in one of these states, or with one of these (infra) results, has not
-# settled: it is still running or was retried after an exception, so its outcome
-# is not knowable yet and we wait for it. Anything else that is not a decisive
-# pass/fail (unscheduled, canceled, superseded, ...) or a build that never ran
-# at all (coalesced) is treated as non-decisive and skipped.
+# States/results whose outcome isn't knowable yet: still running, or awaiting an
+# auto-retry after an infra exception.
 _UNSETTLED_STATES = ("pending", "running", "exception")
 _UNSETTLED_RESULTS = ("exception", "retry")
 
-# Sentinel meaning the decision cannot be made yet because an ancestor build has
-# not settled; the caller waits and re-checks.
+# The deciding ancestor hasn't settled yet; the caller waits and re-checks.
 _PENDING = object()
 
 
 def _build_status(push: Push, label: str):
-    """Return 'passed', 'failed', _PENDING, or None for a build label on a push.
+    """'passed'/'failed'/_PENDING/None for a build label on a push.
 
-    'passed'/'failed' come from a run with a decisive result. _PENDING means the
-    result is not knowable yet: a task exists but has not settled (still running,
-    or exceptioned and awaiting a retry), or no task is visible yet but the build
-    was scheduled to run on this push (its result has not propagated). None means
-    the build produced no decisive result and none is coming: it was coalesced /
-    never scheduled, or it only reached a non-decisive terminal state. None is
-    deliberately non-decisive so coalescing gaps are skipped and never suppress a
-    real regression. Retriggers are collapsed: any green run means 'passed'; only
-    a genuine build failure counts as 'failed'.
+    None is non-decisive (coalesced, never scheduled, or a non-pass/fail terminal
+    state), so such gaps are skipped rather than mistaken for an inherited failure.
     """
     label_tasks = [t for t in push.tasks if t.label == label]
     if label_tasks:
         if any(t.result in _PASSED_RESULTS for t in label_tasks):
             return "passed"
-        # Checked before failure: a retrigger that is still running or was
-        # exceptioned and auto-retried may yet turn green, and any green run wins,
-        # so we wait for it rather than prematurely inheriting a failure.
+        # Checked before failure: a still-running or auto-retried run may yet turn
+        # green, and any green run wins, so wait rather than inherit prematurely.
         if any(
             t.state in _UNSETTLED_STATES or t.result in _UNSETTLED_RESULTS
             for t in label_tasks
         ):
             return _PENDING
-        # Not "not t.failed": a run can be neither passed nor failed (canceled,
-        # superseded, ...). mozci's Task.failed also counts `exception`, but those
-        # are unsettled and already returned above, so only genuine build failures
-        # reach here.
         if any(t.failed for t in label_tasks):
             return "failed"
-        # Ran but reached a non-decisive terminal state (canceled, ...): skip.
         return None
 
-    # No task for this label on the push. Distinguish a build that was scheduled
-    # to run here but whose result is not visible yet (wait) from one that was
-    # never scheduled / coalesced away (skip), using the decision task's
-    # scheduled set (available well before the builds themselves finish).
+    # No task here: wait if the build was scheduled (result not visible yet),
+    # skip if it was coalesced away.
     try:
         scheduled = label in push.scheduled_task_labels
     except Exception:
@@ -80,12 +54,12 @@ def _build_status(push: Push, label: str):
     return _PENDING if scheduled else None
 
 
-def _classify(branch: str, rev: str, label: str):
-    """Walk ancestors once. Returns True (new), False (inherited), or _PENDING.
+def _classify(branch: str, rev: str, status_fn, describe: str):
+    """Walk ancestors; return (state, last_green_rev).
 
-    A fresh Push is built each call so re-checks re-fetch live data (recent
-    pushes are not finalized in mozci, so their tasks are never served from
-    cache).
+    state is True (new), False (inherited) or _PENDING. status_fn(push) reports
+    'passed'/'failed'/_PENDING/None for the failing unit (build label or test
+    group). A fresh Push per call re-fetches live data for unfinalized pushes.
     """
     ancestor = Push(rev, branch=branch)
     for _ in range(MAX_DEPTH):
@@ -93,74 +67,94 @@ def _classify(branch: str, rev: str, label: str):
             ancestor = ancestor.parent
         except ParentPushNotFound:
             break
-        status = _build_status(ancestor, label)
+        status = status_fn(ancestor)
         if status is None:
             continue
         if status is _PENDING:
             logger.info(
-                "Build %s not settled yet at %s; deferring decision for %s",
-                label,
-                ancestor.rev,
-                rev,
+                "%s not settled at %s; deferring for %s", describe, ancestor.rev, rev
             )
-            return _PENDING
+            return _PENDING, None
         if status == "failed":
             logger.info(
-                "Build %s already failing at %s; inherited failure at %s",
-                label,
-                ancestor.rev,
-                rev,
+                "%s already failing at %s; inherited at %s", describe, ancestor.rev, rev
             )
-            return False
-        logger.info(
-            "Build %s passed at %s; new failure introduced at %s",
-            label,
-            ancestor.rev,
-            rev,
-        )
-        return True
+            return False, None
+        logger.info("%s passed at %s; new failure at %s", describe, ancestor.rev, rev)
+        return True, ancestor.rev
 
     logger.warning(
-        "No ancestor within %s pushes ran build %s; running agent", MAX_DEPTH, label
+        "No ancestor within %s pushes ran %s; running agent", MAX_DEPTH, describe
     )
-    return True
+    return True, None
 
 
-def is_new_build_failure(branch: str, rev: str, label: str) -> bool:
-    """Return True if this push introduced the failure, False if it inherited it.
+def _await_new_failure(branch: str, rev: str, status_fn, describe: str):
+    """(is_new, last_green_rev) for `rev`, waiting on an unsettled ancestor.
 
-    Walks back over pushes that did not run the build (coalescing) until it
-    finds the nearest ancestor that did. When that ancestor's build has not
-    settled yet, waits in-process and re-checks until it produces a decisive
-    result or MAX_WAIT_SECONDS elapses, rather than racing ahead and
-    misreporting an inherited failure as new. Fails open (returns True) on any
-    mozci/network error, if the build stays unsettled past the deadline, or if
-    no ancestor within MAX_DEPTH ran the build, so we never silently drop a real
-    regression.
+    Fails open ((True, None)) on any error, an ancestor unsettled past the
+    deadline, or no deciding ancestor within MAX_DEPTH, so a real regression is
+    never silently dropped.
     """
     try:
         deadline = time.monotonic() + MAX_WAIT_SECONDS
         while True:
-            result = _classify(branch, rev, label)
-            if result is not _PENDING:
-                return result
+            state, last_green = _classify(branch, rev, status_fn, describe)
+            if state is not _PENDING:
+                return state, last_green
             if time.monotonic() >= deadline:
                 break
             logger.info(
-                "Waiting %ss for an unsettled ancestor build of %s (%s)",
+                "Waiting %ss for an unsettled ancestor of %s (%s)",
                 POLL_INTERVAL_SECONDS,
+                describe,
                 rev,
-                label,
             )
             time.sleep(POLL_INTERVAL_SECONDS)
     except Exception:
-        logger.exception("Regression check failed for %s@%s; running agent", label, rev)
-        return True
+        logger.exception(
+            "Regression check failed for %s@%s; running agent", describe, rev
+        )
+        return True, None
 
     logger.warning(
-        "Build %s still unsettled after %ss at %s; running agent",
-        label,
+        "%s still unsettled after %ss at %s; running agent",
+        describe,
         MAX_WAIT_SECONDS,
         rev,
     )
-    return True
+    return True, None
+
+
+def is_new_build_failure(branch: str, rev: str, label: str) -> bool:
+    """True if this push introduced the build failure, False if it inherited it."""
+    is_new, _ = _await_new_failure(
+        branch, rev, lambda push: _build_status(push, label), f"build {label}"
+    )
+    return is_new
+
+
+def _group_status(push: Push, group: str):
+    """'passed'/'failed'/_PENDING/None for a test group (manifest) on a push.
+
+    GroupSummary.status combines retriggers into PASS/FAIL/INTERMITTENT.
+    INTERMITTENT and a missing group are non-decisive: the tests.firefox.dev
+    flakiness rate judges intermittency instead.
+    """
+    summary = push.group_summaries.get(group)
+    if summary is None:
+        return None
+    if push.is_group_running(summary):
+        return _PENDING
+    if summary.status == Status.PASS:
+        return "passed"
+    if summary.status == Status.FAIL:
+        return "failed"
+    return None
+
+
+def is_new_test_failure(branch: str, rev: str, group: str) -> tuple[bool, str | None]:
+    """(is_new, last_green_rev) for a failing test group; shares the build walk."""
+    return _await_new_failure(
+        branch, rev, lambda push: _group_status(push, group), f"group {group}"
+    )

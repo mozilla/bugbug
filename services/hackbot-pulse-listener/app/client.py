@@ -13,13 +13,14 @@ def _headers() -> dict[str, str]:
     return {"X-API-Key": settings.hackbot_api_key}
 
 
-def trigger_run(inputs: dict) -> str | None:
-    """Create a build-repair run. Returns the run id, or None in dry-run mode."""
+def trigger_run(inputs: dict, agent_name: str | None = None) -> str | None:
+    """Create an agent run. Returns the run id, or None in dry-run mode."""
+    agent = agent_name or settings.agent_name
     if settings.dry_run:
-        logger.info("[dry-run] would trigger %s run: %s", settings.agent_name, inputs)
+        logger.info("[dry-run] would trigger %s run: %s", agent, inputs)
         return None
 
-    url = f"{settings.hackbot_api_url}/agents/{settings.agent_name}/runs"
+    url = f"{settings.hackbot_api_url}/agents/{agent}/runs"
     resp = httpx.post(url, json=inputs, headers=_headers(), timeout=_TIMEOUT)
     resp.raise_for_status()
     return resp.json()["run_id"]

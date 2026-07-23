@@ -6,7 +6,15 @@ from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, lando, regression, taskcluster, worker
+from app import (
+    client,
+    failures,
+    flakiness,
+    lando,
+    regression,
+    taskcluster,
+    worker,
+)
 from app.config import settings
 from app.models import RunContext
 
@@ -16,30 +24,52 @@ CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
 
-# In-memory dedupe of hg revisions already handed to the agent. A revision is
-# recorded only once we actually trigger a run, so an inherited failure on one
-# build label never suppresses a genuine regression on another label of the
-# same push, while a revision that breaks many builds still triggers only once.
-# Messages are handled on worker threads, so the check-and-record is done under
-# a lock.
+# Taskcluster ``kind`` tags that denote test tasks (vs build tasks).
+TEST_KINDS = {"test", "mochitest", "web-platform-tests", "source-test"}
+
+# In-memory dedupe of hg revisions already handed to the build-repair agent. A
+# revision is recorded only once we actually trigger a run, so an inherited
+# failure on one build label never suppresses a genuine regression on another
+# label of the same push, while a revision that breaks many builds still triggers
+# only once. Messages are handled on worker threads, so the check-and-record is
+# done under a lock.
 _seen: TTLCache = TTLCache(
     maxsize=settings.dedupe_max_size, ttl=settings.dedupe_ttl_seconds
 )
 _seen_lock = threading.Lock()
+
+# Independent dedupe for test-repair runs, keyed by (taskGroupId, test group): one push
+# emits many failing test tasks, and we want one run per failing group.
+_seen_tests: TTLCache = TTLCache(
+    maxsize=settings.dedupe_max_size, ttl=settings.dedupe_ttl_seconds
+)
+_seen_tests_lock = threading.Lock()
+
+
+def _is_test_task(tags: dict) -> bool:
+    return tags.get("kind") in TEST_KINDS or bool(tags.get("test-suite"))
 
 
 def process(body: dict, executor: Executor) -> str | None:
     """Handle one Taskcluster failure message. Returns the triggered run id."""
     tags = (body.get("task") or {}).get("tags") or {}
 
-    task_label = tags.get("label") or ""
-    if "build" not in task_label or "test" in task_label:
-        return None
-
     project = tags.get("project")
     if project not in settings.watched_repos_set:
         return None
 
+    task_label = tags.get("label") or ""
+    if "build" in task_label and "test" not in task_label:
+        return _process_build(body, tags, executor)
+    if _is_test_task(tags):
+        return _process_test(body, tags, executor)
+    return None
+
+
+def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
+    """Build-failure path: trigger the build-repair agent (unchanged behavior)."""
+    project = tags.get("project")
+    task_label = tags.get("label") or ""
     task_id = body["status"]["taskId"]
     task_name = tags.get("label") or task_id
     developer_email = tags.get("createdForUser")
@@ -113,6 +143,146 @@ def process(body: dict, executor: Executor) -> str | None:
             hg_revision=hg_revision,
             task_id=task_id,
             developer_email=developer_email,
+        )
+        executor.submit(worker.poll_and_notify, ctx)
+    return run_id
+
+
+def _harness(tags: dict, label: str) -> str:
+    """The tests.firefox.dev harness key for a test task."""
+    suite = tags.get("test-suite") or ""
+    if "xpcshell" in suite or "xpcshell" in label:
+        return "xpcshell"
+    if "mochitest" in suite:
+        return "mochitest"
+    return tags.get("kind") or suite
+
+
+def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
+    """Test-failure path: filter, then trigger the test-repair agent for the task.
+
+    One push emits many failing test tasks; each task may fail several groups. We
+    resolve the failing groups (via mozci) and keep the ones that are genuine,
+    non-intermittent regressions, then trigger a single run for the task (the
+    agent resolves the commit range itself from the task id). Dedupe is per
+    (push, group) so a manifest failing across chunks is investigated once.
+    """
+    status = body.get("status") or {}
+    task_id = status.get("taskId")
+    task_group_id = status.get("taskGroupId")
+    project = tags.get("project")
+    label = tags.get("label") or task_id
+    developer_email = tags.get("createdForUser")
+    harness = _harness(tags, label)
+
+    hg_revision = taskcluster.get_hg_revision(task_id)
+    if not hg_revision:
+        logger.warning("No GECKO_HEAD_REV for test task %s; skipping", task_id)
+        return None
+
+    groups = failures.failing_groups(task_id)
+    if not groups:
+        logger.info("No failing test groups resolved for task %s; skipping", task_id)
+        return None
+
+    fresh = _fresh_groups(groups, project, hg_revision, harness)
+    if not fresh:
+        logger.info("No new, non-intermittent groups for task %s; skipping", task_id)
+        return None
+
+    return _trigger_test_repair(
+        fresh,
+        project,
+        hg_revision,
+        task_group_id,
+        task_id,
+        label,
+        developer_email,
+        executor,
+    )
+
+
+def _fresh_groups(groups, project: str, hg_revision: str, harness: str):
+    """Groups that are genuine, non-intermittent regressions worth investigating."""
+    fresh = []
+    for fg in groups:
+        # Cheap intermittent gate first (one HTTP call) before the mozci walk.
+        flak = flakiness.get_flakiness(fg.test, harness)
+        if flak.total and flak.failure_rate >= settings.flakiness_threshold:
+            logger.info(
+                "Test %s is intermittent (failure rate %.2f); skipping",
+                fg.test,
+                flak.failure_rate,
+            )
+            continue
+        is_new, _ = regression.is_new_test_failure(project, hg_revision, fg.group)
+        if not is_new:
+            logger.info(
+                "Group %s at %s inherited from an ancestor; skipping",
+                fg.group,
+                hg_revision,
+            )
+            continue
+        fresh.append(fg)
+    return fresh
+
+
+def _trigger_test_repair(
+    fresh,
+    project: str,
+    hg_revision: str,
+    task_group_id: str,
+    task_id: str,
+    label: str,
+    developer_email: str | None,
+    executor: Executor,
+) -> str | None:
+    # Dedupe per (push, group): trigger only when this task has a fresh group not
+    # already handed off (e.g. by a sibling chunk), then claim all of them.
+    keys = [(task_group_id, fg.group) for fg in fresh]
+    with _seen_tests_lock:
+        unseen = [k for k in keys if k not in _seen_tests]
+        if not unseen:
+            logger.info(
+                "All fresh groups in task %s already triggered; skipping", task_id
+            )
+            return None
+        for k in unseen:
+            _seen_tests[k] = True
+
+    inputs: dict = {"failure_tasks": {label: task_id}}
+    if settings.model:
+        inputs["model"] = settings.model
+    if settings.max_turns is not None:
+        inputs["max_turns"] = settings.max_turns
+
+    try:
+        run_id = client.trigger_run(inputs, agent_name=settings.test_repair_agent_name)
+    except Exception:
+        logger.exception("Failed to trigger test-repair run for task %s", task_id)
+        with _seen_tests_lock:
+            for k in unseen:
+                _seen_tests.pop(k, None)
+        return None
+
+    logger.info(
+        "Triggered test-repair run %s for %s task %s (%d group(s)) at %s",
+        run_id,
+        project,
+        task_id,
+        len(fresh),
+        hg_revision,
+    )
+    if run_id is not None:
+        ctx = RunContext(
+            run_id=run_id,
+            repo=project,
+            git_commit=lando.hg_to_git(hg_revision) or "",
+            hg_revision=hg_revision,
+            task_id=task_id,
+            developer_email=developer_email,
+            agent=settings.test_repair_agent_name,
+            test_name=fresh[0].group,
         )
         executor.submit(worker.poll_and_notify, ctx)
     return run_id

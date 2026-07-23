@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     hackbot_api_key: str = ""
     hackbot_ui_url: str = ""
     agent_name: str = "build-repair"
+    # Agent that analyzes test failures (separate Cloud Run Job from build-repair).
+    test_repair_agent_name: str = "test-repair"
 
     # Source links shown in notifications.
     firefox_git_url: str = "https://github.com/mozilla-firefox/firefox"
@@ -25,6 +27,9 @@ class Settings(BaseSettings):
     run_try_push: bool = False
     model: str | None = None
     max_turns: int | None = None
+    # Skip a failing test whose historical cross-push failure rate is at or above
+    # this (clearly intermittent) before spending an test-repair run.
+    flakiness_threshold: float = 0.2
 
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60
@@ -45,6 +50,8 @@ class Settings(BaseSettings):
     notification_sender: str | None = None
     # Team address CC'd on every notification alongside the revision author.
     notification_team_email: str | None = None
+    # Distribution address; primary recipient of test-repair verdicts.
+    test_repair_notification_email: str | None = None
     # Send all notifications to this address instead of the developer (local testing).
     notification_override_email: str | None = None
     # Only notify when the run produced a patch (skip transient / not-to-blame runs).
