@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     # Server
     port: int = 8080
     environment: str = "development"
-    sentry_dsn: str | None = None
+    sentry_dsn: str | None = (
+        "https://0627922a12291ec4313be63aea828247@o1069899.ingest.us.sentry.io/4511785557295104"
+    )
 
     model_config = {
         "env_file": ".env",
