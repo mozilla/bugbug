@@ -275,11 +275,9 @@ class SubmitPatchHandler:
             log.exception("Failed to submit Phabricator diff for bug %s", bug_id)
             return ActionResult.failed(str(exc))
 
-        revision_url = _revision_url(new_revision_id) if new_revision_id else None
         return ActionResult.ok(
             {
                 "revision_id": new_revision_id,
-                "revision_url": revision_url,
-                "url": revision_url,
+                "url": _revision_url(new_revision_id),
             }
         )

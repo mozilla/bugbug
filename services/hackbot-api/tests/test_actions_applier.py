@@ -5,6 +5,7 @@ gate + per-agent auto-apply opt-in in `on_run_completed`, and the manual
 `apply_all_pending` path — see app/actions_applier.py.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from types import SimpleNamespace
@@ -20,32 +21,34 @@ from app.schemas import RunStatus
 
 def test_resolves_known_ref_and_field():
     out = resolve_placeholders(
-        "Fix submitted: {{actions.patch.revision_url}}",
-        {"patch": {"revision_url": "https://phabricator.services.mozilla.com/D1"}},
+        "Fix submitted: {{actions.patch.url}}",
+        {"patch": {"url": "https://phabricator.services.mozilla.com/D1"}},
     )
     assert out == "Fix submitted: https://phabricator.services.mozilla.com/D1"
 
 
-def test_unknown_ref_left_as_is():
-    out = resolve_placeholders("See {{actions.missing.url}}", {})
+def test_unknown_ref_left_as_is(caplog):
+    with caplog.at_level(logging.WARNING):
+        out = resolve_placeholders("See {{actions.missing.url}}", {})
     assert out == "See {{actions.missing.url}}"
+    assert "Unresolved action reference {{actions.missing.url}}" in caplog.text
 
 
-def test_unknown_field_left_as_is():
-    out = resolve_placeholders(
-        "See {{actions.patch.nope}}", {"patch": {"revision_url": "x"}}
-    )
+def test_unknown_field_left_as_is(caplog):
+    with caplog.at_level(logging.WARNING):
+        out = resolve_placeholders(
+            "See {{actions.patch.nope}}", {"patch": {"url": "x"}}
+        )
     assert out == "See {{actions.patch.nope}}"
+    assert "Unresolved action reference {{actions.patch.nope}}" in caplog.text
 
 
 def test_recurses_into_dict_and_list():
     value = {
-        "text": "{{actions.patch.revision_url}}",
+        "text": "{{actions.patch.url}}",
         "items": ["{{actions.patch.revision_id}}", "plain"],
     }
-    out = resolve_placeholders(
-        value, {"patch": {"revision_url": "u", "revision_id": 5}}
-    )
+    out = resolve_placeholders(value, {"patch": {"url": "u", "revision_id": 5}})
     assert out == {"text": "u", "items": ["5", "plain"]}
 
 
