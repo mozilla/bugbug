@@ -31,19 +31,22 @@ def triggering_transaction_phids(payload: dict) -> list[str]:
     ]
 
 
-def find_hackbot_mention(
+def find_hackbot_mentions(
     transactions: list[dict],
     triggering_phids: set[str],
     *,
     bot_phid: str,
     token: str,
-) -> str | None:
-    """Return the text of a triggering comment that mentions ``token``.
+) -> list[str]:
+    """Return the text of every triggering comment that mentions ``token``.
 
     Only considers transactions named in this delivery, of a comment type, not
-    authored by the bot itself (loop prevention). Returns the first matching
-    comment's raw text, or ``None`` if none qualify.
+    authored by the bot itself (loop prevention). A single review can leave
+    several inline comments (each its own transaction), so all matches are
+    returned, in transaction order. At most one per transaction: a transaction's
+    ``comments`` list is that comment's version history, not distinct comments.
     """
+    matches: list[str] = []
     for transaction in transactions:
         if transaction.get("phid") not in triggering_phids:
             continue
@@ -54,8 +57,20 @@ def find_hackbot_mention(
         for comment in transaction.get("comments") or []:
             raw = (comment.get("content") or {}).get("raw") or ""
             if token in raw:
-                return raw
-    return None
+                matches.append(raw)
+                break
+    return matches
+
+
+def _join_comments(comments: list[str]) -> str:
+    """Combine one or more triggering comments into the agent's ``comment`` input.
+
+    A lone comment is passed through unchanged; multiple are numbered so the
+    agent can tell them apart and address each.
+    """
+    if len(comments) == 1:
+        return comments[0]
+    return "\n\n".join(f"[comment {i}]\n{c}" for i, c in enumerate(comments, 1))
 
 
 async def resolve_revision(
@@ -87,21 +102,22 @@ async def detect_mention_and_revision(
 ) -> tuple[str, int, int] | None:
     """Read Conduit and return ``(comment, revision_id, bug_id)`` or None.
 
-    ``comment`` is the raw text of the triggering ``@hackbot`` comment, passed
-    through as data — the agent frames it (identity, scope, how to respond). The
-    Conduit ``client`` is injected (built by the route's dependency) rather than
-    constructed here. Returns ``None`` when there is no qualifying ``@hackbot``
-    mention, the revision can't be resolved, or it has no Bugzilla bug id
-    (bug-fix needs one).
+    ``comment`` is the raw text of the triggering ``@hackbot`` comment(s), passed
+    through as data — the agent frames it (identity, scope, how to respond). When
+    a delivery carries several qualifying comments (e.g. inline comments in one
+    review) they are combined so the agent addresses each. The Conduit ``client``
+    is injected (built by the route's dependency) rather than constructed here.
+    Returns ``None`` when there is no qualifying ``@hackbot`` mention, the
+    revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
     transactions = await client.search_transactions(object_phid)
-    comment = find_hackbot_mention(
+    comments = find_hackbot_mentions(
         transactions,
         set(triggering_phids),
         bot_phid=webhook.bot_phid,
         token=webhook.mention_token,
     )
-    if comment is None:
+    if not comments:
         log.warning(
             "No %s mention found in triggering transactions %s on %s",
             webhook.mention_token,
@@ -109,6 +125,7 @@ async def detect_mention_and_revision(
             object_phid,
         )
         return None
+    comment = _join_comments(comments)
 
     revision_id, bug_id = await resolve_revision(client, object_phid)
     if revision_id is None:
