@@ -59,6 +59,9 @@ class Settings(BaseSettings):
 
     dry_run: bool = False
     log_level: str = "INFO"
+    # mozci's own (loguru) logging. Its per-task "missing results" warnings are
+    # normal operation, not something to act on; lower this to debug mozci.
+    mozci_log_level: str = "ERROR"
     environment: str = "development"
     sentry_dsn: str | None = None
 

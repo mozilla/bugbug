@@ -3,16 +3,11 @@ import os
 import signal
 from concurrent.futures import ThreadPoolExecutor
 
+# Configures logging on import; must precede the imports that pull in mozci.
+import app.logging_setup  # noqa: F401
 from app import consumer
 from app.config import settings
 
-logging.basicConfig(
-    level=settings.log_level.upper(),
-    format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-# httpx logs every request at INFO, which drowns out our own lines.
-logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
