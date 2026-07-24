@@ -3,10 +3,10 @@
 Pairs with the recording side in ``actions/phabricator.py`` and the payload
 built agent-side in ``hackbot_runtime.changes.build_phabricator_diff`` (while
 the agent still has its own checkout — nothing here ever touches git, a
-local repo, or ``moz-phab``). Talks to Phabricator's Conduit API directly
-with a small ``requests``-based client, mirroring ``bugzilla_handler.py``'s
-choice to avoid ``libmozdata``'s heavier, bulk/futures-oriented client for a
-single lightweight call.
+local repo, or ``moz-phab``). Talks to Phabricator's Conduit API through the
+shared ``phabricator_client`` lib, a small ``httpx``-based client that avoids
+``libmozdata``'s heavier, bulk/futures-oriented client for these single
+lightweight calls.
 """
 
 from __future__ import annotations
@@ -18,50 +18,31 @@ import re
 from functools import lru_cache
 from typing import Any
 
-import requests
+from async_lru import alru_cache
+from phabricator_client import PhabricatorClient
 
 from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_PHABRICATOR_URL = "https://phabricator.services.mozilla.com"
 _DIFF_ARTIFACT_KEY = "changes/phabricator_diff.json"
-_TIMEOUT_SECONDS = 60
-
-
-def _base_url() -> str:
-    return os.environ.get("PHABRICATOR_URL", _DEFAULT_PHABRICATOR_URL).rstrip("/")
-
-
-def _revision_url(revision_id: int) -> str:
-    return f"{_base_url()}/D{revision_id}"
-
-
-def _api_key() -> str:
-    token = os.environ.get("PHABRICATOR_API_KEY", "")
-    if not token:
-        raise RuntimeError("PHABRICATOR_API_KEY is not configured")
-    return token
-
-
-def _conduit_request(method: str, **payload: Any) -> dict:
-    payload["__conduit__"] = {"token": _api_key()}
-    response = requests.post(
-        f"{_base_url()}/api/{method}",
-        data={"params": json.dumps(payload), "output": "json"},
-        timeout=_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    data = response.json()
-    if data.get("error_code"):
-        raise RuntimeError(
-            f"Conduit error {data['error_code']}: {data.get('error_info')}"
-        )
-    return data["result"]
 
 
 @lru_cache(maxsize=1)
-def _repository_phid() -> str:
+def _client() -> PhabricatorClient:
+    return PhabricatorClient()
+
+
+async def _conduit_request(method: str, **payload: Any) -> dict:
+    return await _client().conduit_request(method, **payload)
+
+
+def _revision_url(revision_id: int) -> str:
+    return _client().revision_url(revision_id)
+
+
+@alru_cache(maxsize=1)
+async def _repository_phid() -> str:
     """The target repository's PHID, needed on every `differential.creatediff` call.
 
     Prefers an explicit `PHABRICATOR_REPOSITORY_PHID` (simplest, most robust —
@@ -74,7 +55,7 @@ def _repository_phid() -> str:
         return configured
 
     name = os.environ.get("PHABRICATOR_REPOSITORY_NAME", "mozilla-central")
-    result = _conduit_request("diffusion.repository.search")
+    result = await _conduit_request("diffusion.repository.search")
     for repository in result.get("data", []):
         fields = repository.get("fields", {})
         if fields.get("shortName") == name or fields.get("name") == name:
@@ -112,9 +93,9 @@ def _revision_title(title: str, wip: bool) -> str:
     return f"WIP: {title}" if wip else title
 
 
-def _revision_fields(revision_id: int) -> dict:
+async def _revision_fields(revision_id: int) -> dict:
     """The current fields (title/summary/status) of an existing revision."""
-    result = _conduit_request(
+    result = await _conduit_request(
         "differential.revision.search", constraints={"ids": [int(revision_id)]}
     )
     data = result.get("data") or []
@@ -141,7 +122,7 @@ def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) 
     )
 
 
-def _set_local_commits(
+async def _set_local_commits(
     diff_id: Any,
     local_commits: dict,
     title: str,
@@ -161,12 +142,29 @@ def _set_local_commits(
         commit_info["summary"] = title
         commit_info["message"] = message
 
-    _conduit_request(
+    await _conduit_request(
         "differential.setdiffproperty",
         diff_id=diff_id,
         name="local:commits",
         data=json.dumps(local_commits),
     )
+
+
+class AddCommentHandler:
+    async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        revision_id = params["revision_id"]
+        try:
+            await _conduit_request(
+                "differential.revision.edit",
+                objectIdentifier=revision_id,
+                transactions=[{"type": "comment", "value": params["text"]}],
+            )
+        except Exception as exc:
+            log.exception("Failed to comment on revision D%s", revision_id)
+            return ActionResult.failed(str(exc))
+        return ActionResult.ok(
+            {"revision_id": revision_id, "revision_url": _revision_url(revision_id)}
+        )
 
 
 class SubmitPatchHandler:
@@ -194,9 +192,9 @@ class SubmitPatchHandler:
         wip = params.get("wip", True)
 
         try:
-            diff_result = _conduit_request(
+            diff_result = await _conduit_request(
                 "differential.creatediff",
-                repositoryPHID=_repository_phid(),
+                repositoryPHID=await _repository_phid(),
                 **diff_payload,
             )
             diff_phid = diff_result["phid"]
@@ -207,7 +205,7 @@ class SubmitPatchHandler:
             raw_summary = params.get("summary")
             existing_status = None
             if revision_id:
-                fields = _revision_fields(revision_id)
+                fields = await _revision_fields(revision_id)
                 existing_status = (fields.get("status") or {}).get("value")
                 if not raw_title:
                     raw_title = fields.get("title")
@@ -244,7 +242,7 @@ class SubmitPatchHandler:
             edit_args: dict[str, Any] = {"transactions": transactions}
             if revision_id:
                 edit_args["objectIdentifier"] = revision_id
-            revision_result = _conduit_request(
+            revision_result = await _conduit_request(
                 "differential.revision.edit", **edit_args
             )
 
@@ -252,7 +250,7 @@ class SubmitPatchHandler:
             new_revision_id = object_data.get("id") or revision_id
 
             if post_transactions and new_revision_id:
-                _conduit_request(
+                await _conduit_request(
                     "differential.revision.edit",
                     objectIdentifier=new_revision_id,
                     transactions=post_transactions,
@@ -263,7 +261,7 @@ class SubmitPatchHandler:
             # Revision URL). Without this, `moz-phab patch` on the revision
             # fails with "a diff without commit information detected".
             if local_commits and new_revision_id:
-                _set_local_commits(
+                await _set_local_commits(
                     diff_result["diffid"],
                     local_commits,
                     title,

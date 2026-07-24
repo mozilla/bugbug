@@ -8,8 +8,27 @@ subprocess work at all; that happens agent-side (see test_changes.py's
 """
 
 import json
+from unittest.mock import AsyncMock
 
+import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, phabricator_handler
+
+
+@pytest.fixture(autouse=True)
+def _phabricator_env(monkeypatch):
+    """Provide a dummy Phabricator API key for the handler's client.
+
+    The handler builds a PhabricatorClient, whose settings now require an API
+    key (Conduit calls themselves are mocked, so the value is irrelevant beyond
+    matching the required format). Reset the cached client and the resolved
+    repository PHID (alru_cache) so each test starts clean.
+    """
+    monkeypatch.setenv("PHABRICATOR_API_KEY", "api-" + "a" * 28)
+    phabricator_handler._client.cache_clear()
+    phabricator_handler._repository_phid.cache_clear()
+    yield
+    phabricator_handler._client.cache_clear()
+
 
 _DIFF_PAYLOAD = {
     "changes": [{"currentPath": "file.txt"}],
@@ -35,7 +54,7 @@ def _ctx(diff=_DIFF_PAYLOAD, local_commits=None):
 def _fake_conduit(responses):
     calls = []
 
-    def fake(method, **payload):
+    async def fake(method, **payload):
         calls.append((method, payload))
         return responses[method]
 
@@ -65,7 +84,9 @@ async def test_submit_patch_create_wip_by_default(monkeypatch):
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 1, "revision_id": None, "title": "Fix", "summary": "s"},
@@ -103,7 +124,9 @@ async def test_submit_patch_create_non_wip(monkeypatch):
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 1, "title": "Fix", "summary": "s", "wip": False},
@@ -129,7 +152,9 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     # Only the git-derived fields exist in the artifact; summary + message are
     # filled in apply-side, mirroring moz-phab's set_diff_property.
@@ -190,7 +215,9 @@ async def test_submit_patch_local_commits_fetches_title_on_update(monkeypatch):
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 9, "revision_id": 42},
@@ -223,7 +250,9 @@ async def test_submit_patch_update_sets_object_identifier(monkeypatch):
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 7, "revision_id": 12345}, _ctx()
@@ -250,7 +279,9 @@ async def test_submit_patch_wip_update_already_changes_planned_uses_second_edit(
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 3, "revision_id": 50}, _ctx()
@@ -279,7 +310,9 @@ async def test_submit_patch_non_wip_update_requests_review(monkeypatch):
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 4, "revision_id": 60, "wip": False}, _ctx()
@@ -303,7 +336,9 @@ async def test_submit_patch_falls_back_to_given_revision_id_when_edit_omits_obje
         }
     )
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 7, "revision_id": 999}, _ctx()
@@ -322,11 +357,13 @@ async def test_submit_patch_missing_artifact_fails():
 
 
 async def test_submit_patch_conduit_error_fails(monkeypatch):
-    def fake(method, **payload):
+    async def fake(method, **payload):
         raise RuntimeError("Conduit error ERR-CONDUIT-CORE: bad request")
 
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(phabricator_handler, "_repository_phid", lambda: "PHID-REPO-1")
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
         {"bug_id": 1, "title": "x"}, _ctx()
@@ -335,17 +372,50 @@ async def test_submit_patch_conduit_error_fails(monkeypatch):
     assert "ERR-CONDUIT-CORE" in result.error
 
 
-def test_repository_phid_prefers_env_var(monkeypatch):
+async def test_add_comment_posts_comment_transaction(monkeypatch):
+    fake, calls = _fake_conduit({"differential.revision.edit": {"object": {"id": 42}}})
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    result = await phabricator_handler.AddCommentHandler().apply(
+        {"revision_id": 42, "text": "Answering your question."},
+        ApplyContext(run_id="run-1", download_artifact=None),
+    )
+
+    assert result.status == "applied"
+    assert result.result == {
+        "revision_id": 42,
+        "revision_url": "https://phabricator.services.mozilla.com/D42",
+    }
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    assert edit_call[1]["objectIdentifier"] == 42
+    assert edit_call[1]["transactions"] == [
+        {"type": "comment", "value": "Answering your question."}
+    ]
+
+
+async def test_add_comment_conduit_error_fails(monkeypatch):
+    async def fake(method, **payload):
+        raise RuntimeError("Conduit error ERR-CONDUIT-CORE: nope")
+
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    result = await phabricator_handler.AddCommentHandler().apply(
+        {"revision_id": 42, "text": "x"},
+        ApplyContext(run_id="run-1", download_artifact=None),
+    )
+    assert result.status == "failed"
+    assert "ERR-CONDUIT-CORE" in result.error
+
+
+async def test_repository_phid_prefers_env_var(monkeypatch):
     monkeypatch.setenv("PHABRICATOR_REPOSITORY_PHID", "PHID-FROM-ENV")
-    phabricator_handler._repository_phid.cache_clear()
-    assert phabricator_handler._repository_phid() == "PHID-FROM-ENV"
-    phabricator_handler._repository_phid.cache_clear()
+    assert await phabricator_handler._repository_phid() == "PHID-FROM-ENV"
 
 
-def test_repository_phid_looks_up_by_short_name(monkeypatch):
+async def test_repository_phid_looks_up_by_short_name(monkeypatch):
     monkeypatch.delenv("PHABRICATOR_REPOSITORY_PHID", raising=False)
 
-    def fake(method, **payload):
+    async def fake(method, **payload):
         assert method == "diffusion.repository.search"
         return {
             "data": [
@@ -355,6 +425,4 @@ def test_repository_phid_looks_up_by_short_name(monkeypatch):
         }
 
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    phabricator_handler._repository_phid.cache_clear()
-    assert phabricator_handler._repository_phid() == "PHID-MC"
-    phabricator_handler._repository_phid.cache_clear()
+    assert await phabricator_handler._repository_phid() == "PHID-MC"
