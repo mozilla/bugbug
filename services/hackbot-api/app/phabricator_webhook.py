@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# Transaction types that carry a reviewer comment we can scan for the mention.
+# Transaction types that carry a comment we can scan for the mention.
 _COMMENT_TYPES = frozenset({"comment", "inline"})
 
 
@@ -85,12 +85,14 @@ async def detect_mention_and_revision(
     object_phid: str,
     triggering_phids: list[str],
 ) -> tuple[str, int, int] | None:
-    """Read Conduit and return ``(instructions, revision_id, bug_id)`` or None.
+    """Read Conduit and return ``(comment, revision_id, bug_id)`` or None.
 
-    The Conduit ``client`` is injected (built by the route's dependency) rather
-    than constructed here. Returns ``None`` when there is no qualifying
-    ``@hackbot`` mention, the revision can't be resolved, or it has no Bugzilla
-    bug id (bug-fix needs one).
+    ``comment`` is the raw text of the triggering ``@hackbot`` comment, passed
+    through as data — the agent frames it (identity, scope, how to respond). The
+    Conduit ``client`` is injected (built by the route's dependency) rather than
+    constructed here. Returns ``None`` when there is no qualifying ``@hackbot``
+    mention, the revision can't be resolved, or it has no Bugzilla bug id
+    (bug-fix needs one).
     """
     transactions = await client.search_transactions(object_phid)
     comment = find_hackbot_mention(
@@ -100,6 +102,12 @@ async def detect_mention_and_revision(
         token=webhook.mention_token,
     )
     if comment is None:
+        log.warning(
+            "No %s mention found in triggering transactions %s on %s",
+            webhook.mention_token,
+            triggering_phids,
+            object_phid,
+        )
         return None
 
     revision_id, bug_id = await resolve_revision(client, object_phid)
@@ -107,12 +115,11 @@ async def detect_mention_and_revision(
         log.warning("Could not resolve revision for %s", object_phid)
         return None
     if bug_id is None:
-        log.info(
+        log.warning(
             "Revision D%s (%s) has no Bugzilla bug id; skipping",
             revision_id,
             object_phid,
         )
         return None
 
-    instructions = f"A reviewer commented on D{revision_id}:\n\n{comment}"
-    return instructions, revision_id, bug_id
+    return comment, revision_id, bug_id

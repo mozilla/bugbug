@@ -34,6 +34,7 @@ from .config import (
 )
 
 HERE = Path(__file__).resolve().parent
+PROMPTS = HERE / "prompts"
 
 
 class BugFixResult(HackbotAgentResult):
@@ -41,13 +42,15 @@ class BugFixResult(HackbotAgentResult):
     result: str | None = None
 
 
-def load_system_prompt(rules_dir: Path, extra: str) -> str:
-    tmpl = (HERE / "prompts" / "system.md").read_text()
+def render_prompt(name: str, **fields: object) -> str:
+    """Render a prompt template from ``prompts/`` via ``str.format``.
 
-    return tmpl.format(
-        rules_dir=str(rules_dir.resolve()),
-        extra_instructions=extra or "(none)",
-    )
+    Prompt text lives in ``prompts/*.md`` rather than inline in Python, so it
+    stays readable and editable. Substituted values are inserted verbatim
+    (``str.format`` does not re-scan them), so an untrusted ``comment`` cannot
+    break out of its ``{comment}`` placeholder.
+    """
+    return (PROMPTS / name).read_text().format(**fields)
 
 
 def make_investigator() -> AgentDefinition:
@@ -83,8 +86,7 @@ async def run_bug_fix(
     source_repo: Path,
     fx_ctx: FirefoxContext,
     bug: int,
-    instructions: str = "",
-    task: str | None = None,
+    comment: str | None = None,
     revision_id: int | None = None,
     rules_dir: Path | None = None,
     model: str | None = None,
@@ -117,7 +119,7 @@ async def run_bug_fix(
     )
     enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
 
-    system_prompt = load_system_prompt(rules_dir, instructions)
+    system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -147,42 +149,13 @@ async def run_bug_fix(
         setting_sources=[],
     )
 
-    rules_path = rules_dir.resolve()
-    if revision_id:
-        # Follow-up mode: a reviewer commented on an existing revision (the
-        # comment is in the system prompt's extra instructions). The comment may
-        # ask for a code change or may just be a question — decide which, and
-        # respond accordingly, without opening a new revision.
-        user_prompt = (
-            f"Follow up on Phabricator revision D{revision_id} for bug {bug}.\n\n"
-            f"A reviewer left a comment (see the instructions in your system "
-            f"prompt). First investigate to understand what it is asking for, "
-            f"then take the matching path:\n\n"
-            f"- If the comment requests a code change (a fix, tweak, or "
-            f"follow-up to the patch): make the necessary source changes, "
-            f"verify them, and call phabricator_submit_patch with revision_id={revision_id} "
-            f"so the existing revision D{revision_id} is updated — do not create "
-            f"a new revision.\n"
-            f"- If the comment is only a question or a request for clarification "
-            f"(no code change is warranted): do not edit the source or submit a "
-            f"patch. Investigate, then reply on the revision by calling "
-            f"phabricator_add_comment with revision_id={revision_id} (this posts "
-            f"on D{revision_id} itself — do not answer via a Bugzilla comment).\n\n"
-            f"If you are unsure, prefer answering with a comment over making "
-            f"speculative code changes.\n\n"
-            f"Consult the relevant rules in {rules_path} if they apply."
-        )
-    elif task:
-        user_prompt = (
-            f"Bug to work on: {bug}\n\n"
-            f"Task: {task}\n\n"
-            f"The rules in {rules_path} are available if the task "
-            f"calls for them, but the task above is your primary "
-            f"directive — it overrides the default triage workflow."
+    if revision_id and comment:
+        user_prompt = render_prompt(
+            "follow-up.md", revision_id=revision_id, comment=comment
         )
     else:
-        user_prompt = (
-            f"Triage bug {bug}.\n\nConsult the relevant rules in {rules_path}."
+        user_prompt = render_prompt(
+            "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
         )
 
     result_msg: ResultMessage | None = None

@@ -86,14 +86,14 @@ async def phabricator_webhook(
     if detected is None:
         return {"status": "ignored", "reason": "no actionable @hackbot mention"}
 
-    instructions, revision_id, bug_id = detected
+    comment, revision_id, bug_id = detected
 
     run_id = await api_client.trigger_run(
         "bug-fix",
         {
             "bug_id": bug_id,
             "revision_id": revision_id,
-            "instructions": instructions,
+            "comment": comment,
         },
     )
     log.info(
