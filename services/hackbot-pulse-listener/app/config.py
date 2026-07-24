@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     notify_only_with_patch: bool = True
 
     dry_run: bool = False
+    log_level: str = "INFO"
     environment: str = "development"
     sentry_dsn: str | None = None
 

@@ -104,7 +104,9 @@ def _await_new_failure(branch: str, rev: str, status_fn, describe: str):
                 return state, last_green
             if time.monotonic() >= deadline:
                 break
-            logger.info(
+            # _classify already logged which ancestor is unsettled; keep the
+            # per-poll heartbeat at debug so a long wait isn't dozens of lines.
+            logger.debug(
                 "Waiting %ss for an unsettled ancestor of %s (%s)",
                 POLL_INTERVAL_SECONDS,
                 describe,

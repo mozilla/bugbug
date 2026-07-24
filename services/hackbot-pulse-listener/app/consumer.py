@@ -56,6 +56,7 @@ def process(body: dict, executor: Executor) -> str | None:
 
     project = tags.get("project")
     if project not in settings.watched_repos_set:
+        logger.debug("Ignoring failure on unwatched project %s", project)
         return None
 
     task_label = tags.get("label") or ""
@@ -63,6 +64,7 @@ def process(body: dict, executor: Executor) -> str | None:
         return _process_build(body, tags, executor)
     if _is_test_task(tags):
         return _process_test(body, tags, executor)
+    logger.debug("Ignoring non-build, non-test task %s", task_label)
     return None
 
 
@@ -129,8 +131,8 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
 
     logger.info(
-        "Triggered build-repair run %s for %s@%s (git %s)",
-        run_id,
+        "%s build-repair for %s@%s (git %s)",
+        f"Triggered run {run_id}" if run_id else "Would trigger",
         project,
         hg_revision,
         git_commit,
@@ -266,8 +268,8 @@ def _trigger_test_repair(
         return None
 
     logger.info(
-        "Triggered test-repair run %s for %s task %s (%d group(s)) at %s",
-        run_id,
+        "%s test-repair for %s task %s (%d group(s)) at %s",
+        f"Triggered run {run_id}" if run_id else "Would trigger",
         project,
         task_id,
         len(fresh),

@@ -83,3 +83,36 @@ def test_get_flakiness_fails_soft_on_network_error(monkeypatch):
     stats = flakiness.get_flakiness("dom/base/test/test_foo.js", "xpcshell")
     assert stats.total == 0
     assert stats.failure_rate == 0.0
+
+
+def _http_error(status_code):
+    request = flakiness.httpx.Request("GET", "https://example/timings.json")
+    response = flakiness.httpx.Response(status_code, request=request)
+    return flakiness.httpx.HTTPStatusError("boom", request=request, response=response)
+
+
+def test_unpublished_harness_404_is_not_an_error(monkeypatch, caplog):
+    # Only some harnesses publish a timings dataset (e.g. reftest does not).
+    # A 404 is an expected "no data", not an error worth a traceback/Sentry event.
+    def not_found(*a, **k):
+        raise _http_error(404)
+
+    monkeypatch.setattr(flakiness, "_fetch_bucket", not_found)
+    with caplog.at_level("DEBUG"):
+        stats = flakiness.get_flakiness("editor/reftests/a.html", "reftest")
+
+    assert stats.total == 0
+    assert not [r for r in caplog.records if r.levelname in ("ERROR", "WARNING")]
+    assert any(r.exc_info for r in caplog.records) is False
+
+
+def test_unexpected_http_status_warns_without_traceback(monkeypatch, caplog):
+    def server_error(*a, **k):
+        raise _http_error(500)
+
+    monkeypatch.setattr(flakiness, "_fetch_bucket", server_error)
+    with caplog.at_level("DEBUG"):
+        stats = flakiness.get_flakiness("dom/base/test/test_foo.js", "xpcshell")
+
+    assert stats.total == 0
+    assert [r for r in caplog.records if r.levelname == "WARNING"]

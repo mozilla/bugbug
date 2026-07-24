@@ -187,6 +187,24 @@ def get_flakiness(
     """
     try:
         data = _fetch_bucket(harness, _chunk_index(test_path), repo)
+    except httpx.HTTPStatusError as exc:
+        # Only some harnesses publish a timings dataset; a 404 means there is
+        # nothing to look up, so the gate passes the test through unjudged.
+        if exc.response.status_code == 404:
+            logger.info(
+                "No tests.firefox.dev dataset for harness %s; "
+                "skipping the intermittent check for %s",
+                harness,
+                test_path,
+            )
+        else:
+            logger.warning(
+                "tests.firefox.dev lookup failed for %s (%s): %s",
+                test_path,
+                harness,
+                exc,
+            )
+        return Flakiness()
     except Exception:
         logger.exception(
             "tests.firefox.dev lookup failed for %s (%s)", test_path, harness
