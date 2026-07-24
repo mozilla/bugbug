@@ -151,7 +151,7 @@ async def run_bug_fix(
 
     if revision_id and comment:
         user_prompt = render_prompt(
-            "follow-up.md", revision_id=revision_id, comment=comment
+            "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
         )
     else:
         user_prompt = render_prompt(
