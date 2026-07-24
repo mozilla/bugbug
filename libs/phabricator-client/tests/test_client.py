@@ -145,6 +145,35 @@ async def test_get_raw_diff(monkeypatch):
     assert (await _client().get_raw_diff(9)).startswith("diff --git a/f b/f")
 
 
+async def test_resolve_commit_returns_full_hash_without_call(monkeypatch):
+    # A already-full 40-char hash needs no Conduit round-trip.
+    full = "9f2e8c25f0b40fdce8d2f2ca40281e8711815a6d"
+    captured = _capture_post(monkeypatch, {"result": {}})
+    assert await _client().resolve_commit(full) == full
+    assert captured == {}  # no request was made
+
+
+async def test_resolve_commit_expands_abbreviated_hash(monkeypatch):
+    full = "9f2e8c25f0b40fdce8d2f2ca40281e8711815a6d"
+    captured = _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "identifierMap": {"9f2e8c25f0b4": "PHID-CMIT-1"},
+                "data": {"PHID-CMIT-1": {"identifier": full}},
+            }
+        },
+    )
+    assert await _client().resolve_commit("9f2e8c25f0b4") == full
+    assert captured["url"].endswith("/api/diffusion.querycommits")
+    assert captured["params"]["names"] == ["9f2e8c25f0b4"]
+
+
+async def test_resolve_commit_returns_none_when_unresolved(monkeypatch):
+    _capture_post(monkeypatch, {"result": {"identifierMap": {}, "data": {}}})
+    assert await _client().resolve_commit("deadbeef") is None
+
+
 def test_revision_url_default_base():
     assert _client().revision_url(42) == "https://phabricator.services.mozilla.com/D42"
 
