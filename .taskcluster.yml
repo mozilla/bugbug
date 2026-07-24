@@ -46,7 +46,7 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
     in:
-      $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
+      $if: '(tasks_for == "github-push" && head_branch[:18] != "refs/heads/deploy/") || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
       then:
         - $mergeDeep:
             - { $eval: default_task_definition }

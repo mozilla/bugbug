@@ -109,6 +109,7 @@ gcloud beta run worker-pools deploy "${SERVICE}" \
   --image "${IMAGE}" \
   --region "${REGION}" \
   --scaling 1 \
+  --memory 2Gi \
   --service-account "${SA_EMAIL}" \
   --set-env-vars "${ENV_VARS}" \
   --set-secrets "PULSE_PASSWORD=${PULSE_SECRET}:latest,HACKBOT_API_KEY=${API_KEY_SECRET}:latest,SENDGRID_API_KEY=${SENDGRID_SECRET}:latest"

@@ -109,9 +109,26 @@ async def create_run(
 @router.get("/runs", response_model=list[RunDoc])
 async def list_runs(
     limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    agent: str | None = Query(default=None),
+    # Aliased so the query param is `status` without shadowing fastapi.status.
+    status_filter: RunStatus | None = Query(default=None, alias="status"),
     db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
-    result = await db.execute(select(Run).order_by(Run.created_at.desc()).limit(limit))
+    stmt = select(Run)
+    if agent is not None:
+        stmt = stmt.where(Run.agent == agent)
+    if status_filter is not None:
+        stmt = stmt.where(Run.status == status_filter.value)
+    # created_at is the sort key; run_id is a deterministic tiebreaker so offset
+    # paging is stable when timestamps collide. (agent/status/created_at are all
+    # indexed, so filtering + ordering stay index-backed.)
+    stmt = (
+        stmt.order_by(Run.created_at.desc(), Run.run_id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
     return [RunDoc.model_validate(r) for r in result.scalars()]
 
 

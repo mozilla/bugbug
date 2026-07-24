@@ -3,18 +3,9 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { AGENTS, type AgentValue } from "@/lib/agents";
 import { saveRun } from "@/lib/store";
 import type { RunRef } from "@/lib/types";
-
-const AGENTS = [
-  { value: "bug-fix", label: "bug-fix" },
-  { value: "autowebcompat-repro", label: "autowebcompat-repro" },
-  { value: "build-repair", label: "build-repair" },
-  { value: "frontend-triage", label: "frontend-triage" },
-  { value: "test-plan-generator", label: "test-plan-generator" },
-] as const;
-
-type AgentValue = (typeof AGENTS)[number]["value"];
 
 function parseAgent(value: string | null): AgentValue {
   return AGENTS.some((a) => a.value === value)

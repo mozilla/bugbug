@@ -3,7 +3,7 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { formatFence } from "@/lib/findings-format";
+import { formatFence, stripJsonFences } from "@/lib/findings-format";
 
 // Shared markdown renderer for finding text and proposed action previews.
 // Safe by construction: react-markdown does not render raw HTML and does not
@@ -38,11 +38,18 @@ const components: Components = {
   },
 };
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({
+  text,
+  dropJsonBlocks = false,
+}: {
+  text: string;
+  dropJsonBlocks?: boolean;
+}) {
+  const content = dropJsonBlocks ? stripJsonFences(text) : text;
   return (
     <div className="finding-text markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {text}
+        {content}
       </ReactMarkdown>
     </div>
   );
