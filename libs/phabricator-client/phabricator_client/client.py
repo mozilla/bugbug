@@ -22,6 +22,14 @@ import httpx
 from phabricator_client.config import PhabricatorSettings
 from phabricator_client.models import PhabricatorDiff
 
+_FULL_COMMIT_LEN = 40
+
+
+def _is_full_commit(ref: str) -> bool:
+    """True if ``ref`` is a full 40-char lowercase-hex git commit hash."""
+    ref = ref.lower()
+    return len(ref) == _FULL_COMMIT_LEN and all(c in "0123456789abcdef" for c in ref)
+
 
 class PhabricatorClient:
     def __init__(self, settings: PhabricatorSettings | None = None) -> None:
@@ -84,3 +92,21 @@ class PhabricatorClient:
     async def get_raw_diff(self, diff_id: int) -> str:
         """The raw unified-diff text for a diff (``differential.getrawdiff``)."""
         return await self.conduit_request("differential.getrawdiff", diffID=diff_id)
+
+    async def resolve_commit(self, ref: str) -> str | None:
+        """Expand a commit identifier to its full 40-char hash, or ``None``.
+
+        A diff's ``sourceControlBaseRevision`` is often abbreviated (moz-phab
+        records a short hash for a large repo like firefox), and git can only
+        fetch a full object id, not an abbreviation. ``diffusion.querycommits``
+        resolves the short hash to the full ``identifier``. Already-full hashes
+        are returned as-is without a Conduit call.
+        """
+        if _is_full_commit(ref):
+            return ref
+        result = await self.conduit_request("diffusion.querycommits", names=[ref])
+        commit_phid = (result.get("identifierMap") or {}).get(ref)
+        if not commit_phid:
+            return None
+        commit = (result.get("data") or {}).get(commit_phid) or {}
+        return commit.get("identifier") or None

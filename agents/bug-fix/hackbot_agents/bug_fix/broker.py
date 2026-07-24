@@ -61,7 +61,10 @@ def _phabricator_route(settings: PhabricatorSettings) -> Route:
                 status_code=404,
             )
         raw_diff = await client.get_raw_diff(diff.id)
-        return JSONResponse({"base_commit": diff.base_commit, "raw_diff": raw_diff})
+        # The recorded base is often an abbreviated hash; git can only fetch a
+        # full object id, so expand it here (falling back to the raw value).
+        base_commit = await client.resolve_commit(diff.base_commit) or diff.base_commit
+        return JSONResponse({"base_commit": base_commit, "raw_diff": raw_diff})
 
     return Route("/phabricator/revision/{revision_id:int}/patch", get_patch)
 
