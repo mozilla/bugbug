@@ -6,6 +6,7 @@ export const AGENTS = [
   { value: "autowebcompat-repro", label: "autowebcompat-repro" },
   { value: "build-repair", label: "build-repair" },
   { value: "frontend-triage", label: "frontend-triage" },
+  { value: "test-repair", label: "test-repair" },
   { value: "test-plan-generator", label: "test-plan-generator" },
 ] as const;
 

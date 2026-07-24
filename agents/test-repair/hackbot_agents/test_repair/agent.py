@@ -7,18 +7,20 @@
 
 Blame the commit that regressed a failing test and propose a fix. The pulse
 listener only forwards failures that already passed its regression and flakiness
-filters, so the agent assumes a genuine regression and does not re-classify.
+filters, so a regression is the prior, but the agent still reports the
+classification it reaches from the logs.
 
 A two-stage claude-agent-sdk loop. Stage 1 (analysis, read-only) inspects the
 candidate commit diffs and writes a verdict naming the culprit; Stage 2 (fix)
 runs when a culprit is found and proposes a source patch, which the runtime
-collects into ``changes.patch``. The :class:`TestRepairResult` is
-serialized into ``summary.json``'s ``findings`` and read by the notifier.
+collects into ``changes.patch``. The :class:`TestRepairResult` is serialized into
+``summary.json``'s ``findings`` and read by the notifier.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -47,10 +49,12 @@ from .config import (
 from .logs import TaskLogs
 from .prompts import (
     ANALYSIS_TEMPLATE,
+    CANDIDATE_INTRO_COMPLETE,
+    CANDIDATE_INTRO_PARTIAL,
     FIX_TEMPLATE,
     LAST_GREEN_LINE,
 )
-from .resolve import FailingGroup, Investigation
+from .resolve import CommitRange, FailingGroup, Investigation
 
 _CLASSIFICATIONS = ("regression", "intermittent")
 _RECOMMENDATIONS = ("backout", "do_not_backout", "land_fix")
@@ -144,10 +148,63 @@ def _coerce_classification(value) -> str:
     return value if value in _CLASSIFICATIONS else "regression"
 
 
-def _coerce_recommendation(value, classification: str) -> str:
-    if value in _RECOMMENDATIONS:
-        return value
-    return "backout" if classification == "regression" else "do_not_backout"
+def _coerce_recommendation(value, classification: str, has_culprit: bool) -> str:
+    if value not in _RECOMMENDATIONS:
+        value = "backout" if classification == "regression" else "do_not_backout"
+    if value == "backout" and not has_culprit:
+        return "do_not_backout"
+    return value
+
+
+def _resolve_culprit(source_repo: Path, sha) -> str | None:
+    """Normalize a model-authored sha to a full commit hash in the checkout.
+
+    The shallow clone holds exactly the candidate range, so a sha git cannot
+    resolve there was invented or is out of range; either way it is dropped.
+    """
+    if not isinstance(sha, str) or not sha.strip():
+        return None
+    sha = sha.strip()
+    try:
+        proc = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(source_repo),
+                "rev-parse",
+                "--verify",
+                f"{sha}^{{commit}}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        full = proc.stdout.strip() if proc.returncode == 0 else ""
+    except OSError:
+        full = ""
+    if not full:
+        print(f"[test-repair] discarding culprit {sha!r}", file=sys.stderr)
+        return None
+    return full
+
+
+def _write_mozconfig(fx_ctx: FirefoxContext, *, debug: bool) -> None:
+    """Write a mozconfig mirroring the failing CI build, unless one exists.
+
+    ``build_firefox`` fails outright without one. The build type is mirrored
+    because assertion failures only reproduce in the type CI used.
+    """
+    if fx_ctx.mozconfig.exists():
+        return
+    build_type = (
+        "ac_add_options --enable-debug\n"
+        if debug
+        else "ac_add_options --disable-debug\nac_add_options --enable-optimize\n"
+    )
+    fx_ctx.mozconfig.write_text(
+        "ac_add_options --enable-application=browser\n"
+        f"{build_type}"
+        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
+    )
 
 
 def _as_float(value, default: float = 0.0) -> float:
@@ -167,22 +224,24 @@ def _as_int(value) -> int | None:
 def _assemble_result(
     scratch_out: Path,
     *,
+    verdict: dict,
+    source_repo: Path,
     last_green_revision: str | None,
     total_turns: int,
     total_cost: float,
     publish_file: Callable[[str, Path, str | None], str] | None,
 ) -> TestRepairResult:
-    verdict = _read_verdict(scratch_out)
     classification = _coerce_classification(verdict.get("classification"))
+    culprit_commit = _resolve_culprit(source_repo, verdict.get("culprit_commit"))
     recommendation = _coerce_recommendation(
-        verdict.get("recommendation"), classification
+        verdict.get("recommendation"), classification, bool(culprit_commit)
     )
-    culprit_commit = verdict.get("culprit_commit")
     return TestRepairResult(
         classification=classification,
         recommendation=recommendation,
-        culprit_commit=culprit_commit or None,
+        culprit_commit=culprit_commit,
         culprit_bug=_as_int(verdict.get("culprit_bug")),
+        intermittent_bug=_as_int(verdict.get("intermittent_bug")),
         confidence=_as_float(verdict.get("confidence")),
         last_green_revision=last_green_revision,
         proposed_patch=bool(verdict.get("proposed_patch")),
@@ -193,8 +252,11 @@ def _assemble_result(
     )
 
 
-def _commit_lines(candidate_commits: list[str]) -> str:
-    return "\n".join(f"- {c}" for c in candidate_commits)
+def _range_expr(commit_range: CommitRange) -> str:
+    """A git revision range for ``git log``, falling back to the clone depth."""
+    if commit_range.base:
+        return f"{commit_range.base}..{commit_range.head}"
+    return f"HEAD~{commit_range.span}..HEAD"
 
 
 def _failing_tests(groups: list[FailingGroup]) -> str:
@@ -218,9 +280,7 @@ async def run_test_repair(
     publish_file: Callable[[str, Path, str | None], str] | None = None,
 ) -> TestRepairResult:
     """Blame the commit that regressed a failing test and propose a fix."""
-    candidate_commits = investigation.candidate_commits
-    if not candidate_commits:
-        raise AgentError("candidate_commits must contain at least the head commit")
+    commit_range = investigation.commit_range
     failure_commit = investigation.failure_commit
     print(
         f"[test-repair] analyzing {investigation.hg_revision} at {failure_commit}",
@@ -246,11 +306,16 @@ async def run_test_repair(
         if investigation.last_green_revision
         else ""
     )
+    range_expr = _range_expr(commit_range)
+    intro = (
+        CANDIDATE_INTRO_COMPLETE if commit_range.complete else CANDIDATE_INTRO_PARTIAL
+    )
     analysis_prompt = ANALYSIS_TEMPLATE.format(
         failing_tests=_failing_tests(investigation.failing_groups),
         harness=investigation.harness,
         failure_commit=failure_commit,
-        commit_lines=_commit_lines(candidate_commits),
+        candidate_intro=intro.format(commit_range=range_expr, span=commit_range.span),
+        commit_range=range_expr,
         last_green_line=last_green_line,
         failure_logs=failure_logs,
         scratch_out=scratch_out,
@@ -281,11 +346,12 @@ async def run_test_repair(
         total_cost += result_msg.total_cost_usd or 0.0
         total_turns += result_msg.num_turns or 0
 
-        # Stage 2 (fix) runs when the analysis identified a culprit commit.
+        # Stage 2 (fix) runs only when the analysis blamed a real commit.
         verdict = _read_verdict(scratch_out)
-        culprit_commit = verdict.get("culprit_commit")
+        culprit_commit = _resolve_culprit(source_repo, verdict.get("culprit_commit"))
         if culprit_commit:
             reporter.header(f"{label}: fix")
+            _write_mozconfig(fx_ctx, debug=investigation.debug_build)
             fix_prompt = FIX_TEMPLATE.format(
                 culprit_commit=culprit_commit,
                 scratch_out=scratch_out,
@@ -299,13 +365,26 @@ async def run_test_repair(
                 allowed_tools=allowed_tools,
                 max_turns=max_turns,
             )
-            result_msg = await _run_session(reporter, fix_opts, fix_prompt)
-            _check(result_msg, "fix")
-            total_cost += result_msg.total_cost_usd or 0.0
-            total_turns += result_msg.num_turns or 0
+            # A failed fix stage must not discard the analysis we already paid for.
+            try:
+                result_msg = await _run_session(reporter, fix_opts, fix_prompt)
+                if result_msg is not None:
+                    total_cost += result_msg.total_cost_usd or 0.0
+                    total_turns += result_msg.num_turns or 0
+                _check(result_msg, "fix")
+            except Exception as exc:
+                print(f"[test-repair] fix stage failed: {exc}", file=sys.stderr)
+            # Merge, since the fix stage may rewrite verdict.json without the culprit.
+            fix_verdict = _read_verdict(scratch_out)
+            verdict = {
+                **verdict,
+                **{k: v for k, v in fix_verdict.items() if v is not None},
+            }
 
     return _assemble_result(
         scratch_out,
+        verdict=verdict,
+        source_repo=source_repo,
         last_green_revision=investigation.last_green_revision,
         total_turns=total_turns,
         total_cost=total_cost,

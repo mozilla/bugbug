@@ -4,8 +4,8 @@ Two-stage Claude agent that finds the commit which regressed a failing Firefox C
 test and proposes a fix. Agent logic in `hackbot_agents/test_repair/`.
 
 The pulse listener only forwards failures that already passed its regression and
-flakiness filters, so the agent assumes a genuine regression and does not
-re-classify. Its only input is a Taskcluster task id.
+flakiness filters, so a regression is the prior, but the agent still reports the
+classification it reaches. Its only input is a Taskcluster task id.
 
 Run the Docker command below from the repo root, with secrets in a local `.env`
 (`ANTHROPIC_API_KEY`; `BUGZILLA_API_KEY` is optional).
@@ -19,19 +19,24 @@ investigation needs (no log parsing):
 2. The failing test groups, via mozci.
 3. The revision at which the group was last green, by walking mozci push
    ancestors.
-4. The git commits that landed since then (head first) from the hg pushlog +
-   lando; capped so an old last-green can't produce an unbounded clone.
+4. The git range that landed since then, from the hg pushlog + lando. Only the
+   range endpoints are mapped to git; the commit count sizes the clone and is
+   capped so an old last-green can't produce an unbounded one.
 
-The head (failure) commit and a depth spanning back to last-green are set as
-`SOURCE_REF` / `SOURCE_DEPTH`, so the runtime shallow-clones exactly deep enough
-for the agent to `git show` every candidate. The task's full and sanitized logs
-are written to files for the agent to search.
+The agent gets the range (`base..head`), not a list of shas, and enumerates and
+narrows it itself with `git log`. When the range isn't known to reach a green run
+it is passed as `HEAD~N..HEAD` and the prompt stops asserting the culprit is in
+it.
+
+`SOURCE_REF` / `SOURCE_DEPTH` pin the shallow clone to the failure commit, deep
+enough to walk the range. The task's full and sanitized logs are written to files
+for the agent to search.
 
 ## Input
 
 - `FAILURE_TASKS` - a dictionary of failed Taskcluster test tasks
-  `{task_name: taskcluster_task_id}`. The agent resolves the push, last-green
-  revision and candidate commit range from the first task id itself.
+  `{task_name: taskcluster_task_id}`. Everything else is resolved from the first
+  task id.
 
 ## Output
 
@@ -39,10 +44,11 @@ First stage - analysis (read-only):
 
 - `summary.md` - a short verdict
 - `analysis.md` - detailed reasoning, with evidence from the logs and diffs
-- `verdict.json` - `culprit_commit`, `culprit_bug`, `recommendation`
-  (`backout` / `land_fix`) and `confidence`
+- `verdict.json` - `classification` (`regression` / `intermittent`),
+  `culprit_commit`, `culprit_bug`, `intermittent_bug`, `recommendation`
+  (`backout` / `land_fix` / `do_not_backout`) and `confidence`
 
-Second stage - fixing (only when a culprit is identified):
+Second stage - fixing (only when a culprit was identified):
 
 - A patch in Hackbot format
 

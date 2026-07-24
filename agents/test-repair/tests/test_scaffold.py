@@ -3,6 +3,7 @@ import os
 from hackbot_agents.test_repair import logs
 from hackbot_agents.test_repair.__main__ import _pin_checkout
 from hackbot_agents.test_repair.agent import TestRepairResult
+from hackbot_agents.test_repair.resolve import CommitRange, Investigation
 
 
 def test_sanitize_log_keeps_failure_and_error_lines():
@@ -30,12 +31,25 @@ def test_sanitize_log_dedupes_consecutive_repeats():
     assert len(logs.sanitize_log(raw).splitlines()) == 1
 
 
+def _investigation(**kwargs):
+    defaults = dict(
+        project="autoland",
+        hg_revision="hgrev",
+        harness="mochitest",
+        debug_build=False,
+        failing_groups=[],
+        last_green_revision="greenhg",
+        commit_range=CommitRange(head="headsha", base="basesha", span=3, complete=True),
+    )
+    return Investigation(**{**defaults, **kwargs})
+
+
 def test_pin_checkout_sets_ref_and_depth(monkeypatch):
     monkeypatch.delenv("SOURCE_REF", raising=False)
     monkeypatch.delenv("SOURCE_DEPTH", raising=False)
-    _pin_checkout(["headsha", "midsha", "oldsha"])
+    _pin_checkout(_investigation())
     assert os.environ["SOURCE_REF"] == "headsha"
-    # Depth spans the 3 candidates plus one so the last-green parent is reachable.
+    # Depth spans the 3 commits in the range plus the base's parent.
     assert os.environ["SOURCE_DEPTH"] == "4"
 
 

@@ -7,8 +7,9 @@
 
 From a task id alone, derive the push it belongs to (project + hg revision), the
 test groups that failed, the revision at which the failing group was last green,
-and the git commits that landed since then (head first). That commit range both
-bounds the culprit search and sizes the shallow clone. The agent recomputes all
+and the git range that landed since then. Only the range endpoints are mapped to
+git -- the agent enumerates the commits between them with ``git log`` in the
+checkout. The agent recomputes all
 of this itself so its only input is a task id; the pulse listener uses the same
 public Taskcluster / mozci / hg-pushlog / lando lookups only to decide which
 failures are worth investigating.
@@ -41,8 +42,11 @@ _REPO_PATHS = {
 }
 _HEADERS = {"User-Agent": "hackbot-test-repair/1.0"}
 _TIMEOUT = 30
-# Hard cap so an old last-green can't produce an unbounded clone depth.
-MAX_CANDIDATES = 50
+# Ancestor pushes to walk looking for a green run. Each step is a live, uncached
+# group_summaries lookup, so raising this trades startup latency for a better range.
+LAST_GREEN_MAX_DEPTH = MAX_DEPTH
+# Cap on commits (not pushes) in the range, bounding the clone depth.
+MAX_RANGE_COMMITS = 100
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,20 @@ class FailingGroup:
     test: str
 
 
+@dataclass(frozen=True)
+class CommitRange:
+    """The git commit range to search for the culprit."""
+
+    # The failure commit; what the checkout is pinned to.
+    head: str
+    # The last-green commit, exclusive. None when unknown or outside the cap.
+    base: str | None
+    # Commits in the range; bounds the shallow clone depth.
+    span: int
+    # Whether the culprit is provably inside the range.
+    complete: bool
+
+
 @dataclass
 class Investigation:
     """The resolved context for one test-repair run, derived from a task id."""
@@ -60,14 +78,14 @@ class Investigation:
     project: str
     hg_revision: str
     harness: str
+    debug_build: bool
     failing_groups: list[FailingGroup]
     last_green_revision: str | None
-    # Git hashes of the commits to inspect, head (failure) commit first.
-    candidate_commits: list[str]
+    commit_range: CommitRange
 
     @property
     def failure_commit(self) -> str:
-        return self.candidate_commits[0]
+        return self.commit_range.head
 
 
 def _get_json(url: str) -> dict:
@@ -92,7 +110,13 @@ def _harness(tags: dict) -> str:
         return "xpcshell"
     if "mochitest" in suite:
         return "mochitest"
-    return tags.get("kind") or suite or "unknown"
+    # ``kind`` is "test" for every Firefox test task, so it is a last resort.
+    return suite or tags.get("kind") or "unknown"
+
+
+def _is_debug_build(tags: dict) -> bool:
+    """Whether the failing task ran against a debug build."""
+    return "debug" in (tags.get("test-platform") or tags.get("label") or "")
 
 
 def _failing_groups(task_id: str) -> list[FailingGroup]:
@@ -124,16 +148,17 @@ def _group_status(push: Push, group: str) -> str | None:
     return None
 
 
-def _last_green(branch: str, rev: str, group: str) -> str | None:
+def _last_green(
+    branch: str, rev: str, group: str, max_depth: int = LAST_GREEN_MAX_DEPTH
+) -> str | None:
     """Most recent ancestor revision where ``group`` was green, best effort.
 
-    Returns None when no green ancestor is found within MAX_DEPTH, the group was
-    already failing upstream, or mozci errors -- the caller then falls back to the
-    failing push alone.
+    None when no green ancestor is found within ``max_depth``, the group was
+    already failing upstream, or mozci errors.
     """
     try:
         ancestor = Push(rev, branch=branch)
-        for _ in range(MAX_DEPTH):
+        for _ in range(max_depth):
             try:
                 ancestor = ancestor.parent
             except ParentPushNotFound:
@@ -148,42 +173,38 @@ def _last_green(branch: str, rev: str, group: str) -> str | None:
     return None
 
 
-def _commits_from_pushes(pushes: dict) -> list[tuple[str | None, str | None]]:
-    """Flatten pushlog pushes into (hg_node, git_hash) pairs, oldest first."""
-    pairs: list[tuple[str | None, str | None]] = []
-    for key in sorted(pushes, key=int):
-        push = pushes[key]
-        changesets = push.get("changesets") or []
-        git_changesets = push.get("git_changesets") or []
-        for i, cs in enumerate(changesets):
-            node = cs.get("node") if isinstance(cs, dict) else cs
-            git = git_changesets[i] if i < len(git_changesets) else None
-            pairs.append((node, git))
-    return pairs
+def _count_commits(pushes: dict) -> int:
+    """Total changesets across the pushlog pushes."""
+    return sum(len(p.get("changesets") or []) for p in pushes.values())
 
 
-def _candidate_commits(
+def _resolve_range(
     project: str,
     head_rev: str,
     last_green_rev: str | None,
-    max_candidates: int,
-) -> list[str]:
-    """Git hashes for commits in ``(last_green_rev, head_rev]``, head first.
+    max_commits: int,
+) -> CommitRange | None:
+    """Resolve ``(last_green_rev, head_rev]`` into git endpoints and a commit count.
 
-    Falls back to the head push when there is no last-green, and to the single
-    head commit when the pushlog can't be read, so the result always includes the
-    head. Capped to ``max_candidates`` newest commits.
+    None when the head cannot be mapped: pinning the checkout to an older commit
+    would blame the wrong change. ``base`` is dropped when unknown or outside the
+    capped clone depth, which also marks the range incomplete.
     """
+    head_git = _hg_to_git(head_rev)
+    if not head_git:
+        logger.error("Could not resolve a git hash for head revision %s", head_rev)
+        return None
+
     path = _REPO_PATHS.get(project, project)
-    base = f"{_HG_BASE}/{path}/json-pushes"
+    pushlog = f"{_HG_BASE}/{path}/json-pushes"
     try:
         if last_green_rev:
             url = (
-                f"{base}?fromchange={last_green_rev}"
+                f"{pushlog}?fromchange={last_green_rev}"
                 f"&tochange={head_rev}&full=1&version=2"
             )
         else:
-            url = f"{base}?changeset={head_rev}&full=1&version=2"
+            url = f"{pushlog}?changeset={head_rev}&full=1&version=2"
         pushes = _get_json(url).get("pushes") or {}
     except requests.exceptions.RequestException:
         logger.exception(
@@ -191,32 +212,29 @@ def _candidate_commits(
         )
         pushes = {}
 
-    git_commits: list[str] = []
-    for node, git in _commits_from_pushes(pushes):
-        if not git and node:
-            git = _hg_to_git(node)
-        if git:
-            git_commits.append(git)
-    git_commits.reverse()  # pushlog is oldest-first; we want head first.
+    span = max(_count_commits(pushes), 1)
+    if not last_green_rev or not pushes:
+        return CommitRange(head_git, None, span, False)
 
-    if not git_commits:
-        head_git = _hg_to_git(head_rev)
-        return [head_git] if head_git else []
-
-    if len(git_commits) > max_candidates:
+    if span > max_commits:
         logger.warning(
-            "Candidate range %s..%s has %d commits; capping to the newest %d",
+            "Range %s..%s has %d commits; capping the clone to the newest %d",
             last_green_rev,
             head_rev,
-            len(git_commits),
-            max_candidates,
+            span,
+            max_commits,
         )
-        git_commits = git_commits[:max_candidates]
-    return git_commits
+        return CommitRange(head_git, None, max_commits, False)
+
+    base_git = _hg_to_git(last_green_rev)
+    if not base_git:
+        logger.warning("Could not resolve a git hash for last-green %s", last_green_rev)
+        return CommitRange(head_git, None, span, False)
+    return CommitRange(head_git, base_git, span, True)
 
 
 def resolve_investigation(
-    task_id: str, *, max_candidates: int = MAX_CANDIDATES
+    task_id: str, *, max_commits: int = MAX_RANGE_COMMITS
 ) -> Investigation:
     """Resolve a failing test task into its investigation context.
 
@@ -238,22 +256,23 @@ def resolve_investigation(
     last_green = _last_green(project, hg_revision, groups[0].group) if groups else None
     logger.info("Last-green revision: %s", last_green or "not found")
 
-    candidate_commits = _candidate_commits(
-        project, hg_revision, last_green, max_candidates
-    )
-    if not candidate_commits:
-        raise ValueError(f"could not resolve any git commit for task {task_id}")
+    commit_range = _resolve_range(project, hg_revision, last_green, max_commits)
+    if commit_range is None:
+        raise ValueError(f"could not resolve a git commit for task {task_id}")
     logger.info(
-        "Resolved %d candidate commit(s), head %s",
-        len(candidate_commits),
-        candidate_commits[0],
+        "Range %s..%s spans %d commit(s), complete: %s",
+        commit_range.base or "(unknown)",
+        commit_range.head,
+        commit_range.span,
+        commit_range.complete,
     )
 
     return Investigation(
         project=project,
         hg_revision=hg_revision,
         harness=_harness(tags),
+        debug_build=_is_debug_build(tags),
         failing_groups=groups,
         last_green_revision=last_green,
-        candidate_commits=candidate_commits,
+        commit_range=commit_range,
     )

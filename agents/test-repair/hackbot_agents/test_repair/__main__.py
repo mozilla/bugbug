@@ -25,15 +25,14 @@ class AgentInputs(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
 
 
-def _pin_checkout(candidate_commits: list[str]) -> None:
+def _pin_checkout(investigation: Investigation) -> None:
     """Pin the shallow clone to the failure commit, deep enough for the range.
 
-    ``SOURCE_REF`` is the head (failure) commit and ``SOURCE_DEPTH`` spans back to
-    the last-green commit so the agent can ``git show`` every candidate. Read by
-    the runtime when it prepares the source tree (HackbotContext.source_repo).
+    Read by the runtime when it prepares the source tree
+    (HackbotContext.source_repo).
     """
-    os.environ.setdefault("SOURCE_REF", candidate_commits[0])
-    os.environ.setdefault("SOURCE_DEPTH", str(len(candidate_commits) + 1))
+    os.environ.setdefault("SOURCE_REF", investigation.failure_commit)
+    os.environ.setdefault("SOURCE_DEPTH", str(investigation.commit_range.span + 1))
     logger.info(
         "Pinning checkout to %s with depth %s",
         os.environ["SOURCE_REF"],
@@ -51,7 +50,7 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
     task_id = next(iter(inputs.failure_tasks.values()))
     logger.info("Starting test-repair for task %s", task_id)
     investigation: Investigation = resolve_investigation(task_id)
-    _pin_checkout(investigation.candidate_commits)
+    _pin_checkout(investigation)
 
     scratch_dir = Path(tempfile.mkdtemp(prefix="test-repair-"))
     scratch_in = scratch_dir / "in"
