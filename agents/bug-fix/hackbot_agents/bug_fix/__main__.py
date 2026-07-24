@@ -9,7 +9,7 @@ class AgentInputs(BaseSettings):
     bug_id: int
     bugzilla_mcp_url: str
     revision_id: int | None = None
-    instructions: str | None = None
+    comment: str | None = None
     phabricator_broker_url: str | None = None
     model: str | None = None
     max_turns: int | None = None
@@ -37,10 +37,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
     else:
         await ctx.prepare_repo()
 
-    task = None if inputs.revision_id else "Triage and fix the bug, and verify the fix"
-
     return await run_bug_fix(
-        task=task,
         bugzilla_mcp_server={
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
@@ -49,7 +46,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         fx_ctx=ctx.firefox,
         bug=inputs.bug_id,
         revision_id=inputs.revision_id,
-        instructions=inputs.instructions or "",
+        comment=inputs.comment,
         model=inputs.model,
         max_turns=inputs.max_turns,
         effort=inputs.effort,

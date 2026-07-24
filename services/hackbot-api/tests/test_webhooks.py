@@ -237,7 +237,7 @@ def test_route_triggers_run(client, monkeypatch):
     monkeypatch.setattr(
         webhooks,
         "detect_mention_and_revision",
-        AsyncMock(return_value=("A reviewer commented on D42:\n\nfix it", 42, 12345)),
+        AsyncMock(return_value=("@hackbot please fix", 42, 12345)),
     )
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
@@ -257,14 +257,14 @@ def test_route_triggers_run(client, monkeypatch):
             {
                 "bug_id": 12345,
                 "revision_id": 42,
-                "instructions": "A reviewer commented on D42:\n\nfix it",
+                "comment": "@hackbot please fix",
             },
         )
     ]
 
 
 def test_route_dedupes_retried_delivery(client, monkeypatch):
-    detect = AsyncMock(return_value=("instructions", 42, 12345))
+    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
 

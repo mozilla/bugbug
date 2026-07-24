@@ -23,7 +23,7 @@ services:
       - BUGZILLA_MCP_URL=http://bug-fix-broker:8765/mcp
       - PHABRICATOR_BROKER_URL=http://bug-fix-broker:8765
       - REVISION_ID
-      - INSTRUCTIONS
+      - COMMENT
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
       # No uploader locally: summary/logs/attachments are written under

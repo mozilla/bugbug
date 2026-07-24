@@ -117,10 +117,10 @@ async def add_comment(
 ) -> str:
     """Record an intended comment on a Phabricator revision.
 
-    Use this to reply on a revision — for example, to answer a reviewer's
-    question — when no code change is required. This does not deliver a fix: to
-    submit code changes, use ``submit_patch`` instead. Recorded into the run
-    summary for human review; nothing is posted to Phabricator during the run.
+    Use this to reply on a revision — for example, to answer a question — when
+    no code change is required. This does not deliver a fix: to submit code
+    changes, use ``submit_patch`` instead. Recorded into the run summary for
+    human review; nothing is posted to Phabricator during the run.
     """
     text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
     recorder.record(
