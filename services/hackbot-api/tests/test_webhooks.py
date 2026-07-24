@@ -316,3 +316,47 @@ def test_route_dedupes_retried_delivery(client, monkeypatch):
     assert first.json()["status"] == "triggered"
     assert second.json()["reason"] == "duplicate delivery"
     assert detect.call_count == 1
+
+
+def test_route_detects_only_fresh_transactions(client, monkeypatch):
+    # A delivery mixing an already-seen PHID with a new one must consider only
+    # the fresh transaction for mention detection.
+    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+    monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
+    webhooks._seen_transactions["PHID-XACT-OLD"] = True
+
+    _post(
+        client,
+        {
+            "object": {"type": "DREV", "phid": "PHID-DREV-1"},
+            "transactions": [{"phid": "PHID-XACT-OLD"}, {"phid": "PHID-XACT-NEW"}],
+        },
+    )
+    assert detect.call_args.args[3] == ["PHID-XACT-NEW"]
+
+
+def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
+    # A transient failure must not consume the delivery: the transaction stays
+    # unseen so Phabricator's retry is reprocessed rather than deduped away.
+    monkeypatch.setattr(
+        webhooks,
+        "detect_mention_and_revision",
+        AsyncMock(return_value=("@hackbot please fix", 42, 12345)),
+    )
+
+    class _FailingClient:
+        async def trigger_run(self, agent_name, inputs):
+            raise RuntimeError("conduit down")
+
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
+
+    with pytest.raises(RuntimeError):
+        _post(
+            client,
+            {
+                "object": {"type": "DREV", "phid": "PHID-DREV-1"},
+                "transactions": [{"phid": "PHID-XACT-1"}],
+            },
+        )
+    assert "PHID-XACT-1" not in webhooks._seen_transactions

@@ -74,14 +74,14 @@ async def phabricator_webhook(
     fresh = [phid for phid in triggering if phid not in _seen_transactions]
     if not fresh:
         return {"status": "ignored", "reason": "duplicate delivery"}
-    for phid in fresh:
-        _seen_transactions[phid] = True
 
+    # Only consider this delivery's fresh transactions for the mention, so a
+    # payload mixing new and already-seen PHIDs can't re-trigger on an older one.
     detected = await detect_mention_and_revision(
         phab_client,
         settings.webhook,
         object_phid,
-        triggering,
+        fresh,
     )
     if detected is None:
         return {"status": "ignored", "reason": "no actionable @hackbot mention"}
@@ -96,6 +96,11 @@ async def phabricator_webhook(
             "comment": comment,
         },
     )
+    # Mark seen only after a successful trigger: if detection or the trigger call
+    # raises (transient Conduit/API failure), the delivery 500s and Phabricator's
+    # retry must be reprocessed rather than dropped as a duplicate.
+    for phid in fresh:
+        _seen_transactions[phid] = True
     log.info(
         "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention",
         run_id,
