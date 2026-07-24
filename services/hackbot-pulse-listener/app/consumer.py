@@ -150,14 +150,20 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
     return run_id
 
 
-def _harness(tags: dict, label: str) -> str:
-    """The tests.firefox.dev harness key for a test task."""
-    suite = tags.get("test-suite") or ""
-    if "xpcshell" in suite or "xpcshell" in label:
+def _harness(tags: dict, label: str) -> str | None:
+    """The tests.firefox.dev harness for a test task, or None if it publishes none.
+
+    Only the mochitest and xpcshell timings datasets exist, so every other
+    harness has no intermittent data to check against. The Taskcluster ``kind``
+    is not a harness name (it is often just "test"), so both the suite tag and
+    the label are matched -- the same suite arrives tagged either way.
+    """
+    text = f"{tags.get('test-suite') or ''} {label}"
+    if "xpcshell" in text:
         return "xpcshell"
-    if "mochitest" in suite:
+    if "mochitest" in text or "browser-chrome" in text:
         return "mochitest"
-    return tags.get("kind") or suite
+    return None
 
 
 def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
@@ -204,13 +210,19 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     )
 
 
-def _fresh_groups(groups, project: str, hg_revision: str, harness: str):
+def _fresh_groups(groups, project: str, hg_revision: str, harness: str | None):
     """Groups that are genuine, non-intermittent regressions worth investigating."""
+    if harness is None:
+        logger.info(
+            "No tests.firefox.dev dataset for this harness; "
+            "skipping the intermittent check at %s",
+            hg_revision,
+        )
     fresh = []
     for fg in groups:
         # Cheap intermittent gate first (one HTTP call) before the mozci walk.
-        flak = flakiness.get_flakiness(fg.test, harness)
-        if flak.total and flak.failure_rate >= settings.flakiness_threshold:
+        flak = flakiness.get_flakiness(fg.test, harness) if harness else None
+        if flak and flak.total and flak.failure_rate >= settings.flakiness_threshold:
             logger.info(
                 "Test %s is intermittent (failure rate %.2f); skipping",
                 fg.test,

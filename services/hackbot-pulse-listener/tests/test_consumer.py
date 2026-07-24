@@ -391,10 +391,17 @@ def test_harness_detection():
         consumer._harness({"test-suite": "mochitest-browser-chrome"}, "l")
         == "mochitest"
     )
-    # Falls back to the kind when neither xpcshell nor mochitest matches.
+    # Recognized from the label too: the same suite arrives with kind "test" and
+    # sometimes no test-suite tag, and "test" is not a harness.
     assert (
-        consumer._harness({"kind": "web-platform-tests"}, "l") == "web-platform-tests"
+        consumer._harness(
+            {"kind": "test"}, "test-linux2404-64/opt-mochitest-browser-chrome-8"
+        )
+        == "mochitest"
     )
+    # Harnesses that publish no timings dataset resolve to None (no lookup).
+    assert consumer._harness({"kind": "web-platform-tests"}, "l") is None
+    assert consumer._harness({"kind": "test"}, "test-linux/opt-reftest-1") is None
 
 
 def test_multiple_failing_groups_trigger_one_run_per_task(monkeypatch):
@@ -453,3 +460,18 @@ def test_queue_name_omits_production_environment():
     with patch.object(consumer.settings, "environment", "production"):
         (queue,) = consumer._build_queues("guest")
     assert queue.name == "queue/guest/build-repair-task-failed"
+
+
+def test_no_dataset_harness_skips_flakiness_lookup():
+    # reftest/wpt publish no timings dataset, so the lookup would be a guaranteed
+    # 404; the group is still evaluated for being a regression.
+    with (
+        patch.object(consumer.flakiness, "get_flakiness") as get_flakiness,
+        patch.object(
+            consumer.regression, "is_new_test_failure", return_value=(True, "green")
+        ),
+    ):
+        fresh = consumer._fresh_groups([_GROUP], "autoland", "hgrev", None)
+
+    get_flakiness.assert_not_called()
+    assert fresh == [_GROUP]
