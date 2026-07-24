@@ -1,0 +1,33 @@
+services:
+  regression-range-broker:
+    build:
+      context: ../..
+      dockerfile: agents/regression-range/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+    expose:
+      - "8765"
+
+  regression-range-agent:
+    build:
+      context: ../..
+      dockerfile: agents/regression-range/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      - GOOD=${GOOD:-}
+      - BAD=${BAD:-}
+      - BUGZILLA_MCP_URL=http://regression-range-broker:8765/mcp
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts so
+      # compose and direct runs land in the same user-scoped location.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      regression-range-broker:
+        condition: service_started

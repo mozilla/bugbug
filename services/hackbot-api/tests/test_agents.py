@@ -7,6 +7,7 @@ from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
+    RegressionRangeInputs,
 )
 from app.schemas import (
     TestPlanGeneratorInputs as PlanGeneratorInputs,
@@ -47,6 +48,25 @@ def test_build_repair_registry_entry():
     assert spec.build_env is None
     assert spec.input_schema is BuildRepairInputs
     assert spec.job_name == "hackbot-agent-build-repair"
+
+
+def test_regression_range_registry_entry():
+    spec = AGENT_REGISTRY["regression-range"]
+    assert spec.build_env is None
+    assert spec.input_schema is RegressionRangeInputs
+    assert spec.job_name == "hackbot-agent-regression-range"
+    # Actions are recorded for human review, never auto-applied.
+    assert spec.auto_apply_actions is False
+
+
+def test_regression_range_env_serializes_optional_bounds():
+    # bug_id only: optional bounds must not leak as env vars.
+    env = model_to_env(RegressionRangeInputs(bug_id=42))
+    assert env == {"BUG_ID": "42"}
+    # When provided, bounds map to GOOD/BAD.
+    env = model_to_env(RegressionRangeInputs(bug_id=42, good="123", bad="124"))
+    assert env["GOOD"] == "123"
+    assert env["BAD"] == "124"
 
 
 def test_model_to_env_json_encodes_failure_tasks_and_bool():

@@ -7,6 +7,7 @@ include:
   - path: agents/bug-fix/compose.yml
   - path: agents/build-repair/compose.yml
   - path: agents/frontend-triage/compose.yml
+  - path: agents/regression-range/compose.yml
   - path: agents/test-plan-generator/compose.yml
 
 services:

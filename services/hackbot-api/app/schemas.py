@@ -114,6 +114,18 @@ class FrontendTriageInputs(BaseModel):
     effort: str | None = None
 
 
+class RegressionRangeInputs(BaseModel):
+    bug_id: int
+    # Optional bisection bounds (date, version number, or changeset); inferred
+    # from the bug when omitted.
+    good: str | None = None
+    bad: str | None = None
+    model: str | None = None
+    mozregression_model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None
+
+
 class TestPlanGeneratorInputs(BaseModel):
     feature_name: str
     feature_description: str
