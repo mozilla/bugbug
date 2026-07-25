@@ -15,10 +15,10 @@ def _hb(tmp_path, config: HackbotConfig) -> HackbotContext:
     return hb
 
 
-def test_source_repo_without_declaration_raises(tmp_path):
+async def test_source_repo_without_declaration_raises(tmp_path):
     hb = _hb(tmp_path, HackbotConfig())
     with pytest.raises(RuntimeError, match="\\[source\\]"):
-        hb.source_repo
+        await hb.prepare_repo()
 
 
 def test_firefox_without_declaration_raises(tmp_path):
@@ -36,7 +36,7 @@ def test_firefox_disabled_raises(tmp_path):
         hb.firefox
 
 
-def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):
+async def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):
     calls = []
 
     def fake_ensure(
@@ -56,11 +56,11 @@ def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):
     )
     hb = _hb(tmp_path, cfg)
 
-    assert hb.source_repo == tmp_path / "from-env"
+    assert await hb.prepare_repo() == tmp_path / "from-env"
     assert calls == [(tmp_path / "from-env", "https://example.com/r.git", None, None)]
 
 
-def test_source_repo_honors_source_ref_env(tmp_path, monkeypatch):
+async def test_source_repo_honors_source_ref_env(tmp_path, monkeypatch):
     calls = []
 
     def fake_ensure(
@@ -77,11 +77,11 @@ def test_source_repo_honors_source_ref_env(tmp_path, monkeypatch):
     )
     hb = _hb(tmp_path, cfg)
 
-    assert hb.source_repo == Path("/from/toml")
+    assert await hb.prepare_repo() == Path("/from/toml")
     assert calls == [(Path("/from/toml"), "r", "deadbeef", None)]
 
 
-def test_source_repo_uses_toml_path_without_env(tmp_path, monkeypatch):
+async def test_source_repo_uses_toml_path_without_env(tmp_path, monkeypatch):
     monkeypatch.delenv("SOURCE_REPO", raising=False)
     monkeypatch.setattr(
         "hackbot_runtime.context.ensure_source_repo", lambda *a, **k: None
@@ -90,7 +90,36 @@ def test_source_repo_uses_toml_path_without_env(tmp_path, monkeypatch):
         source=SourceConfig(repo_url="r", checkout_path=Path("/from/toml"))
     )
     hb = _hb(tmp_path, cfg)
-    assert hb.source_repo == Path("/from/toml")
+    assert await hb.prepare_repo() == Path("/from/toml")
+
+
+async def test_prepare_repo_explicit_ref_overrides_env(tmp_path, monkeypatch):
+    refs = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.ensure_source_repo",
+        lambda path, repo_url, ref=None, depth=None: refs.append(ref),
+    )
+    monkeypatch.setenv("SOURCE_REF", "from-env")
+    cfg = HackbotConfig(source=SourceConfig(repo_url="r", checkout_path=Path("/x")))
+    hb = _hb(tmp_path, cfg)
+
+    # An explicit ref (e.g. a revision's base commit) wins over SOURCE_REF, and
+    # is threaded straight to ensure_source_repo — no env mutation.
+    await hb.prepare_repo(ref="base9")
+    assert refs == ["base9"]
+
+
+async def test_prepare_repo_conflicting_ref_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("SOURCE_REF", raising=False)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.ensure_source_repo", lambda *a, **k: None
+    )
+    cfg = HackbotConfig(source=SourceConfig(repo_url="r", checkout_path=Path("/x")))
+    hb = _hb(tmp_path, cfg)
+
+    await hb.prepare_repo()  # prepares at the default ref first
+    with pytest.raises(RuntimeError, match="already prepared"):
+        await hb.prepare_repo(ref="base9")
 
 
 def test_results_plumbing(tmp_path):
@@ -118,11 +147,10 @@ def _hb_with_source(tmp_path, monkeypatch):
     cfg = HackbotConfig(source=SourceConfig(repo_url="https://example.com/r.git"))
     hb = _hb(tmp_path, cfg)
     hb._source_base = "basecommit"
-    # source_repo would normally clone; publish_changes only passes it through
-    # to the (mocked) changes helpers, so a bare path is enough here.
-    monkeypatch.setattr(
-        type(hb), "source_repo", property(lambda self: tmp_path / "src")
-    )
+    # prepare_repo would normally clone and set this; publish_changes only reads
+    # repo_path and passes it to the (mocked) changes helpers, so a bare path is
+    # enough here.
+    hb._repo_path = tmp_path / "src"
     monkeypatch.setattr(
         "hackbot_runtime.context.changes.collect",
         lambda repo, base, repo_url: ChangeSet(patch=b"x", metadata={"base": base}),

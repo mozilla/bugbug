@@ -7,6 +7,8 @@ services:
     environment:
       BUGZILLA_API_URL: ${BUGZILLA_API_URL}
       BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+      PHABRICATOR_URL: ${PHABRICATOR_URL}
+      PHABRICATOR_API_KEY: ${PHABRICATOR_API_KEY}
     expose:
       - "8765"
 
@@ -19,6 +21,9 @@ services:
       - RUN_ID
       - BUG_ID=${BUG_ID:?error}
       - BUGZILLA_MCP_URL=http://bug-fix-broker:8765/mcp
+      - PHABRICATOR_BROKER_URL=http://bug-fix-broker:8765
+      - REVISION_ID
+      - COMMENT
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
       # No uploader locally: summary/logs/attachments are written under

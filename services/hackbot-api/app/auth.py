@@ -1,13 +1,49 @@
+import hashlib
 import hmac
 import logging
 
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, Request, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
 from app.config import settings
 
 log = logging.getLogger(__name__)
+
+
+def verify_phabricator_signature(raw_body: bytes, signature: str | None) -> bool:
+    """Constant-time-check Phabricator's `X-Phabricator-Webhook-Signature`.
+
+    Phabricator signs each delivery with HMAC-SHA256 over the raw request body,
+    keyed by the webhook's HMAC key, and sends the hex digest in the header.
+    Returns False if the secret is unconfigured or the header is missing/wrong.
+    """
+    if not settings.webhook.secret or not signature:
+        return False
+    expected = hmac.new(
+        settings.webhook.secret.encode(),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+async def require_phabricator_signature(
+    request: Request,
+    x_phabricator_webhook_signature: str | None = Header(default=None),
+) -> None:
+    """Reject the request unless Phabricator's webhook signature is valid.
+
+    A dependency mirroring `require_api_key`, but it authenticates via an HMAC
+    over the raw body rather than a header token. Reading the body here is safe:
+    Starlette caches it, so the route can still call `request.json()`.
+    """
+    raw = await request.body()
+    if not verify_phabricator_signature(raw, x_phabricator_webhook_signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing webhook signature",
+        )
 
 
 async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:

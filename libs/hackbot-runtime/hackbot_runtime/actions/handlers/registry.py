@@ -5,6 +5,9 @@ from hackbot_runtime.actions.handlers.bugzilla_handler import (
     CreateBugHandler,
     UpdateBugHandler,
 )
+from hackbot_runtime.actions.handlers.phabricator_handler import (
+    AddCommentHandler as PhabricatorAddCommentHandler,
+)
 from hackbot_runtime.actions.handlers.phabricator_handler import SubmitPatchHandler
 from hackbot_runtime.actions.handlers.testrail_handler import SubmitTestCasesHandler
 
@@ -17,6 +20,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "bugzilla.add_attachment": AddAttachmentHandler(),
     "bugzilla.create_bug": CreateBugHandler(),
     "phabricator.submit_patch": SubmitPatchHandler(),
+    "phabricator.add_comment": PhabricatorAddCommentHandler(),
     "testrail.submit_test_cases": SubmitTestCasesHandler(),
 }
 

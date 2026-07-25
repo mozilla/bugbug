@@ -1,5 +1,3 @@
-import os
-
 from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,17 +31,15 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
     git_commits = resolve_git_commits(task_id, inputs.git_commit)
 
     # Pin the checkout to the failure commit and fetch deep enough to include the
-    # whole push, so the agent can `git show` every commit in it. Both are read
-    # when the runtime prepares the source tree (HackbotContext.source_repo).
-    os.environ.setdefault("SOURCE_REF", git_commits[0])
-    os.environ.setdefault("SOURCE_DEPTH", str(len(git_commits) + 1))
+    # whole push, so the agent can `git show` every commit in it.
+    await ctx.prepare_repo(ref=git_commits[0], depth=len(git_commits) + 1)
 
     return await run_build_repair(
         bugzilla_mcp_server={
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
         },
-        source_repo=ctx.source_repo,
+        source_repo=ctx.repo_path,
         fx_ctx=ctx.firefox,
         bug_id=inputs.bug_id,
         git_commits=git_commits,

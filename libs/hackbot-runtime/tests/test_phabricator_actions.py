@@ -39,3 +39,20 @@ async def test_ref_is_recorded():
         rec, bug_id=1, reasoning="r", title="Fix", ref="patch"
     )
     assert rec.actions[0]["ref"] == "patch"
+
+
+async def test_add_comment_records_revision_and_text():
+    rec = ActionsRecorder()
+    await phabricator.add_comment(
+        rec, revision_id=42, text="Here is the answer.", reasoning="r"
+    )
+    action = rec.actions[0]
+    assert action["type"] == "phabricator.add_comment"
+    assert action["params"]["revision_id"] == 42
+    assert action["params"]["text"].startswith("Here is the answer.")
+
+
+async def test_add_comment_appends_footer():
+    rec = ActionsRecorder()
+    await phabricator.add_comment(rec, revision_id=1, text="Answer.", reasoning="r")
+    assert rec.actions[0]["params"]["text"].endswith(phabricator._COMMENT_FOOTER)

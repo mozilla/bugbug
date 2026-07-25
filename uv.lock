@@ -30,6 +30,7 @@ members = [
     "hackbot-api",
     "hackbot-pulse-listener",
     "hackbot-runtime",
+    "phabricator-client",
     "reviewhelper-api",
 ]
 
@@ -2508,8 +2509,15 @@ dependencies = [
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
+    { name = "phabricator-client" },
     { name = "starlette" },
     { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
 ]
 
 [package.metadata]
@@ -2519,9 +2527,13 @@ requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "starlette", specifier = ">=0.36.0" },
     { name = "uvicorn", specifier = ">=0.27.0" },
 ]
+provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-build-repair"
@@ -2614,6 +2626,7 @@ source = { editable = "services/hackbot-api" }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "cachetools" },
     { name = "cloud-sql-python-connector", extra = ["asyncpg"] },
     { name = "fastapi" },
     { name = "google-auth" },
@@ -2621,6 +2634,8 @@ dependencies = [
     { name = "google-cloud-run" },
     { name = "google-cloud-storage" },
     { name = "hackbot-runtime" },
+    { name = "httpx" },
+    { name = "phabricator-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "sentry-sdk" },
@@ -2639,6 +2654,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.13.1" },
     { name = "asyncpg", specifier = ">=0.29.0" },
+    { name = "cachetools", specifier = ">=5.3.0" },
     { name = "cloud-sql-python-connector", extras = ["asyncpg"], specifier = ">=1.5.0" },
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "google-auth", specifier = ">=2.29.0" },
@@ -2646,7 +2662,9 @@ requires-dist = [
     { name = "google-cloud-run", specifier = ">=0.10.0" },
     { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "hackbot-runtime", editable = "libs/hackbot-runtime" },
+    { name = "httpx", specifier = ">=0.26.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
@@ -2701,7 +2719,10 @@ version = "0.1.0"
 source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
+    { name = "async-lru" },
     { name = "google-auth" },
+    { name = "httpx" },
+    { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
     { name = "weave" },
@@ -2720,9 +2741,12 @@ phabricator = [
 requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
+    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
+    { name = "httpx", specifier = ">=0.26.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
     { name = "weave", specifier = ">=0.53.1" },
@@ -4955,6 +4979,30 @@ sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523", size = 63772, upload-time = "2023-11-25T06:56:14.81Z" },
 ]
+
+[[package]]
+name = "phabricator-client"
+version = "0.1.0"
+source = { editable = "libs/phabricator-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "pillow"
