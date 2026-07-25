@@ -222,8 +222,8 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     for its own work — no separate clone or checkout happens here. Returns
     ``None`` if building the diff fails for any reason (e.g. the checkout
     lacks an ``.arcconfig``, or nothing actually changed) — this is
-    best-effort, gated by the caller on whether a `phabricator.submit_patch`
-    action was even recorded, so a failure here shouldn't break an otherwise
+    best-effort, gated by the caller on whether a Phabricator patch action
+    was even recorded, so a failure here shouldn't break an otherwise
     successful run.
 
     ``repositoryPHID`` is deliberately not included here — it's resolved by

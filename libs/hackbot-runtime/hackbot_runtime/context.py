@@ -25,6 +25,7 @@ from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts, changes
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
@@ -232,7 +233,7 @@ class HackbotContext(BaseSettings):
         Returns the patch key, or ``None`` when the agent never prepared a source
         checkout or made no changes at all.
 
-        If the agent recorded a ``phabricator.submit_patch`` action, also builds
+        If the agent recorded a Phabricator patch action, also builds
         and publishes the Phabricator submission payload here — while the
         checkout the agent already has is still around — so the downstream
         apply step never needs its own checkout (see
@@ -255,8 +256,7 @@ class HackbotContext(BaseSettings):
         self.publish_json(meta_key, change_set.metadata)
 
         wants_phabricator = any(
-            action["type"] == "phabricator.submit_patch"
-            for action in self.actions.actions
+            action["type"] in PATCH_ACTION_TYPES for action in self.actions.actions
         )
         if wants_phabricator:
             diff_payload = changes.build_phabricator_diff(

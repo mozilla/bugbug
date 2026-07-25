@@ -158,8 +158,11 @@ def _hb_with_source(tmp_path, monkeypatch):
     return hb
 
 
+@pytest.mark.parametrize(
+    "action_type", ["phabricator.submit_patch", "phabricator.update_patch"]
+)
 def test_publish_changes_builds_phabricator_diff_when_action_recorded(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, action_type
 ):
     hb = _hb_with_source(tmp_path, monkeypatch)
     monkeypatch.setattr(
@@ -169,7 +172,7 @@ def test_publish_changes_builds_phabricator_diff_when_action_recorded(
             "local_commits": {"node": {"author": "A"}},
         },
     )
-    hb.actions.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
+    hb.actions.record(action_type, {"bug_id": 1}, reasoning="r")
 
     hb.publish_changes()
 
