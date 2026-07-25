@@ -19,7 +19,6 @@ export default function RootLayout({
         <header className="topbar">
           <div className="inner">
             <h1>🚀 Hackbot Launchpad</h1>
-            <span className="tag">demo</span>
             <a
               className="github-link"
               href="https://github.com/mozilla/bugbug/tree/master/services/hackbot-ui"
