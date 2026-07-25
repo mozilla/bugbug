@@ -19,7 +19,7 @@ services:
       target: agent
     environment:
       - RUN_ID
-      - BUG_ID=${BUG_ID:?error}
+      - BUG_ID=${BUG_ID:-}
       - BUGZILLA_MCP_URL=http://bug-fix-broker:8765/mcp
       - PHABRICATOR_BROKER_URL=http://bug-fix-broker:8765
       - REVISION_ID
