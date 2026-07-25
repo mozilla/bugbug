@@ -74,6 +74,16 @@ class ReviewRequest(Base):
     error: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
 
+    # Risk/complexity pre-screen scores (0-10), recorded even when the review is
+    # skipped so thresholds can be tuned and the dashboard can chart them. The
+    # verbose factors and coverage detail live in `details`.
+    risk: Mapped[int | None]
+    complexity: Mapped[int | None]
+    in_diff_test_signal: Mapped[str | None] = mapped_column(Text)
+    coverage_signal: Mapped[str | None] = mapped_column(Text)
+    # Why the review was skipped (e.g. "above_threshold"); set with status=SKIPPED.
+    skipped_reason: Mapped[str | None] = mapped_column(Text)
+
     # Relationships
     comments: Mapped[list["GeneratedComment"]] = relationship(
         "GeneratedComment",
@@ -115,6 +125,8 @@ class ReviewRequest(Base):
             unique=True,
             postgresql_where=(platform == Platform.GITHUB),
         ),
+        # Speeds up dashboard aggregations grouped by status / skip reason.
+        Index("ix_review_requests_status", "status"),
     )
 
 

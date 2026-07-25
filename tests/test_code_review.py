@@ -1340,7 +1340,15 @@ def test_run_appends_scope_suggestion_last():
     tool._agent_model = "model-x"
     tool.patch_summarizer = MagicMock()
     tool.patch_summarizer.run = MagicMock(return_value="summary")
-    tool.generate_review_comments = AsyncMock(return_value=([regular], []))
+    tool.generate_review_comments = AsyncMock(
+        return_value=(
+            {
+                "messages": [],
+                "structured_response": SimpleNamespace(comments=[regular]),
+            },
+            [],
+        )
+    )
     tool.suggestion_filterer = MagicMock()
     tool.suggestion_filterer.run = MagicMock(return_value=[regular])
 

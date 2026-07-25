@@ -117,6 +117,9 @@ def _build_response_message(review_request: ReviewRequest) -> str:
     if review_request.status == ReviewStatus.PUBLISHED:
         return f"Review Helper already posted its review for Diff {review_request.diff_id}."
 
+    if review_request.status == ReviewStatus.SKIPPED:
+        return f"Review Helper did not review Diff {review_request.diff_id} (reason: {review_request.skipped_reason})."
+
     if review_request.status == ReviewStatus.FAILED:
         return f"The review processing for Diff {review_request.diff_id} failed with error: {review_request.error}"
 
