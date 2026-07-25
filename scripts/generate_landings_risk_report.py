@@ -18,6 +18,7 @@ import textwrap
 import traceback
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from functools import cached_property
 from typing import Any, Set, cast
 
 import bs4
@@ -359,14 +360,13 @@ class LandingsRiskReportGenerator(object):
 
     def get_blocking_of(
         self,
-        bug_map: dict[int, bugzilla.BugDict],
         bug_ids: list[int],
         meta_only: bool = False,
     ) -> dict[int, list[int]]:
         return {
-            bug_id: bugzilla.find_blocking(bug_map, bug_map[bug_id])
+            bug_id: bugzilla.find_blocking(self.bug_map, self.bug_map[bug_id])
             for bug_id in bug_ids
-            if not meta_only or "meta" in bug_map[bug_id]["keywords"]
+            if not meta_only or "meta" in self.bug_map[bug_id]["keywords"]
         }
 
     def get_meta_bugs(self, days: int) -> list[int]:
@@ -440,7 +440,6 @@ class LandingsRiskReportGenerator(object):
 
     def generate_landings_by_date(
         self,
-        bug_map: dict[int, bugzilla.BugDict],
         bugs: list[int],
         meta_bugs: dict[int, list[int]],
     ) -> None:
@@ -452,24 +451,22 @@ class LandingsRiskReportGenerator(object):
             if not bug_id:
                 continue
 
-            if bug_id in bug_map:
+            if bug_id in self.bug_map:
                 bug_to_commits[bug_id].append(commit)
 
         # All bugs blocking the "fuzz" bug and its dependent meta bugs are fuzzing bugs.
         fuzzblocker_bugs = set(
-            bug["id"] for bug in bug_map.values() if is_fuzzblocker(bug)
+            bug["id"] for bug in self.bug_map.values() if is_fuzzblocker(bug)
         )
         fuzzing_bugs = (
             set(
                 sum(
-                    self.get_blocking_of(
-                        bug_map, [FUZZING_METABUG_ID], meta_only=True
-                    ).values(),
+                    self.get_blocking_of([FUZZING_METABUG_ID], meta_only=True).values(),
                     [],
                 )
                 + [
                     bug["id"]
-                    for bug in bug_map.values()
+                    for bug in self.bug_map.values()
                     if "bugmon" in bug["whiteboard"].lower()
                     or "bugmon" in bug["keywords"]
                 ]
@@ -491,10 +488,10 @@ class LandingsRiskReportGenerator(object):
 
         logger.info("Retrieve Phabricator revisions linked to bugs...")
         for bug_id in bugs:
-            if bug_id not in bug_map:
+            if bug_id not in self.bug_map:
                 continue
 
-            revision_ids += bugzilla.get_revision_ids(bug_map[bug_id])
+            revision_ids += bugzilla.get_revision_ids(self.bug_map[bug_id])
 
         logger.info("Download revisions of interest...")
         phabricator.download_modified_revisions()
@@ -509,7 +506,7 @@ class LandingsRiskReportGenerator(object):
 
             if (
                 revision["fields"]["bugzilla.bug-id"]
-                and int(revision["fields"]["bugzilla.bug-id"]) in bug_map
+                and int(revision["fields"]["bugzilla.bug-id"]) in self.bug_map
             ):
                 bug_to_revisions_map[int(revision["fields"]["bugzilla.bug-id"])].append(
                     revision
@@ -565,13 +562,13 @@ class LandingsRiskReportGenerator(object):
 
         bug_summaries = []
         for bug_id in bugs:
-            if bug_id not in bug_map:
+            if bug_id not in self.bug_map:
                 continue
 
             commit_list = bug_to_commits.get(bug_id, [])
             commit_data = get_commit_data(commit_list)
 
-            bug = bug_map[bug_id]
+            bug = self.bug_map[bug_id]
 
             time_to_bug = None
             for regressor_bug_id in bug["regressed_by"]:
@@ -670,7 +667,7 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "summary": bug["summary"],
                 "fixed": bug["status"] in ("VERIFIED", "RESOLVED"),
-                "types": bug_to_types(bug, bug_map)
+                "types": bug_to_types(bug, self.bug_map)
                 + (
                     ["intermittent"]
                     if "intermittent-failure" in bug["keywords"]
@@ -717,15 +714,13 @@ class LandingsRiskReportGenerator(object):
             }
             if meta_bugs is not None:
                 output["featureMetaBugs"] = [
-                    {"id": meta_bug, "summary": bug_map[meta_bug]["summary"]}
+                    {"id": meta_bug, "summary": self.bug_map[meta_bug]["summary"]}
                     for meta_bug in meta_bugs
                 ]
 
             json.dump(output, f)
 
-    def generate_component_connections(
-        self, bug_map: dict[int, bugzilla.BugDict], bugs: list[int]
-    ) -> None:
+    def generate_component_connections(self, bugs: list[int]) -> None:
         bugs_set = set(bugs)
         commits = [
             commit
@@ -751,9 +746,9 @@ class LandingsRiskReportGenerator(object):
                 continue
 
             commit_bugs = [
-                bug_map[commit["bug_id"]]
+                self.bug_map[commit["bug_id"]]
                 for commit in commit_list
-                if commit["bug_id"] in bug_map
+                if commit["bug_id"] in self.bug_map
             ]
 
             components = list(set(get_full_component(bug) for bug in commit_bugs))
@@ -773,17 +768,17 @@ class LandingsRiskReportGenerator(object):
                     )
 
         # Filter out commits for which we have no bugs.
-        commits = [commit for commit in commits if commit["bug_id"] in bug_map]
+        commits = [commit for commit in commits if commit["bug_id"] in self.bug_map]
 
         # Filter out backed-out commits.
         commits = [commit for commit in commits if commit["backedoutby"]]
 
         # Sort commits by bug component, so we can use itertools.groupby to group them by bug component.
-        commits.sort(key=lambda x: get_full_component(bug_map[x["bug_id"]]))
+        commits.sort(key=lambda x: get_full_component(self.bug_map[x["bug_id"]]))
 
         commit_groups = []
         for component, commit_iter in itertools.groupby(
-            commits, lambda x: get_full_component(bug_map[x["bug_id"]])
+            commits, lambda x: get_full_component(self.bug_map[x["bug_id"]])
         ):
             commit_group = {
                 "component": component,
@@ -805,9 +800,7 @@ class LandingsRiskReportGenerator(object):
 
         repository.close_component_mapping()
 
-    def generate_component_test_stats(
-        self, bug_map: dict[int, bugzilla.BugDict], test_infos: dict[str, Any]
-    ) -> None:
+    def generate_component_test_stats(self, test_infos: dict[str, Any]) -> None:
         component_test_stats: dict[str, dict[str, dict[str, list[dict[str, int]]]]] = (
             collections.defaultdict(
                 lambda: collections.defaultdict(lambda: collections.defaultdict(list))
@@ -819,15 +812,33 @@ class LandingsRiskReportGenerator(object):
 
             for bug in test_info["bugs"]:
                 bug_id = bug["id"]
-                if bug_id not in bug_map:
+                if bug_id not in self.bug_map:
                     continue
 
-                component_test_stats[get_full_component(bug_map[bug_id])][date][
+                component_test_stats[get_full_component(self.bug_map[bug_id])][date][
                     "bugs"
                 ].append(bug)
 
         with open("component_test_stats.json", "w") as f:
             json.dump(component_test_stats, f)
+
+    @cached_property
+    def bug_map(self) -> dict[int, bugzilla.BugDict]:
+        bugs_set = set(
+            self.bugs + self.test_info_bugs + self.meta_bugs + [FUZZING_METABUG_ID]
+        )
+
+        bug_map = {}
+        for bug in bugzilla.get_bugs(include_all_products=True):
+            # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the bug_to_types call) and bugs that caused regressions.
+            if (
+                bug["id"] in bugs_set
+                or len(bug["depends_on"]) > 0
+                or len(bug["regressions"]) > 0
+            ):
+                bug_map[bug["id"]] = bug
+
+        return bug_map
 
     def go(self, days: int) -> None:
         bugs = self.get_landed_and_filed_since(days)
@@ -888,25 +899,15 @@ class LandingsRiskReportGenerator(object):
 
         logger.info("%d bugs to analyze.", len(bugs))
 
-        bugs_set = set(bugs + test_info_bugs + meta_bugs + [FUZZING_METABUG_ID])
+        self.bugs = bugs
+        self.test_info_bugs = test_info_bugs
+        self.meta_bugs = meta_bugs
 
-        bug_map = {}
-        for bug in bugzilla.get_bugs(include_all_products=True):
-            # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the bug_to_types call) and bugs that caused regressions.
-            if (
-                bug["id"] in bugs_set
-                or len(bug["depends_on"]) > 0
-                or len(bug["regressions"]) > 0
-            ):
-                bug_map[bug["id"]] = bug
+        self.generate_landings_by_date(bugs, self.get_blocking_of(meta_bugs))
 
-        self.generate_landings_by_date(
-            bug_map, bugs, self.get_blocking_of(bug_map, meta_bugs)
-        )
+        self.generate_component_connections(bugs)
 
-        self.generate_component_connections(bug_map, bugs)
-
-        self.generate_component_test_stats(bug_map, test_infos)
+        self.generate_component_test_stats(test_infos)
 
 
 def notification(days: int) -> None:
