@@ -13,10 +13,13 @@ TRIAGE_TASK = (
 )
 
 
+DEFAULT_MODEL = "claude-opus-5"
+
+
 class AgentInputs(BaseSettings):
     bug_id: int
     bugzilla_mcp_url: str
-    model: str | None = None
+    model: str = DEFAULT_MODEL
     max_turns: int | None = None
     effort: str | None = None
 
