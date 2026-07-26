@@ -49,6 +49,10 @@ Your local checkout is **shallow** (no git history), so for anything beyond the 
 - `get_blame(file_path, lines)` — the changeset that last modified each line (HASH/DATE/MESSAGE). Use to find the change — and thus the bug — that introduced a line.
 - `get_file(file_path, revision?)` — full file content, optionally at a past revision.
 
+**Searching locates; reading confirms. Do both.** A search hit tells you a file is relevant — it does not tell you what the code there actually does. Before you assert a root cause, **`get_file` (or local `Read`) every file you are about to name** and read the surrounding rule, function, or selector. This is the difference between a vague plan ("some elements don't opt into the fix") and a checkable one ("this selector sets no background, while its sibling does").
+
+It matters most when your explanation depends on something being **absent** — a class that lacks a property, a gate that is never applied, a handler that was never wired up. **A search hit can only show you what is there, never what is missing**, so any claim of the form "X has no Y" must come from having read X. The same applies before you cite a line number or quote a rule: read it, don't infer it from a search snippet.
+
 **`mozilla_vcs` MCP tools — inspect a specific changeset (regression triage):**
 
 - When the bug is a **regression** — it has a `regressed_by` bug, or a comment names a regressor, or `get_blame` points you at a changeset — read what actually changed: `get_commit_info(node)` for metadata + changed files, then `get_commit_diff(node)` for the diff. Pinpoint the introducing change and propose a fix relative to it.
