@@ -7,17 +7,17 @@ description: How to start / run the hackbot services locally — the web UI (hac
 
 Hackbot is three cooperating services under `services/`:
 
-| Service | What it is | Runtime |
-| --- | --- | --- |
-| `hackbot-api` | FastAPI orchestrator; triggers agents as Cloud Run Jobs, stores runs in Cloud SQL Postgres | Python (uvicorn) |
-| `hackbot-ui` | Next.js "Launchpad" — trigger runs, browse "Recent runs", read results | Node (Next.js) |
-| `hackbot-pulse-listener` | Listens to Firefox CI build failures and triggers `build-repair` runs via the API | Python |
+| Service                  | What it is                                                                                 | Runtime          |
+| ------------------------ | ------------------------------------------------------------------------------------------ | ---------------- |
+| `hackbot-api`            | FastAPI orchestrator; triggers agents as Cloud Run Jobs, stores runs in Cloud SQL Postgres | Python (uvicorn) |
+| `hackbot-ui`             | Next.js "Launchpad" — trigger runs, browse "Recent runs", read results                     | Node (Next.js)   |
+| `hackbot-pulse-listener` | Listens to Firefox CI build failures and triggers `build-repair` runs via the API          | Python           |
 
 The UI talks only to the API (server-side, via `X-API-Key`); the API owns the DB, GCS, and Cloud Run Jobs.
 
 Pick the path that matches the request:
 
-- **"Try the UI / see the dashboard" without GCP creds** → [Quick local UI demo](#quick-local-ui-demo). Fastest; no Cloud SQL / GCP / Google OAuth needed.
+- **"Try the UI / see the dashboard" without GCP creds** → [Quick local UI demo](#quick-local-ui-demo). Fastest; no Cloud SQL / GCP needed (a Google OAuth client still is — sign-in always applies).
 - **Run the real API** → [Run hackbot-api](#run-hackbot-api). Needs GCP + Cloud SQL config.
 - **Run the real UI against a real API** → [Run hackbot-ui](#run-hackbot-ui). Needs Google OAuth.
 - **Run the pulse listener** → [Run the pulse listener](#run-the-pulse-listener).
@@ -27,18 +27,23 @@ Pick the path that matches the request:
 ## Quick local UI demo
 
 Runs the **real** UI (proxy routes + components) against a throwaway stub that stands in for
-hackbot-api, so the "Recent runs" view can be inspected without Cloud SQL / GCP. Auth still
-applies — see the note at the end for skipping Google OAuth locally.
+hackbot-api, so the "Recent runs" view can be inspected without Cloud SQL / GCP. **Sign-in
+still applies**: there is no auth bypass, so this path needs a Google OAuth client (a personal
+throwaway one is fine — see `services/hackbot-ui/README.md`).
 
 Requirements: `python3`, `node`/`npm`.
 
 1. **Stub API** — a small stdlib HTTP server that serves `GET /agents`, `GET /runs`
-   (honoring `agent`/`status`/`author`/`limit`/`offset`), and `GET /runs/{id}` with seeded
+   (honoring `agent`/`status`/`author`/`limit`/`offset`), and `GET /runs/{run_id}` with seeded
    fake runs. It lives at `services/hackbot-ui/dev/stub_api.py`; run it on :8080:
 
    ```bash
-   python3 services/hackbot-ui/dev/stub_api.py   # listens on 127.0.0.1:8080
+   # Optional: attribute the seeded "my runs" to the account you sign in with.
+   HACKBOT_DEV_USER=you@mozilla.com python3 services/hackbot-ui/dev/stub_api.py   # 127.0.0.1:8080
    ```
+
+   If that file isn't in the checkout, the stub hasn't landed there yet — use
+   [Run hackbot-api](#run-hackbot-api) instead.
 
 2. **UI env** — create `services/hackbot-ui/.env.local` (gitignored), pointing at the stub:
 
@@ -58,16 +63,14 @@ Requirements: `python3`, `node`/`npm`.
    ```
 
    Open http://localhost:3000 and sign in with a `@mozilla.com` Google account. The stub then
-   backs every run the UI reads (filtering, "My runs" vs "All runs", the author column, etc.).
+   backs every run the UI reads, so the whole "Recent runs" surface — filters, paging, run
+   detail — works against seeded data.
 
-**Skipping Google OAuth locally.** The codebase has no auth bypass. If you don't want to
-configure an OAuth client for a throwaway demo, add a temporary, env-gated bypass yourself
-(and never commit it): short-circuit `middleware.ts` and `getAuthedEmail()` in `lib/session.ts`
-when a `DEV_AUTH_EMAIL` env var is set, and fall back to `NEXT_PUBLIC_DEV_AUTH_EMAIL` for the
-client identity in `components/RecentRuns.tsx`. Because they key off env vars that are unset in
-production, they stay inert there — but keep them out of committed branches.
+Note that the stub is read-only: triggering a run from the form will fail, since it implements
+only the `GET` endpoints the dashboard reads.
 
-Stop: `pkill -f stub_api.py; pkill -f "next dev"`.
+Stop both processes with Ctrl+C in the terminals running them (avoid `pkill -f "next dev"`,
+which would also kill unrelated Next.js dev servers).
 
 ---
 
@@ -139,8 +142,10 @@ cp .env.example .env.local
 npm install && npm run dev          # http://localhost:3000 -> /login
 ```
 
-Auth is stateless (no DB); only `BETTER_AUTH_SECRET` must be shared across instances.
-To skip OAuth for local work, use the [Quick local UI demo](#quick-local-ui-demo) bypass instead.
+Auth is stateless (no DB); only `BETTER_AUTH_SECRET` must be shared across instances. There is
+no auth bypass, and adding one isn't worth the risk — register a throwaway OAuth client for
+local work. If you only need to look at the dashboard, the
+[Quick local UI demo](#quick-local-ui-demo) avoids needing a real API.
 
 ---
 
