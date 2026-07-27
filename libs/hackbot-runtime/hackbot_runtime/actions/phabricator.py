@@ -26,9 +26,8 @@ _COMMENT_FOOTER = (
 )
 
 # Both patch actions submit the working directory's changes as a diff, so
-# anything gated on "this run submits a patch" (the diff artifact built in
-# ``context.publish_changes``, the WIP policy applied in hackbot-api) has to
-# cover both types.
+# anything gated on "this run submits a patch" — today the diff artifact built
+# in ``context.publish_changes`` — has to cover both types.
 PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
 
 
