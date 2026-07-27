@@ -1,12 +1,6 @@
 """Tests for the apply-side TestRail action handler."""
 
-import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, testrail_handler
-
-
-@pytest.fixture(autouse=True)
-def configure_project(monkeypatch):
-    monkeypatch.setenv("TESTRAIL_PROJECT_ID", "73")
 
 
 def _ctx():
@@ -75,53 +69,72 @@ def _plan():
     }
 
 
-async def test_submit_test_cases_creates_suite_section_and_cases(monkeypatch):
-    calls = []
-    responses = iter(
-        [
-            [{"id": 6, "name": "Functional"}],
-            [{"id": 2, "name": "Test Case (Steps)"}],
-            {"id": 10},
-            {"id": 20},
-            {"id": 101},
-            {"id": 102},
-        ]
-    )
+class _FakeClient:
+    def __init__(self, responses=None):
+        self.calls = []
+        self._responses = list(
+            responses
+            or [
+                [{"id": 6, "name": "Functional"}],
+                [{"id": 2, "name": "Test Case (Steps)"}],
+                {"id": 10},
+                {"id": 20},
+                {"id": 101},
+                {"id": 102},
+            ]
+        )
 
-    def fake_request(method, endpoint, data=None):
-        calls.append((method, endpoint, data))
-        return next(responses)
+    def _next(self):
+        value = self._responses.pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return value
 
-    monkeypatch.setattr(testrail_handler, "_api_request", fake_request)
-    monkeypatch.setattr(
-        testrail_handler, "_base_url", lambda: "https://testrail.example"
-    )
+    async def get_case_types(self):
+        self.calls.append(("get_case_types",))
+        return self._next()
 
-    result = await testrail_handler.SubmitTestCasesHandler().apply(_plan(), _ctx())
+    async def get_templates(self):
+        self.calls.append(("get_templates",))
+        return self._next()
+
+    async def add_suite(self, name):
+        self.calls.append(("add_suite", name))
+        return self._next()
+
+    async def add_section(self, suite_id, name):
+        self.calls.append(("add_section", suite_id, name))
+        return self._next()
+
+    async def add_case(self, section_id, payload):
+        self.calls.append(("add_case", section_id, payload))
+        return self._next()
+
+    def suite_url(self, suite_id):
+        return f"https://testrail.example/index.php?/suites/view/{suite_id}"
+
+
+async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
+    client = _FakeClient()
+    monkeypatch.setattr(testrail_handler, "_client", lambda: client)
+
+    result = await testrail_handler.SubmitTestPlanHandler().apply(_plan(), _ctx())
 
     assert result.status == "applied"
     assert result.result == {
         "suite_id": 10,
-        "suite_url": "https://testrail.example/index.php?/suites/view/10",
+        "url": "https://testrail.example/index.php?/suites/view/10",
         "section_id": 20,
         "case_ids": [101, 102],
     }
 
-    assert calls[0] == ("GET", "get_case_types", None)
-    assert calls[1] == ("GET", "get_templates/73", None)
-    assert calls[2] == (
-        "POST",
-        "add_suite/73",
-        {"name": "[Hackbot] - PDF Improvements"},
-    )
-    assert calls[3] == (
-        "POST",
-        "add_section/73",
-        {"suite_id": 10, "name": "Test Cases"},
-    )
+    assert client.calls[0] == ("get_case_types",)
+    assert client.calls[1] == ("get_templates",)
+    assert client.calls[2] == ("add_suite", "[Hackbot] - PDF Improvements")
+    assert client.calls[3] == ("add_section", 10, "Test Cases")
 
-    first_case = calls[4]
-    assert first_case[1] == "add_case/20"
+    first_case = client.calls[4]
+    assert first_case[0:2] == ("add_case", 20)
     assert first_case[2] == {
         "title": "The PDF opens",
         "type_id": 6,
@@ -135,144 +148,84 @@ async def test_submit_test_cases_creates_suite_section_and_cases(monkeypatch):
     }
 
 
-async def test_submit_test_cases_reports_api_failure(monkeypatch):
-    def fail(*_args, **_kwargs):
-        raise RuntimeError("TestRail is unavailable")
+async def test_submit_test_plan_reports_api_failure(monkeypatch):
+    client = _FakeClient(responses=[RuntimeError("TestRail is unavailable")])
+    monkeypatch.setattr(testrail_handler, "_client", lambda: client)
 
-    monkeypatch.setattr(testrail_handler, "_api_request", fail)
-    result = await testrail_handler.SubmitTestCasesHandler().apply(_plan(), _ctx())
+    result = await testrail_handler.SubmitTestPlanHandler().apply(_plan(), _ctx())
 
     assert result.status == "failed"
     assert result.error == "TestRail is unavailable"
 
 
-def test_api_request_uses_basic_authentication(monkeypatch):
-    monkeypatch.setenv("TESTRAIL_URL", "https://testrail.example/")
-    monkeypatch.setenv("TESTRAIL_USERNAME", "qa@example.com")
-    monkeypatch.setenv("TESTRAIL_API_KEY", "secret")
-    captured = {}
+async def test_submit_test_plan_requires_feature(monkeypatch):
+    client = _FakeClient()
+    monkeypatch.setattr(testrail_handler, "_client", lambda: client)
+    plan = _plan()
+    plan["feature"] = " "
 
-    class Response:
-        content = b'{"id": 10}'
+    result = await testrail_handler.SubmitTestPlanHandler().apply(plan, _ctx())
 
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"id": 10}
-
-    def fake_request(method, url, **kwargs):
-        captured.update(method=method, url=url, **kwargs)
-        return Response()
-
-    monkeypatch.setattr(testrail_handler.requests, "request", fake_request)
-
-    result = testrail_handler._api_request("POST", "add_suite/73", {"name": "Suite"})
-
-    assert result == {"id": 10}
-    assert captured["url"] == (
-        "https://testrail.example/index.php?/api/v2/add_suite/73"
-    )
-    assert captured["auth"] == ("qa@example.com", "secret")
-    assert captured["json"] == {"name": "Suite"}
-    assert captured["timeout"] == 30
+    assert result.status == "failed"
+    assert result.error == "TestRail submission requires a feature name"
+    assert client.calls == []
 
 
-def test_base_url_defaults_to_mozilla_testrail(monkeypatch):
-    monkeypatch.delenv("TESTRAIL_URL", raising=False)
+async def test_submit_test_plan_requires_cases(monkeypatch):
+    client = _FakeClient()
+    monkeypatch.setattr(testrail_handler, "_client", lambda: client)
+    plan = _plan()
+    plan["generated_test_cases"] = []
 
-    assert testrail_handler._base_url() == "https://mozilla.testrail.io"
+    result = await testrail_handler.SubmitTestPlanHandler().apply(plan, _ctx())
 
-
-def test_api_request_requires_credentials(monkeypatch):
-    monkeypatch.delenv("TESTRAIL_USERNAME", raising=False)
-
-    try:
-        testrail_handler._api_request("GET", "get_projects")
-    except RuntimeError as exc:
-        assert str(exc) == "TESTRAIL_USERNAME is not configured"
-    else:
-        raise AssertionError("missing TestRail configuration did not fail")
+    assert result.status == "failed"
+    assert result.error == "TestRail submission requires test cases"
+    assert client.calls == []
 
 
-def test_project_id_can_be_overridden(monkeypatch):
-    monkeypatch.setenv("TESTRAIL_PROJECT_ID", "99")
-
-    assert testrail_handler._project_id() == 99
-
-
-def test_project_id_is_required(monkeypatch):
-    monkeypatch.delenv("TESTRAIL_PROJECT_ID")
-
-    try:
-        testrail_handler._project_id()
-    except RuntimeError as exc:
-        assert str(exc) == "TESTRAIL_PROJECT_ID is not configured"
-    else:
-        raise AssertionError("missing TestRail project id did not fail")
-
-
-def test_configured_ids_must_be_integers(monkeypatch):
-    monkeypatch.setenv("TESTRAIL_PROJECT_ID", "grave-yard")
-
-    try:
-        testrail_handler._project_id()
-    except RuntimeError as exc:
-        assert str(exc) == "TESTRAIL_PROJECT_ID must be an integer"
-    else:
-        raise AssertionError("invalid TestRail project id did not fail")
-
-
-def test_resolve_case_type_id_by_name(monkeypatch):
-    monkeypatch.setattr(
-        testrail_handler,
-        "_api_request",
-        lambda *_args: [
-            {"id": 3, "name": "Automated"},
-            {"id": 12, "name": " functional "},
-        ],
+async def test_resolve_case_type_id_by_name():
+    client = _FakeClient(
+        responses=[
+            [
+                {"id": 3, "name": "Automated"},
+                {"id": 12, "name": " functional "},
+            ]
+        ]
     )
 
-    assert testrail_handler._resolve_case_type_id() == 12
+    assert await testrail_handler._resolve_case_type_id(client) == 12
 
 
-def test_resolve_case_type_id_requires_functional_type(monkeypatch):
-    monkeypatch.setattr(
-        testrail_handler,
-        "_api_request",
-        lambda *_args: [{"id": 3, "name": "Automated"}],
-    )
+async def test_resolve_case_type_id_requires_functional_type():
+    client = _FakeClient(responses=[[{"id": 3, "name": "Automated"}]])
 
     try:
-        testrail_handler._resolve_case_type_id()
+        await testrail_handler._resolve_case_type_id(client)
     except RuntimeError as exc:
         assert str(exc) == 'TestRail has no case type named "Functional"'
     else:
         raise AssertionError("missing Functional case type did not fail")
 
 
-def test_resolve_template_id_by_name(monkeypatch):
-    monkeypatch.setattr(
-        testrail_handler,
-        "_api_request",
-        lambda *_args: [
-            {"id": 1, "name": "Test Case (Text)"},
-            {"id": 2, "name": " test case (steps) "},
-        ],
+async def test_resolve_template_id_by_name():
+    client = _FakeClient(
+        responses=[
+            [
+                {"id": 1, "name": "Test Case (Text)"},
+                {"id": 2, "name": " test case (steps) "},
+            ]
+        ]
     )
 
-    assert testrail_handler._resolve_template_id(73) == 2
+    assert await testrail_handler._resolve_template_id(client) == 2
 
 
-def test_resolve_template_id_requires_steps_template(monkeypatch):
-    monkeypatch.setattr(
-        testrail_handler,
-        "_api_request",
-        lambda *_args: [{"id": 1, "name": "Test Case (Text)"}],
-    )
+async def test_resolve_template_id_requires_steps_template():
+    client = _FakeClient(responses=[[{"id": 1, "name": "Test Case (Text)"}]])
 
     try:
-        testrail_handler._resolve_template_id(73)
+        await testrail_handler._resolve_template_id(client)
     except RuntimeError as exc:
         assert str(exc) == 'TestRail has no template named "Test Case (Steps)"'
     else:

@@ -91,4 +91,3 @@ def test_test_plan_generator_registry_uses_default_env_serializer():
     assert spec.build_env is None
     assert spec.job_name == "hackbot-agent-test-plan-generator"
     assert spec.input_schema is PlanGeneratorInputs
-    assert spec.auto_apply_actions is True

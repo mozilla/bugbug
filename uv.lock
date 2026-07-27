@@ -31,6 +31,7 @@ members = [
     "hackbot-pulse-listener",
     "hackbot-runtime",
     "phabricator-client",
+    "testrail-client",
     "reviewhelper-api",
 ]
 
@@ -2725,6 +2726,7 @@ dependencies = [
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
+    { name = "testrail-client" },
     { name = "weave" },
 ]
 
@@ -2749,6 +2751,7 @@ requires-dist = [
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
+    { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "weave", specifier = ">=0.53.1" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
@@ -4984,6 +4987,30 @@ wheels = [
 name = "phabricator-client"
 version = "0.1.0"
 source = { editable = "libs/phabricator-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "testrail-client"
+version = "0.1.0"
+source = { editable = "libs/testrail-client" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic-settings" },

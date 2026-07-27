@@ -3,71 +3,24 @@
 from __future__ import annotations
 
 import logging
-import os
+from functools import lru_cache
 from typing import Any
 
-import requests
+from testrail_client import TestRailClient
 
 from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_TESTRAIL_URL = "https://mozilla.testrail.io"
 _CASE_TYPE_NAME = "Functional"
 _CASE_TEMPLATE_NAME = "Test Case (Steps)"
 _CASE_LABEL = "AI Generated"
 _SECTION_NAME = "Test Cases"
-_TIMEOUT_SECONDS = 30
 
 
-def _required_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise RuntimeError(f"{name} is not configured")
-    return value
-
-
-def _base_url() -> str:
-    return os.environ.get("TESTRAIL_URL", _DEFAULT_TESTRAIL_URL).rstrip("/")
-
-
-def _required_int_env(name: str) -> int:
-    raw_value = _required_env(name)
-    try:
-        return int(raw_value)
-    except ValueError as exc:
-        raise RuntimeError(f"{name} must be an integer") from exc
-
-
-def _project_id() -> int:
-    return _required_int_env("TESTRAIL_PROJECT_ID")
-
-
-def _api_url(endpoint: str) -> str:
-    return f"{_base_url()}/index.php?/api/v2/{endpoint.lstrip('/')}"
-
-
-def _api_request(
-    method: str, endpoint: str, data: dict[str, Any] | None = None
-) -> dict[str, Any] | list[Any]:
-    response = requests.request(
-        method,
-        _api_url(endpoint),
-        auth=(
-            _required_env("TESTRAIL_USERNAME"),
-            _required_env("TESTRAIL_API_KEY"),
-        ),
-        json=data,
-        headers={"Content-Type": "application/json"},
-        timeout=_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    if not response.content:
-        return {}
-    result = response.json()
-    if not isinstance(result, (dict, list)):
-        raise RuntimeError("TestRail returned an unexpected response")
-    return result
+@lru_cache(maxsize=1)
+def _client() -> TestRailClient:
+    return TestRailClient()
 
 
 def _require_id(response: object, object_name: str) -> int:
@@ -82,8 +35,8 @@ def _require_id(response: object, object_name: str) -> int:
         ) from exc
 
 
-def _resolve_case_type_id() -> int:
-    response = _api_request("GET", "get_case_types")
+async def _resolve_case_type_id(client: TestRailClient) -> int:
+    response = await client.get_case_types()
     case_types = (
         response.get("case_types", []) if isinstance(response, dict) else response
     )
@@ -97,8 +50,8 @@ def _resolve_case_type_id() -> int:
     raise RuntimeError(f'TestRail has no case type named "{_CASE_TYPE_NAME}"')
 
 
-def _resolve_template_id(project_id: int) -> int:
-    response = _api_request("GET", f"get_templates/{project_id}")
+async def _resolve_template_id(client: TestRailClient) -> int:
+    response = await client.get_templates()
     templates = (
         response.get("templates", []) if isinstance(response, dict) else response
     )
@@ -113,7 +66,9 @@ def _resolve_template_id(project_id: int) -> int:
 
 
 def _case_payload(
-    test_case: dict[str, Any], case_type_id: int, template_id: int
+    test_case: dict[str, Any],
+    case_type_id: int,
+    template_id: int,
 ) -> dict[str, Any]:
     steps = [str(step) for step in test_case.get("steps", [])]
     payload: dict[str, Any] = {
@@ -128,11 +83,7 @@ def _case_payload(
     return payload
 
 
-def _suite_url(suite_id: int) -> str:
-    return f"{_base_url()}/index.php?/suites/view/{suite_id}"
-
-
-class SubmitTestCasesHandler:
+class SubmitTestPlanHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         feature = str(params.get("feature") or "").strip()
         test_cases = params.get("generated_test_cases") or []
@@ -143,24 +94,16 @@ class SubmitTestCasesHandler:
             return ActionResult.failed("TestRail submission requires test cases")
 
         try:
-            project_id = _project_id()
-            case_type_id = _resolve_case_type_id()
-            template_id = _resolve_template_id(project_id)
+            client = _client()
+            case_type_id = await _resolve_case_type_id(client)
+            template_id = await _resolve_template_id(client)
             suite_name = f"[Hackbot] - {feature}"
             suite_id = _require_id(
-                _api_request(
-                    "POST",
-                    f"add_suite/{project_id}",
-                    {"name": suite_name},
-                ),
+                await client.add_suite(suite_name),
                 "suite",
             )
             section_id = _require_id(
-                _api_request(
-                    "POST",
-                    f"add_section/{project_id}",
-                    {"suite_id": suite_id, "name": _SECTION_NAME},
-                ),
+                await client.add_section(suite_id, _SECTION_NAME),
                 "section",
             )
 
@@ -168,10 +111,13 @@ class SubmitTestCasesHandler:
             for test_case in test_cases:
                 generated_id = int(test_case["id"])
                 case_id = _require_id(
-                    _api_request(
-                        "POST",
-                        f"add_case/{section_id}",
-                        _case_payload(test_case, case_type_id, template_id),
+                    await client.add_case(
+                        section_id,
+                        _case_payload(
+                            test_case,
+                            case_type_id,
+                            template_id,
+                        ),
                     ),
                     "case",
                 )
@@ -186,7 +132,7 @@ class SubmitTestCasesHandler:
         return ActionResult.ok(
             {
                 "suite_id": suite_id,
-                "suite_url": _suite_url(suite_id),
+                "url": client.suite_url(suite_id),
                 "section_id": section_id,
                 "case_ids": list(created_case_ids.values()),
             }
