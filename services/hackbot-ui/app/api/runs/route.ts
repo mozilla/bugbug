@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
     const agent = searchParams.get("agent") || undefined;
     const status = searchParams.get("status") || undefined;
-    const runs = await listRuns({ limit, offset, agent, status });
+    const author = searchParams.get("author") || undefined;
+    const runs = await listRuns({ limit, offset, agent, status, author });
     return NextResponse.json(runs);
   } catch (err) {
     const status = err instanceof HackbotError ? err.status : 500;
@@ -31,7 +32,8 @@ export async function GET(req: NextRequest) {
 // POST /api/runs  { agent: string, inputs: object }
 // Triggers a new agent run via hackbot-api.
 export async function POST(req: NextRequest) {
-  if (!(await getAuthedEmail())) {
+  const email = await getAuthedEmail();
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const run = await createRun(agent, inputs ?? {});
+    const run = await createRun(agent, inputs ?? {}, email);
     return NextResponse.json(run, { status: 201 });
   } catch (err) {
     const status = err instanceof HackbotError ? err.status : 500;

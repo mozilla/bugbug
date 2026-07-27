@@ -40,6 +40,7 @@ def _fake_run(**overrides):
         agent="frontend-triage",
         status="succeeded",
         inputs={"bug_id": 123},
+        author=None,
         created_at=datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc),
         updated_at=datetime(2026, 7, 21, 12, 5, tzinfo=timezone.utc),
         execution_name=None,
@@ -59,7 +60,7 @@ def _sql(stmt) -> str:
 async def test_list_runs_default_orders_and_pages():
     db = _CapturingDB([_fake_run()])
     out = await runs_router.list_runs(
-        limit=50, offset=0, agent=None, status_filter=None, db=db
+        limit=50, offset=0, agent=None, status_filter=None, author=None, db=db
     )
     sql = _sql(db.stmt)
     assert "FROM runs" in sql
@@ -74,7 +75,12 @@ async def test_list_runs_default_orders_and_pages():
 async def test_list_runs_filters_by_agent_and_status():
     db = _CapturingDB([])
     await runs_router.list_runs(
-        limit=10, offset=20, agent="bug-fix", status_filter=RunStatus.failed, db=db
+        limit=10,
+        offset=20,
+        agent="bug-fix",
+        status_filter=RunStatus.failed,
+        author=None,
+        db=db,
     )
     sql = _sql(db.stmt)
     assert "runs.agent =" in sql
@@ -85,8 +91,30 @@ async def test_list_runs_filters_by_agent_and_status():
 async def test_list_runs_filters_by_agent_only():
     db = _CapturingDB([])
     await runs_router.list_runs(
-        limit=50, offset=0, agent="frontend-triage", status_filter=None, db=db
+        limit=50,
+        offset=0,
+        agent="frontend-triage",
+        status_filter=None,
+        author=None,
+        db=db,
     )
     sql = _sql(db.stmt)
     assert "runs.agent =" in sql
     assert "runs.status =" not in sql
+
+
+async def test_list_runs_filters_by_author():
+    db = _CapturingDB([])
+    await runs_router.list_runs(
+        limit=50,
+        offset=0,
+        agent=None,
+        status_filter=None,
+        author="Someone@Mozilla.com",
+        db=db,
+    )
+    sql = _sql(db.stmt)
+    assert "runs.author =" in sql
+    # Stored authors are lowercased, so the filter must lowercase too.
+    params = db.stmt.compile(dialect=postgresql.dialect()).params
+    assert "someone@mozilla.com" in params.values()

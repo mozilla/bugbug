@@ -3,7 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +55,9 @@ async def list_agents() -> list[AgentDescriptor]:
 async def create_run(
     agent_name: str,
     payload: dict,
+    # Set by the UI proxy to the authenticated user's email. Automated callers
+    # (e.g. the Phabricator webhook) omit it, leaving the run unattributed.
+    author: str | None = Header(default=None, alias="X-Hackbot-Author"),
     db: AsyncSession = Depends(get_db),
 ) -> RunRef:
     agent = _lookup_agent(agent_name)
@@ -73,6 +76,7 @@ async def create_run(
         agent=agent.name,
         status=RunStatus.pending.value,
         inputs=inputs.model_dump(mode="json"),
+        author=author.lower() if author else None,
         results_prefix=results_prefix,
         artifacts=[],
     )
@@ -113,6 +117,9 @@ async def list_runs(
     agent: str | None = Query(default=None),
     # Aliased so the query param is `status` without shadowing fastapi.status.
     status_filter: RunStatus | None = Query(default=None, alias="status"),
+    # Filter to runs triggered by this user (email). Used by the UI's "my runs"
+    # default. Matched case-insensitively against the stored (lowercased) author.
+    author: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
     stmt = select(Run)
@@ -120,6 +127,8 @@ async def list_runs(
         stmt = stmt.where(Run.agent == agent)
     if status_filter is not None:
         stmt = stmt.where(Run.status == status_filter.value)
+    if author is not None:
+        stmt = stmt.where(Run.author == author.lower())
     # created_at is the sort key; run_id is a deterministic tiebreaker so offset
     # paging is stable when timestamps collide. (agent/status/created_at are all
     # indexed, so filtering + ordering stay index-backed.)

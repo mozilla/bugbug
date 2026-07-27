@@ -20,6 +20,10 @@ class Run(Base):
     agent: Mapped[str] = mapped_column(String, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, index=True)
     inputs: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    # Email of the person who triggered the run from the UI. Null for runs
+    # triggered by automation (e.g. Phabricator webhooks) and for legacy runs
+    # created before authorship was recorded. Indexed for "my runs" filtering.
+    author: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -73,12 +73,16 @@ export function listAgents(): Promise<AgentDescriptor[]> {
 export function createRun(
   agentName: string,
   inputs: Record<string, unknown>,
+  author?: string | null,
 ): Promise<RunRef> {
   return request<RunRef>(
     `/agents/${encodeURIComponent(agentName)}/runs`,
     {
       method: "POST",
       body: JSON.stringify(inputs),
+      // Attribute the run to the authenticated user; the API records it so the
+      // dashboard can filter to "my runs".
+      headers: author ? { "X-Hackbot-Author": author } : undefined,
     },
   );
 }
@@ -92,6 +96,7 @@ export interface ListRunsParams {
   offset?: number;
   agent?: string;
   status?: string;
+  author?: string;
 }
 
 export function listRuns(params: ListRunsParams = {}): Promise<RunDoc[]> {
@@ -100,6 +105,7 @@ export function listRuns(params: ListRunsParams = {}): Promise<RunDoc[]> {
   if (params.offset) qs.set("offset", String(params.offset));
   if (params.agent) qs.set("agent", params.agent);
   if (params.status) qs.set("status", params.status);
+  if (params.author) qs.set("author", params.author);
   return request<RunDoc[]>(`/runs?${qs.toString()}`);
 }
 
