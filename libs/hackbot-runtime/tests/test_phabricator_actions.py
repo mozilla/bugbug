@@ -1,44 +1,65 @@
-"""Tests for the phabricator.submit_patch recording tool."""
+"""Tests for the phabricator recording tools (submit/update patch, comment)."""
 
 import pytest
-from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder, phabricator
 
 
-async def test_create_requires_title():
-    rec = ActionsRecorder()
-    with pytest.raises(ToolError):
-        await phabricator.submit_patch(rec, bug_id=1, reasoning="r")
-
-
-async def test_create_records_without_revision_id():
+async def test_submit_records_create_params_only():
     rec = ActionsRecorder()
     await phabricator.submit_patch(
-        rec, bug_id=1, reasoning="r", title="Fix the thing", summary="Details"
+        rec, bug_id=1, title="Fix the thing", reasoning="r", summary="Details"
     )
     action = rec.actions[0]
     assert action["type"] == "phabricator.submit_patch"
     assert action["params"] == {
         "bug_id": 1,
-        "revision_id": None,
         "title": "Fix the thing",
         "summary": "Details",
     }
     assert "ref" not in action
 
 
-async def test_update_does_not_require_title():
+async def test_submit_requires_title():
     rec = ActionsRecorder()
-    await phabricator.submit_patch(rec, bug_id=1, reasoning="r", revision_id=12345)
-    assert rec.actions[0]["params"]["revision_id"] == 12345
+    with pytest.raises(TypeError):
+        await phabricator.submit_patch(rec, bug_id=1, reasoning="r")
 
 
-async def test_ref_is_recorded():
+async def test_submit_ref_is_recorded():
     rec = ActionsRecorder()
     await phabricator.submit_patch(
-        rec, bug_id=1, reasoning="r", title="Fix", ref="patch"
+        rec, bug_id=1, title="Fix", reasoning="r", ref="patch"
     )
     assert rec.actions[0]["ref"] == "patch"
+
+
+async def test_update_records_only_the_revision_id():
+    rec = ActionsRecorder()
+    await phabricator.update_patch(rec, revision_id=12345, reasoning="r")
+    action = rec.actions[0]
+    assert action["type"] == "phabricator.update_patch"
+    # Nothing about the revision itself is the agent's to set on an update.
+    assert action["params"] == {"revision_id": 12345}
+
+
+async def test_update_requires_revision_id():
+    rec = ActionsRecorder()
+    with pytest.raises(TypeError):
+        await phabricator.update_patch(rec, reasoning="r")
+
+
+def test_agent_facing_schemas_are_case_specific():
+    """The point of the split: create takes no revision id, update demands one."""
+    submit = next(t for t in phabricator.TOOLS if t.name == "submit_patch")
+    update = next(t for t in phabricator.TOOLS if t.name == "update_patch")
+
+    assert "revision_id" not in submit.input_schema["properties"]
+    assert set(submit.input_schema["required"]) == {"bug_id", "title", "reasoning"}
+
+    # An update carries the revision id and nothing else: the revision's title,
+    # summary and bug id stay as they are, and there is no new URL to reference.
+    assert set(update.input_schema["required"]) == {"revision_id", "reasoning"}
+    assert set(update.input_schema["properties"]) == {"revision_id", "reasoning"}
 
 
 async def test_add_comment_records_revision_and_text():

@@ -28,9 +28,10 @@ from hackbot_runtime.claude import Reporter
 
 from .config import (
     BUGZILLA_READ_TOOLS,
-    ENABLED_ACTION_TYPES,
     FIREFOX_TOOLS,
+    PHABRICATOR_FOLLOW_UP_ACTIONS,
     SOURCE_WRITE_TOOLS,
+    TRIAGE_AND_FIX_ACTIONS,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -111,13 +112,24 @@ async def run_bug_fix(
     # hackbot.toml; here we only wrap its tools as an MCP server.
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
+    if revision_id:
+        action_types = PHABRICATOR_FOLLOW_UP_ACTIONS
+        user_prompt = render_prompt(
+            "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
+        )
+    else:
+        action_types = TRIAGE_AND_FIX_ACTIONS
+        user_prompt = render_prompt(
+            "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
+        )
+
     # Action-recording MCP server (in-process). Standalone/script runs pass
     # actions_recorder=None and get a local recorder that copies attachments
     # under ./artifacts (no uploader).
     actions_recorder, actions_server = actions_server_for(
-        actions_recorder, types=ENABLED_ACTION_TYPES
+        actions_recorder, types=action_types
     )
-    enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
+    enabled_action_tools = actions_to_tool_names(action_types)
 
     system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
 
@@ -148,15 +160,6 @@ async def run_bug_fix(
         **({"effort": effort} if effort else {}),
         setting_sources=[],
     )
-
-    if revision_id and comment:
-        user_prompt = render_prompt(
-            "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
-        )
-    else:
-        user_prompt = render_prompt(
-            "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
-        )
 
     result_msg: ResultMessage | None = None
     with Reporter(verbose=verbose, log_path=log) as reporter:
