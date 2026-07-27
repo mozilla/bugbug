@@ -20,6 +20,7 @@ class Run(Base):
     agent: Mapped[str] = mapped_column(String, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, index=True)
     inputs: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    requested_by: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
