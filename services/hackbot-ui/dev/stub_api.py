@@ -1,14 +1,22 @@
-"""Throwaway stand-in for hackbot-api, so the real hackbot-ui can be tried
-locally without Cloud SQL / GCP. Serves just the endpoints the UI proxy calls:
-GET /agents, GET /runs (with agent/status/author/limit/offset), GET /runs/{id}.
+"""Throwaway stand-in for hackbot-api.
+
+Lets the real hackbot-ui be tried locally without Cloud SQL / GCP. Serves just
+the endpoints the UI proxy calls: GET /agents, GET /runs (with
+agent/status/author/limit/offset), and GET /runs/{run_id}.
 """
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-DEV_USER = "sledru@mozilla.com"
+# The identity the seeded "my runs" belong to. Override it with the address you
+# sign in to the local UI with, so the "My runs" filter shows something.
+DEV_USER = os.environ.get("HACKBOT_DEV_USER", "dev@example.com")
+# Placeholder co-workers; deliberately fake so no real address is committed.
+OTHER_USERS = ["alice@example.com", "bob@example.com", "carol@example.com"]
+_ALICE, _BOB, _CAROL = OTHER_USERS
 AGENTS = [
     "bug-fix",
     "autowebcompat-repro",
@@ -16,27 +24,26 @@ AGENTS = [
     "frontend-triage",
     "test-plan-generator",
 ]
-STATUSES = ["succeeded", "failed", "running", "pending", "timed_out"]
 # author, agent, status, inputs
 _SEED = [
     (DEV_USER, "bug-fix", "succeeded", {"bug_id": 1889001}),
     (None, "bug-fix", "running", {"bug_id": 1889002, "revision_id": 412233}),
-    ("padenot@mozilla.com", "frontend-triage", "succeeded", {"bug_id": 1890777}),
+    (_ALICE, "frontend-triage", "succeeded", {"bug_id": 1890777}),
     (DEV_USER, "build-repair", "failed", {"git_commit": "a1b2c3d4e5f6a7b8"}),
     (DEV_USER, "frontend-triage", "running", {"bug_id": 1891555}),
-    ("smujahid@mozilla.com", "test-plan-generator", "succeeded", {"feature_name": "WebGPU compute"}),
+    (_BOB, "test-plan-generator", "succeeded", {"feature_name": "WebGPU compute"}),
     (None, "bug-fix", "timed_out", {"bug_id": 1888120, "revision_id": 410900}),
     (DEV_USER, "autowebcompat-repro", "succeeded", {"bug_id": 1892003}),
-    ("mcastelluccio@mozilla.com", "bug-fix", "failed", {"bug_id": 1887654}),
-    (DEV_USER, "test-plan-generator", "pending", {"feature_name": "Cookie partitioning"}),
+    (_CAROL, "bug-fix", "failed", {"bug_id": 1887654}),
+    (DEV_USER, "test-plan-generator", "pending", {"feature_name": "Cookie jars"}),
     (DEV_USER, "bug-fix", "succeeded", {"bug_id": 1893100}),
-    ("smujahid@mozilla.com", "build-repair", "running", {"git_commit": "ffee00112233aabb"}),
-    ("mcastelluccio@mozilla.com", "bug-fix", "succeeded", {"bug_id": 1885000, "revision_id": 409001}),
+    (_BOB, "build-repair", "running", {"git_commit": "ffee00112233aabb"}),
+    (_CAROL, "bug-fix", "succeeded", {"bug_id": 1885000, "revision_id": 409001}),
     (DEV_USER, "frontend-triage", "succeeded", {"bug_id": 1894222}),
-    ("padenot@mozilla.com", "autowebcompat-repro", "timed_out", {"bug_id": 1886777}),
+    (_ALICE, "autowebcompat-repro", "timed_out", {"bug_id": 1886777}),
     (DEV_USER, "bug-fix", "failed", {"bug_id": 1895333}),
     (DEV_USER, "bug-fix", "running", {"bug_id": 1896444}),
-    ("mcastelluccio@mozilla.com", "frontend-triage", "succeeded", {"bug_id": 1897555}),
+    (_CAROL, "frontend-triage", "succeeded", {"bug_id": 1897555}),
     (None, "bug-fix", "succeeded", {"bug_id": 1884321, "revision_id": 408222}),
     (DEV_USER, "build-repair", "succeeded", {"git_commit": "0011223344556677"}),
 ]
@@ -119,8 +126,12 @@ class Handler(BaseHTTPRequestHandler):
             if author:
                 al = author.lower()
                 items = [r for r in items if (r["author"] or "").lower() == al]
-            offset = int(q.get("offset", ["0"])[0])
-            limit = int(q.get("limit", ["50"])[0])
+            try:
+                offset = int(q.get("offset", ["0"])[0])
+                limit = int(q.get("limit", ["50"])[0])
+            except ValueError:
+                # Don't take the server down over a typo'd query string.
+                return self._json({"detail": "limit/offset must be integers"}, 400)
             return self._json(items[offset : offset + limit])
 
         return self._json({"detail": "Not found"}, 404)
