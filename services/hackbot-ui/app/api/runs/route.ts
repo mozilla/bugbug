@@ -5,9 +5,9 @@ import { getAuthedEmail } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/runs?limit=50&offset=0&agent=<name>&status=<status>
+// GET /api/runs?limit=50&offset=0&agent=<name>&status=<status>&author=<email>
 // Returns a page of runs from hackbot-api (newest first), optionally filtered
-// by agent and/or status.
+// by agent, status and/or the email of the user who triggered them.
 export async function GET(req: NextRequest) {
   if (!(await getAuthedEmail())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

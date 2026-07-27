@@ -29,6 +29,19 @@ log = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
+def _normalize_author(author: str | None) -> str | None:
+    """Canonicalize an author email for storage and comparison.
+
+    Authors are stored lowercased and stripped, so the same normalization has to
+    run on both the write and the filter path. Blank values (a missing header or
+    an empty query param) collapse to ``None`` rather than an empty-string author.
+    """
+    if author is None:
+        return None
+    normalized = author.strip().lower()
+    return normalized or None
+
+
 def _lookup_agent(name: str) -> AgentSpec:
     agent = AGENT_REGISTRY.get(name)
     if agent is None:
@@ -76,7 +89,7 @@ async def create_run(
         agent=agent.name,
         status=RunStatus.pending.value,
         inputs=inputs.model_dump(mode="json"),
-        author=author.lower() if author else None,
+        author=_normalize_author(author),
         results_prefix=results_prefix,
         artifacts=[],
     )
@@ -118,7 +131,8 @@ async def list_runs(
     # Aliased so the query param is `status` without shadowing fastapi.status.
     status_filter: RunStatus | None = Query(default=None, alias="status"),
     # Filter to runs triggered by this user (email). Used by the UI's "my runs"
-    # default. Matched case-insensitively against the stored (lowercased) author.
+    # default. Matched case-insensitively against the stored (lowercased) author;
+    # a blank value means "no filter".
     author: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
@@ -127,8 +141,9 @@ async def list_runs(
         stmt = stmt.where(Run.agent == agent)
     if status_filter is not None:
         stmt = stmt.where(Run.status == status_filter.value)
-    if author is not None:
-        stmt = stmt.where(Run.author == author.lower())
+    normalized_author = _normalize_author(author)
+    if normalized_author is not None:
+        stmt = stmt.where(Run.author == normalized_author)
     # created_at is the sort key; run_id is a deterministic tiebreaker so offset
     # paging is stable when timestamps collide. (agent/status/created_at are all
     # indexed, so filtering + ordering stay index-backed.)

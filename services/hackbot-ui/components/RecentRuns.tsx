@@ -102,7 +102,7 @@ export function RecentRuns() {
   const statusFilter = searchParams.get("status") ?? "";
   // Default to "my runs"; `?scope=all` shows everyone's.
   const showAll = searchParams.get("scope") === "all";
-  const authorFilter = showAll ? undefined : myEmail ?? undefined;
+  const authorFilter = showAll ? undefined : (myEmail ?? undefined);
   // In "my runs" mode we need the signed-in email before we can filter, so hold
   // off fetching until the session resolves. Once resolved without an email
   // (shouldn't happen for an authed user), fall through to an unfiltered list.
@@ -197,7 +197,8 @@ export function RecentRuns() {
       author: authorFilter,
       offset: runs.length,
     });
-    if (page) {
+    // `null` means the request failed; an empty page is a valid last page.
+    if (page !== null) {
       setRuns((prev) => {
         const base = prev ?? [];
         const seen = new Set(base.map((r) => r.run_id));

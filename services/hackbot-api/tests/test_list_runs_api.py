@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
 from app.routers import runs as runs_router
 from app.schemas import RunStatus
 from sqlalchemy.dialects import postgresql
@@ -118,3 +119,14 @@ async def test_list_runs_filters_by_author():
     # Stored authors are lowercased, so the filter must lowercase too.
     params = db.stmt.compile(dialect=postgresql.dialect()).params
     assert "someone@mozilla.com" in params.values()
+
+
+@pytest.mark.parametrize("author", ["", "   "])
+async def test_list_runs_ignores_blank_author(author):
+    # A blank author param means "no filter", not "runs with an empty author".
+    db = _CapturingDB([])
+    await runs_router.list_runs(
+        limit=50, offset=0, agent=None, status_filter=None, author=author, db=db
+    )
+    # "runs.author" also appears in the SELECT list, so assert on the clause.
+    assert "WHERE" not in _sql(db.stmt)
