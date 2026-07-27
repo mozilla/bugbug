@@ -9,15 +9,23 @@ failure. The email's primary recipient is the author of that blamed commit.
 ## How it works
 
 1. Consume `task-failed` messages from `pulse.mozilla.org`.
-2. Keep only **build-kind** tasks (`tags.kind == "build"`) on a watched `project`
-   (`WATCHED_REPOS`, default `try`). Build tasks don't run tests, so a failure is a
-   compilation/link error.
+2. Keep only **build** tasks (`tags.label` contains `build` and not `test`) on a watched
+   `project` (`WATCHED_REPOS`, default `autoland`). Build tasks don't run tests, so a
+   failure is a compilation/link error.
 3. Fetch the task definition to read `GECKO_HEAD_REV` (the revision is not in the message).
-4. Dedupe by revision with an in-memory TTL cache, so only one agent run is triggered per
+4. Skip tasks scheduled by an **action task** rather than by the push: `extra.parent`
+   points at the decision task (= the task group) for everything the push scheduled, and at
+   the action-callback task for a backfill or retrigger.
+5. Skip pushes that landed more than `MAX_PUSH_AGE_HOURS` ago (default 24). A failure can
+   surface long after its push, and by then the push has been superseded.
+6. Skip failures **inherited** from an ancestor push, waiting for an unsettled ancestor
+   build to finish first. Both this and the push-age check fail open on error, so a real
+   regression is never silently dropped.
+7. Dedupe by revision with an in-memory TTL cache, so only one agent run is triggered per
    revision even when many build tasks fail for the same push.
-5. Trigger the agent with the failing tasks -- it resolves the push commits itself and
+8. Trigger the agent with the failing tasks -- it resolves the push commits itself and
    returns the commit it blamed for the failure, so the listener does no pushlog lookups.
-6. `POST /agents/build-repair/runs`, then poll `GET /runs/{run_id}` until terminal. Look the
+9. `POST /agents/build-repair/runs`, then poll `GET /runs/{run_id}` until terminal. Look the
    blamed commit up in the firefox GitHub mirror to get its author's email and send the
    report email to that developer.
 

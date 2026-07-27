@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Failure filtering and agent inputs.
     # ``watched_repos`` is a comma-separated list of Taskcluster ``project`` tags.
     watched_repos: str = "autoland"
+    # Pushes older than this are not repaired. A build failure can arrive long
+    # after its push (a backfill, a long-queued task, a replayed message), and by
+    # then the push has been superseded. Generous next to the minutes a build
+    # needs plus the hour the regression check may wait for an ancestor.
+    max_push_age_hours: float = 24
     run_try_push: bool = False
     model: str | None = None
     max_turns: int | None = None
