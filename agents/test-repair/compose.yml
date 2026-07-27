@@ -16,6 +16,9 @@ services:
       # No uploader locally: summary/logs/artifacts are written under
       # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
       - ARTIFACTS_DIR=/artifacts
+    # Firefox's content processes need far more than Docker's default 64MB
+    # /dev/shm; browser tests crash without this.
+    shm_size: 2gb
     volumes:
       - workspace:/workspace
       - ${HOME}/hackbot/artifacts:/artifacts

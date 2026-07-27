@@ -6,13 +6,12 @@
 """Resolve a failing Taskcluster test task into everything the agent needs.
 
 From a task id alone, derive the push it belongs to (project + hg revision), the
-test groups that failed, the revision at which the failing group was last green,
-and the git range that landed since then. Only the range endpoints are mapped to
-git -- the agent enumerates the commits between them with ``git log`` in the
-checkout. The agent recomputes all
-of this itself so its only input is a task id; the pulse listener uses the same
-public Taskcluster / mozci / hg-pushlog / lando lookups only to decide which
-failures are worth investigating.
+tests that failed, the revision at which those tests were last green on the same
+platform, and the git range that landed since then. Only the range endpoints are
+mapped to git -- the agent enumerates the commits between them with ``git log``
+in the checkout. The agent recomputes all of this itself so its only input is a
+task id; the pulse listener uses the same public Taskcluster / mozci / hg-pushlog
+/ lando lookups only to decide which failures are worth investigating.
 """
 
 from __future__ import annotations
@@ -25,7 +24,6 @@ import requests
 from mozci import data
 from mozci.errors import ParentPushNotFound
 from mozci.push import MAX_DEPTH, Push
-from mozci.task import Status
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +49,10 @@ MAX_RANGE_COMMITS = 100
 
 @dataclass(frozen=True)
 class FailingGroup:
-    """A failing test manifest and a representative failing test within it."""
+    """A failing test manifest and every test that failed in it."""
 
     group: str
-    test: str
+    tests: list[str]
 
 
 @dataclass(frozen=True)
@@ -78,7 +76,8 @@ class Investigation:
     project: str
     hg_revision: str
     harness: str
-    debug_build: bool
+    # Taskcluster ``test-platform`` tag, e.g. "linux1804-64-qr/debug".
+    platform: str
     failing_groups: list[FailingGroup]
     last_green_revision: str | None
     commit_range: CommitRange
@@ -86,6 +85,27 @@ class Investigation:
     @property
     def failure_commit(self) -> str:
         return self.commit_range.head
+
+    @property
+    def debug_build(self) -> bool:
+        return "debug" in self.platform
+
+    @property
+    def is_linux(self) -> bool:
+        """Whether the agent's Linux container is the same OS family."""
+        return self.platform.startswith("linux")
+
+    @property
+    def sanitizer(self) -> str | None:
+        """The sanitizer CI built with, if any; a plain build cannot trigger it."""
+        for name in ("asan", "tsan"):
+            if f"-{name}" in self.platform:
+                return name
+        return None
+
+    @property
+    def coverage_build(self) -> bool:
+        return "-ccov" in self.platform
 
 
 def _get_json(url: str) -> dict:
@@ -114,11 +134,6 @@ def _harness(tags: dict) -> str:
     return suite or tags.get("kind") or "unknown"
 
 
-def _is_debug_build(tags: dict) -> bool:
-    """Whether the failing task ran against a debug build."""
-    return "debug" in (tags.get("test-platform") or tags.get("label") or "")
-
-
 def _failing_groups(task_id: str) -> list[FailingGroup]:
     """Failing test groups for a task, via mozci; empty on any error."""
     try:
@@ -130,31 +145,55 @@ def _failing_groups(task_id: str) -> list[FailingGroup]:
     for group, fails in by_group.items():
         if not group or not fails:
             continue
-        test, _ftype = fails[0]
-        groups.append(FailingGroup(group=group, test=test))
+        groups.append(FailingGroup(group=group, tests=[test for test, _type in fails]))
     return groups
 
 
-def _group_status(push: Push, group: str) -> str | None:
-    """'passed'/'failed'/None for a test group on a push (None = non-decisive)."""
+def _same_platform(task, platform: str) -> bool:
+    return task.platform == platform or platform in (task.label or "")
+
+
+def _test_status(push: Push, group: str, tests: list[str], platform: str) -> str | None:
+    """'passed'/'failed'/None for ``tests`` of ``group`` on ``platform``.
+
+    Restricted to the failing tests and the failing platform: ``GroupSummary``
+    aggregates every platform and every test in the manifest, so a push where the
+    group ran green on Windows -- or where only other tests in it passed -- must
+    not anchor a last-green for a Linux-only failure. None means non-decisive
+    (the group did not run here, or is intermittent/unfinished).
+    """
     summary = push.group_summaries.get(group)
     if summary is None:
         return None
-    if summary.status == Status.PASS:
-        return "passed"
-    if summary.status == Status.FAIL:
+    wanted = set(tests)
+    statuses = set()
+    for task in summary.tasks:
+        if not _same_platform(task, platform):
+            continue
+        for result in task.results:
+            if result.group != group:
+                continue
+            if result.ok:
+                statuses.add("passed")
+                continue
+            failed = {test for test, _type in task.failure_types.get(group, [])}
+            statuses.add("failed" if not wanted or wanted & failed else "passed")
+    if "failed" in statuses:
         return "failed"
-    # INTERMITTENT or still running: can't anchor last-green here.
-    return None
+    return "passed" if statuses else None
 
 
 def _last_green(
-    branch: str, rev: str, group: str, max_depth: int = LAST_GREEN_MAX_DEPTH
+    branch: str,
+    rev: str,
+    failing: FailingGroup,
+    platform: str,
+    max_depth: int = LAST_GREEN_MAX_DEPTH,
 ) -> str | None:
-    """Most recent ancestor revision where ``group`` was green, best effort.
+    """Most recent ancestor revision where the failing tests were green.
 
-    None when no green ancestor is found within ``max_depth``, the group was
-    already failing upstream, or mozci errors.
+    Best effort: None when no green ancestor is found within ``max_depth``, the
+    tests were already failing upstream, or mozci errors.
     """
     try:
         ancestor = Push(rev, branch=branch)
@@ -163,13 +202,15 @@ def _last_green(
                 ancestor = ancestor.parent
             except ParentPushNotFound:
                 break
-            status = _group_status(ancestor, group)
+            status = _test_status(ancestor, failing.group, failing.tests, platform)
             if status == "passed":
                 return ancestor.rev
             if status == "failed":
                 return None
     except Exception:
-        logger.exception("Could not determine last-green for %s at %s", group, rev)
+        logger.exception(
+            "Could not determine last-green for %s at %s", failing.group, rev
+        )
     return None
 
 
@@ -253,7 +294,10 @@ def resolve_investigation(
         "Failing groups: %s", ", ".join(g.group for g in groups) or "none resolved"
     )
 
-    last_green = _last_green(project, hg_revision, groups[0].group) if groups else None
+    platform = tags.get("test-platform") or ""
+    last_green = (
+        _last_green(project, hg_revision, groups[0], platform) if groups else None
+    )
     logger.info("Last-green revision: %s", last_green or "not found")
 
     commit_range = _resolve_range(project, hg_revision, last_green, max_commits)
@@ -271,7 +315,7 @@ def resolve_investigation(
         project=project,
         hg_revision=hg_revision,
         harness=_harness(tags),
-        debug_build=_is_debug_build(tags),
+        platform=platform,
         failing_groups=groups,
         last_green_revision=last_green,
         commit_range=commit_range,

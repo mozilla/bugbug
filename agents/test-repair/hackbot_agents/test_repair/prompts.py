@@ -5,14 +5,19 @@
 
 """Prompt templates for the test-repair agent."""
 
+# Failing tests listed per group before the list is elided, keeping the prompt
+# bounded when a whole manifest fails.
+MAX_TESTS_PER_GROUP = 10
+
 ANALYSIS_TEMPLATE = """\
 You are investigating a failing Firefox CI test to find the commit that broke it.
 The CI listener already filtered out known intermittents, so treat this as a
 genuine regression unless the logs clearly show otherwise.
 
-Failing test groups (manifests) and a representative failing test in each:
+Failing test groups (manifests) and the tests that failed in each:
 {failing_tests}
 Test harness: {harness}
+Test platform: {platform}
 
 The source tree is checked out at the failure commit {failure_commit}.
 {candidate_intro}
@@ -35,8 +40,12 @@ Do the following:
      "intermittent"), "culprit_commit" (a full sha copied verbatim from the
      candidate list above, or null if none is convincing), "culprit_bug" (integer
      or null), "intermittent_bug" (integer or null; the bug already tracking this
-     intermittent, if you found one), "recommendation" ("backout", "land_fix" or
-     "do_not_backout") and "confidence" (0.0-1.0).
+     intermittent, if you found one), "recommendation" ("backout", "land_fix",
+     "do_not_backout" or "rerun") and "confidence" (0.0-1.0).
+
+Use "rerun" when you cannot tell whether the failure is real -- infrastructure
+noise, a timeout under load, or a failure no candidate plausibly explains -- and
+a retrigger would settle it. Prefer it over blaming a commit you are unsure of.
 
 Never guess a sha: one that is not a real commit in the range above is discarded,
 and a wrong blame is worse than no blame. Use null when nothing convinces you.
@@ -56,7 +65,12 @@ reach back to a run where the test was green, so the culprit may predate it -- i
 nothing in it plausibly caused the failure, say so in your analysis and set
 "culprit_commit" to null."""
 
-LAST_GREEN_LINE = "The test was last green at revision {last_green_revision}.\n"
+# Explicitly an hg revision: everything else in the prompt is a git hash, and an
+# unlabelled hg node just makes the agent try `git` commands that exit 128.
+LAST_GREEN_LINE = (
+    "The test was last green at hg revision {last_green_revision} (not a git"
+    " object; the base of the range above is its git equivalent).\n"
+)
 
 FIX_TEMPLATE = """\
 You determined that commit {culprit_commit} regressed the failing test(s).
@@ -64,12 +78,37 @@ Propose a minimal source patch that fixes the failure.
 
 1. Make the smallest change that addresses the root cause you identified in
    {scratch_out}/analysis.md.
-2. If practical, verify the fix with the Firefox MCP tools (build_firefox /
-   evaluate_testcase). A mozconfig matching the failing CI build is already in
-   place.
+{verify_step}
 3. Update {scratch_out}/verdict.json in place, preserving every key it already
    has: set "proposed_patch" to true if you made a fix, and set "recommendation"
    to "land_fix" only if you are confident in the fix; otherwise keep "backout".
 
 Keep the patch minimal and focused on the regression.
 """
+
+# The agent's container is Linux. Both steps run the test; they differ only in
+# what a passing run is allowed to prove.
+VERIFY_LOCAL = """\
+2. Verify the fix: build with the build_firefox tool (a mozconfig matching the
+   failing CI build is already in place), then run the failing test(s) yourself
+   over Bash with mach -- consult the tree's own AGENTS.md / CLAUDE.md for how it
+   runs {harness} tests. They should pass."""
+
+VERIFY_REMOTE = """\
+2. Build with the build_firefox tool (a mozconfig matching the failing CI build is
+   already in place), then still run the failing test(s) over Bash with mach --
+   consult the tree's own AGENTS.md / CLAUDE.md for how it runs {harness} tests.
+   Read the outcome asymmetrically: this container is Linux and the failure is on
+   {platform}, so a failure here is real evidence the patch is wrong or breaks
+   Linux, while a pass proves nothing about {platform} -- the test may even be
+   skipped or absent here. Report a pass as "not verified" rather than as
+   verification, and do not set "land_fix" on the strength of it alone."""
+
+# The image ships Xvfb, Firefox's runtime libraries and fonts, and bootstrap has
+# already run, so GUI harnesses are runnable -- but it is Debian, not CI's image.
+ENVIRONMENT_NOTE = """
+   Environment: a Debian container with a virtual display (DISPLAY is already set,
+   Xvfb is running) and the build toolchain bootstrapped, so mach can build and
+   run GUI harnesses. It is not CI's image though, and CI ran {platform}, so a
+   test that cannot run here at all is "could not verify", not a failure -- say
+   which it was."""

@@ -36,7 +36,7 @@ def _investigation(**kwargs):
         project="autoland",
         hg_revision="hgrev",
         harness="mochitest",
-        debug_build=False,
+        platform="linux1804-64-qr/opt",
         failing_groups=[],
         last_green_revision="greenhg",
         commit_range=CommitRange(head="headsha", base="basesha", span=3, complete=True),

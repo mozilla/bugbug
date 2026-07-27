@@ -17,8 +17,9 @@ investigation needs (no log parsing):
 
 1. Project + hg revision from the Taskcluster task.
 2. The failing test groups, via mozci.
-3. The revision at which the group was last green, by walking mozci push
-   ancestors.
+3. The revision at which the failing tests were last green, by walking mozci push
+   ancestors. Restricted to the failing tests on the failing platform, since a
+   manifest can be green on another platform or for its other tests.
 4. The git range that landed since then, from the hg pushlog + lando. Only the
    range endpoints are mapped to git; the commit count sizes the clone and is
    capped so an old last-green can't produce an unbounded one.
@@ -31,6 +32,14 @@ it.
 `SOURCE_REF` / `SOURCE_DEPTH` pin the shallow clone to the failure commit, deep
 enough to walk the range. The task's full and sanitized logs are written to files
 for the agent to search.
+
+The fix stage writes a mozconfig mirroring the failing CI build (debug/opt, plus
+asan/tsan/ccov), runs `mach bootstrap`, builds with the `build_firefox` tool, and
+runs the failing tests with mach over Bash. The image ships Xvfb (started by the
+entrypoint on `DISPLAY=:99`) with Firefox's runtime libraries and fonts, so GUI
+harnesses run too, not just xpcshell and gtest. The container is Linux, so for a Windows or Mac failure the
+run is read asymmetrically: a failure is real evidence the patch is wrong, while
+a pass proves nothing about the failing platform and is reported as unverified.
 
 ## Input
 
@@ -46,7 +55,7 @@ First stage - analysis (read-only):
 - `analysis.md` - detailed reasoning, with evidence from the logs and diffs
 - `verdict.json` - `classification` (`regression` / `intermittent`),
   `culprit_commit`, `culprit_bug`, `intermittent_bug`, `recommendation`
-  (`backout` / `land_fix` / `do_not_backout`) and `confidence`
+  (`backout` / `land_fix` / `do_not_backout` / `rerun`) and `confidence`
 
 Second stage - fixing (only when a culprit was identified):
 

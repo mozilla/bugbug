@@ -13,6 +13,9 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
     the running user's ~/.mozbuild/. Idempotent: re-runs are fast once
     the toolchain is in place.
 
+    Runs with ``--no-system-changes``: the agent containers are unprivileged, so
+    bootstrap cannot apt-install anything. System packages belong in the image.
+
     Args:
         firefox_dir: Firefox source directory (contains ./mach).
 
@@ -30,8 +33,9 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
 
         process = await asyncio.create_subprocess_exec(
             "./mach",
-            "bootstrap",
             "--no-interactive",
+            "bootstrap",
+            "--no-system-changes",
             "--application-choice=browser",
             cwd=firefox_dir,
             stdout=asyncio.subprocess.PIPE,

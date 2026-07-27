@@ -2,14 +2,42 @@ import pytest
 from hackbot_agents.test_repair import resolve
 from hackbot_agents.test_repair.resolve import FailingGroup
 from mozci.errors import ParentPushNotFound
-from mozci.task import Status
 
 GROUP = "dom/base/test/mochitest.ini"
+TESTS = ["dom/base/test/test_a.js"]
+PLATFORM = "linux1804-64-qr/debug"
+
+
+def _investigation(**kwargs):
+    defaults = dict(
+        project="autoland",
+        hg_revision="hgrev",
+        harness="mochitest",
+        platform=PLATFORM,
+        failing_groups=[],
+        last_green_revision=None,
+        commit_range=resolve.CommitRange("head", None, 1, False),
+    )
+    return resolve.Investigation(**{**defaults, **kwargs})
+
+
+class FakeResult:
+    def __init__(self, group, ok):
+        self.group = group
+        self.ok = ok
+
+
+class FakeTask:
+    def __init__(self, platform, ok, failed_tests=()):
+        self.platform = platform
+        self.label = f"test-{platform}-mochitest-1"
+        self.results = [FakeResult(GROUP, ok)]
+        self.failure_types = {GROUP: [(t, "timeout") for t in failed_tests]}
 
 
 class FakeSummary:
-    def __init__(self, status):
-        self.status = status
+    def __init__(self, *tasks):
+        self.tasks = list(tasks)
 
 
 class FakePush:
@@ -25,6 +53,10 @@ class FakePush:
         return self._parent
 
 
+def _failing():
+    return FailingGroup(GROUP, TESTS)
+
+
 def test_harness_detection():
     assert resolve._harness({"test-suite": "xpcshell"}) == "xpcshell"
     assert resolve._harness({"label": "test-linux/opt-xpcshell-4"}) == "xpcshell"
@@ -37,27 +69,62 @@ def test_harness_detection():
     assert resolve._harness({}) == "unknown"
 
 
-def test_debug_build_detection():
-    assert resolve._is_debug_build({"test-platform": "linux1804-64-qr/debug"}) is True
-    assert resolve._is_debug_build({"test-platform": "windows11-64/opt"}) is False
-    assert resolve._is_debug_build({}) is False
+def test_platform_derived_flags():
+    inv = _investigation(platform="linux1804-64-qr/debug")
+    assert inv.debug_build is True
+    assert inv.is_linux is True
+    win = _investigation(platform="windows11-64-24h2/opt")
+    assert win.debug_build is False
+    assert win.is_linux is False
 
 
 def test_last_green_returns_first_passing_ancestor(monkeypatch):
-    green = FakePush("greenrev", {GROUP: FakeSummary(Status.PASS)})
-    flaky = FakePush(
-        "flakyrev", {GROUP: FakeSummary(Status.INTERMITTENT)}, parent=green
-    )
-    head = FakePush("headrev", {}, parent=flaky)
+    green = FakePush("greenrev", {GROUP: FakeSummary(FakeTask(PLATFORM, ok=True))})
+    head = FakePush("headrev", {}, parent=green)
     monkeypatch.setattr(resolve, "Push", lambda rev, branch=None: head)
-    assert resolve._last_green("autoland", "headrev", GROUP) == "greenrev"
+    assert (
+        resolve._last_green("autoland", "headrev", _failing(), PLATFORM) == "greenrev"
+    )
 
 
 def test_last_green_none_when_already_failing_upstream(monkeypatch):
-    parent = FakePush("parentrev", {GROUP: FakeSummary(Status.FAIL)})
+    parent = FakePush(
+        "parentrev",
+        {GROUP: FakeSummary(FakeTask(PLATFORM, ok=False, failed_tests=TESTS))},
+    )
     head = FakePush("headrev", {}, parent=parent)
     monkeypatch.setattr(resolve, "Push", lambda rev, branch=None: head)
-    assert resolve._last_green("autoland", "headrev", GROUP) is None
+    assert resolve._last_green("autoland", "headrev", _failing(), PLATFORM) is None
+
+
+def test_last_green_skips_pushes_that_only_ran_elsewhere(monkeypatch):
+    # The group passed on Windows but never ran on the failing Linux platform, so
+    # it cannot anchor a last-green -- the walk must continue past it.
+    green = FakePush("greenrev", {GROUP: FakeSummary(FakeTask(PLATFORM, ok=True))})
+    other = FakePush(
+        "otherrev",
+        {GROUP: FakeSummary(FakeTask("windows11-64-24h2/opt", ok=True))},
+        parent=green,
+    )
+    head = FakePush("headrev", {}, parent=other)
+    monkeypatch.setattr(resolve, "Push", lambda rev, branch=None: head)
+    assert (
+        resolve._last_green("autoland", "headrev", _failing(), PLATFORM) == "greenrev"
+    )
+
+
+def test_test_status_ignores_failures_of_other_tests():
+    # The manifest failed, but not for the test we are investigating.
+    summary = FakeSummary(
+        FakeTask(PLATFORM, ok=False, failed_tests=["dom/base/test/test_other.js"])
+    )
+    push = FakePush("rev", {GROUP: summary})
+    assert resolve._test_status(push, GROUP, TESTS, PLATFORM) == "passed"
+    assert resolve._test_status(push, GROUP, [], PLATFORM) == "failed"
+
+
+def test_test_status_none_when_group_absent():
+    assert resolve._test_status(FakePush("rev"), GROUP, TESTS, PLATFORM) is None
 
 
 def test_last_green_fails_soft_on_error(monkeypatch):
@@ -65,7 +132,7 @@ def test_last_green_fails_soft_on_error(monkeypatch):
         raise RuntimeError("mozci exploded")
 
     monkeypatch.setattr(resolve, "Push", boom)
-    assert resolve._last_green("autoland", "headrev", GROUP) is None
+    assert resolve._last_green("autoland", "headrev", _failing(), PLATFORM) is None
 
 
 def _hg2git(rev):
@@ -150,7 +217,7 @@ def test_resolve_investigation_assembles_context(monkeypatch):
     }
     monkeypatch.setattr(resolve, "_get_json", lambda url: task)
     monkeypatch.setattr(
-        resolve, "_failing_groups", lambda tid: [FailingGroup(GROUP, "a.js")]
+        resolve, "_failing_groups", lambda tid: [FailingGroup(GROUP, TESTS)]
     )
     monkeypatch.setattr(resolve, "_last_green", lambda *a: "greenrev")
     monkeypatch.setattr(
@@ -163,6 +230,7 @@ def test_resolve_investigation_assembles_context(monkeypatch):
     assert inv.project == "autoland"
     assert inv.hg_revision == "hghead"
     assert inv.harness == "mochitest"
+    assert inv.platform == "linux1804-64-qr/debug"
     assert inv.debug_build is True
     assert inv.last_green_revision == "greenrev"
     assert inv.failure_commit == "gitHead"

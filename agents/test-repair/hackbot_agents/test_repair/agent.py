@@ -29,6 +29,7 @@ from typing import Literal
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox import FirefoxContext
+from agent_tools.firefox.tools import bootstrap_firefox
 from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
@@ -51,18 +52,23 @@ from .prompts import (
     ANALYSIS_TEMPLATE,
     CANDIDATE_INTRO_COMPLETE,
     CANDIDATE_INTRO_PARTIAL,
+    ENVIRONMENT_NOTE,
     FIX_TEMPLATE,
     LAST_GREEN_LINE,
+    MAX_TESTS_PER_GROUP,
+    VERIFY_LOCAL,
+    VERIFY_REMOTE,
 )
 from .resolve import CommitRange, FailingGroup, Investigation
 
 _CLASSIFICATIONS = ("regression", "intermittent")
-_RECOMMENDATIONS = ("backout", "do_not_backout", "land_fix")
+_RECOMMENDATIONS = ("backout", "do_not_backout", "land_fix", "rerun")
+_SANITIZER_OPTIONS = {"asan": "address-sanitizer", "tsan": "thread-sanitizer"}
 
 
 class TestRepairResult(HackbotAgentResult):
     classification: Literal["regression", "intermittent"]
-    recommendation: Literal["backout", "do_not_backout", "land_fix"]
+    recommendation: Literal["backout", "do_not_backout", "land_fix", "rerun"]
     culprit_commit: str | None = None
     culprit_bug: int | None = None
     confidence: float = 0.0
@@ -187,24 +193,43 @@ def _resolve_culprit(source_repo: Path, sha) -> str | None:
     return full
 
 
-def _write_mozconfig(fx_ctx: FirefoxContext, *, debug: bool) -> None:
+def _write_mozconfig(fx_ctx: FirefoxContext, investigation: Investigation) -> None:
     """Write a mozconfig mirroring the failing CI build, unless one exists.
 
-    ``build_firefox`` fails outright without one. The build type is mirrored
-    because assertion failures only reproduce in the type CI used.
+    ``build_firefox`` fails outright without one. The variant is mirrored because
+    a plain build cannot trigger an assertion, sanitizer or coverage failure.
     """
     if fx_ctx.mozconfig.exists():
         return
-    build_type = (
-        "ac_add_options --enable-debug\n"
-        if debug
-        else "ac_add_options --disable-debug\nac_add_options --enable-optimize\n"
-    )
-    fx_ctx.mozconfig.write_text(
-        "ac_add_options --enable-application=browser\n"
-        f"{build_type}"
-        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
-    )
+    options = ["ac_add_options --enable-application=browser"]
+    if investigation.debug_build:
+        options.append("ac_add_options --enable-debug")
+    else:
+        options += [
+            "ac_add_options --disable-debug",
+            "ac_add_options --enable-optimize",
+        ]
+    if investigation.sanitizer:
+        options += [
+            f"ac_add_options --enable-{_SANITIZER_OPTIONS[investigation.sanitizer]}",
+            "ac_add_options --disable-jemalloc",
+        ]
+    if investigation.coverage_build:
+        options.append("ac_add_options --enable-coverage")
+    options.append(f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}")
+    fx_ctx.mozconfig.write_text("\n".join(options) + "\n")
+
+
+async def _bootstrap(fx_ctx: FirefoxContext) -> None:
+    """Install the build toolchain before the fix stage needs it.
+
+    Deterministic prep rather than a tool call: it is slow and unconditional, so
+    spending agent turns deciding to run it wastes budget. Idempotent, and a
+    failure here is not fatal -- build_firefox reports its own errors.
+    """
+    result = await bootstrap_firefox(fx_ctx.source_dir)
+    if not result.get("success"):
+        print(f"[test-repair] bootstrap: {result.get('message')}", file=sys.stderr)
 
 
 def _as_float(value, default: float = 0.0) -> float:
@@ -262,7 +287,13 @@ def _range_expr(commit_range: CommitRange) -> str:
 def _failing_tests(groups: list[FailingGroup]) -> str:
     if not groups:
         return "- (failing groups could not be resolved; identify them from the logs)"
-    return "\n".join(f"- {g.group} (e.g. {g.test})" for g in groups)
+    lines = []
+    for group in groups:
+        shown = group.tests[:MAX_TESTS_PER_GROUP]
+        extra = len(group.tests) - len(shown)
+        tests = ", ".join(shown) + (f", +{extra} more" if extra > 0 else "")
+        lines.append(f"- {group.group}: {tests or '(tests not resolved)'}")
+    return "\n".join(lines)
 
 
 async def run_test_repair(
@@ -313,6 +344,7 @@ async def run_test_repair(
     analysis_prompt = ANALYSIS_TEMPLATE.format(
         failing_tests=_failing_tests(investigation.failing_groups),
         harness=investigation.harness,
+        platform=investigation.platform or "unknown",
         failure_commit=failure_commit,
         candidate_intro=intro.format(commit_range=range_expr, span=commit_range.span),
         commit_range=range_expr,
@@ -351,9 +383,15 @@ async def run_test_repair(
         culprit_commit = _resolve_culprit(source_repo, verdict.get("culprit_commit"))
         if culprit_commit:
             reporter.header(f"{label}: fix")
-            _write_mozconfig(fx_ctx, debug=investigation.debug_build)
+            _write_mozconfig(fx_ctx, investigation)
+            await _bootstrap(fx_ctx)
+            template = VERIFY_LOCAL if investigation.is_linux else VERIFY_REMOTE
+            verify_step = template.format(
+                harness=investigation.harness, platform=investigation.platform
+            ) + ENVIRONMENT_NOTE.format(platform=investigation.platform)
             fix_prompt = FIX_TEMPLATE.format(
                 culprit_commit=culprit_commit,
+                verify_step=verify_step,
                 scratch_out=scratch_out,
             )
             fix_opts = _build_options(

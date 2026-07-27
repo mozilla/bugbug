@@ -4,6 +4,7 @@ import subprocess
 from types import SimpleNamespace
 
 from hackbot_agents.test_repair import agent
+from hackbot_agents.test_repair.prompts import MAX_TESTS_PER_GROUP
 from hackbot_agents.test_repair.resolve import (
     CommitRange,
     FailingGroup,
@@ -48,25 +49,37 @@ def _git_repo(path):
     return shas
 
 
-def _investigation(head, base, complete=True):
+def _investigation(head, base, complete=True, platform="linux1804-64/opt", groups=None):
     return Investigation(
         project="autoland",
         hg_revision="hgrev",
         harness="mochitest",
-        debug_build=False,
-        failing_groups=[
-            FailingGroup("dom/base/test/mochitest.ini", "dom/base/test/a.js")
-        ],
+        platform=platform,
+        failing_groups=groups
+        if groups is not None
+        else [FailingGroup("dom/base/test/mochitest.ini", ["dom/base/test/a.js"])],
         last_green_revision="greenhg",
         commit_range=CommitRange(head=head, base=base, span=2, complete=complete),
     )
 
 
 def _fx_ctx(tmp_path):
-    return SimpleNamespace(mozconfig=tmp_path / ".mozconfig", objdir=tmp_path / "obj")
+    return SimpleNamespace(
+        source_dir=tmp_path / "src",
+        mozconfig=tmp_path / ".mozconfig",
+        objdir=tmp_path / "obj",
+    )
 
 
-def _run(tmp_path, verdicts, monkeypatch, complete=True, results=None):
+def _run(
+    tmp_path,
+    verdicts,
+    monkeypatch,
+    complete=True,
+    results=None,
+    platform="linux1804-64/opt",
+    groups=None,
+):
     repo = tmp_path / "src"
     repo.mkdir()
     base, head = _git_repo(repo)
@@ -85,7 +98,14 @@ def _run(tmp_path, verdicts, monkeypatch, complete=True, results=None):
         (scratch_out / "analysis.md").write_text("the reasoning")
         return _result_msg(is_error=bool(results and results.pop(0)))
 
+    bootstrapped = []
+
+    async def fake_bootstrap(firefox_dir):
+        bootstrapped.append(firefox_dir)
+        return {"success": True}
+
     monkeypatch.setattr(agent, "_run_session", fake_session)
+    monkeypatch.setattr(agent, "bootstrap_firefox", fake_bootstrap)
     monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {"type": "sdk"})
 
     result = asyncio.run(
@@ -93,7 +113,9 @@ def _run(tmp_path, verdicts, monkeypatch, complete=True, results=None):
             bugzilla_mcp_server=None,
             source_repo=repo,
             fx_ctx=_fx_ctx(tmp_path),
-            investigation=_investigation(head, base if complete else None, complete),
+            investigation=_investigation(
+                head, base if complete else None, complete, platform, groups
+            ),
             task_logs={},
             scratch_out=scratch_out,
             verbose=False,
@@ -292,3 +314,108 @@ def test_range_expr_prefers_the_last_green_base():
     anchored = CommitRange(head="h" * 40, base="b" * 40, span=5, complete=True)
     assert agent._range_expr(anchored) == f"{'b' * 40}..{'h' * 40}"
     assert agent._range_expr(CommitRange("h" * 40, None, 5, False)) == "HEAD~5..HEAD"
+
+
+def test_all_failing_tests_are_listed(tmp_path, monkeypatch):
+    tests = [f"dom/base/test/test_{i}.js" for i in range(3)]
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": None}],
+        monkeypatch,
+        groups=[FailingGroup("dom/base/test/mochitest.ini", tests)],
+    )
+    for test in tests:
+        assert test in calls[0]
+
+
+def test_long_failing_test_lists_are_elided(tmp_path, monkeypatch):
+    tests = [f"dom/base/test/test_{i}.js" for i in range(MAX_TESTS_PER_GROUP + 5)]
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": None}],
+        monkeypatch,
+        groups=[FailingGroup("dom/base/test/mochitest.ini", tests)],
+    )
+    assert "+5 more" in calls[0]
+
+
+def test_rerun_recommendation_survives_without_a_culprit(tmp_path, monkeypatch):
+    result, calls, _head = _run(
+        tmp_path,
+        [{"recommendation": "rerun", "culprit_commit": None, "confidence": 0.2}],
+        monkeypatch,
+    )
+    assert len(calls) == 1
+    assert result.recommendation == "rerun"
+
+
+def test_linux_failure_expects_the_test_to_pass(tmp_path, monkeypatch):
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
+        monkeypatch,
+    )
+    assert "mach" in calls[1]
+    assert "They should pass." in calls[1]
+    assert "proves nothing" not in calls[1]
+
+
+def test_non_linux_failure_still_runs_the_test_but_discounts_a_pass(
+    tmp_path, monkeypatch
+):
+    # A failure on Linux is real evidence the patch is wrong; a pass says nothing
+    # about the failing platform, so it must not count as verification.
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
+        monkeypatch,
+        platform="windows11-64-24h2/opt",
+    )
+    assert "mach" in calls[1]
+    assert "proves nothing about windows11-64-24h2/opt" in calls[1]
+    assert "not verified" in calls[1]
+
+
+def _mozconfig_for(tmp_path, platform):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    fx = _fx_ctx(tmp_path)
+    agent._write_mozconfig(fx, _investigation("h", None, platform=platform))
+    return fx.mozconfig.read_text()
+
+
+def test_mozconfig_mirrors_the_ci_build_variant(tmp_path):
+    opt = _mozconfig_for(tmp_path / "opt", "linux1804-64-qr/opt")
+    assert "--disable-debug" in opt and "--enable-optimize" in opt
+    assert "sanitizer" not in opt
+
+    dbg = _mozconfig_for(tmp_path / "dbg", "linux1804-64-qr/debug")
+    assert "--enable-debug" in dbg
+
+    # A plain build cannot trigger a sanitizer or coverage failure at all.
+    asan = _mozconfig_for(tmp_path / "asan", "linux1804-64-asan-qr/opt")
+    assert "--enable-address-sanitizer" in asan and "--disable-jemalloc" in asan
+
+    tsan = _mozconfig_for(tmp_path / "tsan", "linux1804-64-tsan-qr/opt")
+    assert "--enable-thread-sanitizer" in tsan
+
+    ccov = _mozconfig_for(tmp_path / "ccov", "linux1804-64-ccov/opt")
+    assert "--enable-coverage" in ccov
+
+
+def test_verify_step_states_the_container_limits(tmp_path, monkeypatch):
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
+        monkeypatch,
+        platform="linux1804-64-qr/debug",
+    )
+    assert "virtual display" in calls[1]
+    assert "could not verify" in calls[1]
+
+
+def test_last_green_is_labelled_as_an_hg_revision(tmp_path, monkeypatch):
+    # Every other revision in the prompt is a git hash; an unlabelled hg node
+    # makes the agent run git commands against it and get exit 128.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "hg revision greenhg" in calls[0]
+    assert "not a git object" in calls[0]
