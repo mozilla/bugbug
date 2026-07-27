@@ -2,8 +2,10 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,17 +31,14 @@ log = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
-def _normalize_author(author: str | None) -> str | None:
-    """Canonicalize an author email for storage and comparison.
-
-    Authors are stored lowercased and stripped, so the same normalization has to
-    run on both the write and the filter path. Blank values (a missing header or
-    an empty query param) collapse to ``None`` rather than an empty-string author.
-    """
-    if author is None:
+def _normalize_identity(email: str | None) -> str | None:
+    if not email:
         return None
-    normalized = author.strip().lower()
-    return normalized or None
+
+    return email.strip().lower() or None
+
+
+UserEmail = Annotated[str | None, BeforeValidator(_normalize_identity)]
 
 
 def _lookup_agent(name: str) -> AgentSpec:
@@ -68,9 +67,13 @@ async def list_agents() -> list[AgentDescriptor]:
 async def create_run(
     agent_name: str,
     payload: dict,
-    # Set by the UI proxy to the authenticated user's email. Automated callers
-    # (e.g. the Phabricator webhook) omit it, leaving the run unattributed.
-    author: str | None = Header(default=None, alias="X-Hackbot-Author"),
+    on_behalf_of: Annotated[
+        UserEmail,
+        Header(
+            alias="X-On-Behalf-Of",
+            description="Email of the user this run is requested for.",
+        ),
+    ] = None,
     db: AsyncSession = Depends(get_db),
 ) -> RunRef:
     agent = _lookup_agent(agent_name)
@@ -89,7 +92,7 @@ async def create_run(
         agent=agent.name,
         status=RunStatus.pending.value,
         inputs=inputs.model_dump(mode="json"),
-        author=_normalize_author(author),
+        requested_by=on_behalf_of,
         results_prefix=results_prefix,
         artifacts=[],
     )
@@ -130,10 +133,10 @@ async def list_runs(
     agent: str | None = Query(default=None),
     # Aliased so the query param is `status` without shadowing fastapi.status.
     status_filter: RunStatus | None = Query(default=None, alias="status"),
-    # Filter to runs triggered by this user (email). Used by the UI's "my runs"
-    # default. Matched case-insensitively against the stored (lowercased) author;
-    # a blank value means "no filter".
-    author: str | None = Query(default=None),
+    requested_by: Annotated[
+        UserEmail,
+        Query(description="Only return runs requested by this user."),
+    ] = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
     stmt = select(Run)
@@ -141,12 +144,11 @@ async def list_runs(
         stmt = stmt.where(Run.agent == agent)
     if status_filter is not None:
         stmt = stmt.where(Run.status == status_filter.value)
-    normalized_author = _normalize_author(author)
-    if normalized_author is not None:
-        stmt = stmt.where(Run.author == normalized_author)
+    if requested_by is not None:
+        stmt = stmt.where(Run.requested_by == requested_by)
     # created_at is the sort key; run_id is a deterministic tiebreaker so offset
-    # paging is stable when timestamps collide. (agent/status/created_at are all
-    # indexed, so filtering + ordering stay index-backed.)
+    # paging is stable when timestamps collide. (agent/status/requested_by and
+    # created_at are all indexed, so filtering + ordering stay index-backed.)
     stmt = (
         stmt.order_by(Run.created_at.desc(), Run.run_id.desc())
         .offset(offset)

@@ -1,29 +1,14 @@
-"""Tests for POST /agents/{agent_name}/runs, focused on author attribution.
+"""Tests for POST /agents/{agent_name}/runs, focused on requester attribution.
 
-Follows this suite's fake-based style: the handler is called directly with a fake
-session that captures the Run it adds, and the GCS/Cloud Run collaborators are
-monkeypatched, so no GCP or Postgres is needed.
+These go through a TestClient rather than calling the handler directly: the
+`X-On-Behalf-Of` normalization lives in the parameter's annotation (see
+`UserEmail` in app/routers/runs.py), so it only runs as part of FastAPI's request
+handling. The GCS/Cloud Run collaborators are monkeypatched and the DB session is
+the shared `FakeSession`, so no GCP or Postgres is needed.
 """
 
 import pytest
 from app import gcs, jobs
-from app.routers import runs as runs_router
-
-
-class _CapturingDB:
-    """Captures the ORM object passed to add(); commit/flush are no-ops."""
-
-    def __init__(self):
-        self.added = None
-
-    def add(self, obj):
-        self.added = obj
-
-    async def flush(self):
-        pass
-
-    async def commit(self):
-        pass
 
 
 @pytest.fixture(autouse=True)
@@ -39,31 +24,28 @@ def _stub_gcp(monkeypatch):
     monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
 
 
-async def _create(author, db=None):
-    db = db or _CapturingDB()
-    await runs_router.create_run(
-        agent_name="bug-fix",
-        payload={"bug_id": 1889001},
-        author=author,
-        db=db,
+def _create(client, headers=None):
+    resp = client.post(
+        "/agents/bug-fix/runs", json={"bug_id": 1889001}, headers=headers or {}
     )
-    return db.added
+    assert resp.status_code == 201, resp.text
+    return resp
 
 
-async def test_create_run_records_author_from_header():
-    run = await _create("someone@mozilla.com")
-    assert run.author == "someone@mozilla.com"
+def test_create_run_records_requested_by_from_header(client, db):
+    _create(client, {"X-On-Behalf-Of": "someone@mozilla.com"})
+    assert db.added.requested_by == "someone@mozilla.com"
 
 
-async def test_create_run_normalizes_author_case_and_whitespace():
+def test_create_run_normalizes_requested_by_case_and_whitespace(client, db):
     # Stored lowercased/stripped so the list_runs filter can match exactly.
-    run = await _create("  Someone@Mozilla.COM \n")
-    assert run.author == "someone@mozilla.com"
+    _create(client, {"X-On-Behalf-Of": "  Someone@Mozilla.COM  "})
+    assert db.added.requested_by == "someone@mozilla.com"
 
 
-@pytest.mark.parametrize("header", [None, "", "   "])
-async def test_create_run_leaves_run_unattributed_without_author(header):
+@pytest.mark.parametrize("headers", [{}, {"X-On-Behalf-Of": "   "}])
+def test_create_run_leaves_run_unattributed_without_header(client, db, headers):
     # Automation (e.g. the Phabricator webhook) omits the header entirely; a
-    # blank one must not land as an empty-string author either.
-    run = await _create(header)
-    assert run.author is None
+    # blank one must not land as an empty-string requester either.
+    _create(client, headers)
+    assert db.added.requested_by is None

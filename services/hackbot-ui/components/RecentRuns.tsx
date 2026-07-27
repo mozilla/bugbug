@@ -29,7 +29,7 @@ interface RunRow {
   agent: string;
   status: RunStatus;
   label: string;
-  author: string | null;
+  requestedBy: string | null;
   created_at: string;
   error: string | null;
 }
@@ -54,7 +54,7 @@ function toRow(d: RunDoc): RunRow {
     agent: d.agent,
     status: d.status,
     label: labelFromInputs(d.inputs),
-    author: d.author,
+    requestedBy: d.requested_by,
     created_at: d.created_at,
     error: d.error,
   };
@@ -64,18 +64,18 @@ function hasErrorDetail(r: RunRow): boolean {
   return (r.status === "failed" || r.status === "timed_out") && !!r.error;
 }
 
-// Compact author cell: the email's local part (full email on hover). Runs with
-// no author come from automation (e.g. Phabricator webhooks).
-function AuthorCell({ author }: { author: string | null }) {
-  if (!author) return <span className="muted">automation</span>;
-  const localPart = author.split("@")[0];
-  return <span title={author}>{localPart}</span>;
+// Compact requester cell: the email's local part (full email on hover). Runs
+// with no requester come from automation (e.g. Phabricator webhooks).
+function RequesterCell({ requestedBy }: { requestedBy: string | null }) {
+  if (!requestedBy) return <span className="muted">automation</span>;
+  const localPart = requestedBy.split("@")[0];
+  return <span title={requestedBy}>{localPart}</span>;
 }
 
 async function fetchPage(params: {
   agent?: string;
   status?: string;
-  author?: string;
+  requestedBy?: string;
   offset: number;
 }): Promise<RunRow[] | null> {
   const qs = new URLSearchParams({
@@ -84,7 +84,7 @@ async function fetchPage(params: {
   });
   if (params.agent) qs.set("agent", params.agent);
   if (params.status) qs.set("status", params.status);
-  if (params.author) qs.set("author", params.author);
+  if (params.requestedBy) qs.set("requested_by", params.requestedBy);
   const res = await fetch(`/api/runs?${qs.toString()}`);
   if (!res.ok) return null;
   const docs = (await res.json()) as RunDoc[];
@@ -102,7 +102,7 @@ export function RecentRuns() {
   const statusFilter = searchParams.get("status") ?? "";
   // Default to "my runs"; `?scope=all` shows everyone's.
   const showAll = searchParams.get("scope") === "all";
-  const authorFilter = showAll ? undefined : (myEmail ?? undefined);
+  const requesterFilter = showAll ? undefined : myEmail ?? undefined;
   // In "my runs" mode we need the signed-in email before we can filter, so hold
   // off fetching until the session resolves. Once resolved without an email
   // (shouldn't happen for an authed user), fall through to an unfiltered list.
@@ -122,7 +122,7 @@ export function RecentRuns() {
     fetchPage({
       agent: agentFilter || undefined,
       status: statusFilter || undefined,
-      author: authorFilter,
+      requestedBy: requesterFilter,
       offset: 0,
     }).then((page) => {
       if (cancelled) return;
@@ -138,7 +138,7 @@ export function RecentRuns() {
     return () => {
       cancelled = true;
     };
-  }, [agentFilter, statusFilter, authorFilter, sessionReady]);
+  }, [agentFilter, statusFilter, requesterFilter, sessionReady]);
 
   // Live-status polling for the loaded, non-terminal runs — updated in place so
   // pagination/scroll position is preserved.
@@ -194,7 +194,7 @@ export function RecentRuns() {
     const page = await fetchPage({
       agent: agentFilter || undefined,
       status: statusFilter || undefined,
-      author: authorFilter,
+      requestedBy: requesterFilter,
       offset: runs.length,
     });
     // `null` means the request failed; an empty page is a valid last page.
@@ -207,7 +207,7 @@ export function RecentRuns() {
       setHasMore(page.length === PAGE_SIZE);
     }
     setLoadingMore(false);
-  }, [runs, loadingMore, agentFilter, statusFilter, authorFilter]);
+  }, [runs, loadingMore, agentFilter, statusFilter, requesterFilter]);
 
   const hasFilters = Boolean(agentFilter || statusFilter || showAll);
 
@@ -217,7 +217,7 @@ export function RecentRuns() {
         <h2>Recent runs</h2>
         <div className="runs-filters">
           <select
-            aria-label="Filter by author"
+            aria-label="Filter by requester"
             value={showAll ? "all" : "mine"}
             onChange={(e) => setFilter("scope", e.target.value)}
           >
@@ -280,7 +280,7 @@ export function RecentRuns() {
                   <th>Run</th>
                   <th>Agent</th>
                   <th>Input</th>
-                  <th>Author</th>
+                  <th>Requested by</th>
                   <th>Status</th>
                   <th>Started</th>
                 </tr>
@@ -299,7 +299,7 @@ export function RecentRuns() {
                         <td>{r.agent}</td>
                         <td>{r.label}</td>
                         <td>
-                          <AuthorCell author={r.author} />
+                          <RequesterCell requestedBy={r.requestedBy} />
                         </td>
                         <td>
                           <StatusBadge status={r.status} />

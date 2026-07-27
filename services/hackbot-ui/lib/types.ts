@@ -62,8 +62,7 @@ export interface RunDoc {
   agent: string;
   status: RunStatus;
   inputs: Record<string, unknown>;
-  // Email of the user who triggered the run, or null for automation/legacy runs.
-  author: string | null;
+  requested_by: string | null;
   created_at: string;
   updated_at: string;
   execution_name: string | null;

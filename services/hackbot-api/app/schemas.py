@@ -63,7 +63,7 @@ class RunDoc(BaseModel):
     agent: str
     status: RunStatus
     inputs: dict[str, Any]
-    author: str | None = None
+    requested_by: str | None = None
     created_at: datetime
     updated_at: datetime
     execution_name: str | None = None
