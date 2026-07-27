@@ -57,7 +57,7 @@
     "workerType": "batch"
   },
   "triggerSchema": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "type": "object"
   }
 }
