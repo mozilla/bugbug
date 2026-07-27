@@ -5,8 +5,8 @@
 
 """Models and tool allowlist for the test-repair agent."""
 
-ANALYSIS_MODEL = "claude-opus-4-8"
-FIX_MODEL = "claude-opus-4-8"
+ANALYSIS_MODEL = "claude-opus-5"
+FIX_MODEL = "claude-opus-5"
 
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
