@@ -194,13 +194,15 @@ def _resolve_culprit(source_repo: Path, sha) -> str | None:
 
 
 def _write_mozconfig(fx_ctx: FirefoxContext, investigation: Investigation) -> None:
-    """Write a mozconfig mirroring the failing CI build, unless one exists.
+    """Write a mozconfig mirroring the failing CI build.
 
     ``build_firefox`` fails outright without one. The variant is mirrored because
     a plain build cannot trigger an assertion, sanitizer or coverage failure.
+
+    Always overwritten: ``/workspace`` is a persistent volume shared with the
+    other agents, so a leftover mozconfig from a previous run points the build at
+    a foreign objdir with foreign flags.
     """
-    if fx_ctx.mozconfig.exists():
-        return
     options = ["ac_add_options --enable-application=browser"]
     if investigation.debug_build:
         options.append("ac_add_options --enable-debug")

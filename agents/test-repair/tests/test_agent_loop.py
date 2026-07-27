@@ -419,3 +419,19 @@ def test_last_green_is_labelled_as_an_hg_revision(tmp_path, monkeypatch):
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
     assert "hg revision greenhg" in calls[0]
     assert "not a git object" in calls[0]
+
+
+def test_mozconfig_overwrites_a_foreign_one(tmp_path):
+    # /workspace is shared with the other agents, so a leftover mozconfig points
+    # the build at a foreign objdir with foreign flags.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    fx = _fx_ctx(tmp_path)
+    fx.mozconfig.write_text(
+        "ac_add_options --enable-release\n"
+        "mk_add_options MOZ_OBJDIR=/workspace/firefox/objdir-build-repair\n"
+    )
+    agent._write_mozconfig(fx, _investigation("h", None, platform="linux1804-64/opt"))
+    written = fx.mozconfig.read_text()
+    assert "objdir-build-repair" not in written
+    assert "--enable-release" not in written
+    assert str(fx.objdir) in written
