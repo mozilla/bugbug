@@ -100,13 +100,13 @@ export function RecentRuns() {
 
   const agentFilter = searchParams.get("agent") ?? "";
   const statusFilter = searchParams.get("status") ?? "";
-  // Default to "my runs"; `?scope=all` shows everyone's.
-  const showAll = searchParams.get("scope") === "all";
-  const requesterFilter = showAll ? undefined : myEmail ?? undefined;
+  // Default to everyone's runs; `?scope=mine` narrows to the signed-in user.
+  const showMine = searchParams.get("scope") === "mine";
+  const requesterFilter = showMine ? myEmail ?? undefined : undefined;
   // In "my runs" mode we need the signed-in email before we can filter, so hold
   // off fetching until the session resolves. Once resolved without an email
   // (shouldn't happen for an authed user), fall through to an unfiltered list.
-  const sessionReady = showAll || myEmail !== null || !sessionPending;
+  const sessionReady = !showMine || myEmail !== null || !sessionPending;
 
   const [runs, setRuns] = useState<RunRow[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -176,8 +176,8 @@ export function RecentRuns() {
   const setFilter = useCallback(
     (key: "agent" | "status" | "scope", value: string) => {
       const params = new URLSearchParams(searchParams.toString());
-      // "mine" is the default scope, so drop the param rather than storing it.
-      if (value && !(key === "scope" && value === "mine")) {
+      // "all" is the default scope, so drop the param rather than storing it.
+      if (value && !(key === "scope" && value === "all")) {
         params.set(key, value);
       } else {
         params.delete(key);
@@ -209,7 +209,7 @@ export function RecentRuns() {
     setLoadingMore(false);
   }, [runs, loadingMore, agentFilter, statusFilter, requesterFilter]);
 
-  const hasFilters = Boolean(agentFilter || statusFilter || showAll);
+  const hasFilters = Boolean(agentFilter || statusFilter || showMine);
 
   return (
     <>
@@ -218,11 +218,11 @@ export function RecentRuns() {
         <div className="runs-filters">
           <select
             aria-label="Filter by requester"
-            value={showAll ? "all" : "mine"}
+            value={showMine ? "mine" : "all"}
             onChange={(e) => setFilter("scope", e.target.value)}
           >
-            <option value="mine">My runs</option>
             <option value="all">All runs</option>
+            <option value="mine">My runs</option>
           </select>
           <select
             aria-label="Filter by agent"
@@ -267,9 +267,9 @@ export function RecentRuns() {
         <p className="muted">
           {agentFilter || statusFilter
             ? "No runs match these filters."
-            : showAll
-              ? "No runs yet. Use the form above to trigger an agent."
-              : "You haven't triggered any runs yet. Use the form above, or switch to “All runs” to see everyone's."}
+            : showMine
+              ? "You haven't triggered any runs yet. Use the form above, or switch to “All runs” to see everyone's."
+              : "No runs yet. Use the form above to trigger an agent."}
         </p>
       ) : (
         <>
