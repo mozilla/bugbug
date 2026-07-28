@@ -41,6 +41,29 @@ test("accepts the short bugzilla.mozilla.org/<id> form", () => {
   assert.equal(parseBugId("bugzilla.mozilla.org/2058177/"), 2058177);
 });
 
+test("accepts the staging Bugzilla hosts", () => {
+  assert.equal(
+    parseBugId("https://bugzilla.allizom.org/show_bug.cgi?id=2058177"),
+    2058177
+  );
+  assert.equal(
+    parseBugId("https://BUGZILLA-DEV.allizom.org/show_bug.cgi?id=2058177"),
+    2058177
+  );
+});
+
+test("rejects a non-Bugzilla host carrying an id parameter", () => {
+  for (const value of [
+    "https://example.com/?id=2058177",
+    "https://example.com/show_bug.cgi?id=2058177",
+    "https://bugzilla.mozilla.org.evil.example/show_bug.cgi?id=2058177",
+    "https://example.com/2058177",
+    "//example.com/show_bug.cgi?id=2058177",
+  ]) {
+    assert.equal(parseBugId(value), null, `expected null for ${value}`);
+  }
+});
+
 test("rejects input without a usable bug ID", () => {
   for (const value of [
     "",
