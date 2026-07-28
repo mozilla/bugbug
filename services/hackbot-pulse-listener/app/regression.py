@@ -1,8 +1,22 @@
+"""Whether a CI failure is new at a push or inherited from an ancestor.
+
+The ancestor chain comes from mozci, which resolves it from the hg pushlog --
+Treeherder itself uses mozci for exactly this. The per-push results come from
+Treeherder, which keeps them small: mozci would instead pull the push's whole task
+list from the Taskcluster queue, tens of megabytes per ancestor.
+
+A build is looked up by its task label, which is stable across pushes. A test group
+is looked up by configuration (platform and build option) instead, because a test
+label carries its chunk number and chunk assignments drift between pushes.
+"""
+
 import logging
 import time
 
 from mozci.errors import ParentPushNotFound
 from mozci.push import MAX_DEPTH, Push
+
+from app import treeherder
 
 logger = logging.getLogger(__name__)
 
@@ -10,124 +24,96 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 120
 MAX_WAIT_SECONDS = 60 * 60
 
-# mozci spells a green result "passed" (Taskcluster) or "success" (Treeherder).
-_PASSED_RESULTS = ("passed", "success")
-
-# States/results whose outcome isn't knowable yet: still running, or awaiting an
+# Treeherder job results and states.
+_PASSED_RESULTS = ("success",)
+_FAILED_RESULTS = ("testfailed", "busted")
+# Outcomes that aren't knowable yet: still queued or running, or awaiting an
 # auto-retry after an infra exception.
-_UNSETTLED_STATES = ("pending", "running", "exception")
-_UNSETTLED_RESULTS = ("exception", "retry")
+_UNSETTLED_STATES = ("pending", "running")
+_UNSETTLED_RESULTS = ("retry", "exception", "unknown")
 
 # The deciding ancestor hasn't settled yet; the caller waits and re-checks.
 _PENDING = object()
 
 
-def _label_tasks(push: Push, label: str) -> list:
-    return [t for t in push.tasks if t.label == label]
-
-
-def _unsettled(tasks: list) -> bool:
-    """Whether any of these runs may still change outcome (running or auto-retried)."""
+def _unsettled(jobs: list[dict]) -> bool:
+    """Whether any of these runs may still change outcome."""
     return any(
-        t.state in _UNSETTLED_STATES or t.result in _UNSETTLED_RESULTS for t in tasks
+        job["state"] in _UNSETTLED_STATES or job["result"] in _UNSETTLED_RESULTS
+        for job in jobs
     )
 
 
-def _was_scheduled(push: Push, label: str) -> bool:
-    """Whether the push originally scheduled the label (results not visible yet)."""
-    try:
-        return label in push.scheduled_task_labels
-    except Exception:
-        logger.debug("Could not read scheduled task labels for %s", push.rev)
-        return False
-
-
-def _build_status(push: Push, label: str):
+def _build_status(project: str, rev: str, label: str):
     """'passed'/'failed'/_PENDING/None for a build label on a push.
 
-    None is non-decisive (coalesced, never scheduled, or a non-pass/fail terminal
-    state), so such gaps are skipped rather than mistaken for an inherited failure.
+    None is non-decisive (never ran here, or a non-pass/fail terminal state), so such
+    gaps are skipped rather than mistaken for an inherited failure.
     """
-    tasks = _label_tasks(push, label)
-    if tasks:
-        if any(t.result in _PASSED_RESULTS for t in tasks):
-            return "passed"
-        # Checked before failure: a still-running or auto-retried run may yet turn
-        # green, and any green run wins, so wait rather than inherit prematurely.
-        if _unsettled(tasks):
-            return _PENDING
-        if any(t.failed for t in tasks):
-            return "failed"
-        return None
-
-    # No task here: wait if the build was scheduled (result not visible yet),
-    # skip if it was coalesced away.
-    return _PENDING if _was_scheduled(push, label) else None
-
-
-def _group_status(push: Push, group: str, label: str):
-    """'passed'/'failed'/_PENDING/None for a test group on a push, for one label.
-
-    Only tasks sharing the failing task's label are consulted. push.group_summaries
-    folds every configuration together and reports FAIL when the manifest is broken
-    on any platform, which would mask a genuine new failure on this one; a label
-    pins the platform, suite, variant and chunk.
-
-    The precedence matches _build_status: pass, then pending, then fail.
-    """
-    tasks = _label_tasks(push, label)
-    results = [
-        r
-        for t in tasks
-        for r in (getattr(t, "results", None) or [])
-        if r.group == group
-    ]
-    if any(r.ok for r in results):
+    jobs = treeherder.label_jobs(project, rev, label)
+    if any(job["result"] in _PASSED_RESULTS for job in jobs):
         return "passed"
-    if _unsettled(tasks):
+    # Checked before failure: a still-running or auto-retried run may yet turn green,
+    # and any green run wins, so wait rather than inherit prematurely.
+    if _unsettled(jobs):
         return _PENDING
-    if results:
+    if any(job["result"] in _FAILED_RESULTS for job in jobs):
+        return "failed"
+    return None
+
+
+def _group_status(project: str, rev: str, config: tuple[str, str], group: str):
+    """'passed'/'failed'/_PENDING/None for a test group on a push, in one config.
+
+    Only this configuration's runs are consulted, so a manifest already broken on
+    another platform cannot mask a genuine new failure on this one. Same precedence
+    as _build_status: pass, then pending, then fail.
+    """
+    jobs = treeherder.config_jobs(project, rev, *config)
+    results = treeherder.group_results(project, rev)
+    recorded = [
+        results[job["task_id"]][group]
+        for job in jobs
+        if group in (results.get(job["task_id"]) or {})
+    ]
+    if any(recorded):
+        return "passed"
+    if _unsettled(jobs):
+        return _PENDING
+    if recorded:
         return "failed"
 
-    # Nothing reported for the group: wait if the label was scheduled here, skip if
-    # this push never ran it (coalesced, or the manifest was chunked elsewhere).
-    return _PENDING if not tasks and _was_scheduled(push, label) else None
+    # Nothing recorded for the group: this push never ran it (coalesced, or the
+    # manifest was chunked into another task).
+    return None
 
 
-def _classify(head: Push, status_fn, describe: str):
-    """Walk ancestors of `head`; True (new), False (inherited) or _PENDING.
+def _classify(project: str, rev: str, status_fn, describe: str, first_pass=True):
+    """Walk ancestors of `rev`; True (new), False (inherited) or _PENDING.
 
-    status_fn(push) reports 'passed'/'failed'/_PENDING/None for the failing unit
-    (build label or test group).
+    status_fn(ancestor_rev) reports 'passed'/'failed'/_PENDING/None for the failing
+    unit (build label or test group). `first_pass` keeps the "not settled" notice to
+    one line per unit rather than repeating it on every poll for up to an hour.
     """
-    ancestor = head
+    push = Push(rev, branch=project)
     for _ in range(MAX_DEPTH):
         try:
-            ancestor = ancestor.parent
+            push = push.parent
         except ParentPushNotFound:
             break
-        status = status_fn(ancestor)
+        status = status_fn(push.rev)
         if status is None:
             continue
         if status is _PENDING:
-            logger.info(
-                "%s not settled at %s; deferring for %s",
-                describe,
-                ancestor.rev,
-                head.rev,
-            )
+            notice = logger.info if first_pass else logger.debug
+            notice("%s not settled at %s; deferring for %s", describe, push.rev, rev)
             return _PENDING
         if status == "failed":
             logger.info(
-                "%s already failing at %s; inherited at %s",
-                describe,
-                ancestor.rev,
-                head.rev,
+                "%s already failing at %s; inherited at %s", describe, push.rev, rev
             )
             return False
-        logger.info(
-            "%s passed at %s; new failure at %s", describe, ancestor.rev, head.rev
-        )
+        logger.info("%s passed at %s; new failure at %s", describe, push.rev, rev)
         return True
 
     logger.warning(
@@ -136,13 +122,10 @@ def _classify(head: Push, status_fn, describe: str):
     return True
 
 
-def _await_new_failures(branch: str, rev: str, status_fn, units, describe: str) -> set:
+def _await_new_failures(project: str, rev: str, status_fn, units, describe: str) -> set:
     """The units whose failure `rev` introduced; the rest were inherited.
 
-    status_fn(push, unit) reports 'passed'/'failed'/_PENDING/None. One walk serves
-    every unit: mozci memoizes a push's task list per instance, so sharing the head
-    push across units fetches each ancestor's (large) task data once instead of once
-    per unit.
+    status_fn(ancestor_rev, unit) reports 'passed'/'failed'/_PENDING/None.
 
     Fails open -- undecided units counted as new -- on any error, an ancestor still
     unsettled past MAX_WAIT_SECONDS, or no deciding ancestor within MAX_DEPTH, so a
@@ -151,15 +134,17 @@ def _await_new_failures(branch: str, rev: str, status_fn, units, describe: str) 
     deadline = time.monotonic() + MAX_WAIT_SECONDS
     unresolved = list(units)
     new: set = set()
+    first_pass = True
     while True:
         try:
-            # A fresh head each attempt is what re-reads live data for a push whose
-            # ancestors have not finished yet.
-            head = Push(rev, branch=branch)
             pending = []
             for unit in unresolved:
                 state = _classify(
-                    head, lambda push, u=unit: status_fn(push, u), f"{describe} {unit}"
+                    project,
+                    rev,
+                    lambda ancestor, u=unit: status_fn(ancestor, u),
+                    f"{describe} {unit}",
+                    first_pass=first_pass,
                 )
                 if state is _PENDING:
                     pending.append(unit)
@@ -191,19 +176,35 @@ def _await_new_failures(branch: str, rev: str, status_fn, units, describe: str) 
         )
         time.sleep(POLL_INTERVAL_SECONDS)
         unresolved = pending
+        first_pass = False
 
 
-def is_new_build_failure(branch: str, rev: str, label: str) -> bool:
+def is_new_build_failure(project: str, rev: str, label: str) -> bool:
     """True if this push introduced the build failure, False if it inherited it."""
-    return label in _await_new_failures(branch, rev, _build_status, [label], "build")
-
-
-def new_test_failures(branch: str, rev: str, label: str, groups: list[str]) -> set[str]:
-    """The failing groups this push introduced, for one task's label."""
-    return _await_new_failures(
-        branch,
+    return label in _await_new_failures(
+        project,
         rev,
-        lambda push, group: _group_status(push, group, label),
+        lambda ancestor, unit: _build_status(project, ancestor, unit),
+        [label],
+        "build",
+    )
+
+
+def new_test_failures(
+    project: str, rev: str, config: tuple[str, str], groups: list[str]
+) -> set[str]:
+    """The failing groups this push introduced, for one configuration.
+
+    `config` is (platform, platform_option). With no configuration to compare
+    against, every group is reported as new rather than silently dropped.
+    """
+    if not all(config):
+        logger.info("No configuration for %s; running agent", rev)
+        return set(groups)
+    return _await_new_failures(
+        project,
+        rev,
+        lambda ancestor, group: _group_status(project, ancestor, config, group),
         groups,
         "group",
     )

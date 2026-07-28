@@ -27,12 +27,14 @@ class Settings(BaseSettings):
     run_try_push: bool = False
     model: str | None = None
     max_turns: int | None = None
-    # Skip a failing test whose historical failure rate is at or above this
-    # (clearly intermittent) before spending a test-repair run. The rate is per
-    # *run*, over every platform in the timings window (three weeks, thousands of
-    # runs per test), where even the flakiest tests sit near a few percent -- so
-    # this is an order of magnitude lower than a per-push failure rate would be.
-    flakiness_threshold: float = 0.05
+    # Treeherder classifies a failing job shortly after we see the failure, so the
+    # gate waits for the job to be ingested before reading that verdict.
+    treeherder_ingest_poll_seconds: int = 30
+    treeherder_ingest_max_wait_seconds: int = 240
+    # How long to wait for a verdict on a failure whose manifests are unknown, where
+    # no ancestor comparison is possible and most failures turn out to be classified
+    # intermittent or expected-fail shortly after we see them.
+    treeherder_classification_wait_seconds: int = 300
 
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60

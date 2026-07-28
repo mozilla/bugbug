@@ -6,15 +6,7 @@ from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import (
-    client,
-    failures,
-    flakiness,
-    lando,
-    regression,
-    taskcluster,
-    worker,
-)
+from app import client, lando, regression, taskcluster, treeherder, worker
 from app.config import settings
 from app.models import RunContext
 
@@ -38,8 +30,11 @@ _seen: TTLCache = TTLCache(
 )
 _seen_lock = threading.Lock()
 
-# Independent dedupe for test-repair runs, keyed by (taskGroupId, test group): one push
-# emits many failing test tasks, and we want one run per failing group.
+# Independent dedupe for test-repair runs, keyed by (hg revision, test group): one
+# push emits many failing test tasks, and we want one run per failing group. Keyed on
+# the revision rather than the Taskcluster task group because backfills and retriggers
+# are dispatched by action tasks, which start task groups of their own -- the same
+# push would otherwise be investigated once per task group.
 _seen_tests: TTLCache = TTLCache(
     maxsize=settings.dedupe_max_size, ttl=settings.dedupe_ttl_seconds
 )
@@ -155,14 +150,13 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     """Test-failure path: filter, then trigger the test-repair agent for the task.
 
     One push emits many failing test tasks; each task may fail several groups. We
-    resolve the failing groups (via mozci) and keep the ones that are genuine,
-    non-intermittent regressions, then trigger a single run for the task (the
-    agent resolves the commit range itself from the task id). Dedupe is per
-    (push, group) so a manifest failing across chunks is investigated once.
+    resolve the failing groups and keep the ones that are genuine, non-intermittent
+    regressions, then trigger a single run for the task (the agent resolves the
+    commit range itself from the task id). Dedupe is per (push, group) so a manifest
+    failing across chunks is investigated once.
     """
     status = body.get("status") or {}
     task_id = status.get("taskId")
-    task_group_id = status.get("taskGroupId")
     project = tags.get("project")
     label = tags.get("label") or task_id
     developer_email = tags.get("createdForUser")
@@ -172,36 +166,38 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         logger.warning("No GECKO_HEAD_REV for test task %s; skipping", task_id)
         return None
 
+    # Cheapest gate first: one small request, and it rules out intermittents and
+    # infra failures for every harness before any ancestor walking. The same record
+    # carries the configuration the regression check compares against.
+    job = treeherder.job_for_task(project, task_id)
+    reason = treeherder.skip_reason(job)
+    if reason:
+        logger.info("Treeherder classified task %s as %s; skipping", task_id, reason)
+        return None
+    config = ((job or {}).get("platform"), (job or {}).get("platform_option"))
+
+    whole_task = (project, hg_revision, task_id, label, developer_email)
     try:
-        groups = failures.failing_groups(task_id, label)
+        groups = treeherder.failing_groups(project, hg_revision, task_id)
+    except treeherder.GroupResultsUnavailable as exc:
+        # Routine: a task-level failure (crash, timeout, harness error) produces no
+        # per-manifest results, and a log may still be being parsed. Either way we
+        # cannot say what failed, so fail open rather than drop it.
+        logger.info("%s; running the agent on the whole task", exc)
+        return _trigger_whole_task(*whole_task, executor)
     except Exception:
-        # Fail open, as the build path does. An errorsummary that cannot be read
-        # (Taskcluster error, or the artifact not published yet when the failure
-        # message arrives) must not be mistaken for "nothing failed": investigate
-        # the whole task, keyed on its label since no group name is known.
         logger.exception(
-            "Could not resolve the failing groups of task %s; "
+            "Could not read the failing groups of task %s; "
             "running the agent on the whole task",
             task_id,
         )
-        if not _claim_groups([(task_group_id, label)]):
-            return None
-        return _trigger_test_repair(
-            [],
-            [(task_group_id, label)],
-            project,
-            hg_revision,
-            task_id,
-            label,
-            developer_email,
-            executor,
-        )
+        return _trigger_whole_task(*whole_task, executor)
 
     if not groups:
         logger.info("Task %s reported no failing test groups; skipping", task_id)
         return None
 
-    claimed = _claim_groups([(task_group_id, fg.group) for fg in groups])
+    claimed = _claim_groups([(hg_revision, group) for group in groups])
     if not claimed:
         logger.info(
             "Every failing group of task %s is already handled; skipping", task_id
@@ -209,14 +205,25 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
 
     fresh = _fresh_groups(
-        [fg for fg in groups if (task_group_id, fg.group) in claimed],
+        [group for group in groups if (hg_revision, group) in claimed],
         project,
         hg_revision,
-        label,
-        tags.get("test-suite") or "",
+        config,
     )
     if not fresh:
         logger.info("No new, non-intermittent groups for task %s; skipping", task_id)
+        return None
+
+    # Ask again before spending a run: the check above takes minutes, which is about
+    # how long Treeherder takes to classify an intermittent, so a verdict that was
+    # not available at the start of it often is by now.
+    reason = treeherder.recheck_skip_reason(project, task_id)
+    if reason:
+        logger.info(
+            "Treeherder classified task %s as %s while it was being checked; skipping",
+            task_id,
+            reason,
+        )
         return None
 
     return _trigger_test_repair(
@@ -224,10 +231,40 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     )
 
 
+def _trigger_whole_task(
+    project: str,
+    hg_revision: str,
+    task_id: str,
+    label: str,
+    developer_email: str | None,
+    executor: Executor,
+) -> str | None:
+    """Investigate a task whose failing manifests could not be determined.
+
+    There is no manifest to compare against an ancestor here, so nothing else delays
+    the decision. In practice these are mostly intermittents and expected failures
+    that Treeherder classifies a few minutes later, so wait for a verdict before
+    spending a run.
+    """
+    claimed = _claim_groups([(hg_revision, label)])
+    if not claimed:
+        logger.info("Task %s is already handled; skipping", task_id)
+        return None
+
+    reason = treeherder.await_skip_reason(project, task_id)
+    if reason:
+        logger.info("Treeherder classified task %s as %s; skipping", task_id, reason)
+        return None
+
+    return _trigger_test_repair(
+        [], claimed, project, hg_revision, task_id, label, developer_email, executor
+    )
+
+
 def _claim_groups(keys: list[tuple[str, str]]) -> set[tuple[str, str]]:
     """Claim the keys not yet handed off, returning the ones this call claimed.
 
-    Claimed *before* the flakiness and mozci checks, not after: every failing chunk
+    Claimed *before* the regression check, not after: every failing chunk
     of a push resolves the same groups, so without an up-front claim they all run
     the expensive walk concurrently and then throw the answer away. A key stays
     claimed even when the filter then rejects the group, so the sibling tasks do
@@ -241,16 +278,10 @@ def _claim_groups(keys: list[tuple[str, str]]) -> set[tuple[str, str]]:
 
 
 def _fresh_groups(
-    groups, project: str, hg_revision: str, label: str, suite: str
+    candidates: list[str], project: str, hg_revision: str, config: tuple[str, str]
 ) -> list[str]:
-    """Names of the groups that are genuine, non-intermittent regressions."""
-    # Cheap intermittent gate first (one HTTP call per test) before the mozci walk.
-    flaky = flakiness.intermittent_tests([fg.test for fg in groups], suite, label)
-    candidates = [fg.group for fg in groups if fg.test not in flaky]
-    if not candidates:
-        return []
-
-    new = regression.new_test_failures(project, hg_revision, label, candidates)
+    """The groups whose failure this push introduced."""
+    new = regression.new_test_failures(project, hg_revision, config, candidates)
     for group in candidates:
         if group not in new:
             logger.info(

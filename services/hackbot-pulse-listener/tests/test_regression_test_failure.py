@@ -1,6 +1,6 @@
 """Tests for the test-failure regression gate (new_test_failures)."""
 
-from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from app import regression
@@ -8,187 +8,187 @@ from mozci.errors import ParentPushNotFound
 
 GROUP = "dom/base/test/mochitest.ini"
 OTHER_GROUP = "layout/test/mochitest.ini"
-LABEL = "test-linux1804-64/opt-mochitest-browser-chrome-1"
-OTHER_LABEL = "test-windows11-64/debug-mochitest-browser-chrome-1"
+CONFIG = ("linux1804-64", "opt")
+OTHER_CONFIG = ("windows11-64", "debug")
 
 
-def _task(label=LABEL, groups=(), state="completed", result="failed"):
-    """A test task reporting (group, ok) pairs."""
-    return SimpleNamespace(
-        label=label,
-        state=state,
-        result=result,
-        failed=result == "failed",
-        results=[SimpleNamespace(group=g, ok=ok, duration=1) for g, ok in groups],
-    )
+def _job(task_id="T1", result="testfailed", state="completed"):
+    return {"result": result, "state": state, "task_id": task_id}
 
 
 class FakePush:
-    def __init__(self, rev, tasks=(), parent=None, scheduled=()):
+    """A push whose only job is to yield the ancestor chain, as mozci does."""
+
+    def __init__(self, rev, parent=None):
         self.rev = rev
-        self.tasks = list(tasks)
-        self.scheduled_task_labels = set(scheduled)
         self._parent = parent
 
     @property
     def parent(self):
         if self._parent is None:
-            raise ParentPushNotFound(f"no parent for {self.rev}")
+            raise ParentPushNotFound("no parent", rev=self.rev, branch="autoland")
         return self._parent
 
 
-def _install_head(monkeypatch, head):
-    monkeypatch.setattr(regression, "Push", lambda rev, branch=None: head)
+def _chain(depth: int):
+    push = None
+    for i in range(depth, 0, -1):
+        push = FakePush(f"rev{i}", parent=push)
+    return FakePush("head", parent=push)
 
 
-def _check(groups=(GROUP,)):
-    return regression.new_test_failures("autoland", "headrev", LABEL, list(groups))
+def _run(groups, jobs, results, *, depth=1, poll=None):
+    """jobs: {rev: {config: [job]}}; results: {rev: {task_id: {group: passed}}}."""
+    snapshots = [(jobs, results)] + list(poll or [])
+    state = {"attempt": 0}
+
+    def snapshot():
+        return snapshots[min(state["attempt"], len(snapshots) - 1)]
+
+    with (
+        patch.object(regression, "Push", return_value=_chain(depth)),
+        patch.object(
+            regression.treeherder,
+            "config_jobs",
+            lambda p, rev, plat, opt: snapshot()[0].get(rev, {}).get((plat, opt), []),
+        ),
+        patch.object(
+            regression.treeherder,
+            "group_results",
+            lambda p, rev: snapshot()[1].get(rev, {}),
+        ),
+        patch.object(
+            regression.time,
+            "sleep",
+            lambda s: state.update(attempt=state["attempt"] + 1),
+        ),
+    ):
+        return regression.new_test_failures("autoland", "head", CONFIG, list(groups))
 
 
-def _group_state(monkeypatch, head, group=GROUP):
-    _install_head(monkeypatch, head)
-    return regression._classify(
-        head,
-        lambda push: regression._group_status(push, group, LABEL),
-        f"group {group}",
+def test_new_failure_when_ancestor_passed():
+    assert _run(
+        [GROUP],
+        {"rev1": {CONFIG: [_job()]}},
+        {"rev1": {"T1": {GROUP: True}}},
+    ) == {GROUP}
+
+
+def test_inherited_when_ancestor_failed():
+    assert (
+        _run([GROUP], {"rev1": {CONFIG: [_job()]}}, {"rev1": {"T1": {GROUP: False}}})
+        == set()
     )
 
 
-def test_new_failure_when_ancestor_passed(monkeypatch):
-    parent = FakePush("parentrev", [_task(groups=[(GROUP, True)], result="passed")])
-    _install_head(monkeypatch, FakePush("headrev", parent=parent))
-    assert _check() == {GROUP}
+def test_retriggered_green_ancestor_counts_as_passed():
+    jobs = {"rev1": {CONFIG: [_job(task_id="T1"), _job(task_id="T2")]}}
+    results = {"rev1": {"T1": {GROUP: False}, "T2": {GROUP: True}}}
+    assert _run([GROUP], jobs, results) == {GROUP}
 
 
-def test_inherited_when_ancestor_failed(monkeypatch):
-    parent = FakePush("parentrev", [_task(groups=[(GROUP, False)])])
-    _install_head(monkeypatch, FakePush("headrev", parent=parent))
-    assert _check() == set()
-
-
-def test_retriggered_green_ancestor_counts_as_passed(monkeypatch):
-    # Any green run wins, so the failure here is treated as new (errs toward
-    # running the agent rather than dropping a regression).
-    parent = FakePush(
-        "parentrev", [_task(groups=[(GROUP, False)]), _task(groups=[(GROUP, True)])]
-    )
-    _install_head(monkeypatch, FakePush("headrev", parent=parent))
-    assert _check() == {GROUP}
-
-
-def test_other_configuration_failure_does_not_mask_new_failure(monkeypatch):
-    # The manifest is already broken on another platform at the parent push. The
-    # all-configuration group summary would call that an inherited failure; only
+def test_other_configuration_failure_does_not_mask_new_failure():
+    # The manifest is already broken on another platform at the parent push; only
     # this task's own label may decide.
-    green = FakePush("greenrev", [_task(groups=[(GROUP, True)], result="passed")])
-    parent = FakePush(
-        "parentrev", [_task(label=OTHER_LABEL, groups=[(GROUP, False)])], parent=green
-    )
-    _install_head(monkeypatch, FakePush("headrev", parent=parent))
-    assert _check() == {GROUP}
+    jobs = {
+        "rev1": {OTHER_CONFIG: [_job(task_id="OTHER")]},
+        "rev2": {CONFIG: [_job(task_id="T2")]},
+    }
+    results = {
+        "rev1": {"OTHER": {GROUP: False}},
+        "rev2": {"T2": {GROUP: True}},
+    }
+    assert _run([GROUP], jobs, results, depth=2) == {GROUP}
 
 
-def test_unfinished_ancestor_task_is_pending(monkeypatch):
-    # The parent's equivalent task is still running, so it has published no
-    # results yet. It must be waited for, not skipped as non-decisive.
-    parent = FakePush("parentrev", [_task(state="running", result=None)])
-    head = FakePush("headrev", parent=parent)
-    assert _group_state(monkeypatch, head) is regression._PENDING
+def test_unfinished_ancestor_is_waited_then_inherited():
+    jobs = {"rev1": {CONFIG: [_job(result=None, state="running")]}}
+    poll = [({"rev1": {CONFIG: [_job()]}}, {"rev1": {"T1": {GROUP: False}}})]
+    assert _run([GROUP], jobs, {}, poll=poll) == set()
 
 
-def test_unsettled_sibling_defers_a_failed_group(monkeypatch):
-    # Same precedence as the build path: a retrigger that may still turn green
-    # outranks an existing failure, so wait instead of calling it inherited.
-    parent = FakePush(
-        "parentrev",
-        [_task(groups=[(GROUP, False)]), _task(state="running", result=None)],
-    )
-    head = FakePush("headrev", parent=parent)
-    assert _group_state(monkeypatch, head) is regression._PENDING
+def test_unsettled_sibling_defers_a_failed_group():
+    # Same precedence as the build path: a run that may still turn green outranks
+    # an existing failure, so wait instead of calling it inherited.
+    jobs = {"rev1": {CONFIG: [_job(task_id="T1"), _job(task_id="T2", state="running")]}}
+    results = {"rev1": {"T1": {GROUP: False}}}
+    poll = [
+        (
+            {"rev1": {CONFIG: [_job(task_id="T1"), _job(task_id="T2")]}},
+            {"rev1": {"T1": {GROUP: False}, "T2": {GROUP: True}}},
+        )
+    ]
+    assert _run([GROUP], jobs, results, poll=poll) == {GROUP}
 
 
-def test_scheduled_but_unreported_ancestor_task_is_pending(monkeypatch):
-    # The label was scheduled on the parent but no task is visible yet.
-    parent = FakePush("parentrev", [], scheduled=[LABEL])
-    head = FakePush("headrev", parent=parent)
-    assert _group_state(monkeypatch, head) is regression._PENDING
+def test_ancestor_that_never_ran_the_group_is_skipped():
+    # Coalesced, or the manifest was chunked into another task: non-decisive.
+    jobs = {
+        "rev1": {CONFIG: [_job(task_id="T1")]},
+        "rev2": {CONFIG: [_job(task_id="T2")]},
+    }
+    results = {
+        "rev1": {"T1": {OTHER_GROUP: False}},
+        "rev2": {"T2": {GROUP: True}},
+    }
+    assert _run([GROUP], jobs, results, depth=2) == {GROUP}
 
 
-def test_coalesced_ancestor_is_skipped(monkeypatch):
-    # Nothing ran and nothing was scheduled: non-decisive, keep walking.
-    green = FakePush("greenrev", [_task(groups=[(GROUP, True)], result="passed")])
-    coalesced = FakePush("coalrev", [], parent=green)
-    _install_head(monkeypatch, FakePush("headrev", parent=coalesced))
-    assert _check() == {GROUP}
+def test_groups_are_judged_independently():
+    jobs = {"rev1": {CONFIG: [_job()]}}
+    results = {"rev1": {"T1": {GROUP: True, OTHER_GROUP: False}}}
+    assert _run([GROUP, OTHER_GROUP], jobs, results) == {GROUP}
 
 
-def test_ancestor_ran_label_without_the_group_is_skipped(monkeypatch):
-    # The manifest was chunked into a different task here: non-decisive.
-    green = FakePush("greenrev", [_task(groups=[(GROUP, True)], result="passed")])
-    other = FakePush("otherrev", [_task(groups=[(OTHER_GROUP, False)])], parent=green)
-    _install_head(monkeypatch, FakePush("headrev", parent=other))
-    assert _check() == {GROUP}
+def test_no_ancestor_ran_the_group_fails_open():
+    assert _run([GROUP], {}, {}) == {GROUP}
 
 
-def test_groups_are_judged_independently(monkeypatch):
-    parent = FakePush(
-        "parentrev",
-        [_task(groups=[(GROUP, True), (OTHER_GROUP, False)], result="passed")],
-    )
-    _install_head(monkeypatch, FakePush("headrev", parent=parent))
-    assert _check([GROUP, OTHER_GROUP]) == {GROUP}
+def test_lookup_error_fails_open():
+    def explode(*args, **kwargs):
+        raise RuntimeError("treeherder down")
+
+    with (
+        patch.object(regression, "Push", return_value=_chain(1)),
+        patch.object(regression.treeherder, "config_jobs", explode),
+        patch.object(regression.time, "sleep"),
+    ):
+        assert regression.new_test_failures(
+            "autoland", "head", CONFIG, [GROUP, OTHER_GROUP]
+        ) == {GROUP, OTHER_GROUP}
 
 
-def test_one_ancestor_walk_serves_every_group(monkeypatch):
-    # mozci memoizes a push's task list per instance, so all groups of a task must
-    # share one head push rather than refetching the ancestors for each.
-    parent = FakePush("parentrev", [_task(groups=[(GROUP, True)], result="passed")])
-    head = FakePush("headrev", parent=parent)
-    builds = []
-
-    def build(rev, branch=None):
-        builds.append(rev)
-        return head
-
-    monkeypatch.setattr(regression, "Push", build)
-    regression.new_test_failures(
-        "autoland", "headrev", LABEL, [GROUP, OTHER_GROUP, "c"]
-    )
-    assert builds == ["headrev"]
-
-
-def test_no_ancestor_ran_group_fails_open(monkeypatch):
-    _install_head(monkeypatch, FakePush("headrev", parent=FakePush("parentrev")))
-    assert _check() == {GROUP}
-
-
-def test_mozci_error_fails_open(monkeypatch):
-    def boom(rev, branch=None):
-        raise RuntimeError("mozci exploded")
-
-    monkeypatch.setattr(regression, "Push", boom)
-    assert _check([GROUP, OTHER_GROUP]) == {GROUP, OTHER_GROUP}
-
-
-def test_pending_past_deadline_fails_open(monkeypatch):
-    parent = FakePush("parentrev", [_task(state="running", result=None)])
-    _install_head(monkeypatch, FakePush("headrev", parent=parent))
-    monkeypatch.setattr(regression.time, "sleep", lambda s: None)
-    ticks = iter([0.0, regression.MAX_WAIT_SECONDS + 1])
-    monkeypatch.setattr(regression.time, "monotonic", lambda: next(ticks))
-    assert _check() == {GROUP}
-
-
-def test_groups_of_one_task_share_one_wait_budget(monkeypatch):
+def test_groups_of_one_task_share_one_wait_budget():
     # The budget is per call, not per group: two pending groups must not each get
     # their own MAX_WAIT_SECONDS.
-    parent = FakePush("parentrev", [_task(state="running", result=None)])
-    _install_head(monkeypatch, FakePush("headrev", parent=parent))
+    jobs = {"rev1": {CONFIG: [_job(result=None, state="running")]}}
 
     def no_sleep(_seconds):
         pytest.fail("waited past a spent deadline")
 
-    monkeypatch.setattr(regression.time, "sleep", no_sleep)
-    ticks = iter([0.0, regression.MAX_WAIT_SECONDS + 1])
-    monkeypatch.setattr(regression.time, "monotonic", lambda: next(ticks))
-    assert _check([GROUP, OTHER_GROUP]) == {GROUP, OTHER_GROUP}
+    with (
+        patch.object(regression, "Push", return_value=_chain(1)),
+        patch.object(
+            regression.treeherder,
+            "config_jobs",
+            lambda p, rev, plat, opt: jobs.get(rev, {}).get((plat, opt), []),
+        ),
+        patch.object(regression.treeherder, "group_results", lambda p, rev: {}),
+        patch.object(regression.time, "sleep", no_sleep),
+        patch.object(
+            regression.time,
+            "monotonic",
+            side_effect=[0.0, regression.MAX_WAIT_SECONDS + 1],
+        ),
+    ):
+        assert regression.new_test_failures(
+            "autoland", "head", CONFIG, [GROUP, OTHER_GROUP]
+        ) == {GROUP, OTHER_GROUP}
+
+
+def test_missing_configuration_reports_every_group_as_new():
+    # Without a configuration there is nothing to compare against, so nothing may
+    # be silently dropped.
+    assert regression.new_test_failures("autoland", "head", (None, None), [GROUP]) == {
+        GROUP
+    }

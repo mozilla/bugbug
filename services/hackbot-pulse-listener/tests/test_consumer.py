@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from app import consumer
-from app.failures import FailingGroup
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -42,7 +41,9 @@ def test_sample_messages_route_to_test_repair_not_build():
     executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
-        patch.object(consumer.failures, "failing_groups", return_value=[]) as fg,
+        patch.object(consumer.treeherder, "failing_groups", return_value=[]) as fg,
+        patch.object(consumer.treeherder, "job_for_task", return_value=None),
+        patch.object(consumer.treeherder, "skip_reason", return_value=None),
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
         for body in _sample_bodies():
@@ -241,11 +242,7 @@ def _test_msg(
     }
 
 
-_GROUP = FailingGroup(
-    group="dom/base/test/mochitest.ini",
-    test="dom/base/test/test_a.js",
-    failure_type="GENERIC",
-)
+_GROUP = "dom/base/test/mochitest.ini"
 
 
 @pytest.fixture
@@ -258,7 +255,16 @@ def env(monkeypatch):
     mocks = SimpleNamespace(
         get_hg_revision=MagicMock(return_value="hgrev"),
         failing_groups=MagicMock(return_value=[_GROUP]),
-        intermittent_tests=MagicMock(return_value=set()),
+        job_for_task=MagicMock(
+            return_value={
+                "failure_classification_id": 6,
+                "platform": "linux1804-64",
+                "platform_option": "opt",
+            }
+        ),
+        skip_reason=MagicMock(return_value=None),
+        recheck_skip_reason=MagicMock(return_value=None),
+        await_skip_reason=MagicMock(return_value=None),
         new_test_failures=MagicMock(
             side_effect=lambda p, r, label, groups: set(groups)
         ),
@@ -267,9 +273,14 @@ def env(monkeypatch):
         executor=MagicMock(),
     )
     monkeypatch.setattr(consumer.taskcluster, "get_hg_revision", mocks.get_hg_revision)
-    monkeypatch.setattr(consumer.failures, "failing_groups", mocks.failing_groups)
+    monkeypatch.setattr(consumer.treeherder, "failing_groups", mocks.failing_groups)
+    monkeypatch.setattr(consumer.treeherder, "job_for_task", mocks.job_for_task)
+    monkeypatch.setattr(consumer.treeherder, "skip_reason", mocks.skip_reason)
     monkeypatch.setattr(
-        consumer.flakiness, "intermittent_tests", mocks.intermittent_tests
+        consumer.treeherder, "recheck_skip_reason", mocks.recheck_skip_reason
+    )
+    monkeypatch.setattr(
+        consumer.treeherder, "await_skip_reason", mocks.await_skip_reason
     )
     monkeypatch.setattr(
         consumer.regression, "new_test_failures", mocks.new_test_failures
@@ -296,14 +307,23 @@ def test_test_failure_triggers_rca_run(env):
     fn, ctx = env.executor.submit.call_args.args
     assert fn is consumer.worker.poll_and_notify
     assert ctx.agent == "test-repair"
-    assert ctx.test_groups == [_GROUP.group]
+    assert ctx.test_groups == [_GROUP]
 
 
-def test_intermittent_test_skipped_before_mozci(env):
-    env.intermittent_tests.return_value = {_GROUP.test}
+def test_treeherder_intermittent_skipped_before_any_walk(env):
+    # Treeherder's own verdict rules the failure out before any mozci work.
+    env.skip_reason.return_value = "intermittent"
     assert consumer.process(_test_msg(), env.executor) is None
+    env.failing_groups.assert_not_called()
     env.new_test_failures.assert_not_called()
     env.trigger_run.assert_not_called()
+
+
+def test_unclassified_failure_is_investigated(env):
+    # "not classified" / "new failure" leave the decision to the mozci walk.
+    env.skip_reason.return_value = None
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.new_test_failures.assert_called_once()
 
 
 def test_inherited_test_group_skipped(env):
@@ -324,21 +344,22 @@ def test_no_failing_groups_skips(env):
     env.trigger_run.assert_not_called()
 
 
-def test_unreadable_errorsummary_still_triggers_run(env):
-    # Fail open like the build path: an errorsummary that cannot be read must not
-    # be mistaken for "nothing failed" and drop a possible regression.
-    env.failing_groups.side_effect = RuntimeError("no artifact")
+def test_task_without_group_results_still_triggers_run(env):
+    # A task-level failure (crash, timeout) records no per-manifest results; that
+    # must not be mistaken for "nothing failed" and drop a real regression.
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable(
+        "no group results for task ERR"
+    )
     assert consumer.process(_test_msg(task_id="ERR"), env.executor) == "tr-1"
     env.trigger_run.assert_called_once()
     # With no groups resolved there is nothing to filter or to name.
-    env.intermittent_tests.assert_not_called()
     env.new_test_failures.assert_not_called()
     _, ctx = env.executor.submit.call_args.args
     assert ctx.test_groups == []
 
 
-def test_unreadable_errorsummary_triggers_once_per_task(env):
-    env.failing_groups.side_effect = RuntimeError("no artifact")
+def test_unreadable_group_results_triggers_once_per_task(env):
+    env.failing_groups.side_effect = RuntimeError("treeherder down")
     consumer.process(_test_msg(task_id="A"), env.executor)
     consumer.process(_test_msg(task_id="B"), env.executor)
     env.trigger_run.assert_called_once()
@@ -379,10 +400,7 @@ def test_test_repair_trigger_failure_releases_group_for_retry(env):
 
 
 def test_multiple_failing_groups_trigger_one_run_per_task(env):
-    groups = [
-        FailingGroup("dom/base/test/mochitest.ini", "dom/base/test/a.js", "GENERIC"),
-        FailingGroup("layout/test/mochitest.ini", "layout/test/b.js", "TIMEOUT"),
-    ]
+    groups = ["dom/base/test/mochitest.ini", "layout/test/mochitest.ini"]
     env.failing_groups.return_value = groups
 
     assert consumer.process(_test_msg(), env.executor) == "tr-1"
@@ -394,7 +412,7 @@ def test_multiple_failing_groups_trigger_one_run_per_task(env):
     assert env.executor.submit.call_count == 1
     # Every failing group is named, not an arbitrary one of them.
     _, ctx = env.executor.submit.call_args.args
-    assert ctx.test_groups == [g.group for g in groups]
+    assert ctx.test_groups == groups
 
 
 def test_missing_hg_revision_skips_test_task(env):
@@ -405,23 +423,13 @@ def test_missing_hg_revision_skips_test_task(env):
     env.trigger_run.assert_not_called()
 
 
-def test_intermittent_gate_runs_before_the_mozci_walk(env):
-    # Both gates are batch calls over the task's groups; the cheap one goes first
-    # and the expensive one only sees what survived.
-    groups = [
-        FailingGroup("a/mochitest.ini", "a/test_a.js", "GENERIC"),
-        FailingGroup("b/mochitest.ini", "b/test_b.js", "GENERIC"),
-    ]
+def test_every_failing_group_reaches_the_mozci_walk(env):
+    groups = ["a/mochitest.ini", "b/mochitest.ini"]
     env.failing_groups.return_value = groups
-    env.intermittent_tests.return_value = {"a/test_a.js"}
+    env.new_test_failures.side_effect = lambda p, r, cfg, gs: {"b/mochitest.ini"}
 
     assert consumer.process(_test_msg(), env.executor) == "tr-1"
-    env.intermittent_tests.assert_called_once()
-    tests, suite, label = env.intermittent_tests.call_args.args
-    assert list(tests) == ["a/test_a.js", "b/test_b.js"]
-    assert suite == "mochitest-browser-chrome"
-    # Only the surviving group reaches the walk.
-    assert env.new_test_failures.call_args.args[3] == ["b/mochitest.ini"]
+    assert env.new_test_failures.call_args.args[3] == groups
     _, ctx = env.executor.submit.call_args.args
     assert ctx.test_groups == ["b/mochitest.ini"]
 
@@ -436,3 +444,59 @@ def test_queue_name_omits_production_environment():
     with patch.object(consumer.settings, "environment", "production"):
         (queue,) = consumer._build_queues("guest")
     assert queue.name == "queue/guest/build-repair-task-failed"
+
+
+def test_classification_landing_during_the_check_cancels_the_run(env):
+    # The regression check takes minutes, which is about how long Treeherder needs
+    # to classify an intermittent; a verdict that arrives meanwhile must win.
+    env.recheck_skip_reason.return_value = "intermittent"
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.trigger_run.assert_not_called()
+
+
+def test_recheck_happens_after_the_regression_check(env):
+    order = []
+    env.new_test_failures.side_effect = lambda p, r, cfg, gs: (
+        order.append("walk"),
+        set(gs),
+    )[1]
+    env.recheck_skip_reason.side_effect = lambda p, t: order.append("recheck")
+
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert order == ["walk", "recheck"]
+
+
+def test_backfill_in_a_new_task_group_is_deduped(env):
+    # Backfills and retriggers are dispatched by action tasks, which start their own
+    # Taskcluster task group. The same push+group must still be investigated once.
+    assert consumer.process(_test_msg(task_id="A", group_id="G1"), env.executor)
+    assert (
+        consumer.process(_test_msg(task_id="B", group_id="ACTION-GROUP"), env.executor)
+        is None
+    )
+    env.trigger_run.assert_called_once()
+
+
+def test_different_pushes_are_not_deduped(env):
+    # Dedupe is per push: the same manifest newly failing on a later push is a
+    # separate regression and must be investigated again.
+    revisions = iter(["rev-one", "rev-two"])
+    env.get_hg_revision.side_effect = lambda task_id: next(revisions)
+    consumer.process(_test_msg(task_id="A"), env.executor)
+    consumer.process(_test_msg(task_id="B"), env.executor)
+    assert env.trigger_run.call_count == 2
+
+
+def test_whole_task_waits_for_a_verdict_before_triggering(env):
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.await_skip_reason.return_value = "intermittent"
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.await_skip_reason.assert_called_once()
+    env.trigger_run.assert_not_called()
+
+
+def test_whole_task_triggers_when_no_verdict_arrives(env):
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.await_skip_reason.return_value = None
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.trigger_run.assert_called_once()

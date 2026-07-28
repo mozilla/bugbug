@@ -21,8 +21,10 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
 4. **Judge** whether the failure is worth a run. Both paths fail open — a mozci or
    Taskcluster error runs the agent rather than dropping a possible regression.
    - _Build:_ keep only failures this push introduced (not inherited from an ancestor).
-   - _Test:_ keep only groups that are new for this task's own configuration and not
-     intermittent (tests.firefox.dev flakiness below `FLAKINESS_THRESHOLD`). One run per
+   - _Test:_ first drop whatever Treeherder has already judged not to be a new
+     regression (intermittent, infra, expected-fail, fixed-by-commit); Treeherder
+     ingests a minute or so behind us, so the gate waits for the job to appear. Then
+     keep only groups that are new for this task's own configuration. One run per
      task, carrying only the task id.
 5. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
    terminal, then email a hackbot UI link, the analysis summary, a Treeherder link, and the
