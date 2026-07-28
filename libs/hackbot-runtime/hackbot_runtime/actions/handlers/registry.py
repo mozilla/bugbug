@@ -8,7 +8,10 @@ from hackbot_runtime.actions.handlers.bugzilla_handler import (
 from hackbot_runtime.actions.handlers.phabricator_handler import (
     AddCommentHandler as PhabricatorAddCommentHandler,
 )
-from hackbot_runtime.actions.handlers.phabricator_handler import SubmitPatchHandler
+from hackbot_runtime.actions.handlers.phabricator_handler import (
+    SubmitPatchHandler,
+    UpdatePatchHandler,
+)
 from hackbot_runtime.actions.handlers.testrail_handler import SubmitTestPlanHandler
 
 # Maps a recorded action's dotted `type` to the handler that applies it.
@@ -20,6 +23,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "bugzilla.add_attachment": AddAttachmentHandler(),
     "bugzilla.create_bug": CreateBugHandler(),
     "phabricator.submit_patch": SubmitPatchHandler(),
+    "phabricator.update_patch": UpdatePatchHandler(),
     "phabricator.add_comment": PhabricatorAddCommentHandler(),
     "testrail.submit_test_plan": SubmitTestPlanHandler(),
 }

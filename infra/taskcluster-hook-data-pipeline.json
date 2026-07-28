@@ -44,7 +44,7 @@
       "image": "mozilla/bugbug-spawn-pipeline",
       "maxRunTime": 7200
     },
-    "priority": "normal",
+    "priority": "lowest",
     "provisionerId": "proj-bugbug",
     "retries": 5,
     "routes": [
@@ -57,7 +57,7 @@
     "workerType": "batch"
   },
   "triggerSchema": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "type": "object"
   }
 }

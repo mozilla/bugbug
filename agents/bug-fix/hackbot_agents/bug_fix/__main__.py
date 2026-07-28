@@ -28,6 +28,17 @@ class AgentInputs(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _follow_up_with_comment(self) -> "AgentInputs":
+        # A follow-up (revision_id set) must have a comment to post on the
+        # revision.
+        if self.revision_id is not None and not self.comment:
+            raise ValueError(
+                "comment (COMMENT) is required when revision_id is set, to post "
+                "on the revision"
+            )
+        return self
+
 
 async def main(ctx: HackbotContext) -> BugFixResult:
     inputs = AgentInputs()

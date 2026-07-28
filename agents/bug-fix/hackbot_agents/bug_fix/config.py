@@ -10,14 +10,22 @@ BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__download_attachment",
 ]
 
-
-# Recordable action types the agent may take, by dotted id.
-ENABLED_ACTION_TYPES = [
+# Action types that the agent may record during triage/fix runs.
+TRIAGE_AND_FIX_ACTIONS = [
     "bugzilla.update_bug",
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
     "phabricator.submit_patch",
+]
+
+# Action types that the agent may record during follow-up runs on a revision.
+PHABRICATOR_FOLLOW_UP_ACTIONS = [
+    "bugzilla.update_bug",
+    "bugzilla.add_comment",
+    "bugzilla.add_attachment",
+    "bugzilla.create_bug",
+    "phabricator.update_patch",
     "phabricator.add_comment",
 ]
 

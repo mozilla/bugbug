@@ -1,241 +1,54 @@
 # frontend-triage agent
 
-A Hackbot agent that **triages Firefox desktop frontend bugs** from Bugzilla and
-produces a **root-cause analysis + a proposed fix plan**. It investigates the
-Firefox source tree read-only — navigating the codebase with **Searchfox** and
-inspecting regressor changesets via Mozilla's Mercurial server (**HGMO**) — and
-writes its findings to disk; it does **not** build Firefox, modify source,
-reproduce the bug, or write anything to Bugzilla.
+Triages a Firefox desktop frontend bug from Bugzilla and produces a **root-cause
+analysis plus a proposed fix plan**. It reads the source tree, navigates the
+codebase with Searchfox, and inspects regressor changesets on hg.mozilla.org. It
+does **not** build Firefox, edit source, reproduce the bug, or write to Bugzilla.
 
-Think of it as an experienced engineer doing first-pass triage on a UI/UX
-papercut: it reads the bug, finds the responsible code, explains the likely
-cause, and proposes how to fix it — then hands that off to a human (or a
-downstream execution agent) to actually implement and verify.
-
-It is a sibling of the reference [`bug-fix`](../bug-fix/) agent, which targets
-_crash/sanitizer_ bugs and goes all the way to a verified patch. `frontend-triage`
-deliberately stops at a plan, because visual/interaction bugs can't be verified
-by the crash-reproduction loop `bug-fix` relies on.
-
----
+Think of it as first-pass triage on a UI papercut: read the bug, find the
+responsible code, explain the likely cause, propose a fix — then hand that to a
+human or an execution agent to implement and verify. It deliberately stops at a
+plan, because visual and interaction bugs can't be verified by the
+crash-reproduction loop the [`bug-fix`](../bug-fix/) agent relies on.
 
 ## What it's for
 
-Good fits — Firefox desktop **frontend** defects, typically documented with a
-video/screenshot and steps to reproduce, not a crash:
+Firefox desktop **frontend defects** — the kind documented with a screenshot or
+steps to reproduce rather than a stack trace. Tabbed Browser (incl. Split View
+and Tab Groups), New Tab Page, Address Bar, Menus, Toolbars and Customization,
+Sidebar, Theme.
 
-- `Firefox :: Tabbed Browser` / `Tabbed Browser: Split View`
-- `Firefox :: New Tab Page`
-- `Firefox :: Address Bar`, `Menus`, `Toolbars and Customization`, `Sidebar`, `Theme`
+Poor fits: crashes, hangs, assertions and sanitizer reports (those belong to
+[`bug-fix`](../bug-fix/)); anything with no frontend component; and bugs whose
+fix can only be judged by _seeing_ the rendered result — it can localize and
+propose, but never visually confirm.
 
-Poor fits (use a different agent / manual triage):
+Out-of-scope bugs are filtered automatically. `rules/scoping.md` runs first and
+has the agent skip non-defects, tracking/`meta` bugs, and intermittent test
+failures with a short note instead of an invented fix plan.
 
-- Crashes, hangs, assertions, sanitizer reports → these belong to [`bug-fix`](../bug-fix/).
-- Backend/platform bugs with no frontend component.
-- Bugs whose fix can only be judged by _seeing_ the rendered result — the agent
-  can localize and propose, but cannot visually confirm.
+## Safety: it cannot write to Bugzilla or to the source tree
 
-**Scoping (handled automatically):** a built-in `rules/scoping.md` ruleset, applied
-first, has the agent skip non-defects (enhancements/tasks), tracking/`meta` bugs,
-and intermittent/test-infra failures — it records a short out-of-scope note instead
-of inventing a fix plan — and flags accessibility (`access`) bugs as a specialized
-lane. This keeps the agent from spending a full investigation on bugs it can't
-meaningfully fix-plan.
+This is structural, not just prompting:
 
----
+- **No Bugzilla write tool exists.** The agent reaches Bugzilla only through the
+  broker sidecar, which exposes five read tools and nothing else. The API key
+  lives in the broker; the agent process never sees it.
+- **"Actions" only record to disk.** `bugzilla_add_comment` /
+  `bugzilla_update_bug` come from a separate in-process server that appends to a
+  list serialized into `summary.json`. They make no network calls. Applying them
+  is a separate downstream step, not part of a run.
+- **No write or build tools are granted.** `agent.py` builds `allowed_tools` from
+  read-only inspection tools plus the Bugzilla, Searchfox and Mozilla-VCS read
+  tools. There is no `Write`/`Edit` and no Firefox build/eval tool. Searchfox and
+  hg.mozilla.org are queried over HTTP for public data only.
 
-## What it produces
+## Running it locally
 
-For each run, in `~/hackbot/artifacts/<run_id>/`:
+Needs Docker running, an Anthropic API key with billing enabled, and a Bugzilla
+API key (reads only — one from an account without edit rights works fine).
 
-- **`summary.json`** — the machine-readable result:
-  - `findings` → the structured plan: `summary`, `root_cause`, `proposed_fix`,
-    `target_files`, `confidence` (`high|medium|low`), plus `num_turns` and
-    `total_cost_usd`. Handoff fields for a downstream executor: `actionable`
-    (`false` for out-of-scope/skipped bugs), `regressor_node` (hg node of the
-    introducing changeset when found), and `relevant_tests` (existing tests
-    covering the area — the executor's verification anchor; `[]` if none exist).
-  - `actions` → a single **recorded** `bugzilla.add_comment` (the human-readable
-    triage comment). "Recorded" means written to this file for review — **it is
-    not posted to Bugzilla.**
-- **Logs** of the agent's streamed reasoning.
-
-It never produces a `changes/` directory (that would mean source edits) — its
-absence is your confirmation the run stayed read-only.
-
----
-
-## Safety guarantees (and why they hold)
-
-Nothing this agent does can write to Bugzilla or modify the source tree. This is
-enforced structurally, not just by prompt instructions:
-
-1. **No Bugzilla write tool exists.** The agent reaches Bugzilla only through the
-   broker sidecar, which exposes exactly five **read** tools (`search_bugs`,
-   `get_bugs`, `get_bug_comments`, `get_bug_attachments`, `download_attachment`
-   — see `agent_tools/bugzilla.py`). There is no update/comment/create tool in
-   the Bugzilla toolset at all. The Bugzilla API key lives only in the broker and
-   is used solely for reads.
-2. **"Actions" only record to disk.** The `bugzilla_add_comment` / `bugzilla_update_bug`
-   tools come from a separate in-process server and merely append to a list that
-   is serialized into `summary.json` (`ActionsRecorder.record`). They make no
-   network calls. Applying them to Bugzilla is a separate downstream step that is
-   **not** part of local runs.
-3. **No write/build tools are granted.** `agent.py` builds `allowed_tools` from
-   read-only inspection tools (`Read`, `Grep`, `Glob`, `Bash`, `Task`), the
-   Bugzilla read tools, the **read-only** Searchfox and Mozilla-VCS tools, and the
-   record-only action tools. There are no `Write`/`Edit` tools and no Firefox
-   build/eval tools.
-4. **The new investigation tools are read-only too.** Searchfox (`searchfox.org`)
-   and Mozilla VCS (`hg.mozilla.org`) are queried over HTTP for public code-search
-   and changeset data only — no writes, no auth, no mutation. They need outbound
-   network from the agent container (which it already has, since the runtime clones
-   the repo at startup).
-
-`config.py` further restricts recordable actions to `bugzilla.add_comment` and
-`bugzilla.update_bug` (no attachments, no bug creation), and the system prompt
-forbids private comments and `RESOLVED` status changes.
-
----
-
-## How it works
-
-```
-                         ┌─────────────────────────────┐
-   Bugzilla (read-only)  │  frontend-triage-broker      │
-   bugzilla.mozilla.org ─┤  (sidecar; holds API key)    │
-                         │  exposes 5 read tools (MCP)  │
-                         └──────────────┬──────────────┘
-                                        │ MCP over HTTP (read-only)
-                                        ▼
-   git clone (shallow)   ┌─────────────────────────────┐   in-process MCP tools
-   mozilla-firefox/      │  frontend-triage-agent       │   (read-only HTTP):
-   firefox  ───────────► │                              │ ─► searchfox.org
-   (workspace volume)    │  Claude Agent SDK loop:      │    (code search/blame)
-                         │   - read bug + comments      │ ─► hg.mozilla.org
-                         │   - read relevant rules/     │    (regressor diffs)
-                         │   - investigate source       │
-                         │     (Read/Grep/Glob/Bash +   │
-                         │      Searchfox + VCS tools,  │
-                         │      + investigator subagent)│
-                         │   - record comment + plan    │
-                         └──────────────┬──────────────┘
-                                        │ records (no network write)
-                                        ▼
-                            ~/hackbot/artifacts/<run_id>/summary.json
-```
-
-**The run, step by step:**
-
-1. **Startup (runtime).** `hackbot-runtime` reads `hackbot.toml`, shallow-clones
-   the Firefox repo into the `workspace` volume (slow on first run, cached after),
-   and builds a `HackbotContext`. There is **no** `[firefox]` table, so no build
-   toolchain is prepared.
-2. **Entrypoint.** `__main__.py` reads the per-run inputs (env vars), sets a
-   read-only triage `task`, and calls `run_frontend_triage(...)`.
-3. **Agent loop.** `agent.py` wires up the Claude Agent SDK with the read-only
-   tools (Bugzilla read tools via the broker, plus two in-process MCP servers —
-   `searchfox` and `mozilla_vcs` — built with `build_sdk_server`), the rules
-   directory, and the action-recording server. It then drives the loop: apply
-   `scoping.md` → fetch the bug → load the relevant ruleset(s) from `rules/` →
-   investigate the source (Searchfox for cross-file symbol tracing, the VCS tools
-   to read a regressor's diff, local `Read`/`Grep` for exact bytes; deep searches
-   delegated to a read-only `investigator` subagent) → record one comment with the
-   fix plan.
-4. **Structured output.** The agent ends its final message with a fenced
-   ` ```json ` block. `agent.py` parses that into the typed
-   `FrontendTriageResult` (`root_cause`, `proposed_fix`, `target_files`,
-   `confidence`), which the runtime writes to `summary.json` under `findings`.
-   If the block is missing/unparsable, the structured fields are left null and
-   the raw text is preserved in `result`.
-
-**Confidence semantics:** confidence reflects how clearly the agent could pin a
-**root cause** in the code, not whether the fix is verified (it never runs the
-result). Treat `high` as "trust the diagnosis, still review/verify the patch."
-
-### Investigation tools (Searchfox + Mozilla VCS)
-
-The local checkout is a **shallow** clone (`--depth=1`) — no git history, and
-`Grep` only sees the checked-out files. Two in-process MCP tool servers fill that
-gap; they live in the shared `libs/agent-tools/` library (`searchfox.py`,
-`mozilla_vcs.py`) and are wired in by `agent.py`:
-
-- **`searchfox` server** (backed by the `searchfox` client → `searchfox.org`):
-  `search_identifier`, `search_text`, `find_definition`, `get_function_at_line`,
-  `get_blame`, `get_file`. This is the agent's main localization aid — symbol/usage
-  lookup across the _whole_ tree, far better than grep for the multi-module JS that
-  dominates frontend bugs. The prompt directs the agent to prefer it over local
-  `Grep` when tracing how a symbol/pref/state flows across files.
-- **`mozilla_vcs` server** (HTTP to `hg.mozilla.org`): `get_commit_info`,
-  `get_commit_diff`, `file_history`. Used for **regression** bugs — read the actual
-  diff of a known regressor changeset (found via a bug's `regressed_by` field or
-  `get_blame`) to pinpoint what changed, which the shallow clone can't provide.
-
-Both are read-only (see Safety guarantees). Note Searchfox/HGMO reflect
-mozilla-central _tip_, which can differ slightly from the checkout — the prompt
-tells the agent to use them for search/history and local `Read` for exact bytes.
-
-### File layout
-
-```
-agents/frontend-triage/
-  pyproject.toml          # distribution "hackbot-agent-frontend-triage"
-  hackbot.toml            # [source] = mozilla-firefox/firefox; NO [firefox] table
-  Dockerfile              # builds the agent + broker images
-  compose.yml             # frontend-triage-{broker,agent} services for local runs
-  hackbot_agents/
-    frontend_triage/
-      __main__.py         # inputs + read-only triage task + entrypoint
-      agent.py            # the agent loop, FrontendTriageResult, plan parser
-      config.py           # tool/action allow-lists (read-only; bugzilla+searchfox+vcs)
-      broker.py           # Bugzilla read-only MCP broker (sidecar)
-      prompts/system.md   # system prompt: triage + fix-plan, no build/repro
-      rules/
-        README.md         # how to author rulesets
-        scoping.md        # applied first: skip/flag out-of-scope bugs
-        frontend-triage.md  # the frontend-papercut ruleset
-```
-
-The Searchfox and VCS tools themselves are **not** in this folder — they're shared
-modules in `libs/agent-tools/agent_tools/` (`searchfox.py`, `mozilla_vcs.py`),
-pulled in via the `searchfox` and `vcs` extras of the `agent-tools` dependency in
-`pyproject.toml`. They are inert for other agents (each agent wires tools
-explicitly), so adding them did not affect `bug-fix` or `autowebcompat-repro`.
-
-### Configuration (per-run inputs)
-
-Set as environment variables (the API derives these automatically from the input
-schema; locally you pass them via `.env` / the command line):
-
-| Env var             | Required | Meaning                                                                     |
-| ------------------- | -------- | --------------------------------------------------------------------------- |
-| `BUG_ID`            | yes      | The Bugzilla bug to triage                                                  |
-| `ANTHROPIC_API_KEY` | yes      | Drives the Claude agent (billed per token)                                  |
-| `BUGZILLA_API_URL`  | yes      | Bugzilla instance, e.g. `https://bugzilla.mozilla.org`                      |
-| `BUGZILLA_API_KEY`  | yes      | Held by the broker; used for **reads only**                                 |
-| `MODEL`             | no       | Override the agent model (cost/quality dial)                                |
-| `MAX_TURNS`         | no       | Hard cap on agent loop iterations (runaway/cost guard; cut off if exceeded) |
-| `EFFORT`            | no       | Reasoning effort level                                                      |
-
-A **turn** is one iteration of the agent loop (model thinks → calls tools →
-observes results). It is not a number of fix attempts; more turns just means more
-investigation. Turns roughly track cost. `MAX_TURNS` cuts the loop off if hit.
-
----
-
-## How to test it locally
-
-You run it with Docker Compose from the **repo root**. No cloud, no uploader —
-everything stays on your machine.
-
-**Prerequisites**
-
-- Docker Desktop running.
-- An Anthropic API key with API billing enabled.
-- A Bugzilla API key (used only for reads; you can use one from an account
-  without edit rights for extra safety).
-
-**1. Create the repo-root `.env`** (gitignored — never committed):
+Put the secrets in a gitignored `.env` at the repo root:
 
 ```dotenv
 ANTHROPIC_API_KEY=sk-ant-...
@@ -243,38 +56,17 @@ BUGZILLA_API_URL=https://bugzilla.mozilla.org
 BUGZILLA_API_KEY=...
 ```
 
-**2. Run against a bug** (from `/path/to/bugbug`, the repo root):
+Then run from the repo root — the root `docker-compose.yml` includes this
+agent's `compose.yml`, so the service and its broker sidecar are available:
 
 ```sh
 BUG_ID=2014702 docker compose up frontend-triage-agent --build
 ```
 
-The root `docker-compose.yml` includes this agent's `compose.yml`, so the
-`frontend-triage-agent` service (and its `frontend-triage-broker` sidecar) are
-available. The first run shallow-clones the Firefox repo into a Docker volume —
-expect several minutes and a large download. Subsequent runs reuse the volume and
-start quickly.
+The first run shallow-clones mozilla-central into a Docker volume: expect several
+minutes and a large download. Later runs reuse the volume.
 
-**3. Read the result:**
-
-```sh
-LATEST=$(ls -t ~/hackbot/artifacts | head -1)
-cat ~/hackbot/artifacts/$LATEST/summary.json
-```
-
-Check:
-
-- `findings` → the structured plan (`root_cause`, `proposed_fix`, `target_files`,
-  `confidence`).
-- `actions` → exactly one `bugzilla.add_comment`, recorded (not posted). It carries
-  an `*This is an automated analysis result...*` footer.
-- **No `changes/` directory** and no build step — confirms the run stayed read-only.
-- **Tool usage** (in `logs/agent.log`): expect `mcp__searchfox__*` calls during
-  investigation, and `mcp__mozilla_vcs__*` calls on regression bugs. On an
-  out-of-scope bug (a `meta`/enhancement), expect a short "out of scope" comment
-  with `confidence: low` / `root_cause: null` rather than a fabricated plan.
-
-**Good bugs to test** (validated across the three classes this agent handles):
+Three bugs that exercise the classes this agent handles:
 
 | Bug       | Class       | Notes                                           |
 | --------- | ----------- | ----------------------------------------------- |
@@ -282,52 +74,61 @@ Check:
 | `2014629` | Pure visual | Split View group-line CSS gap                   |
 | `2004297` | Regression  | Print Preview shift; traces the named regressor |
 
-**A note on line numbers:** the agent cites approximate line numbers
-(e.g. `~L1234`). Those are model-asserted and can drift — trust the files and
-functions/selectors it names, and confirm exact lines against the source before
-acting.
+## Inputs
 
----
+Environment variables. `hackbot-api` derives them from the input schema; locally
+they come from `.env` or the command line.
+
+| Env var             | Required | Meaning                                                        |
+| ------------------- | -------- | -------------------------------------------------------------- |
+| `BUG_ID`            | yes      | The Bugzilla bug to triage                                     |
+| `ANTHROPIC_API_KEY` | yes      | Drives the agent (billed per token)                            |
+| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org`                            |
+| `BUGZILLA_API_KEY`  | yes      | Held by the broker; reads only                                 |
+| `MODEL`             | no       | Defaults to `claude-opus-5` (`DEFAULT_MODEL` in `__main__.py`) |
+| `MAX_TURNS`         | no       | Hard cap on loop iterations — a runaway guard, cut off if hit  |
+| `EFFORT`            | no       | `low` \| `medium` \| `high` (default) \| `xhigh` \| `max`      |
+
+The model is pinned rather than left to the Claude Code CLI's default, so runs
+are reproducible and identical locally and in the cloud. An explicit value wins,
+which is what makes model comparisons possible.
+
+## Reading the output
+
+Each run writes to `~/hackbot/artifacts/<run_id>/`:
+
+- **`summary.json`** — `findings` holds the structured plan (`root_cause`,
+  `proposed_fix`, `target_files`, `confidence`) plus the executor handoff fields
+  `actionable`, `regressor_node` and `relevant_tests`. `actions` holds the single
+  **recorded** `bugzilla.add_comment` — written here for review, not posted.
+- **`logs/agent.log`** — the streamed reasoning and every tool call, and the only
+  record of which model actually ran.
+- **No `changes/` directory.** Its absence confirms the run stayed read-only.
+
+Two things to know before acting on a plan:
+
+- **`confidence` describes the diagnosis, not the fix.** It reflects how clearly
+  the agent pinned a root cause in the code, never whether the fix works — it
+  cannot run anything. Read `high` as "trust the diagnosis, still review the
+  patch."
+- **Line numbers are model-asserted and drift.** Trust the files, functions and
+  selectors it names; confirm exact lines against the source.
 
 ## Tuning
 
-- **Rules** (`rules/`): the main behavior dial. `scoping.md` controls what gets
-  skipped/flagged; `frontend-triage.md` controls in-scope components, comment
-  content/brevity, and the confidence thresholds for actions. The agent Globs
-  `rules/` and reads only the rulesets it judges relevant, so you can add more
-  `.md` files for other scopes.
-- **System prompt** (`prompts/system.md`): the standing instructions — output
-  format, the read-only mandate, the structured-JSON requirement, and the guidance
-  to prefer Searchfox over local grep for cross-file tracing.
-- **Cost ceiling**: set `MAX_TURNS` and/or a cheaper `MODEL` per run to bound cost
-  when batching. Note: Searchfox results are token-heavy, so a tool-using run can
-  cost more than a grep-only one even with fewer turns — narrowing queries (use
-  `path_filter`, modest `limit`) is the lever if cost matters at scale.
-
-## Handoff to implementation
-
-The structured plan in `summary.json` `findings` is designed to be consumed
-downstream. To turn a plan into a candidate patch, feed it (e.g. via the `task` /
-extra-instructions override) into an agent that has source-write tools — either
-the existing [`bug-fix`](../bug-fix/) agent or a dedicated execution agent — which
-emits a `git am`-applyable patch. A human reviews and visually verifies the diff,
-since frontend fixes can't be auto-verified.
+- **`rules/`** is the main behavior dial. `scoping.md` decides what gets skipped;
+  `frontend-triage.md` sets in-scope components, comment content, and the
+  confidence thresholds for recording an action. The agent globs the directory
+  and reads only what it judges relevant, so new `.md` files extend it.
+- **`prompts/system.md`** holds the standing instructions: output format, the
+  read-only mandate, and when to reach for Searchfox versus reading a file.
+- **Cost** scales with tool use, not just turns — Searchfox results are
+  token-heavy, so narrowing queries (`path_filter`, a modest `limit`) matters
+  more than `MAX_TURNS` when batching.
 
 ## Registration
 
-This agent is registered with `hackbot-api` for orchestrated runs:
-`FrontendTriageInputs` in `services/hackbot-api/app/schemas.py` and the
-`frontend-triage` entry in `services/hackbot-api/app/agents.py` (job
-`hackbot-agent-frontend-triage`). Local Compose runs do not require the API.
-
-## Future work
-
-- **Evaluate the official Mozilla MCP server (`moz`).** Firefox's `.mcp.json`
-  defines a hosted HTTP MCP server (`https://mcp-dev.moz.tools/mcp`) exposing
-  `get_bugzilla_bug` (with **change history**, which our broker lacks),
-  `get_phabricator_revision`, and `read_fx_doc_section`. These are _complementary_
-  to (not duplicated by) our Searchfox/VCS tools — it has no code-search or VCS
-  tools. Wiring it in as an extra `http` MCP server could add Phabricator-patch
-  awareness ("has a fix already landed?"), Firefox docs, and Bugzilla bug history.
-  Before depending on it for automated runs, confirm whether there's a
-  stable/production endpoint (the current URL is a `mcp-dev` one).
+Registered with `hackbot-api` as `FrontendTriageInputs` in
+`services/hackbot-api/app/schemas.py` and a `frontend-triage` entry in
+`app/agents.py` (job `hackbot-agent-frontend-triage`). Local Compose runs don't
+need the API.

@@ -70,6 +70,23 @@ header.topbar .tag {
   color: var(--muted);
 }
 
+header.topbar .github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+header.topbar .github-link:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);

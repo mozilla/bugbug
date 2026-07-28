@@ -5,9 +5,9 @@ import { getAuthedEmail } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/runs?limit=50&offset=0&agent=<name>&status=<status>
+// GET /api/runs?limit=50&offset=0&agent=<name>&status=<status>&requested_by=<email>
 // Returns a page of runs from hackbot-api (newest first), optionally filtered
-// by agent and/or status.
+// by agent, status and/or the email of the user they're attributed to.
 export async function GET(req: NextRequest) {
   if (!(await getAuthedEmail())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
     const agent = searchParams.get("agent") || undefined;
     const status = searchParams.get("status") || undefined;
-    const runs = await listRuns({ limit, offset, agent, status });
+    const requestedBy = searchParams.get("requested_by") || undefined;
+    const runs = await listRuns({ limit, offset, agent, status, requestedBy });
     return NextResponse.json(runs);
   } catch (err) {
     const status = err instanceof HackbotError ? err.status : 500;
@@ -29,9 +30,11 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/runs  { agent: string, inputs: object }
-// Triggers a new agent run via hackbot-api.
+// Triggers a new agent run via hackbot-api, attributed to the signed-in user
+// (the session email, never a client-supplied one).
 export async function POST(req: NextRequest) {
-  if (!(await getAuthedEmail())) {
+  const email = await getAuthedEmail();
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,7 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const run = await createRun(agent, inputs ?? {});
+    const run = await createRun(agent, inputs ?? {}, email);
     return NextResponse.json(run, { status: 201 });
   } catch (err) {
     const status = err instanceof HackbotError ? err.status : 500;

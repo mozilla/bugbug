@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, phabricator_handler
+from hackbot_runtime.actions.handlers.registry import get_handler
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 
 
 @pytest.fixture(autouse=True)
@@ -39,10 +41,16 @@ _DIFF_PAYLOAD = {
 }
 
 
+# The agent-built artifact always carries both keys (see
+# changes.build_phabricator_diff), so handlers may rely on them.
+_LOCAL_COMMITS = {"node1": {"author": "Hackbot Agent", "commit": "node1"}}
+
+
 def _ctx(diff=_DIFF_PAYLOAD, local_commits=None):
-    submission = {"diff": diff}
-    if local_commits is not None:
-        submission["local_commits"] = local_commits
+    submission = {
+        "diff": diff,
+        "local_commits": local_commits or dict(_LOCAL_COMMITS),
+    }
 
     async def download(key):
         assert key == "changes/phabricator_diff.json"
@@ -56,27 +64,35 @@ def _fake_conduit(responses):
 
     async def fake(method, **payload):
         calls.append((method, payload))
-        return responses[method]
+        return responses.get(method, {})
 
     return fake, calls
 
 
+def test_each_patch_action_type_has_its_own_handler():
+    assert isinstance(
+        get_handler("phabricator.submit_patch"), phabricator_handler.SubmitPatchHandler
+    )
+    assert isinstance(
+        get_handler("phabricator.update_patch"), phabricator_handler.UpdatePatchHandler
+    )
+    # Every type the recording side can emit is registered.
+    assert all(get_handler(t) is not None for t in PATCH_ACTION_TYPES)
+
+
 def test_revision_title_strips_and_reprefixes():
     rt = phabricator_handler._revision_title
-    assert rt("Fix bug", wip=True) == "WIP: Fix bug"
-    assert rt("WIP: Fix bug", wip=True) == "WIP: Fix bug"  # not doubled
-    assert rt("WIP: Fix bug", wip=False) == "Fix bug"  # prefix stripped
+    assert rt("Fix bug") == "WIP: Fix bug"
+    assert rt("WIP: Fix bug") == "WIP: Fix bug"  # not doubled
 
 
 def test_revision_title_never_blank_for_bare_wip_marker():
     # A title that is only a WIP marker must fall back to the original, not go
     # blank (which would be an invalid Phabricator title).
-    rt = phabricator_handler._revision_title
-    assert rt("WIP:", wip=True) == "WIP: WIP"
-    assert rt("WIP", wip=False) == "WIP"
+    assert phabricator_handler._revision_title("WIP:") == "WIP: WIP"
 
 
-async def test_submit_patch_create_wip_by_default(monkeypatch):
+async def test_submit_patch_creates_wip_revision(monkeypatch):
     fake, calls = _fake_conduit(
         {
             "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
@@ -89,14 +105,13 @@ async def test_submit_patch_create_wip_by_default(monkeypatch):
     )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 1, "revision_id": None, "title": "Fix", "summary": "s"},
+        {"bug_id": 1, "title": "Fix", "summary": "s"},
         _ctx(),
     )
 
     assert result.status == "applied"
     assert result.result == {
         "revision_id": 555,
-        "revision_url": "https://phabricator.services.mozilla.com/D555",
         "url": "https://phabricator.services.mozilla.com/D555",
     }
 
@@ -108,39 +123,12 @@ async def test_submit_patch_create_wip_by_default(monkeypatch):
     assert "objectIdentifier" not in edit_call[1]
     transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
     assert transactions["update"] == "PHID-DIFF-1"
-    # WIP by default: title is prefixed, the revision is marked changes-planned,
-    # and reviewers are NOT requested.
+    # Everything hackbot creates is a WIP draft: title prefixed, revision
+    # marked changes-planned, and reviewers are NOT requested.
     assert transactions["title"] == "WIP: Fix"
     assert transactions["plan-changes"] is True
     assert "reviewers.add" not in transactions
     assert transactions["bugzilla.bug-id"] == "1"
-
-
-async def test_submit_patch_create_non_wip(monkeypatch):
-    fake, calls = _fake_conduit(
-        {
-            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
-            "differential.revision.edit": {"object": {"id": 555}},
-        }
-    )
-    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(
-        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
-    )
-
-    await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 1, "title": "Fix", "summary": "s", "wip": False},
-        _ctx(),
-    )
-
-    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
-    transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
-    # Not WIP: no WIP prefix and no plan-changes; a brand-new revision needs no
-    # request-review (Phabricator auto needs-review). Reviewers are never set.
-    assert transactions["title"] == "Fix"
-    assert "reviewers.add" not in transactions
-    assert "plan-changes" not in transactions
-    assert "request-review" not in transactions
 
 
 async def test_submit_patch_sets_local_commits_property(monkeypatch):
@@ -187,7 +175,7 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
     assert stored["author"] == "Hackbot Agent"
     assert stored["tree"] == "tree1"
     assert stored["parents"] == ["base1"]
-    # WIP by default: summary/title carry the WIP prefix and reviewers are empty.
+    # The stored title carries the WIP prefix and reviewers are empty.
     assert stored["summary"] == "WIP: Fix the thing"
     assert stored["message"].startswith("WIP: Fix the thing\n\nSummary:\ndoes it")
     assert (
@@ -203,13 +191,52 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
     assert "local_commits" not in creatediff_call[1]
 
 
-async def test_submit_patch_local_commits_fetches_title_on_update(monkeypatch):
+async def test_update_patch_only_updates_the_diff(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-2", "diffid": 2},
+            "differential.revision.edit": {"object": {"id": 12345}},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.UpdatePatchHandler().apply(
+        {"revision_id": 12345}, _ctx()
+    )
+
+    # Nothing is reported back: an update creates no new revision, and its URL
+    # was already known to whoever recorded the action.
+    assert result.status == "applied"
+    assert result.result is None
+
+    # Exactly one edit, carrying nothing but the new diff: the revision's title,
+    # summary, bug id and review status are all left alone.
+    edits = [c for c in calls if c[0] == "differential.revision.edit"]
+    assert len(edits) == 1
+    assert edits[0][1]["objectIdentifier"] == 12345
+    assert edits[0][1]["transactions"] == [{"type": "update", "value": "PHID-DIFF-2"}]
+    # The revision is read, but only to rebuild the local:commits message.
+    assert "differential.revision.search" in [c[0] for c in calls]
+
+
+async def test_update_patch_local_commits_use_the_revisions_own_fields(monkeypatch):
     fake, calls = _fake_conduit(
         {
             "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 3},
             "differential.revision.edit": {"object": {"id": 42}},
             "differential.revision.search": {
-                "data": [{"fields": {"title": "Existing title", "summary": "old sum"}}]
+                "data": [
+                    {
+                        "fields": {
+                            "title": "WIP: Existing title",
+                            "summary": "old sum",
+                            "bugzilla.bug-id": "9",
+                        }
+                    }
+                ]
             },
             "differential.setdiffproperty": {},
         }
@@ -219,141 +246,41 @@ async def test_submit_patch_local_commits_fetches_title_on_update(monkeypatch):
         phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
     )
 
-    result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 9, "revision_id": 42},
+    result = await phabricator_handler.UpdatePatchHandler().apply(
+        {"revision_id": 42},
         _ctx(local_commits={"n": {"author": "A"}}),
     )
     assert result.status == "applied"
 
-    # No title on the action -> fall back to the existing revision's title, with
-    # the WIP prefix applied.
+    # The commit message mirrors the revision as it stands: its own title,
+    # summary and bug id, verbatim.
     stored = json.loads(
         next(c for c in calls if c[0] == "differential.setdiffproperty")[1]["data"]
     )["n"]
     assert stored["summary"] == "WIP: Existing title"
+    assert stored["message"].startswith("WIP: Existing title\n\nSummary:\nold sum")
+    assert "Bug #: 9" in stored["message"]
     assert (
         "Differential Revision: https://phabricator.services.mozilla.com/D42"
         in stored["message"]
     )
 
 
-async def test_submit_patch_update_sets_object_identifier(monkeypatch):
-    fake, calls = _fake_conduit(
-        {
-            "differential.creatediff": {"phid": "PHID-DIFF-2", "diffid": 2},
-            "differential.revision.edit": {"object": {"id": 12345}},
-            "differential.revision.search": {
-                "data": [
-                    {"fields": {"title": "T", "status": {"value": "needs-review"}}}
-                ]
-            },
-        }
-    )
-    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(
-        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
-    )
-
-    result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 7, "revision_id": 12345}, _ctx()
-    )
-
-    assert result.status == "applied"
-    assert result.result["revision_id"] == 12345
-    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
-    assert edit_call[1]["objectIdentifier"] == 12345
-
-
-async def test_submit_patch_wip_update_already_changes_planned_uses_second_edit(
-    monkeypatch,
-):
-    fake, calls = _fake_conduit(
-        {
-            "differential.creatediff": {"phid": "PHID-DIFF-5", "diffid": 5},
-            "differential.revision.edit": {"object": {"id": 50}},
-            "differential.revision.search": {
-                "data": [
-                    {"fields": {"title": "T", "status": {"value": "changes-planned"}}}
-                ]
-            },
-        }
-    )
-    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(
-        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
-    )
-
-    result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 3, "revision_id": 50}, _ctx()
-    )
-    assert result.status == "applied"
-
-    # Revision is already changes-planned, so plan-changes can't ride the main
-    # edit (no-op status change errors) — it goes in a second, separate edit.
-    edits = [c for c in calls if c[0] == "differential.revision.edit"]
-    assert len(edits) == 2
-    assert all(t["type"] != "plan-changes" for t in edits[0][1]["transactions"])
-    assert edits[1][1]["objectIdentifier"] == 50
-    assert edits[1][1]["transactions"] == [{"type": "plan-changes", "value": True}]
-
-
-async def test_submit_patch_non_wip_update_requests_review(monkeypatch):
-    fake, calls = _fake_conduit(
-        {
-            "differential.creatediff": {"phid": "PHID-DIFF-6", "diffid": 6},
-            "differential.revision.edit": {"object": {"id": 60}},
-            "differential.revision.search": {
-                "data": [
-                    {"fields": {"title": "T", "status": {"value": "changes-planned"}}}
-                ]
-            },
-        }
-    )
-    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(
-        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
-    )
-
-    await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 4, "revision_id": 60, "wip": False}, _ctx()
-    )
-
-    # Re-activating an existing non-review revision requests review; not WIP.
-    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
-    types = {t["type"] for t in edit_call[1]["transactions"]}
-    assert "request-review" in types
-    assert "plan-changes" not in types
-
-
-async def test_submit_patch_falls_back_to_given_revision_id_when_edit_omits_object(
-    monkeypatch,
-):
-    fake, _ = _fake_conduit(
-        {
-            "differential.creatediff": {"phid": "PHID-DIFF-3"},
-            "differential.revision.edit": {"object": {}},
-            "differential.revision.search": {"data": [{"fields": {}}]},
-        }
-    )
-    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
-    monkeypatch.setattr(
-        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
-    )
-
-    result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 7, "revision_id": 999}, _ctx()
-    )
-    assert result.status == "applied"
-    assert result.result["revision_id"] == 999
-
-
-async def test_submit_patch_missing_artifact_fails():
+@pytest.mark.parametrize(
+    ("handler", "params"),
+    [
+        ("SubmitPatchHandler", {"bug_id": 1, "title": "x"}),
+        ("UpdatePatchHandler", {"revision_id": 7}),
+    ],
+)
+async def test_missing_artifact_fails(handler, params):
     async def download(key):
         raise KeyError(key)
 
     ctx = ApplyContext(run_id="run-1", download_artifact=download)
-    result = await phabricator_handler.SubmitPatchHandler().apply({"bug_id": 1}, ctx)
+    result = await getattr(phabricator_handler, handler)().apply(params, ctx)
     assert result.status == "failed"
+    assert "No Phabricator submission artifact" in result.error
 
 
 async def test_submit_patch_conduit_error_fails(monkeypatch):
