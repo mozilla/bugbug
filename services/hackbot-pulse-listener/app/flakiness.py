@@ -1,4 +1,4 @@
-"""tests.firefox.dev flakiness lookup for the test-repair gate.
+"""tests.firefox.dev flakiness gate for test-repair.
 
 The tests.firefox.dev dashboard (github.com/mozilla/aretestsfastyet) is static JS
 that reads pre-aggregated timings JSON from the Firefox CI Taskcluster index at
@@ -15,9 +15,14 @@ per-test stats) is a direct port of the dashboard's ``common-test-data.js``.
 from __future__ import annotations
 
 import logging
+import threading
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 import httpx
+from cachetools import TTLCache
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +32,15 @@ _INDEX_URL = (
 )
 _TIMEOUT = 30
 _TOTAL_CHUNKS = 64
+
+# Decoded buckets, keyed by (harness, chunk, repo). The index publishes a new
+# dataset at most a few times a day, and a raw bucket is tens of MB of JSON, so
+# caching the (small) decoded stats avoids refetching it for every test. The lock
+# covers the fetch and decode together: the worker pool is far larger than the
+# number of buckets, and concurrent decodes would dominate the memory limit.
+_BUCKET_TTL_SECONDS = 60 * 60
+_buckets: TTLCache = TTLCache(maxsize=32, ttl=_BUCKET_TTL_SECONDS)
+_buckets_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -39,9 +53,6 @@ class Flakiness:
     timeouts: int = 0
     crashes: int = 0
     skips: int = 0
-    # Most recent day offset (relative to metadata.startDate) the test was green,
-    # or None if it never passed in the window. Coarse context only.
-    last_green_day: int | None = None
 
     @property
     def failure_rate(self) -> float:
@@ -50,6 +61,22 @@ class Flakiness:
         if denom == 0:
             return 0.0
         return (self.fails + self.timeouts + self.crashes) / denom
+
+
+def _harness(suite: str, label: str) -> str | None:
+    """The timings harness for a test task, or None if it publishes none.
+
+    Only the mochitest and xpcshell datasets exist, so every other harness has no
+    intermittent data to check against. The Taskcluster ``kind`` is not a harness
+    name (it is often just "test"), so both the suite tag and the label are matched
+    -- the same suite arrives tagged either way.
+    """
+    text = f"{suite or ''} {label or ''}"
+    if "xpcshell" in text:
+        return "xpcshell"
+    if "mochitest" in text or "browser-chrome" in text:
+        return "mochitest"
+    return None
 
 
 def _to_int32(n: int) -> int:
@@ -74,32 +101,14 @@ def _fetch_bucket(harness: str, chunk: int, repo: str) -> dict:
     return resp.json()
 
 
-def _decompress_days(days: list[int]) -> list[int]:
-    """Days are stored as offsets from the previous entry; return absolute days."""
-    out: list[int] = []
-    acc = 0
-    for d in days:
-        acc += d
-        out.append(acc)
-    return out
-
-
-def _group_len(group: dict) -> int:
-    for key in ("counts", "durations", "taskIdIds"):
-        if key in group:
-            return len(group[key])
-    return len(group.get("days") or [])
-
-
-def _count_at(group: dict, i: int) -> int:
-    """Runs recorded at index ``i`` of a status group; port of ``getCountAtIndex``."""
+def _run_count(group: dict) -> int:
+    """Runs recorded in a status group; port of ``getCountAtIndex`` over all indices."""
     if "counts" in group:
-        return group["counts"][i]
-    if "durations" in group:
-        return len(group["durations"][i])
-    if "taskIdIds" in group:
-        return len(group["taskIdIds"][i])
-    return 1
+        return sum(group["counts"])
+    for key in ("durations", "taskIdIds"):
+        if key in group:
+            return sum(len(entry) for entry in group[key])
+    return len(group.get("days") or [])
 
 
 def _classify(status: str) -> str | None:
@@ -118,63 +127,57 @@ def _classify(status: str) -> str | None:
     return "fail"
 
 
-def _find_test_id(data: dict, test_path: str) -> int | None:
+def _test_paths(data: dict) -> dict[int, str]:
+    """Full test path per test id, from the bucket's index tables."""
     tables = data.get("tables") or {}
     info = data.get("testInfo") or {}
-    runs = data.get("testRuns") or []
     paths = tables.get("testPaths") or []
     names = tables.get("testNames") or []
     path_ids = info.get("testPathIds") or []
     name_ids = info.get("testNameIds") or []
-    for test_id, group in enumerate(runs):
-        if not group or test_id >= len(path_ids) or test_id >= len(name_ids):
-            continue
+    out = {}
+    for test_id in range(min(len(path_ids), len(name_ids))):
         dir_path = paths[path_ids[test_id]]
-        test_name = names[name_ids[test_id]]
-        full = f"{dir_path}/{test_name}" if dir_path else test_name
-        if full == test_path:
-            return test_id
-    return None
+        name = names[name_ids[test_id]]
+        out[test_id] = f"{dir_path}/{name}" if dir_path else name
+    return out
 
 
-def _compute_stats(data: dict, test_path: str) -> Flakiness:
-    """Aggregate a test's status groups into a :class:`Flakiness`."""
+def _decode_bucket(data: dict) -> dict[str, Flakiness]:
+    """Per-test stats for every test in a bucket."""
     statuses = (data.get("tables") or {}).get("statuses") or []
-    test_id = _find_test_id(data, test_path)
-    if test_id is None:
-        return Flakiness()
-    test_group = (data.get("testRuns") or [])[test_id]
-
-    counts = {"pass": 0, "fail": 0, "timeout": 0, "crash": 0, "skip": 0}
-    pass_days: set[int] = set()
-    bad_days: set[int] = set()
-    for status_id, group in enumerate(test_group):
-        if not group or status_id >= len(statuses):
+    paths = _test_paths(data)
+    out: dict[str, Flakiness] = {}
+    for test_id, test_group in enumerate(data.get("testRuns") or []):
+        path = paths.get(test_id)
+        if not test_group or path is None:
             continue
-        kind = _classify(statuses[status_id])
-        if kind is None:
-            continue
-        n = _group_len(group)
-        days = _decompress_days(group.get("days") or list(range(n)))
-        for i in range(n):
-            c = _count_at(group, i)
-            counts[kind] += c
-            if c > 0 and i < len(days):
-                if kind == "pass":
-                    pass_days.add(days[i])
-                elif kind in ("fail", "timeout", "crash"):
-                    bad_days.add(days[i])
+        counts = dict.fromkeys(("pass", "fail", "timeout", "crash", "skip"), 0)
+        for status_id, group in enumerate(test_group):
+            if not group or status_id >= len(statuses):
+                continue
+            kind = _classify(statuses[status_id])
+            if kind is not None:
+                counts[kind] += _run_count(group)
+        out[path] = Flakiness(
+            total=sum(counts.values()),
+            passes=counts["pass"],
+            fails=counts["fail"],
+            timeouts=counts["timeout"],
+            crashes=counts["crash"],
+            skips=counts["skip"],
+        )
+    return out
 
-    green = pass_days - bad_days
-    return Flakiness(
-        total=sum(counts.values()),
-        passes=counts["pass"],
-        fails=counts["fail"],
-        timeouts=counts["timeout"],
-        crashes=counts["crash"],
-        skips=counts["skip"],
-        last_green_day=max(green) if green else None,
-    )
+
+def _bucket_stats(harness: str, chunk: int, repo: str) -> dict[str, Flakiness]:
+    key = (harness, chunk, repo)
+    with _buckets_lock:
+        stats = _buckets.get(key)
+        if stats is None:
+            stats = _decode_bucket(_fetch_bucket(harness, chunk, repo))
+            _buckets[key] = stats
+        return stats
 
 
 def get_flakiness(
@@ -186,7 +189,9 @@ def get_flakiness(
     listener gate treats the test as non-flaky (and errs toward triggering a run).
     """
     try:
-        data = _fetch_bucket(harness, _chunk_index(test_path), repo)
+        return _bucket_stats(harness, _chunk_index(test_path), repo).get(
+            test_path, Flakiness()
+        )
     except httpx.HTTPStatusError as exc:
         # Only some harnesses publish a timings dataset; a 404 means there is
         # nothing to look up, so the gate passes the test through unjudged.
@@ -204,10 +209,33 @@ def get_flakiness(
                 harness,
                 exc,
             )
-        return Flakiness()
     except Exception:
         logger.exception(
             "tests.firefox.dev lookup failed for %s (%s)", test_path, harness
         )
-        return Flakiness()
-    return _compute_stats(data, test_path)
+    return Flakiness()
+
+
+def intermittent_tests(tests: Iterable[str], suite: str, label: str) -> set[str]:
+    """The tests whose historical failure rate marks them as clearly intermittent.
+
+    Empty when the task's harness publishes no timings dataset, logged once for the
+    task rather than once per test.
+    """
+    harness = _harness(suite, label)
+    if harness is None:
+        logger.info(
+            "No tests.firefox.dev dataset for %s; skipping the intermittent check",
+            label,
+        )
+        return set()
+
+    flaky = set()
+    for test in tests:
+        rate = get_flakiness(test, harness).failure_rate
+        if rate >= settings.flakiness_threshold:
+            logger.info(
+                "Test %s is intermittent (failure rate %.2f); skipping", test, rate
+            )
+            flaky.add(test)
+    return flaky

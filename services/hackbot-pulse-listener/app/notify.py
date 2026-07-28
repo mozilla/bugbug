@@ -62,7 +62,7 @@ def _send_test_repair_email(ctx: RunContext, run_doc: dict) -> None:
     )
     # test-repair verdicts are always notified (including do-not-backout verdicts), so
     # the build-repair notify_only_with_patch gate does not apply here.
-    recipients = _test_repair_recipients(culprit_author)
+    recipients = _recipients(settings.test_repair_notification_email, culprit_author)
     if not recipients:
         logger.info(
             "No recipients for test-repair run %s; skipping notification", ctx.run_id
@@ -73,10 +73,9 @@ def _send_test_repair_email(ctx: RunContext, run_doc: dict) -> None:
         return
 
     patch = _fetch_patch(ctx.run_id, run_doc)
-    banner = _RECOMMENDATION_BANNER.get(
-        findings.get("recommendation"), findings.get("recommendation") or "analysis"
+    subject = (
+        f"[test-repair] {_banner(findings)} - {_test_groups_label(ctx)} ({ctx.repo})"
     )
-    subject = f"[test-repair] {banner} - {ctx.test_name} ({ctx.repo})"
     body_md = _build_test_repair_body(ctx, findings, patch, culprit_author)
     _deliver(subject, body_md, recipients, patch)
 
@@ -127,20 +126,18 @@ def _deliver(subject: str, body_md: str, recipients: list[str], patch: str | Non
     )
 
 
-def _recipients(
-    author_email: str | None, developer_email: str | None = None
-) -> list[str]:
-    """Recipients for a run, deduped and ordered by priority.
+def _recipients(primary: str | None, secondary: str | None = None) -> list[str]:
+    """Recipients for a run, deduped and ordered by priority, team address last.
 
-    The blamed commit's author is the primary To (the person who introduced the
-    failure), then the pushing developer, then the team address.
-    ``notification_override_email`` short-circuits to a single address so local
-    testing never mails real developers or the team.
+    build-repair puts the blamed commit's author first and the pushing developer
+    second; test-repair puts its distribution address first and the culprit author
+    second. ``notification_override_email`` short-circuits to a single address so
+    local testing never mails real developers or the team.
     """
     if settings.notification_override_email:
         return [settings.notification_override_email]
     recipients: list[str] = []
-    for addr in (author_email, developer_email, settings.notification_team_email):
+    for addr in (primary, secondary, settings.notification_team_email):
         if addr and addr not in recipients:
             recipients.append(addr)
     return recipients
@@ -153,22 +150,18 @@ _RECOMMENDATION_BANNER = {
 }
 
 
-def _test_repair_recipients(culprit_author: str | None) -> list[str]:
-    """The test-repair notification address (primary To), the culprit author, then the team.
+def _banner(findings: dict) -> str:
+    """The recommendation as a human-readable headline."""
+    recommendation = findings.get("recommendation")
+    return _RECOMMENDATION_BANNER.get(recommendation, recommendation or "analysis")
 
-    ``notification_override_email`` short-circuits to a single address for testing.
-    """
-    if settings.notification_override_email:
-        return [settings.notification_override_email]
-    recipients: list[str] = []
-    for addr in (
-        settings.test_repair_notification_email,
-        culprit_author,
-        settings.notification_team_email,
-    ):
-        if addr and addr not in recipients:
-            recipients.append(addr)
-    return recipients
+
+def _test_groups_label(ctx: RunContext) -> str:
+    """A one-line name for the run's failing groups, for the email subject."""
+    if not ctx.test_groups:
+        return f"task {ctx.task_id}"
+    first, *rest = ctx.test_groups
+    return f"{first} (+{len(rest)} more)" if rest else first
 
 
 def _build_test_repair_body(
@@ -177,16 +170,22 @@ def _build_test_repair_body(
     patch: str | None,
     culprit_author: str | None,
 ) -> str:
-    recommendation = findings.get("recommendation")
-    banner = _RECOMMENDATION_BANNER.get(recommendation, recommendation or "analysis")
+    groups = ", ".join(f"`{g}`" for g in ctx.test_groups) or "not resolved"
     lines = [
         "# Test failure analysis",
         "",
-        f"- **Recommendation:** {banner}",
-        f"- **Failing test:** `{ctx.test_name}`",
+        f"- **Recommendation:** {_banner(findings)}",
+        f"- **Failing tests:** {groups}",
         f"- **Classification:** {findings.get('classification')}",
         f"- **Repository:** {ctx.repo}",
-        f"- **Revision (git):** [`{ctx.git_commit[:12]}`]({_git_url(ctx.git_commit)})",
+    ]
+    # Omitted rather than linked as an empty commit when Lando has not mirrored the
+    # revision yet; the hg revision below always identifies the push.
+    if ctx.git_commit:
+        lines.append(
+            f"- **Revision (git):** [`{ctx.git_commit[:12]}`]({_git_url(ctx.git_commit)})"
+        )
+    lines += [
         f"- **Revision (hg):** [`{ctx.hg_revision[:12]}`]({_hg_url(ctx.hg_revision)})",
         f"- **Failed task:** [`{ctx.task_id}`]({_task_url(ctx.task_id)})",
         f"- **Treeherder:** "
@@ -212,26 +211,41 @@ def _build_test_repair_body(
     if bug:
         lines.append(f"- **Bug:** [{bug}]({_bug_url(bug)})")
 
-    if settings.hackbot_ui_url:
-        run_url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
-        lines.append(f"- **Run details:** {run_url}")
-
-    if findings.get("summary"):
-        lines += ["", "## Summary", "", _demote_headings(findings["summary"])]
-    if findings.get("analysis"):
-        lines += ["", "## Analysis", "", _demote_headings(findings["analysis"])]
-    if patch:
-        lines += ["", "## Proposed patch", "", _patch_block(patch)]
-
-    if settings.notification_team_email:
-        lines += [
-            "",
-            "---",
-            "",
-            "_Reply to this email with any feedback on this analysis; it reaches "
-            "the hackbot team._",
-        ]
+    lines += _run_details(ctx) + _analysis_sections(findings) + _patch_section(patch)
+    lines += _team_footer()
     return "\n".join(lines)
+
+
+def _run_details(ctx: RunContext) -> list[str]:
+    if not settings.hackbot_ui_url:
+        return []
+    return [
+        f"- **Run details:** {settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
+    ]
+
+
+def _analysis_sections(findings: dict) -> list[str]:
+    lines: list[str] = []
+    for key, title in (("summary", "Summary"), ("analysis", "Analysis")):
+        if findings.get(key):
+            lines += ["", f"## {title}", "", _demote_headings(findings[key])]
+    return lines
+
+
+def _patch_section(patch: str | None) -> list[str]:
+    return ["", "## Proposed patch", "", _patch_block(patch)] if patch else []
+
+
+def _team_footer() -> list[str]:
+    if not settings.notification_team_email:
+        return []
+    return [
+        "",
+        "---",
+        "",
+        "_Reply to this email with any feedback on this analysis; it reaches "
+        "the hackbot team._",
+    ]
 
 
 def _fetch_patch(run_id: str, run_doc: dict) -> str | None:
@@ -301,16 +315,9 @@ def _build_body(
     if bug_id:
         lines.append(f"- **Bug:** [{bug_id}]({_bug_url(bug_id)})")
 
-    if settings.hackbot_ui_url:
-        run_url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
-        lines.append(f"- **Run details:** {run_url}")
-
+    lines += _run_details(ctx)
     lines += _recipients_note(ctx, blamed_commit, blamed_author)
-
-    if findings.get("summary"):
-        lines += ["", "## Summary", "", _demote_headings(findings["summary"])]
-    if findings.get("analysis"):
-        lines += ["", "## Analysis", "", _demote_headings(findings["analysis"])]
+    lines += _analysis_sections(findings)
 
     if findings.get("local_build_verified") is not None:
         lines += [
@@ -320,18 +327,7 @@ def _build_body(
             f"- Local build verified: {findings['local_build_verified']}",
         ]
 
-    if patch:
-        lines += ["", "## Proposed patch", "", _patch_block(patch)]
-
-    if settings.notification_team_email:
-        lines += [
-            "",
-            "---",
-            "",
-            "_Reply to this email with any feedback on this analysis; it reaches "
-            "the hackbot team._",
-        ]
-
+    lines += _patch_section(patch) + _team_footer()
     return "\n".join(lines)
 
 

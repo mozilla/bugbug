@@ -18,12 +18,13 @@ def _ctx(**over):
     return RunContext(**base)
 
 
+def settings_test_repair_address() -> str | None:
+    return notify.settings.test_repair_notification_email
+
+
 def _test_repair_ctx(**over):
-    return _ctx(
-        agent="test-repair",
-        test_name="dom/base/test/mochitest.ini",
-        **over,
-    )
+    over.setdefault("test_groups", ["dom/base/test/mochitest.ini"])
+    return _ctx(agent="test-repair", **over)
 
 
 def test_skips_without_recipient():
@@ -317,6 +318,34 @@ def test_test_repair_body_leads_with_recommendation():
     assert "## Analysis" in body
 
 
+def test_test_repair_body_names_every_failing_group():
+    ctx = _test_repair_ctx(
+        test_groups=["dom/base/test/mochitest.ini", "layout/test/mochitest.ini"]
+    )
+    body = notify._build_test_repair_body(ctx, _test_repair_findings(), None, None)
+    assert "dom/base/test/mochitest.ini" in body
+    assert "layout/test/mochitest.ini" in body
+
+
+def test_test_repair_subject_summarizes_multiple_groups():
+    ctx = _test_repair_ctx(test_groups=["a/mochitest.ini", "b/mochitest.ini"])
+    assert notify._test_groups_label(ctx) == "a/mochitest.ini (+1 more)"
+    assert (
+        notify._test_groups_label(_test_repair_ctx()) == "dom/base/test/mochitest.ini"
+    )
+    assert notify._test_groups_label(_test_repair_ctx(test_groups=[])) == "task TASK123"
+
+
+def test_test_repair_body_omits_unmapped_git_revision():
+    # An unmapped revision must not render an empty commit link.
+    body = notify._build_test_repair_body(
+        _test_repair_ctx(git_commit=""), _test_repair_findings(), None, None
+    )
+    assert "Revision (git)" not in body
+    assert "firefox/commit/)" not in body
+    assert "Revision (hg)" in body
+
+
 def test_test_repair_intermittent_body_says_do_not_backout():
     findings = _test_repair_findings(
         classification="intermittent",
@@ -334,7 +363,9 @@ def test_test_repair_recipients_address_then_culprit(monkeypatch):
         notify.settings, "test_repair_notification_email", "test-repair@mozilla.com"
     )
     monkeypatch.setattr(notify.settings, "notification_team_email", "team@mozilla.com")
-    assert notify._test_repair_recipients("culprit@mozilla.com") == [
+    assert notify._recipients(
+        settings_test_repair_address(), "culprit@mozilla.com"
+    ) == [
         "test-repair@mozilla.com",
         "culprit@mozilla.com",
         "team@mozilla.com",
@@ -348,7 +379,9 @@ def test_test_repair_recipients_override_wins(monkeypatch):
     monkeypatch.setattr(
         notify.settings, "test_repair_notification_email", "test-repair@mozilla.com"
     )
-    assert notify._test_repair_recipients("culprit@mozilla.com") == ["me@mozilla.com"]
+    assert notify._recipients(
+        settings_test_repair_address(), "culprit@mozilla.com"
+    ) == ["me@mozilla.com"]
 
 
 def test_test_repair_intermittent_sends_without_patch(monkeypatch):

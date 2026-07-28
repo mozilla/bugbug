@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
-from mozci import data
+from mozci.task import TestTask, is_bad_group, wpt_workaround
 
 logger = logging.getLogger(__name__)
 
@@ -28,27 +28,46 @@ class FailingGroup:
     failure_type: str
 
 
-def _failure_types(task_id: str) -> dict:
+def _failure_types(task: TestTask) -> dict:
     """mozci: ``{group: [(test_name, FailureType), ...]}`` for a task."""
-    return data.handler.get("test_task_failure_types", task_id=task_id)
+    return task.failure_types
 
 
-def failing_groups(task_id: str) -> list[FailingGroup]:
-    """Failing test groups for a task; empty on any error (gate fails open)."""
-    try:
-        by_group = _failure_types(task_id)
-    except Exception:
-        logger.exception("Could not read failing groups for task %s", task_id)
-        return []
+def _canonical_group(task: TestTask, group: str) -> str:
+    """Rewrite a group name the way mozci does.
 
+    The errorsummary names web-platform-tests groups by URL path ("/html/foo.html")
+    while mozci keys the results we compare against by source path
+    ("testing/web-platform/tests/html/foo.html"), so the regression check only ever
+    matches if we apply the same transform.
+    """
+    if task.is_wpt and group.startswith((":/", "/")):
+        return wpt_workaround(group)
+    return group
+
+
+def failing_groups(task_id: str, label: str) -> list[FailingGroup]:
+    """Failing test groups for a task, named the way mozci names them.
+
+    Raises on any mozci/network error rather than returning nothing: an
+    errorsummary that cannot be read must not be mistaken for "nothing failed",
+    which would silently drop a real regression.
+    """
+    task = TestTask(id=task_id, label=label)
     groups: list[FailingGroup] = []
-    for group, fails in by_group.items():
-        if not group or not fails:
+    for group, fails in _failure_types(task).items():
+        if not group or not fails or group == "/":
+            continue
+        canonical = _canonical_group(task, group)
+        # mozci drops these from its own results, so they could never match.
+        if is_bad_group(task_id, canonical):
             continue
         test, ftype = fails[0]
         groups.append(
             FailingGroup(
-                group=group, test=test, failure_type=getattr(ftype, "name", str(ftype))
+                group=canonical,
+                test=test,
+                failure_type=getattr(ftype, "name", str(ftype)),
             )
         )
     return groups

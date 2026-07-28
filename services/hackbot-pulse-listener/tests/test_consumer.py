@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
 from app import consumer
 from app.failures import FailingGroup
-from app.flakiness import Flakiness
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -247,39 +248,44 @@ _GROUP = FailingGroup(
 )
 
 
-def _test_repair_patches(is_new=(True, "greenrev"), rate=0.0):
-    return (
-        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
-        patch.object(consumer.failures, "failing_groups", return_value=[_GROUP]),
-        patch.object(
-            consumer.flakiness,
-            "get_flakiness",
-            return_value=Flakiness(
-                total=10, passes=int(10 * (1 - rate)), fails=int(10 * rate)
-            ),
+@pytest.fixture
+def env(monkeypatch):
+    """The test-repair path's external seams, as named mocks.
+
+    Defaults describe the happy path: one failing group, not intermittent, a new
+    regression, revision mappable, trigger succeeds.
+    """
+    mocks = SimpleNamespace(
+        get_hg_revision=MagicMock(return_value="hgrev"),
+        failing_groups=MagicMock(return_value=[_GROUP]),
+        intermittent_tests=MagicMock(return_value=set()),
+        new_test_failures=MagicMock(
+            side_effect=lambda p, r, label, groups: set(groups)
         ),
-        patch.object(consumer.regression, "is_new_test_failure", return_value=is_new),
-        patch.object(consumer.lando, "hg_to_git", return_value="gitH"),
+        hg_to_git=MagicMock(return_value="gitH"),
+        trigger_run=MagicMock(return_value="tr-1"),
+        executor=MagicMock(),
     )
+    monkeypatch.setattr(consumer.taskcluster, "get_hg_revision", mocks.get_hg_revision)
+    monkeypatch.setattr(consumer.failures, "failing_groups", mocks.failing_groups)
+    monkeypatch.setattr(
+        consumer.flakiness, "intermittent_tests", mocks.intermittent_tests
+    )
+    monkeypatch.setattr(
+        consumer.regression, "new_test_failures", mocks.new_test_failures
+    )
+    monkeypatch.setattr(consumer.lando, "hg_to_git", mocks.hg_to_git)
+    monkeypatch.setattr(consumer.client, "trigger_run", mocks.trigger_run)
+    return mocks
 
 
-def test_test_failure_triggers_rca_run():
-    executor = MagicMock()
-    p1, p2, p3, p4, p5 = _test_repair_patches()
-    with (
-        p1,
-        p2,
-        p3,
-        p4,
-        p5,
-        patch.object(consumer.client, "trigger_run", return_value="tr-1") as trigger,
-    ):
-        run_id = consumer.process(_test_msg(), executor)
+def test_test_failure_triggers_rca_run(env):
+    run_id = consumer.process(_test_msg(), env.executor)
 
     assert run_id == "tr-1"
-    trigger.assert_called_once()
-    inputs = trigger.call_args.args[0]
-    assert trigger.call_args.kwargs["agent_name"] == "test-repair"
+    env.trigger_run.assert_called_once()
+    inputs = env.trigger_run.call_args.args[0]
+    assert env.trigger_run.call_args.kwargs["agent_name"] == "test-repair"
     # The agent resolves the test, commit range and clone depth itself; the
     # listener only hands it the failing task.
     assert inputs["failure_tasks"] == {
@@ -287,167 +293,137 @@ def test_test_failure_triggers_rca_run():
     }
     assert "test_id" not in inputs
     assert "candidate_commits" not in inputs
-    fn, ctx = executor.submit.call_args.args
+    fn, ctx = env.executor.submit.call_args.args
     assert fn is consumer.worker.poll_and_notify
     assert ctx.agent == "test-repair"
-    assert ctx.test_name == "dom/base/test/mochitest.ini"
+    assert ctx.test_groups == [_GROUP.group]
 
 
-def test_intermittent_test_skipped_before_mozci():
-    executor = MagicMock()
-    p1, p2, p3, p4, p5 = _test_repair_patches(rate=0.8)
-    with (
-        p1,
-        p2,
-        p3,
-        p4 as is_new,
-        p5,
-        patch.object(consumer.client, "trigger_run") as trigger,
-    ):
-        assert consumer.process(_test_msg(), executor) is None
-    is_new.assert_not_called()
-    trigger.assert_not_called()
+def test_intermittent_test_skipped_before_mozci(env):
+    env.intermittent_tests.return_value = {_GROUP.test}
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.new_test_failures.assert_not_called()
+    env.trigger_run.assert_not_called()
 
 
-def test_inherited_test_group_skipped():
-    executor = MagicMock()
-    p1, p2, p3, p4, p5 = _test_repair_patches(is_new=(False, None))
-    with (
-        p1,
-        p2,
-        p3,
-        p4,
-        p5,
-        patch.object(consumer.client, "trigger_run") as trigger,
-    ):
-        assert consumer.process(_test_msg(), executor) is None
-    trigger.assert_not_called()
+def test_inherited_test_group_skipped(env):
+    env.new_test_failures.side_effect = lambda *_: set()
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.trigger_run.assert_not_called()
 
 
-def test_same_group_same_push_triggers_once():
-    executor = MagicMock()
-    p1, p2, p3, p4, p5 = _test_repair_patches()
-    with (
-        p1,
-        p2,
-        p3,
-        p4,
-        p5,
-        patch.object(consumer.client, "trigger_run", return_value="tr-1") as trigger,
-    ):
-        consumer.process(_test_msg(task_id="A"), executor)
-        consumer.process(_test_msg(task_id="B"), executor)
-    trigger.assert_called_once()
+def test_same_group_same_push_triggers_once(env):
+    consumer.process(_test_msg(task_id="A"), env.executor)
+    consumer.process(_test_msg(task_id="B"), env.executor)
+    env.trigger_run.assert_called_once()
 
 
-def test_no_failing_groups_skips():
-    executor = MagicMock()
-    with (
-        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
-        patch.object(consumer.failures, "failing_groups", return_value=[]),
-        patch.object(consumer.client, "trigger_run") as trigger,
-    ):
-        assert consumer.process(_test_msg(), executor) is None
-    trigger.assert_not_called()
+def test_no_failing_groups_skips(env):
+    env.failing_groups.return_value = []
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.trigger_run.assert_not_called()
 
 
-def test_unwatched_project_test_skipped():
-    executor = MagicMock()
-    with (
-        patch.object(consumer.taskcluster, "get_hg_revision") as get_rev,
-        patch.object(consumer.failures, "failing_groups") as fg,
-    ):
-        assert consumer.process(_test_msg(project="try"), executor) is None
-    get_rev.assert_not_called()
-    fg.assert_not_called()
+def test_unreadable_errorsummary_still_triggers_run(env):
+    # Fail open like the build path: an errorsummary that cannot be read must not
+    # be mistaken for "nothing failed" and drop a possible regression.
+    env.failing_groups.side_effect = RuntimeError("no artifact")
+    assert consumer.process(_test_msg(task_id="ERR"), env.executor) == "tr-1"
+    env.trigger_run.assert_called_once()
+    # With no groups resolved there is nothing to filter or to name.
+    env.intermittent_tests.assert_not_called()
+    env.new_test_failures.assert_not_called()
+    _, ctx = env.executor.submit.call_args.args
+    assert ctx.test_groups == []
 
 
-def test_test_repair_trigger_failure_releases_group_for_retry():
-    executor = MagicMock()
-    p1, p2, p3, p4, p5 = _test_repair_patches()
-    with (
-        p1,
-        p2,
-        p3,
-        p4,
-        p5,
-        patch.object(
-            consumer.client, "trigger_run", side_effect=[RuntimeError("boom"), "tr-2"]
-        ) as trigger,
-    ):
-        assert consumer.process(_test_msg(task_id="A"), executor) is None
-        assert consumer.process(_test_msg(task_id="B"), executor) == "tr-2"
-    assert trigger.call_count == 2
+def test_unreadable_errorsummary_triggers_once_per_task(env):
+    env.failing_groups.side_effect = RuntimeError("no artifact")
+    consumer.process(_test_msg(task_id="A"), env.executor)
+    consumer.process(_test_msg(task_id="B"), env.executor)
+    env.trigger_run.assert_called_once()
 
 
-def test_harness_detection():
-    # xpcshell via the test-suite tag, and via the label when the suite is generic.
-    assert consumer._harness({"test-suite": "xpcshell"}, "irrelevant") == "xpcshell"
-    assert (
-        consumer._harness({"test-suite": "test"}, "test-linux/opt-xpcshell-4")
-        == "xpcshell"
-    )
-    assert (
-        consumer._harness({"test-suite": "mochitest-browser-chrome"}, "l")
-        == "mochitest"
-    )
-    # Recognized from the label too: the same suite arrives with kind "test" and
-    # sometimes no test-suite tag, and "test" is not a harness.
-    assert (
-        consumer._harness(
-            {"kind": "test"}, "test-linux2404-64/opt-mochitest-browser-chrome-8"
-        )
-        == "mochitest"
-    )
-    # Harnesses that publish no timings dataset resolve to None (no lookup).
-    assert consumer._harness({"kind": "web-platform-tests"}, "l") is None
-    assert consumer._harness({"kind": "test"}, "test-linux/opt-reftest-1") is None
+def test_rejected_group_is_not_re_evaluated_by_sibling_chunks(env):
+    # The dedupe claim is taken before the expensive checks, so a sibling chunk
+    # reporting the same group does not repeat the mozci walk to reach the same
+    # verdict.
+    env.new_test_failures.side_effect = lambda *_: set()
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    env.trigger_run.assert_not_called()
+    assert env.new_test_failures.call_count == 1
 
 
-def test_multiple_failing_groups_trigger_one_run_per_task(monkeypatch):
-    executor = MagicMock()
+def test_missing_git_mapping_still_triggers_run(env):
+    # Unlike a build failure, the run is still useful (the agent works from the
+    # task id), so a revision Lando has not mirrored yet must not drop it.
+    env.hg_to_git.return_value = None
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.trigger_run.assert_called_once()
+    _, ctx = env.executor.submit.call_args.args
+    assert ctx.git_commit == ""
+
+
+def test_unwatched_project_test_skipped(env):
+    assert consumer.process(_test_msg(project="try"), env.executor) is None
+    env.get_hg_revision.assert_not_called()
+    env.failing_groups.assert_not_called()
+
+
+def test_test_repair_trigger_failure_releases_group_for_retry(env):
+    env.trigger_run.side_effect = [RuntimeError("boom"), "tr-2"]
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-2"
+    assert env.trigger_run.call_count == 2
+
+
+def test_multiple_failing_groups_trigger_one_run_per_task(env):
     groups = [
         FailingGroup("dom/base/test/mochitest.ini", "dom/base/test/a.js", "GENERIC"),
         FailingGroup("layout/test/mochitest.ini", "layout/test/b.js", "TIMEOUT"),
     ]
-    with (
-        patch.object(consumer.taskcluster, "get_hg_revision", return_value="hgrev"),
-        patch.object(consumer.failures, "failing_groups", return_value=groups),
-        patch.object(
-            consumer.flakiness,
-            "get_flakiness",
-            return_value=Flakiness(total=10, passes=10),
-        ),
-        patch.object(
-            consumer.regression,
-            "is_new_test_failure",
-            return_value=(True, "greenrev"),
-        ),
-        patch.object(consumer.lando, "hg_to_git", return_value="gitH"),
-        patch.object(consumer.client, "trigger_run", return_value="tr-1") as trigger,
-    ):
-        run_id = consumer.process(_test_msg(), executor)
+    env.failing_groups.return_value = groups
 
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
     # The whole task gets a single run; the agent investigates every failing group.
-    assert run_id == "tr-1"
-    trigger.assert_called_once()
-    assert trigger.call_args.args[0]["failure_tasks"] == {
+    env.trigger_run.assert_called_once()
+    assert env.trigger_run.call_args.args[0]["failure_tasks"] == {
         "test-linux1804-64/opt-mochitest-browser-chrome-1": "TT"
     }
-    assert executor.submit.call_count == 1
+    assert env.executor.submit.call_count == 1
+    # Every failing group is named, not an arbitrary one of them.
+    _, ctx = env.executor.submit.call_args.args
+    assert ctx.test_groups == [g.group for g in groups]
 
 
-def test_missing_hg_revision_skips_test_task(monkeypatch):
-    executor = MagicMock()
-    with (
-        patch.object(consumer.taskcluster, "get_hg_revision", return_value=None),
-        patch.object(consumer.failures, "failing_groups") as fg,
-        patch.object(consumer.client, "trigger_run") as trigger,
-    ):
-        assert consumer.process(_test_msg(), executor) is None
+def test_missing_hg_revision_skips_test_task(env):
+    env.get_hg_revision.return_value = None
+    assert consumer.process(_test_msg(), env.executor) is None
     # Bail before doing the (network-heavy) group resolution.
-    fg.assert_not_called()
-    trigger.assert_not_called()
+    env.failing_groups.assert_not_called()
+    env.trigger_run.assert_not_called()
+
+
+def test_intermittent_gate_runs_before_the_mozci_walk(env):
+    # Both gates are batch calls over the task's groups; the cheap one goes first
+    # and the expensive one only sees what survived.
+    groups = [
+        FailingGroup("a/mochitest.ini", "a/test_a.js", "GENERIC"),
+        FailingGroup("b/mochitest.ini", "b/test_b.js", "GENERIC"),
+    ]
+    env.failing_groups.return_value = groups
+    env.intermittent_tests.return_value = {"a/test_a.js"}
+
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.intermittent_tests.assert_called_once()
+    tests, suite, label = env.intermittent_tests.call_args.args
+    assert list(tests) == ["a/test_a.js", "b/test_b.js"]
+    assert suite == "mochitest-browser-chrome"
+    # Only the surviving group reaches the walk.
+    assert env.new_test_failures.call_args.args[3] == ["b/mochitest.ini"]
+    _, ctx = env.executor.submit.call_args.args
+    assert ctx.test_groups == ["b/mochitest.ini"]
 
 
 def test_queue_name_includes_non_production_environment():
@@ -460,18 +436,3 @@ def test_queue_name_omits_production_environment():
     with patch.object(consumer.settings, "environment", "production"):
         (queue,) = consumer._build_queues("guest")
     assert queue.name == "queue/guest/build-repair-task-failed"
-
-
-def test_no_dataset_harness_skips_flakiness_lookup():
-    # reftest/wpt publish no timings dataset, so the lookup would be a guaranteed
-    # 404; the group is still evaluated for being a regression.
-    with (
-        patch.object(consumer.flakiness, "get_flakiness") as get_flakiness,
-        patch.object(
-            consumer.regression, "is_new_test_failure", return_value=(True, "green")
-        ),
-    ):
-        fresh = consumer._fresh_groups([_GROUP], "autoland", "hgrev", None)
-
-    get_flakiness.assert_not_called()
-    assert fresh == [_GROUP]

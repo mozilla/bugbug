@@ -14,8 +14,17 @@ def _headers() -> dict[str, str]:
 
 
 def trigger_run(inputs: dict, agent_name: str | None = None) -> str | None:
-    """Create an agent run. Returns the run id, or None in dry-run mode."""
+    """Create an agent run. Returns the run id, or None in dry-run mode.
+
+    The model/turn overrides are settings shared by every agent, so they are added
+    here rather than by each caller.
+    """
     agent = agent_name or settings.agent_name
+    inputs = dict(inputs)
+    if settings.model:
+        inputs["model"] = settings.model
+    if settings.max_turns is not None:
+        inputs["max_turns"] = settings.max_turns
     if settings.dry_run:
         logger.info("[dry-run] would trigger %s run: %s", agent, inputs)
         return None

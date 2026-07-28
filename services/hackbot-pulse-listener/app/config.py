@@ -27,9 +27,12 @@ class Settings(BaseSettings):
     run_try_push: bool = False
     model: str | None = None
     max_turns: int | None = None
-    # Skip a failing test whose historical cross-push failure rate is at or above
-    # this (clearly intermittent) before spending an test-repair run.
-    flakiness_threshold: float = 0.2
+    # Skip a failing test whose historical failure rate is at or above this
+    # (clearly intermittent) before spending a test-repair run. The rate is per
+    # *run*, over every platform in the timings window (three weeks, thousands of
+    # runs per test), where even the flakiest tests sit near a few percent -- so
+    # this is an order of magnitude lower than a per-push failure rate would be.
+    flakiness_threshold: float = 0.05
 
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60

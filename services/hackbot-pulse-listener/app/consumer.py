@@ -68,8 +68,15 @@ def process(body: dict, executor: Executor) -> str | None:
     return None
 
 
+def _release(cache: TTLCache, lock: threading.Lock, keys) -> None:
+    """Give up claimed dedupe keys so a later message can retry them."""
+    with lock:
+        for key in keys:
+            cache.pop(key, None)
+
+
 def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
-    """Build-failure path: trigger the build-repair agent (unchanged behavior)."""
+    """Build-failure path: trigger the build-repair agent."""
     project = tags.get("project")
     task_label = tags.get("label") or ""
     task_id = body["status"]["taskId"]
@@ -109,25 +116,19 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
             task_id,
             project,
         )
-        with _seen_lock:
-            _seen.pop(hg_revision, None)
+        _release(_seen, _seen_lock, [hg_revision])
         return None
 
-    inputs: dict = {
-        "failure_tasks": {task_name: task_id},
-        "run_try_push": settings.run_try_push,
-    }
-    if settings.model:
-        inputs["model"] = settings.model
-    if settings.max_turns is not None:
-        inputs["max_turns"] = settings.max_turns
-
     try:
-        run_id = client.trigger_run(inputs)
+        run_id = client.trigger_run(
+            {
+                "failure_tasks": {task_name: task_id},
+                "run_try_push": settings.run_try_push,
+            }
+        )
     except Exception:
         logger.exception("Failed to trigger build-repair run for %s", hg_revision)
-        with _seen_lock:
-            _seen.pop(hg_revision, None)
+        _release(_seen, _seen_lock, [hg_revision])
         return None
 
     logger.info(
@@ -150,22 +151,6 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
     return run_id
 
 
-def _harness(tags: dict, label: str) -> str | None:
-    """The tests.firefox.dev harness for a test task, or None if it publishes none.
-
-    Only the mochitest and xpcshell timings datasets exist, so every other
-    harness has no intermittent data to check against. The Taskcluster ``kind``
-    is not a harness name (it is often just "test"), so both the suite tag and
-    the label are matched -- the same suite arrives tagged either way.
-    """
-    text = f"{tags.get('test-suite') or ''} {label}"
-    if "xpcshell" in text:
-        return "xpcshell"
-    if "mochitest" in text or "browser-chrome" in text:
-        return "mochitest"
-    return None
-
-
 def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     """Test-failure path: filter, then trigger the test-repair agent for the task.
 
@@ -181,122 +166,151 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     project = tags.get("project")
     label = tags.get("label") or task_id
     developer_email = tags.get("createdForUser")
-    harness = _harness(tags, label)
 
     hg_revision = taskcluster.get_hg_revision(task_id)
     if not hg_revision:
         logger.warning("No GECKO_HEAD_REV for test task %s; skipping", task_id)
         return None
 
-    groups = failures.failing_groups(task_id)
+    try:
+        groups = failures.failing_groups(task_id, label)
+    except Exception:
+        # Fail open, as the build path does. An errorsummary that cannot be read
+        # (Taskcluster error, or the artifact not published yet when the failure
+        # message arrives) must not be mistaken for "nothing failed": investigate
+        # the whole task, keyed on its label since no group name is known.
+        logger.exception(
+            "Could not resolve the failing groups of task %s; "
+            "running the agent on the whole task",
+            task_id,
+        )
+        if not _claim_groups([(task_group_id, label)]):
+            return None
+        return _trigger_test_repair(
+            [],
+            [(task_group_id, label)],
+            project,
+            hg_revision,
+            task_id,
+            label,
+            developer_email,
+            executor,
+        )
+
     if not groups:
-        logger.info("No failing test groups resolved for task %s; skipping", task_id)
+        logger.info("Task %s reported no failing test groups; skipping", task_id)
         return None
 
-    fresh = _fresh_groups(groups, project, hg_revision, harness)
+    claimed = _claim_groups([(task_group_id, fg.group) for fg in groups])
+    if not claimed:
+        logger.info(
+            "Every failing group of task %s is already handled; skipping", task_id
+        )
+        return None
+
+    fresh = _fresh_groups(
+        [fg for fg in groups if (task_group_id, fg.group) in claimed],
+        project,
+        hg_revision,
+        label,
+        tags.get("test-suite") or "",
+    )
     if not fresh:
         logger.info("No new, non-intermittent groups for task %s; skipping", task_id)
         return None
 
     return _trigger_test_repair(
-        fresh,
-        project,
-        hg_revision,
-        task_group_id,
-        task_id,
-        label,
-        developer_email,
-        executor,
+        fresh, claimed, project, hg_revision, task_id, label, developer_email, executor
     )
 
 
-def _fresh_groups(groups, project: str, hg_revision: str, harness: str | None):
-    """Groups that are genuine, non-intermittent regressions worth investigating."""
-    if harness is None:
-        logger.info(
-            "No tests.firefox.dev dataset for this harness; "
-            "skipping the intermittent check at %s",
-            hg_revision,
-        )
-    fresh = []
-    for fg in groups:
-        # Cheap intermittent gate first (one HTTP call) before the mozci walk.
-        flak = flakiness.get_flakiness(fg.test, harness) if harness else None
-        if flak and flak.total and flak.failure_rate >= settings.flakiness_threshold:
-            logger.info(
-                "Test %s is intermittent (failure rate %.2f); skipping",
-                fg.test,
-                flak.failure_rate,
-            )
-            continue
-        is_new, _ = regression.is_new_test_failure(project, hg_revision, fg.group)
-        if not is_new:
+def _claim_groups(keys: list[tuple[str, str]]) -> set[tuple[str, str]]:
+    """Claim the keys not yet handed off, returning the ones this call claimed.
+
+    Claimed *before* the flakiness and mozci checks, not after: every failing chunk
+    of a push resolves the same groups, so without an up-front claim they all run
+    the expensive walk concurrently and then throw the answer away. A key stays
+    claimed even when the filter then rejects the group, so the sibling tasks do
+    not recompute a verdict that would come out the same.
+    """
+    with _seen_tests_lock:
+        claimed = {k for k in keys if k not in _seen_tests}
+        for k in claimed:
+            _seen_tests[k] = True
+    return claimed
+
+
+def _fresh_groups(
+    groups, project: str, hg_revision: str, label: str, suite: str
+) -> list[str]:
+    """Names of the groups that are genuine, non-intermittent regressions."""
+    # Cheap intermittent gate first (one HTTP call per test) before the mozci walk.
+    flaky = flakiness.intermittent_tests([fg.test for fg in groups], suite, label)
+    candidates = [fg.group for fg in groups if fg.test not in flaky]
+    if not candidates:
+        return []
+
+    new = regression.new_test_failures(project, hg_revision, label, candidates)
+    for group in candidates:
+        if group not in new:
             logger.info(
                 "Group %s at %s inherited from an ancestor; skipping",
-                fg.group,
+                group,
                 hg_revision,
             )
-            continue
-        fresh.append(fg)
-    return fresh
+    return [group for group in candidates if group in new]
 
 
 def _trigger_test_repair(
-    fresh,
+    test_groups: list[str],
+    claimed,
     project: str,
     hg_revision: str,
-    task_group_id: str,
     task_id: str,
     label: str,
     developer_email: str | None,
     executor: Executor,
 ) -> str | None:
-    # Dedupe per (push, group): trigger only when this task has a fresh group not
-    # already handed off (e.g. by a sibling chunk), then claim all of them.
-    keys = [(task_group_id, fg.group) for fg in fresh]
-    with _seen_tests_lock:
-        unseen = [k for k in keys if k not in _seen_tests]
-        if not unseen:
-            logger.info(
-                "All fresh groups in task %s already triggered; skipping", task_id
-            )
-            return None
-        for k in unseen:
-            _seen_tests[k] = True
-
-    inputs: dict = {"failure_tasks": {label: task_id}}
-    if settings.model:
-        inputs["model"] = settings.model
-    if settings.max_turns is not None:
-        inputs["max_turns"] = settings.max_turns
-
     try:
-        run_id = client.trigger_run(inputs, agent_name=settings.test_repair_agent_name)
+        run_id = client.trigger_run(
+            {"failure_tasks": {label: task_id}},
+            agent_name=settings.test_repair_agent_name,
+        )
     except Exception:
         logger.exception("Failed to trigger test-repair run for task %s", task_id)
-        with _seen_tests_lock:
-            for k in unseen:
-                _seen_tests.pop(k, None)
+        _release(_seen_tests, _seen_tests_lock, claimed)
         return None
 
     logger.info(
-        "%s test-repair for %s task %s (%d group(s)) at %s",
+        "%s test-repair for %s task %s (%s) at %s",
         f"Triggered run {run_id}" if run_id else "Would trigger",
         project,
         task_id,
-        len(fresh),
+        f"{len(test_groups)} group(s)" if test_groups else "groups unresolved",
         hg_revision,
     )
     if run_id is not None:
+        git_commit = lando.hg_to_git(hg_revision)
+        if not git_commit:
+            # Not fatal, unlike on the build path: the agent works from the task id
+            # alone, and a revision Lando has not mirrored yet is routine for a
+            # just-landed push. The notification omits the git revision instead of
+            # linking to an empty commit.
+            logger.warning(
+                "Could not map hg revision %s to git for task %s; "
+                "the notification will omit the git revision",
+                hg_revision,
+                task_id,
+            )
         ctx = RunContext(
             run_id=run_id,
             repo=project,
-            git_commit=lando.hg_to_git(hg_revision) or "",
+            git_commit=git_commit or "",
             hg_revision=hg_revision,
             task_id=task_id,
             developer_email=developer_email,
             agent=settings.test_repair_agent_name,
-            test_name=fresh[0].group,
+            test_groups=list(test_groups),
         )
         executor.submit(worker.poll_and_notify, ctx)
     return run_id
