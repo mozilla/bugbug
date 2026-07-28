@@ -19,7 +19,7 @@ ACTION_TYPE = "testrail.submit_test_plan"
 
 class TestRailCaseInput(BaseModel):
     id: int
-    title: str = Field(description="Short TestRail test case title.")
+    title: str = Field(description="TestRail test case title.")
     context: str | None = Field(
         default=None, description="Optional context for where this case applies."
     )
