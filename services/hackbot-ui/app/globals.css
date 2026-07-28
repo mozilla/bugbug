@@ -188,25 +188,33 @@ button.secondary {
 
 table.runs {
   width: 100%;
+  /* Below this the percentage columns get too narrow for a timestamp or an
+     agent name, so .table-scroll takes over and the table scrolls instead. */
+  min-width: 760px;
   border-collapse: collapse;
   /* Fixed layout keeps the columns from re-balancing (and the last column from
      ballooning) when the visible rows change, e.g. when a filter is applied. */
   table-layout: fixed;
 }
+/* Widths must cover every column: an uncovered trailing column gets no share of
+   the fixed layout and overflows instead. */
 table.runs th:nth-child(1) {
-  width: 12%;
+  width: 10%;
 }
 table.runs th:nth-child(2) {
-  width: 22%;
+  width: 18%;
 }
 table.runs th:nth-child(3) {
-  width: 28%;
+  width: 26%;
 }
 table.runs th:nth-child(4) {
   width: 14%;
 }
 table.runs th:nth-child(5) {
-  width: 24%;
+  width: 13%;
+}
+table.runs th:nth-child(6) {
+  width: 19%;
 }
 table.runs th,
 table.runs td {
@@ -274,11 +282,13 @@ table.runs tr.run-error-row > td {
 .runs-filters {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .runs-filters select {
   width: auto;
-  min-width: 150px;
+  min-width: 130px;
   padding: 6px 10px;
   font-size: 13px;
 }
