@@ -29,8 +29,10 @@ ruleset does not apply — note that and stop.
 ## Comment
 
 Record a single brief comment (a few sentences) with: the suspected root cause,
-the target file(s), and the proposed approach. Cite concrete paths. Do not
-restate the whole bug. Do not claim the fix is verified — you did not run it.
+the target file(s), and the proposed approach. Cite concrete paths, each as an
+inline Markdown link to its Searchfox permalink (with a line anchor where you
+know the line) per the **Linking source files** section of the system prompt. Do
+not restate the whole bug. Do not claim the fix is verified — you did not run it.
 
 ## Confidence and field changes
 

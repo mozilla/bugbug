@@ -111,8 +111,36 @@ Two things to know before acting on a plan:
   the agent pinned a root cause in the code, never whether the fix works — it
   cannot run anything. Read `high` as "trust the diagnosis, still review the
   patch."
-- **Line numbers are model-asserted and drift.** Trust the files, functions and
+- **Line numbers are model-asserted.** The permalink pins the revision, so a
+  cited line can't drift out from under the link — but the number is still the
+  model's claim about where the problem is. Trust the files, functions and
   selectors it names; confirm exact lines against the source.
+
+Source files in the comment are inline Markdown links to **permalinked**
+Searchfox URLs (`https://searchfox.org/firefox-main/rev/<sha>/<path>#<line>`), so
+they keep pointing at the code the agent read.
+
+The agent never handles the revision: it writes
+`{{searchfox.permalink}}/<path>#<line>`, the same placeholder convention as
+`{{actions.<ref>.url}}`, and an action hook on `bugzilla.add_comment` expands the
+prefix as the comment is recorded — so what lands in `summary.json` for review is
+already clickable. `agent.py` resolves the revision once per run with
+`hackbot_runtime.searchfox.resolve_index_revision()`.
+
+A path the agent names that isn't in the checkout is **not** linked: the hook
+unwraps the Markdown link to its backticked label and logs a warning. Models do
+occasionally invent a plausible path, and a permalink that 404s for whoever
+clicks it is worse than plain text. The check is a heuristic — the checkout and
+the pinned revision are hours apart, so a file added in between exists locally
+but not on Searchfox — but it catches the common case.
+
+That reads the permalink Searchfox publishes on a file page, rather than the
+checkout's base commit, because Searchfox only serves `/rev/<sha>` for revisions
+it has **indexed** — and its index trails the tip of `firefox.git` by hours (83
+commits / ~20h when measured), so a link pinned to the checkout would 500 for
+about a day, exactly the window in which someone reads the comment. If the
+revision can't be resolved at all, the placeholder expands to Searchfox's
+revision-agnostic `/source/` prefix: still a working link, just unpinned.
 
 ## Tuning
 
