@@ -120,7 +120,9 @@ export function TriggerForm() {
       inputs.bug_id = parsedBugId;
     } else {
       if (!hasBugId && !hasBugData) {
-        setError("Provide a Bugzilla bug ID (or bug URL) or paste report text.");
+        setError(
+          "Provide a Bugzilla bug ID (or bug URL) or paste report text."
+        );
         return;
       }
       if (hasBugId) inputs.bug_id = parsedBugId;
