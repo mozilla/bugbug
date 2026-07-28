@@ -33,8 +33,6 @@ async def main(ctx: HackbotContext) -> TestPlanGeneratorResult:
         log=ctx.log_path,
         verbose=True,
     )
-    if result.result is None:
-        raise RuntimeError("Cannot submit an empty test plan to TestRail")
     record_test_plan(ctx.actions, result.result.model_dump(mode="json"))
     return result
 
