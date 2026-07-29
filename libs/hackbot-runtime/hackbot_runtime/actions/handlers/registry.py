@@ -12,6 +12,7 @@ from hackbot_runtime.actions.handlers.phabricator_handler import (
     SubmitPatchHandler,
     UpdatePatchHandler,
 )
+from hackbot_runtime.actions.handlers.testrail_handler import SubmitTestPlanHandler
 
 # Maps a recorded action's dotted `type` to the handler that applies it.
 # Adding a new action type later is a one-line addition here — the dispatch
@@ -24,6 +25,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "phabricator.submit_patch": SubmitPatchHandler(),
     "phabricator.update_patch": UpdatePatchHandler(),
     "phabricator.add_comment": PhabricatorAddCommentHandler(),
+    "testrail.submit_test_plan": SubmitTestPlanHandler(),
 }
 
 
