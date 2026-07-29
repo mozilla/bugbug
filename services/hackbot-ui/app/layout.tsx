@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import "./globals.css";
 import { UserMenu } from "@/components/UserMenu";
@@ -32,7 +33,11 @@ export default function RootLayout({
       <body>
         <header className="topbar">
           <div className="inner">
-            <h1>🚀 Hackbot Launchpad</h1>
+            <h1>
+              <Link href="/" className="home-link">
+                🚀 Hackbot Launchpad
+              </Link>
+            </h1>
             <div className="topbar-actions">
               <a
                 className="github-link"
