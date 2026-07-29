@@ -45,28 +45,20 @@ class TestRailClient:
     async def get_case_types(self) -> dict[str, Any] | list[Any]:
         return await self.request("GET", "get_case_types")
 
-    async def get_templates(
-        self, project_id: int | None = None
-    ) -> dict[str, Any] | list[Any]:
-        return await self.request(
-            "GET", f"get_templates/{project_id or self.settings.project_id}"
-        )
+    async def get_templates(self) -> dict[str, Any] | list[Any]:
+        return await self.request("GET", f"get_templates/{self.settings.project_id}")
 
-    async def add_suite(
-        self, name: str, project_id: int | None = None
-    ) -> dict[str, Any] | list[Any]:
+    async def add_suite(self, name: str) -> dict[str, Any] | list[Any]:
         return await self.request(
             "POST",
-            f"add_suite/{project_id or self.settings.project_id}",
+            f"add_suite/{self.settings.project_id}",
             {"name": name},
         )
 
-    async def add_section(
-        self, suite_id: int, name: str, project_id: int | None = None
-    ) -> dict[str, Any] | list[Any]:
+    async def add_section(self, suite_id: int, name: str) -> dict[str, Any] | list[Any]:
         return await self.request(
             "POST",
-            f"add_section/{project_id or self.settings.project_id}",
+            f"add_section/{self.settings.project_id}",
             {"suite_id": suite_id, "name": name},
         )
 
