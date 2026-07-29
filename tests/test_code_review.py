@@ -1284,6 +1284,26 @@ def _make_scope_tool(scope_response):
     return tool
 
 
+def test_generate_initial_prompt_includes_current_date():
+    pytest.importorskip("langchain")
+    from bugbug.tools.code_review.agent import CodeReviewTool
+
+    tool = CodeReviewTool.__new__(CodeReviewTool)
+    tool.is_experiment_env = False
+    tool._get_comment_examples = MagicMock(return_value="")
+    tool._get_generated_examples = MagicMock(return_value="")
+
+    review_patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1 @@\n+a\n")
+
+    with patch(
+        "bugbug.tools.code_review.agent.current_date_for_prompt",
+        return_value="2026-07-30",
+    ):
+        prompt = tool.generate_initial_prompt(review_patch, "summary")
+
+    assert "Current date: 2026-07-30" in prompt
+
+
 def test_assess_patch_scope_returns_at_most_one_comment():
     # The model returns two comments; the pass must keep only the first.
     comments = [
@@ -1303,6 +1323,20 @@ def test_assess_patch_scope_returns_at_most_one_comment():
 
     assert len(result) == 1
     assert result[0].comment == "Split this patch 0"
+
+
+def test_assess_patch_scope_prompt_includes_current_date():
+    tool = _make_scope_tool(PatchScopeResponse(comments=[]))
+
+    review_patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
+    with patch(
+        "bugbug.tools.code_review.agent.current_date_for_prompt",
+        return_value="2026-07-30",
+    ):
+        asyncio.run(tool.assess_patch_scope(review_patch, "summary"))
+
+    prompt = tool.scope_agent.ainvoke.call_args.args[0]["messages"][0].content
+    assert "Current date: 2026-07-30" in prompt
 
 
 def test_assess_patch_scope_returns_empty_when_no_split_warranted():
