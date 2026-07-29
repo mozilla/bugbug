@@ -49,7 +49,15 @@ def _git_repo(path):
     return shas
 
 
-def _investigation(head, base, complete=True, platform="linux1804-64/opt", groups=None):
+def _investigation(
+    head,
+    base,
+    complete=True,
+    platform="linux1804-64/opt",
+    groups=None,
+    group_based=True,
+    label="test-linux1804-64/opt-mochitest-browser-chrome-swr-1",
+):
     return Investigation(
         project="autoland",
         hg_revision="hgrev",
@@ -60,6 +68,8 @@ def _investigation(head, base, complete=True, platform="linux1804-64/opt", group
         else [FailingGroup("dom/base/test/mochitest.ini", ["dom/base/test/a.js"])],
         last_green_revision="greenhg",
         commit_range=CommitRange(head=head, base=base, span=2, complete=complete),
+        label=label,
+        group_based=group_based,
     )
 
 
@@ -79,6 +89,7 @@ def _run(
     results=None,
     platform="linux1804-64/opt",
     groups=None,
+    group_based=True,
 ):
     repo = tmp_path / "src"
     repo.mkdir()
@@ -93,6 +104,14 @@ def _run(
         if verdict is not None:
             if verdict.get("culprit_commit") == "HEAD":
                 verdict = {**verdict, "culprit_commit": head}
+            if verdict.get("candidate_commits"):
+                verdict = {
+                    **verdict,
+                    "candidate_commits": [
+                        {"HEAD": head, "BASE": base}.get(sha, sha)
+                        for sha in verdict["candidate_commits"]
+                    ],
+                }
             (scratch_out / "verdict.json").write_text(json.dumps(verdict))
         (scratch_out / "summary.md").write_text("the verdict")
         (scratch_out / "analysis.md").write_text("the reasoning")
@@ -114,7 +133,12 @@ def _run(
             source_repo=repo,
             fx_ctx=_fx_ctx(tmp_path),
             investigation=_investigation(
-                head, base if complete else None, complete, platform, groups
+                head,
+                base if complete else None,
+                complete,
+                platform,
+                groups,
+                group_based,
             ),
             task_logs={},
             scratch_out=scratch_out,
@@ -337,6 +361,75 @@ def test_long_failing_test_lists_are_elided(tmp_path, monkeypatch):
         groups=[FailingGroup("dom/base/test/mochitest.ini", tests)],
     )
     assert "+5 more" in calls[0]
+
+
+def test_group_less_suites_say_so_instead_of_reporting_a_lookup_failure(
+    tmp_path, monkeypatch
+):
+    # gtest and friends report no manifests at all, which is not the same thing as
+    # mozci failing to resolve them.
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": None}],
+        monkeypatch,
+        groups=[],
+        group_based=False,
+    )
+    assert "does not report test manifests" in calls[0]
+    assert "could not be resolved" not in calls[0]
+
+
+def test_prompt_names_the_task_not_just_the_platform(tmp_path, monkeypatch):
+    # The variant and chunk live in the label, so a config-specific failure is only
+    # visible to the agent if the label is.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "test-linux1804-64/opt-mochitest-browser-chrome-swr-1" in calls[0]
+
+
+def test_prompt_treats_path_filtering_as_ordering_not_exclusion(tmp_path, monkeypatch):
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "it does not clear anyone" in calls[0]
+    assert "go through the rest of the list" in calls[0]
+
+
+def test_candidate_commits_are_kept_when_no_culprit_convinces(tmp_path, monkeypatch):
+    result, _calls, head = _run(
+        tmp_path,
+        [{"culprit_commit": None, "candidate_commits": ["HEAD", "BASE"]}],
+        monkeypatch,
+    )
+    assert result.culprit_commit is None
+    # Ranked order is the model's; both are real commits in the range.
+    assert result.candidate_commits[0] == head
+    assert len(result.candidate_commits) == 2
+
+
+def test_candidate_commits_drop_hallucinations_and_the_culprit(tmp_path):
+    repo = tmp_path / "src"
+    repo.mkdir()
+    base, head = _git_repo(repo)
+    # The culprit is not repeated in the list, invented shas go, duplicates collapse.
+    assert agent._resolve_candidates(
+        repo, [head, base, base, "deadbeefdeadbeefdeadbeef", 42], head
+    ) == [base]
+
+
+def test_candidate_commits_tolerate_a_non_list(tmp_path):
+    repo = tmp_path / "src"
+    repo.mkdir()
+    _git_repo(repo)
+    assert agent._resolve_candidates(repo, "not a list", None) == []
+    assert agent._resolve_candidates(repo, None, None) == []
+
+
+def test_candidate_commits_are_capped(tmp_path):
+    repo = tmp_path / "src"
+    repo.mkdir()
+    base, head = _git_repo(repo)
+    shas = [head, base] * 10
+    resolved = agent._resolve_candidates(repo, shas, None)
+    assert len(resolved) <= agent.MAX_CANDIDATE_COMMITS
+    assert resolved == [head, base]
 
 
 def test_rerun_recommendation_survives_without_a_culprit(tmp_path, monkeypatch):

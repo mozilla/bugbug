@@ -55,11 +55,12 @@ from .prompts import (
     ENVIRONMENT_NOTE,
     FIX_TEMPLATE,
     LAST_GREEN_LINE,
+    MAX_CANDIDATE_COMMITS,
     MAX_TESTS_PER_GROUP,
     VERIFY_LOCAL,
     VERIFY_REMOTE,
 )
-from .resolve import CommitRange, FailingGroup, Investigation
+from .resolve import CommitRange, Investigation
 
 _CLASSIFICATIONS = ("regression", "intermittent")
 _RECOMMENDATIONS = ("backout", "do_not_backout", "land_fix", "rerun")
@@ -70,6 +71,9 @@ class TestRepairResult(HackbotAgentResult):
     classification: Literal["regression", "intermittent"]
     recommendation: Literal["backout", "do_not_backout", "land_fix", "rerun"]
     culprit_commit: str | None = None
+    # Ranked commits that could not be ruled out, when no single culprit convinced
+    # the agent; lets sheriffs retrigger just these instead of backfilling.
+    candidate_commits: list[str] = []
     culprit_bug: int | None = None
     confidence: float = 0.0
     last_green_revision: str | None = None
@@ -193,6 +197,25 @@ def _resolve_culprit(source_repo: Path, sha) -> str | None:
     return full
 
 
+def _resolve_candidates(source_repo: Path, value, culprit: str | None) -> list[str]:
+    """Validate the model's ranked fallback candidates, preserving their order.
+
+    Same discard rule as the culprit: a sha git cannot resolve in the shallow clone
+    is not in the range. The culprit is dropped so the list stays a strict
+    alternative to it rather than repeating it.
+    """
+    if not isinstance(value, list):
+        return []
+    resolved: list[str] = []
+    for sha in value[: MAX_CANDIDATE_COMMITS * 2]:
+        full = _resolve_culprit(source_repo, sha)
+        if full and full != culprit and full not in resolved:
+            resolved.append(full)
+        if len(resolved) == MAX_CANDIDATE_COMMITS:
+            break
+    return resolved
+
+
 def _write_mozconfig(fx_ctx: FirefoxContext, investigation: Investigation) -> None:
     """Write a mozconfig mirroring the failing CI build.
 
@@ -267,6 +290,9 @@ def _assemble_result(
         classification=classification,
         recommendation=recommendation,
         culprit_commit=culprit_commit,
+        candidate_commits=_resolve_candidates(
+            source_repo, verdict.get("candidate_commits"), culprit_commit
+        ),
         culprit_bug=_as_int(verdict.get("culprit_bug")),
         intermittent_bug=_as_int(verdict.get("intermittent_bug")),
         confidence=_as_float(verdict.get("confidence")),
@@ -286,15 +312,22 @@ def _range_expr(commit_range: CommitRange) -> str:
     return f"HEAD~{commit_range.span}..HEAD"
 
 
-def _failing_tests(groups: list[FailingGroup]) -> str:
+def _failing_tests(investigation: Investigation) -> str:
+    groups = investigation.failing_groups
     if not groups:
+        if not investigation.group_based:
+            return (
+                "- (this suite does not report test manifests; identify the failing"
+                " tests from the failure logs)"
+            )
         return "- (failing groups could not be resolved; identify them from the logs)"
     lines = []
     for group in groups:
         shown = group.tests[:MAX_TESTS_PER_GROUP]
         extra = len(group.tests) - len(shown)
         tests = ", ".join(shown) + (f", +{extra} more" if extra > 0 else "")
-        lines.append(f"- {group.group}: {tests or '(tests not resolved)'}")
+        count = f"{len(group.tests)} failed" if group.tests else "tests not resolved"
+        lines.append(f"- {group.group} ({count}): {tests or 'n/a'}")
     return "\n".join(lines)
 
 
@@ -344,12 +377,14 @@ async def run_test_repair(
         CANDIDATE_INTRO_COMPLETE if commit_range.complete else CANDIDATE_INTRO_PARTIAL
     )
     analysis_prompt = ANALYSIS_TEMPLATE.format(
-        failing_tests=_failing_tests(investigation.failing_groups),
+        failing_tests=_failing_tests(investigation),
         harness=investigation.harness,
         platform=investigation.platform or "unknown",
+        label=investigation.label or "unknown",
         failure_commit=failure_commit,
         candidate_intro=intro.format(commit_range=range_expr, span=commit_range.span),
         commit_range=range_expr,
+        max_candidates=MAX_CANDIDATE_COMMITS,
         last_green_line=last_green_line,
         failure_logs=failure_logs,
         scratch_out=scratch_out,

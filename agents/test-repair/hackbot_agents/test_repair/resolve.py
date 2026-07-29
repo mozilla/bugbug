@@ -24,6 +24,7 @@ import requests
 from mozci import data
 from mozci.errors import ParentPushNotFound
 from mozci.push import MAX_DEPTH, Push
+from mozci.task import Status, is_no_groups_suite
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,14 @@ class Investigation:
     failing_groups: list[FailingGroup]
     last_green_revision: str | None
     commit_range: CommitRange
+    # Full task label, e.g. "test-linux1804-64-qr/debug-mochitest-browser-chrome-1".
+    # Unlike ``platform`` it also carries the test variant and chunk, which is what
+    # distinguishes two runs of the same suite on the same OS and build type.
+    label: str = ""
+    # False for suites that report no test manifests (gtest, jittest, talos, ...),
+    # where ``failing_groups`` is empty by nature rather than because the lookup
+    # failed, and blame has to be anchored on the task as a whole.
+    group_based: bool = True
 
     @property
     def failure_commit(self) -> str:
@@ -183,17 +192,33 @@ def _test_status(push: Push, group: str, tests: list[str], platform: str) -> str
     return "passed" if statuses else None
 
 
-def _last_green(
-    branch: str,
-    rev: str,
-    failing: FailingGroup,
-    platform: str,
-    max_depth: int = LAST_GREEN_MAX_DEPTH,
+def _label_status(push: Push, label: str) -> str | None:
+    """'passed'/'failed'/None for a whole task label on ``push``.
+
+    The fallback for suites that report no test manifests, where there is no group
+    to key on and the task is the finest granularity available. The label already
+    pins the platform, build type and variant, and ``label_summaries`` excludes
+    taskgraph-chunked tasks -- whose label covers different tests on each push --
+    so only genuinely comparable runs are considered.
+    """
+    summary = push.label_summaries.get(label)
+    if summary is None:
+        return None
+    if summary.status == Status.PASS:
+        return "passed"
+    if summary.status == Status.FAIL:
+        return "failed"
+    # INTERMITTENT: it both passed and failed here, so it cannot anchor a green.
+    return None
+
+
+def _walk_ancestors(
+    branch: str, rev: str, status_of, max_depth: int = LAST_GREEN_MAX_DEPTH
 ) -> str | None:
-    """Most recent ancestor revision where the failing tests were green.
+    """Most recent ancestor revision that ``status_of`` reports as 'passed'.
 
     Best effort: None when no green ancestor is found within ``max_depth``, the
-    tests were already failing upstream, or mozci errors.
+    failure was already there upstream, or mozci errors.
     """
     try:
         ancestor = Push(rev, branch=branch)
@@ -202,16 +227,39 @@ def _last_green(
                 ancestor = ancestor.parent
             except ParentPushNotFound:
                 break
-            status = _test_status(ancestor, failing.group, failing.tests, platform)
+            status = status_of(ancestor)
             if status == "passed":
                 return ancestor.rev
             if status == "failed":
                 return None
     except Exception:
-        logger.exception(
-            "Could not determine last-green for %s at %s", failing.group, rev
-        )
+        logger.exception("Could not determine last-green at %s", rev)
     return None
+
+
+def _last_green(
+    branch: str,
+    rev: str,
+    failing: FailingGroup,
+    platform: str,
+    max_depth: int = LAST_GREEN_MAX_DEPTH,
+) -> str | None:
+    """Most recent ancestor revision where the failing tests were green."""
+    return _walk_ancestors(
+        branch,
+        rev,
+        lambda push: _test_status(push, failing.group, failing.tests, platform),
+        max_depth,
+    )
+
+
+def _last_green_label(
+    branch: str, rev: str, label: str, max_depth: int = LAST_GREEN_MAX_DEPTH
+) -> str | None:
+    """Most recent ancestor revision where the whole failing task was green."""
+    return _walk_ancestors(
+        branch, rev, lambda push: _label_status(push, label), max_depth
+    )
 
 
 def _count_commits(pushes: dict) -> int:
@@ -289,15 +337,26 @@ def resolve_investigation(
         raise ValueError(f"task {task_id} has no GECKO_HEAD_REV")
     logger.info("Resolved task %s: project=%s rev=%s", task_id, project, hg_revision)
 
-    groups = _failing_groups(task_id)
+    label = tags.get("label") or ""
+    group_based = not is_no_groups_suite(label)
+    groups = _failing_groups(task_id) if group_based else []
     logger.info(
-        "Failing groups: %s", ", ".join(g.group for g in groups) or "none resolved"
+        "Failing groups: %s",
+        ", ".join(g.group for g in groups)
+        or ("suite reports none" if not group_based else "none resolved"),
     )
 
     platform = tags.get("test-platform") or ""
-    last_green = (
-        _last_green(project, hg_revision, groups[0], platform) if groups else None
-    )
+    # Group-less suites have nothing finer than the task to compare across pushes.
+    # A grouped suite whose lookup failed gets no last-green rather than a
+    # label-level one: its tasks are chunked, so the same label covers different
+    # tests on each push and ``label_summaries`` deliberately omits them.
+    if groups:
+        last_green = _last_green(project, hg_revision, groups[0], platform)
+    elif not group_based and label:
+        last_green = _last_green_label(project, hg_revision, label)
+    else:
+        last_green = None
     logger.info("Last-green revision: %s", last_green or "not found")
 
     commit_range = _resolve_range(project, hg_revision, last_green, max_commits)
@@ -319,4 +378,6 @@ def resolve_investigation(
         failing_groups=groups,
         last_green_revision=last_green,
         commit_range=commit_range,
+        label=label,
+        group_based=group_based,
     )

@@ -2,6 +2,7 @@ import pytest
 from hackbot_agents.test_repair import resolve
 from hackbot_agents.test_repair.resolve import FailingGroup
 from mozci.errors import ParentPushNotFound
+from mozci.task import Status
 
 GROUP = "dom/base/test/mochitest.ini"
 TESTS = ["dom/base/test/test_a.js"]
@@ -40,10 +41,16 @@ class FakeSummary:
         self.tasks = list(tasks)
 
 
+class FakeLabelSummary:
+    def __init__(self, status):
+        self.status = status
+
+
 class FakePush:
-    def __init__(self, rev, summaries=None, parent=None):
+    def __init__(self, rev, summaries=None, parent=None, labels=None):
         self.rev = rev
         self.group_summaries = summaries or {}
+        self.label_summaries = labels or {}
         self._parent = parent
 
     @property
@@ -125,6 +132,37 @@ def test_test_status_ignores_failures_of_other_tests():
 
 def test_test_status_none_when_group_absent():
     assert resolve._test_status(FakePush("rev"), GROUP, TESTS, PLATFORM) is None
+
+
+def test_label_status_maps_the_summary_status():
+    label = "test-macosx1500-aarch64/opt-gtest-1proc"
+    passed = FakePush("rev", labels={label: FakeLabelSummary(Status.PASS)})
+    failed = FakePush("rev", labels={label: FakeLabelSummary(Status.FAIL)})
+    flaky = FakePush("rev", labels={label: FakeLabelSummary(Status.INTERMITTENT)})
+    assert resolve._label_status(passed, label) == "passed"
+    assert resolve._label_status(failed, label) == "failed"
+    # Both passed and failed here, so it cannot anchor a green.
+    assert resolve._label_status(flaky, label) is None
+    assert resolve._label_status(FakePush("rev"), label) is None
+
+
+def test_last_green_label_walks_to_a_green_task(monkeypatch):
+    # gtest reports no manifests, so the whole task is the finest granularity.
+    label = "test-macosx1500-aarch64/opt-gtest-1proc"
+    green = FakePush("greenrev", labels={label: FakeLabelSummary(Status.PASS)})
+    # Did not run here at all: non-decisive, so the walk must continue.
+    absent = FakePush("absentrev", labels={}, parent=green)
+    head = FakePush("headrev", labels={}, parent=absent)
+    monkeypatch.setattr(resolve, "Push", lambda rev, branch=None: head)
+    assert resolve._last_green_label("autoland", "headrev", label) == "greenrev"
+
+
+def test_last_green_label_none_when_already_failing_upstream(monkeypatch):
+    label = "test-macosx1500-aarch64/opt-gtest-1proc"
+    parent = FakePush("parentrev", labels={label: FakeLabelSummary(Status.FAIL)})
+    head = FakePush("headrev", labels={}, parent=parent)
+    monkeypatch.setattr(resolve, "Push", lambda rev, branch=None: head)
+    assert resolve._last_green_label("autoland", "headrev", label) is None
 
 
 def test_last_green_fails_soft_on_error(monkeypatch):
@@ -237,6 +275,72 @@ def test_resolve_investigation_assembles_context(monkeypatch):
     assert inv.commit_range.base == "gitBase"
     assert inv.commit_range.complete is True
     assert inv.commit_range.span == 2
+
+
+def test_resolve_investigation_anchors_group_less_suites_on_the_task(monkeypatch):
+    label = "test-macosx1500-aarch64/opt-gtest-1proc"
+    task = {
+        "tags": {
+            "project": "autoland",
+            "test-suite": "gtest",
+            "test-platform": "macosx1500-aarch64/opt",
+            "label": label,
+        },
+        "payload": {"env": {"GECKO_HEAD_REV": "hghead"}},
+    }
+    monkeypatch.setattr(resolve, "_get_json", lambda url: task)
+
+    def no_group_lookup(task_id):
+        raise AssertionError("group lookup must be skipped for a group-less suite")
+
+    monkeypatch.setattr(resolve, "_failing_groups", no_group_lookup)
+    monkeypatch.setattr(
+        resolve, "_last_green_label", lambda branch, rev, lbl: f"green-{lbl}"
+    )
+    monkeypatch.setattr(
+        resolve,
+        "_resolve_range",
+        lambda *a: resolve.CommitRange("gitHead", "gitBase", 2, True),
+    )
+
+    inv = resolve.resolve_investigation("TASK")
+    assert inv.group_based is False
+    assert inv.failing_groups == []
+    assert inv.label == label
+    assert inv.last_green_revision == f"green-{label}"
+
+
+def test_resolve_investigation_keeps_group_level_last_green_for_grouped_suites(
+    monkeypatch,
+):
+    task = {
+        "tags": {
+            "project": "autoland",
+            "test-suite": "mochitest-browser-chrome",
+            "test-platform": PLATFORM,
+            "label": f"test-{PLATFORM}-mochitest-browser-chrome-1",
+        },
+        "payload": {"env": {"GECKO_HEAD_REV": "hghead"}},
+    }
+    monkeypatch.setattr(resolve, "_get_json", lambda url: task)
+    monkeypatch.setattr(
+        resolve, "_failing_groups", lambda tid: [FailingGroup(GROUP, TESTS)]
+    )
+    monkeypatch.setattr(resolve, "_last_green", lambda *a: "greenrev")
+
+    def no_label_lookup(*a):
+        raise AssertionError("label-level last-green is only for group-less suites")
+
+    monkeypatch.setattr(resolve, "_last_green_label", no_label_lookup)
+    monkeypatch.setattr(
+        resolve,
+        "_resolve_range",
+        lambda *a: resolve.CommitRange("gitHead", "gitBase", 2, True),
+    )
+
+    inv = resolve.resolve_investigation("TASK")
+    assert inv.group_based is True
+    assert inv.last_green_revision == "greenrev"
 
 
 def test_resolve_investigation_requires_a_git_commit(monkeypatch):

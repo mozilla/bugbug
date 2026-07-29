@@ -5,9 +5,13 @@
 
 """Prompt templates for the test-repair agent."""
 
-# Failing tests listed per group before the list is elided, keeping the prompt
-# bounded when a whole manifest fails.
-MAX_TESTS_PER_GROUP = 10
+# Failing tests listed per group before the list is elided. High enough to list
+# them all in practice; only a whole-manifest failure hits it, and there the count
+# printed alongside carries the signal the names would.
+MAX_TESTS_PER_GROUP = 100
+
+# Candidate shas kept from the model's ranked list when it names no single culprit.
+MAX_CANDIDATE_COMMITS = 5
 
 ANALYSIS_TEMPLATE = """\
 You are investigating a failing Firefox CI test to find the commit that broke it.
@@ -18,6 +22,9 @@ Failing test groups (manifests) and the tests that failed in each:
 {failing_tests}
 Test harness: {harness}
 Test platform: {platform}
+Test task: {label}
+The task label pins the build type, test variant and chunk, not just the OS -- a
+failure can be specific to this exact configuration rather than to the platform.
 
 The source tree is checked out at the failure commit {failure_commit}.
 {candidate_intro}
@@ -27,28 +34,41 @@ Failure logs (start with the sanitized failures file; fall back to the full log)
 
 Do the following:
 1. Read the sanitized failure lines to understand exactly how the test failed.
-2. Enumerate the candidates with `git log --oneline {commit_range}`. Narrow them
-   before reading diffs -- `git log --oneline {commit_range} -- <path>` on the
-   failing test's directory and on the source it exercises is usually enough to
-   get to a handful. Then `git show <commit>` those to identify the single commit
-   that most plausibly introduced the failure. You may search Bugzilla for a
-   related bug.
+2. Enumerate every candidate with `git log --oneline {commit_range}`. That full
+   list is the set of possibilities; path filtering only decides what you read
+   first, it does not clear anyone. `git log --oneline {commit_range} -- <path>`
+   on the failing test's directory and on the source it exercises gets you to the
+   likeliest few, so `git show` those first -- but plenty of real culprits touch
+   neither: build config and mozconfig changes, shared headers, dependency and
+   toolchain bumps, manifest or harness changes, and changes that only shift
+   timing or memory elsewhere. If none of the path-matching commits explains the
+   failure, go through the rest of the list before concluding that nothing does.
+   You may search Bugzilla for a related bug.
 3. Write these files to {scratch_out}:
    - summary.md: a short (2-4 sentence) verdict.
    - analysis.md: the detailed reasoning, with evidence from the logs and diffs.
    - verdict.json: an object with keys "classification" ("regression" or
      "intermittent"), "culprit_commit" (a full sha copied verbatim from the
-     candidate list above, or null if none is convincing), "culprit_bug" (integer
-     or null), "intermittent_bug" (integer or null; the bug already tracking this
-     intermittent, if you found one), "recommendation" ("backout", "land_fix",
-     "do_not_backout" or "rerun") and "confidence" (0.0-1.0).
+     candidate list above, or null if none is convincing), "candidate_commits"
+     (see below), "culprit_bug" (integer or null), "intermittent_bug" (integer or
+     null; the bug already tracking this intermittent, if you found one),
+     "recommendation" ("backout", "land_fix", "do_not_backout" or "rerun") and
+     "confidence" (0.0-1.0).
+
+Set "candidate_commits" whenever you are not confident in a single culprit: up to
+{max_candidates} full shas from the range, most to least likely, so sheriffs can
+retrigger just those instead of backfilling the whole range. Include the commits
+you could not rule out, not only the one you like best; leave it as an empty list
+when "culprit_commit" is certain, and still fill it in when "culprit_commit" is
+null but some commits are more suspicious than others.
 
 Use "rerun" when you cannot tell whether the failure is real -- infrastructure
 noise, a timeout under load, or a failure no candidate plausibly explains -- and
 a retrigger would settle it. Prefer it over blaming a commit you are unsure of.
 
-Never guess a sha: one that is not a real commit in the range above is discarded,
-and a wrong blame is worse than no blame. Use null when nothing convinces you.
+Never guess a sha: any that is not a real commit in the range above is discarded,
+in "culprit_commit" and in "candidate_commits" alike, and a wrong blame is worse
+than no blame. Use null when nothing convinces you.
 
 Do not edit any source files in this step.
 """
@@ -62,8 +82,9 @@ the culprit is one of them."""
 CANDIDATE_INTRO_PARTIAL = """\
 `{commit_range}` is the {span} most recent commits. This range is NOT known to
 reach back to a run where the test was green, so the culprit may predate it -- if
-nothing in it plausibly caused the failure, say so in your analysis and set
-"culprit_commit" to null."""
+nothing in it plausibly caused the failure, say so in your analysis, set
+"culprit_commit" to null and leave "candidate_commits" empty rather than naming
+the least implausible commit in the range."""
 
 # Explicitly an hg revision: everything else in the prompt is a git hash, and an
 # unlabelled hg node just makes the agent try `git` commands that exit 128.
