@@ -179,6 +179,36 @@ def _await_new_failures(project: str, rev: str, status_fn, units, describe: str)
         first_pass = False
 
 
+def is_stale_push(project: str, rev: str, max_age_seconds: float) -> bool:
+    """Whether the push landed more than ``max_age_seconds`` ago.
+
+    A task can fail long after its push -- a backfill scheduled weeks later, a task
+    that sat queued, a listener restart replaying an old message -- and repairing a
+    push that has long since been superseded helps nobody. Fails open (returns False)
+    when the push date cannot be read, so a real regression is never silently dropped.
+    """
+    try:
+        # Push.date is in seconds since the epoch, despite what mozci's docstring
+        # says: it is hgmo's `pushdate[0]`, which is a Unix timestamp.
+        age = time.time() - Push(rev, branch=project).date
+    except Exception:
+        logger.exception(
+            "Could not read the push date for %s@%s; running agent", project, rev
+        )
+        return False
+
+    if age > max_age_seconds:
+        logger.info(
+            "Push %s@%s landed %.1fh ago (limit %.1fh); skipping",
+            project,
+            rev,
+            age / 3600,
+            max_age_seconds / 3600,
+        )
+        return True
+    return False
+
+
 def is_new_build_failure(project: str, rev: str, label: str) -> bool:
     """True if this push introduced the build failure, False if it inherited it."""
     return label in _await_new_failures(

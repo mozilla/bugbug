@@ -1,4 +1,5 @@
 from hackbot_runtime import HackbotContext, run_async
+from hackbot_runtime.actions.testrail import record_test_plan
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestPlanGeneratorResult, run_test_plan_generator
@@ -21,7 +22,7 @@ async def main(ctx: HackbotContext) -> TestPlanGeneratorResult:
 
     firefox_path = str(install_firefox_nightly())
 
-    return await run_test_plan_generator(
+    result = await run_test_plan_generator(
         feature_name=inputs.feature_name,
         feature_description=inputs.feature_description,
         test_scope=inputs.test_scope,
@@ -32,6 +33,8 @@ async def main(ctx: HackbotContext) -> TestPlanGeneratorResult:
         log=ctx.log_path,
         verbose=True,
     )
+    record_test_plan(ctx.actions, result.result.model_dump(mode="json"))
+    return result
 
 
 if __name__ == "__main__":

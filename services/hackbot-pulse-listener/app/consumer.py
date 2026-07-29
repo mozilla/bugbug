@@ -78,7 +78,18 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
     task_name = tags.get("label") or task_id
     developer_email = tags.get("createdForUser")
 
-    hg_revision = taskcluster.get_hg_revision(task_id)
+    task = taskcluster.get_task(task_id)
+
+    if taskcluster.is_action_scheduled(task):
+        logger.info(
+            "Task %s (%s) was scheduled by an action task, not by the push "
+            "(backfill or retrigger); skipping",
+            task_id,
+            task_label,
+        )
+        return None
+
+    hg_revision = taskcluster.get_hg_revision(task)
     if not hg_revision:
         logger.warning("No GECKO_HEAD_REV for task %s; skipping", task_id)
         return None
@@ -87,6 +98,11 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
         already_seen = hg_revision in _seen
     if already_seen:
         logger.info("Revision %s already triggered a run; skipping", hg_revision)
+        return None
+
+    if regression.is_stale_push(
+        project, hg_revision, settings.max_push_age_hours * 3600
+    ):
         return None
 
     if not regression.is_new_build_failure(project, hg_revision, task_label):
@@ -161,9 +177,25 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     label = tags.get("label") or task_id
     developer_email = tags.get("createdForUser")
 
-    hg_revision = taskcluster.get_hg_revision(task_id)
+    task = taskcluster.get_task(task_id)
+
+    if taskcluster.is_action_scheduled(task):
+        logger.info(
+            "Task %s (%s) was scheduled by an action task, not by the push "
+            "(backfill or retrigger); skipping",
+            task_id,
+            label,
+        )
+        return None
+
+    hg_revision = taskcluster.get_hg_revision(task)
     if not hg_revision:
         logger.warning("No GECKO_HEAD_REV for test task %s; skipping", task_id)
+        return None
+
+    if regression.is_stale_push(
+        project, hg_revision, settings.max_push_age_hours * 3600
+    ):
         return None
 
     # Cheapest gate first: one small request, and it rules out intermittents and

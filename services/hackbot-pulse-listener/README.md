@@ -11,25 +11,35 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
 ## How it works
 
 1. **Subscribe.** Consume `task-failed` messages from `pulse.mozilla.org`.
-2. **Filter** to a watched `project` (`WATCHED_REPOS`, default `autoland`), then by task
-   kind: build tasks (compile/link errors) take the build-repair path; test tasks take the
-   test-repair path. Fetch the task definition for `GECKO_HEAD_REV` (not in the message),
-   and for a test task the failing groups (mozci).
-3. **Dedupe** with in-memory TTL caches: build-repair once per revision; test-repair once per
-   `(push, test group)`, so a manifest failing across chunks is investigated once. Groups are
-   claimed before the checks below, so sibling chunks never repeat them.
-4. **Judge** whether the failure is worth a run. Both paths fail open — a mozci or
-   Taskcluster error runs the agent rather than dropping a possible regression.
-   - _Build:_ keep only failures this push introduced (not inherited from an ancestor).
-   - _Test:_ first drop whatever Treeherder has already judged not to be a new
-     regression (intermittent, infra, expected-fail, fixed-by-commit); Treeherder
-     ingests a minute or so behind us, so the gate waits for the job to appear. Then
-     keep only groups that are new for this task's own configuration. One run per
-     task, carrying only the task id.
-5. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
+2. **Route** to a watched `project` (`WATCHED_REPOS`, default `autoland`), then by task
+   kind: build tasks (`tags.label` contains `build` and not `test`, so a failure is a
+   compilation/link error) take the build-repair path; test tasks take the test-repair
+   path. Fetch the task definition for `GECKO_HEAD_REV` (not in the message).
+3. **Discard what is not this push's failure**, on both paths:
+   - Tasks scheduled by an **action task** rather than by the push: `extra.parent` points
+     at the decision task (= the task group) for everything the push scheduled, and at the
+     action-callback task for a backfill or retrigger.
+   - Pushes that landed more than `MAX_PUSH_AGE_HOURS` ago (default 24). A failure can
+     surface long after its push, and by then the push has been superseded.
+4. **Dedupe** with in-memory TTL caches, both keyed by revision: build-repair once per
+   revision; test-repair once per `(revision, test group)`, so a manifest failing across
+   chunks is investigated once. Test groups are claimed before the checks below, so
+   sibling chunks never repeat them.
+5. **Judge** whether the failure is worth a run. Every check fails open — an upstream
+   error runs the agent rather than dropping a possible regression.
+   - _Build:_ keep only failures this push introduced, waiting for an unsettled ancestor
+     build to finish first.
+   - _Test:_ first drop whatever Treeherder has already judged not to be a new regression
+     (intermittent, infra, expected-fail, fixed-by-commit); Treeherder ingests a minute or
+     so behind us, so the gate waits for the job to appear. Then keep only groups that are
+     new for this task's own configuration (platform and build option), and ask Treeherder
+     once more before triggering, since a verdict often lands while that check runs. One
+     run per task, carrying only the task id.
+6. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
    terminal, then email a hackbot UI link, the analysis summary, a Treeherder link, and the
-   commit the agent blamed. Build-repair mails the blamed commit's author; test-repair mails
-   the notification address (`TEST_REPAIR_NOTIFICATION_EMAIL`).
+   commit the agent blamed. Build-repair looks the blamed commit up in the firefox GitHub
+   mirror and mails its author; test-repair mails the notification address
+   (`TEST_REPAIR_NOTIFICATION_EMAIL`).
 
 The dedupe caches and pending-run tracking are in-memory (reset on restart).
 

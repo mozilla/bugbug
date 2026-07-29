@@ -11,6 +11,7 @@ dependencies = [
     "async-lru>=2.0.0",
     "agent-tools",
     "phabricator-client",
+    "testrail-client",
     "weave>=0.53.1"
 ]
 
@@ -24,6 +25,7 @@ phabricator = ["MozPhab==2.15.3"]
 [tool.uv.sources]
 agent-tools = { workspace = true }
 phabricator-client = { workspace = true }
+testrail-client = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

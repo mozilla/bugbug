@@ -7,9 +7,15 @@ agent-tools, so one mechanism backs both read tools and write-actions. The
 claude-sdk adapter is ``hackbot_runtime.actions.claude_sdk.actions_server_for``.
 """
 
-from hackbot_runtime.actions import bugzilla, phabricator
+from hackbot_runtime.actions import bugzilla, phabricator, testrail
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
 ACTIONS_SERVER_NAME = "actions"
 
-__all__ = ["ACTIONS_SERVER_NAME", "ActionsRecorder", "bugzilla", "phabricator"]
+__all__ = [
+    "ACTIONS_SERVER_NAME",
+    "ActionsRecorder",
+    "bugzilla",
+    "phabricator",
+    "testrail",
+]

@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { AGENT_NAMES } from "@/lib/agents";
+import { useSession } from "@/lib/auth-client";
 import { isTerminal, type RunDoc, type RunStatus } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
 
@@ -12,7 +13,7 @@ import { StatusBadge } from "./StatusBadge";
 // stays live without a full reload.
 const POLL_MS = 5000;
 const PAGE_SIZE = 50;
-const COLS = 5;
+const COLS = 6;
 
 const STATUS_OPTIONS: RunStatus[] = [
   "pending",
@@ -28,6 +29,7 @@ interface RunRow {
   agent: string;
   status: RunStatus;
   label: string;
+  requestedBy: string | null;
   created_at: string;
   error: string | null;
 }
@@ -52,6 +54,7 @@ function toRow(d: RunDoc): RunRow {
     agent: d.agent,
     status: d.status,
     label: labelFromInputs(d.inputs),
+    requestedBy: d.requested_by,
     created_at: d.created_at,
     error: d.error,
   };
@@ -61,9 +64,18 @@ function hasErrorDetail(r: RunRow): boolean {
   return (r.status === "failed" || r.status === "timed_out") && !!r.error;
 }
 
+// Compact requester cell: the email's local part (full email on hover). Runs
+// with no requester come from automation (e.g. Phabricator webhooks).
+function RequesterCell({ requestedBy }: { requestedBy: string | null }) {
+  if (!requestedBy) return <span className="muted">automation</span>;
+  const localPart = requestedBy.split("@")[0];
+  return <span title={requestedBy}>{localPart}</span>;
+}
+
 async function fetchPage(params: {
   agent?: string;
   status?: string;
+  requestedBy?: string;
   offset: number;
 }): Promise<RunRow[] | null> {
   const qs = new URLSearchParams({
@@ -72,6 +84,7 @@ async function fetchPage(params: {
   });
   if (params.agent) qs.set("agent", params.agent);
   if (params.status) qs.set("status", params.status);
+  if (params.requestedBy) qs.set("requested_by", params.requestedBy);
   const res = await fetch(`/api/runs?${qs.toString()}`);
   if (!res.ok) return null;
   const docs = (await res.json()) as RunDoc[];
@@ -82,22 +95,34 @@ export function RecentRuns() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { data: session, isPending: sessionPending } = useSession();
+  const myEmail = session?.user?.email ?? null;
+
   const agentFilter = searchParams.get("agent") ?? "";
   const statusFilter = searchParams.get("status") ?? "";
+  // Default to everyone's runs; `?scope=mine` narrows to the signed-in user.
+  const showMine = searchParams.get("scope") === "mine";
+  const requesterFilter = showMine ? myEmail ?? undefined : undefined;
+  // In "my runs" mode we need the signed-in email before we can filter, so hold
+  // off fetching until the session resolves. Once resolved without an email
+  // (shouldn't happen for an authed user), fall through to an unfiltered list.
+  const sessionReady = !showMine || myEmail !== null || !sessionPending;
 
   const [runs, setRuns] = useState<RunRow[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  // (Re)load the first page whenever the filters change.
+  // (Re)load the first page whenever the filters (or resolved identity) change.
   useEffect(() => {
+    if (!sessionReady) return;
     let cancelled = false;
     setRuns(null);
     setFailed(false);
     fetchPage({
       agent: agentFilter || undefined,
       status: statusFilter || undefined,
+      requestedBy: requesterFilter,
       offset: 0,
     }).then((page) => {
       if (cancelled) return;
@@ -113,7 +138,7 @@ export function RecentRuns() {
     return () => {
       cancelled = true;
     };
-  }, [agentFilter, statusFilter]);
+  }, [agentFilter, statusFilter, requesterFilter, sessionReady]);
 
   // Live-status polling for the loaded, non-terminal runs — updated in place so
   // pagination/scroll position is preserved.
@@ -149,10 +174,14 @@ export function RecentRuns() {
   }, [runs]);
 
   const setFilter = useCallback(
-    (key: "agent" | "status", value: string) => {
+    (key: "agent" | "status" | "scope", value: string) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (value) params.set(key, value);
-      else params.delete(key);
+      // "all" is the default scope, so drop the param rather than storing it.
+      if (value && !(key === "scope" && value === "all")) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
       const qs = params.toString();
       router.push(qs ? `${pathname}?${qs}` : pathname);
     },
@@ -165,9 +194,11 @@ export function RecentRuns() {
     const page = await fetchPage({
       agent: agentFilter || undefined,
       status: statusFilter || undefined,
+      requestedBy: requesterFilter,
       offset: runs.length,
     });
-    if (page) {
+    // `null` means the request failed; an empty page is a valid last page.
+    if (page !== null) {
       setRuns((prev) => {
         const base = prev ?? [];
         const seen = new Set(base.map((r) => r.run_id));
@@ -176,15 +207,23 @@ export function RecentRuns() {
       setHasMore(page.length === PAGE_SIZE);
     }
     setLoadingMore(false);
-  }, [runs, loadingMore, agentFilter, statusFilter]);
+  }, [runs, loadingMore, agentFilter, statusFilter, requesterFilter]);
 
-  const hasFilters = Boolean(agentFilter || statusFilter);
+  const hasFilters = Boolean(agentFilter || statusFilter || showMine);
 
   return (
     <>
       <div className="panel-head">
         <h2>Recent runs</h2>
         <div className="runs-filters">
+          <select
+            aria-label="Filter by requester"
+            value={showMine ? "mine" : "all"}
+            onChange={(e) => setFilter("scope", e.target.value)}
+          >
+            <option value="all">All runs</option>
+            <option value="mine">My runs</option>
+          </select>
           <select
             aria-label="Filter by agent"
             value={agentFilter}
@@ -226,9 +265,11 @@ export function RecentRuns() {
         <p className="muted">Could not load runs. Try again shortly.</p>
       ) : runs.length === 0 ? (
         <p className="muted">
-          {hasFilters
+          {agentFilter || statusFilter
             ? "No runs match these filters."
-            : "No runs yet. Use the form above to trigger an agent."}
+            : showMine
+              ? "You haven't triggered any runs yet. Use the form above, or switch to “All runs” to see everyone's."
+              : "No runs yet. Use the form above to trigger an agent."}
         </p>
       ) : (
         <>
@@ -239,6 +280,7 @@ export function RecentRuns() {
                   <th>Run</th>
                   <th>Agent</th>
                   <th>Input</th>
+                  <th>Requested by</th>
                   <th>Status</th>
                   <th>Started</th>
                 </tr>
@@ -256,6 +298,9 @@ export function RecentRuns() {
                         </td>
                         <td>{r.agent}</td>
                         <td>{r.label}</td>
+                        <td>
+                          <RequesterCell requestedBy={r.requestedBy} />
+                        </td>
                         <td>
                           <StatusBadge status={r.status} />
                         </td>

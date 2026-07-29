@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
 from app.routers import runs as runs_router
 from app.schemas import RunStatus
 from sqlalchemy.dialects import postgresql
@@ -40,6 +41,7 @@ def _fake_run(**overrides):
         agent="frontend-triage",
         status="succeeded",
         inputs={"bug_id": 123},
+        requested_by=None,
         created_at=datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc),
         updated_at=datetime(2026, 7, 21, 12, 5, tzinfo=timezone.utc),
         execution_name=None,
@@ -59,7 +61,7 @@ def _sql(stmt) -> str:
 async def test_list_runs_default_orders_and_pages():
     db = _CapturingDB([_fake_run()])
     out = await runs_router.list_runs(
-        limit=50, offset=0, agent=None, status_filter=None, db=db
+        limit=50, offset=0, agent=None, status_filter=None, requested_by=None, db=db
     )
     sql = _sql(db.stmt)
     assert "FROM runs" in sql
@@ -74,7 +76,12 @@ async def test_list_runs_default_orders_and_pages():
 async def test_list_runs_filters_by_agent_and_status():
     db = _CapturingDB([])
     await runs_router.list_runs(
-        limit=10, offset=20, agent="bug-fix", status_filter=RunStatus.failed, db=db
+        limit=10,
+        offset=20,
+        agent="bug-fix",
+        status_filter=RunStatus.failed,
+        requested_by=None,
+        db=db,
     )
     sql = _sql(db.stmt)
     assert "runs.agent =" in sql
@@ -85,8 +92,60 @@ async def test_list_runs_filters_by_agent_and_status():
 async def test_list_runs_filters_by_agent_only():
     db = _CapturingDB([])
     await runs_router.list_runs(
-        limit=50, offset=0, agent="frontend-triage", status_filter=None, db=db
+        limit=50,
+        offset=0,
+        agent="frontend-triage",
+        status_filter=None,
+        requested_by=None,
+        db=db,
     )
     sql = _sql(db.stmt)
     assert "runs.agent =" in sql
     assert "runs.status =" not in sql
+
+
+async def test_list_runs_filters_by_requested_by():
+    db = _CapturingDB([])
+    await runs_router.list_runs(
+        limit=50,
+        offset=0,
+        agent=None,
+        status_filter=None,
+        requested_by="someone@mozilla.com",
+        db=db,
+    )
+    sql = _sql(db.stmt)
+    assert "runs.requested_by =" in sql
+    params = db.stmt.compile(dialect=postgresql.dialect()).params
+    assert "someone@mozilla.com" in params.values()
+
+
+async def test_list_runs_without_requested_by_is_unfiltered():
+    db = _CapturingDB([])
+    await runs_router.list_runs(
+        limit=50, offset=0, agent=None, status_filter=None, requested_by=None, db=db
+    )
+    # "runs.requested_by" also appears in the SELECT list, so assert on the clause.
+    assert "WHERE" not in _sql(db.stmt)
+
+
+# The `requested_by` query param is normalized by its annotation (see `UserEmail`
+# in app/routers/runs.py), which only runs inside FastAPI's request handling --
+# hence the TestClient here rather than a direct handler call.
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [("Someone@Mozilla.com", "someone@mozilla.com"), ("  a@b.c ", "a@b.c")],
+)
+def test_list_runs_normalizes_requested_by_query_param(client, db, raw, expected):
+    assert client.get("/runs", params={"requested_by": raw}).status_code == 200
+    params = db.stmt.compile(dialect=postgresql.dialect()).params
+    assert expected in params.values()
+
+
+@pytest.mark.parametrize("raw", ["", "   "])
+def test_list_runs_ignores_blank_requested_by(client, db, raw):
+    # A blank param means "no filter", not "runs with an empty requester".
+    assert client.get("/runs", params={"requested_by": raw}).status_code == 200
+    assert "WHERE" not in _sql(db.stmt)

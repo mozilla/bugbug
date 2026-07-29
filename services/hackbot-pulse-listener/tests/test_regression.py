@@ -193,3 +193,39 @@ def test_pending_notice_is_logged_once_not_every_poll(caplog):
 
     notices = [r for r in caplog.records if "not settled" in r.message]
     assert [r.levelname for r in notices] == ["INFO", "DEBUG"]
+
+
+DAY = 24 * 60 * 60
+
+
+class DatedPush:
+    def __init__(self, date):
+        self.date = date
+
+
+def _stale(push_date, now, max_age_seconds=DAY):
+    with (
+        patch.object(regression, "Push", return_value=DatedPush(push_date)),
+        patch.object(regression.time, "time", return_value=now),
+    ):
+        return regression.is_stale_push("autoland", "rev", max_age_seconds)
+
+
+def test_push_from_minutes_ago_is_not_stale():
+    assert _stale(push_date=1_000_000, now=1_000_000 + 30 * 60) is False
+
+
+def test_push_from_seventeen_days_ago_is_stale():
+    # Bug 6395: a backfill made a 17-day-old push look like a fresh failure.
+    assert _stale(push_date=1_000_000, now=1_000_000 + 17 * DAY) is True
+
+
+def test_push_age_limit_is_inclusive_of_the_limit():
+    assert _stale(push_date=0, now=DAY) is False
+    assert _stale(push_date=0, now=DAY + 1) is True
+
+
+def test_unreadable_push_date_is_not_stale():
+    # Fails open so a network blip never drops a real regression.
+    with patch.object(regression, "Push", side_effect=RuntimeError("boom")):
+        assert regression.is_stale_push("autoland", "rev", DAY) is False
