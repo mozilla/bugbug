@@ -381,6 +381,7 @@ async def run_test_repair(
         harness=investigation.harness,
         platform=investigation.platform or "unknown",
         label=investigation.label or "unknown",
+        source_repo=source_repo,
         failure_commit=failure_commit,
         candidate_intro=intro.format(commit_range=range_expr, span=commit_range.span),
         commit_range=range_expr,
@@ -429,6 +430,7 @@ async def run_test_repair(
             fix_prompt = FIX_TEMPLATE.format(
                 culprit_commit=culprit_commit,
                 verify_step=verify_step,
+                source_repo=source_repo,
                 scratch_out=scratch_out,
             )
             fix_opts = _build_options(

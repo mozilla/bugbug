@@ -26,7 +26,10 @@ Test task: {label}
 The task label pins the build type, test variant and chunk, not just the OS -- a
 failure can be specific to this exact configuration rather than to the platform.
 
-The source tree is checked out at the failure commit {failure_commit}.
+The source tree is at {source_repo} (your working directory), checked out at the
+failure commit {failure_commit}. The log and scratch paths below are outside
+it -- `cd {source_repo}` to return. Search it with `git grep`, never `grep -r`:
+the tree is enormous and a recursive walk hits the Bash timeout.
 {candidate_intro}
 {last_green_line}
 Failure logs (start with the sanitized failures file; fall back to the full log):
@@ -96,6 +99,10 @@ LAST_GREEN_LINE = (
 FIX_TEMPLATE = """\
 You determined that commit {culprit_commit} regressed the failing test(s).
 Propose a minimal source patch that fixes the failure.
+
+The source tree is at {source_repo} (your working directory); the scratch paths
+below are outside it -- `cd {source_repo}` to return. Search it with `git grep`,
+never `grep -r`: the tree is enormous and a recursive walk hits the Bash timeout.
 
 1. Make the smallest change that addresses the root cause you identified in
    {scratch_out}/analysis.md.

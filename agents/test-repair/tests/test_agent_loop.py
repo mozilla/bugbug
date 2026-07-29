@@ -340,6 +340,32 @@ def test_range_expr_prefers_the_last_green_base():
     assert agent._range_expr(CommitRange("h" * 40, None, 5, False)) == "HEAD~5..HEAD"
 
 
+def test_both_stages_name_the_checkout_path(tmp_path, monkeypatch):
+    # Only the scratch dir used to be named, so the agent cd'd there and then had
+    # to hunt the filesystem for the tree -- in both stages.
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
+        monkeypatch,
+    )
+    repo = str(tmp_path / "src")
+    assert len(calls) == 2
+    for prompt in calls:
+        assert repo in prompt
+
+
+def test_both_stages_steer_tree_searches_to_git_grep(tmp_path, monkeypatch):
+    # An unbounded `grep -r` over the Firefox tree burns the whole Bash timeout.
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
+        monkeypatch,
+    )
+    assert len(calls) == 2
+    for prompt in calls:
+        assert "`git grep`" in prompt
+
+
 def test_all_failing_tests_are_listed(tmp_path, monkeypatch):
     tests = [f"dom/base/test/test_{i}.js" for i in range(3)]
     _result, calls, _head = _run(
