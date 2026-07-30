@@ -127,24 +127,23 @@ async def _diff_commits(diff_id: Any) -> list[dict]:
     return commits if isinstance(commits, list) else []
 
 
-def _preserve_local_commit_authors(
-    local_commits: dict, previous_commits: list[dict]
-) -> None:
-    """Copy the previous diff's commit author identity onto new commit metadata."""
+def _local_commit_author_fields(previous_commits: list[dict]) -> dict[str, str]:
+    """Return the previous diff's commit author identity."""
     if not previous_commits:
-        return
+        return {}
 
     previous_author = previous_commits[-1].get("author") or {}
-    author_fields = {}
-    if previous_author.get("name"):
-        author_fields["author"] = previous_author["name"]
-    if previous_author.get("email"):
-        author_fields["authorEmail"] = previous_author["email"]
-    if not author_fields:
-        return
+    if not previous_author.get("name") or not previous_author.get("email"):
+        log.warning(
+            "Could not preserve local commit author: previous diff author metadata "
+            "is incomplete"
+        )
+        return {}
 
-    for commit_info in local_commits.values():
-        commit_info.update(author_fields)
+    return {
+        "author": previous_author["name"],
+        "authorEmail": previous_author["email"],
+    }
 
 
 def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) -> str:
@@ -309,17 +308,11 @@ class UpdatePatchHandler:
         try:
             fields = await _revision_fields(revision_id)
             previous_diff_id = fields.get("diffID")
-            try:
-                _preserve_local_commit_authors(
-                    submission["local_commits"],
-                    await _diff_commits(previous_diff_id),
-                )
-            except Exception:
-                log.warning(
-                    "Could not preserve local commit author from previous diff %s",
-                    previous_diff_id,
-                    exc_info=True,
-                )
+            author_fields = _local_commit_author_fields(
+                await _diff_commits(previous_diff_id)
+            )
+            for commit_info in submission["local_commits"].values():
+                commit_info.update(author_fields)
 
             diff_result = await _conduit_request(
                 "differential.creatediff",
