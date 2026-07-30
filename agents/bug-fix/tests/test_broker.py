@@ -1,22 +1,26 @@
-"""Tests for the broker's Phabricator patch route."""
+"""Tests for the broker's Phabricator patch route and MCP mounts."""
 
 from unittest.mock import AsyncMock
 
+import pytest
 from hackbot_agents.bug_fix import broker
 from phabricator_client import PhabricatorDiff, PhabricatorSettings
+from pydantic import ValidationError
 from starlette.applications import Starlette
+from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
 VALID_TOKEN = "api-" + "a" * 28
 
 
-def _client(monkeypatch, fake) -> TestClient:
-    monkeypatch.setattr(broker, "PhabricatorClient", lambda settings: fake)
-    route = broker._phabricator_route(PhabricatorSettings(api_key=VALID_TOKEN))
+def _client(fake) -> TestClient:
+    route = Route(
+        "/phabricator/revision/{revision_id:int}/patch", broker._patch_endpoint(fake)
+    )
     return TestClient(Starlette(routes=[route]))
 
 
-def test_patch_route_returns_base_and_diff(monkeypatch):
+def test_patch_route_returns_base_and_diff():
     fake = AsyncMock()
     fake.query_latest_diff = AsyncMock(
         return_value=PhabricatorDiff(id=9, base_commit="base9")
@@ -25,7 +29,7 @@ def test_patch_route_returns_base_and_diff(monkeypatch):
     # The abbreviated base is expanded to a full, fetchable hash.
     fake.resolve_commit = AsyncMock(return_value="base9full")
 
-    resp = _client(monkeypatch, fake).get("/phabricator/revision/42/patch")
+    resp = _client(fake).get("/phabricator/revision/42/patch")
 
     assert resp.status_code == 200
     assert resp.json() == {
@@ -36,7 +40,7 @@ def test_patch_route_returns_base_and_diff(monkeypatch):
     fake.resolve_commit.assert_awaited_once_with("base9")
 
 
-def test_patch_route_falls_back_to_raw_base_when_unresolved(monkeypatch):
+def test_patch_route_falls_back_to_raw_base_when_unresolved():
     fake = AsyncMock()
     fake.query_latest_diff = AsyncMock(
         return_value=PhabricatorDiff(id=9, base_commit="base9")
@@ -44,27 +48,84 @@ def test_patch_route_falls_back_to_raw_base_when_unresolved(monkeypatch):
     fake.get_raw_diff = AsyncMock(return_value="diff --git a/f b/f\n")
     fake.resolve_commit = AsyncMock(return_value=None)
 
-    resp = _client(monkeypatch, fake).get("/phabricator/revision/42/patch")
+    resp = _client(fake).get("/phabricator/revision/42/patch")
 
     assert resp.status_code == 200
     assert resp.json()["base_commit"] == "base9"
 
 
-def test_patch_route_404_when_no_diff(monkeypatch):
+def test_patch_route_404_when_no_diff():
     fake = AsyncMock()
     fake.query_latest_diff = AsyncMock(return_value=None)
 
-    resp = _client(monkeypatch, fake).get("/phabricator/revision/42/patch")
+    resp = _client(fake).get("/phabricator/revision/42/patch")
 
     assert resp.status_code == 404
 
 
-def test_patch_route_404_when_no_base_commit(monkeypatch):
+def test_patch_route_404_when_no_base_commit():
     fake = AsyncMock()
     fake.query_latest_diff = AsyncMock(
         return_value=PhabricatorDiff(id=9, base_commit=None)
     )
 
-    resp = _client(monkeypatch, fake).get("/phabricator/revision/42/patch")
+    resp = _client(fake).get("/phabricator/revision/42/patch")
 
     assert resp.status_code == 404
+
+
+def _app() -> Starlette:
+    return broker.build_app(
+        broker.BrokerInputs(
+            bugzilla_api_url="https://bugzilla.example.com/rest",
+            bugzilla_api_key="bz-key",
+            phabricator=PhabricatorSettings(
+                url="https://phab.example.com", api_key=VALID_TOKEN
+            ),
+        )
+    )
+
+
+def test_inputs_embed_phabricator_config_from_flat_env_names(monkeypatch):
+    # env_nested_max_split=1 is what makes PHABRICATOR_API_KEY land on
+    # phabricator.api_key instead of phabricator.api.key, so the nested model
+    # takes the same flat env names the deployment already sets. The bugzilla_*
+    # fields pin the other half of that: a flat field whose own name contains
+    # underscores must still bind to its exact env var.
+    monkeypatch.setenv("BUGZILLA_API_URL", "https://bugzilla.example.com/rest")
+    monkeypatch.setenv("BUGZILLA_API_KEY", "bz-key")
+    monkeypatch.setenv("PHABRICATOR_URL", "https://phab.example.com")
+    monkeypatch.setenv("PHABRICATOR_API_KEY", VALID_TOKEN)
+    monkeypatch.setenv("PHABRICATOR_TIMEOUT_SECONDS", "15")
+
+    inputs = broker.BrokerInputs()
+
+    assert inputs.bugzilla_api_url == "https://bugzilla.example.com/rest"
+    assert inputs.bugzilla_api_key == "bz-key"
+    assert inputs.phabricator.url == "https://phab.example.com"
+    assert inputs.phabricator.api_key == VALID_TOKEN
+    assert inputs.phabricator.timeout_seconds == 15
+
+
+def test_inputs_require_phabricator_config(monkeypatch):
+    # Required, not defaulted: a broker with no Conduit key must fail at startup
+    # rather than serve tools that 401 on every call.
+    monkeypatch.setenv("BUGZILLA_API_URL", "https://bugzilla.example.com/rest")
+    monkeypatch.setenv("BUGZILLA_API_KEY", "bz-key")
+    monkeypatch.delenv("PHABRICATOR_URL", raising=False)
+    monkeypatch.delenv("PHABRICATOR_API_KEY", raising=False)
+
+    with pytest.raises(ValidationError, match="phabricator"):
+        broker.BrokerInputs()
+
+
+def test_app_serves_both_mcp_endpoints():
+    # Two MCP servers on one sidecar, one per domain. Both are wired here so
+    # neither token leaves the broker.
+    mounts = {r.path for r in _app().routes if isinstance(r, Mount)}
+    assert mounts == {"/bugzilla/mcp", "/phabricator/mcp"}
+
+
+def test_app_serves_the_patch_route():
+    paths = {r.path for r in _app().routes if isinstance(r, Route)}
+    assert "/phabricator/revision/{revision_id:int}/patch" in paths

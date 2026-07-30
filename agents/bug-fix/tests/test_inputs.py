@@ -5,10 +5,23 @@ from hackbot_agents.bug_fix.__main__ import AgentInputs
 from pydantic import ValidationError
 
 
-def test_revision_requires_broker_url(monkeypatch):
+def test_broker_url_required(monkeypatch):
+    # Every run mounts the broker's Phabricator MCP tools, so the broker URL is
+    # required whether or not this is a follow-up on a revision.
     monkeypatch.delenv("PHABRICATOR_BROKER_URL", raising=False)
     with pytest.raises(ValidationError, match="phabricator_broker_url"):
-        AgentInputs(bug_id=1, bugzilla_mcp_url="http://x", revision_id=42)
+        AgentInputs(bug_id=1, bugzilla_mcp_url="http://x")
+
+
+def test_revision_requires_comment():
+    # A follow-up must carry the comment it was triggered by.
+    with pytest.raises(ValidationError, match="comment"):
+        AgentInputs(
+            bug_id=1,
+            bugzilla_mcp_url="http://x",
+            revision_id=42,
+            phabricator_broker_url="http://broker",
+        )
 
 
 def test_revision_with_broker_url_ok():
@@ -16,12 +29,28 @@ def test_revision_with_broker_url_ok():
         bug_id=1,
         bugzilla_mcp_url="http://x",
         revision_id=42,
+        comment="@hackbot please fix",
         phabricator_broker_url="http://broker",
     )
     assert inputs.phabricator_broker_url == "http://broker"
 
 
-def test_no_revision_ok_without_broker_url(monkeypatch):
-    monkeypatch.delenv("PHABRICATOR_BROKER_URL", raising=False)
-    inputs = AgentInputs(bug_id=1, bugzilla_mcp_url="http://x")
+def test_no_revision_ok_without_comment():
+    inputs = AgentInputs(
+        bug_id=1,
+        bugzilla_mcp_url="http://x",
+        phabricator_broker_url="http://broker",
+    )
     assert inputs.revision_id is None
+    assert inputs.comment is None
+
+
+def test_phabricator_mcp_url_derived_from_broker_url():
+    # The read tools are served by the same sidecar as the patch route, so the
+    # endpoint is derived rather than configured separately.
+    inputs = AgentInputs(
+        bug_id=1,
+        bugzilla_mcp_url="http://x",
+        phabricator_broker_url="http://broker:8765/",
+    )
+    assert inputs.phabricator_mcp_url == "http://broker:8765/phabricator/mcp"
