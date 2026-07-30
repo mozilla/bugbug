@@ -266,6 +266,76 @@ async def test_update_patch_local_commits_use_the_revisions_own_fields(monkeypat
     )
 
 
+async def test_update_patch_preserves_previous_diff_commit_author(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-NEW", "diffid": 8},
+            "differential.revision.edit": {"object": {"id": 42}},
+            "differential.revision.search": {
+                "data": [
+                    {
+                        "fields": {
+                            "title": "WIP: Existing title",
+                            "summary": "old sum",
+                            "bugzilla.bug-id": "9",
+                            "diffID": 7,
+                        }
+                    }
+                ]
+            },
+            "differential.diff.search": {
+                "data": [
+                    {
+                        "id": 1335196,
+                        "type": "DIFF",
+                        "phid": "PHID-DIFF-j6xoinvjxogsqyfmelha",
+                        "attachments": {
+                            "commits": {
+                                "commits": [
+                                    {
+                                        "identifier": "d0b3319556e92ee5f25590c40562f4ce4d7909f2",
+                                        "author": {
+                                            "name": "Patch Author",
+                                            "email": "author@mozilla.example",
+                                            "raw": "Patch Author <author@mozilla.example>",
+                                            "epoch": 1,
+                                        },
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                ]
+            },
+            "differential.setdiffproperty": {},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.UpdatePatchHandler().apply(
+        {"revision_id": 42},
+        _ctx(
+            local_commits={
+                "new-node": {
+                    "author": "Hackbot Agent",
+                    "authorEmail": "hackbot@mozilla.tld",
+                    "commit": "new-node",
+                }
+            }
+        ),
+    )
+    assert result.status == "applied"
+
+    prop_call = next(c for c in calls if c[0] == "differential.setdiffproperty")
+    stored = json.loads(prop_call[1]["data"])["new-node"]
+    assert stored["author"] == "Patch Author"
+    assert stored["authorEmail"] == "author@mozilla.example"
+    assert stored["commit"] == "new-node"
+
+
 @pytest.mark.parametrize(
     ("handler", "params"),
     [
