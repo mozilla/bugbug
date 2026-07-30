@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # Pushes older than this are not repaired. A build failure can arrive long
     # after its push (a backfill, a long-queued task, a replayed message), and by
     # then the push has been superseded. Generous next to the minutes a build
-    # needs plus the hour the regression check may wait for an ancestor.
+    # needs plus the ten the regression check may wait for an ancestor.
     max_push_age_hours: float = 24
     run_try_push: bool = False
     model: str | None = None
@@ -36,9 +36,9 @@ class Settings(BaseSettings):
     # gate waits for the job to be ingested before reading that verdict.
     treeherder_ingest_poll_seconds: int = 30
     treeherder_ingest_max_wait_seconds: int = 240
-    # How long to wait for a verdict on a failure whose manifests are unknown, where
-    # no ancestor comparison is possible and most failures turn out to be classified
-    # intermittent or expected-fail shortly after we see them.
+    # How long to wait for a verdict once the job is ingested. Classification lands a
+    # few minutes after ingestion, and most test failures turn out to be intermittent
+    # or expected-fail, so waiting here rejects them before the ancestor walk.
     treeherder_classification_wait_seconds: int = 300
 
     # Dedupe (in-memory, by hg revision)

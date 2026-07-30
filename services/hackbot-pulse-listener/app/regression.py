@@ -20,9 +20,12 @@ from app import treeherder
 
 logger = logging.getLogger(__name__)
 
-# Poll an unsettled ancestor for up to MAX_WAIT_SECONDS before giving up.
+# Poll an unsettled ancestor for up to MAX_WAIT_SECONDS before giving up and running
+# the agent. An ancestor that has not settled within ten minutes is usually not about
+# to: the walk either resolves in a few polls or the run it waits on is itself stuck,
+# and holding the decision longer only delays the repair.
 POLL_INTERVAL_SECONDS = 120
-MAX_WAIT_SECONDS = 60 * 60
+MAX_WAIT_SECONDS = 60 * 10
 
 # Treeherder job results and states.
 _PASSED_RESULTS = ("success",)

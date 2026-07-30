@@ -237,23 +237,31 @@ def job_for_task(project: str, task_id: str) -> dict | None:
         time.sleep(settings.treeherder_ingest_poll_seconds)
 
 
-def await_skip_reason(project: str, task_id: str) -> str | None:
+def await_skip_reason(project: str, task_id: str, job: dict | None) -> str | None:
     """Wait a bounded time for a verdict that this failure is not worth a run.
 
-    For a task with no per-manifest results there is nothing to compare against an
-    ancestor, so nothing else delays the decision -- and in practice these are mostly
-    intermittents and expected failures that Treeherder classifies a few minutes
-    later. Returns None once the wait is spent, so an unclassified failure is still
-    investigated rather than dropped.
+    ``job`` carries the verdict as of ingestion, which on an intermittent is usually
+    still "not classified": Treeherder classifies a few minutes later. Waiting for it
+    here rejects such a failure before the caller's ancestor walk rather than after,
+    so the filter no longer depends on how long that walk happens to take.
+
+    Returns None once the wait is spent, so an unclassified failure is investigated
+    rather than dropped, and at once for a task Treeherder holds no job for, since
+    then there is no verdict to wait for.
     """
+    if job is None:
+        return None
+    reason = skip_reason(job)
+    if reason:
+        return reason
+
     deadline = time.monotonic() + settings.treeherder_classification_wait_seconds
-    while True:
+    while time.monotonic() < deadline:
+        time.sleep(settings.treeherder_ingest_poll_seconds)
         reason = recheck_skip_reason(project, task_id)
         if reason:
             return reason
-        if time.monotonic() >= deadline:
-            return None
-        time.sleep(settings.treeherder_ingest_poll_seconds)
+    return None
 
 
 def recheck_skip_reason(project: str, task_id: str) -> str | None:

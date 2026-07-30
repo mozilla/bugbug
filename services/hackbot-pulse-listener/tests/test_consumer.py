@@ -91,7 +91,7 @@ def test_sample_messages_route_to_test_repair_not_build():
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.treeherder, "failing_groups", return_value=[]) as groups,
         patch.object(consumer.treeherder, "job_for_task", return_value=None),
-        patch.object(consumer.treeherder, "skip_reason", return_value=None),
+        patch.object(consumer.treeherder, "await_skip_reason", return_value=None),
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
         for body in _sample_bodies():
@@ -337,7 +337,6 @@ def env(monkeypatch):
                 "platform_option": "opt",
             }
         ),
-        skip_reason=MagicMock(return_value=None),
         recheck_skip_reason=MagicMock(return_value=None),
         await_skip_reason=MagicMock(return_value=None),
         new_test_failures=MagicMock(
@@ -350,7 +349,6 @@ def env(monkeypatch):
     monkeypatch.setattr(consumer.taskcluster, "get_task", mocks.get_task)
     monkeypatch.setattr(consumer.treeherder, "failing_groups", mocks.failing_groups)
     monkeypatch.setattr(consumer.treeherder, "job_for_task", mocks.job_for_task)
-    monkeypatch.setattr(consumer.treeherder, "skip_reason", mocks.skip_reason)
     monkeypatch.setattr(
         consumer.treeherder, "recheck_skip_reason", mocks.recheck_skip_reason
     )
@@ -387,7 +385,7 @@ def test_test_failure_triggers_rca_run(env):
 
 def test_treeherder_intermittent_skipped_before_any_walk(env):
     # Treeherder's own verdict rules the failure out before any mozci work.
-    env.skip_reason.return_value = "intermittent"
+    env.await_skip_reason.return_value = "intermittent"
     assert consumer.process(_test_msg(), env.executor) is None
     env.failing_groups.assert_not_called()
     env.new_test_failures.assert_not_called()
@@ -396,7 +394,7 @@ def test_treeherder_intermittent_skipped_before_any_walk(env):
 
 def test_unclassified_failure_is_investigated(env):
     # "not classified" / "new failure" leave the decision to the mozci walk.
-    env.skip_reason.return_value = None
+    env.await_skip_reason.return_value = None
     assert consumer.process(_test_msg(), env.executor) == "tr-1"
     env.new_test_failures.assert_called_once()
 
@@ -407,10 +405,21 @@ def test_inherited_test_group_skipped(env):
     env.trigger_run.assert_not_called()
 
 
-def test_same_group_same_push_triggers_once(env):
-    consumer.process(_test_msg(task_id="A"), env.executor)
-    consumer.process(_test_msg(task_id="B"), env.executor)
+def test_one_run_per_push(env):
+    # The agent reads the push's other failures itself, so the first task worth
+    # investigating is enough; later failing tasks of the same push are skipped.
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
     env.trigger_run.assert_called_once()
+
+
+def test_later_task_of_a_claimed_push_stops_before_treeherder(env):
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    env.job_for_task.reset_mock()
+    env.failing_groups.reset_mock()
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    env.job_for_task.assert_not_called()
+    env.failing_groups.assert_not_called()
 
 
 def test_no_failing_groups_skips(env):
@@ -433,22 +442,30 @@ def test_task_without_group_results_still_triggers_run(env):
     assert ctx.test_groups == []
 
 
-def test_unreadable_group_results_triggers_once_per_task(env):
+def test_unreadable_group_results_triggers_once_per_push(env):
     env.failing_groups.side_effect = RuntimeError("treeherder down")
     consumer.process(_test_msg(task_id="A"), env.executor)
     consumer.process(_test_msg(task_id="B"), env.executor)
     env.trigger_run.assert_called_once()
 
 
-def test_rejected_group_is_not_re_evaluated_by_sibling_chunks(env):
-    # The dedupe claim is taken before the expensive checks, so a sibling chunk
-    # reporting the same group does not repeat the mozci walk to reach the same
-    # verdict.
-    env.new_test_failures.side_effect = lambda *_: set()
+def test_rejected_task_does_not_suppress_a_real_regression_on_the_push(env):
+    # The push is claimed only when a run is triggered, so a task rejected as
+    # inherited leaves the push open for the next failing task -- which may be the
+    # genuine regression.
+    env.new_test_failures.side_effect = [set(), {_GROUP}]
     assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
-    env.trigger_run.assert_not_called()
-    assert env.new_test_failures.call_count == 1
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    env.trigger_run.assert_called_once()
+
+
+def test_intermittent_task_does_not_suppress_the_next_task(env):
+    # Same for a task Treeherder has already classified: it must not claim a push
+    # it will not investigate.
+    env.await_skip_reason.side_effect = ["intermittent", None]
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    env.trigger_run.assert_called_once()
 
 
 def test_missing_git_mapping_still_triggers_run(env):
@@ -562,19 +579,38 @@ def test_different_pushes_are_not_deduped(env):
     assert env.trigger_run.call_count == 2
 
 
-def test_whole_task_waits_for_a_verdict_before_triggering(env):
+def test_verdict_is_awaited_before_resolving_groups(env):
+    # The wait for a verdict is the cheap gate, so it must come first: an intermittent
+    # should cost neither a group fetch nor an ancestor walk.
+    order = []
+    env.await_skip_reason.side_effect = lambda p, t, j: order.append("await")
+    env.failing_groups.side_effect = lambda *_: (order.append("groups"), [_GROUP])[1]
+
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert order == ["await", "groups"]
+
+
+def test_the_verdict_is_awaited_once_on_every_path(env):
+    # A task with no group results used to run its own second wait; the up-front one
+    # covers it, and waiting twice would double the delay before a real repair.
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
-    env.await_skip_reason.return_value = "intermittent"
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
     env.await_skip_reason.assert_called_once()
+
+
+def test_group_less_intermittent_is_dropped_by_the_up_front_gate(env):
+    # The only filter such a failure gets, since it has no manifest to compare.
+    env.await_skip_reason.return_value = "intermittent"
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    assert consumer.process(_test_msg(), env.executor) is None
     env.trigger_run.assert_not_called()
 
 
-def test_whole_task_triggers_when_no_verdict_arrives(env):
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
-    env.await_skip_reason.return_value = None
+def test_the_job_is_passed_to_the_verdict_wait(env):
+    # The wait needs the ingested job: it is the verdict as of ingestion, and without
+    # it the wait cannot tell "not classified yet" from "never ingested".
     assert consumer.process(_test_msg(), env.executor) == "tr-1"
-    env.trigger_run.assert_called_once()
+    assert env.await_skip_reason.call_args.args[2] is env.job_for_task.return_value
 
 
 def test_backfilled_test_task_is_skipped(env):
@@ -596,3 +632,26 @@ def test_stale_push_skips_a_test_failure(env, fresh_push):
     )
     env.new_test_failures.assert_not_called()
     env.trigger_run.assert_not_called()
+
+
+def test_group_less_task_claims_the_push_for_every_path(env):
+    # One run per push whichever path triggered it: a task-level failure (no group
+    # results) and a manifest failure on the same push must not both run.
+    env.failing_groups.side_effect = [
+        consumer.treeherder.GroupResultsUnavailable("none"),
+        [_GROUP],
+    ]
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    env.trigger_run.assert_called_once()
+
+
+def test_manifest_failure_claims_the_push_against_a_group_less_task(env):
+    # The reverse order must dedupe too.
+    env.failing_groups.side_effect = [
+        [_GROUP],
+        consumer.treeherder.GroupResultsUnavailable("none"),
+    ]
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    env.trigger_run.assert_called_once()

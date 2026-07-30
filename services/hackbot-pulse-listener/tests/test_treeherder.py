@@ -330,10 +330,31 @@ def test_config_jobs_shares_one_fetch_across_options(monkeypatch):
 
 
 def test_await_skip_reason_returns_a_late_verdict(monkeypatch):
-    verdicts = iter([None, None, _job(4)])
+    verdicts = iter([_job(1), _job(4)])
     monkeypatch.setattr(treeherder, "_job", lambda p, t: next(verdicts))
     monkeypatch.setattr(treeherder.time, "sleep", lambda s: None)
-    assert treeherder.await_skip_reason("autoland", "T1") == "intermittent"
+    assert treeherder.await_skip_reason("autoland", "T1", _job(1)) == "intermittent"
+
+
+def test_await_skip_reason_uses_the_verdict_it_was_given(monkeypatch):
+    # Already classified at ingestion: no further request, and no waiting.
+    def fail(*_):
+        raise AssertionError("should not re-fetch an already classified job")
+
+    monkeypatch.setattr(treeherder, "_job", fail)
+    monkeypatch.setattr(treeherder.time, "sleep", fail)
+    assert treeherder.await_skip_reason("autoland", "T1", _job(4)) == "intermittent"
+
+
+def test_await_skip_reason_does_not_wait_without_a_job(monkeypatch):
+    # Treeherder never ingested the task, so there is no verdict coming; waiting the
+    # full window for one would stall the failure for nothing.
+    def fail(*_):
+        raise AssertionError("should not poll for a job Treeherder does not have")
+
+    monkeypatch.setattr(treeherder, "_job", fail)
+    monkeypatch.setattr(treeherder.time, "sleep", fail)
+    assert treeherder.await_skip_reason("autoland", "T1", None) is None
 
 
 def test_await_skip_reason_gives_up_and_investigates(monkeypatch):
@@ -341,4 +362,4 @@ def test_await_skip_reason_gives_up_and_investigates(monkeypatch):
     monkeypatch.setattr(treeherder.time, "sleep", lambda s: None)
     ticks = iter([0.0, treeherder.settings.treeherder_classification_wait_seconds + 1])
     monkeypatch.setattr(treeherder.time, "monotonic", lambda: next(ticks))
-    assert treeherder.await_skip_reason("autoland", "T1") is None
+    assert treeherder.await_skip_reason("autoland", "T1", _job(6)) is None

@@ -21,20 +21,24 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
      action-callback task for a backfill or retrigger.
    - Pushes that landed more than `MAX_PUSH_AGE_HOURS` ago (default 24). A failure can
      surface long after its push, and by then the push has been superseded.
-4. **Dedupe** with in-memory TTL caches, both keyed by revision: build-repair once per
-   revision; test-repair once per `(revision, test group)`, so a manifest failing across
-   chunks is investigated once. Test groups are claimed before the checks below, so
-   sibling chunks never repeat them.
+4. **Dedupe** with in-memory TTL caches, both keyed by revision: one run per push per
+   agent, triggered on the first failing task worth investigating. The test-repair
+   agent works from a single task but reads the push's other failures itself, so a
+   second run for the same push would re-tread the same ground. A revision is recorded
+   only once a run is actually triggered, so a task rejected as intermittent or
+   inherited leaves the push open for the next one.
 5. **Judge** whether the failure is worth a run. Every check fails open — an upstream
    error runs the agent rather than dropping a possible regression.
    - _Build:_ keep only failures this push introduced, waiting for an unsettled ancestor
      build to finish first.
-   - _Test:_ first drop whatever Treeherder has already judged not to be a new regression
-     (intermittent, infra, expected-fail, fixed-by-commit); Treeherder ingests a minute or
-     so behind us, so the gate waits for the job to appear. Then keep only groups that are
-     new for this task's own configuration (platform and build option), and ask Treeherder
-     once more before triggering, since a verdict often lands while that check runs. One
-     run per task, carrying only the task id.
+   - _Test:_ first drop whatever Treeherder judges not to be a new regression
+     (intermittent, infra, expected-fail, fixed-by-commit). Treeherder ingests a minute or
+     so behind us and classifies a few minutes after that, so this gate waits for the job
+     to appear and then for its verdict — it is the cheap filter, and most test failures
+     stop here, before any group is fetched or any ancestor walked. What survives is
+     narrowed to the groups that are new for this task's own configuration (platform and
+     build option), then Treeherder is asked once more, since a verdict can still land
+     while that walk runs. The run carries only the task id.
 6. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
    terminal, then email a hackbot UI link, the analysis summary, a Treeherder link, and the
    commit the agent blamed. Build-repair looks the blamed commit up in the firefox GitHub
