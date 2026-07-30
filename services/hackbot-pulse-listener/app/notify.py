@@ -62,7 +62,11 @@ def _send_test_repair_email(ctx: RunContext, run_doc: dict) -> None:
     )
     # test-repair verdicts are always notified (including do-not-backout verdicts), so
     # the build-repair notify_only_with_patch gate does not apply here.
-    recipients = _recipients(settings.test_repair_notification_email, culprit_author)
+    #
+    # The distribution list and the team address only. A verdict is a triage signal
+    # for the team, not something to mail at the developer whose commit the agent
+    # happens to blame -- the culprit is still named in the body.
+    recipients = _recipients(settings.test_repair_notification_email)
     if not recipients:
         logger.info(
             "No recipients for test-repair run %s; skipping notification", ctx.run_id
@@ -130,8 +134,8 @@ def _recipients(primary: str | None, secondary: str | None = None) -> list[str]:
     """Recipients for a run, deduped and ordered by priority, team address last.
 
     build-repair puts the blamed commit's author first and the pushing developer
-    second; test-repair puts its distribution address first and the culprit author
-    second. ``notification_override_email`` short-circuits to a single address so
+    second; test-repair passes only its distribution address and so reaches no
+    individual. ``notification_override_email`` short-circuits to a single address so
     local testing never mails real developers or the team.
     """
     if settings.notification_override_email:

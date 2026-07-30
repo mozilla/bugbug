@@ -417,7 +417,9 @@ def test_test_repair_intermittent_sends_without_patch(monkeypatch):
     assert personalizations["to"] == [{"email": "test-repair@mozilla.com"}]
 
 
-def test_test_repair_regression_ccs_culprit_author(monkeypatch):
+def test_test_repair_never_mails_the_culprit_author(monkeypatch):
+    # A verdict goes to the team, never to the developer the agent blamed, even when
+    # it is confident enough to name one.
     monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
     monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
     monkeypatch.setattr(notify.settings, "notification_override_email", None)
@@ -433,16 +435,70 @@ def test_test_repair_regression_ccs_culprit_author(monkeypatch):
         patch("sendgrid.SendGridAPIClient", return_value=fake_client),
         patch.object(
             notify.github, "commit_author_email", return_value="culprit@mozilla.com"
-        ) as author,
+        ),
     ):
         notify.send_email(_test_repair_ctx(), run_doc)
 
-    author.assert_called_once_with("abc123def456")
+    message = fake_client.send.call_args.kwargs["message"].get()
+    personalizations = message["personalizations"][0]
+    assert personalizations["to"] == [{"email": "test-repair@mozilla.com"}]
+    assert "cc" not in personalizations
+    # Still named in the body, which is the point of resolving it at all.
+    assert "culprit@mozilla.com" in message["content"][0]["value"]
+
+
+def test_test_repair_mails_the_team_address_too(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notification_override_email", None)
+    monkeypatch.setattr(
+        notify.settings, "test_repair_notification_email", "test-repair@mozilla.com"
+    )
+    monkeypatch.setattr(notify.settings, "notification_team_email", "team@mozilla.com")
+
+    run_doc = {"status": "succeeded", "summary": {"findings": _test_repair_findings()}}
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with (
+        patch("sendgrid.SendGridAPIClient", return_value=fake_client),
+        patch.object(
+            notify.github, "commit_author_email", return_value="culprit@mozilla.com"
+        ),
+    ):
+        notify.send_email(_test_repair_ctx(), run_doc)
+
     personalizations = fake_client.send.call_args.kwargs["message"].get()[
         "personalizations"
     ][0]
     assert personalizations["to"] == [{"email": "test-repair@mozilla.com"}]
-    assert personalizations["cc"] == [{"email": "culprit@mozilla.com"}]
+    assert personalizations["cc"] == [{"email": "team@mozilla.com"}]
+
+
+def test_test_repair_ignores_the_pushing_developer(monkeypatch):
+    # ctx.developer_email is the push author; only build-repair mails them.
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notification_override_email", None)
+    monkeypatch.setattr(
+        notify.settings, "test_repair_notification_email", "test-repair@mozilla.com"
+    )
+    monkeypatch.setattr(notify.settings, "notification_team_email", None)
+
+    ctx = _test_repair_ctx(developer_email="pusher@mozilla.com")
+    run_doc = {"status": "succeeded", "summary": {"findings": _test_repair_findings()}}
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with (
+        patch("sendgrid.SendGridAPIClient", return_value=fake_client),
+        patch.object(notify.github, "commit_author_email", return_value=None),
+    ):
+        notify.send_email(ctx, run_doc)
+
+    personalizations = fake_client.send.call_args.kwargs["message"].get()[
+        "personalizations"
+    ][0]
+    assert personalizations["to"] == [{"email": "test-repair@mozilla.com"}]
+    assert "cc" not in personalizations
 
 
 def test_attaches_patch_file(monkeypatch):
