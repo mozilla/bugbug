@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     dedupe_ttl_seconds: int = 6 * 60 * 60
     dedupe_max_size: int = 4096
 
+    # Cap on test-repair runs started in any rolling 24 hours. Each run clones and
+    # builds Firefox in its own container, so a bad day on autoland -- a broken
+    # manifest inherited by push after push, or a Treeherder outage that leaves every
+    # gate failing open -- could otherwise cost far more than the failures are worth.
+    max_test_repairs_per_day: int = 50
+
     # Polling the API for run completion
     poll_interval_seconds: int = 60
     run_max_age_minutes: int = 12 * 60

@@ -39,13 +39,19 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
      narrowed to the groups that are new for this task's own configuration (platform and
      build option), then Treeherder is asked once more, since a verdict can still land
      while that walk runs. The run carries only the task id.
-6. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
+6. **Budget.** At most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs (default 100) may
+   start in any rolling 24 hours. A slot is taken when a run is triggered and given
+   back if the trigger fails, so only runs that really started count. Once the budget
+   is spent, later test failures stop before any Treeherder work. Build-repair is not
+   capped.
+7. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
    terminal, then email a hackbot UI link, the analysis summary, a Treeherder link, and the
    commit the agent blamed. Build-repair looks the blamed commit up in the firefox GitHub
    mirror and mails its author; test-repair mails the notification address
    (`TEST_REPAIR_NOTIFICATION_EMAIL`).
 
-The dedupe caches and pending-run tracking are in-memory (reset on restart).
+The dedupe caches, the daily budget and pending-run tracking are all in-memory, so
+a restart resets them.
 
 ## Run locally
 
@@ -61,7 +67,9 @@ uv run --package hackbot-pulse-listener python -m app
 Email is sent only when `SENDGRID_API_KEY` and `NOTIFICATION_SENDER` are set; otherwise it
 is logged and skipped. Build-repair mails the blamed commit's author (looked up in the
 firefox GitHub mirror), the pushing developer, and the `NOTIFICATION_TEAM_EMAIL` team
-address if set; test-repair mails `TEST_REPAIR_NOTIFICATION_EMAIL` (with the culprit author CC'd). Set
+address if set; test-repair mails only `TEST_REPAIR_NOTIFICATION_EMAIL` and the team address --
+never the culprit author or the pushing developer, though the culprit is still named
+in the body. Set
 `NOTIFICATION_OVERRIDE_EMAIL` to route every notification to a single address (useful for
 local testing). By default only build-repair runs that produced a patch are emailed; set
 `NOTIFY_ONLY_WITH_PATCH=false` to also notify on transient / not-to-blame runs (test-repair always

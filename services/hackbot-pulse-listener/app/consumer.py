@@ -1,5 +1,7 @@
 import logging
 import threading
+import time
+from collections import deque
 from concurrent.futures import Executor
 
 from cachetools import TTLCache
@@ -40,6 +42,13 @@ _seen_tests: TTLCache = TTLCache(
     maxsize=settings.dedupe_max_size, ttl=settings.dedupe_ttl_seconds
 )
 _seen_tests_lock = threading.Lock()
+
+# When each test-repair run of the last day was started, oldest first, capping how
+# many may run in any rolling 24 hours. A slot is taken at the moment of triggering
+# and given back if the trigger fails, so only runs that really started count.
+_RATE_WINDOW_SECONDS = 24 * 60 * 60
+_test_run_times: deque[float] = deque()
+_test_run_lock = threading.Lock()
 
 
 def _is_test_task(tags: dict) -> bool:
@@ -229,6 +238,15 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
+    if _test_budget_spent():
+        logger.info(
+            "Test-repair budget of %s runs per 24h is spent; skipping task %s -- %s",
+            settings.max_test_repairs_per_day,
+            task_id,
+            job_link,
+        )
+        return None
+
     # Cheapest gate first: it rules out intermittents and infra failures for every
     # harness before any group resolution or ancestor walking. Treeherder classifies
     # a few minutes after ingesting, so the verdict is waited for rather than read
@@ -321,6 +339,47 @@ def _claim_push(hg_revision: str) -> bool:
         return True
 
 
+def _test_runs_today() -> int:
+    """Runs started in the window, dropping those that have aged out of it.
+
+    Caller must hold ``_test_run_lock``.
+    """
+    cutoff = time.time() - _RATE_WINDOW_SECONDS
+    while _test_run_times and _test_run_times[0] <= cutoff:
+        _test_run_times.popleft()
+    return len(_test_run_times)
+
+
+def _test_budget_spent() -> bool:
+    """Whether the day's runs are used up, checked before any Treeherder work."""
+    with _test_run_lock:
+        return _test_runs_today() >= settings.max_test_repairs_per_day
+
+
+def _reserve_test_run() -> bool:
+    """Take one of the day's runs, or False if the budget is spent."""
+    limit = settings.max_test_repairs_per_day
+    with _test_run_lock:
+        if _test_runs_today() >= limit:
+            return False
+        _test_run_times.append(time.time())
+        remaining = limit - len(_test_run_times)
+    if not remaining:
+        logger.warning(
+            "Test-repair budget of %s runs per 24h is now spent; further failures "
+            "will be skipped until it frees up",
+            limit,
+        )
+    return True
+
+
+def _release_test_run() -> None:
+    """Give a reserved run back when it turned out not to start."""
+    with _test_run_lock:
+        if _test_run_times:
+            _test_run_times.pop()
+
+
 def _fresh_groups(
     candidates: list[str], project: str, hg_revision: str, config: tuple[str, str]
 ) -> list[str]:
@@ -347,6 +406,16 @@ def _trigger_test_repair(
     executor: Executor,
 ) -> str | None:
     job_link = treeherder.job_url(project, hg_revision, task_id)
+    if not _reserve_test_run():
+        logger.info(
+            "Test-repair budget of %s runs per 24h was spent while task %s was being "
+            "checked; skipping -- %s",
+            settings.max_test_repairs_per_day,
+            task_id,
+            job_link,
+        )
+        return None
+
     if not _claim_push(hg_revision):
         logger.info(
             "Push %s was claimed while task %s was being checked; skipping -- %s",
@@ -354,6 +423,7 @@ def _trigger_test_repair(
             task_id,
             job_link,
         )
+        _release_test_run()
         return None
 
     try:
@@ -366,6 +436,7 @@ def _trigger_test_repair(
             "Failed to trigger test-repair run for task %s -- %s", task_id, job_link
         )
         _release(_seen_tests, _seen_tests_lock, [hg_revision])
+        _release_test_run()
         return None
 
     logger.info(

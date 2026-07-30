@@ -15,6 +15,7 @@ DECISION_TASK_ID = "DECISION"
 def setup_function():
     consumer._seen.clear()
     consumer._seen_tests.clear()
+    consumer._test_run_times.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -685,3 +686,110 @@ def test_an_action_scheduled_task_is_logged_with_a_treeherder_link(env, caplog):
     with caplog.at_level(logging.INFO, logger="app.consumer"):
         assert consumer.process(_test_msg(), env.executor) is None
     assert _LINK in caplog.text
+
+
+def test_runs_stop_at_the_daily_limit(env, monkeypatch):
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 2)
+    revisions = iter(["rev-1", "rev-2", "rev-3"])
+    env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="C"), env.executor) is None
+    assert env.trigger_run.call_count == 2
+
+
+def test_the_limit_is_a_rolling_window(env, monkeypatch):
+    # A run that has aged out of the window frees its slot again.
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
+    revisions = iter(["rev-1", "rev-2"])
+    env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    consumer._test_run_times[0] -= consumer._RATE_WINDOW_SECONDS + 1
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+
+
+def test_a_spent_budget_stops_before_any_treeherder_work(env, monkeypatch):
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
+    revisions = iter(["rev-1", "rev-2"])
+    env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    env.job_for_task.reset_mock()
+    env.failing_groups.reset_mock()
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    env.job_for_task.assert_not_called()
+    env.failing_groups.assert_not_called()
+
+
+def test_a_failed_trigger_gives_its_slot_back(env, monkeypatch):
+    # The budget counts runs that started, not attempts.
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
+    env.trigger_run.side_effect = [RuntimeError("boom"), "tr-2"]
+    revisions = iter(["rev-1", "rev-2"])
+    env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-2"
+
+
+def test_a_budget_blocked_task_does_not_claim_its_push(env, monkeypatch):
+    # Same rule as an intermittent: a push we did not investigate stays open, so it
+    # is still eligible once the budget frees up.
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
+    revisions = iter(["rev-1", "rev-2", "rev-2"])
+    env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 2)
+    assert consumer.process(_test_msg(task_id="B2"), env.executor) == "tr-1"
+
+
+def test_the_limit_does_not_apply_to_build_repair(env, monkeypatch):
+    # The cap is on test-repair; build failures are far rarer and cheaper to judge.
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 0)
+    with (
+        patch.object(consumer.regression, "is_new_build_failure", return_value=True),
+        patch.object(consumer.lando, "hg_to_git", return_value="gitH"),
+        patch.object(consumer.client, "trigger_run", return_value="br-1") as trigger,
+    ):
+        assert consumer.process(_build_msg(), env.executor) == "br-1"
+    trigger.assert_called_once()
+
+
+def test_exhausting_the_budget_is_logged_once(env, monkeypatch, caplog):
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
+    with caplog.at_level(logging.WARNING, logger="app.consumer"):
+        assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert (
+        sum(
+            "budget of 1 runs per 24h is now spent" in r.message for r in caplog.records
+        )
+        == 1
+    )
+
+
+def test_the_reservation_is_the_hard_boundary(monkeypatch):
+    # The early check can pass while another thread takes the last slot, so the
+    # reservation itself has to enforce the limit rather than lean on that check.
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 2)
+    assert consumer._reserve_test_run() is True
+    assert consumer._reserve_test_run() is True
+    assert consumer._reserve_test_run() is False
+
+
+def test_losing_the_claim_race_gives_the_slot_back(env, monkeypatch):
+    # Another task claims the push while this one is being checked. The slot this
+    # one reserved must not stay spent for the rest of the day.
+    monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
+
+    def claim_meanwhile(project, rev, config, groups):
+        consumer._claim_push(rev)
+        return set(groups)
+
+    env.new_test_failures.side_effect = claim_meanwhile
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    env.trigger_run.assert_not_called()
+    assert len(consumer._test_run_times) == 0
