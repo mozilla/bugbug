@@ -87,11 +87,9 @@ def _app() -> Starlette:
 
 
 def test_inputs_embed_phabricator_config_from_flat_env_names(monkeypatch):
-    # env_nested_max_split=1 is what makes PHABRICATOR_API_KEY land on
-    # phabricator.api_key instead of phabricator.api.key, so the nested model
-    # takes the same flat env names the deployment already sets. The bugzilla_*
-    # fields pin the other half of that: a flat field whose own name contains
-    # underscores must still bind to its exact env var.
+    # env_nested_max_split=1 splits only on the first underscore, so
+    # PHABRICATOR_API_KEY lands on phabricator.api_key, not phabricator.api.key,
+    # and flat fields keep binding to their own exact env names.
     monkeypatch.setenv("BUGZILLA_API_URL", "https://bugzilla.example.com/rest")
     monkeypatch.setenv("BUGZILLA_API_KEY", "bz-key")
     monkeypatch.setenv("PHABRICATOR_URL", "https://phab.example.com")
@@ -108,8 +106,7 @@ def test_inputs_embed_phabricator_config_from_flat_env_names(monkeypatch):
 
 
 def test_inputs_require_phabricator_config(monkeypatch):
-    # Required, not defaulted: a broker with no Conduit key must fail at startup
-    # rather than serve tools that 401 on every call.
+    # Fail at startup rather than serve tools that 401 on every call.
     monkeypatch.setenv("BUGZILLA_API_URL", "https://bugzilla.example.com/rest")
     monkeypatch.setenv("BUGZILLA_API_KEY", "bz-key")
     monkeypatch.delenv("PHABRICATOR_URL", raising=False)
@@ -120,8 +117,7 @@ def test_inputs_require_phabricator_config(monkeypatch):
 
 
 def test_app_serves_both_mcp_endpoints():
-    # Two MCP servers on one sidecar, one per domain. Both are wired here so
-    # neither token leaves the broker.
+    # One MCP server per domain, both wired here so no token leaves the broker.
     mounts = {r.path for r in _app().routes if isinstance(r, Mount)}
     assert mounts == {"/bugzilla/mcp", "/phabricator/mcp"}
 

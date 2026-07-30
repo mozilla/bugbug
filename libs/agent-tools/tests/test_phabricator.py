@@ -211,7 +211,7 @@ async def test_get_revision_comments_locates_inline_comments():
 
     assert result["count"] == 2
     assert result["latest_diff_id"] == 9
-    # Reordered oldest first, so the discussion reads in the order it happened.
+    # Reordered oldest first.
     inline, general = result["comments"]
     assert inline["type"] == "inline"
     assert inline["author"] == "reviewer"
@@ -234,8 +234,7 @@ async def test_get_revision_comments_locates_inline_comments():
 
 
 async def test_inline_length_is_an_inclusive_line_count():
-    # transaction.search reports Phabricator's zero-based lineLength plus one, so
-    # length 3 anchored at line 10 covers lines 10, 11 and 12.
+    # length is lineLength + 1, so length 3 at line 10 covers lines 10-12.
     ctx = _ctx(
         search_revision_by_id=_revision(),
         search_transactions=[_inline(line=10, length=3)],
@@ -249,7 +248,6 @@ async def test_inline_length_is_an_inclusive_line_count():
 
 
 async def test_inline_length_floors_at_one_line():
-    # A missing or zero length must not produce an end line before the start.
     ctx = _ctx(
         search_revision_by_id=_revision(),
         search_transactions=[_inline(line=10, length=0)],

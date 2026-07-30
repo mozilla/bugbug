@@ -6,15 +6,13 @@ from pydantic import ValidationError
 
 
 def test_broker_url_required(monkeypatch):
-    # Every run mounts the broker's Phabricator MCP tools, so the broker URL is
-    # required whether or not this is a follow-up on a revision.
+    # Every run mounts the broker's Phabricator tools, follow-up or not.
     monkeypatch.delenv("PHABRICATOR_BROKER_URL", raising=False)
     with pytest.raises(ValidationError, match="phabricator_broker_url"):
         AgentInputs(bug_id=1, bugzilla_mcp_url="http://x")
 
 
 def test_revision_requires_comment():
-    # A follow-up must carry the comment it was triggered by.
     with pytest.raises(ValidationError, match="comment"):
         AgentInputs(
             bug_id=1,
@@ -46,8 +44,6 @@ def test_no_revision_ok_without_comment():
 
 
 def test_phabricator_mcp_url_derived_from_broker_url():
-    # The read tools are served by the same sidecar as the patch route, so the
-    # endpoint is derived rather than configured separately.
     inputs = AgentInputs(
         bug_id=1,
         bugzilla_mcp_url="http://x",

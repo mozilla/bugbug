@@ -79,9 +79,8 @@ class PhabricatorClient:
         """Return the Differential revision ``D<revision_id>``, or ``None``.
 
         The id-keyed counterpart of :meth:`search_revision`, for callers that
-        start from a revision monogram rather than a PHID. ``attachments`` is
-        passed through to Conduit (e.g. ``{"reviewers": True}``), which only
-        returns those blocks when they are asked for.
+        start from a revision monogram rather than a PHID. Conduit only returns
+        an ``attachments`` block (e.g. ``{"reviewers": True}``) when asked for it.
         """
         payload: dict[str, Any] = {"constraints": {"ids": [revision_id]}}
         if attachments:
@@ -93,9 +92,9 @@ class PhabricatorClient:
     async def search_users(self, phids: list[str]) -> dict[str, dict]:
         """Map user PHIDs to ``{"username", "real_name"}`` in one Conduit call.
 
-        Non-user PHIDs are dropped before the call: a revision's reviewer list
-        mixes users with projects (review groups), and ``user.search`` rejects
-        the latter. PHIDs it cannot resolve are simply absent from the result.
+        Non-user PHIDs are dropped first: a reviewer list mixes users with
+        projects (review groups), which ``user.search`` rejects. Unresolvable
+        PHIDs are absent from the result.
         """
         wanted = [
             phid
