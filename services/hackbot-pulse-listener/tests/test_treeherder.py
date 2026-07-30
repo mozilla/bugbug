@@ -363,3 +363,23 @@ def test_await_skip_reason_gives_up_and_investigates(monkeypatch):
     ticks = iter([0.0, treeherder.settings.treeherder_classification_wait_seconds + 1])
     monkeypatch.setattr(treeherder.time, "monotonic", lambda: next(ticks))
     assert treeherder.await_skip_reason("autoland", "T1", _job(6)) is None
+
+
+def test_push_url_points_at_the_push():
+    assert treeherder.push_url("autoland", "abc123") == (
+        "https://treeherder.mozilla.org/#/jobs?repo=autoland&revision=abc123"
+    )
+
+
+def test_job_url_selects_the_task_on_its_push():
+    assert treeherder.job_url("autoland", "abc123", "TT") == (
+        "https://treeherder.mozilla.org/#/jobs"
+        "?repo=autoland&revision=abc123&selectedTaskRun=TT"
+    )
+
+
+def test_job_url_without_a_revision_still_selects_the_task():
+    # Treeherder cannot preload the push, but resolves the task and links to it.
+    assert treeherder.job_url("autoland", None, "TT") == (
+        "https://treeherder.mozilla.org/#/jobs?repo=autoland&selectedTaskRun=TT"
+    )

@@ -107,20 +107,40 @@ def _classify(project: str, rev: str, status_fn, describe: str, first_pass=True)
         status = status_fn(push.rev)
         if status is None:
             continue
+        ancestor_link = treeherder.push_url(project, push.rev)
         if status is _PENDING:
             notice = logger.info if first_pass else logger.debug
-            notice("%s not settled at %s; deferring for %s", describe, push.rev, rev)
+            notice(
+                "%s not settled at %s; deferring for %s -- %s",
+                describe,
+                push.rev,
+                rev,
+                ancestor_link,
+            )
             return _PENDING
         if status == "failed":
             logger.info(
-                "%s already failing at %s; inherited at %s", describe, push.rev, rev
+                "%s already failing at %s; inherited at %s -- %s",
+                describe,
+                push.rev,
+                rev,
+                ancestor_link,
             )
             return False
-        logger.info("%s passed at %s; new failure at %s", describe, push.rev, rev)
+        logger.info(
+            "%s passed at %s; new failure at %s -- %s",
+            describe,
+            push.rev,
+            rev,
+            ancestor_link,
+        )
         return True
 
     logger.warning(
-        "No ancestor within %s pushes ran %s; running agent", MAX_DEPTH, describe
+        "No ancestor within %s pushes ran %s; running agent -- %s",
+        MAX_DEPTH,
+        describe,
+        treeherder.push_url(project, rev),
     )
     return True
 
@@ -155,7 +175,10 @@ def _await_new_failures(project: str, rev: str, status_fn, units, describe: str)
                     new.add(unit)
         except Exception:
             logger.exception(
-                "Regression check failed for %s@%s; running agent", describe, rev
+                "Regression check failed for %s@%s; running agent -- %s",
+                describe,
+                rev,
+                treeherder.push_url(project, rev),
             )
             return new | set(unresolved)
 
@@ -163,10 +186,11 @@ def _await_new_failures(project: str, rev: str, status_fn, units, describe: str)
             return new
         if time.monotonic() >= deadline:
             logger.warning(
-                "%s still unsettled after %ss at %s; running agent",
+                "%s still unsettled after %ss at %s; running agent -- %s",
                 describe,
                 MAX_WAIT_SECONDS,
                 rev,
+                treeherder.push_url(project, rev),
             )
             return new | set(pending)
         # _classify already logged which ancestor is unsettled; keep the per-poll
@@ -196,17 +220,21 @@ def is_stale_push(project: str, rev: str, max_age_seconds: float) -> bool:
         age = time.time() - Push(rev, branch=project).date
     except Exception:
         logger.exception(
-            "Could not read the push date for %s@%s; running agent", project, rev
+            "Could not read the push date for %s@%s; running agent -- %s",
+            project,
+            rev,
+            treeherder.push_url(project, rev),
         )
         return False
 
     if age > max_age_seconds:
         logger.info(
-            "Push %s@%s landed %.1fh ago (limit %.1fh); skipping",
+            "Push %s@%s landed %.1fh ago (limit %.1fh); skipping -- %s",
             project,
             rev,
             age / 3600,
             max_age_seconds / 3600,
+            treeherder.push_url(project, rev),
         )
         return True
     return False
@@ -232,7 +260,11 @@ def new_test_failures(
     against, every group is reported as new rather than silently dropped.
     """
     if not all(config):
-        logger.info("No configuration for %s; running agent", rev)
+        logger.info(
+            "No configuration for %s; running agent -- %s",
+            rev,
+            treeherder.push_url(project, rev),
+        )
         return set(groups)
     return _await_new_failures(
         project,

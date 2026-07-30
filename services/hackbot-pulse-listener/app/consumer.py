@@ -81,24 +81,33 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
 
     task = taskcluster.get_task(task_id)
 
-    if taskcluster.is_action_scheduled(task):
-        logger.info(
-            "Task %s (%s) was scheduled by an action task, not by the push "
-            "(backfill or retrigger); skipping",
-            task_id,
-            task_label,
-        )
-        return None
-
+    # Read before the action-task check so every decision below can be pointed at
+    # the job in Treeherder.
     hg_revision = taskcluster.get_hg_revision(task)
     if not hg_revision:
         logger.warning("No GECKO_HEAD_REV for task %s; skipping", task_id)
+        return None
+    job_link = treeherder.job_url(project, hg_revision, task_id)
+    push_link = treeherder.push_url(project, hg_revision)
+
+    if taskcluster.is_action_scheduled(task):
+        logger.info(
+            "Task %s (%s) was scheduled by an action task, not by the push "
+            "(backfill or retrigger); skipping -- %s",
+            task_id,
+            task_label,
+            job_link,
+        )
         return None
 
     with _seen_lock:
         already_seen = hg_revision in _seen
     if already_seen:
-        logger.info("Revision %s already triggered a run; skipping", hg_revision)
+        logger.info(
+            "Revision %s already triggered a run; skipping -- %s",
+            hg_revision,
+            push_link,
+        )
         return None
 
     if regression.is_stale_push(
@@ -108,25 +117,31 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
 
     if not regression.is_new_build_failure(project, hg_revision, task_label):
         logger.info(
-            "Build %s at %s inherited from an ancestor push; skipping",
+            "Build %s at %s inherited from an ancestor push; skipping -- %s",
             task_label,
             hg_revision,
+            job_link,
         )
         return None
 
     with _seen_lock:
         if hg_revision in _seen:
-            logger.info("Revision %s already triggered a run; skipping", hg_revision)
+            logger.info(
+                "Revision %s already triggered a run; skipping -- %s",
+                hg_revision,
+                push_link,
+            )
             return None
         _seen[hg_revision] = True
 
     git_commit = lando.hg_to_git(hg_revision)
     if not git_commit:
         logger.warning(
-            "Could not map hg revision %s to git for task %s (%s); skipping",
+            "Could not map hg revision %s to git for task %s (%s); skipping -- %s",
             hg_revision,
             task_id,
             project,
+            job_link,
         )
         _release(_seen, _seen_lock, [hg_revision])
         return None
@@ -144,11 +159,12 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
 
     logger.info(
-        "%s build-repair for %s@%s (git %s)",
+        "%s build-repair for %s@%s (git %s) -- %s",
         f"Triggered run {run_id}" if run_id else "Would trigger",
         project,
         hg_revision,
         git_commit,
+        job_link,
     )
     if run_id is not None:
         ctx = RunContext(
@@ -179,18 +195,22 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
 
     task = taskcluster.get_task(task_id)
 
-    if taskcluster.is_action_scheduled(task):
-        logger.info(
-            "Task %s (%s) was scheduled by an action task, not by the push "
-            "(backfill or retrigger); skipping",
-            task_id,
-            label,
-        )
-        return None
-
+    # Read before the action-task check so every decision below can be pointed at
+    # the job in Treeherder.
     hg_revision = taskcluster.get_hg_revision(task)
     if not hg_revision:
         logger.warning("No GECKO_HEAD_REV for test task %s; skipping", task_id)
+        return None
+    job_link = treeherder.job_url(project, hg_revision, task_id)
+
+    if taskcluster.is_action_scheduled(task):
+        logger.info(
+            "Task %s (%s) was scheduled by an action task, not by the push "
+            "(backfill or retrigger); skipping -- %s",
+            task_id,
+            label,
+            job_link,
+        )
         return None
 
     if regression.is_stale_push(
@@ -202,9 +222,10 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     # any Treeherder work.
     if _push_claimed(hg_revision):
         logger.info(
-            "Push %s already handed to test-repair; skipping task %s",
+            "Push %s already handed to test-repair; skipping task %s -- %s",
             hg_revision,
             task_id,
+            job_link,
         )
         return None
 
@@ -216,7 +237,12 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     job = treeherder.job_for_task(project, task_id)
     reason = treeherder.await_skip_reason(project, task_id, job)
     if reason:
-        logger.info("Treeherder classified task %s as %s; skipping", task_id, reason)
+        logger.info(
+            "Treeherder classified task %s as %s; skipping -- %s",
+            task_id,
+            reason,
+            job_link,
+        )
         return None
     config = ((job or {}).get("platform"), (job or {}).get("platform_option"))
 
@@ -229,23 +255,32 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         # cannot say what failed, so fail open rather than drop it. There is no
         # manifest to compare against an ancestor, so the gate above is the only
         # filter such a failure gets.
-        logger.info("%s; running the agent on the whole task", exc)
+        logger.info("%s; running the agent on the whole task -- %s", exc, job_link)
         return _trigger_test_repair([], *trigger)
     except Exception:
         logger.exception(
             "Could not read the failing groups of task %s; "
-            "running the agent on the whole task",
+            "running the agent on the whole task -- %s",
             task_id,
+            job_link,
         )
         return _trigger_test_repair([], *trigger)
 
     if not groups:
-        logger.info("Task %s reported no failing test groups; skipping", task_id)
+        logger.info(
+            "Task %s reported no failing test groups; skipping -- %s",
+            task_id,
+            job_link,
+        )
         return None
 
     fresh = _fresh_groups(groups, project, hg_revision, config)
     if not fresh:
-        logger.info("No new, non-intermittent groups for task %s; skipping", task_id)
+        logger.info(
+            "No new, non-intermittent groups for task %s; skipping -- %s",
+            task_id,
+            job_link,
+        )
         return None
 
     # One last cheap look before spending a run. The gate above already waited for a
@@ -254,9 +289,11 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     reason = treeherder.recheck_skip_reason(project, task_id)
     if reason:
         logger.info(
-            "Treeherder classified task %s as %s while it was being checked; skipping",
+            "Treeherder classified task %s as %s while it was being checked; "
+            "skipping -- %s",
             task_id,
             reason,
+            job_link,
         )
         return None
 
@@ -292,9 +329,10 @@ def _fresh_groups(
     for group in candidates:
         if group not in new:
             logger.info(
-                "Group %s at %s inherited from an ancestor; skipping",
+                "Group %s at %s inherited from an ancestor; skipping -- %s",
                 group,
                 hg_revision,
+                treeherder.push_url(project, hg_revision),
             )
     return [group for group in candidates if group in new]
 
@@ -308,11 +346,13 @@ def _trigger_test_repair(
     developer_email: str | None,
     executor: Executor,
 ) -> str | None:
+    job_link = treeherder.job_url(project, hg_revision, task_id)
     if not _claim_push(hg_revision):
         logger.info(
-            "Push %s was claimed while task %s was being checked; skipping",
+            "Push %s was claimed while task %s was being checked; skipping -- %s",
             hg_revision,
             task_id,
+            job_link,
         )
         return None
 
@@ -322,17 +362,20 @@ def _trigger_test_repair(
             agent_name=settings.test_repair_agent_name,
         )
     except Exception:
-        logger.exception("Failed to trigger test-repair run for task %s", task_id)
+        logger.exception(
+            "Failed to trigger test-repair run for task %s -- %s", task_id, job_link
+        )
         _release(_seen_tests, _seen_tests_lock, [hg_revision])
         return None
 
     logger.info(
-        "%s test-repair for %s task %s (%s) at %s",
+        "%s test-repair for %s task %s (%s) at %s -- %s",
         f"Triggered run {run_id}" if run_id else "Would trigger",
         project,
         task_id,
         f"{len(test_groups)} group(s)" if test_groups else "groups unresolved",
         hg_revision,
+        job_link,
     )
     if run_id is not None:
         git_commit = lando.hg_to_git(hg_revision)
@@ -343,9 +386,10 @@ def _trigger_test_repair(
             # linking to an empty commit.
             logger.warning(
                 "Could not map hg revision %s to git for task %s; "
-                "the notification will omit the git revision",
+                "the notification will omit the git revision -- %s",
                 hg_revision,
                 task_id,
+                job_link,
             )
         ctx = RunContext(
             run_id=run_id,

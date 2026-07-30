@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -655,3 +656,32 @@ def test_manifest_failure_claims_the_push_against_a_group_less_task(env):
     assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
     assert consumer.process(_test_msg(task_id="B"), env.executor) is None
     env.trigger_run.assert_called_once()
+
+
+_LINK = (
+    "https://treeherder.mozilla.org/#/jobs"
+    "?repo=autoland&revision=hgrev&selectedTaskRun=TT"
+)
+
+
+def test_a_rejected_task_is_logged_with_a_treeherder_link(env, caplog):
+    # The reason to log links at all: every verdict must be checkable in the UI.
+    env.await_skip_reason.return_value = "intermittent"
+    with caplog.at_level(logging.INFO, logger="app.consumer"):
+        assert consumer.process(_test_msg(), env.executor) is None
+    assert _LINK in caplog.text
+
+
+def test_a_triggered_run_is_logged_with_a_treeherder_link(env, caplog):
+    with caplog.at_level(logging.INFO, logger="app.consumer"):
+        assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert _LINK in caplog.text
+
+
+def test_an_action_scheduled_task_is_logged_with_a_treeherder_link(env, caplog):
+    # This one is logged before the revision was previously read, so it is the case
+    # the ordering change exists to cover.
+    env.get_task.return_value = _task_def(parent="ACTION-CALLBACK")
+    with caplog.at_level(logging.INFO, logger="app.consumer"):
+        assert consumer.process(_test_msg(), env.executor) is None
+    assert _LINK in caplog.text

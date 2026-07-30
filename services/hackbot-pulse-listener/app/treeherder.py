@@ -56,6 +56,21 @@ _CLASSIFICATIONS = {
 _NOT_A_REGRESSION = {2, 3, 4, 5, 7, 8}
 
 
+def push_url(project: str, revision: str | None = None) -> str:
+    """Treeherder's job view for a push, or for the project alone without one."""
+    url = f"{settings.treeherder_url.rstrip('/')}/#/jobs?repo={project}"
+    return f"{url}&revision={revision}" if revision else url
+
+
+def job_url(project: str, revision: str | None, task_id: str) -> str:
+    """Treeherder's job view with one task selected.
+
+    Given no revision Treeherder cannot load the push up front; it still resolves the
+    task and offers a link to the push it belongs to.
+    """
+    return f"{push_url(project, revision)}&selectedTaskRun={task_id}"
+
+
 def _job(project: str, task_id: str) -> dict | None:
     """The Treeherder job for a Taskcluster task, or None if not ingested yet.
 
@@ -222,16 +237,19 @@ def job_for_task(project: str, task_id: str) -> dict | None:
             job = _job(project, task_id)
         except Exception:
             logger.exception(
-                "Treeherder lookup failed for task %s; investigating", task_id
+                "Treeherder lookup failed for task %s; investigating -- %s",
+                task_id,
+                job_url(project, None, task_id),
             )
             return None
         if job is not None:
             return job
         if time.monotonic() >= deadline:
             logger.info(
-                "Treeherder has not ingested task %s after %ss; investigating",
+                "Treeherder has not ingested task %s after %ss; investigating -- %s",
                 task_id,
                 settings.treeherder_ingest_max_wait_seconds,
+                job_url(project, None, task_id),
             )
             return None
         time.sleep(settings.treeherder_ingest_poll_seconds)
@@ -275,7 +293,9 @@ def recheck_skip_reason(project: str, task_id: str) -> str | None:
         return skip_reason(_job(project, task_id))
     except Exception:
         logger.exception(
-            "Treeherder re-check failed for task %s; investigating", task_id
+            "Treeherder re-check failed for task %s; investigating -- %s",
+            task_id,
+            job_url(project, None, task_id),
         )
         return None
 

@@ -2,7 +2,7 @@ import base64
 import logging
 import re
 
-from app import client, github
+from app import client, github, treeherder
 from app.config import settings
 from app.models import RunContext
 
@@ -189,7 +189,7 @@ def _build_test_repair_body(
         f"- **Revision (hg):** [`{ctx.hg_revision[:12]}`]({_hg_url(ctx.hg_revision)})",
         f"- **Failed task:** [`{ctx.task_id}`]({_task_url(ctx.task_id)})",
         f"- **Treeherder:** "
-        f"[jobs]({_treeherder_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
+        f"[jobs]({treeherder.job_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
     ]
 
     confidence = findings.get("confidence")
@@ -272,13 +272,6 @@ def _task_url(task_id: str) -> str:
     return f"{settings.taskcluster_root_url.rstrip('/')}/tasks/{task_id}"
 
 
-def _treeherder_url(repo: str, hg_revision: str, task_id: str) -> str:
-    return (
-        f"{settings.treeherder_url.rstrip('/')}/#/jobs"
-        f"?repo={repo}&revision={hg_revision}&selectedTaskRun={task_id}"
-    )
-
-
 def _bug_url(bug_id: object) -> str:
     return f"{settings.bugzilla_url.rstrip('/')}/show_bug.cgi?id={bug_id}"
 
@@ -301,7 +294,7 @@ def _build_body(
         f"- **Revision (hg):** [`{ctx.hg_revision[:12]}`]({_hg_url(ctx.hg_revision)})",
         f"- **Failed task:** [`{ctx.task_id}`]({_task_url(ctx.task_id)})",
         f"- **Treeherder:** "
-        f"[jobs]({_treeherder_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
+        f"[jobs]({treeherder.job_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
     ]
 
     if blamed_commit:
