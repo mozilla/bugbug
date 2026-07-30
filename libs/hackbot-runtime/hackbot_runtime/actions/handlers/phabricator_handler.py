@@ -108,6 +108,44 @@ async def _revision_fields(revision_id: int) -> dict:
     return data[0].get("fields", {}) if data else {}
 
 
+async def _diff_commits(diff_id: Any) -> list[dict]:
+    """Return a diff's existing local commits from ``differential.diff.search``."""
+    if not diff_id:
+        return []
+
+    result = await _conduit_request(
+        "differential.diff.search",
+        constraints={"ids": [int(diff_id)]},
+        attachments={"commits": True},
+        limit=1,
+    )
+    data = result.get("data") or []
+    if not data:
+        return []
+
+    commits = data[0].get("attachments", {}).get("commits", {}).get("commits", [])
+    return commits if isinstance(commits, list) else []
+
+
+def _local_commit_author_fields(previous_commits: list[dict]) -> dict[str, str]:
+    """Return the previous diff's commit author identity."""
+    if not previous_commits:
+        return {}
+
+    previous_author = previous_commits[-1].get("author") or {}
+    if not previous_author.get("name") or not previous_author.get("email"):
+        log.warning(
+            "Could not preserve local commit author: previous diff author metadata "
+            "is incomplete"
+        )
+        return {}
+
+    return {
+        "author": previous_author["name"],
+        "authorEmail": previous_author["email"],
+    }
+
+
 def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) -> str:
     """Build moz-phab's arc commit message, with the Differential Revision URL.
 
@@ -247,7 +285,10 @@ class UpdatePatchHandler:
     Only the diff changes: title, summary, bug id, and review status are left
     exactly as they are, so an update never overwrites something a reviewer or
     the patch author has since edited. The revision's fields are read only to
-    rebuild the ``local:commits`` message, which has to match the revision.
+    rebuild the ``local:commits`` message, which has to match the revision. The
+    previous diff's commit author is preserved so updating a patch does not
+    silently replace the author's identity with Hackbot's synthetic commit
+    identity.
     """
 
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
@@ -265,6 +306,14 @@ class UpdatePatchHandler:
             )
 
         try:
+            fields = await _revision_fields(revision_id)
+            previous_diff_id = fields.get("diffID")
+            author_fields = _local_commit_author_fields(
+                await _diff_commits(previous_diff_id)
+            )
+            for commit_info in submission["local_commits"].values():
+                commit_info.update(author_fields)
+
             diff_result = await _conduit_request(
                 "differential.creatediff",
                 repositoryPHID=await _repository_phid(),
@@ -276,7 +325,6 @@ class UpdatePatchHandler:
                 transactions=[{"type": "update", "value": diff_result["phid"]}],
             )
 
-            fields = await _revision_fields(revision_id)
             await _set_local_commits(
                 diff_result["diffid"],
                 submission["local_commits"],

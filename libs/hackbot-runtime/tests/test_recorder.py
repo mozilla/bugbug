@@ -1,7 +1,8 @@
-"""Tests for ActionsRecorder: attachment upload vs local-copy behavior."""
+"""Tests for ActionsRecorder: attachment upload vs local-copy behavior, hooks."""
 
 from pathlib import Path
 
+import pytest
 from hackbot_runtime.actions import ActionsRecorder
 
 
@@ -88,3 +89,131 @@ def test_ref_omitted_when_not_given():
     rec = ActionsRecorder()
     rec.record("bugzilla.update_bug", {"bug_id": 1})
     assert "ref" not in rec.actions[0]
+
+
+def test_hooks_run_in_order_and_mutations_are_recorded():
+    calls: list[str] = []
+
+    def first(action):
+        calls.append("first")
+        action["params"]["priority"] = "P1"
+
+    def second(action):
+        calls.append("second")
+        # Sees the previous hook's mutation, and the built action.
+        action["params"]["seen"] = action["params"]["priority"]
+
+    rec = ActionsRecorder(hooks={"bugzilla.update_bug": [first, second]})
+    returned = rec.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="rule X")
+
+    assert calls == ["first", "second"]
+    assert returned["params"] == {"bug_id": 1, "priority": "P1", "seen": "P1"}
+    assert rec.actions[0] == returned
+
+
+def test_hooks_only_run_for_their_action_type():
+    seen: list[str] = []
+    rec = ActionsRecorder(
+        hooks={"phabricator.submit_patch": [lambda action: seen.append(action["type"])]}
+    )
+
+    rec.record("bugzilla.add_comment", {"bug_id": 1})
+    assert seen == []
+
+    rec.record("phabricator.submit_patch", {"bug_id": 1})
+    assert seen == ["phabricator.submit_patch"]
+
+
+def test_hook_sees_ref_but_runs_before_attachments_are_published(tmp_path):
+    src = tmp_path / "fix.patch"
+    src.write_text("diff")
+    captured: list[dict] = []
+
+    def capture(action):
+        captured.append(dict(action))
+
+    rec = ActionsRecorder(
+        artifacts_dir=tmp_path / "a",
+        hooks={"bugzilla.add_attachment": [capture]},
+    )
+    recorded = rec.record(
+        "bugzilla.add_attachment",
+        {"bug_id": 1},
+        ref="patch",
+        attachments={"file": src},
+    )
+
+    assert captured[0]["ref"] == "patch"
+    # Publishing happens only once the hooks have accepted the action.
+    assert "attachments" not in captured[0]
+    assert recorded["attachments"] == [
+        {"name": "file", "uploaded_key": "attachments/0/file"}
+    ]
+
+
+def test_raising_hook_aborts_the_recording():
+    def reject(action):
+        raise ValueError("no")
+
+    def never(action):  # pragma: no cover - must not run
+        raise AssertionError("later hook ran after an earlier one raised")
+
+    rec = ActionsRecorder(hooks={"bugzilla.update_bug": [reject, never]})
+
+    with pytest.raises(ValueError, match="no"):
+        rec.record("bugzilla.update_bug", {"bug_id": 1})
+
+    assert rec.actions == []
+
+
+def test_raising_hook_publishes_no_attachment(tmp_path):
+    src = tmp_path / "fix.patch"
+    src.write_text("diff")
+    uploader = _StubUploader()
+    artifacts = tmp_path / "artifacts"
+
+    def reject(action):
+        raise ValueError("no")
+
+    rec = ActionsRecorder(
+        uploader=uploader,
+        artifacts_dir=artifacts,
+        hooks={"bugzilla.add_attachment": [reject]},
+    )
+
+    with pytest.raises(ValueError, match="no"):
+        rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src})
+
+    # Nothing uploaded or copied: an aborted recording leaves no orphaned file
+    # at a key the next recorded action would reuse.
+    assert uploader.uploaded == []
+    assert not artifacts.exists()
+
+    # The next successful record still owns attachments/0, with no leftover
+    # from the rejected action sitting at that key.
+    rec.record("bugzilla.update_bug", {"bug_id": 1})
+    assert [a["type"] for a in rec.actions] == ["bugzilla.update_bug"]
+
+
+def test_add_hook_appends_after_constructor_hooks():
+    calls: list[str] = []
+    rec = ActionsRecorder(
+        hooks={"bugzilla.update_bug": [lambda action: calls.append("ctor")]}
+    )
+    rec.add_hook("bugzilla.update_bug", lambda action: calls.append("added"))
+    rec.add_hook("bugzilla.add_comment", lambda action: calls.append("other-type"))
+
+    rec.record("bugzilla.update_bug", {"bug_id": 1})
+
+    assert calls == ["ctor", "added"]
+
+
+def test_constructor_hooks_are_copied():
+    hooks: dict[str, list] = {"bugzilla.update_bug": []}
+    rec = ActionsRecorder(hooks=hooks)
+    hooks["bugzilla.update_bug"].append(
+        lambda action: pytest.fail("mutating the caller's mapping must not register")
+    )
+
+    rec.record("bugzilla.update_bug", {"bug_id": 1})
+    assert len(rec.actions) == 1
