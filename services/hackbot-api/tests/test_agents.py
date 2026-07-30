@@ -7,6 +7,7 @@ from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
+    TestRepairInputs,
 )
 from app.schemas import (
     TestPlanGeneratorInputs as PlanGeneratorInputs,
@@ -91,3 +92,29 @@ def test_test_plan_generator_registry_uses_default_env_serializer():
     assert spec.build_env is None
     assert spec.job_name == "hackbot-agent-test-plan-generator"
     assert spec.input_schema is PlanGeneratorInputs
+
+
+def test_test_repair_registry_entry():
+    spec = AGENT_REGISTRY["test-repair"]
+    assert spec.build_env is None
+    assert spec.input_schema is TestRepairInputs
+    assert spec.job_name == "hackbot-agent-test-repair"
+    assert spec.auto_apply_actions is False
+
+
+def test_test_repair_env_serialization():
+    # The agent resolves the test, commit range and clone depth from the task id,
+    # so the only per-run input is the failing task mapping.
+    env = model_to_env(
+        TestRepairInputs(
+            failure_tasks={"test-linux1804-64/opt-xpcshell-1": "abc123"},
+        )
+    )
+    assert json.loads(env["FAILURE_TASKS"]) == {
+        "test-linux1804-64/opt-xpcshell-1": "abc123"
+    }
+
+
+def test_test_repair_inputs_require_failure_tasks():
+    with pytest.raises(ValidationError):
+        TestRepairInputs(model="claude-opus-4-8")

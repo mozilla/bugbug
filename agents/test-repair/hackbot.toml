@@ -1,0 +1,10 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+# The agent resolves the failure commit and candidate range from the task id at
+# startup, then sets SOURCE_REF (the head/failure commit) and SOURCE_DEPTH (deep
+# enough to reach the last-green commit) before the runtime prepares the tree.
+
+[firefox]
+enabled = true
+objdir = "objdir-test-repair"
