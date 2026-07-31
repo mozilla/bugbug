@@ -115,6 +115,19 @@ class PhabricatorClient:
             if user.get("phid")
         }
 
+    async def get_project_members(self, project_phid: str) -> frozenset[str]:
+        """Return the user PHIDs belonging to a Phabricator project."""
+        result = await self.conduit_request(
+            "project.search",
+            constraints={"phids": [project_phid]},
+            attachments={"members": True},
+        )
+        data = result.get("data") or []
+        if not data:
+            return frozenset()
+        members = data[0].get("attachments", {}).get("members", {}).get("members", [])
+        return frozenset(member["phid"] for member in members if member.get("phid"))
+
     async def query_latest_diff(self, revision_id: int) -> PhabricatorDiff | None:
         """The most recent diff for a revision, or ``None`` if it has none.
 

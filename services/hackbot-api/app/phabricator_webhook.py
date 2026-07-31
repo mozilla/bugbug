@@ -9,6 +9,7 @@ Bugzilla bug id. The route in ``app/routers/webhooks.py`` orchestrates these.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,6 +21,13 @@ log = logging.getLogger(__name__)
 
 # Transaction types that carry a comment we can scan for the mention.
 _COMMENT_TYPES = frozenset({"comment", "inline"})
+EDITBUGS_GROUP_PHID = "PHID-PROJ-njo5uuqyyq3oijbkhy55"
+
+
+@dataclass(frozen=True)
+class HackbotMention:
+    raw: str
+    author_phid: str
 
 
 def triggering_transaction_phids(payload: dict) -> list[str]:
@@ -37,8 +45,8 @@ def find_hackbot_mentions(
     *,
     bot_phid: str,
     token: str,
-) -> list[str]:
-    """Return the text of every triggering comment that mentions ``token``.
+) -> list[HackbotMention]:
+    """Return every triggering comment that mentions ``token``.
 
     Only considers transactions named in this delivery, of a comment type, not
     authored by the bot itself (loop prevention). A single review can leave
@@ -46,7 +54,7 @@ def find_hackbot_mentions(
     returned, in transaction order. At most one per transaction: a transaction's
     ``comments`` list is that comment's version history, not distinct comments.
     """
-    matches: list[str] = []
+    matches: list[HackbotMention] = []
     for transaction in transactions:
         if transaction.get("phid") not in triggering_phids:
             continue
@@ -57,7 +65,12 @@ def find_hackbot_mentions(
         for comment in transaction.get("comments") or []:
             raw = (comment.get("content") or {}).get("raw") or ""
             if token in raw:
-                matches.append(raw)
+                matches.append(
+                    HackbotMention(
+                        raw=raw,
+                        author_phid=transaction.get("authorPHID", ""),
+                    )
+                )
                 break
     return matches
 
@@ -111,19 +124,34 @@ async def detect_mention_and_revision(
     revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
     transactions = await client.search_transactions(object_phid)
-    comments = find_hackbot_mentions(
+    mentions = find_hackbot_mentions(
         transactions,
         set(triggering_phids),
         bot_phid=webhook.bot_phid,
         token=webhook.mention_token,
     )
-    if not comments:
+    if not mentions:
         log.warning(
             "No %s mention found in triggering transactions %s on %s",
             webhook.mention_token,
             triggering_phids,
             object_phid,
         )
+        return None
+
+    authorized_members = await client.get_project_members(EDITBUGS_GROUP_PHID)
+    comments: list[str] = []
+    for mention in mentions:
+        if mention.author_phid in authorized_members:
+            comments.append(mention.raw)
+        else:
+            log.warning(
+                "Ignoring %s mention from non-editbugs user %s on %s",
+                webhook.mention_token,
+                mention.author_phid or "<missing PHID>",
+                object_phid,
+            )
+    if not comments:
         return None
     comment = _join_comments(comments)
 
