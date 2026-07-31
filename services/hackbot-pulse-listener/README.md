@@ -21,6 +21,10 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
      action-callback task for a backfill or retrigger.
    - Pushes that landed more than `MAX_PUSH_AGE_HOURS` ago (default 24). A failure can
      surface long after its push, and by then the push has been superseded.
+   - Test suites that report no manifests (gtest, junit, talos, raptor, jittest, ... —
+     mozci's `is_no_groups_suite`). Their failures are overwhelmingly crashes and
+     timeouts, and the agent's method of re-running a failing manifest does not apply.
+     Judged on the label, so it costs nothing.
 4. **Dedupe** with in-memory TTL caches, both keyed by revision: one run per push per
    agent, triggered on the first failing task worth investigating. The test-repair
    agent works from a single task but reads the push's other failures itself, so a
@@ -33,12 +37,17 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
      build to finish first.
    - _Test:_ first drop whatever Treeherder judges not to be a new regression
      (intermittent, infra, expected-fail, fixed-by-commit). Treeherder ingests a minute or
-     so behind us and classifies a few minutes after that, so this gate waits for the job
-     to appear and then for its verdict — it is the cheap filter, and most test failures
-     stop here, before any group is fetched or any ancestor walked. What survives is
+     so behind us and classifies well after that — a median of ~19 minutes past the end of
+     the job for the intermittents we care about — so this gate waits for the job to
+     appear and then up to `TREEHERDER_CLASSIFICATION_WAIT_SECONDS` for its verdict. It is
+     the cheap filter, and most test failures stop here, before any group is fetched or
+     any ancestor walked. What survives is
      narrowed to the groups that are new for this task's own configuration (platform and
      build option), then Treeherder is asked once more, since a verdict can still land
      while that walk runs. The run carries only the task id.
+   - _Both:_ a walk is abandoned as soon as another task triggers the run for that
+     push. One push can emit dozens of failing tasks, and without this each one holds
+     a worker for the full wait only to find the push already handed off.
 6. **Budget.** At most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs (default 100) may
    start in any rolling 24 hours. A slot is taken when a run is triggered and given
    back if the trigger fails, so only runs that really started count. Once the budget

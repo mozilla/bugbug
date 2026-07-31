@@ -36,10 +36,10 @@ class Settings(BaseSettings):
     # gate waits for the job to be ingested before reading that verdict.
     treeherder_ingest_poll_seconds: int = 30
     treeherder_ingest_max_wait_seconds: int = 240
-    # How long to wait for a verdict once the job is ingested. Classification lands a
-    # few minutes after ingestion, and most test failures turn out to be intermittent
-    # or expected-fail, so waiting here rejects them before the ancestor walk.
-    treeherder_classification_wait_seconds: int = 300
+    # How long to wait for a verdict once the job is ingested. Most test failures turn
+    # out to be intermittent or expected-fail, so waiting here rejects them before the
+    # ancestor walk and before an agent run.
+    treeherder_classification_wait_seconds: int = 1200
 
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60

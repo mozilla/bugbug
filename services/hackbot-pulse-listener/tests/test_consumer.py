@@ -342,8 +342,9 @@ def env(monkeypatch):
         recheck_skip_reason=MagicMock(return_value=None),
         await_skip_reason=MagicMock(return_value=None),
         new_test_failures=MagicMock(
-            side_effect=lambda p, r, label, groups: set(groups)
+            side_effect=lambda p, r, cfg, groups, abort=None: set(groups)
         ),
+        is_new_task_failure=MagicMock(return_value=True),
         hg_to_git=MagicMock(return_value="gitH"),
         trigger_run=MagicMock(return_value="tr-1"),
         executor=MagicMock(),
@@ -359,6 +360,9 @@ def env(monkeypatch):
     )
     monkeypatch.setattr(
         consumer.regression, "new_test_failures", mocks.new_test_failures
+    )
+    monkeypatch.setattr(
+        consumer.regression, "is_new_task_failure", mocks.is_new_task_failure
     )
     monkeypatch.setattr(consumer.lando, "hg_to_git", mocks.hg_to_git)
     monkeypatch.setattr(consumer.client, "trigger_run", mocks.trigger_run)
@@ -520,7 +524,9 @@ def test_missing_hg_revision_skips_test_task(env):
 def test_every_failing_group_reaches_the_mozci_walk(env):
     groups = ["a/mochitest.ini", "b/mochitest.ini"]
     env.failing_groups.return_value = groups
-    env.new_test_failures.side_effect = lambda p, r, cfg, gs: {"b/mochitest.ini"}
+    env.new_test_failures.side_effect = lambda p, r, cfg, gs, abort=None: {
+        "b/mochitest.ini"
+    }
 
     assert consumer.process(_test_msg(), env.executor) == "tr-1"
     assert env.new_test_failures.call_args.args[3] == groups
@@ -550,7 +556,7 @@ def test_classification_landing_during_the_check_cancels_the_run(env):
 
 def test_recheck_happens_after_the_regression_check(env):
     order = []
-    env.new_test_failures.side_effect = lambda p, r, cfg, gs: (
+    env.new_test_failures.side_effect = lambda p, r, cfg, gs, abort=None: (
         order.append("walk"),
         set(gs),
     )[1]
@@ -785,7 +791,7 @@ def test_losing_the_claim_race_gives_the_slot_back(env, monkeypatch):
     # one reserved must not stay spent for the rest of the day.
     monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
 
-    def claim_meanwhile(project, rev, config, groups):
+    def claim_meanwhile(project, rev, config, groups, abort=None):
         consumer._claim_push(rev)
         return set(groups)
 
@@ -793,3 +799,101 @@ def test_losing_the_claim_race_gives_the_slot_back(env, monkeypatch):
     assert consumer.process(_test_msg(task_id="A"), env.executor) is None
     env.trigger_run.assert_not_called()
     assert len(consumer._test_run_times) == 0
+
+
+def test_source_test_tasks_are_not_routed_to_test_repair(env):
+    # source-test is lint / shadow-scheduler / file-metadata work, not a Firefox test
+    # harness, so the agent has no way to repair it.
+    body = _test_msg()
+    body["task"]["tags"]["kind"] = "source-test"
+    body["task"]["tags"]["label"] = "source-test-node-newtab-unit-tests"
+    body["task"]["tags"].pop("test-suite", None)
+
+    assert consumer.process(body, env.executor) is None
+    env.get_task.assert_not_called()
+    env.trigger_run.assert_not_called()
+
+
+def test_group_less_task_inherited_from_an_ancestor_is_skipped(env):
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.is_new_task_failure.return_value = False
+
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.trigger_run.assert_not_called()
+    assert env.is_new_task_failure.call_args.args[:3] == (
+        "autoland",
+        "hgrev",
+        "test-linux1804-64/opt-mochitest-browser-chrome-1",
+    )
+
+
+def test_group_less_task_new_at_this_push_still_triggers(env):
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.is_new_task_failure.return_value = True
+
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.trigger_run.assert_called_once()
+
+
+def test_an_unreadable_group_lookup_does_not_wait_on_an_ancestor(env):
+    # A Treeherder error is not the group-less case: comparing the label would hit
+    # the same broken API, so that failure still runs the agent outright.
+    env.failing_groups.side_effect = RuntimeError("treeherder down")
+
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.is_new_task_failure.assert_not_called()
+
+
+def test_group_less_suites_are_not_investigated(env):
+    # gtest / junit / talos and the rest report no manifests. Every one the listener
+    # ran on was later classified intermittent, and the agent cannot re-run a
+    # manifest that does not exist.
+    body = _test_msg()
+    body["task"]["tags"]["label"] = "test-macosx1500-aarch64/debug-gtest-1proc"
+
+    assert consumer.process(body, env.executor) is None
+    # Rejected on the label alone: no ingest wait, no verdict wait, no walk.
+    env.job_for_task.assert_not_called()
+    env.failing_groups.assert_not_called()
+    env.trigger_run.assert_not_called()
+
+
+def test_manifest_suites_are_still_investigated(env):
+    # The guard must not swallow a suite that does report manifests.
+    body = _test_msg()
+    body["task"]["tags"]["label"] = "test-linux2404-64/debug-mochitest-browser-chrome-7"
+    assert consumer.process(body, env.executor) == "tr-1"
+
+
+def test_a_walk_is_abandoned_once_the_push_is_claimed(env):
+    # The biggest observed waste: a sibling task walking for the full wait only to
+    # find the push already handed off. The walk is told to stop instead.
+    aborted = {}
+
+    def walk(project, rev, config, groups, should_abort=None):
+        consumer._claim_push(rev)
+        aborted["stopped"] = should_abort()
+        raise consumer.regression.WalkAborted("group at rev")
+
+    env.new_test_failures.side_effect = walk
+    assert consumer.process(_test_msg(), env.executor) is None
+    assert aborted["stopped"] is True
+    env.trigger_run.assert_not_called()
+
+
+def test_an_abandoned_walk_does_not_look_inherited(env, caplog):
+    # It must not be reported as "no new groups": that would read as a real verdict
+    # about the failure rather than "we stopped asking".
+    env.new_test_failures.side_effect = consumer.regression.WalkAborted("group at rev")
+    with caplog.at_level(logging.INFO, logger="app.consumer"):
+        assert consumer.process(_test_msg(), env.executor) is None
+    assert "abandoning the check" in caplog.text
+    assert "inherited" not in caplog.text
+    assert "No new, non-intermittent groups" not in caplog.text
+
+
+def test_the_group_less_walk_is_also_abandoned(env):
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.is_new_task_failure.side_effect = consumer.regression.WalkAborted("task at rev")
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.trigger_run.assert_not_called()

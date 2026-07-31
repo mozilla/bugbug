@@ -5,12 +5,14 @@ Treeherder itself uses mozci for exactly this. The per-push results come from
 Treeherder, which keeps them small: mozci would instead pull the push's whole task
 list from the Taskcluster queue, tens of megabytes per ancestor.
 
-A build is looked up by its task label, which is stable across pushes. A test group
-is looked up by configuration (platform and build option) instead, because a test
-label carries its chunk number and chunk assignments drift between pushes.
+A build, and a test task from a suite that reports no manifests, are looked up by
+task label. A test group is looked up by configuration (platform and build option)
+instead, because a chunked test label carries its chunk number and chunk assignments
+drift between pushes.
 """
 
 import logging
+import re
 import time
 
 from mozci.errors import ParentPushNotFound
@@ -39,6 +41,10 @@ _UNSETTLED_RESULTS = ("retry", "exception", "unknown")
 _PENDING = object()
 
 
+class WalkAborted(Exception):
+    """The caller stopped needing this answer while the walk was running."""
+
+
 def _unsettled(jobs: list[dict]) -> bool:
     """Whether any of these runs may still change outcome."""
     return any(
@@ -47,8 +53,8 @@ def _unsettled(jobs: list[dict]) -> bool:
     )
 
 
-def _build_status(project: str, rev: str, label: str):
-    """'passed'/'failed'/_PENDING/None for a build label on a push.
+def _label_status(project: str, rev: str, label: str):
+    """'passed'/'failed'/_PENDING/None for one task label on a push.
 
     None is non-decisive (never ran here, or a non-pass/fail terminal state), so such
     gaps are skipped rather than mistaken for an inherited failure.
@@ -69,8 +75,15 @@ def _group_status(project: str, rev: str, config: tuple[str, str], group: str):
     """'passed'/'failed'/_PENDING/None for a test group on a push, in one config.
 
     Only this configuration's runs are consulted, so a manifest already broken on
-    another platform cannot mask a genuine new failure on this one. Same precedence
-    as _build_status: pass, then pending, then fail.
+    another platform cannot mask a genuine new failure on this one.
+
+    Precedence is pass, then fail, then pending -- unlike _label_status, which puts
+    pending first. A recorded failure has to be decisive here because ``_unsettled``
+    covers every job of the configuration, not just the ones that could run this
+    manifest, and on a recent ancestor some unrelated job is nearly always still
+    going: deferring on that spent the whole MAX_WAIT_SECONDS and then failed open.
+    The cost is that an ancestor whose failure was itself intermittent now reads as
+    inherited, so such a failure is skipped rather than investigated.
     """
     jobs = treeherder.config_jobs(project, rev, *config)
     results = treeherder.group_results(project, rev)
@@ -81,10 +94,10 @@ def _group_status(project: str, rev: str, config: tuple[str, str], group: str):
     ]
     if any(recorded):
         return "passed"
-    if _unsettled(jobs):
-        return _PENDING
     if recorded:
         return "failed"
+    if _unsettled(jobs):
+        return _PENDING
 
     # Nothing recorded for the group: this push never ran it (coalesced, or the
     # manifest was chunked into another task).
@@ -145,7 +158,9 @@ def _classify(project: str, rev: str, status_fn, describe: str, first_pass=True)
     return True
 
 
-def _await_new_failures(project: str, rev: str, status_fn, units, describe: str) -> set:
+def _await_new_failures(
+    project: str, rev: str, status_fn, units, describe: str, should_abort=None
+) -> set:
     """The units whose failure `rev` introduced; the rest were inherited.
 
     status_fn(ancestor_rev, unit) reports 'passed'/'failed'/_PENDING/None.
@@ -153,12 +168,20 @@ def _await_new_failures(project: str, rev: str, status_fn, units, describe: str)
     Fails open -- undecided units counted as new -- on any error, an ancestor still
     unsettled past MAX_WAIT_SECONDS, or no deciding ancestor within MAX_DEPTH, so a
     real regression is never silently dropped.
+
+    ``should_abort`` is polled between attempts; once it returns True the walk raises
+    WalkAborted, because a wait of up to MAX_WAIT_SECONDS is not worth spending on an
+    answer the caller has stopped being able to act on.
     """
     deadline = time.monotonic() + MAX_WAIT_SECONDS
     unresolved = list(units)
     new: set = set()
     first_pass = True
     while True:
+        # Checked outside the try below, which would otherwise swallow this and
+        # fail open.
+        if should_abort is not None and should_abort():
+            raise WalkAborted(f"{describe} at {rev}")
         try:
             pending = []
             for unit in unresolved:
@@ -240,19 +263,52 @@ def is_stale_push(project: str, rev: str, max_age_seconds: float) -> bool:
     return False
 
 
-def is_new_build_failure(project: str, rev: str, label: str) -> bool:
-    """True if this push introduced the build failure, False if it inherited it."""
+# A trailing chunk number, e.g. "-12" on mochitest-browser-chrome-12.
+_CHUNKED_LABEL = re.compile(r"-\d+$")
+
+
+def _is_new_label_failure(
+    project: str, rev: str, label: str, describe: str, should_abort=None
+) -> bool:
     return label in _await_new_failures(
         project,
         rev,
-        lambda ancestor, unit: _build_status(project, ancestor, unit),
+        lambda ancestor, unit: _label_status(project, ancestor, unit),
         [label],
-        "build",
+        describe,
+        should_abort,
     )
 
 
+def is_new_build_failure(project: str, rev: str, label: str, should_abort=None) -> bool:
+    """True if this push introduced the build failure, False if it inherited it."""
+    return _is_new_label_failure(project, rev, label, "build", should_abort)
+
+
+def is_new_task_failure(project: str, rev: str, label: str, should_abort=None) -> bool:
+    """Whether this push introduced a whole-task failure, compared by task label.
+
+    For a suite that reports no manifests (gtest, jittest, talos, ...) there is no
+    group to compare, so the task as a whole is the finest granularity available.
+    Only meaningful for an unchunked label: a chunk covers different tests on each
+    push, so a chunked task is reported as new rather than compared wrongly.
+    """
+    if _CHUNKED_LABEL.search(label):
+        logger.info(
+            "Task %s at %s is chunked, so no ancestor is comparable; running agent",
+            label,
+            rev,
+        )
+        return True
+    return _is_new_label_failure(project, rev, label, "task", should_abort)
+
+
 def new_test_failures(
-    project: str, rev: str, config: tuple[str, str], groups: list[str]
+    project: str,
+    rev: str,
+    config: tuple[str, str],
+    groups: list[str],
+    should_abort=None,
 ) -> set[str]:
     """The failing groups this push introduced, for one configuration.
 
@@ -272,4 +328,5 @@ def new_test_failures(
         lambda ancestor, group: _group_status(project, ancestor, config, group),
         groups,
         "group",
+        should_abort,
     )

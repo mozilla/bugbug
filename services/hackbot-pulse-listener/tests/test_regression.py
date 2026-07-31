@@ -229,3 +229,67 @@ def test_unreadable_push_date_is_not_stale():
     # Fails open so a network blip never drops a real regression.
     with patch.object(regression, "Push", side_effect=RuntimeError("boom")):
         assert regression.is_stale_push("autoland", "rev", DAY) is False
+
+
+_TASK_LABEL = "test-macosx1500-aarch64/debug-gtest-1proc"
+
+
+def _run_task(chain):
+    """The same gate, entered through is_new_task_failure with a test label."""
+    head, jobs = chain
+
+    def label_jobs(project, rev, label):
+        return [j for j in jobs.get(rev, []) if label == _TASK_LABEL]
+
+    with (
+        patch.object(regression, "Push", return_value=head),
+        patch.object(regression.treeherder, "label_jobs", label_jobs),
+        patch.object(regression.time, "sleep", lambda _s: None),
+    ):
+        return regression.is_new_task_failure("autoland", "head", _TASK_LABEL)
+
+
+def test_group_less_task_failing_at_the_parent_is_inherited():
+    # The gap this closes: a suite with no manifests used to be triggered blind.
+    assert _run_task(_chain(failed())) is False
+
+
+def test_group_less_task_green_at_the_parent_is_new():
+    assert _run_task(_chain(passed())) is True
+
+
+def test_chunked_task_label_is_not_compared():
+    # Chunk assignments drift between pushes, so the ancestor's chunk 12 covers
+    # different tests. Nothing is looked up and the failure is investigated.
+    #
+    # Asserted outside the patch on purpose: _await_new_failures catches every
+    # exception and falls open, so raising in a stub would be swallowed and the
+    # test would pass with the guard removed.
+    chunked = "test-linux2404-64/opt-mochitest-browser-chrome-12"
+    with (
+        patch.object(regression, "Push") as push,
+        patch.object(regression.treeherder, "label_jobs") as label_jobs,
+    ):
+        assert regression.is_new_task_failure("autoland", "head", chunked) is True
+    push.assert_not_called()
+    label_jobs.assert_not_called()
+
+
+def test_a_walk_stops_when_the_caller_stops_caring():
+    # Polled between attempts, so a sibling label that already triggered a run ends
+    # this walk instead of letting it hold a worker for the full wait.
+    head, jobs = _chain(failed())
+
+    with (
+        patch.object(regression, "Push", return_value=head),
+        patch.object(regression.treeherder, "label_jobs") as label_jobs,
+        patch.object(regression.time, "sleep", lambda _s: None),
+        pytest.raises(regression.WalkAborted),
+    ):
+        regression.is_new_build_failure("autoland", "head", LABEL, lambda: True)
+    # Aborted before any lookup, not after finishing the walk anyway.
+    label_jobs.assert_not_called()
+
+
+def test_a_walk_runs_normally_without_an_abort_signal():
+    assert _run(_chain(passed())) is True

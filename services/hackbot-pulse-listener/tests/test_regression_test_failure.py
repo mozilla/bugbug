@@ -37,8 +37,13 @@ def _chain(depth: int):
     return FakePush("head", parent=push)
 
 
-def _run(groups, jobs, results, *, depth=1, poll=None):
-    """jobs: {rev: {config: [job]}}; results: {rev: {task_id: {group: passed}}}."""
+def _run(groups, jobs, results, *, depth=1, poll=None, max_wait=None):
+    """jobs: {rev: {config: [job]}}; results: {rev: {task_id: {group: passed}}}.
+
+    ``max_wait`` caps the deferral budget. Pass 0 in a test that must decide without
+    ever deferring: otherwise a regression that reintroduces a deferral spins for the
+    real MAX_WAIT_SECONDS instead of failing.
+    """
     snapshots = [(jobs, results)] + list(poll or [])
     state = {"attempt": 0}
 
@@ -61,6 +66,11 @@ def _run(groups, jobs, results, *, depth=1, poll=None):
             regression.time,
             "sleep",
             lambda s: state.update(attempt=state["attempt"] + 1),
+        ),
+        patch.object(
+            regression,
+            "MAX_WAIT_SECONDS",
+            regression.MAX_WAIT_SECONDS if max_wait is None else max_wait,
         ),
     ):
         return regression.new_test_failures("autoland", "head", CONFIG, list(groups))
@@ -107,18 +117,27 @@ def test_unfinished_ancestor_is_waited_then_inherited():
     assert _run([GROUP], jobs, {}, poll=poll) == set()
 
 
-def test_unsettled_sibling_defers_a_failed_group():
-    # Same precedence as the build path: a run that may still turn green outranks
-    # an existing failure, so wait instead of calling it inherited.
+def test_a_recorded_failure_outranks_an_unsettled_sibling():
+    # Deliberately unlike the build path. _unsettled covers every job of the
+    # configuration, and on a recent ancestor one is nearly always still running, so
+    # deferring on that spent the whole wait and then failed open. A group already
+    # recorded as failing decides it instead: inherited, not new.
     jobs = {"rev1": {CONFIG: [_job(task_id="T1"), _job(task_id="T2", state="running")]}}
     results = {"rev1": {"T1": {GROUP: False}}}
+    assert _run([GROUP], jobs, results, max_wait=0) == set()
+
+
+def test_nothing_recorded_yet_still_waits():
+    # The pending branch survives for the case it is actually for: no run has
+    # recorded the group here, so one still might.
+    jobs = {"rev1": {CONFIG: [_job(task_id="T1", state="running")]}}
     poll = [
         (
-            {"rev1": {CONFIG: [_job(task_id="T1"), _job(task_id="T2")]}},
-            {"rev1": {"T1": {GROUP: False}, "T2": {GROUP: True}}},
+            {"rev1": {CONFIG: [_job(task_id="T1")]}},
+            {"rev1": {"T1": {GROUP: True}}},
         )
     ]
-    assert _run([GROUP], jobs, results, poll=poll) == {GROUP}
+    assert _run([GROUP], jobs, {}, poll=poll) == {GROUP}
 
 
 def test_ancestor_that_never_ran_the_group_is_skipped():

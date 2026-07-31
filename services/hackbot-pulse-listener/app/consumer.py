@@ -4,9 +4,11 @@ import time
 from collections import deque
 from concurrent.futures import Executor
 
+import mozci.push  # noqa: F401  (imported first: mozci.task alone is circular)
 from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
+from mozci.task import is_no_groups_suite
 
 from app import client, lando, regression, taskcluster, treeherder, worker
 from app.config import settings
@@ -19,7 +21,12 @@ CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
 
 # Taskcluster ``kind`` tags that denote test tasks (vs build tasks).
-TEST_KINDS = {"test", "mochitest", "web-platform-tests", "source-test"}
+#
+# ``source-test`` is deliberately absent. It is not a Firefox test harness: on a
+# recent push its 22 task types were all mozlint, shadow-scheduler and file-metadata
+# checks. None can be repaired by the agent's method (clone, build Firefox, re-run
+# the failing test with mach), so routing them here only spends runs.
+TEST_KINDS = {"test", "mochitest", "web-platform-tests"}
 
 # In-memory dedupe of hg revisions already handed to the build-repair agent. A
 # revision is recorded only once we actually trigger a run, so an inherited
@@ -124,7 +131,20 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
     ):
         return None
 
-    if not regression.is_new_build_failure(project, hg_revision, task_label):
+    try:
+        introduced_here = regression.is_new_build_failure(
+            project, hg_revision, task_label, lambda: _build_claimed(hg_revision)
+        )
+    except regression.WalkAborted:
+        logger.info(
+            "Revision %s was handed to build-repair while %s was being checked; "
+            "abandoning the check -- %s",
+            hg_revision,
+            task_label,
+            push_link,
+        )
+        return None
+    if not introduced_here:
         logger.info(
             "Build %s at %s inherited from an ancestor push; skipping -- %s",
             task_label,
@@ -222,6 +242,21 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
+    # Suites that report no manifests -- gtest, junit, talos, raptor, jittest and the
+    # rest of mozci's list. Their failures are overwhelmingly crashes and timeouts
+    # rather than regressions (every one the listener ran on so far was later
+    # classified intermittent), and the agent's method of re-running a failing
+    # manifest with mach does not apply to them. Checked on the label, so it costs
+    # nothing.
+    if is_no_groups_suite(label):
+        logger.info(
+            "Task %s (%s) is a suite that reports no test manifests; skipping -- %s",
+            task_id,
+            label,
+            job_link,
+        )
+        return None
+
     if regression.is_stale_push(
         project, hg_revision, settings.max_push_age_hours * 3600
     ):
@@ -264,18 +299,22 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
     config = ((job or {}).get("platform"), (job or {}).get("platform_option"))
 
+    def claimed_elsewhere() -> bool:
+        return _push_claimed(hg_revision)
+
     trigger = (project, hg_revision, task_id, label, developer_email, executor)
+    whole_task = False
     try:
         groups = treeherder.failing_groups(project, hg_revision, task_id)
     except treeherder.GroupResultsUnavailable as exc:
-        # Routine: a task-level failure (crash, timeout, harness error) produces no
-        # per-manifest results, and a log may still be being parsed. Either way we
-        # cannot say what failed, so fail open rather than drop it. There is no
-        # manifest to compare against an ancestor, so the gate above is the only
-        # filter such a failure gets.
-        logger.info("%s; running the agent on the whole task -- %s", exc, job_link)
-        return _trigger_test_repair([], *trigger)
+        # Routine for a task-level failure (crash, timeout, harness error), which
+        # records no per-manifest results, or a log still being parsed. With no group
+        # to compare, fall back to comparing the task as a whole.
+        logger.info("%s; comparing the task as a whole -- %s", exc, job_link)
+        groups, whole_task = [], True
     except Exception:
+        # A Treeherder error, so comparing the label would only hit the same broken
+        # API; investigate rather than drop the failure.
         logger.exception(
             "Could not read the failing groups of task %s; "
             "running the agent on the whole task -- %s",
@@ -284,18 +323,42 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return _trigger_test_repair([], *trigger)
 
-    if not groups:
+    try:
+        if whole_task:
+            if not regression.is_new_task_failure(
+                project, hg_revision, label, claimed_elsewhere
+            ):
+                logger.info(
+                    "Task %s at %s inherited from an ancestor; skipping -- %s",
+                    label,
+                    hg_revision,
+                    job_link,
+                )
+                return None
+            fresh: list[str] = []
+        else:
+            if not groups:
+                logger.info(
+                    "Task %s reported no failing test groups; skipping -- %s",
+                    task_id,
+                    job_link,
+                )
+                return None
+            fresh = _fresh_groups(
+                groups, project, hg_revision, config, claimed_elsewhere
+            )
+            if not fresh:
+                logger.info(
+                    "No new, non-intermittent groups for task %s; skipping -- %s",
+                    task_id,
+                    job_link,
+                )
+                return None
+    except regression.WalkAborted:
         logger.info(
-            "Task %s reported no failing test groups; skipping -- %s",
-            task_id,
-            job_link,
-        )
-        return None
-
-    fresh = _fresh_groups(groups, project, hg_revision, config)
-    if not fresh:
-        logger.info(
-            "No new, non-intermittent groups for task %s; skipping -- %s",
+            "Push %s was handed to test-repair while task %s was being checked; "
+            "abandoning the check -- %s",
+            hg_revision,
             task_id,
             job_link,
         )
@@ -316,6 +379,12 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
 
     return _trigger_test_repair(fresh, *trigger)
+
+
+def _build_claimed(hg_revision: str) -> bool:
+    """Whether a build-repair run has already been triggered for this push."""
+    with _seen_lock:
+        return hg_revision in _seen
 
 
 def _push_claimed(hg_revision: str) -> bool:
@@ -381,10 +450,16 @@ def _release_test_run() -> None:
 
 
 def _fresh_groups(
-    candidates: list[str], project: str, hg_revision: str, config: tuple[str, str]
+    candidates: list[str],
+    project: str,
+    hg_revision: str,
+    config: tuple[str, str],
+    should_abort=None,
 ) -> list[str]:
     """The groups whose failure this push introduced."""
-    new = regression.new_test_failures(project, hg_revision, config, candidates)
+    new = regression.new_test_failures(
+        project, hg_revision, config, candidates, should_abort
+    )
     for group in candidates:
         if group not in new:
             logger.info(
