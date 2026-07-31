@@ -32,8 +32,8 @@ members = [
     "hackbot-pulse-listener",
     "hackbot-runtime",
     "phabricator-client",
-    "testrail-client",
     "reviewhelper-api",
+    "testrail-client",
 ]
 
 [[package]]
@@ -732,7 +732,7 @@ requires-dist = [
     { name = "tenacity", specifier = "~=9.1.4" },
     { name = "tqdm", specifier = ">=4.67.3,<4.69.0" },
     { name = "unidiff", specifier = "~=0.7.5" },
-    { name = "weave", specifier = ">=0.50.0" },
+    { name = "weave", specifier = ">=0.53.4" },
     { name = "xgboost", specifier = ">=3.2,<3.4" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
@@ -2778,7 +2778,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
     { name = "testrail-client", editable = "libs/testrail-client" },
-    { name = "weave", specifier = ">=0.53.1" },
+    { name = "weave", specifier = ">=0.53.4" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
 
@@ -5028,30 +5028,6 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
-name = "testrail-client"
-version = "0.1.0"
-source = { editable = "libs/testrail-client" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic-settings" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.26.0" },
-    { name = "pydantic-settings", specifier = ">=2.1.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "pillow"
 version = "12.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -7072,6 +7048,30 @@ wheels = [
 ]
 
 [[package]]
+name = "testrail-client"
+version = "0.1.0"
+source = { editable = "libs/testrail-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "texttable"
 version = "1.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -7658,7 +7658,7 @@ wheels = [
 
 [[package]]
 name = "weave"
-version = "0.53.2"
+version = "0.53.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -7676,9 +7676,9 @@ dependencies = [
     { name = "tenacity" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/74/b1/566cd40fa3455f2601306a4ebc1ea6c3f26161a01cbdeda668da1479f4df/weave-0.53.2.tar.gz", hash = "sha256:2e14e3279ebc62eb529aabf498aa02d526a01f18a189dfcfec19d2f38e75832a", size = 1148019, upload-time = "2026-07-16T23:38:52.194Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/c0/12d8a59b82030a102d1b6a133228581aa82b567506a456d8ef24696b7bf8/weave-0.53.4.tar.gz", hash = "sha256:b6fa986153f6fe4353beaa2c306c9e6fc216c4b6da8732b0c6d393e93874fe20", size = 1168284, upload-time = "2026-07-30T23:43:45.526Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/57/e9/a22ed23dae0f1231b66afb84bd9460fa9b7c82a81841b7eb0c83593de06f/weave-0.53.2-py3-none-any.whl", hash = "sha256:0e44fcd002ed6e77f759f69a6b257edea8b645612c4b2cb41a8291f697299a3f", size = 1390710, upload-time = "2026-07-16T23:38:50.058Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/30/2ef9d05a9babc3ab9e5274cc1c91e1919cc0e29a6daeb412703addce5ae4/weave-0.53.4-py3-none-any.whl", hash = "sha256:dc34d79108a706818b9bde0fadb53939eaa21885762f1129809ea74fad7c8caa", size = 1414466, upload-time = "2026-07-30T23:43:43.394Z" },
 ]
 
 [[package]]
