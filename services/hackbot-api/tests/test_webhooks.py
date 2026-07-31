@@ -15,7 +15,10 @@ from app.auth import verify_phabricator_signature
 from app.config import settings
 from app.main import app
 from app.phabricator_webhook import (
+    EDITBUGS_GROUP_PHID,
+    HackbotMention,
     _join_comments,
+    detect_mention_and_revision,
     find_hackbot_mentions,
     resolve_revision,
     triggering_transaction_phids,
@@ -70,7 +73,7 @@ def test_find_mention_matches():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "hey @hackbot please fix")]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == ["hey @hackbot please fix"]
+    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a")]
 
 
 def test_find_mention_no_token():
@@ -120,7 +123,7 @@ def test_find_mention_matches_inline_comment():
     ]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == ["@hackbot here"]
+    ) == [HackbotMention("@hackbot here", "PHID-USER-a")]
 
 
 def test_find_mention_collects_all_inline_matches():
@@ -136,7 +139,10 @@ def test_find_mention_collects_all_inline_matches():
         {"PHID-XACT-1", "PHID-XACT-2", "PHID-XACT-3"},
         bot_phid="PHID-USER-bot",
         token="@hackbot",
-    ) == ["@hackbot fix this", "@hackbot and this too"]
+    ) == [
+        HackbotMention("@hackbot fix this", "PHID-USER-a"),
+        HackbotMention("@hackbot and this too", "PHID-USER-a"),
+    ]
 
 
 def test_find_mention_one_per_transaction_ignores_comment_versions():
@@ -153,7 +159,7 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
     }
     assert find_hackbot_mentions(
         [txn], {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == ["@hackbot v1"]
+    ) == [HackbotMention("@hackbot v1", "PHID-USER-a")]
 
 
 def test_join_comments_single_passthrough():
@@ -170,11 +176,16 @@ def test_join_comments_numbers_multiple():
 
 
 class _FakeClient:
-    def __init__(self, revision):
+    def __init__(self, revision, members=()):
         self._revision = revision
+        self._members = frozenset(members)
 
     async def search_revision(self, phid):
         return self._revision
+
+    async def get_project_members(self, project_phid):
+        assert project_phid == EDITBUGS_GROUP_PHID
+        return self._members
 
 
 async def test_resolve_revision_with_bug():
@@ -190,6 +201,52 @@ async def test_resolve_revision_no_bug():
 async def test_resolve_revision_not_found():
     client = _FakeClient(None)
     assert await resolve_revision(client, "PHID-DREV-x") == (None, None)
+
+
+async def test_detect_mention_requires_editbugs_membership(monkeypatch):
+    client = _FakeClient(
+        {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
+        members={"PHID-USER-authorized"},
+    )
+    transactions = [
+        _comment_txn("PHID-XACT-1", "PHID-USER-unauthorized", "@hackbot ignore"),
+    ]
+    monkeypatch.setattr(
+        client,
+        "search_transactions",
+        AsyncMock(return_value=transactions),
+    )
+
+    result = await detect_mention_and_revision(
+        client,
+        settings.webhook,
+        "PHID-DREV-x",
+        ["PHID-XACT-1"],
+    )
+    assert result is None
+
+
+async def test_detect_mention_accepts_editbugs_member(monkeypatch):
+    client = _FakeClient(
+        {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
+        members={"PHID-USER-authorized"},
+    )
+    transactions = [
+        _comment_txn("PHID-XACT-1", "PHID-USER-authorized", "@hackbot please fix"),
+    ]
+    monkeypatch.setattr(
+        client,
+        "search_transactions",
+        AsyncMock(return_value=transactions),
+    )
+
+    result = await detect_mention_and_revision(
+        client,
+        settings.webhook,
+        "PHID-DREV-x",
+        ["PHID-XACT-1"],
+    )
+    assert result == ("@hackbot please fix", 42, 12345)
 
 
 # --- payload parsing ---
