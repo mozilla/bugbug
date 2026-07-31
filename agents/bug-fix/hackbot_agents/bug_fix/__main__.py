@@ -10,23 +10,22 @@ class AgentInputs(BaseSettings):
     bugzilla_mcp_url: str
     revision_id: int | None = None
     comment: str | None = None
-    phabricator_broker_url: str | None = None
+    phabricator_broker_url: str
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    @model_validator(mode="after")
-    def _broker_url_required_for_follow_up(self) -> "AgentInputs":
-        # A follow-up (revision_id set) must be able to fetch the revision's
-        # patch from the broker to check it out.
-        if self.revision_id is not None and not self.phabricator_broker_url:
-            raise ValueError(
-                "phabricator_broker_url (PHABRICATOR_BROKER_URL) is required when "
-                "revision_id is set, to check out the revision"
-            )
-        return self
+    @property
+    def phabricator_mcp_url(self) -> str:
+        """The broker's Phabricator MCP endpoint.
+
+        Derived from the broker URL rather than taken as its own input: both
+        endpoints are served by the same sidecar, so there is nothing for a
+        caller to configure independently.
+        """
+        return f"{self.phabricator_broker_url.rstrip('/')}/phabricator/mcp"
 
     @model_validator(mode="after")
     def _follow_up_with_comment(self) -> "AgentInputs":
@@ -52,6 +51,10 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         bugzilla_mcp_server={
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
+        },
+        phabricator_mcp_server={
+            "type": "http",
+            "url": inputs.phabricator_mcp_url,
         },
         source_repo=ctx.repo_path,
         fx_ctx=ctx.firefox,

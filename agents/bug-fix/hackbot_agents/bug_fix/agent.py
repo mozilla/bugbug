@@ -30,6 +30,7 @@ from .config import (
     BUGZILLA_READ_TOOLS,
     FIREFOX_TOOLS,
     PHABRICATOR_FOLLOW_UP_ACTIONS,
+    PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
     TRIAGE_AND_FIX_ACTIONS,
 )
@@ -84,6 +85,7 @@ def make_investigator() -> AgentDefinition:
 async def run_bug_fix(
     *,
     bugzilla_mcp_server: McpServerConfig,
+    phabricator_mcp_server: McpServerConfig,
     source_repo: Path,
     fx_ctx: FirefoxContext,
     bug: int,
@@ -137,6 +139,7 @@ async def run_bug_fix(
         system_prompt=system_prompt,
         mcp_servers={
             "bugzilla": bugzilla_mcp_server,
+            "phabricator": phabricator_mcp_server,
             "firefox": firefox_server,
             ACTIONS_SERVER_NAME: actions_server,
         },
@@ -152,6 +155,7 @@ async def run_bug_fix(
             "Task",
             *SOURCE_WRITE_TOOLS,
             *BUGZILLA_READ_TOOLS,
+            *PHABRICATOR_READ_TOOLS,
             *enabled_action_tools,
             *FIREFOX_TOOLS,
         ],
