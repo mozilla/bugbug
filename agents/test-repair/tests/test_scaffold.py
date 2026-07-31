@@ -1,7 +1,5 @@
-import os
-
 from hackbot_agents.test_repair import logs
-from hackbot_agents.test_repair.__main__ import _pin_checkout
+from hackbot_agents.test_repair.__main__ import _checkout_pin
 from hackbot_agents.test_repair.agent import TestRepairResult
 from hackbot_agents.test_repair.resolve import CommitRange, Investigation
 
@@ -44,13 +42,11 @@ def _investigation(**kwargs):
     return Investigation(**{**defaults, **kwargs})
 
 
-def test_pin_checkout_sets_ref_and_depth(monkeypatch):
-    monkeypatch.delenv("SOURCE_REF", raising=False)
-    monkeypatch.delenv("SOURCE_DEPTH", raising=False)
-    _pin_checkout(_investigation())
-    assert os.environ["SOURCE_REF"] == "headsha"
+def test_checkout_pin_returns_ref_and_depth():
+    ref, depth = _checkout_pin(_investigation())
+    assert ref == "headsha"
     # Depth spans the 3 commits in the range plus the base's parent.
-    assert os.environ["SOURCE_DEPTH"] == "4"
+    assert depth == 4
 
 
 def test_result_model_serializes_findings():
