@@ -94,8 +94,14 @@ Bug #: {bug_id}
 _WIP_PREFIX_RE = re.compile(r"^(?:WIP[: ]|WIP$)", re.IGNORECASE)
 
 
-def _revision_title(title: str, fallback: str = "Untitled") -> str:
-    return _WIP_PREFIX_RE.sub("", title).strip() or fallback
+def _revision_title(title: str) -> str:
+    """Return the title Phabricator should display.
+
+    Examples:
+    - ``"Fix crash"`` -> ``"Fix crash"``
+    - ``"WIP: Fix crash"`` -> ``"Fix crash"``
+    """
+    return _WIP_PREFIX_RE.sub("", title).strip()
 
 
 async def _revision_fields(revision_id: int) -> dict:
@@ -242,7 +248,7 @@ class SubmitPatchHandler:
             # Reviewers are never assigned by hackbot: a draft gets them at
             # promotion time, and the agent doesn't choose them. A new revision
             # has no status yet, so plan-changes rides this same edit.
-            title = _revision_title(params.get("title") or "", f"Bug {bug_id}")
+            title = _revision_title(params["title"])
             transactions: list[dict[str, Any]] = [
                 {"type": "update", "value": diff_result["phid"]},
                 {"type": "title", "value": title},

@@ -86,12 +86,6 @@ def test_revision_title_strips_wip_prefix():
     assert rt("WIP: Fix bug") == "Fix bug"
 
 
-def test_revision_title_uses_fallback_for_bare_wip_marker():
-    # A title that is only a WIP marker must fall back, not go blank (which
-    # would be an invalid Phabricator title).
-    assert phabricator_handler._revision_title("WIP:", "Bug 1") == "Bug 1"
-
-
 async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     fake, calls = _fake_conduit(
         {
