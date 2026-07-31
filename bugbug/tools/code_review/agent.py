@@ -7,7 +7,7 @@
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from logging import getLogger
 from typing import Optional
 
@@ -59,6 +59,10 @@ from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL, get_tokenizer
 from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
+
+
+def current_date_for_prompt() -> str:
+    return datetime.now(UTC).date().isoformat()
 
 
 class CodeReviewTool(GenerativeModelTool):
@@ -209,6 +213,7 @@ class CodeReviewTool(GenerativeModelTool):
         created_before = patch.date_created if self.is_experiment_env else None
 
         return FIRST_MESSAGE_TEMPLATE.format(
+            current_date=current_date_for_prompt(),
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
             external_context=external_context,
