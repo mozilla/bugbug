@@ -95,12 +95,6 @@ _WIP_PREFIX_RE = re.compile(r"^(?:WIP[: ]|WIP$)", re.IGNORECASE)
 
 
 def _revision_title(title: str) -> str:
-    """Return the title Phabricator should display.
-
-    Examples:
-    - ``"Fix crash"`` -> ``"Fix crash"``
-    - ``"WIP: Fix crash"`` -> ``"Fix crash"``
-    """
     return _WIP_PREFIX_RE.sub("", title).strip()
 
 
