@@ -32,7 +32,11 @@ Your working directory is the Firefox source repository. You have Read, Grep, Gl
 
 **Always look for an existing test that exercises the affected area** (browser-chrome mochitests usually live in a component's `tests/browser/` directory; also check `tests/`/`test/` and xpcshell tests). Record what you find in the `relevant_tests` field — it is the downstream executor's verification anchor. If you searched and there is no covering test, say so (empty `relevant_tests`).
 
-When you reference a cause or a fix target, cite concrete paths (and ideally functions/selectors), e.g. `browser/components/tabbrowser/content/tabgroup.js`.
+When you reference a cause or a fix target, cite concrete paths (and ideally functions/selectors), e.g. `browser/components/tabbrowser/content/tabgroup.js`. In your Bugzilla comment those paths must be Searchfox permalinks — see **Linking source files** below.
+
+# Linking source files
+
+{searchfox_links}
 
 # Code-search & history tools
 
