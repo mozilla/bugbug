@@ -80,19 +80,19 @@ def test_each_patch_action_type_has_its_own_handler():
     assert all(get_handler(t) is not None for t in PATCH_ACTION_TYPES)
 
 
-def test_revision_title_strips_and_reprefixes():
+def test_revision_title_strips_wip_prefix():
     rt = phabricator_handler._revision_title
-    assert rt("Fix bug") == "WIP: Fix bug"
-    assert rt("WIP: Fix bug") == "WIP: Fix bug"  # not doubled
+    assert rt("Fix bug") == "Fix bug"
+    assert rt("WIP: Fix bug") == "Fix bug"
 
 
-def test_revision_title_never_blank_for_bare_wip_marker():
-    # A title that is only a WIP marker must fall back to the original, not go
-    # blank (which would be an invalid Phabricator title).
-    assert phabricator_handler._revision_title("WIP:") == "WIP: WIP"
+def test_revision_title_uses_fallback_for_bare_wip_marker():
+    # A title that is only a WIP marker must fall back, not go blank (which
+    # would be an invalid Phabricator title).
+    assert phabricator_handler._revision_title("WIP:", "Bug 1") == "Bug 1"
 
 
-async def test_submit_patch_creates_wip_revision(monkeypatch):
+async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     fake, calls = _fake_conduit(
         {
             "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
@@ -123,9 +123,9 @@ async def test_submit_patch_creates_wip_revision(monkeypatch):
     assert "objectIdentifier" not in edit_call[1]
     transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
     assert transactions["update"] == "PHID-DIFF-1"
-    # Everything hackbot creates is a WIP draft: title prefixed, revision
-    # marked changes-planned, and reviewers are NOT requested.
-    assert transactions["title"] == "WIP: Fix"
+    # Everything hackbot creates is a draft: the revision is marked
+    # changes-planned, but the visible title does not carry a WIP prefix.
+    assert transactions["title"] == "Fix"
     assert transactions["plan-changes"] is True
     assert "reviewers.add" not in transactions
     assert transactions["bugzilla.bug-id"] == "1"
@@ -175,9 +175,9 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
     assert stored["author"] == "Hackbot Agent"
     assert stored["tree"] == "tree1"
     assert stored["parents"] == ["base1"]
-    # The stored title carries the WIP prefix and reviewers are empty.
-    assert stored["summary"] == "WIP: Fix the thing"
-    assert stored["message"].startswith("WIP: Fix the thing\n\nSummary:\ndoes it")
+    # The stored title matches the visible revision title and reviewers are empty.
+    assert stored["summary"] == "Fix the thing"
+    assert stored["message"].startswith("Fix the thing\n\nSummary:\ndoes it")
     assert (
         "Differential Revision: https://phabricator.services.mozilla.com/D77"
         in stored["message"]
