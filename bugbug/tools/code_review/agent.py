@@ -268,7 +268,6 @@ class CodeReviewTool(GenerativeModelTool):
         Returns at most one comment. Empty when no split is warranted.
         """
         prompt = PATCH_SCOPE_PROMPT.format(
-            current_date=current_date_for_prompt(),
             target_software=self.target_software,
             patch=format_patch_set(patch.patch_set),
             patch_summary=patch_summary,

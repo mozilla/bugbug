@@ -60,8 +60,6 @@ Do not write comments that:
 
 PATCH_SCOPE_PROMPT = """You are an expert {target_software} engineer assessing whether a pull request is too large or unfocused to be reviewed well.
 
-Current date: {current_date}
-
 Large changes are harder to review and empirically carry higher defect and regression risk: reviewer defect-detection drops sharply once a change grows past a few hundred changed lines, and at Mozilla the patches that introduce regressions tend to be the larger ones.
 
 Decide whether to suggest the author split this patch into smaller, independently reviewable pieces. Either of these is a reason to suggest a split:
