@@ -791,3 +791,41 @@ ul.chips li.chip {
 .test-plan-summary {
   margin-top: 24px;
 }
+
+.feedback-thumbs {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+}
+.feedback-thumbs button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.feedback-thumbs button.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.feedback-dimensions {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.feedback-dimensions label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.feedback-note {
+  display: block;
+  margin-bottom: 16px;
+}
+.feedback-note > .muted {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}

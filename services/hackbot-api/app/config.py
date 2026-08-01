@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     # API auth
     external_api_key: str = ""
 
+    # Public feedback links posted into Bugzilla comments (see feedback_links.py).
+    # Both the secret and the base URL must be set for any link to be emitted;
+    # unset means the footer is simply omitted, which is the safe default for
+    # environments that shouldn't be advertising a rating page.
+    feedback_token_secret: str = ""
+    feedback_public_base_url: str = ""
+    feedback_nonce_ttl_seconds: int = 60 * 60
+    # Ceiling on anonymous ratings per run. Cheap backstop against a scripted
+    # ballot-stuffer that bothers to fetch a nonce first.
+    feedback_max_anonymous_votes: int = 50
+
     # Phabricator Conduit connection config, embedded as a nested model and
     # populated in this single settings parse from PHABRICATOR_URL /
     # PHABRICATOR_API_KEY / PHABRICATOR_TIMEOUT_SECONDS (see env_nested_delimiter

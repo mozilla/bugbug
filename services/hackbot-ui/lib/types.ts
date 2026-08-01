@@ -57,6 +57,31 @@ export interface RunRef {
   status: RunStatus;
 }
 
+export type FeedbackRating = "up" | "down";
+
+// Keep in step with FeedbackDimension (services/hackbot-api/app/schemas.py);
+// the API rejects labels it doesn't know.
+export const FEEDBACK_DIMENSIONS = [
+  { value: "root_cause_wrong", label: "Root cause is wrong" },
+  { value: "fix_wont_work", label: "Proposed fix won't work" },
+  { value: "wrong_files", label: "Wrong files or broken links" },
+  { value: "overconfident", label: "Overconfident for what it knew" },
+  {
+    value: "should_not_have_commented",
+    label: "Shouldn't have commented at all",
+  },
+  { value: "too_verbose", label: "Too verbose" },
+] as const;
+
+export type FeedbackDimension = (typeof FEEDBACK_DIMENSIONS)[number]["value"];
+
+// Mirror of FeedbackTargetDoc (services/hackbot-api/app/schemas.py).
+export interface FeedbackTarget {
+  bug_id: number;
+  comment: string;
+  nonce: string;
+}
+
 export interface RunDoc {
   run_id: string;
   agent: string;

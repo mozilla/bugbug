@@ -21,7 +21,14 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Protect everything except the auth endpoints, the login page, and static
-  // assets.
-  matcher: ["/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)"],
+  // Protect everything except the auth endpoints, the login page, the public
+  // feedback page, and static assets.
+  //
+  // `/feedback/*` is reachable by anyone: it is linked from Bugzilla comments,
+  // whose readers are mostly not Mozillians. Both entries are required — the
+  // lookahead anchors immediately after the leading slash, so `feedback` alone
+  // does not cover `/api/feedback/*`. See app/feedback/[token]/page.tsx.
+  matcher: [
+    "/((?!api/auth|api/feedback|login|feedback|_next/static|_next/image|favicon.ico).*)",
+  ],
 };

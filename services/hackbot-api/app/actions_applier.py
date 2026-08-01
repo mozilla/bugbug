@@ -27,7 +27,7 @@ from hackbot_runtime.actions.handlers import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import gcs
+from app import feedback_links, gcs
 from app.agents import AGENT_REGISTRY
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
@@ -35,6 +35,32 @@ from app.schemas import RunStatus
 log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
+
+
+def with_feedback_link(run: Run, action_type: str, params: dict) -> dict:
+    """Append the rating invitation to a comment about to be posted.
+
+    Done here rather than where the agent records the comment, for three
+    reasons: only comments that actually reach Bugzilla should advertise a
+    feedback URL (most recorded ones are never applied), the signing secret
+    belongs to this service rather than the agent container, and this is
+    already the point where params are rewritten before dispatch.
+
+    Returns a new dict; the caller must not persist it back to the row, so a
+    re-apply re-derives the link instead of stacking a second copy.
+    """
+    if action_type != "bugzilla.add_comment":
+        return params
+
+    spec = AGENT_REGISTRY.get(run.agent)
+    if not (spec and spec.feedback_link) or not feedback_links.is_enabled():
+        return params
+
+    url = feedback_links.feedback_url(run.run_id)
+    invitation = (
+        f"*Was this analysis useful? [👍 Yes]({url}?v=up) · [👎 No]({url}?v=down)*"
+    )
+    return {**params, "text": params["text"].rstrip() + "\n\n" + invitation}
 
 
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
@@ -195,7 +221,14 @@ async def _apply_pending_rows(
         if anchor is not None:
             member_rows = [pending[i][0] for i in group_at[anchor]]
             entries = [
-                (member.type, resolve_placeholders(member.params, results_by_ref))
+                (
+                    member.type,
+                    with_feedback_link(
+                        run,
+                        member.type,
+                        resolve_placeholders(member.params, results_by_ref),
+                    ),
+                )
                 for member in member_rows
             ]
             outcome = await _dispatch(
@@ -203,7 +236,9 @@ async def _apply_pending_rows(
             )
         else:
             member_rows = [row]
-            params = resolve_placeholders(row.params, results_by_ref)
+            params = with_feedback_link(
+                run, row.type, resolve_placeholders(row.params, results_by_ref)
+            )
             outcome = await _dispatch(run, row.type, params, attachments)
 
         # Only stamp applied_at on a real success, so a failed row isn't

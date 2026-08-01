@@ -1,6 +1,14 @@
 import "server-only";
 
-import type { AgentDescriptor, RunAction, RunDoc, RunRef } from "./types";
+import type {
+  AgentDescriptor,
+  FeedbackDimension,
+  FeedbackRating,
+  FeedbackTarget,
+  RunAction,
+  RunDoc,
+  RunRef,
+} from "./types";
 
 // Thin server-side client for the hackbot-api. The API key lives here and is
 // never exposed to the browser — every browser request goes through the
@@ -110,6 +118,36 @@ export function applyRunActions(runId: string): Promise<RunAction[]> {
   return request<RunAction[]>(
     `/runs/${encodeURIComponent(runId)}/actions/apply`,
     { method: "POST" }
+  );
+}
+
+// The comment a public rater is being asked to judge, plus the nonce that
+// authorises their submission. Read-only: fetching this never records a vote.
+export function getFeedbackTarget(token: string): Promise<FeedbackTarget> {
+  return request<FeedbackTarget>(`/feedback/${encodeURIComponent(token)}`);
+}
+
+export interface SubmitFeedbackBody {
+  rating: FeedbackRating;
+  nonce: string;
+  dimensions: FeedbackDimension[];
+  comment: string | null;
+}
+
+// `rater` carries the original visitor's IP and user agent, which are otherwise
+// lost behind this server-side hop; hackbot-api salts them into a pseudonymous
+// dedupe key.
+export function submitFeedback(
+  token: string,
+  body: SubmitFeedbackBody,
+  rater: { forwardedFor?: string | null; userAgent?: string | null } = {}
+): Promise<{ message: string }> {
+  const headers: Record<string, string> = {};
+  if (rater.forwardedFor) headers["X-Forwarded-For"] = rater.forwardedFor;
+  if (rater.userAgent) headers["User-Agent"] = rater.userAgent;
+  return request<{ message: string }>(
+    `/feedback/${encodeURIComponent(token)}`,
+    { method: "POST", body: JSON.stringify(body), headers }
   );
 }
 

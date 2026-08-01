@@ -27,6 +27,10 @@ class AgentSpec:
     # succeeds. Off by default: actions are still recorded and can always be
     # applied manually from the UI; only opted-in agents auto-apply.
     auto_apply_actions: bool = False
+    # Whether posted Bugzilla comments invite a public rating (see
+    # app/feedback_links.py). Off by default so a new agent doesn't start
+    # soliciting feedback on output nobody has reviewed yet.
+    feedback_link: bool = False
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -79,6 +83,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Triage a Firefox desktop frontend bug (read-only) and produce a root-cause analysis and proposed fix plan.",
         job_name="hackbot-agent-frontend-triage",
         input_schema=FrontendTriageInputs,
+        feedback_link=True,
     ),
     "test-repair": AgentSpec(
         name="test-repair",

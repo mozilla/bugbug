@@ -14,6 +14,39 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class FeedbackRating(str, Enum):
+    up = "up"
+    down = "down"
+
+
+class RaterKind(str, Enum):
+    anonymous = "anonymous"
+    bugzilla = "bugzilla"
+
+
+class FeedbackDimension(str, Enum):
+    """What a rater says went wrong, keyed to the agent's own output fields.
+
+    Members map 1:1 onto the structured plan the agent emits (root_cause,
+    proposed_fix, target_files, confidence, actionable), so a thumbs-down can be
+    aggregated per-field instead of read as prose.
+    """
+
+    root_cause_wrong = "root_cause_wrong"
+    fix_wont_work = "fix_wont_work"
+    wrong_files = "wrong_files"
+    overconfident = "overconfident"
+    should_not_have_commented = "should_not_have_commented"
+    too_verbose = "too_verbose"
+
+
+class RaterRelationship(str, Enum):
+    reporter = "reporter"
+    assignee = "assignee"
+    component_peer = "component_peer"
+    other = "other"
+
+
 class ArtifactRef(BaseModel):
     name: str
     size: int
@@ -71,6 +104,35 @@ class RunDoc(BaseModel):
     summary: RunSummary | None = None
     artifacts: list[ArtifactRef] = Field(default_factory=list)
     error: str | None = None
+
+
+# --- Public feedback on a posted Bugzilla comment ---
+
+
+class FeedbackTargetDoc(BaseModel):
+    """What the public feedback page needs to render, and nothing else.
+
+    Deliberately narrow: the page is reachable without authentication, so it
+    gets the comment that was actually posted and the bug it landed on — never
+    the run's inputs, findings, artifacts or identity.
+    """
+
+    bug_id: int
+    comment: str
+    # Gates the write (see app/feedback_links.py). Minted per page render so a
+    # crawler that only ever GETs the link cannot cast a vote.
+    nonce: str
+
+
+class FeedbackCreate(BaseModel):
+    rating: FeedbackRating
+    nonce: str
+    dimensions: list[FeedbackDimension] = Field(default_factory=list)
+    comment: str | None = Field(default=None, max_length=5000)
+
+
+class FeedbackResponse(BaseModel):
+    message: str
 
 
 # --- Per-agent input schemas ---
