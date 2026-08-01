@@ -40,13 +40,6 @@ class FeedbackDimension(str, Enum):
     too_verbose = "too_verbose"
 
 
-class RaterRelationship(str, Enum):
-    reporter = "reporter"
-    assignee = "assignee"
-    component_peer = "component_peer"
-    other = "other"
-
-
 class ArtifactRef(BaseModel):
     name: str
     size: int

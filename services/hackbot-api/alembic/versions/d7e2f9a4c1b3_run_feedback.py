@@ -31,9 +31,6 @@ def upgrade() -> None:
         ),
         sa.Column("comment", sa.Text(), nullable=True),
         sa.Column("rater_kind", sa.String(), nullable=False),
-        sa.Column("bugzilla_user_id", sa.Integer(), nullable=True),
-        sa.Column("bugzilla_name", sa.String(), nullable=True),
-        sa.Column("rater_relationship", sa.String(), nullable=True),
         sa.Column("anon_id", sa.String(), nullable=True),
         sa.Column(
             "created_at",
@@ -53,14 +50,8 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_run_feedback_run_id"), "run_feedback", ["run_id"], unique=False
     )
-    # Partial, because only one of the two rater-identity columns is set per row.
-    op.create_index(
-        "uq_run_feedback_bugzilla_user",
-        "run_feedback",
-        ["run_id", "bugzilla_user_id"],
-        unique=True,
-        postgresql_where=sa.text("bugzilla_user_id IS NOT NULL"),
-    )
+    # Partial, because a request carrying neither an IP nor a user agent has no
+    # dedupe key and those rows must not collide with each other.
     op.create_index(
         "uq_run_feedback_anon",
         "run_feedback",
@@ -73,6 +64,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index("uq_run_feedback_anon", table_name="run_feedback")
-    op.drop_index("uq_run_feedback_bugzilla_user", table_name="run_feedback")
     op.drop_index(op.f("ix_run_feedback_run_id"), table_name="run_feedback")
     op.drop_table("run_feedback")

@@ -83,27 +83,20 @@ class RunAction(Base):
 class RunFeedback(Base):
     """A rating of the Bugzilla comment a run posted, from the public feedback link.
 
-    Values for `rating`, `rater_kind`, `dimensions` and `rater_relationship` are
-    stored as plain strings and validated by the pydantic enums in app/schemas.py
-    (matching how `Run.status` handles `RunStatus`) — the write path is the only
-    way rows are created, so a native DB enum would buy little and cost a
-    migration every time a dimension is added.
+    Values for `rating`, `rater_kind` and `dimensions` are stored as plain
+    strings and validated by the pydantic enums in app/schemas.py (matching how
+    `Run.status` handles `RunStatus`) — the write path is the only way rows are
+    created, so a native DB enum would buy little and cost a migration every
+    time a dimension is added.
 
-    Dedupe keys differ by rater kind: a signed-in rater keys on their Bugzilla
-    id, an anonymous one on a salted hash of IP + user agent. Hence two partial
-    unique indexes rather than one constraint — only one of the columns is ever
-    set on a given row.
+    Raters are anonymous, so the dedupe key is a salted hash of IP + user agent.
+    That hash is absent when the request carries neither signal, hence a partial
+    unique index rather than a constraint: rows with no key don't collide with
+    each other.
     """
 
     __tablename__ = "run_feedback"
     __table_args__ = (
-        Index(
-            "uq_run_feedback_bugzilla_user",
-            "run_id",
-            "bugzilla_user_id",
-            unique=True,
-            postgresql_where=text("bugzilla_user_id IS NOT NULL"),
-        ),
         Index(
             "uq_run_feedback_anon",
             "run_id",
@@ -121,9 +114,6 @@ class RunFeedback(Base):
     dimensions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     rater_kind: Mapped[str] = mapped_column(String, nullable=False)
-    bugzilla_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    bugzilla_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    rater_relationship: Mapped[str | None] = mapped_column(String, nullable=True)
     anon_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
