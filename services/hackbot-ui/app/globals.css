@@ -829,3 +829,25 @@ ul.chips li.chip {
   font-size: 12px;
   margin-bottom: 4px;
 }
+
+.feedback-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.feedback-list li {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+}
+.feedback-list li:first-child {
+  border-top: none;
+}
+.feedback-list p {
+  margin: 6px 0 0;
+}
+.feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}

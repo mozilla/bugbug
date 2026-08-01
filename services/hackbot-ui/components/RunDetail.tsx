@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { updateRunStatus } from "@/lib/store";
-import { isTerminal, type RunAction, type RunDoc } from "@/lib/types";
+import {
+  isTerminal,
+  type FeedbackDoc,
+  type RunAction,
+  type RunDoc,
+} from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
 import { StatusBadge } from "./StatusBadge";
@@ -52,6 +57,7 @@ export function RunDetail({ runId }: { runId: string }) {
   const [actions, setActions] = useState<RunAction[] | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackDoc[] | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchRun = useCallback(async () => {
@@ -107,6 +113,21 @@ export function RunDetail({ runId }: { runId: string }) {
   useEffect(() => {
     if (run && isTerminal(run.status)) fetchActions();
   }, [run, fetchActions]);
+
+  // Only agents with feedback links enabled can ever accumulate ratings, so an
+  // empty result is also how a non-participating agent renders: nothing.
+  const fetchFeedback = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/feedback?run_id=${runId}`);
+      if (res.ok) setFeedback((await res.json()) as FeedbackDoc[]);
+    } catch {
+      // Non-fatal: the tally just stays hidden.
+    }
+  }, [runId]);
+
+  useEffect(() => {
+    if (run && isTerminal(run.status)) fetchFeedback();
+  }, [run, fetchFeedback]);
 
   const applyActions = useCallback(async () => {
     setApplying(true);
@@ -233,6 +254,23 @@ export function RunDetail({ runId }: { runId: string }) {
               {applying ? "Applying…" : applyLabel}
             </button>
           )}
+        </div>
+      )}
+
+      {feedback && feedback.length > 0 && (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Feedback ({feedback.length})</h2>
+            <span className="muted">
+              👍 {feedback.filter((f) => f.rating === "up").length} · 👎{" "}
+              {feedback.filter((f) => f.rating === "down").length}
+            </span>
+          </div>
+          <p className="muted">
+            <Link href={`/feedback?run_id=${runId}`}>
+              Read what raters said →
+            </Link>
+          </p>
         </div>
       )}
 

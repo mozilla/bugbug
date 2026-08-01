@@ -9,6 +9,8 @@ fetch every link in a Bugzilla comment, from casting votes.
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from app import feedback_links
@@ -183,6 +185,7 @@ async def test_post_records_the_vote():
             comment="The regressor is bug 123, not bug 456.",
         ),
         db,
+        x_rater_key="cookie-a",
         x_forwarded_for="203.0.113.7, 70.41.3.18",
         user_agent="Firefox",
     )
@@ -195,7 +198,27 @@ async def test_post_records_the_vote():
     assert row.dimensions == ["root_cause_wrong"]
     assert row.comment == "The regressor is bug 123, not bug 456."
     assert row.rater_kind == "anonymous"
-    assert row.anon_id == feedback_links.anon_id("203.0.113.7", "Firefox")
+    assert row.anon_id == feedback_links.anon_id("cookie-a", None, None)
+
+
+async def test_two_raters_behind_one_ip_get_separate_rows():
+    """The dedupe collision that would otherwise lose a rating to an upsert."""
+    run = _FakeRun()
+    shared = {"x_forwarded_for": "203.0.113.7", "user_agent": "Firefox/140.0"}
+    keys = []
+
+    for cookie in ("cookie-a", "cookie-b"):
+        db = _FakeDB(run=run, action=_FakeAction())
+        await feedback_router.submit_feedback(
+            feedback_links.mint_token(run.run_id),
+            _payload(run.run_id),
+            db,
+            x_rater_key=cookie,
+            **shared,
+        )
+        keys.append(db.added[0].anon_id)
+
+    assert keys[0] != keys[1]
 
 
 async def test_post_without_a_nonce_is_rejected():
@@ -236,6 +259,50 @@ async def test_cap_does_not_count_the_rater_changing_their_own_mind():
     )
 
     assert db.commits == 1
+
+
+class _ListDB:
+    """Returns scripted (RunFeedback-ish, agent, inputs) tuples for the join."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    async def execute(self, stmt):
+        return SimpleNamespace(all=lambda: self._rows)
+
+
+async def test_list_feedback_joins_agent_and_bug_from_the_run():
+    run_id = uuid.uuid4()
+    row = SimpleNamespace(
+        run_id=run_id,
+        rating="down",
+        dimensions=["root_cause_wrong"],
+        comment="Wrong regressor.",
+        created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+    db = _ListDB([(row, "frontend-triage", {"bug_id": 2049877})])
+
+    (out,) = await feedback_router.list_feedback(db)
+
+    assert out.run_id == run_id
+    assert out.agent == "frontend-triage"
+    assert out.bug_id == 2049877
+    assert out.rating == FeedbackRating.down
+    assert out.comment == "Wrong regressor."
+
+
+async def test_list_feedback_tolerates_a_run_without_a_bug_id():
+    row = SimpleNamespace(
+        run_id=uuid.uuid4(),
+        rating="up",
+        dimensions=[],
+        comment=None,
+        created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+    (out,) = await feedback_router.list_feedback(
+        _ListDB([(row, "build-repair", {"failure_tasks": {}})])
+    )
+    assert out.bug_id is None
 
 
 class _ConflictingDB(_FakeDB):

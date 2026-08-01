@@ -57,6 +57,15 @@ export async function POST(
     return NextResponse.json({ error: "Invalid dimension" }, { status: 400 });
   }
 
+  // Per-browser dedupe key. IP + user agent alone collapses colleagues behind
+  // one office or VPN egress IP into a single rater, and because the write is
+  // an upsert the later one would silently overwrite the earlier. Minted here
+  // on first submit so it applies from the very first rating.
+  const existingKey = req.headers
+    .get("cookie")
+    ?.match(/(?:^|;\s*)hb_rater=([^;]+)/)?.[1];
+  const raterKey = existingKey ?? crypto.randomUUID();
+
   try {
     const result = await submitFeedback(
       token,
@@ -67,11 +76,25 @@ export async function POST(
         comment: typeof comment === "string" && comment.trim() ? comment : null,
       },
       {
+        raterKey,
         forwardedFor: req.headers.get("x-forwarded-for"),
         userAgent: req.headers.get("user-agent"),
       }
     );
-    return NextResponse.json(result);
+
+    const res = NextResponse.json(result);
+    if (!existingKey) {
+      res.cookies.set("hb_rater", raterKey, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        // Scoped to the route that reads it. Cookie paths are prefix-matched
+        // against the request path, so "/rate" would never be sent here.
+        path: "/api/rate",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+    return res;
   } catch (err) {
     const status = err instanceof HackbotError ? err.status : 500;
     return NextResponse.json({ error: (err as Error).message }, { status });

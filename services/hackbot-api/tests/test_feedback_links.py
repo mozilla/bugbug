@@ -38,10 +38,11 @@ def test_token_signature_is_not_accepted_as_a_nonce():
     assert feedback_links.verify_nonce(run_id, f"0.{signature}") is False
 
 
-def test_feedback_url_is_absolute_and_carries_the_token():
+def test_feedback_url_points_at_the_public_rate_namespace():
+    """`/rate` is the only prefix hackbot-ui exempts from SSO."""
     run_id = uuid.uuid4()
     url = feedback_links.feedback_url(run_id)
-    assert url.startswith("https://example.test/feedback/")
+    assert url.startswith("https://example.test/rate/")
     assert feedback_links.verify_token(url.rsplit("/", 1)[1]) == run_id
 
 
@@ -78,16 +79,29 @@ def test_nothing_is_minted_or_accepted_without_a_secret(monkeypatch):
 
 
 def test_anon_id_is_stable_pseudonymous_and_hides_the_ip():
-    first = feedback_links.anon_id("203.0.113.7", "Firefox")
-    assert first == feedback_links.anon_id("203.0.113.7", "Firefox")
-    assert first != feedback_links.anon_id("203.0.113.8", "Firefox")
-    assert first != feedback_links.anon_id("203.0.113.7", "Chrome")
+    first = feedback_links.anon_id(None, "203.0.113.7", "Firefox")
+    assert first == feedback_links.anon_id(None, "203.0.113.7", "Firefox")
+    assert first != feedback_links.anon_id(None, "203.0.113.8", "Firefox")
+    assert first != feedback_links.anon_id(None, "203.0.113.7", "Chrome")
     assert "203.0.113.7" not in first
 
 
+def test_a_rater_key_separates_colleagues_behind_one_ip():
+    """The case IP + user agent gets wrong: same egress, same browser build."""
+    shared = ("203.0.113.7", "Firefox/140.0")
+    one = feedback_links.anon_id("cookie-a", *shared)
+    two = feedback_links.anon_id("cookie-b", *shared)
+
+    assert one != two
+    assert one == feedback_links.anon_id("cookie-a", *shared)
+    # Same person, new IP (roaming): still one rater.
+    assert one == feedback_links.anon_id("cookie-a", "198.51.100.2", "Firefox/140.0")
+    assert "cookie-a" not in one
+
+
 def test_anon_id_is_none_without_any_signal():
-    assert feedback_links.anon_id(None, None) is None
-    assert feedback_links.anon_id("", "") is None
+    assert feedback_links.anon_id(None, None, None) is None
+    assert feedback_links.anon_id("", "", "") is None
 
 
 def test_client_ip_takes_the_first_forwarded_hop():

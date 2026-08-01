@@ -1,9 +1,15 @@
 """Read and record ratings of the Bugzilla comment a run posted.
 
-Both routes sit behind ``require_api_key`` like the rest of the API. The
-anonymous surface is the Next.js page in hackbot-ui, which calls these
-server-side with the shared key — so nothing here is directly reachable by the
-public, and the trust boundary stays where the rest of the service expects it.
+Two groups of routes, split by who they serve. ``/rate/{token}`` backs the
+public page anyone can reach from a Bugzilla comment; ``/feedback`` backs the
+internal review page and is only ever called on behalf of a signed-in Mozillian.
+Every route sits behind ``require_api_key`` regardless — the anonymous surface
+is the Next.js page in hackbot-ui, which calls these server-side with the shared
+key, so nothing here is directly reachable by the public.
+
+The path split matters: hackbot-ui exempts ``/rate`` from its SSO middleware, so
+keeping the public routes in their own namespace means anything added under
+``/feedback`` later stays guarded by default.
 
 The write path follows the upsert used by reviewhelper-api's ``/feedback``:
 insert, catch the named unique violation, roll back and update. Re-rating
@@ -28,6 +34,7 @@ from app.database.connection import get_db
 from app.database.models import Run, RunAction, RunFeedback
 from app.schemas import (
     FeedbackCreate,
+    FeedbackDoc,
     FeedbackResponse,
     FeedbackTargetDoc,
     RaterKind,
@@ -36,7 +43,7 @@ from app.schemas import (
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/feedback", tags=["feedback"])
+router = APIRouter(tags=["feedback"])
 
 _ANON_CONSTRAINT = "uq_run_feedback_anon"
 
@@ -76,7 +83,7 @@ async def _resolve_target(db: AsyncSession, token: str) -> tuple[UUID, RunAction
 
 
 @router.get(
-    "/{token}",
+    "/rate/{token}",
     response_model=FeedbackTargetDoc,
     dependencies=[Depends(require_api_key)],
 )
@@ -98,7 +105,7 @@ async def get_feedback_target(
 
 
 @router.post(
-    "/{token}",
+    "/rate/{token}",
     response_model=FeedbackResponse,
     dependencies=[Depends(require_api_key)],
 )
@@ -106,6 +113,7 @@ async def submit_feedback(
     token: str,
     request: FeedbackCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
+    x_rater_key: Annotated[str | None, Header()] = None,
     x_forwarded_for: Annotated[str | None, Header()] = None,
     user_agent: Annotated[str | None, Header()] = None,
 ) -> FeedbackResponse:
@@ -118,7 +126,7 @@ async def submit_feedback(
         )
 
     anon_id = feedback_links.anon_id(
-        feedback_links.client_ip_from(x_forwarded_for), user_agent
+        x_rater_key, feedback_links.client_ip_from(x_forwarded_for), user_agent
     )
 
     # Excluding this rater's own row keeps someone who is merely changing their
@@ -170,3 +178,48 @@ async def submit_feedback(
         return FeedbackResponse(message="Feedback updated. Thank you.")
 
     return FeedbackResponse(message="Feedback recorded. Thank you.")
+
+
+@router.get(
+    "/feedback",
+    response_model=list[FeedbackDoc],
+    dependencies=[Depends(require_api_key)],
+)
+async def list_feedback(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    agent: str | None = None,
+    run_id: UUID | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[FeedbackDoc]:
+    """Every rating, newest first, for the internal review page.
+
+    Joined to `runs` because `agent` and the bug id live there — feedback rows
+    only carry a run id. Unlike the public routes this returns rater metadata
+    and the run it belongs to, which is why the page fronting it is behind SSO.
+    """
+    stmt = (
+        select(RunFeedback, Run.agent, Run.inputs)
+        .join(Run, Run.run_id == RunFeedback.run_id)
+        .order_by(RunFeedback.created_at.desc())
+        .limit(min(limit, 500))
+        .offset(offset)
+    )
+    if agent:
+        stmt = stmt.where(Run.agent == agent)
+    if run_id:
+        stmt = stmt.where(RunFeedback.run_id == run_id)
+
+    result = await db.execute(stmt)
+    return [
+        FeedbackDoc(
+            run_id=row.run_id,
+            agent=row_agent,
+            bug_id=(inputs or {}).get("bug_id"),
+            rating=row.rating,
+            dimensions=row.dimensions,
+            comment=row.comment,
+            created_at=row.created_at,
+        )
+        for row, row_agent, inputs in result.all()
+    ]

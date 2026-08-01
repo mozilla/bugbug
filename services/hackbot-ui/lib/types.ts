@@ -82,6 +82,21 @@ export interface FeedbackTarget {
   nonce: string;
 }
 
+// Mirror of FeedbackDoc (services/hackbot-api/app/schemas.py).
+export interface FeedbackDoc {
+  run_id: string;
+  agent: string;
+  bug_id: number | null;
+  rating: FeedbackRating;
+  dimensions: string[];
+  comment: string | null;
+  created_at: string;
+}
+
+export const DIMENSION_LABELS: Record<string, string> = Object.fromEntries(
+  FEEDBACK_DIMENSIONS.map((d) => [d.value, d.label])
+);
+
 export interface RunDoc {
   run_id: string;
   agent: string;

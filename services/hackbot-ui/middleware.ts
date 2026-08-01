@@ -22,13 +22,18 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   // Protect everything except the auth endpoints, the login page, the public
-  // feedback page, and static assets.
+  // rating page, and static assets.
   //
-  // `/feedback/*` is reachable by anyone: it is linked from Bugzilla comments,
+  // `/rate/*` is reachable by anyone: it is linked from Bugzilla comments,
   // whose readers are mostly not Mozillians. Both entries are required — the
-  // lookahead anchors immediately after the leading slash, so `feedback` alone
-  // does not cover `/api/feedback/*`. See app/feedback/[token]/page.tsx.
+  // lookahead anchors immediately after the leading slash, so `rate` alone does
+  // not cover `/api/rate/*`. See app/rate/[token]/page.tsx.
+  //
+  // Public pages live under `/rate` and nothing else does. The exemption is a
+  // prefix match, so a page added under an exempted path would silently become
+  // public — keeping that namespace to one purpose is what stops the internal
+  // review pages under `/feedback` from being exposed by accident.
   matcher: [
-    "/((?!api/auth|api/feedback|login|feedback|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/auth|api/rate|login|rate|_next/static|_next/image|favicon.ico).*)",
   ],
 };

@@ -3,6 +3,7 @@ import "server-only";
 import type {
   AgentDescriptor,
   FeedbackDimension,
+  FeedbackDoc,
   FeedbackRating,
   FeedbackTarget,
   RunAction,
@@ -124,7 +125,7 @@ export function applyRunActions(runId: string): Promise<RunAction[]> {
 // The comment a public rater is being asked to judge, plus the nonce that
 // authorises their submission. Read-only: fetching this never records a vote.
 export function getFeedbackTarget(token: string): Promise<FeedbackTarget> {
-  return request<FeedbackTarget>(`/feedback/${encodeURIComponent(token)}`);
+  return request<FeedbackTarget>(`/rate/${encodeURIComponent(token)}`);
 }
 
 export interface SubmitFeedbackBody {
@@ -134,21 +135,47 @@ export interface SubmitFeedbackBody {
   comment: string | null;
 }
 
-// `rater` carries the original visitor's IP and user agent, which are otherwise
-// lost behind this server-side hop; hackbot-api salts them into a pseudonymous
-// dedupe key.
+// `rater` carries the signals hackbot-api salts into a pseudonymous dedupe
+// key: a per-browser cookie id, falling back to the original visitor's IP and
+// user agent, both of which are otherwise lost behind this server-side hop.
 export function submitFeedback(
   token: string,
   body: SubmitFeedbackBody,
-  rater: { forwardedFor?: string | null; userAgent?: string | null } = {}
+  rater: {
+    raterKey?: string | null;
+    forwardedFor?: string | null;
+    userAgent?: string | null;
+  } = {}
 ): Promise<{ message: string }> {
   const headers: Record<string, string> = {};
+  if (rater.raterKey) headers["X-Rater-Key"] = rater.raterKey;
   if (rater.forwardedFor) headers["X-Forwarded-For"] = rater.forwardedFor;
   if (rater.userAgent) headers["User-Agent"] = rater.userAgent;
-  return request<{ message: string }>(
-    `/feedback/${encodeURIComponent(token)}`,
-    { method: "POST", body: JSON.stringify(body), headers }
-  );
+  return request<{ message: string }>(`/rate/${encodeURIComponent(token)}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers,
+  });
+}
+
+export interface ListFeedbackParams {
+  agent?: string;
+  runId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// Every recorded rating, for the internal review page. Returns rater-adjacent
+// data the public routes never expose, so callers must be SSO-authenticated.
+export function listFeedback(
+  params: ListFeedbackParams = {}
+): Promise<FeedbackDoc[]> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(params.limit ?? 100));
+  if (params.offset) qs.set("offset", String(params.offset));
+  if (params.agent) qs.set("agent", params.agent);
+  if (params.runId) qs.set("run_id", params.runId);
+  return request<FeedbackDoc[]>(`/feedback?${qs.toString()}`);
 }
 
 // Ask hackbot-api for a short-lived signed download URL for one artifact.

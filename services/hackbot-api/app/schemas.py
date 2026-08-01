@@ -128,6 +128,18 @@ class FeedbackResponse(BaseModel):
     message: str
 
 
+class FeedbackDoc(BaseModel):
+    """One recorded rating, as shown on the internal (SSO-gated) review page."""
+
+    run_id: UUID
+    agent: str
+    bug_id: int | None = None
+    rating: FeedbackRating
+    dimensions: list[str] = Field(default_factory=list)
+    comment: str | None = None
+    created_at: datetime
+
+
 # --- Per-agent input schemas ---
 
 

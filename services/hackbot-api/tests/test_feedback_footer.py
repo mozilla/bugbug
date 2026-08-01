@@ -38,7 +38,7 @@ def test_appends_an_invitation_carrying_a_verifiable_token():
     assert "Was this analysis useful?" in out["text"]
     assert out["text"].startswith("Root cause: the pref is never read.")
 
-    token = out["text"].split("/feedback/")[1].split("?")[0]
+    token = out["text"].split("/rate/")[1].split("?")[0]
     assert verify_token(token) == run.run_id
     assert "?v=up" in out["text"] and "?v=down" in out["text"]
 

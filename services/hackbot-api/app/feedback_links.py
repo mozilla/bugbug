@@ -74,8 +74,15 @@ def verify_token(token: str) -> UUID | None:
 
 
 def feedback_url(run_id: UUID) -> str:
+    """Public rating URL for a run.
+
+    Lives under ``/rate`` rather than ``/feedback`` because that prefix is the
+    one exempted from the UI's SSO middleware: keeping the public surface in its
+    own namespace means the internal ratings pages under ``/feedback`` stay
+    guarded by default instead of relying on a narrower pattern.
+    """
     base = settings.feedback_public_base_url.rstrip("/")
-    return f"{base}/feedback/{mint_token(run_id)}"
+    return f"{base}/rate/{mint_token(run_id)}"
 
 
 def mint_nonce(run_id: UUID) -> str:
@@ -99,15 +106,26 @@ def verify_nonce(run_id: UUID, nonce: str) -> bool:
     return hmac.compare_digest(signature, expected)
 
 
-def anon_id(client_ip: str | None, user_agent: str | None) -> str | None:
+def anon_id(
+    rater_key: str | None, client_ip: str | None, user_agent: str | None
+) -> str | None:
     """Stable pseudonymous key for deduping anonymous raters.
 
-    Salted with the signing secret and truncated so the raw IP is never
-    recoverable from the stored value. Returns None when the request carries
-    neither signal, which leaves the row's dedupe column null — the partial
-    unique index then ignores it rather than collapsing every such rater into
-    one bucket.
+    Prefers ``rater_key``, a per-browser id the UI keeps in a first-party
+    cookie. IP + user agent is only a fallback, because on its own it is
+    actively unsafe here: two people behind one office or VPN egress IP running
+    the same Firefox build hash identically, and since the write is an upsert
+    the second rater would silently overwrite the first. A cookie distinguishes
+    them while still letting one person change their own mind in place.
+
+    Salted with the signing secret and truncated, so neither the raw IP nor the
+    cookie value is recoverable from what's stored. Returns None when the
+    request carries no signal at all, leaving the dedupe column null — the
+    partial unique index then ignores the row rather than collapsing every such
+    rater into one bucket.
     """
+    if rater_key:
+        return _sign("anon", f"key:{rater_key}")
     if not client_ip and not user_agent:
         return None
     return _sign("anon", f"{client_ip or ''}|{user_agent or ''}")
