@@ -60,7 +60,10 @@ def find_hackbot_mentions(
             continue
         if transaction.get("type") not in _COMMENT_TYPES:
             continue
-        if bot_phid and transaction.get("authorPHID") == bot_phid:
+        author_phid = transaction.get("authorPHID")
+        if not author_phid:
+            continue
+        if bot_phid and author_phid == bot_phid:
             continue
         for comment in transaction.get("comments") or []:
             raw = (comment.get("content") or {}).get("raw") or ""
@@ -68,7 +71,7 @@ def find_hackbot_mentions(
                 matches.append(
                     HackbotMention(
                         raw=raw,
-                        author_phid=transaction.get("authorPHID", ""),
+                        author_phid=author_phid,
                     )
                 )
                 break
@@ -130,15 +133,6 @@ async def detect_mention_and_revision(
         bot_phid=webhook.bot_phid,
         token=webhook.mention_token,
     )
-    if not mentions:
-        log.warning(
-            "No %s mention found in triggering transactions %s on %s",
-            webhook.mention_token,
-            triggering_phids,
-            object_phid,
-        )
-        return None
-
     authorized_members = await client.get_project_members(EDITBUGS_GROUP_PHID)
     comments: list[str] = []
     for mention in mentions:
@@ -148,10 +142,16 @@ async def detect_mention_and_revision(
             log.warning(
                 "Ignoring %s mention from non-editbugs user %s on %s",
                 webhook.mention_token,
-                mention.author_phid or "<missing PHID>",
+                mention.author_phid,
                 object_phid,
             )
     if not comments:
+        log.warning(
+            "No actionable %s mention found in triggering transactions %s on %s",
+            webhook.mention_token,
+            triggering_phids,
+            object_phid,
+        )
         return None
     comment = _join_comments(comments)
 
