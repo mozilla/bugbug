@@ -5,6 +5,16 @@ import { NextRequest, NextResponse } from "next/server";
 // valid session cookie — the proxy API routes additionally validate the
 // session and the @mozilla.com allowlist server-side (see lib/session.ts).
 export function middleware(req: NextRequest) {
+  // Local development only: DEV_AUTH_EMAIL in .env.local stands in for a Google
+  // session so the SSO-gated pages can be driven against sample data without
+  // OAuth credentials. Mirrors devUser() in lib/session.ts, which is the
+  // authoritative check — this file can't import it, since that module is
+  // `server-only` and middleware runs on the edge runtime. The NODE_ENV guard
+  // makes both branches dead code in any production build.
+  if (process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_EMAIL) {
+    return NextResponse.next();
+  }
+
   const sessionCookie = getSessionCookie(req);
   if (sessionCookie) {
     return NextResponse.next();
