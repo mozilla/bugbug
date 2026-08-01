@@ -47,6 +47,22 @@ router = APIRouter(tags=["feedback"])
 
 _ANON_CONSTRAINT = "uq_run_feedback_anon"
 
+# Start of the footer the runtime appends to every agent comment at record time
+# (see hackbot_runtime.actions.bugzilla).
+_BUGZILLA_FOOTER = "*This is an automated analysis result."
+
+
+def _analysis_only(text: str) -> str:
+    """Drop the Bugzilla-facing footer from what the rating page shows.
+
+    It directs the reader to file a needinfo if the analysis is wrong, which is
+    both redundant and faintly contradictory on a page that exists to collect
+    exactly that correction. The rating link the applier adds is never stored on
+    the action, so it can't appear here in the first place.
+    """
+    head, found, _ = text.partition(_BUGZILLA_FOOTER)
+    return head.rstrip() if found else text.rstrip()
+
 
 async def _resolve_target(db: AsyncSession, token: str) -> tuple[UUID, RunAction]:
     """Map a token to the run and the comment action it may be rated against.
@@ -99,7 +115,7 @@ async def get_feedback_target(
     run_id, action = await _resolve_target(db, token)
     return FeedbackTargetDoc(
         bug_id=action.params["bug_id"],
-        comment=action.params["text"],
+        comment=_analysis_only(action.params["text"]),
         nonce=feedback_links.mint_nonce(run_id),
     )
 

@@ -145,6 +145,17 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* The rule above targets text fields; a checkbox stretched to width:100% eats
+   the whole row and pushes its label to the far edge. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  flex: none;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .field {
   margin-bottom: 16px;
 }
@@ -818,7 +829,17 @@ ul.chips li.chip {
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  margin-top: 8px;
+  /* Overrides the muted global label colour: these are choices, not captions. */
+  color: var(--text);
+  margin: 0 0 10px;
+  cursor: pointer;
+}
+.feedback-dimensions label:last-child {
+  margin-bottom: 0;
+}
+.feedback-dimensions legend {
+  font-size: 12px;
+  padding: 0 4px;
 }
 .feedback-note {
   display: block;

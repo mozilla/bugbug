@@ -114,6 +114,31 @@ async def test_get_returns_the_posted_comment_and_a_nonce():
     assert feedback_links.verify_nonce(run.run_id, out.nonce) is True
 
 
+async def test_get_trims_the_bugzilla_footer_from_the_preview():
+    run = _FakeRun()
+    body = (
+        "Root cause: the pref is never read.\n\n"
+        "*This is an automated analysis result. If this result is incorrect "
+        "please add a needinfo and feel free to correct the error.* "
+    )
+    db = _FakeDB(run=run, action=_FakeAction(text=body))
+
+    out = await feedback_router.get_feedback_target(
+        feedback_links.mint_token(run.run_id), db
+    )
+
+    assert out.comment == "Root cause: the pref is never read."
+
+
+async def test_get_leaves_a_comment_without_the_footer_alone():
+    run = _FakeRun()
+    db = _FakeDB(run=run, action=_FakeAction(text="Just the analysis."))
+    out = await feedback_router.get_feedback_target(
+        feedback_links.mint_token(run.run_id), db
+    )
+    assert out.comment == "Just the analysis."
+
+
 async def test_get_never_writes():
     """A GET is reached by every prefetcher that touches the bugmail."""
     run = _FakeRun()
