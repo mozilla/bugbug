@@ -30,7 +30,6 @@ def upgrade() -> None:
             "dimensions", postgresql.JSONB(astext_type=sa.Text()), nullable=False
         ),
         sa.Column("comment", sa.Text(), nullable=True),
-        sa.Column("corrected_text", sa.Text(), nullable=True),
         sa.Column("rater_kind", sa.String(), nullable=False),
         sa.Column("bugzilla_user_id", sa.Integer(), nullable=True),
         sa.Column("bugzilla_name", sa.String(), nullable=True),

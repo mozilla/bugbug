@@ -120,9 +120,6 @@ class RunFeedback(Base):
     rating: Mapped[str] = mapped_column(String, nullable=False)
     dimensions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Lets a rater correct the analysis rather than only score it — the richest
-    # signal for retraining. Populated from phase 2 onward.
-    corrected_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     rater_kind: Mapped[str] = mapped_column(String, nullable=False)
     bugzilla_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bugzilla_name: Mapped[str | None] = mapped_column(String, nullable=True)
