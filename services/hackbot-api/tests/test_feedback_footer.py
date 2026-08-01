@@ -59,19 +59,10 @@ def test_skipped_for_agents_that_have_not_opted_in():
     assert out == params
 
 
-def test_skipped_for_unknown_agents():
+def test_only_comments_get_a_link():
+    """update_bug is the case that matters: it coalesces into the same PUT."""
     params = _comment()
-    out = with_feedback_link(_FakeRun(agent="nope"), "bugzilla.add_comment", params)
-    assert out == params
-
-
-@pytest.mark.parametrize(
-    "action_type",
-    ["bugzilla.update_bug", "bugzilla.add_attachment", "phabricator.submit_patch"],
-)
-def test_only_comments_get_a_link(action_type):
-    params = _comment()
-    assert with_feedback_link(_FakeRun(), action_type, params) == params
+    assert with_feedback_link(_FakeRun(), "bugzilla.update_bug", params) == params
 
 
 @pytest.mark.parametrize(

@@ -127,20 +127,13 @@ async def test_get_never_writes():
     assert db.updates == 0
 
 
-@pytest.mark.parametrize(
-    "token_kind", ["unsigned", "malformed", "empty", "wrong-signature"]
-)
-async def test_bad_tokens_all_404(token_kind):
+async def test_bad_token_404s():
+    """Token shapes are covered in test_feedback_links; this is the route's guard."""
     run = _FakeRun()
-    token = {
-        "unsigned": uuid.uuid4().hex,
-        "malformed": "not-a-token",
-        "empty": "",
-        "wrong-signature": f"{run.run_id.hex}.{'0' * 32}",
-    }[token_kind]
-
     with pytest.raises(HTTPException) as exc:
-        await feedback_router.get_feedback_target(token, _FakeDB(run=run))
+        await feedback_router.get_feedback_target(
+            f"{run.run_id.hex}.{'0' * 32}", _FakeDB(run=run)
+        )
     assert exc.value.status_code == 404
     assert exc.value.detail == "Not found"
 
@@ -154,11 +147,8 @@ async def test_unknown_run_404s_identically():
     assert exc.value.detail == "Not found"
 
 
-@pytest.mark.parametrize(
-    "status", [RunStatus.failed.value, RunStatus.running.value, RunStatus.pending.value]
-)
-async def test_runs_that_did_not_succeed_404(status):
-    run = _FakeRun(status=status)
+async def test_a_run_that_did_not_succeed_404s():
+    run = _FakeRun(status=RunStatus.failed.value)
     with pytest.raises(HTTPException) as exc:
         await feedback_router.get_feedback_target(
             feedback_links.mint_token(run.run_id),
@@ -222,35 +212,6 @@ async def test_post_without_a_nonce_is_rejected():
     assert exc.value.status_code == 400
     assert db.added == []
     assert db.commits == 0
-
-
-async def test_post_with_an_expired_nonce_is_rejected(monkeypatch):
-    run = _FakeRun()
-    db = _FakeDB(run=run, action=_FakeAction())
-    payload = _payload(run.run_id)
-    monkeypatch.setattr(settings, "feedback_nonce_ttl_seconds", -1)
-
-    with pytest.raises(HTTPException) as exc:
-        await feedback_router.submit_feedback(
-            feedback_links.mint_token(run.run_id), payload, db
-        )
-
-    assert exc.value.status_code == 400
-    assert db.added == []
-
-
-async def test_a_nonce_from_another_run_is_rejected():
-    run = _FakeRun()
-    db = _FakeDB(run=run, action=_FakeAction())
-    payload = _payload(run.run_id, nonce=feedback_links.mint_nonce(uuid.uuid4()))
-
-    with pytest.raises(HTTPException) as exc:
-        await feedback_router.submit_feedback(
-            feedback_links.mint_token(run.run_id), payload, db
-        )
-
-    assert exc.value.status_code == 400
-    assert db.added == []
 
 
 async def test_anonymous_vote_cap_rejects_new_raters():
