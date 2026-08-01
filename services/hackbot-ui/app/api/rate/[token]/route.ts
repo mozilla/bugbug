@@ -11,7 +11,7 @@ const KNOWN_DIMENSIONS = new Set<string>(
 );
 const MAX_COMMENT = 5000;
 
-// POST /api/feedback/:token — record a public rating of a posted Bugzilla
+// POST /api/rate/:token — record a public rating of a posted Bugzilla
 // comment. This is the one route handler that deliberately omits
 // getAuthedEmail(): the raters we most want to hear from are Bugzilla users
 // without Mozilla accounts. It still injects the API key server-side, so the

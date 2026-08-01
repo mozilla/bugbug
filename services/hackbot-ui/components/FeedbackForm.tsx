@@ -42,7 +42,7 @@ export function FeedbackForm({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/feedback/${encodeURIComponent(token)}`, {
+      const res = await fetch(`/api/rate/${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -52,11 +52,14 @@ export function FeedbackForm({
           comment: note.trim() || null,
         }),
       });
-      const body = await res.json();
+      // Parse defensively: an unexpected status can carry an HTML error page,
+      // and letting res.json() throw on it would replace a readable status
+      // with a JSON syntax error.
+      const body = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
       }
-      setDone(body.message ?? "Feedback recorded. Thank you.");
+      setDone(body?.message ?? "Feedback recorded. Thank you.");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -120,7 +123,7 @@ export function FeedbackForm({
         />
       </label>
 
-      {error && <p className="muted">{error}</p>}
+      {error && <div className="error-banner">{error}</div>}
 
       <button type="button" onClick={submit} disabled={!rating || submitting}>
         {submitting ? "Sending…" : "Submit feedback"}
