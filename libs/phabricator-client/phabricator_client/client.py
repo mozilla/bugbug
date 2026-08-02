@@ -122,11 +122,8 @@ class PhabricatorClient:
             constraints={"phids": [project_phid]},
             attachments={"members": True},
         )
-        data = result.get("data") or []
-        if not data:
-            return frozenset()
-        members = data[0].get("attachments", {}).get("members", {}).get("members", [])
-        return frozenset(member["phid"] for member in members if member.get("phid"))
+        members = result["data"][0]["attachments"]["members"]["members"]
+        return frozenset(member["phid"] for member in members)
 
     async def query_latest_diff(self, revision_id: int) -> PhabricatorDiff | None:
         """The most recent diff for a revision, or ``None`` if it has none.
