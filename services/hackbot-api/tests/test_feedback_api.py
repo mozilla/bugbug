@@ -359,14 +359,15 @@ async def test_re_rating_updates_instead_of_duplicating():
         feedback_links.mint_token(run.run_id),
         _payload(run.run_id, rating=FeedbackRating.down),
         db,
-        x_forwarded_for="203.0.113.7",
-        user_agent="Firefox",
+        x_rater_key="cookie-a",
     )
 
-    assert "updated" in out.message.lower()
     assert db.rollbacks == 1
     assert db.updates == 1
     assert db.commits == 1
+    # Insert and replace answer identically: whether we recognised this rater
+    # is our bookkeeping, not something to tell them about.
+    assert out.message == "Feedback recorded. Thank you."
 
 
 async def test_unrelated_integrity_errors_are_not_swallowed():

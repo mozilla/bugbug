@@ -47,6 +47,10 @@ router = APIRouter(tags=["feedback"])
 
 _ANON_CONSTRAINT = "uq_run_feedback_anon"
 
+# Whether a submission inserted or replaced an earlier one is our bookkeeping,
+# not the rater's concern, so both paths answer identically.
+_THANKS = "Feedback recorded. Thank you."
+
 # Start of the footer the runtime appends to every agent comment at record time
 # (see hackbot_runtime.actions.bugzilla).
 _BUGZILLA_FOOTER = "*This is an automated analysis result."
@@ -180,6 +184,8 @@ async def submit_feedback(
     except IntegrityError as exc:
         if _ANON_CONSTRAINT not in str(exc.orig):
             raise
+        # This rater already judged this run: replace their verdict rather than
+        # stack a second row.
         await db.rollback()
         await db.execute(
             update(RunFeedback)
@@ -191,9 +197,8 @@ async def submit_feedback(
             .where(RunFeedback.run_id == run_id, RunFeedback.anon_id == anon_id)
         )
         await db.commit()
-        return FeedbackResponse(message="Feedback updated. Thank you.")
 
-    return FeedbackResponse(message="Feedback recorded. Thank you.")
+    return FeedbackResponse(message=_THANKS)
 
 
 @router.get(
