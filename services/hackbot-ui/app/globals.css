@@ -244,28 +244,25 @@ table.runs th:nth-child(5) {
 table.runs th:nth-child(6) {
   width: 19%;
 }
-/* Seven columns rather than the runs table's six, so every width is restated;
-   the two-class selector outranks the nth-child rules above. */
+/* Same column count as the runs table but a different balance, so every width
+   is restated; the two-class selector outranks the nth-child rules above. */
 table.runs.feedback th:nth-child(1) {
-  width: 8%;
-}
-table.runs.feedback th:nth-child(2) {
-  width: 14%;
-}
-table.runs.feedback th:nth-child(3) {
-  width: 8%;
-}
-table.runs.feedback th:nth-child(4) {
   width: 7%;
 }
+table.runs.feedback th:nth-child(2) {
+  width: 18%;
+}
+table.runs.feedback th:nth-child(3) {
+  width: 10%;
+}
+table.runs.feedback th:nth-child(4) {
+  width: 8%;
+}
 table.runs.feedback th:nth-child(5) {
-  width: 20%;
+  width: 37%;
 }
 table.runs.feedback th:nth-child(6) {
-  width: 29%;
-}
-table.runs.feedback th:nth-child(7) {
-  width: 14%;
+  width: 20%;
 }
 table.runs.feedback td {
   vertical-align: top;
@@ -903,6 +900,25 @@ ul.chips li.chip {
 .thumb-filter.selected {
   border-color: var(--accent);
   background: rgba(88, 128, 255, 0.16);
+}
+
+/* Rater comments get a full-width row under the record, mirroring the run-error
+   row above. Not clamped, unlike errors: the comment is the thing you came to
+   read, and the write path caps its length. */
+table.runs tr.has-comment > td {
+  border-bottom: none;
+}
+table.runs tr.feedback-comment-row > td {
+  padding-top: 2px;
+  padding-bottom: 12px;
+  white-space: normal;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.feedback-comment-text {
+  overflow-wrap: anywhere;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
 }
 
 .dimension-tags {

@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import {
   DIMENSION_LABELS,
   type FeedbackDoc,
   type FeedbackRating,
 } from "@/lib/types";
+
+// Comments sit on their own full-width row beneath the record, the way run
+// errors do in RecentRuns: they are free prose of unpredictable length, and a
+// column wide enough for them would starve every other field.
+const COLS = 6;
 
 // Filtering happens here rather than server-side because the agent options must
 // come from every row, not the visible ones — deriving them from the filtered
@@ -81,47 +86,56 @@ export function FeedbackTable({ rows }: { rows: FeedbackDoc[] }) {
                 <th>Bug</th>
                 <th>Run</th>
                 <th>What was wrong</th>
-                <th>Comment</th>
                 <th>When</th>
               </tr>
             </thead>
             <tbody>
               {visible.map((row) => (
-                <tr key={`${row.run_id}-${row.created_at}`}>
-                  <td>{row.rating === "up" ? "👍" : "👎"}</td>
-                  <td>{row.agent}</td>
-                  <td>
-                    {row.bug_id ? (
-                      <a
-                        href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${row.bug_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {row.bug_id}
-                      </a>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td>
-                    <Link href={`/runs/${row.run_id}`}>view</Link>
-                  </td>
-                  <td>
-                    {row.dimensions.length === 0 ? (
-                      <span className="muted">—</span>
-                    ) : (
-                      <ul className="dimension-tags">
-                        {row.dimensions.map((d) => (
-                          <li key={d}>{DIMENSION_LABELS[d] ?? d}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td>{row.comment ?? <span className="muted">—</span>}</td>
-                  <td className="muted">
-                    {new Date(row.created_at).toLocaleString()}
-                  </td>
-                </tr>
+                <Fragment key={`${row.run_id}-${row.created_at}`}>
+                  <tr className={row.comment ? "has-comment" : undefined}>
+                    <td>{row.rating === "up" ? "👍" : "👎"}</td>
+                    <td>{row.agent}</td>
+                    <td>
+                      {row.bug_id ? (
+                        <a
+                          href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${row.bug_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {row.bug_id}
+                        </a>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <Link href={`/runs/${row.run_id}`}>view</Link>
+                    </td>
+                    <td>
+                      {row.dimensions.length === 0 ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <ul className="dimension-tags">
+                          {row.dimensions.map((d) => (
+                            <li key={d}>{DIMENSION_LABELS[d] ?? d}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                    <td className="muted">
+                      {new Date(row.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                  {row.comment && (
+                    <tr className="feedback-comment-row">
+                      <td colSpan={COLS}>
+                        <div className="feedback-comment-text">
+                          {row.comment}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
