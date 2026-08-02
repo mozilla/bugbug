@@ -21,14 +21,12 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Everything is guarded except auth, login, static assets, and `/rate/*` —
-  // the public rating pages, linked from Bugzilla comments whose readers are
-  // mostly not Mozillians.
+  // Everything is guarded except auth, login, static assets, and `/rate/*`, the
+  // public rating pages linked from Bugzilla.
   //
   // Two cautions. Both rate entries are needed: the lookahead anchors after the
   // leading slash, so `rate` alone misses `/api/rate/*`. And exemptions are
-  // prefix matches, so anything added under `/rate` becomes public silently —
-  // keep that namespace to the one purpose.
+  // prefix matches, so anything added under `/rate` becomes public silently.
   matcher: [
     "/((?!api/auth|api/rate|login|rate|_next/static|_next/image|favicon.ico).*)",
   ],

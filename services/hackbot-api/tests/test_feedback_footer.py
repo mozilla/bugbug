@@ -2,8 +2,7 @@
 
 See `with_feedback_link` in app/actions_applier.py. The link must appear only
 for opted-in agents, only on comments, and only when the service is configured
-to mint one — a broken or unverifiable URL in a permanent Bugzilla comment is
-worse than no link at all.
+to mint one: a Bugzilla comment is permanent, and so is a broken URL in it.
 """
 
 import uuid

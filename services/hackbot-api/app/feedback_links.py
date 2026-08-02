@@ -4,11 +4,11 @@ Run ids are already UUIDv4, so the token's signature isn't hiding them — it
 lets the endpoint reject junk before touching the database.
 
 The nonce is separate: minted when the page renders, required on the write.
-Bugmail reaches every CC'd account and corporate mail scanners pre-fetch every
-link they see, so a GET must never record a vote, and a client that never
-rendered the page has no nonce to submit. It does not stop a determined
-scripted attacker; the per-run cap and the partial unique indexes in
-``database/models.py`` bound that.
+The link is published where automated clients follow it — mail gateways and
+chat clients fetch links to scan or preview them — so a GET must never record a
+vote, and a client that never rendered the page has no nonce to submit. It does
+not stop a scripted attacker; the per-run cap and the partial unique indexes in
+``database/models.py`` are what limit that.
 
 HMAC payloads are domain-prefixed so a signature minted for one purpose can't
 be replayed as another.

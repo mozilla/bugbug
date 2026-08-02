@@ -71,8 +71,8 @@ export function FeedbackTable() {
     };
   }, [runFilter]);
 
-  // Counts beside each thumb track the agent filter, so the number is always
-  // how many rows clicking it would show.
+  // Counts follow the agent filter but not the dimension one: they are all-time
+  // totals, so with a dimension selected the thumb reads higher than the rows.
   const counts = agentFilter
     ? stats?.by_agent.find((a) => a.agent === agentFilter)
     : stats;
@@ -184,9 +184,8 @@ export function FeedbackTable() {
               </option>
             ))}
           </select>
-          {/* Unlike agents, every dimension is offered whether or not it has
-              been used yet: the list is a fixed vocabulary the form always
-              shows, so an empty one is a real answer rather than a dead end. */}
+          {/* Every dimension is offered, unlike agents: any of them is one
+              rating away, so an empty result is an answer not a dead end. */}
           <select
             aria-label="Filter by what was wrong"
             value={dimensionFilter}

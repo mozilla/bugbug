@@ -51,9 +51,9 @@ def with_feedback_link(run: Run, action_type: str, params: dict) -> dict:
     """Append the rating invitation to a comment about to be posted.
 
     Done at apply rather than record time because only comments that actually
-    reach Bugzilla should advertise a feedback URL — most recorded ones never
-    are — and because the signing secret belongs to this service, not the agent
-    container.
+    reach Bugzilla should advertise a feedback URL — applying is a separate,
+    currently manual step — and because the signing secret belongs to this
+    service, not the agent container.
 
     Returns a new dict; the caller must not persist it back to the row, or a
     re-apply would stack a second copy.

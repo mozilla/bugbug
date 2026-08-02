@@ -6,8 +6,8 @@ comment; ``/feedback`` backs the internal review page. Every route sits behind
 hackbot-ui, which calls these server-side with the shared key.
 
 The write path follows the upsert in reviewhelper-api's ``/feedback``: insert,
-catch the named unique violation, roll back and update, so re-rating replaces a
-verdict instead of stacking duplicates.
+catch the named unique violation, roll back and update, so re-rating replaces
+rather than duplicates.
 """
 
 from __future__ import annotations
@@ -61,8 +61,8 @@ _BUGZILLA_FOOTER = "*This is an automated analysis result."
 def _analysis_only(text: str) -> str:
     """Drop the Bugzilla-facing footer from what the rating page shows.
 
-    It tells the reader to file a needinfo if the analysis is wrong, which is
-    contradictory on a page that exists to collect exactly that correction.
+    It directs the reader to file a needinfo, which contradicts the page they
+    are already on.
     """
     head, found, _ = text.partition(_BUGZILLA_FOOTER)
     return head.rstrip() if found else text.rstrip()
@@ -73,10 +73,9 @@ async def _comment_action(
 ) -> RunAction:
     """The comment on `run_id` that may be rated, or 404.
 
-    `applied_only` is the difference between the two entry points. A public
-    rater can only judge what Bugzilla actually received; a signed-in reviewer
-    judges the proposed comment, and the case that matters most is the one they
-    decide not to post at all.
+    `applied_only` separates the two entry points: a public rater can only judge
+    what Bugzilla received, a signed-in reviewer judges the proposal — including
+    one they then decline to post.
     """
     run = await db.get(Run, run_id)
     if run is None or run.status != RunStatus.succeeded.value:

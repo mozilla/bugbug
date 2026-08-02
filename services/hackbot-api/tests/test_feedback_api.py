@@ -1,10 +1,9 @@
 """Tests for the feedback endpoints.
 
 Exercises the handlers directly with a fake DB, matching this suite's style.
-The cases that matter most are the negative ones: a GET must never write, every
-rejection must look identical from outside, and a stale or absent nonce must
-stop the write — that nonce is what keeps mail scanners and crawlers, which
-fetch every link in a Bugzilla comment, from casting votes.
+The negative cases carry the weight: a GET must never write, every rejection
+must look identical from outside, and a missing or stale nonce must stop the
+write.
 """
 
 import uuid
@@ -138,7 +137,7 @@ async def test_get_trims_the_bugzilla_footer_from_the_preview():
 
 
 async def test_get_never_writes():
-    """A GET is reached by every prefetcher that touches the bugmail."""
+    """Automated clients follow this link; none of them may vote."""
     run = _FakeRun()
     db = _FakeDB(run=run, action=_FakeAction())
 

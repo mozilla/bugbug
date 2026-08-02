@@ -136,9 +136,8 @@ export interface SubmitFeedbackBody {
   comment: string | null;
 }
 
-// `rater` carries the signals hackbot-api salts into a pseudonymous dedupe
-// key: a per-browser cookie id, falling back to the original visitor's IP and
-// user agent, both of which are otherwise lost behind this server-side hop.
+// `rater` carries signals the server-side hop would otherwise lose; hackbot-api
+// salts them into a dedupe key (see anon_id in app/feedback_links.py).
 export function submitFeedback(
   token: string,
   body: SubmitFeedbackBody,
@@ -165,9 +164,8 @@ export interface InternalFeedbackBody {
   comment: string | null;
 }
 
-// A signed-in reviewer's rating of a run's proposed comment, which unlike the
-// public route works before (or instead of) posting it. `email` comes from the
-// caller's session and is what the rating is attributed to.
+// A reviewer's rating of a proposed comment; unlike the public route it works
+// before, or instead of, posting. `email` is what the rating is attributed to.
 export function submitRunFeedback(
   runId: string,
   body: InternalFeedbackBody,
@@ -192,8 +190,8 @@ export interface ListFeedbackParams {
   offset?: number;
 }
 
-// Every recorded rating, for the internal review page. Returns rater-adjacent
-// data the public routes never expose, so callers must be SSO-authenticated.
+// Every recorded rating, for the internal review page. Exposes rater identity,
+// so its route handler checks the session.
 export function listFeedback(
   params: ListFeedbackParams = {}
 ): Promise<FeedbackDoc[]> {

@@ -87,9 +87,7 @@ export interface FeedbackTarget {
   nonce: string;
 }
 
-// Mirror of FeedbackStats (services/hackbot-api/app/schemas.py). `by_agent`
-// lists only agents that have been rated, which is what the filter offers —
-// the full registry includes agents whose comments carry no feedback link.
+// Mirror of FeedbackStats (services/hackbot-api/app/schemas.py).
 export interface AgentFeedbackStats {
   agent: string;
   up: number;
@@ -112,8 +110,6 @@ export interface FeedbackDoc {
   rating: FeedbackRating;
   dimensions: string[];
   comment: string | null;
-  // "mozilla" is a reviewer rating in Hackbot, possibly before the comment was
-  // posted; "anonymous" is a Bugzilla reader rating one that already is.
   rater_kind: RaterKind;
   rater_id: string | null;
   created_at: string;

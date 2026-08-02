@@ -8,9 +8,9 @@ import {
   type FeedbackRating,
 } from "@/lib/types";
 
-// Rating for a comment the agent proposes, available before it is posted — the
-// case worth capturing is a reviewer judging an analysis bad and declining to
-// apply it. Attribution comes from the session, server-side.
+// Rating for a proposed comment, available before it is posted, so a reviewer
+// who declines to apply one still records why. Attribution comes from the
+// session, server-side.
 export function ActionRating({ runId }: { runId: string }) {
   const [rating, setRating] = useState<FeedbackRating | null>(null);
   const [dimensions, setDimensions] = useState<FeedbackDimension[]>([]);

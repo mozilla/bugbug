@@ -12,11 +12,11 @@ const KNOWN_DIMENSIONS = new Set<string>(
 const MAX_COMMENT = 5000;
 
 // POST /api/rate/:token — the one route handler that deliberately omits
-// getAuthedEmail(), since the raters worth hearing from are Bugzilla users
-// without Mozilla accounts. The API key is still injected server-side.
+// getAuthedEmail(), since its raters have no Mozilla account. The API key is
+// still injected server-side.
 //
-// No GET here on purpose: mail scanners and crawlers fetch every link in a
-// Bugzilla comment, and a GET that wrote would hand each of them a ballot.
+// No GET here on purpose: automated clients follow links out of bugmail, and a
+// GET that wrote would let them vote.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ token: string }> }
@@ -55,9 +55,8 @@ export async function POST(
     return NextResponse.json({ error: "Invalid dimension" }, { status: 400 });
   }
 
-  // Per-browser dedupe key, minted on first submit so it applies from the very
-  // first rating. IP + user agent alone would collapse colleagues behind one
-  // egress IP into a single rater (see anon_id in app/feedback_links.py).
+  // Per-browser dedupe key, minted on first submit so it counts from the first
+  // rating (see anon_id in app/feedback_links.py for why IP alone won't do).
   const existingKey = req.headers
     .get("cookie")
     ?.match(/(?:^|;\s*)hb_rater=([^;]+)/)?.[1];

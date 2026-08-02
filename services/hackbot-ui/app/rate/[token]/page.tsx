@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// Carried over from the Bugzilla link so the visitor needn't re-pick the thumb
-// they already clicked. Strictly a display hint: anything else means no
-// selection rather than an error, and the value is never echoed into the page.
+// Carried over from the Bugzilla link so the visitor needn't re-pick the thumb.
+// Display only: anything else means no selection rather than an error, and the
+// value is never echoed into the page.
 function preselect(
   value: string | string[] | undefined
 ): FeedbackRating | null {
