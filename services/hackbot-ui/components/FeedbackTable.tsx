@@ -6,6 +6,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 
 import {
   DIMENSION_LABELS,
+  FEEDBACK_DIMENSIONS,
   type FeedbackDoc,
   type FeedbackRating,
   type FeedbackStats,
@@ -21,6 +22,7 @@ const COLS = 5;
 async function fetchPage(params: {
   agent?: string;
   rating?: string;
+  dimension?: string;
   runId?: string;
   offset: number;
 }): Promise<FeedbackDoc[] | null> {
@@ -30,6 +32,7 @@ async function fetchPage(params: {
   });
   if (params.agent) qs.set("agent", params.agent);
   if (params.rating) qs.set("rating", params.rating);
+  if (params.dimension) qs.set("dimension", params.dimension);
   if (params.runId) qs.set("run_id", params.runId);
   const res = await fetch(`/api/feedback?${qs.toString()}`);
   if (!res.ok) return null;
@@ -43,6 +46,7 @@ export function FeedbackTable() {
 
   const agentFilter = searchParams.get("agent") ?? "";
   const ratingFilter = searchParams.get("rating") ?? "";
+  const dimensionFilter = searchParams.get("dimension") ?? "";
   const runFilter = searchParams.get("run_id") ?? "";
 
   const [rows, setRows] = useState<FeedbackDoc[] | null>(null);
@@ -82,6 +86,7 @@ export function FeedbackTable() {
     fetchPage({
       agent: agentFilter || undefined,
       rating: ratingFilter || undefined,
+      dimension: dimensionFilter || undefined,
       runId: runFilter || undefined,
       offset: 0,
     }).then((page) => {
@@ -98,10 +103,10 @@ export function FeedbackTable() {
     return () => {
       cancelled = true;
     };
-  }, [agentFilter, ratingFilter, runFilter]);
+  }, [agentFilter, ratingFilter, dimensionFilter, runFilter]);
 
   const setFilter = useCallback(
-    (key: "agent" | "rating", value: string) => {
+    (key: "agent" | "rating" | "dimension", value: string) => {
       const params = new URLSearchParams(searchParams.toString());
       if (value) {
         params.set(key, value);
@@ -120,6 +125,7 @@ export function FeedbackTable() {
     const page = await fetchPage({
       agent: agentFilter || undefined,
       rating: ratingFilter || undefined,
+      dimension: dimensionFilter || undefined,
       runId: runFilter || undefined,
       offset: rows.length,
     });
@@ -129,7 +135,14 @@ export function FeedbackTable() {
       setHasMore(page.length === PAGE_SIZE);
     }
     setLoadingMore(false);
-  }, [rows, loadingMore, agentFilter, ratingFilter, runFilter]);
+  }, [
+    rows,
+    loadingMore,
+    agentFilter,
+    ratingFilter,
+    dimensionFilter,
+    runFilter,
+  ]);
 
   function thumb(value: FeedbackRating, label: string) {
     const active = ratingFilter === value;
@@ -172,6 +185,21 @@ export function FeedbackTable() {
               </option>
             ))}
           </select>
+          {/* Unlike agents, every dimension is offered whether or not it has
+              been used yet: the list is a fixed vocabulary the form always
+              shows, so an empty one is a real answer rather than a dead end. */}
+          <select
+            aria-label="Filter by what was wrong"
+            value={dimensionFilter}
+            onChange={(e) => setFilter("dimension", e.target.value)}
+          >
+            <option value="">Anything wrong</option>
+            {FEEDBACK_DIMENSIONS.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -187,7 +215,7 @@ export function FeedbackTable() {
         <p className="muted">Loading…</p>
       ) : rows.length === 0 ? (
         <p className="muted">
-          {agentFilter || ratingFilter
+          {agentFilter || ratingFilter || dimensionFilter
             ? "No ratings match these filters."
             : "No ratings yet."}
         </p>

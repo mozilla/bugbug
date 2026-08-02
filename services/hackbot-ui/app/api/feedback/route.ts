@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 import { HackbotError, listFeedback } from "@/lib/hackbot";
 import { getAuthedEmail } from "@/lib/session";
+import { FEEDBACK_DIMENSIONS, type FeedbackDimension } from "@/lib/types";
+
+const KNOWN_DIMENSIONS = new Set<string>(
+  FEEDBACK_DIMENSIONS.map((d) => d.value)
+);
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +20,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const rating = url.searchParams.get("rating");
+  const dimension = url.searchParams.get("dimension");
   const limit = Number(url.searchParams.get("limit"));
   const offset = Number(url.searchParams.get("offset"));
   try {
@@ -22,6 +28,10 @@ export async function GET(req: Request) {
       await listFeedback({
         agent: url.searchParams.get("agent") ?? undefined,
         rating: rating === "up" || rating === "down" ? rating : undefined,
+        dimension:
+          dimension && KNOWN_DIMENSIONS.has(dimension)
+            ? (dimension as FeedbackDimension)
+            : undefined,
         runId: url.searchParams.get("run_id") ?? undefined,
         limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
         offset: Number.isFinite(offset) && offset > 0 ? offset : undefined,

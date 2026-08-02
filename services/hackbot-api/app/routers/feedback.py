@@ -35,6 +35,7 @@ from app.database.models import Run, RunAction, RunFeedback
 from app.schemas import (
     AgentFeedbackStats,
     FeedbackCreate,
+    FeedbackDimension,
     FeedbackDoc,
     FeedbackRating,
     FeedbackResponse,
@@ -258,6 +259,7 @@ async def list_feedback(
     db: Annotated[AsyncSession, Depends(get_db)],
     agent: str | None = None,
     rating: FeedbackRating | None = None,
+    dimension: FeedbackDimension | None = None,
     run_id: UUID | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -279,6 +281,9 @@ async def list_feedback(
         stmt = stmt.where(Run.agent == agent)
     if rating:
         stmt = stmt.where(RunFeedback.rating == rating.value)
+    if dimension:
+        # JSONB containment (@>): the row's dimension array includes this label.
+        stmt = stmt.where(RunFeedback.dimensions.contains([dimension.value]))
     if run_id:
         stmt = stmt.where(RunFeedback.run_id == run_id)
 

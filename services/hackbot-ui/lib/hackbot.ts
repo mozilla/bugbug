@@ -162,6 +162,7 @@ export function submitFeedback(
 export interface ListFeedbackParams {
   agent?: string;
   rating?: FeedbackRating;
+  dimension?: FeedbackDimension;
   runId?: string;
   limit?: number;
   offset?: number;
@@ -177,6 +178,7 @@ export function listFeedback(
   if (params.offset) qs.set("offset", String(params.offset));
   if (params.agent) qs.set("agent", params.agent);
   if (params.rating) qs.set("rating", params.rating);
+  if (params.dimension) qs.set("dimension", params.dimension);
   if (params.runId) qs.set("run_id", params.runId);
   return request<FeedbackDoc[]>(`/feedback?${qs.toString()}`);
 }

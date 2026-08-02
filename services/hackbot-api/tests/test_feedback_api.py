@@ -18,6 +18,7 @@ from app.config import settings
 from app.routers import feedback as feedback_router
 from app.schemas import FeedbackCreate, FeedbackDimension, FeedbackRating, RunStatus
 from fastapi import HTTPException
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 
 
@@ -291,8 +292,10 @@ class _ListDB:
 
     def __init__(self, rows):
         self._rows = rows
+        self.stmt = None
 
     async def execute(self, stmt):
+        self.stmt = stmt
         return SimpleNamespace(all=lambda: self._rows)
 
 
@@ -314,6 +317,24 @@ async def test_list_feedback_joins_agent_and_bug_from_the_run():
     assert out.bug_id == 2049877
     assert out.rating == FeedbackRating.down
     assert out.comment == "Wrong regressor."
+
+
+async def test_dimension_filter_reaches_the_query():
+    """A silently dropped filter would look like "no rows match" instead."""
+    db = _ListDB([])
+    await feedback_router.list_feedback(
+        db, dimension=FeedbackDimension.root_cause_wrong
+    )
+
+    compiled = db.stmt.compile(dialect=postgresql.dialect())
+    assert "run_feedback.dimensions @>" in str(compiled)
+    assert ["root_cause_wrong"] in compiled.params.values()
+
+
+async def test_no_dimension_filter_means_no_containment_clause():
+    db = _ListDB([])
+    await feedback_router.list_feedback(db)
+    assert "@>" not in str(db.stmt)
 
 
 async def test_stats_totals_and_breaks_down_by_agent():
