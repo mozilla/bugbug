@@ -12,7 +12,7 @@ report only pass/fail/unsuitable results. Do not try to fix, patch or make chang
    - A title.
    - A primary execution context label: `chrome` or `content`.
    - Ordered test steps.
-   - Step indexed expectations for the verification step(s).
+   - Step-indexed expectations for only the verification step(s).
 3. Run the generated cases and steps in order.
 4. Submit one final structured result with `submit_result`.
    - Use the provided feature name as the structured result feature.
@@ -51,8 +51,8 @@ bypass a failing content interaction.
 - Put only the action a QA engineer should perform in each step.
 - Put expected results in `step_expectations` only for the step or steps that
   directly verify the observable behavior described by the test case title.
-  Each test case must include at least one expected result. Leave non verifying
-  steps empty.
+- Do not add expectations for setup, navigation, or routine happy-path
+  confirmation steps, leave those steps empty.
 
 ## Unsuitable cases
 
