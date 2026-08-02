@@ -244,6 +244,33 @@ table.runs th:nth-child(5) {
 table.runs th:nth-child(6) {
   width: 19%;
 }
+/* Seven columns rather than the runs table's six, so every width is restated;
+   the two-class selector outranks the nth-child rules above. */
+table.runs.feedback th:nth-child(1) {
+  width: 8%;
+}
+table.runs.feedback th:nth-child(2) {
+  width: 14%;
+}
+table.runs.feedback th:nth-child(3) {
+  width: 8%;
+}
+table.runs.feedback th:nth-child(4) {
+  width: 7%;
+}
+table.runs.feedback th:nth-child(5) {
+  width: 20%;
+}
+table.runs.feedback th:nth-child(6) {
+  width: 29%;
+}
+table.runs.feedback th:nth-child(7) {
+  width: 14%;
+}
+table.runs.feedback td {
+  vertical-align: top;
+}
+
 table.runs th,
 table.runs td {
   text-align: left;
@@ -860,24 +887,37 @@ ul.chips li.chip {
   margin-bottom: 4px;
 }
 
-.feedback-list {
+/* Compact filter control, not one of the page's primary accent buttons. */
+.thumb-filter {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  font-weight: 500;
+  font-size: 13px;
+}
+.thumb-filter:hover {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+.thumb-filter.selected {
+  border-color: var(--accent);
+  background: rgba(88, 128, 255, 0.16);
+}
+
+.dimension-tags {
   list-style: none;
-  padding: 0;
   margin: 0;
-}
-.feedback-list li {
-  border-top: 1px solid var(--border);
-  padding: 12px 0;
-}
-.feedback-list li:first-child {
-  border-top: none;
-}
-.feedback-list p {
-  margin: 6px 0 0;
-}
-.feedback-row {
+  padding: 0;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dimension-tags li {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  white-space: nowrap;
 }
