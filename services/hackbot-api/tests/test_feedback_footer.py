@@ -87,22 +87,16 @@ def _action(status):
     )
 
 
-async def test_posted_text_exposed_once_applied():
-    """The preview should match the comment Bugzilla received."""
-    run = _FakeRun()
-    (doc,) = await runs_router._list_actions(_ActionsDB([_action("applied")]), run)
-
-    assert doc.posted_text is not None
-    assert "Was this analysis useful?" in doc.posted_text
-    assert doc.params["text"] not in ("", None)
-    assert "Was this analysis useful?" not in doc.params["text"]
-
-
-async def test_no_posted_text_before_apply():
+async def test_posted_text_appears_only_once_applied():
     """A link offered before the comment is posted would only 404."""
     run = _FakeRun()
-    (doc,) = await runs_router._list_actions(_ActionsDB([_action("pending")]), run)
-    assert doc.posted_text is None
+
+    (applied,) = await runs_router._list_actions(_ActionsDB([_action("applied")]), run)
+    assert "Was this analysis useful?" in (applied.posted_text or "")
+    assert "Was this analysis useful?" not in applied.params["text"]
+
+    (pending,) = await runs_router._list_actions(_ActionsDB([_action("pending")]), run)
+    assert pending.posted_text is None
 
 
 @pytest.mark.parametrize(

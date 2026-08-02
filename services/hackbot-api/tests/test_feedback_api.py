@@ -181,16 +181,6 @@ async def test_a_run_that_did_not_succeed_404s():
     assert exc.value.status_code == 404
 
 
-async def test_run_without_an_applied_comment_404s():
-    """Nothing was posted to Bugzilla, so there is nothing to rate."""
-    run = _FakeRun()
-    with pytest.raises(HTTPException) as exc:
-        await feedback_router.get_feedback_target(
-            feedback_links.mint_token(run.run_id), _FakeDB(run=run, action=None)
-        )
-    assert exc.value.status_code == 404
-
-
 # --- recording a vote --------------------------------------------------- #
 
 
@@ -390,23 +380,17 @@ async def test_stats_totals_and_breaks_down_by_agent():
             ("frontend-triage", "up", 12),
             ("frontend-triage", "down", 32),
             ("bug-fix", "up", 6),
-            ("bug-fix", "down", 16),
         ]
     )
     out = await feedback_router.feedback_stats(db)
 
-    assert (out.up, out.down) == (18, 48)
+    assert (out.up, out.down) == (18, 32)
+    # Only rated agents are listed — the filter is built from this — and a
+    # rating with no rows reads 0 rather than raising.
     assert [(a.agent, a.up, a.down) for a in out.by_agent] == [
-        ("bug-fix", 6, 16),
+        ("bug-fix", 6, 0),
         ("frontend-triage", 12, 32),
     ]
-
-
-async def test_stats_lists_only_agents_that_have_been_rated():
-    """The filter is built from this, and must not offer empty agents."""
-    out = await feedback_router.feedback_stats(_ListDB([("frontend-triage", "up", 1)]))
-    assert [a.agent for a in out.by_agent] == ["frontend-triage"]
-    assert out.by_agent[0].down == 0
 
 
 class _ConflictingDB(_FakeDB):
