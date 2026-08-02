@@ -10,7 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
-from app.actions_applier import apply_all_pending, with_feedback_link
+from app.actions_applier import (
+    apply_all_pending,
+    rating_enabled,
+    with_feedback_link,
+)
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
 from app.config import settings
@@ -203,10 +207,12 @@ async def _list_actions(db: AsyncSession, run: Run) -> list[RunActionDoc]:
     docs = []
     for row in result.scalars():
         doc = RunActionDoc.model_validate(row)
-        # Only once applied: the rating page rejects a comment that was never
-        # posted, so offering the link earlier would just 404.
-        if row.status == "applied" and row.type == "bugzilla.add_comment":
-            doc.posted_text = with_feedback_link(run, row.type, row.params)["text"]
+        if row.type == "bugzilla.add_comment" and rating_enabled(run.agent):
+            doc.can_rate = True
+            # Only once applied: the rating page rejects a comment that was
+            # never posted, so offering the link earlier would just 404.
+            if row.status == "applied":
+                doc.posted_text = with_feedback_link(run, row.type, row.params)["text"]
         docs.append(doc)
     return docs
 

@@ -10,6 +10,7 @@ import {
   type RunAction,
   type RunDoc,
 } from "@/lib/types";
+import { ActionRating } from "./ActionRating";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
 import { StatusBadge } from "./StatusBadge";
@@ -18,9 +19,10 @@ import { StatusBadge } from "./StatusBadge";
 // pull it out so we can preview what would be posted to the bug.
 function commentPreview(a: RunAction): string | null {
   if (a.type !== "bugzilla.add_comment") return null;
-  // Prefer what Bugzilla actually received, so the preview matches the posted
-  // comment — including the rating links, which are live once applied.
-  const text = a.posted_text ?? a.params?.text;
+  // The agent's text, not posted_text: the rating footer Bugzilla receives is
+  // deliberately left out here, since the control below already offers it and
+  // clicking the link instead would file a second, anonymous row.
+  const text = a.params?.text;
   return typeof text === "string" && text.trim() ? text : null;
 }
 
@@ -242,10 +244,13 @@ export function RunDetail({ runId }: { runId: string }) {
                     {a.error && <span className="muted">{a.error}</span>}
                   </div>
                   {preview && (
-                    <div className="action-preview">
-                      <span className="muted">Comment preview</span>
-                      <Markdown text={preview} />
-                    </div>
+                    <>
+                      <div className="action-preview">
+                        <span className="muted">Comment preview</span>
+                        <Markdown text={preview} />
+                      </div>
+                      {a.can_rate && <ActionRating runId={runId} />}
+                    </>
                   )}
                 </li>
               );

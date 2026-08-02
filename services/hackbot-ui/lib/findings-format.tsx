@@ -48,7 +48,7 @@ const DEDUP_MIN_LEN = 40;
 // intact and together, just not repeated. Occurrences that tie at the deepest
 // level (e.g. per-channel copies) are all kept.
 export function dropHoistedDuplicates(
-  findings: Record<string, unknown>,
+  findings: Record<string, unknown>
 ): Record<string, unknown> {
   const maxDepth = new Map<string, number>();
   const scan = (value: unknown, depth: number): void => {
@@ -90,20 +90,23 @@ export function dropHoistedDuplicates(
 // fields shown separately. The raw dump remains available via the JSON toggle.
 export function stripJsonFences(text: string): string {
   return text
-    .replace(/```(\w*)[ \t]*\n([\s\S]*?)```/g, (whole, lang: string, body: string) => {
-      const isJsonLang = (lang || "").toLowerCase() === "json";
-      const trimmed = body.trim();
-      const looksJson = trimmed.startsWith("{") || trimmed.startsWith("[");
-      if (isJsonLang || looksJson) {
-        try {
-          JSON.parse(trimmed);
-          return "";
-        } catch {
-          if (isJsonLang) return "";
+    .replace(
+      /```(\w*)[ \t]*\n([\s\S]*?)```/g,
+      (whole, lang: string, body: string) => {
+        const isJsonLang = (lang || "").toLowerCase() === "json";
+        const trimmed = body.trim();
+        const looksJson = trimmed.startsWith("{") || trimmed.startsWith("[");
+        if (isJsonLang || looksJson) {
+          try {
+            JSON.parse(trimmed);
+            return "";
+          } catch {
+            if (isJsonLang) return "";
+          }
         }
+        return whole;
       }
-      return whole;
-    })
+    )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

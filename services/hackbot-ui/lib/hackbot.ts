@@ -159,6 +159,30 @@ export function submitFeedback(
   });
 }
 
+export interface InternalFeedbackBody {
+  rating: FeedbackRating;
+  dimensions: FeedbackDimension[];
+  comment: string | null;
+}
+
+// A signed-in reviewer's rating of a run's proposed comment, which unlike the
+// public route works before (or instead of) posting it. `email` comes from the
+// caller's session and is what the rating is attributed to.
+export function submitRunFeedback(
+  runId: string,
+  body: InternalFeedbackBody,
+  email: string
+): Promise<{ message: string }> {
+  return request<{ message: string }>(
+    `/runs/${encodeURIComponent(runId)}/feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "X-On-Behalf-Of": email },
+    }
+  );
+}
+
 export interface ListFeedbackParams {
   agent?: string;
   rating?: FeedbackRating;

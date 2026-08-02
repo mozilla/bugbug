@@ -31,6 +31,7 @@ def upgrade() -> None:
         ),
         sa.Column("comment", sa.Text(), nullable=True),
         sa.Column("rater_kind", sa.String(), nullable=False),
+        sa.Column("rater_id", sa.String(), nullable=True),
         sa.Column("anon_id", sa.String(), nullable=True),
         sa.Column(
             "created_at",
@@ -50,8 +51,15 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_run_feedback_run_id"), "run_feedback", ["run_id"], unique=False
     )
-    # Partial, because a request carrying neither an IP nor a user agent has no
-    # dedupe key and those rows must not collide with each other.
+    # Partial: only one dedupe key is set per row, by rater kind, and rows with
+    # neither must not collide with each other.
+    op.create_index(
+        "uq_run_feedback_rater",
+        "run_feedback",
+        ["run_id", "rater_id"],
+        unique=True,
+        postgresql_where=sa.text("rater_id IS NOT NULL"),
+    )
     op.create_index(
         "uq_run_feedback_anon",
         "run_feedback",
@@ -64,5 +72,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index("uq_run_feedback_anon", table_name="run_feedback")
+    op.drop_index("uq_run_feedback_rater", table_name="run_feedback")
     op.drop_index(op.f("ix_run_feedback_run_id"), table_name="run_feedback")
     op.drop_table("run_feedback")

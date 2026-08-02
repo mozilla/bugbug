@@ -37,6 +37,16 @@ log = logging.getLogger(__name__)
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 
 
+def rating_enabled(agent: str) -> bool:
+    """Whether `agent` collects feedback, in Bugzilla and in Hackbot alike.
+
+    One switch for both surfaces: an agent opts in by setting `feedback_link`
+    on its `AgentSpec`, and nothing else needs changing.
+    """
+    spec = AGENT_REGISTRY.get(agent)
+    return bool(spec and spec.feedback_link)
+
+
 def with_feedback_link(run: Run, action_type: str, params: dict) -> dict:
     """Append the rating invitation to a comment about to be posted.
 
@@ -51,8 +61,7 @@ def with_feedback_link(run: Run, action_type: str, params: dict) -> dict:
     if action_type != "bugzilla.add_comment":
         return params
 
-    spec = AGENT_REGISTRY.get(run.agent)
-    if not (spec and spec.feedback_link) or not feedback_links.is_enabled():
+    if not rating_enabled(run.agent) or not feedback_links.is_enabled():
         return params
 
     url = feedback_links.feedback_url(run.run_id)

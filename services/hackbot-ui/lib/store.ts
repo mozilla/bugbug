@@ -39,10 +39,10 @@ export function saveRun(run: TrackedRun): TrackedRun[] {
 
 export function updateRunStatus(
   runId: string,
-  status: RunStatus,
+  status: RunStatus
 ): TrackedRun[] {
   const runs = loadRuns().map((r) =>
-    r.run_id === runId ? { ...r, status } : r,
+    r.run_id === runId ? { ...r, status } : r
   );
   window.localStorage.setItem(KEY, JSON.stringify(runs));
   return runs;

@@ -87,12 +87,21 @@ class RunFeedback(Base):
     app/schemas.py, as `Run.status` does — a native DB enum would cost a
     migration every time a dimension is added.
 
-    `anon_id` is absent when a request carries no identifying signal at all,
-    hence a partial unique index: those rows must not collide with each other.
+    Two dedupe keys, one per rater kind: `rater_id` (a signed-in reviewer's
+    email) or `anon_id` (a public rater's salted cookie hash). Only one is set
+    per row, so each gets a partial unique index rather than a constraint —
+    which also lets rows with neither coexist.
     """
 
     __tablename__ = "run_feedback"
     __table_args__ = (
+        Index(
+            "uq_run_feedback_rater",
+            "run_id",
+            "rater_id",
+            unique=True,
+            postgresql_where=text("rater_id IS NOT NULL"),
+        ),
         Index(
             "uq_run_feedback_anon",
             "run_id",
@@ -110,6 +119,7 @@ class RunFeedback(Base):
     dimensions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     rater_kind: Mapped[str] = mapped_column(String, nullable=False)
+    rater_id: Mapped[str | None] = mapped_column(String, nullable=True)
     anon_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

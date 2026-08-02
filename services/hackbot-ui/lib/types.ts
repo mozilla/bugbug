@@ -52,6 +52,8 @@ export interface RunAction {
   // For an applied bugzilla.add_comment, the exact text Bugzilla received —
   // the agent's comment plus the rating footer. Null before it is applied.
   posted_text: string | null;
+  // Whether this agent collects feedback; false hides the rating control.
+  can_rate: boolean;
 }
 
 export interface RunRef {
@@ -101,6 +103,8 @@ export interface FeedbackStats {
 }
 
 // Mirror of FeedbackDoc (services/hackbot-api/app/schemas.py).
+export type RaterKind = "anonymous" | "mozilla";
+
 export interface FeedbackDoc {
   run_id: string;
   agent: string;
@@ -108,6 +112,10 @@ export interface FeedbackDoc {
   rating: FeedbackRating;
   dimensions: string[];
   comment: string | null;
+  // "mozilla" is a reviewer rating in Hackbot, possibly before the comment was
+  // posted; "anonymous" is a Bugzilla reader rating one that already is.
+  rater_kind: RaterKind;
+  rater_id: string | null;
   created_at: string;
 }
 

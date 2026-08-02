@@ -16,7 +16,13 @@ import pytest
 from app import feedback_links
 from app.config import settings
 from app.routers import feedback as feedback_router
-from app.schemas import FeedbackCreate, FeedbackDimension, FeedbackRating, RunStatus
+from app.schemas import (
+    FeedbackCreate,
+    FeedbackDimension,
+    FeedbackRating,
+    InternalFeedbackCreate,
+    RunStatus,
+)
 from fastapi import HTTPException
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
@@ -258,6 +264,80 @@ async def test_cap_does_not_count_the_rater_changing_their_own_mind():
     assert db.commits == 1
 
 
+# --- rating from Hackbot, before the comment is posted ------------------ #
+
+
+async def test_a_reviewer_can_rate_a_comment_that_was_never_applied():
+    """The point of the internal route: reject an analysis, don't post it."""
+    run = _FakeRun()
+    db = _FakeDB(run=run, action=_FakeAction())
+
+    out = await feedback_router.submit_internal_feedback(
+        run.run_id,
+        InternalFeedbackCreate(
+            rating=FeedbackRating.down,
+            dimensions=[FeedbackDimension.should_not_have_commented],
+            comment="Not worth posting.",
+        ),
+        db,
+        x_on_behalf_of="mconley@mozilla.com",
+    )
+
+    assert "Thank you" in out.message
+    (row,) = db.added
+    assert row.rater_kind == "mozilla"
+    assert row.rater_id == "mconley@mozilla.com"
+    assert row.anon_id is None
+    assert row.rating == "down"
+
+
+async def test_the_internal_route_does_not_require_an_applied_comment():
+    """Contrast with the public route, which 404s without one."""
+    run = _FakeRun()
+    await feedback_router._comment_action(
+        _FakeDB(run=run, action=_FakeAction()), run.run_id, applied_only=False
+    )
+
+    with pytest.raises(HTTPException):
+        await feedback_router._comment_action(
+            _FakeDB(run=run, action=None), run.run_id, applied_only=True
+        )
+
+
+async def test_an_agent_that_has_not_opted_in_cannot_be_rated():
+    """One registry flag governs both surfaces; bug-fix has not set it."""
+    run = _FakeRun(agent="bug-fix")
+    db = _FakeDB(run=run, action=_FakeAction())
+
+    with pytest.raises(HTTPException) as exc:
+        await feedback_router.submit_internal_feedback(
+            run.run_id,
+            InternalFeedbackCreate(rating=FeedbackRating.up),
+            db,
+            x_on_behalf_of="mconley@mozilla.com",
+        )
+
+    assert exc.value.status_code == 404
+    assert db.added == []
+
+
+async def test_internal_feedback_needs_an_identity():
+    """Identity comes from the session; without it there is nothing to dedupe on."""
+    run = _FakeRun()
+    db = _FakeDB(run=run, action=_FakeAction())
+
+    with pytest.raises(HTTPException) as exc:
+        await feedback_router.submit_internal_feedback(
+            run.run_id,
+            InternalFeedbackCreate(rating=FeedbackRating.up),
+            db,
+            x_on_behalf_of=None,
+        )
+
+    assert exc.value.status_code == 400
+    assert db.added == []
+
+
 class _ListDB:
     """Returns scripted (RunFeedback-ish, agent, inputs) tuples for the join."""
 
@@ -277,6 +357,8 @@ async def test_list_feedback_joins_agent_and_bug_from_the_run():
         rating="down",
         dimensions=["root_cause_wrong"],
         comment="Wrong regressor.",
+        rater_kind="mozilla",
+        rater_id="mconley@mozilla.com",
         created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
     )
     db = _ListDB([(row, "frontend-triage", {"bug_id": 2049877})])
@@ -288,6 +370,7 @@ async def test_list_feedback_joins_agent_and_bug_from_the_run():
     assert out.bug_id == 2049877
     assert out.rating == FeedbackRating.down
     assert out.comment == "Wrong regressor."
+    assert out.rater_id == "mconley@mozilla.com"
 
 
 async def test_dimension_filter_reaches_the_query():

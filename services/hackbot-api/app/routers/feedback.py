@@ -22,10 +22,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import feedback_links
+from app.actions_applier import rating_enabled
 from app.auth import require_api_key
 from app.config import settings
 from app.database.connection import get_db
 from app.database.models import Run, RunAction, RunFeedback
+from app.routers.runs import UserEmail
 from app.schemas import (
     AgentFeedbackStats,
     FeedbackCreate,
@@ -35,6 +37,7 @@ from app.schemas import (
     FeedbackResponse,
     FeedbackStats,
     FeedbackTargetDoc,
+    InternalFeedbackCreate,
     RaterKind,
     RunStatus,
 )
@@ -44,6 +47,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(tags=["feedback"])
 
 _ANON_CONSTRAINT = "uq_run_feedback_anon"
+_RATER_CONSTRAINT = "uq_run_feedback_rater"
 
 # Whether a submission inserted or replaced an earlier one is our bookkeeping,
 # not the rater's concern, so both paths answer identically.
@@ -64,8 +68,35 @@ def _analysis_only(text: str) -> str:
     return head.rstrip() if found else text.rstrip()
 
 
+async def _comment_action(
+    db: AsyncSession, run_id: UUID, *, applied_only: bool
+) -> RunAction:
+    """The comment on `run_id` that may be rated, or 404.
+
+    `applied_only` is the difference between the two entry points. A public
+    rater can only judge what Bugzilla actually received; a signed-in reviewer
+    judges the proposed comment, and the case that matters most is the one they
+    decide not to post at all.
+    """
+    run = await db.get(Run, run_id)
+    if run is None or run.status != RunStatus.succeeded.value:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    stmt = select(RunAction).where(
+        RunAction.run_id == run_id,
+        RunAction.type == "bugzilla.add_comment",
+    )
+    if applied_only:
+        stmt = stmt.where(RunAction.status == "applied")
+
+    action = (await db.execute(stmt.order_by(RunAction.idx))).scalars().first()
+    if action is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return action
+
+
 async def _resolve_target(db: AsyncSession, token: str) -> tuple[UUID, RunAction]:
-    """Map a token to the run and the comment action it may be rated against.
+    """Map a public token to the run and the posted comment it may rate.
 
     Every failure raises the same 404 — unsigned token, unknown run, run that
     never succeeded, run whose comment was never applied — so nothing leaks
@@ -74,25 +105,58 @@ async def _resolve_target(db: AsyncSession, token: str) -> tuple[UUID, RunAction
     run_id = feedback_links.verify_token(token)
     if run_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return run_id, await _comment_action(db, run_id, applied_only=True)
 
-    run = await db.get(Run, run_id)
-    if run is None or run.status != RunStatus.succeeded.value:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
-    result = await db.execute(
-        select(RunAction)
-        .where(
-            RunAction.run_id == run_id,
-            RunAction.type == "bugzilla.add_comment",
-            RunAction.status == "applied",
+async def _record(
+    db: AsyncSession,
+    run_id: UUID,
+    request: FeedbackCreate | InternalFeedbackCreate,
+    *,
+    rater_kind: RaterKind,
+    constraint: str,
+    rater_id: str | None = None,
+    anon_id: str | None = None,
+) -> None:
+    """Insert this rater's verdict, or replace the one they left before.
+
+    Insert-then-catch rather than a pre-check, so two submissions racing can't
+    both decide they are the first. Shared by both entry points; they differ
+    only in which dedupe key, and so which unique index, identifies the rater.
+    """
+    dimensions = [dimension.value for dimension in request.dimensions]
+    db.add(
+        RunFeedback(
+            run_id=run_id,
+            rating=request.rating.value,
+            dimensions=dimensions,
+            comment=request.comment,
+            rater_kind=rater_kind.value,
+            rater_id=rater_id,
+            anon_id=anon_id,
         )
-        .order_by(RunAction.idx)
     )
-    action = result.scalars().first()
-    if action is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-    return run_id, action
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        if constraint not in str(exc.orig):
+            raise
+        await db.rollback()
+        key = (
+            RunFeedback.rater_id == rater_id
+            if rater_id is not None
+            else RunFeedback.anon_id == anon_id
+        )
+        await db.execute(
+            update(RunFeedback)
+            .values(
+                rating=request.rating.value,
+                dimensions=dimensions,
+                comment=request.comment,
+            )
+            .where(RunFeedback.run_id == run_id, key)
+        )
+        await db.commit()
 
 
 @router.get(
@@ -159,37 +223,55 @@ async def submit_feedback(
             detail="This analysis has already received the maximum number of ratings.",
         )
 
-    dimensions = [dimension.value for dimension in request.dimensions]
-    db.add(
-        RunFeedback(
-            run_id=run_id,
-            rating=request.rating.value,
-            dimensions=dimensions,
-            comment=request.comment,
-            rater_kind=RaterKind.anonymous.value,
-            anon_id=anon_id,
-        )
+    await _record(
+        db,
+        run_id,
+        request,
+        rater_kind=RaterKind.anonymous,
+        constraint=_ANON_CONSTRAINT,
+        anon_id=anon_id,
     )
+    return FeedbackResponse(message=_THANKS)
 
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        if _ANON_CONSTRAINT not in str(exc.orig):
-            raise
-        # This rater already judged this run: replace their verdict rather than
-        # stack a second row.
-        await db.rollback()
-        await db.execute(
-            update(RunFeedback)
-            .values(
-                rating=request.rating.value,
-                dimensions=dimensions,
-                comment=request.comment,
-            )
-            .where(RunFeedback.run_id == run_id, RunFeedback.anon_id == anon_id)
+
+@router.post(
+    "/runs/{run_id}/feedback",
+    response_model=FeedbackResponse,
+    dependencies=[Depends(require_api_key)],
+)
+async def submit_internal_feedback(
+    run_id: UUID,
+    request: InternalFeedbackCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_on_behalf_of: UserEmail = Header(default=None),
+) -> FeedbackResponse:
+    """Record a signed-in reviewer's rating of a run's proposed comment.
+
+    Unlike the public route this accepts a comment that has only been recorded,
+    so a reviewer can reject an analysis and decline to post it — the clearest
+    signal the agent got something wrong. Identity comes from the caller's
+    session via hackbot-ui, never from the request body. Gated on the same
+    registry flag as the Bugzilla link, so an agent opts in once for both.
+    """
+    if not x_on_behalf_of:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-On-Behalf-Of is required",
         )
-        await db.commit()
 
+    run = await db.get(Run, run_id)
+    if run is None or not rating_enabled(run.agent):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    await _comment_action(db, run_id, applied_only=False)
+    await _record(
+        db,
+        run_id,
+        request,
+        rater_kind=RaterKind.mozilla,
+        constraint=_RATER_CONSTRAINT,
+        rater_id=x_on_behalf_of,
+    )
     return FeedbackResponse(message=_THANKS)
 
 
@@ -282,6 +364,8 @@ async def list_feedback(
             rating=row.rating,
             dimensions=row.dimensions,
             comment=row.comment,
+            rater_kind=row.rater_kind,
+            rater_id=row.rater_id,
             created_at=row.created_at,
         )
         for row, row_agent, inputs in result.all()

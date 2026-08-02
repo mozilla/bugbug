@@ -20,8 +20,17 @@ class FeedbackRating(str, Enum):
 
 
 class RaterKind(str, Enum):
+    """Who rated, which also says when.
+
+    `mozilla` is a signed-in reviewer judging a comment in Hackbot, possibly
+    before it is posted and possibly deciding not to post it at all.
+    `anonymous` is a Bugzilla reader rating a comment that is already public.
+    A rejection and a public complaint are different signals, so they stay
+    distinguishable.
+    """
+
     anonymous = "anonymous"
-    bugzilla = "bugzilla"
+    mozilla = "mozilla"
 
 
 class FeedbackDimension(str, Enum):
@@ -70,6 +79,8 @@ class RunActionDoc(BaseModel):
     # params["text"] plus the rating footer. Derived on read rather than stored,
     # so a re-apply can't stack a second copy of the link.
     posted_text: str | None = None
+    # Whether the run page should offer a rating control for this action.
+    can_rate: bool = False
 
 
 class AgentDescriptor(BaseModel):
@@ -127,6 +138,18 @@ class FeedbackCreate(BaseModel):
     comment: str | None = Field(default=None, max_length=5000)
 
 
+class InternalFeedbackCreate(BaseModel):
+    """A signed-in reviewer's rating, from the run page rather than Bugzilla.
+
+    No nonce: that exists to stop link prefetchers voting, and nothing behind
+    SSO is reachable by one.
+    """
+
+    rating: FeedbackRating
+    dimensions: list[FeedbackDimension] = Field(default_factory=list)
+    comment: str | None = Field(default=None, max_length=5000)
+
+
 class FeedbackResponse(BaseModel):
     message: str
 
@@ -159,6 +182,8 @@ class FeedbackDoc(BaseModel):
     rating: FeedbackRating
     dimensions: list[str] = Field(default_factory=list)
     comment: str | None = None
+    rater_kind: RaterKind = RaterKind.anonymous
+    rater_id: str | None = None
     created_at: datetime
 
 

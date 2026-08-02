@@ -17,7 +17,7 @@ const PAGE_SIZE = 50;
 // Comments sit on their own full-width row beneath the record, the way run
 // errors do in RecentRuns: they are free prose of unpredictable length, and a
 // column wide enough for them would starve every other field.
-const COLS = 5;
+const COLS = 6;
 
 async function fetchPage(params: {
   agent?: string;
@@ -225,6 +225,7 @@ export function FeedbackTable() {
               <thead>
                 <tr>
                   <th>Rating</th>
+                  <th>Rater</th>
                   <th>Agent</th>
                   <th>Run</th>
                   <th>What was wrong</th>
@@ -236,6 +237,15 @@ export function FeedbackTable() {
                   <Fragment key={`${row.run_id}-${row.created_at}`}>
                     <tr className={row.comment ? "has-comment" : undefined}>
                       <td>{row.rating === "up" ? "👍" : "👎"}</td>
+                      <td>
+                        {row.rater_kind === "mozilla" ? (
+                          <span title={row.rater_id ?? undefined}>
+                            {row.rater_id?.split("@")[0] ?? "reviewer"}
+                          </span>
+                        ) : (
+                          <span className="muted">public</span>
+                        )}
+                      </td>
                       <td>{row.agent}</td>
                       <td>
                         <Link href={`/runs/${row.run_id}`}>view</Link>
