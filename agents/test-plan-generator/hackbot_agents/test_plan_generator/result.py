@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Literal
 
 from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    model_validator,
+)
 
 RESULT_SERVER_NAME = "test-plan-generator"
 SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
@@ -22,14 +27,24 @@ class GeneratedTestCase(BaseModel):
         )
     )
     preconditions: str | None = None
-    steps: list[str] = Field(
-        description="Concise test steps for this case; between 1 and 6 steps."
+    steps: list[str] = Field(description="Concise ordered test steps for this case.")
+    step_expectations: list[str | None] = Field(
+        description=(
+            "Expected results aligned by index with steps when present. Use null "
+            "for setup, navigation, or happy-path steps that do not directly "
+            "verify the case title."
+        )
     )
 
     @model_validator(mode="after")
     def _validate_steps(self) -> "GeneratedTestCase":
-        if not 1 <= len(self.steps) <= 6:
-            raise ValueError("each generated test case must have 1 to 6 steps")
+        if not self.steps:
+            raise ValueError("each generated test case must have at least one step")
+        if not any(self.step_expectations):
+            raise ValueError(
+                "each generated test case must include an expected result on at "
+                "least one verification step"
+            )
         return self
 
 

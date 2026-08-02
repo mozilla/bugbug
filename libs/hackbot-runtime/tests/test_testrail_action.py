@@ -14,6 +14,7 @@ def _cases():
             "context": "content",
             "preconditions": "A PDF is available.",
             "steps": ["Open the PDF"],
+            "step_expectations": ["The PDF is displayed."],
         }
     ]
 
@@ -45,6 +46,48 @@ async def test_submit_test_plan_tool_rejects_invalid_input():
 
     assert "invalid TestRail submission" in str(exc.value)
     assert recorder.actions == []
+
+
+async def test_submit_test_plan_tool_rejects_cases_without_expectation():
+    recorder = ActionsRecorder()
+
+    with pytest.raises(ToolError) as exc:
+        await testrail.submit_test_plan(
+            recorder,
+            feature="Feature",
+            generated_test_cases=[
+                {
+                    "id": 1,
+                    "title": "Case",
+                    "steps": ["Open the PDF"],
+                    "step_expectations": [""],
+                }
+            ],
+        )
+
+    assert "invalid TestRail submission" in str(exc.value)
+    assert recorder.actions == []
+
+
+async def test_submit_test_plan_tool_preserves_blank_expectations():
+    recorder = ActionsRecorder()
+
+    await testrail.submit_test_plan(
+        recorder,
+        feature="Feature",
+        generated_test_cases=[
+            {
+                "id": 1,
+                "title": "Case",
+                "steps": ["Open the PDF", "Select text"],
+                "step_expectations": ["", "Text is selected."],
+            }
+        ],
+    )
+
+    assert recorder.actions[0]["params"]["generated_test_cases"][0][
+        "step_expectations"
+    ] == ["", "Text is selected."]
 
 
 def test_submit_test_plan_handler_is_registered():

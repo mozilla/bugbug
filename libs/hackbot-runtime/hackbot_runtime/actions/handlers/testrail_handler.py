@@ -70,17 +70,33 @@ def _case_payload(
     case_type_id: int,
     template_id: int,
 ) -> dict[str, Any]:
-    steps = [str(step) for step in test_case.get("steps", [])]
     payload: dict[str, Any] = {
         "title": test_case["title"],
         "type_id": case_type_id,
         "template_id": template_id,
         "labels": [_CASE_LABEL],
-        "custom_steps_separated": [{"content": step, "expected": ""} for step in steps],
+        "custom_steps_separated": _separated_steps(test_case),
     }
     if test_case.get("preconditions"):
         payload["custom_preconds"] = test_case["preconditions"]
     return payload
+
+
+def _separated_steps(test_case: dict[str, Any]) -> list[dict[str, str]]:
+    steps = [str(step) for step in test_case.get("steps", [])]
+    expectations = list(test_case.get("step_expectations") or [])
+
+    separated_steps = []
+    for index, step in enumerate(steps):
+        expected = expectations[index] if index < len(expectations) else ""
+        separated_steps.append(
+            {
+                "content": step,
+                "expected": str(expected or ""),
+            }
+        )
+
+    return separated_steps
 
 
 class SubmitTestPlanHandler:

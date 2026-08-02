@@ -10,7 +10,13 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from agent_tools.registry import ToolError, tool, tools_in
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
@@ -29,6 +35,12 @@ class TestRailCaseInput(BaseModel):
     steps: list[str] = Field(
         min_length=1, description="Ordered steps a QA engineer should follow."
     )
+    step_expectations: list[str | None] = Field(
+        description=(
+            "Expected results aligned by index with steps when present. Use null "
+            "for steps that do not directly verify the case title."
+        ),
+    )
 
     @field_validator("title")
     @classmethod
@@ -45,6 +57,12 @@ class TestRailCaseInput(BaseModel):
         if any(not step for step in steps):
             raise ValueError("steps must not contain blank items")
         return steps
+
+    @model_validator(mode="after")
+    def expectations_must_include_verification(self) -> "TestRailCaseInput":
+        if not any(self.step_expectations):
+            raise ValueError("at least one step must include an expected result")
+        return self
 
 
 class SubmitTestPlanInput(BaseModel):
