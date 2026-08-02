@@ -52,7 +52,7 @@ bypass a failing content interaction.
 - Put expected results in `step_expectations` only for the step or steps that
   directly verify the observable behavior described by the test case title.
 - Do not add expectations for setup, navigation, or routine happy-path
-  confirmation steps, leave those steps empty.
+  confirmation steps, leave the corresponding `step_expectations` entries null.
 
 ## Unsuitable cases
 
