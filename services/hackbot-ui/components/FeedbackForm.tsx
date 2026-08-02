@@ -14,11 +14,13 @@ const MAX_COMMENT = 5000;
 export function FeedbackForm({
   token,
   nonce,
+  bugId,
   comment,
   initialRating,
 }: {
   token: string;
   nonce: string;
+  bugId: number;
   comment: string;
   initialRating: FeedbackRating | null;
 }) {
@@ -68,11 +70,24 @@ export function FeedbackForm({
   }
 
   if (done) {
-    return <p>{done}</p>;
+    return <p className="feedback-done">{done}</p>;
   }
 
   return (
     <>
+      <h2>Was this analysis useful?</h2>
+      <p className="muted">
+        Hackbot posted the comment below on{" "}
+        <a
+          href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${bugId}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          bug {bugId}
+        </a>
+        . Your rating helps us improve it. No account needed.
+      </p>
+
       <div className="action-preview">
         <span className="muted">Comment being rated</span>
         <Markdown text={comment} />

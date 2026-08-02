@@ -49,23 +49,15 @@ export default async function FeedbackPage({
     );
   }
 
+  // The heading and preamble live inside FeedbackForm rather than here, so that
+  // submitting can replace the whole panel with a confirmation instead of
+  // leaving a question the reader has already answered sitting above it.
   return (
     <div className="panel">
-      <h2>Was this analysis useful?</h2>
-      <p className="muted">
-        Hackbot posted the comment below on{" "}
-        <a
-          href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${target.bug_id}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          bug {target.bug_id}
-        </a>
-        . Your rating helps us improve it. No account needed.
-      </p>
       <FeedbackForm
         token={token}
         nonce={target.nonce}
+        bugId={target.bug_id}
         comment={target.comment}
         initialRating={preselect(v)}
       />

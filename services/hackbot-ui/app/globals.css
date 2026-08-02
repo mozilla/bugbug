@@ -803,6 +803,15 @@ ul.chips li.chip {
   margin-top: 24px;
 }
 
+/* Sole content of the panel once a rating is in, so it carries the weight the
+   heading used to. Full text colour, unlike the muted panel headings. */
+.feedback-done {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .feedback-thumbs {
   display: flex;
   gap: 12px;
