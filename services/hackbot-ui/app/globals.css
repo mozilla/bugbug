@@ -901,6 +901,14 @@ ul.chips li.chip {
   border-color: var(--accent);
   background: rgba(88, 128, 255, 0.16);
 }
+.thumb-count {
+  margin-left: 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.thumb-filter.selected .thumb-count {
+  color: var(--text);
+}
 
 /* Rater comments get a full-width row under the record, mirroring the run-error
    row above. Not clamped, unlike errors: the comment is the thing you came to

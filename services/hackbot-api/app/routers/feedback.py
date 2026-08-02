@@ -33,10 +33,12 @@ from app.config import settings
 from app.database.connection import get_db
 from app.database.models import Run, RunAction, RunFeedback
 from app.schemas import (
+    AgentFeedbackStats,
     FeedbackCreate,
     FeedbackDoc,
     FeedbackRating,
     FeedbackResponse,
+    FeedbackStats,
     FeedbackTargetDoc,
     RaterKind,
     RunStatus,
@@ -200,6 +202,51 @@ async def submit_feedback(
         await db.commit()
 
     return FeedbackResponse(message=_THANKS)
+
+
+@router.get(
+    "/feedback/stats",
+    response_model=FeedbackStats,
+    dependencies=[Depends(require_api_key)],
+)
+async def feedback_stats(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    run_id: UUID | None = None,
+) -> FeedbackStats:
+    """Rating totals, broken down by agent, independent of paging.
+
+    Takes no `agent` or `rating` parameter on purpose. The caller needs the
+    whole breakdown at once: to populate the agent filter with the agents that
+    have actually been rated, and to show each thumb's count. Narrowing by
+    either would collapse the very list being offered — the mistake that made
+    an earlier client-side version of this filter disappear once used.
+    """
+    stmt = (
+        select(Run.agent, RunFeedback.rating, func.count())
+        .select_from(RunFeedback)
+        .join(Run, Run.run_id == RunFeedback.run_id)
+        .group_by(Run.agent, RunFeedback.rating)
+    )
+    if run_id:
+        stmt = stmt.where(RunFeedback.run_id == run_id)
+
+    per_agent: dict[str, dict[str, int]] = {}
+    for agent, rating, count in (await db.execute(stmt)).all():
+        per_agent.setdefault(agent, {})[rating] = count
+
+    by_agent = [
+        AgentFeedbackStats(
+            agent=agent,
+            up=counts.get(FeedbackRating.up.value, 0),
+            down=counts.get(FeedbackRating.down.value, 0),
+        )
+        for agent, counts in sorted(per_agent.items())
+    ]
+    return FeedbackStats(
+        up=sum(a.up for a in by_agent),
+        down=sum(a.down for a in by_agent),
+        by_agent=by_agent,
+    )
 
 
 @router.get(

@@ -5,6 +5,7 @@ import type {
   FeedbackDimension,
   FeedbackDoc,
   FeedbackRating,
+  FeedbackStats,
   FeedbackTarget,
   RunAction,
   RunDoc,
@@ -178,6 +179,15 @@ export function listFeedback(
   if (params.rating) qs.set("rating", params.rating);
   if (params.runId) qs.set("run_id", params.runId);
   return request<FeedbackDoc[]>(`/feedback?${qs.toString()}`);
+}
+
+// Rating totals for the whole matching set, so the thumb filters can show a
+// count that paging doesn't distort.
+export function getFeedbackStats(
+  params: { runId?: string } = {}
+): Promise<FeedbackStats> {
+  const qs = params.runId ? `?run_id=${encodeURIComponent(params.runId)}` : "";
+  return request<FeedbackStats>(`/feedback/stats${qs}`);
 }
 
 // Ask hackbot-api for a short-lived signed download URL for one artifact.

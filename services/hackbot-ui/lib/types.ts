@@ -82,6 +82,21 @@ export interface FeedbackTarget {
   nonce: string;
 }
 
+// Mirror of FeedbackStats (services/hackbot-api/app/schemas.py). `by_agent`
+// lists only agents that have been rated, which is what the filter offers —
+// the full registry includes agents whose comments carry no feedback link.
+export interface AgentFeedbackStats {
+  agent: string;
+  up: number;
+  down: number;
+}
+
+export interface FeedbackStats {
+  up: number;
+  down: number;
+  by_agent: AgentFeedbackStats[];
+}
+
 // Mirror of FeedbackDoc (services/hackbot-api/app/schemas.py).
 export interface FeedbackDoc {
   run_id: string;

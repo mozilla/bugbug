@@ -316,6 +316,37 @@ async def test_list_feedback_joins_agent_and_bug_from_the_run():
     assert out.comment == "Wrong regressor."
 
 
+async def test_stats_totals_and_breaks_down_by_agent():
+    db = _ListDB(
+        [
+            ("frontend-triage", "up", 12),
+            ("frontend-triage", "down", 32),
+            ("bug-fix", "up", 6),
+            ("bug-fix", "down", 16),
+        ]
+    )
+    out = await feedback_router.feedback_stats(db)
+
+    assert (out.up, out.down) == (18, 48)
+    assert [(a.agent, a.up, a.down) for a in out.by_agent] == [
+        ("bug-fix", 6, 16),
+        ("frontend-triage", 12, 32),
+    ]
+
+
+async def test_stats_reports_zero_for_a_rating_with_no_rows():
+    """An absent group key must read as 0, not raise."""
+    out = await feedback_router.feedback_stats(_ListDB([("bug-fix", "down", 3)]))
+    assert (out.up, out.down) == (0, 3)
+    assert out.by_agent[0].up == 0
+
+
+async def test_stats_lists_only_agents_that_have_been_rated():
+    """The filter is built from this, and must not offer empty agents."""
+    out = await feedback_router.feedback_stats(_ListDB([("frontend-triage", "up", 1)]))
+    assert [a.agent for a in out.by_agent] == ["frontend-triage"]
+
+
 async def test_list_feedback_tolerates_a_run_without_a_bug_id():
     row = SimpleNamespace(
         run_id=uuid.uuid4(),

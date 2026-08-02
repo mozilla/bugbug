@@ -128,6 +128,25 @@ class FeedbackResponse(BaseModel):
     message: str
 
 
+class AgentFeedbackStats(BaseModel):
+    agent: str
+    up: int = 0
+    down: int = 0
+
+
+class FeedbackStats(BaseModel):
+    """Rating totals over everything, not just the loaded page.
+
+    `by_agent` covers only agents that have actually been rated, which is what
+    the review page's filter offers — the full registry would list agents whose
+    comments carry no feedback link and so can never appear here.
+    """
+
+    up: int = 0
+    down: int = 0
+    by_agent: list[AgentFeedbackStats] = Field(default_factory=list)
+
+
 class FeedbackDoc(BaseModel):
     """One recorded rating, as shown on the internal (SSO-gated) review page."""
 

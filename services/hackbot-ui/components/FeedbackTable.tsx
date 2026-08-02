@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
 
-import { AGENT_NAMES } from "@/lib/agents";
 import {
   DIMENSION_LABELS,
   type FeedbackDoc,
   type FeedbackRating,
+  type FeedbackStats,
 } from "@/lib/types";
 
 const PAGE_SIZE = 50;
@@ -46,9 +46,34 @@ export function FeedbackTable() {
   const runFilter = searchParams.get("run_id") ?? "";
 
   const [rows, setRows] = useState<FeedbackDoc[] | null>(null);
+  const [stats, setStats] = useState<FeedbackStats | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  // One unfiltered breakdown drives both the thumb counts and the agent
+  // options, so neither is distorted by paging and the option list can't
+  // collapse when a filter is applied.
+  useEffect(() => {
+    let cancelled = false;
+    const qs = runFilter ? `?run_id=${encodeURIComponent(runFilter)}` : "";
+    fetch(`/api/feedback/stats${qs}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setStats(data as FeedbackStats | null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [runFilter]);
+
+  // Counts beside each thumb track the agent filter, so the number is always
+  // how many rows clicking it would show.
+  const counts = agentFilter
+    ? stats?.by_agent.find((a) => a.agent === agentFilter)
+    : stats;
+  const agentOptions = stats?.by_agent.map((a) => a.agent) ?? [];
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +133,7 @@ export function FeedbackTable() {
 
   function thumb(value: FeedbackRating, label: string) {
     const active = ratingFilter === value;
+    const total = counts?.[value];
     return (
       <button
         type="button"
@@ -117,6 +143,7 @@ export function FeedbackTable() {
         onClick={() => setFilter("rating", active ? "" : value)}
       >
         {value === "up" ? "👍" : "👎"}
+        {total !== undefined && <span className="thumb-count">{total}</span>}
       </button>
     );
   }
@@ -134,7 +161,12 @@ export function FeedbackTable() {
             onChange={(e) => setFilter("agent", e.target.value)}
           >
             <option value="">All agents</option>
-            {AGENT_NAMES.map((a) => (
+            {/* A filter arriving by URL for an agent with no ratings still
+                needs an option, or the select would render blank. */}
+            {(agentFilter && !agentOptions.includes(agentFilter)
+              ? [...agentOptions, agentFilter]
+              : agentOptions
+            ).map((a) => (
               <option key={a} value={a}>
                 {a}
               </option>
