@@ -13,10 +13,9 @@ export async function getAuthedEmail(): Promise<string | null> {
   return isAllowedEmail(email) ? email : null;
 }
 
-// Stands in for a Google session when running locally against sample data, so
-// the SSO-gated pages can be opened without OAuth credentials. Requires
-// DEV_AUTH_EMAIL, which belongs only in .env.local (gitignored). The NODE_ENV
-// guard makes this dead code in any production build.
+// Stands in for a Google session when running locally against sample data.
+// DEV_AUTH_EMAIL belongs only in .env.local; the NODE_ENV guard makes this dead
+// code in any production build.
 export function devUser(): string | null {
   if (process.env.NODE_ENV === "production") return null;
   return process.env.DEV_AUTH_EMAIL || null;

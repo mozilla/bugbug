@@ -56,8 +56,7 @@ export function FeedbackTable() {
   const [failed, setFailed] = useState(false);
 
   // One unfiltered breakdown drives both the thumb counts and the agent
-  // options, so neither is distorted by paging and the option list can't
-  // collapse when a filter is applied.
+  // options, so paging can't distort them nor filtering empty the list.
   useEffect(() => {
     let cancelled = false;
     const qs = runFilter ? `?run_id=${encodeURIComponent(runFilter)}` : "";

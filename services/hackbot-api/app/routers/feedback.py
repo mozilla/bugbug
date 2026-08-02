@@ -1,19 +1,13 @@
 """Read and record ratings of the Bugzilla comment a run posted.
 
-Two groups of routes, split by who they serve. ``/rate/{token}`` backs the
-public page anyone can reach from a Bugzilla comment; ``/feedback`` backs the
-internal review page and is only ever called on behalf of a signed-in Mozillian.
-Every route sits behind ``require_api_key`` regardless — the anonymous surface
-is the Next.js page in hackbot-ui, which calls these server-side with the shared
-key, so nothing here is directly reachable by the public.
+``/rate/{token}`` backs the public page anyone can reach from a Bugzilla
+comment; ``/feedback`` backs the internal review page. Every route sits behind
+``require_api_key`` regardless — the anonymous surface is the Next.js page in
+hackbot-ui, which calls these server-side with the shared key.
 
-The path split matters: hackbot-ui exempts ``/rate`` from its SSO middleware, so
-keeping the public routes in their own namespace means anything added under
-``/feedback`` later stays guarded by default.
-
-The write path follows the upsert used by reviewhelper-api's ``/feedback``:
-insert, catch the named unique violation, roll back and update. Re-rating
-therefore replaces a rater's previous verdict instead of stacking duplicates.
+The write path follows the upsert in reviewhelper-api's ``/feedback``: insert,
+catch the named unique violation, roll back and update, so re-rating replaces a
+verdict instead of stacking duplicates.
 """
 
 from __future__ import annotations
@@ -63,10 +57,8 @@ _BUGZILLA_FOOTER = "*This is an automated analysis result."
 def _analysis_only(text: str) -> str:
     """Drop the Bugzilla-facing footer from what the rating page shows.
 
-    It directs the reader to file a needinfo if the analysis is wrong, which is
-    both redundant and faintly contradictory on a page that exists to collect
-    exactly that correction. The rating link the applier adds is never stored on
-    the action, so it can't appear here in the first place.
+    It tells the reader to file a needinfo if the analysis is wrong, which is
+    contradictory on a page that exists to collect exactly that correction.
     """
     head, found, _ = text.partition(_BUGZILLA_FOOTER)
     return head.rstrip() if found else text.rstrip()
@@ -75,12 +67,9 @@ def _analysis_only(text: str) -> str:
 async def _resolve_target(db: AsyncSession, token: str) -> tuple[UUID, RunAction]:
     """Map a token to the run and the comment action it may be rated against.
 
-    Every failure raises the same 404: an unsigned token, an unknown run, a run
-    that never succeeded and a run whose comment was never applied are
-    indistinguishable from outside. Rating something Hackbot didn't actually
-    post is the case reviewhelper-api's endpoint guards with a 422; here it
-    collapses into the not-found response so nothing leaks about which runs
-    exist.
+    Every failure raises the same 404 — unsigned token, unknown run, run that
+    never succeeded, run whose comment was never applied — so nothing leaks
+    about which runs exist.
     """
     run_id = feedback_links.verify_token(token)
     if run_id is None:
@@ -117,8 +106,7 @@ async def get_feedback_target(
 ) -> FeedbackTargetDoc:
     """Return the posted comment being rated, plus a nonce for the write.
 
-    Strictly read-only. Recording a vote here would hand one to every link
-    prefetcher that touches the bugmail.
+    Strictly read-only: recording here would hand a vote to every prefetcher.
     """
     run_id, action = await _resolve_target(db, token)
     return FeedbackTargetDoc(
@@ -153,8 +141,8 @@ async def submit_feedback(
         x_rater_key, feedback_links.client_ip_from(x_forwarded_for), user_agent
     )
 
-    # Excluding this rater's own row keeps someone who is merely changing their
-    # mind from being turned away once a popular bug reaches the ceiling.
+    # Excluding this rater's own row lets someone change their mind even once
+    # the ceiling is reached.
     others = await db.scalar(
         select(func.count())
         .select_from(RunFeedback)
@@ -216,11 +204,9 @@ async def feedback_stats(
 ) -> FeedbackStats:
     """Rating totals, broken down by agent, independent of paging.
 
-    Takes no `agent` or `rating` parameter on purpose. The caller needs the
-    whole breakdown at once: to populate the agent filter with the agents that
-    have actually been rated, and to show each thumb's count. Narrowing by
-    either would collapse the very list being offered — the mistake that made
-    an earlier client-side version of this filter disappear once used.
+    Takes no `agent` or `rating` parameter on purpose: this also populates the
+    agent filter's options, so narrowing it would collapse the list it exists
+    to build.
     """
     stmt = (
         select(Run.agent, RunFeedback.rating, func.count())

@@ -25,11 +25,11 @@ class RaterKind(str, Enum):
 
 
 class FeedbackDimension(str, Enum):
-    """What a rater says went wrong, keyed to the agent's own output fields.
+    """What a rater says went wrong.
 
     Members map 1:1 onto the structured plan the agent emits (root_cause,
-    proposed_fix, target_files, confidence, actionable), so a thumbs-down can be
-    aggregated per-field instead of read as prose.
+    proposed_fix, target_files, confidence, actionable), so a thumbs-down
+    aggregates per-field instead of being read as prose.
     """
 
     root_cause_wrong = "root_cause_wrong"
@@ -103,11 +103,10 @@ class RunDoc(BaseModel):
 
 
 class FeedbackTargetDoc(BaseModel):
-    """What the public feedback page needs to render, and nothing else.
+    """What the public feedback page needs, and nothing else.
 
-    Deliberately narrow: the page is reachable without authentication, so it
-    gets the comment that was actually posted and the bug it landed on — never
-    the run's inputs, findings, artifacts or identity.
+    The page is reachable without authentication, so this exposes the posted
+    comment and its bug — never the run's inputs, findings or identity.
     """
 
     bug_id: int
@@ -137,9 +136,9 @@ class AgentFeedbackStats(BaseModel):
 class FeedbackStats(BaseModel):
     """Rating totals over everything, not just the loaded page.
 
-    `by_agent` covers only agents that have actually been rated, which is what
-    the review page's filter offers — the full registry would list agents whose
-    comments carry no feedback link and so can never appear here.
+    `by_agent` covers only agents that have been rated: the review page builds
+    its filter from this, and the full registry would offer agents whose
+    comments carry no feedback link and so can never appear.
     """
 
     up: int = 0

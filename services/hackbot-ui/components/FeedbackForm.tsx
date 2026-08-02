@@ -54,9 +54,8 @@ export function FeedbackForm({
           comment: note.trim() || null,
         }),
       });
-      // Parse defensively: an unexpected status can carry an HTML error page,
-      // and letting res.json() throw on it would replace a readable status
-      // with a JSON syntax error.
+      // An unexpected status can carry an HTML error page; letting res.json()
+      // throw would replace a readable status with a JSON syntax error.
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(body?.error ?? `${res.status} ${res.statusText}`);

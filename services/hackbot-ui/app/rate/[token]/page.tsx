@@ -6,16 +6,14 @@ import type { FeedbackRating } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// These pages are linked from public Bugzilla comments; keep them out of search
-// indexes so the long tail of crawler traffic never builds up.
+// Linked from public Bugzilla comments; keep them out of search indexes.
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// `?v=` is a convenience carried over from the Bugzilla link so the visitor
-// doesn't have to re-pick the thumb they already clicked. It is strictly a
-// display hint: anything other than up/down is treated as no selection rather
-// than an error, and the value is never echoed back into the page.
+// Carried over from the Bugzilla link so the visitor needn't re-pick the thumb
+// they already clicked. Strictly a display hint: anything else means no
+// selection rather than an error, and the value is never echoed into the page.
 function preselect(
   value: string | string[] | undefined
 ): FeedbackRating | null {
@@ -49,9 +47,8 @@ export default async function FeedbackPage({
     );
   }
 
-  // The heading and preamble live inside FeedbackForm rather than here, so that
-  // submitting can replace the whole panel with a confirmation instead of
-  // leaving a question the reader has already answered sitting above it.
+  // Heading and preamble live inside FeedbackForm so submitting can replace the
+  // whole panel, rather than leaving an answered question above the receipt.
   return (
     <div className="panel">
       <FeedbackForm

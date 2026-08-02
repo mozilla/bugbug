@@ -83,16 +83,12 @@ class RunAction(Base):
 class RunFeedback(Base):
     """A rating of the Bugzilla comment a run posted, from the public feedback link.
 
-    Values for `rating`, `rater_kind` and `dimensions` are stored as plain
-    strings and validated by the pydantic enums in app/schemas.py (matching how
-    `Run.status` handles `RunStatus`) — the write path is the only way rows are
-    created, so a native DB enum would buy little and cost a migration every
-    time a dimension is added.
+    Enum-valued columns are plain strings validated by the pydantic enums in
+    app/schemas.py, as `Run.status` does — a native DB enum would cost a
+    migration every time a dimension is added.
 
-    Raters are anonymous, so the dedupe key is a salted hash of IP + user agent.
-    That hash is absent when the request carries neither signal, hence a partial
-    unique index rather than a constraint: rows with no key don't collide with
-    each other.
+    `anon_id` is absent when a request carries no identifying signal at all,
+    hence a partial unique index: those rows must not collide with each other.
     """
 
     __tablename__ = "run_feedback"

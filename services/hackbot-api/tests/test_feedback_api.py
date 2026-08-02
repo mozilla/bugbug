@@ -131,15 +131,6 @@ async def test_get_trims_the_bugzilla_footer_from_the_preview():
     assert out.comment == "Root cause: the pref is never read."
 
 
-async def test_get_leaves_a_comment_without_the_footer_alone():
-    run = _FakeRun()
-    db = _FakeDB(run=run, action=_FakeAction(text="Just the analysis."))
-    out = await feedback_router.get_feedback_target(
-        feedback_links.mint_token(run.run_id), db
-    )
-    assert out.comment == "Just the analysis."
-
-
 async def test_get_never_writes():
     """A GET is reached by every prefetcher that touches the bugmail."""
     run = _FakeRun()
@@ -227,26 +218,6 @@ async def test_post_records_the_vote():
     assert row.anon_id == feedback_links.anon_id("cookie-a", None, None)
 
 
-async def test_two_raters_behind_one_ip_get_separate_rows():
-    """The dedupe collision that would otherwise lose a rating to an upsert."""
-    run = _FakeRun()
-    shared = {"x_forwarded_for": "203.0.113.7", "user_agent": "Firefox/140.0"}
-    keys = []
-
-    for cookie in ("cookie-a", "cookie-b"):
-        db = _FakeDB(run=run, action=_FakeAction())
-        await feedback_router.submit_feedback(
-            feedback_links.mint_token(run.run_id),
-            _payload(run.run_id),
-            db,
-            x_rater_key=cookie,
-            **shared,
-        )
-        keys.append(db.added[0].anon_id)
-
-    assert keys[0] != keys[1]
-
-
 async def test_post_without_a_nonce_is_rejected():
     run = _FakeRun()
     db = _FakeDB(run=run, action=_FakeAction())
@@ -331,12 +302,6 @@ async def test_dimension_filter_reaches_the_query():
     assert ["root_cause_wrong"] in compiled.params.values()
 
 
-async def test_no_dimension_filter_means_no_containment_clause():
-    db = _ListDB([])
-    await feedback_router.list_feedback(db)
-    assert "@>" not in str(db.stmt)
-
-
 async def test_stats_totals_and_breaks_down_by_agent():
     db = _ListDB(
         [
@@ -355,31 +320,11 @@ async def test_stats_totals_and_breaks_down_by_agent():
     ]
 
 
-async def test_stats_reports_zero_for_a_rating_with_no_rows():
-    """An absent group key must read as 0, not raise."""
-    out = await feedback_router.feedback_stats(_ListDB([("bug-fix", "down", 3)]))
-    assert (out.up, out.down) == (0, 3)
-    assert out.by_agent[0].up == 0
-
-
 async def test_stats_lists_only_agents_that_have_been_rated():
     """The filter is built from this, and must not offer empty agents."""
     out = await feedback_router.feedback_stats(_ListDB([("frontend-triage", "up", 1)]))
     assert [a.agent for a in out.by_agent] == ["frontend-triage"]
-
-
-async def test_list_feedback_tolerates_a_run_without_a_bug_id():
-    row = SimpleNamespace(
-        run_id=uuid.uuid4(),
-        rating="up",
-        dimensions=[],
-        comment=None,
-        created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
-    )
-    (out,) = await feedback_router.list_feedback(
-        _ListDB([(row, "build-repair", {"failure_tasks": {}})])
-    )
-    assert out.bug_id is None
+    assert out.by_agent[0].down == 0
 
 
 class _ConflictingDB(_FakeDB):

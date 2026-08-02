@@ -40,14 +40,13 @@ _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 def with_feedback_link(run: Run, action_type: str, params: dict) -> dict:
     """Append the rating invitation to a comment about to be posted.
 
-    Done here rather than where the agent records the comment, for three
-    reasons: only comments that actually reach Bugzilla should advertise a
-    feedback URL (most recorded ones are never applied), the signing secret
-    belongs to this service rather than the agent container, and this is
-    already the point where params are rewritten before dispatch.
+    Done at apply rather than record time because only comments that actually
+    reach Bugzilla should advertise a feedback URL — most recorded ones never
+    are — and because the signing secret belongs to this service, not the agent
+    container.
 
-    Returns a new dict; the caller must not persist it back to the row, so a
-    re-apply re-derives the link instead of stacking a second copy.
+    Returns a new dict; the caller must not persist it back to the row, or a
+    re-apply would stack a second copy.
     """
     if action_type != "bugzilla.add_comment":
         return params
