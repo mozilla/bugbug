@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Generic, Literal, TypeVar
 
 from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 RESULT_SERVER_NAME = "autowebcompat-repro"
 SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
@@ -56,6 +62,15 @@ class TestPlanResult(BaseModel):
 
 
 class ReproductionResult(BaseModel):
+    confirmed_by_script: bool = Field(
+        default=False,
+        description=(
+            "true if a Puppeteer script demonstrated the difference for this "
+            "Firefox build, false if you could not get one to pass or did not "
+            "run one."
+        ),
+    )
+
     reproduced: bool = Field(
         description=(
             "true if the reported issue reproduced in Firefox, otherwise false."
@@ -144,9 +159,40 @@ class BugReproductionResult(ReproductionResult):
             "exact origin — the URL you fetched it from, the command you ran, or "
             'how you generated it — not just that you "used" or "saved" it. A '
             "reader must be able to obtain the same inputs. Omit the Chrome cross-check "
-            "reproduction and screenshot steps."
+            "reproduction, Puppeteer script and screenshot steps."
         ),
     )
+
+    script_path: Path | None = Field(
+        description=(
+            """The file path of the Puppeteer confirmation script you wrote and
+            ran successfully (exit code 0). Use the exact path you were given
+            to write to (do NOT paste the script source). Must be null when
+            `reproduced` is false."""
+        ),
+    )
+
+    @field_validator("script_path", mode="after")
+    @classmethod
+    def validate_script_path(cls, path: Path | None) -> Path | None:
+        if path is None:
+            return None
+
+        if not path.exists():
+            raise ValueError(f"Script path {path} doesn't exist")
+        if not path.read_text().strip():
+            raise ValueError(f"Script path {path} is empty")
+        return path
+
+    @model_validator(mode="after")
+    def validate_script_matches_reproduced(self) -> BugReproductionResult:
+        """Only a script that demonstrated the difference counts as one."""
+        if not self.reproduced and self.script_path is not None:
+            raise ValueError(
+                "script_path must be null when reproduced is false; a script "
+                "that does not demonstrate the issue is not a confirmation."
+            )
+        return self
 
 
 class ChromeMaskResult(BaseModel):
