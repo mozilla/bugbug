@@ -66,6 +66,10 @@ class RunActionDoc(BaseModel):
     result: dict[str, Any] | None = None
     error: str | None = None
     applied_at: datetime | None = None
+    # For an applied bugzilla.add_comment, the exact text Bugzilla received:
+    # params["text"] plus the rating footer. Derived on read rather than stored,
+    # so a re-apply can't stack a second copy of the link.
+    posted_text: str | None = None
 
 
 class AgentDescriptor(BaseModel):

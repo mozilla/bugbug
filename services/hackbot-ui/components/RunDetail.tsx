@@ -18,7 +18,9 @@ import { StatusBadge } from "./StatusBadge";
 // pull it out so we can preview what would be posted to the bug.
 function commentPreview(a: RunAction): string | null {
   if (a.type !== "bugzilla.add_comment") return null;
-  const text = a.params?.text;
+  // Prefer what Bugzilla actually received, so the preview matches the posted
+  // comment — including the rating links, which are live once applied.
+  const text = a.posted_text ?? a.params?.text;
   return typeof text === "string" && text.trim() ? text : null;
 }
 

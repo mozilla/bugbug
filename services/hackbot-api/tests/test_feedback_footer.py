@@ -8,11 +8,13 @@ worse than no link at all.
 
 import uuid
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 import pytest
 from app.actions_applier import with_feedback_link
 from app.config import settings
 from app.feedback_links import verify_token
+from app.routers import runs as runs_router
 
 
 @dataclass
@@ -63,6 +65,45 @@ def test_only_comments_get_a_link():
     """update_bug is the case that matters: it coalesces into the same PUT."""
     params = _comment()
     assert with_feedback_link(_FakeRun(), "bugzilla.update_bug", params) == params
+
+
+class _ActionsDB:
+    def __init__(self, rows):
+        self._rows = rows
+
+    async def execute(self, stmt):
+        return SimpleNamespace(scalars=lambda: self._rows)
+
+
+def _action(status):
+    return SimpleNamespace(
+        idx=0,
+        type="bugzilla.add_comment",
+        params=_comment(),
+        ref=None,
+        status=status,
+        result=None,
+        error=None,
+        applied_at=None,
+    )
+
+
+async def test_posted_text_exposed_once_applied():
+    """The preview should match the comment Bugzilla received."""
+    run = _FakeRun()
+    (doc,) = await runs_router._list_actions(_ActionsDB([_action("applied")]), run)
+
+    assert doc.posted_text is not None
+    assert "Was this analysis useful?" in doc.posted_text
+    assert doc.params["text"] not in ("", None)
+    assert "Was this analysis useful?" not in doc.params["text"]
+
+
+async def test_no_posted_text_before_apply():
+    """A link offered before the comment is posted would only 404."""
+    run = _FakeRun()
+    (doc,) = await runs_router._list_actions(_ActionsDB([_action("pending")]), run)
+    assert doc.posted_text is None
 
 
 @pytest.mark.parametrize(

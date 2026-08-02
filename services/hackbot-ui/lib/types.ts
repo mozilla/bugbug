@@ -49,6 +49,9 @@ export interface RunAction {
   result: Record<string, unknown> | null;
   error: string | null;
   applied_at: string | null;
+  // For an applied bugzilla.add_comment, the exact text Bugzilla received —
+  // the agent's comment plus the rating footer. Null before it is applied.
+  posted_text: string | null;
 }
 
 export interface RunRef {
