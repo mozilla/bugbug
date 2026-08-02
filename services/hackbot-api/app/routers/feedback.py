@@ -35,6 +35,7 @@ from app.database.models import Run, RunAction, RunFeedback
 from app.schemas import (
     FeedbackCreate,
     FeedbackDoc,
+    FeedbackRating,
     FeedbackResponse,
     FeedbackTargetDoc,
     RaterKind,
@@ -209,6 +210,7 @@ async def submit_feedback(
 async def list_feedback(
     db: Annotated[AsyncSession, Depends(get_db)],
     agent: str | None = None,
+    rating: FeedbackRating | None = None,
     run_id: UUID | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -228,6 +230,8 @@ async def list_feedback(
     )
     if agent:
         stmt = stmt.where(Run.agent == agent)
+    if rating:
+        stmt = stmt.where(RunFeedback.rating == rating.value)
     if run_id:
         stmt = stmt.where(RunFeedback.run_id == run_id)
 

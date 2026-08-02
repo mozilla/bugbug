@@ -244,25 +244,25 @@ table.runs th:nth-child(5) {
 table.runs th:nth-child(6) {
   width: 19%;
 }
-/* Same column count as the runs table but a different balance, so every width
-   is restated; the two-class selector outranks the nth-child rules above. */
+/* Five columns to the runs table's six, so every width is restated and the
+   sixth cleared; the two-class selector outranks the nth-child rules above. */
 table.runs.feedback th:nth-child(1) {
-  width: 7%;
-}
-table.runs.feedback th:nth-child(2) {
-  width: 18%;
-}
-table.runs.feedback th:nth-child(3) {
-  width: 10%;
-}
-table.runs.feedback th:nth-child(4) {
   width: 8%;
 }
+table.runs.feedback th:nth-child(2) {
+  width: 20%;
+}
+table.runs.feedback th:nth-child(3) {
+  width: 8%;
+}
+table.runs.feedback th:nth-child(4) {
+  width: 44%;
+}
 table.runs.feedback th:nth-child(5) {
-  width: 37%;
+  width: 20%;
 }
 table.runs.feedback th:nth-child(6) {
-  width: 20%;
+  width: auto;
 }
 table.runs.feedback td {
   vertical-align: top;

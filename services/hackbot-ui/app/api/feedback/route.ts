@@ -14,11 +14,17 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
+  const rating = url.searchParams.get("rating");
+  const limit = Number(url.searchParams.get("limit"));
+  const offset = Number(url.searchParams.get("offset"));
   try {
     return NextResponse.json(
       await listFeedback({
         agent: url.searchParams.get("agent") ?? undefined,
+        rating: rating === "up" || rating === "down" ? rating : undefined,
         runId: url.searchParams.get("run_id") ?? undefined,
+        limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
+        offset: Number.isFinite(offset) && offset > 0 ? offset : undefined,
       })
     );
   } catch (err) {
