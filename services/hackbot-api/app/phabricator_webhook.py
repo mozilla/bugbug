@@ -8,13 +8,11 @@ Bugzilla bug id. The route in ``app/routers/webhooks.py`` orchestrates these.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cachetools import TTLCache
+from app.phabricator_authorization import phabricator_authorizer
 
 if TYPE_CHECKING:
     from phabricator_client import PhabricatorClient
@@ -25,16 +23,6 @@ log = logging.getLogger(__name__)
 
 # Transaction types that carry a comment we can scan for the mention.
 _COMMENT_TYPES = frozenset({"comment", "inline"})
-EDITBUGS_GROUP_PHID = "PHID-PROJ-njo5uuqyyq3oijbkhy55"
-_MEMBERSHIP_CACHE_TTL_SECONDS = 60
-_MISSING_MEMBER_REFRESH_COOLDOWN_SECONDS = 30
-
-_editbugs_members_cache: TTLCache[str, frozenset[str]] = TTLCache(
-    maxsize=1,
-    ttl=_MEMBERSHIP_CACHE_TTL_SECONDS,
-)
-_editbugs_members_lock = asyncio.Lock()
-_last_editbugs_members_refresh = 0.0
 
 
 @dataclass(frozen=True)
@@ -102,45 +90,6 @@ def _join_comments(comments: list[str]) -> str:
     return "\n\n".join(f"[comment {i}]\n{c}" for i, c in enumerate(comments, 1))
 
 
-async def get_authorized_members(
-    client: PhabricatorClient, author_phids: set[str]
-) -> frozenset[str]:
-    """Return the members authorized to trigger Hackbot for these authors.
-
-    Known authors use the cached project-members snapshot. If any author is
-    absent, refresh the snapshot once so newly added members take effect without
-    waiting for the TTL. The cooldown prevents repeated unauthorized mentions
-    from issuing a Phabricator request for every delivery.
-    """
-    global _last_editbugs_members_refresh
-
-    if not author_phids:
-        return frozenset()
-
-    cached_members = _editbugs_members_cache.get(EDITBUGS_GROUP_PHID)
-    if cached_members is not None and author_phids.issubset(cached_members):
-        return cached_members
-
-    # A shared async lock, so concurrent webhook requests do not issue duplicate refreshes.
-    async with _editbugs_members_lock:
-        cached_members = _editbugs_members_cache.get(EDITBUGS_GROUP_PHID)
-        if cached_members is not None and author_phids.issubset(cached_members):
-            return cached_members
-
-        now = time.monotonic()
-        if (
-            cached_members is not None
-            and now - _last_editbugs_members_refresh
-            < _MISSING_MEMBER_REFRESH_COOLDOWN_SECONDS
-        ):
-            return cached_members
-
-        members = await client.get_project_members(EDITBUGS_GROUP_PHID)
-        _editbugs_members_cache[EDITBUGS_GROUP_PHID] = members
-        _last_editbugs_members_refresh = time.monotonic()
-        return members
-
-
 async def resolve_revision(
     client: PhabricatorClient, revision_phid: str
 ) -> tuple[int | None, int | None]:
@@ -185,13 +134,12 @@ async def detect_mention_and_revision(
         bot_phid=webhook.bot_phid,
         token=webhook.mention_token,
     )
-    authorized_members = await get_authorized_members(
-        client,
-        {mention.author_phid for mention in mentions},
-    )
     comments: list[str] = []
     for mention in mentions:
-        if mention.author_phid in authorized_members:
+        if await phabricator_authorizer.is_authorized(
+            client,
+            mention.author_phid,
+        ):
             comments.append(mention.raw)
         else:
             log.warning(

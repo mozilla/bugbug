@@ -14,8 +14,8 @@ import pytest
 from app.auth import verify_phabricator_signature
 from app.config import settings
 from app.main import app
+from app.phabricator_authorization import AUTHORIZED_GROUP_PHID
 from app.phabricator_webhook import (
-    EDITBUGS_GROUP_PHID,
     HackbotMention,
     _join_comments,
     detect_mention_and_revision,
@@ -180,11 +180,14 @@ class _FakeClient:
         self._revision = revision
         self._members = frozenset(members)
 
+    async def search_transactions(self, phid):
+        return []
+
     async def search_revision(self, phid):
         return self._revision
 
     async def get_project_members(self, project_phid):
-        assert project_phid == EDITBUGS_GROUP_PHID
+        assert project_phid == AUTHORIZED_GROUP_PHID
         return self._members
 
 

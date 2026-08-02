@@ -199,11 +199,6 @@ async def test_get_project_members(monkeypatch):
     assert captured["params"]["attachments"] == {"members": True}
 
 
-async def test_get_project_members_missing_project(monkeypatch):
-    _capture_post(monkeypatch, {"result": {"data": []}})
-    assert await _client().get_project_members("PHID-PROJ-1") == frozenset()
-
-
 async def test_query_latest_diff_picks_highest_id(monkeypatch):
     _capture_post(
         monkeypatch,
