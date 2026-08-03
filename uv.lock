@@ -32,8 +32,8 @@ members = [
     "hackbot-pulse-listener",
     "hackbot-runtime",
     "phabricator-client",
-    "testrail-client",
     "reviewhelper-api",
+    "testrail-client",
 ]
 
 [[package]]
@@ -728,7 +728,7 @@ requires-dist = [
     { name = "shap", extras = ["plots"], specifier = ">=0.51,<0.53" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = "==3.8.14" },
     { name = "tabulate", specifier = "~=0.10.0" },
-    { name = "taskcluster", specifier = ">=97.1,<100.6" },
+    { name = "taskcluster", specifier = ">=97.1,<101.2" },
     { name = "tenacity", specifier = "~=9.1.4" },
     { name = "tqdm", specifier = ">=4.67.3,<4.69.0" },
     { name = "unidiff", specifier = "~=0.7.5" },
@@ -743,7 +743,7 @@ spawn-pipeline = [
     { name = "json-e", specifier = "==4.8.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "requests", specifier = "==2.34.2" },
-    { name = "taskcluster", specifier = "==100.5.0" },
+    { name = "taskcluster", specifier = "==101.1.0" },
 ]
 test = [
     { name = "coverage", specifier = "==7.14.1" },
@@ -2735,7 +2735,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
-    { name = "taskcluster", specifier = ">=97.1,<100.6" },
+    { name = "taskcluster", specifier = ">=97.1,<101.2" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
 provides-extras = ["dev"]
@@ -5028,30 +5028,6 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
-name = "testrail-client"
-version = "0.1.0"
-source = { editable = "libs/testrail-client" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic-settings" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.26.0" },
-    { name = "pydantic-settings", specifier = ">=2.1.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "pillow"
 version = "12.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -7037,7 +7013,7 @@ wheels = [
 
 [[package]]
 name = "taskcluster"
-version = "100.5.0"
+version = "101.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -7048,9 +7024,9 @@ dependencies = [
     { name = "slugid" },
     { name = "taskcluster-urls" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/c5/823ca59868de80f05f6992482dfb1b0106bd106b9eb410e1c3dd2990f7a3/taskcluster-100.5.0.tar.gz", hash = "sha256:5b2dc2624e7e1a1ca8352b63cf9c4734e9edfab4452a4b3adaa45ce09b19f444", size = 254859, upload-time = "2026-06-25T08:25:48.89Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/56/fa407b54c68b3d0d363bc9029e9f8d76c9d12017aecda0acd867d1b0b12b/taskcluster-101.1.0.tar.gz", hash = "sha256:9b2c2310ca95e144bab68e1a2953efa9837fa93eafd9866bf748e4bfb0956596", size = 242070, upload-time = "2026-07-09T14:19:34.462Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9c/e6/459aeffc43c6d7266d34388ec167c34ccf02dab20970365ab499602134d2/taskcluster-100.5.0-py3-none-any.whl", hash = "sha256:b56b385da136024cb0f7326a545156bc0d9827194930636bd2d4a9dde2e7d59f", size = 150887, upload-time = "2026-06-25T08:25:47.427Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/42/ce75dde7192a19de14b2cb842d33ed9a12b71fdac1f5f0553e40c6b1a1f2/taskcluster-101.1.0-py3-none-any.whl", hash = "sha256:44f0bfd00769e4c897ae84f19fb7a576dfe23975f30ba66381d118169edb174c", size = 150884, upload-time = "2026-07-09T14:19:32.996Z" },
 ]
 
 [[package]]
@@ -7070,6 +7046,30 @@ sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926, upload-time = "2026-02-07T10:45:32.24Z" },
 ]
+
+[[package]]
+name = "testrail-client"
+version = "0.1.0"
+source = { editable = "libs/testrail-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "texttable"
