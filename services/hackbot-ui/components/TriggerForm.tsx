@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { AGENTS, type AgentValue } from "@/lib/agents";
+import { parseBugId } from "@/lib/bugzilla";
 import { saveRun } from "@/lib/store";
 import type { RunRef } from "@/lib/types";
 
@@ -57,8 +58,8 @@ export function TriggerForm() {
 
     const inputs: Record<string, unknown> = {};
 
-    const parsedBugId = bugId.trim() ? Number.parseInt(bugId, 10) : Number.NaN;
-    const hasBugId = Number.isInteger(parsedBugId) && parsedBugId > 0;
+    const parsedBugId = parseBugId(bugId);
+    const hasBugId = parsedBugId !== null;
     const hasBugData = isReproAgent && bugData.trim().length > 0;
 
     if (needsFailureTasks) {
@@ -113,13 +114,15 @@ export function TriggerForm() {
       inputs.test_scope = testScope.trim();
     } else if (!isReproAgent) {
       if (!hasBugId) {
-        setError("Enter a valid Bugzilla bug ID.");
+        setError("Enter a valid Bugzilla bug ID or bug URL.");
         return;
       }
       inputs.bug_id = parsedBugId;
     } else {
       if (!hasBugId && !hasBugData) {
-        setError("Provide a Bugzilla bug ID or paste report text.");
+        setError(
+          "Provide a Bugzilla bug ID (or bug URL) or paste report text."
+        );
         return;
       }
       if (hasBugId) inputs.bug_id = parsedBugId;
@@ -195,13 +198,12 @@ export function TriggerForm() {
         <div className="field">
           <label htmlFor="bugId">
             {isReproAgent
-              ? "Bugzilla bug ID (optional if report text provided)"
-              : "Bugzilla bug ID *"}
+              ? "Bugzilla bug ID or URL (optional if report text provided)"
+              : "Bugzilla bug ID or URL *"}
           </label>
           <input
             id="bugId"
-            inputMode="numeric"
-            placeholder="e.g. 1846789"
+            placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
             value={bugId}
             onChange={(e) => setBugId(e.target.value)}
             required={!isReproAgent}
@@ -227,11 +229,10 @@ export function TriggerForm() {
       {isBuildRepairAgent && (
         <>
           <div className="field">
-            <label htmlFor="bugId">Bugzilla bug ID (optional)</label>
+            <label htmlFor="bugId">Bugzilla bug ID or URL (optional)</label>
             <input
               id="bugId"
-              inputMode="numeric"
-              placeholder="e.g. 1846789"
+              placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
               value={bugId}
               onChange={(e) => setBugId(e.target.value)}
             />
