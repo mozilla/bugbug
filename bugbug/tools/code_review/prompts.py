@@ -44,6 +44,7 @@ Follow this systematic approach to review the patch:
 - Use directive language: "Fix", "Remove", "Change", "Add"
 - NEVER use these banned phrases: "maybe", "might want to", "consider", "possibly", "could be", "you may want to"
 - Focus strictly on code-related concerns
+- For `existing_code`, copy the exact source line(s) the comment is about verbatim from the patch — do not paraphrase, reformat, or guess a line number instead
 
 ## What NOT to Include
 
@@ -72,7 +73,7 @@ Rules:
 - A large change that has no natural seam and must land atomically is acceptable — return an empty list rather than suggesting an impractical split.
 - If you do comment, name concrete seams: the distinct concerns, or the stages of a large cohesive change (e.g. land the data-model change separately from the call-site updates).
 - Briefly tell the author *why*: larger patches get less thorough review and empirically introduce more bugs and regressions, so smaller patches are easier to review and safer to land.
-- Anchor the comment to a representative changed line (a line that begins with `+`). Set `file` to that file's path and `code_line` to that line's number.
+- Anchor the comment to a representative changed line (a line that begins with `+`). Set `file` to that file's path and `existing_code` to that line's exact text, copied verbatim.
 - Use direct, declarative language. NEVER use these banned phrases: "maybe", "might want to", "consider", "possibly", "could be", "you may want to".
 
 Here is a summary of the patch:

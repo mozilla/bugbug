@@ -5,54 +5,118 @@
 
 
 import re
-from itertools import chain
 from logging import getLogger
 from typing import Iterable
 
 from unidiff import Hunk, PatchedFile, PatchSet
 
 from bugbug.tools.core.data_types import InlineComment
-from bugbug.tools.core.exceptions import (
-    FileNotInPatchError,
-    HunkNotInPatchError,
-    ModelResultError,
-)
+from bugbug.tools.core.exceptions import CommentNotLocatedError
 
 logger = getLogger(__name__)
 
 
-def find_comment_scope(file: PatchedFile, line_number: int):
-    hunks_based_on_added = (
-        hunk
-        for hunk in file
-        if hunk.target_start <= line_number <= hunk.target_start + hunk.target_length
+def _normalize_line(line: str) -> str:
+    """Strip whitespace and an optional leading diff marker from a line."""
+    line = line.strip()
+    if line[:1] in ("+", "-"):
+        line = line[1:]
+    return line.strip()
+
+
+def _side_lines(hunk: Hunk, new_side: bool) -> list[tuple[int, str]]:
+    """Extract one side of a hunk as (line_number, normalized_content) pairs.
+
+    new_side=True: context + added lines, numbered against the new file.
+    new_side=False: context + removed lines, numbered against the old file.
+    """
+    result = []
+    for line in hunk:
+        if new_side:
+            if line.is_context or line.is_added:
+                result.append((line.target_line_no, _normalize_line(line.value)))
+        elif line.is_context or line.is_removed:
+            result.append((line.source_line_no, _normalize_line(line.value)))
+    return result
+
+
+def _match_consecutive(
+    side_lines: list[tuple[int, str]], target_lines: list[str]
+) -> tuple[int, int] | None:
+    """Find a consecutive run in `side_lines` matching `target_lines`, if any."""
+    n = len(target_lines)
+    if n == 0 or len(side_lines) < n:
+        return None
+    for i in range(len(side_lines) - n + 1):
+        if all(side_lines[i + j][1] == target_lines[j] for j in range(n)):
+            return side_lines[i][0], side_lines[i + n - 1][0]
+    return None
+
+
+def find_comment_location(file: PatchedFile, existing_code: str) -> dict:
+    """Locate the line range in `file` matching `existing_code` verbatim.
+
+    Rather than trusting a model-provided line number (which requires
+    counting from a hunk header and is error-prone), this matches the quoted
+    snippet against the actual patch content and derives line numbers
+    deterministically — the approach used by alibaba/open-code-review. Tries
+    the new side (context + added lines) first, then the old side (context +
+    removed lines), across all hunks.
+
+    Raises CommentNotLocatedError if no hunk contains a run of lines matching
+    `existing_code`.
+    """
+    target_lines = [
+        _normalize_line(line) for line in existing_code.splitlines() if line.strip()
+    ]
+    if not target_lines:
+        raise CommentNotLocatedError("existing_code is empty")
+
+    for new_side in (True, False):
+        for hunk in file:
+            match = _match_consecutive(_side_lines(hunk, new_side), target_lines)
+            if match is None:
+                continue
+
+            line_start, line_end = match
+            has_added_lines = any(line.is_added for line in hunk)
+            has_deleted_lines = any(line.is_removed for line in hunk)
+            if has_added_lines and has_deleted_lines:
+                hunk_start, hunk_end = find_mixed_lines_range(hunk)
+            elif has_added_lines:
+                hunk_start, hunk_end = find_added_lines_range(hunk)
+            else:
+                hunk_start, hunk_end = find_removed_lines_range(hunk)
+
+            return {
+                "line_start": line_start,
+                "line_end": line_end,
+                "hunk_start_line": hunk_start,
+                "hunk_end_line": hunk_end,
+                "has_added_lines": new_side,
+            }
+
+    raise CommentNotLocatedError(
+        f"Could not find existing_code in the patch: {existing_code!r}"
     )
-    hunks_based_on_deleted = (
-        hunk
-        for hunk in file
-        if hunk.source_start <= line_number <= hunk.source_start + hunk.source_length
-    )
 
-    try:
-        hunk = next(chain(hunks_based_on_added, hunks_based_on_deleted))
-    except StopIteration as e:
-        raise HunkNotInPatchError("Line number not found in the patch") from e
 
-    has_added_lines = any(line.is_added for line in hunk)
-    has_deleted_lines = any(line.is_removed for line in hunk)
+def find_line_text(file: PatchedFile, line_number: int) -> str:
+    """Return the content of the line numbered `line_number` in `file`.
 
-    if has_added_lines and has_deleted_lines:
-        first_line, last_line = find_mixed_lines_range(hunk)
-    elif has_added_lines:
-        first_line, last_line = find_added_lines_range(hunk)
-    else:
-        first_line, last_line = find_removed_lines_range(hunk)
-
-    return {
-        "line_start": first_line,
-        "line_end": last_line,
-        "has_added_lines": has_added_lines,
-    }
+    Checks new-file numbering (context + added lines) first, then old-file
+    numbering (context + removed lines). Used to backfill `existing_code` for
+    few-shot examples sourced from historical (file, line_number) comments.
+    """
+    for hunk in file:
+        for line in hunk:
+            if line.target_line_no == line_number and not line.is_removed:
+                return line.value.rstrip("\n")
+    for hunk in file:
+        for line in hunk:
+            if line.source_line_no == line_number and not line.is_added:
+                return line.value.rstrip("\n")
+    raise CommentNotLocatedError(f"Line {line_number} not found in {file.path}")
 
 
 def find_added_lines_range(hunk: Hunk):
@@ -108,9 +172,9 @@ def format_patch_set(patch_set):
     """Render a PatchSet as a unified diff, with an added line-number column.
 
     The `---`/`+++`/`@@` headers match the unified diff format models are
-    trained on. The line-number column (absolute, per source/target file) lets
-    the model anchor comments to a `code_line` without counting from the hunk
-    header.
+    trained on. The added line-number column isn't part of standard diff
+    syntax, but gives the model an easy way to double-check counting; comment
+    placement itself is resolved from quoted `existing_code`, not this number.
     """
     output = []
     for patch in patch_set:
@@ -376,7 +440,10 @@ def convert_generated_comments_to_inline(
         patch: The PatchSet to validate file paths against.
 
     Yields:
-        InlineComment objects with proper scope information.
+        InlineComment objects with proper scope information. Comments whose
+        file or existing_code can't be resolved against the patch are
+        skipped (and logged) rather than aborting the whole batch — one bad
+        comment shouldn't cost the reviewee every other comment.
     """
     patched_files_map = {
         patched_file.target_file: patched_file for patched_file in patch
@@ -391,28 +458,35 @@ def convert_generated_comments_to_inline(
 
         patched_file = patched_files_map.get(file_path)
         if patched_file is None:
-            raise FileNotInPatchError(
-                f"The file `{file_path}` is not part of the patch: {list(patched_files_map)}"
+            logger.warning(
+                "Dropping comment: file `%s` is not part of the patch: %s",
+                file_path,
+                list(patched_files_map),
             )
+            continue
 
-        line_number = comment.code_line
-        if not isinstance(line_number, int):
-            raise ModelResultError("Line number must be an integer")
-
-        scope = find_comment_scope(patched_file, line_number)
+        try:
+            location = find_comment_location(patched_file, comment.existing_code)
+        except CommentNotLocatedError:
+            logger.warning(
+                "Dropping comment: could not locate existing_code in `%s`: %r",
+                file_path,
+                comment.existing_code,
+            )
+            continue
 
         yield InlineComment(
             filename=(
                 patched_file.target_file[2:]
-                if scope["has_added_lines"]
+                if location["has_added_lines"]
                 else patched_file.source_file[2:]
             ),
-            start_line=line_number,
-            end_line=line_number,
-            hunk_start_line=scope["line_start"],
-            hunk_end_line=scope["line_end"],
+            start_line=location["line_start"],
+            end_line=location["line_end"],
+            hunk_start_line=location["hunk_start_line"],
+            hunk_end_line=location["hunk_end_line"],
             content=comment.comment,
-            on_removed_code=not scope["has_added_lines"],
+            on_removed_code=not location["has_added_lines"],
             explanation=comment.explanation,
             order=comment.order,
         )

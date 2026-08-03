@@ -10,12 +10,8 @@ class ModelResultError(Exception):
     """Occurs when the model returns an unexpected result."""
 
 
-class FileNotInPatchError(ModelResultError):
-    """Occurs when the file in the model result is not part of the patch."""
-
-
-class HunkNotInPatchError(ModelResultError):
-    """Occurs when the hunk in the model result is not part of the patch."""
+class CommentNotLocatedError(ModelResultError):
+    """Occurs when a comment's quoted code can't be matched against the patch."""
 
 
 class RunawayGenerationError(ModelResultError):
