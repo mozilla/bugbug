@@ -15,7 +15,10 @@ from phabricator_client import PhabricatorClient
 from app.auth import require_phabricator_signature
 from app.client import HackbotClient
 from app.config import settings
-from app.phabricator_authorization import PhabricatorAuthorizer
+from app.phabricator_authorization import (
+    AUTHORIZED_GROUP_PHID,
+    PhabricatorAuthorizer,
+)
 from app.phabricator_webhook import (
     detect_mention_and_revision,
     triggering_transaction_phids,
@@ -26,9 +29,9 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks")
 
 
-def get_phabricator_client(request: Request) -> PhabricatorClient:
-    """Dependency: the app-scoped Conduit client."""
-    return request.app.state.phabricator_client
+def get_phabricator_client() -> PhabricatorClient:
+    """Dependency: a Conduit client built from the service's Phabricator config."""
+    return PhabricatorClient(settings.phabricator)
 
 
 def get_hackbot_client() -> HackbotClient:
@@ -36,9 +39,16 @@ def get_hackbot_client() -> HackbotClient:
     return HackbotClient(settings.hackbot_api_url, settings.external_api_key)
 
 
-def get_phabricator_authorizer(request: Request) -> PhabricatorAuthorizer:
-    """Dependency: the app-scoped authorizer with its shared member cache."""
-    return request.app.state.phabricator_authorizer
+def get_phabricator_authorizer(
+    request: Request,
+    phab_client: PhabricatorClient = Depends(get_phabricator_client),
+) -> PhabricatorAuthorizer:
+    """Dependency: lazily create the app-scoped authorizer and its member cache."""
+    authorizer = getattr(request.app.state, "phabricator_authorizer", None)
+    if authorizer is None:
+        authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
+        request.app.state.phabricator_authorizer = authorizer
+    return authorizer
 
 
 # Best-effort dedupe of retried deliveries, keyed by triggering transaction PHID.

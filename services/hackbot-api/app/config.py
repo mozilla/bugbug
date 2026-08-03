@@ -42,11 +42,6 @@ class Settings(BaseSettings):
     # API auth
     external_api_key: str = ""
 
-    # Phabricator Conduit connection config, embedded as a nested model and
-    # populated in this single settings parse from PHABRICATOR_URL /
-    # PHABRICATOR_API_KEY / PHABRICATOR_TIMEOUT_SECONDS (see env_nested_delimiter
-    # below). Constructed once at application startup and injected as a dependency.
-    # Required, so a missing/invalid api_key fails at startup.
     phabricator: PhabricatorSettings
 
     # Inbound webhook receiver config, embedded as a nested model and populated
