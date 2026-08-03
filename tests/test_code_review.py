@@ -10,7 +10,7 @@ import httpx
 import pytest
 from unidiff import PatchSet
 
-from bugbug.tools.code_review import data_types, langchain_tools, review_context
+from bugbug.tools.code_review import data_types, langchain_tools, review_context, utils
 from bugbug.tools.code_review.data_types import (
     ExternalContent,
     GeneratedReviewComment,
@@ -369,6 +369,27 @@ def test_find_comment_location_real_patch_mixed_hunk():
     assert location["has_added_lines"] is True
     assert location["hunk_start_line"] == 37
     assert location["hunk_end_line"] == 42
+
+
+def test_convert_generated_comments_logs_error_when_unlocated(caplog):
+    patch_set = PatchSet.from_string(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    )
+    comment = GeneratedReviewComment(
+        file="b/f.txt",
+        existing_code="this text does not appear anywhere",
+        comment="bad",
+        explanation="x",
+        order=1,
+    )
+    with caplog.at_level(logging.ERROR, logger=utils.logger.name):
+        result = list(utils.convert_generated_comments_to_inline([comment], patch_set))
+
+    assert result == []
+    assert any(
+        record.levelno == logging.ERROR and "Dropping comment" in record.message
+        for record in caplog.records
+    )
 
 
 def _mock_client_returning(text: str) -> MagicMock:

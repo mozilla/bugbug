@@ -442,8 +442,8 @@ def convert_generated_comments_to_inline(
     Yields:
         InlineComment objects with proper scope information. Comments whose
         file or existing_code can't be resolved against the patch are
-        skipped (and logged) rather than aborting the whole batch — one bad
-        comment shouldn't cost the reviewee every other comment.
+        skipped rather than aborting the whole batch. An unresolved
+        existing_code is logged at error level (visible in Sentry).
     """
     patched_files_map = {
         patched_file.target_file: patched_file for patched_file in patch
@@ -468,7 +468,7 @@ def convert_generated_comments_to_inline(
         try:
             location = find_comment_location(patched_file, comment.existing_code)
         except CommentNotLocatedError:
-            logger.warning(
+            logger.error(
                 "Dropping comment: could not locate existing_code in `%s`: %r",
                 file_path,
                 comment.existing_code,
