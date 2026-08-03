@@ -44,7 +44,7 @@ def get_phabricator_authorizer(
     phab_client: PhabricatorClient = Depends(get_phabricator_client),
 ) -> PhabricatorAuthorizer:
     """Dependency: lazily create the app-scoped authorizer and its member cache."""
-    authorizer = getattr(request.app.state, "phabricator_authorizer", None)
+    authorizer = request.app.state.get("phabricator_authorizer")
     if authorizer is None:
         authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
         request.app.state.phabricator_authorizer = authorizer
