@@ -172,6 +172,33 @@ async def test_search_users_skips_call_when_nothing_to_resolve(monkeypatch):
     assert captured == {}  # no request was made
 
 
+async def test_get_project_members(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "data": [
+                    {
+                        "attachments": {
+                            "members": {
+                                "members": [
+                                    {"phid": "PHID-USER-1"},
+                                    {"phid": "PHID-USER-2"},
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+    )
+    assert await _client().get_project_members("PHID-PROJ-1") == frozenset(
+        {"PHID-USER-1", "PHID-USER-2"}
+    )
+    assert captured["params"]["constraints"] == {"phids": ["PHID-PROJ-1"]}
+    assert captured["params"]["attachments"] == {"members": True}
+
+
 async def test_query_latest_diff_picks_highest_id(monkeypatch):
     _capture_post(
         monkeypatch,
