@@ -11,18 +11,18 @@ class _FakeClient:
 
 
 async def test_is_authorized_uses_cached_member_list():
-    authorizer = PhabricatorAuthorizer("PHID-PROJ-test")
     client = _FakeClient(frozenset({"PHID-USER-authorized"}))
+    authorizer = PhabricatorAuthorizer(client, "PHID-PROJ-test")
 
-    assert await authorizer.is_authorized(client, "PHID-USER-authorized") is True
-    assert await authorizer.is_authorized(client, "PHID-USER-authorized") is True
+    assert await authorizer.is_authorized("PHID-USER-authorized") is True
+    assert await authorizer.is_authorized("PHID-USER-authorized") is True
     client.get_project_members.assert_awaited_once_with("PHID-PROJ-test")
 
 
 async def test_is_authorized_refreshes_once_for_unknown_authors():
-    authorizer = PhabricatorAuthorizer("PHID-PROJ-test")
     client = _FakeClient(frozenset({"PHID-USER-authorized"}))
+    authorizer = PhabricatorAuthorizer(client, "PHID-PROJ-test")
 
-    assert await authorizer.is_authorized(client, "PHID-USER-unknown-one") is False
-    assert await authorizer.is_authorized(client, "PHID-USER-unknown-two") is False
+    assert await authorizer.is_authorized("PHID-USER-unknown-one") is False
+    assert await authorizer.is_authorized("PHID-USER-unknown-two") is False
     client.get_project_members.assert_awaited_once_with("PHID-PROJ-test")

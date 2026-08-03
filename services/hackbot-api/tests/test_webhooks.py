@@ -14,7 +14,10 @@ import pytest
 from app.auth import verify_phabricator_signature
 from app.config import settings
 from app.main import app
-from app.phabricator_authorization import AUTHORIZED_GROUP_PHID
+from app.phabricator_authorization import (
+    AUTHORIZED_GROUP_PHID,
+    PhabricatorAuthorizer,
+)
 from app.phabricator_webhook import (
     HackbotMention,
     _join_comments,
@@ -225,6 +228,7 @@ async def test_detect_mention_requires_editbugs_membership(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
+        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
     assert result is None
 
@@ -248,6 +252,7 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
+        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
     assert result == ("@hackbot please fix", 42, 12345)
 
@@ -274,11 +279,28 @@ class _FakeHackbotClient:
         return "run-abc"
 
 
+class _FakeAuthorizer:
+    async def is_authorized(self, author_phid):
+        return True
+
+
 @pytest.fixture
-def client(monkeypatch):
+def authorizer():
+    return _FakeAuthorizer()
+
+
+@pytest.fixture
+def phab_client():
+    return object()
+
+
+@pytest.fixture
+def client(monkeypatch, authorizer, phab_client):
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
     # Fresh dedupe cache per test.
     webhooks._seen_transactions.clear()
+    app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
+    app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
     try:
         yield TestClient(app)
     finally:
@@ -331,12 +353,9 @@ def test_route_ignores_no_mention(client, monkeypatch):
     assert resp.json()["reason"] == "no actionable @hackbot mention"
 
 
-def test_route_triggers_run(client, monkeypatch):
-    monkeypatch.setattr(
-        webhooks,
-        "detect_mention_and_revision",
-        AsyncMock(return_value=("@hackbot please fix", 42, 12345)),
-    )
+def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
+    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+    monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
 
@@ -349,6 +368,8 @@ def test_route_triggers_run(client, monkeypatch):
     )
     assert resp.status_code == 202
     assert resp.json() == {"status": "triggered", "run_id": "run-abc"}
+    assert detect.call_args.args[0] is phab_client
+    assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
         (
             "bug-fix",

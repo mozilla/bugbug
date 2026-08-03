@@ -3,10 +3,15 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 from fastapi import FastAPI
+from phabricator_client import PhabricatorClient
 
 from app import __version__
 from app.config import settings
 from app.database.connection import close_db, init_db
+from app.phabricator_authorization import (
+    AUTHORIZED_GROUP_PHID,
+    PhabricatorAuthorizer,
+)
 from app.routers import events_router, runs_router, webhooks_router
 
 if settings.sentry_dsn:
@@ -37,6 +42,11 @@ app = FastAPI(
     description="Agent orchestration platform that runs agents as Cloud Run Jobs",
     version=__version__,
     lifespan=lifespan,
+)
+app.state.phabricator_client = PhabricatorClient(settings.phabricator)
+app.state.phabricator_authorizer = PhabricatorAuthorizer(
+    app.state.phabricator_client,
+    AUTHORIZED_GROUP_PHID,
 )
 
 app.include_router(runs_router)

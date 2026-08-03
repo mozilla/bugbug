@@ -12,17 +12,23 @@ if TYPE_CHECKING:
     from phabricator_client import PhabricatorClient
 
 
+# Members of this project are authorized to trigger Hackbot.
+AUTHORIZED_GROUP_PHID = "PHID-PROJ-njo5uuqyyq3oijbkhy55"  # bmo-editbugs-team
+
+
 class PhabricatorAuthorizer:
     """Cache-backed authorization checks against a Phabricator project."""
 
     def __init__(
         self,
-        group_phid: str,
+        client: PhabricatorClient,
+        authorized_group_phid: str,
         *,
         cache_ttl_seconds: int = 300,
         missing_member_refresh_cooldown_seconds: int = 30,
     ) -> None:
-        self._group_phid = group_phid
+        self._client = client
+        self._authorized_group_phid = authorized_group_phid
         self._members_cache: TTLCache[str, frozenset[str]] = TTLCache(
             maxsize=1,
             ttl=cache_ttl_seconds,
@@ -33,7 +39,7 @@ class PhabricatorAuthorizer:
             missing_member_refresh_cooldown_seconds
         )
 
-    async def is_authorized(self, client: PhabricatorClient, author_phid: str) -> bool:
+    async def is_authorized(self, author_phid: str) -> bool:
         """Return whether an author belongs to the authorized project.
 
         Known members use the cached project snapshot. An unknown author causes
@@ -41,12 +47,12 @@ class PhabricatorAuthorizer:
         unknown authors use a short cooldown to avoid a Phabricator request for
         every unauthorized webhook delivery.
         """
-        cached_members = self._members_cache.get(self._group_phid)
+        cached_members = self._members_cache.get(self._authorized_group_phid)
         if cached_members is not None and author_phid in cached_members:
             return True
 
         async with self._members_lock:
-            cached_members = self._members_cache.get(self._group_phid)
+            cached_members = self._members_cache.get(self._authorized_group_phid)
             if cached_members is not None and author_phid in cached_members:
                 return True
 
@@ -58,12 +64,9 @@ class PhabricatorAuthorizer:
             ):
                 return False
 
-            members = await client.get_project_members(self._group_phid)
-            self._members_cache[self._group_phid] = members
+            members = await self._client.get_project_members(
+                self._authorized_group_phid
+            )
+            self._members_cache[self._authorized_group_phid] = members
             self._last_members_refresh = time.monotonic()
             return author_phid in members
-
-
-# Members of this project are authorized to trigger Hackbot.
-AUTHORIZED_GROUP_PHID = "PHID-PROJ-njo5uuqyyq3oijbkhy55"  # bmo-editbugs-team
-phabricator_authorizer = PhabricatorAuthorizer(AUTHORIZED_GROUP_PHID)

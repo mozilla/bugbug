@@ -12,12 +12,11 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from app.phabricator_authorization import phabricator_authorizer
-
 if TYPE_CHECKING:
     from phabricator_client import PhabricatorClient
 
     from app.config import WebhookSettings
+    from app.phabricator_authorization import PhabricatorAuthorizer
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ _COMMENT_TYPES = frozenset({"comment", "inline"})
 
 @dataclass(frozen=True)
 class HackbotMention:
-    raw: str
+    comment: str
     author_phid: str
 
 
@@ -67,11 +66,11 @@ def find_hackbot_mentions(
         if bot_phid and author_phid == bot_phid:
             continue
         for comment in transaction.get("comments") or []:
-            raw = (comment.get("content") or {}).get("raw") or ""
-            if token in raw:
+            comment_text = (comment.get("content") or {}).get("raw") or ""
+            if token in comment_text:
                 matches.append(
                     HackbotMention(
-                        raw=raw,
+                        comment=comment_text,
                         author_phid=author_phid,
                     )
                 )
@@ -116,6 +115,8 @@ async def detect_mention_and_revision(
     webhook: WebhookSettings,
     object_phid: str,
     triggering_phids: list[str],
+    *,
+    authorizer: PhabricatorAuthorizer,
 ) -> tuple[str, int, int] | None:
     """Read Conduit and return ``(comment, revision_id, bug_id)`` or None.
 
@@ -136,11 +137,8 @@ async def detect_mention_and_revision(
     )
     comments: list[str] = []
     for mention in mentions:
-        if await phabricator_authorizer.is_authorized(
-            client,
-            mention.author_phid,
-        ):
-            comments.append(mention.raw)
+        if await authorizer.is_authorized(mention.author_phid):
+            comments.append(mention.comment)
         else:
             log.warning(
                 "Ignoring %s mention from non-editbugs user %s on %s",

@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     # Phabricator Conduit connection config, embedded as a nested model and
     # populated in this single settings parse from PHABRICATOR_URL /
     # PHABRICATOR_API_KEY / PHABRICATOR_TIMEOUT_SECONDS (see env_nested_delimiter
-    # below). Injected directly as PhabricatorClient(settings.phabricator).
+    # below). Constructed once at application startup and injected as a dependency.
     # Required, so a missing/invalid api_key fails at startup.
     phabricator: PhabricatorSettings
 
