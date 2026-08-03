@@ -212,10 +212,15 @@ class CodeReviewTool(GenerativeModelTool):
     ) -> str:
         created_before = patch.date_created if self.is_experiment_env else None
 
+        commit_message = patch.patch_title
+        if patch.patch_description:
+            commit_message += f"\n\n{patch.patch_description}"
+
         return FIRST_MESSAGE_TEMPLATE.format(
             current_date=current_date_for_prompt(),
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
+            commit_message=commit_message,
             external_context=external_context,
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
