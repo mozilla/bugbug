@@ -91,26 +91,50 @@ def find_mixed_lines_range(hunk: Hunk):
 
 
 def get_hunk_with_associated_lines(hunk):
-    hunk_with_lines = ""
+    lines = []
     for line in hunk:
+        content = line.value.rstrip("\n")
         if line.is_added:
-            hunk_with_lines += f"{line.target_line_no} + {line.value}"
+            lines.append(f"{line.target_line_no} + {content}")
         elif line.is_removed:
-            hunk_with_lines += f"{line.source_line_no} - {line.value}"
+            lines.append(f"{line.source_line_no} - {content}")
         elif line.is_context:
-            hunk_with_lines += f"{line.target_line_no}   {line.value}"
+            lines.append(f"{line.target_line_no}   {content}")
 
-    return hunk_with_lines
+    return "\n".join(lines)
 
 
 def format_patch_set(patch_set):
-    output = ""
-    for patch in patch_set:
-        for hunk in patch:
-            output += f"Filename: {patch.target_file}\n"
-            output += f"{get_hunk_with_associated_lines(hunk)}\n"
+    """Render a PatchSet as a unified diff, with an added line-number column.
 
-    return output
+    The `---`/`+++`/`@@` headers match the unified diff format models are
+    trained on. The line-number column (absolute, per source/target file) lets
+    the model anchor comments to a `code_line` without counting from the hunk
+    header.
+    """
+    output = []
+    for patch in patch_set:
+        old_path = (
+            patch.source_file
+            if patch.source_file != "/dev/null"
+            else f"a/{patch.path}"
+        )
+        new_path = (
+            patch.target_file
+            if patch.target_file != "/dev/null"
+            else f"b/{patch.path}"
+        )
+        output.append(f"diff --git {old_path} {new_path}")
+        output.append(f"--- {patch.source_file}")
+        output.append(f"+++ {patch.target_file}")
+        for hunk in patch:
+            output.append(
+                f"@@ -{hunk.source_start},{hunk.source_length} "
+                f"+{hunk.target_start},{hunk.target_length} @@"
+            )
+            output.append(get_hunk_with_associated_lines(hunk))
+
+    return "\n".join(output) + "\n"
 
 
 def get_associated_file_to_function(function_name, patch):
