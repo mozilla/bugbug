@@ -32,8 +32,8 @@ members = [
     "hackbot-pulse-listener",
     "hackbot-runtime",
     "phabricator-client",
-    "testrail-client",
     "reviewhelper-api",
+    "testrail-client",
 ]
 
 [[package]]
@@ -5028,30 +5028,6 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
-name = "testrail-client"
-version = "0.1.0"
-source = { editable = "libs/testrail-client" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic-settings" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.26.0" },
-    { name = "pydantic-settings", specifier = ">=2.1.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "pillow"
 version = "12.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -5193,14 +5169,14 @@ wheels = [
 
 [[package]]
 name = "prefpicker"
-version = "2.23.0"
+version = "2.25.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/27/f02129eea456b21cf7f369312d370939e3a7de1d87ba29531bdffee18c42/prefpicker-2.23.0.tar.gz", hash = "sha256:d464a9c284dff85cb815fd4c8f450c7e438691fa87b59c3213e9a58a70f6f79f", size = 27434, upload-time = "2026-04-13T15:27:10.617Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/9a/8714dfe24cec24943fcc46845cc065e9b55efec399be5583c6624e9bb273/prefpicker-2.25.0.tar.gz", hash = "sha256:6852109464a9a39c0dff6e072b4829b303afb9cd26626590556828b7c70d2a2d", size = 27438, upload-time = "2026-07-20T17:45:15.393Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3e/cb/40499dd1b226e649f06c9798d611b727b7e7dd6061b3e992144443f78793/prefpicker-2.23.0-py3-none-any.whl", hash = "sha256:c06deb8dad64ae12a10e881968650a926413c011e76fcb3a903f5c6592eaf672", size = 25029, upload-time = "2026-04-13T15:27:09.409Z" },
+    { url = "https://files.pythonhosted.org/packages/26/ae/934d75056ece7adb19798d17b4ec9a09b24ef832d3142a688a79f2809a0d/prefpicker-2.25.0-py3-none-any.whl", hash = "sha256:121bc3136aaa6ffb4ce9e3b8c8b7bc5110065717b2d0a640f67ad0b46ad5d5a8", size = 25122, upload-time = "2026-07-20T17:45:13.996Z" },
 ]
 
 [[package]]
@@ -7070,6 +7046,30 @@ sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926, upload-time = "2026-02-07T10:45:32.24Z" },
 ]
+
+[[package]]
+name = "testrail-client"
+version = "0.1.0"
+source = { editable = "libs/testrail-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "texttable"
