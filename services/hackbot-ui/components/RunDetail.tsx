@@ -176,9 +176,6 @@ export function RunDetail({ runId }: { runId: string }) {
         ? "Retry failed actions"
         : "Apply pending actions";
 
-  // The re-run button is always rendered so the toolbar keeps the same shape on
-  // every run; when the run can't be re-run the label says why rather than the
-  // button silently disappearing.
   const canRetrigger = isFailed(run.status);
   const retriggerLabel = retriggering
     ? "Currently re-running"
