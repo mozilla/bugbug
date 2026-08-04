@@ -176,6 +176,18 @@ export function RunDetail({ runId }: { runId: string }) {
         ? "Retry failed actions"
         : "Apply pending actions";
 
+  // The re-run button is always rendered so the toolbar keeps the same shape on
+  // every run; when the run can't be re-run the label says why rather than the
+  // button silently disappearing.
+  const canRetrigger = isFailed(run.status);
+  const retriggerLabel = retriggering
+    ? "Currently re-running"
+    : canRetrigger
+      ? "Re-run with same inputs"
+      : run.status === "succeeded"
+        ? "Run succeeded, cannot re-run"
+        : "Run in progress, cannot re-run";
+
   return (
     <>
       <div className="toolbar">
@@ -188,16 +200,14 @@ export function RunDetail({ runId }: { runId: string }) {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {isFailed(run.status) && (
-            <button
-              type="button"
-              className="secondary"
-              onClick={retrigger}
-              disabled={retriggering}
-            >
-              {retriggering ? "Re-running…" : "Re-run with same inputs"}
-            </button>
-          )}
+          <button
+            type="button"
+            className="secondary"
+            onClick={retrigger}
+            disabled={retriggering || !canRetrigger}
+          >
+            {retriggerLabel}
+          </button>
           <Link href="/" className="muted">
             ← all runs
           </Link>
