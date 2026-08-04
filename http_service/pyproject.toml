@@ -26,7 +26,7 @@ dependencies = [
     "kombu~=5.6.2",
     "marshmallow>=3.18.0",
     "rq~=2.7.0",
-    "rq-dashboard~=0.8.6",
+    "rq-dashboard>=0.8.6,<0.10.0",
     "sentry-sdk[flask]>=2.60.0",
 ]
 
