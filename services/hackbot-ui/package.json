@@ -11,7 +11,7 @@
     "test": "node --import tsx --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
-    "better-auth": "^1.6.0",
+    "better-auth": "^1.6.22",
     "next": "^15.5.22",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
