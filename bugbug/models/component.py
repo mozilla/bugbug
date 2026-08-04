@@ -14,7 +14,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup, utils
+from bugbug import bug_features, bugzilla, feature_cleanup, repository, utils
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
 from bugbug.model_calibration import IsotonicRegressionCalibrator
@@ -73,6 +73,8 @@ class ComponentModel(BugModel):
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
+
+        self.training_extra_downloads = [repository.download_component_mapping]
 
         feature_extractors = [
             bug_features.HasSTR(),
