@@ -19,10 +19,12 @@ def _plan():
                 "title": "The PDF opens",
                 "context": "content",
                 "preconditions": "A PDF is available.",
-                "steps": ["Open the PDF", "Select some text"],
-                "step_expectations": [
-                    None,
-                    "Text selection is highlighted in the PDF.",
+                "steps": [
+                    {"action": "Open the PDF", "expectation": None},
+                    {
+                        "action": "Select some text",
+                        "expectation": "Text selection is highlighted in the PDF.",
+                    },
                 ],
             },
             {
@@ -30,9 +32,11 @@ def _plan():
                 "title": "The toolbar remains available",
                 "context": "chrome",
                 "preconditions": None,
-                "steps": ["Open the toolbar"],
-                "step_expectations": [
-                    "The toolbar remains visible and usable.",
+                "steps": [
+                    {
+                        "action": "Open the toolbar",
+                        "expectation": "The toolbar remains visible and usable.",
+                    },
                 ],
             },
         ],
@@ -158,28 +162,19 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
     }
 
 
-def test_separated_steps_maps_expectations_by_step_index():
+def test_separated_steps_maps_expectations_from_step_objects():
     assert testrail_handler._separated_steps(
         {
-            "steps": ["Open the PDF", "Select text", "Copy text"],
-            "step_expectations": [None, "", "Text is copied."],
+            "steps": [
+                {"action": "Open the PDF", "expectation": None},
+                {"action": "Select text", "expectation": ""},
+                {"action": "Copy text", "expectation": "Text is copied."},
+            ],
         }
     ) == [
         {"content": "Open the PDF", "expected": ""},
         {"content": "Select text", "expected": ""},
         {"content": "Copy text", "expected": "Text is copied."},
-    ]
-
-
-def test_separated_steps_allows_fewer_expectations_than_steps():
-    assert testrail_handler._separated_steps(
-        {
-            "steps": ["Open the PDF", "Select text"],
-            "step_expectations": ["The PDF is displayed."],
-        }
-    ) == [
-        {"content": "Open the PDF", "expected": "The PDF is displayed."},
-        {"content": "Select text", "expected": ""},
     ]
 
 

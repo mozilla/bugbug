@@ -13,8 +13,9 @@ def _cases():
             "title": "The PDF opens",
             "context": "content",
             "preconditions": "A PDF is available.",
-            "steps": ["Open the PDF"],
-            "step_expectations": ["The PDF is displayed."],
+            "steps": [
+                {"action": "Open the PDF", "expectation": "The PDF is displayed."}
+            ],
         }
     ]
 
@@ -59,8 +60,7 @@ async def test_submit_test_plan_tool_rejects_cases_without_expectation():
                 {
                     "id": 1,
                     "title": "Case",
-                    "steps": ["Open the PDF"],
-                    "step_expectations": [""],
+                    "steps": [{"action": "Open the PDF", "expectation": None}],
                 }
             ],
         )
@@ -79,15 +79,18 @@ async def test_submit_test_plan_tool_preserves_blank_expectations():
             {
                 "id": 1,
                 "title": "Case",
-                "steps": ["Open the PDF", "Select text"],
-                "step_expectations": ["", "Text is selected."],
+                "steps": [
+                    {"action": "Open the PDF", "expectation": ""},
+                    {"action": "Select text", "expectation": "Text is selected."},
+                ],
             }
         ],
     )
 
-    assert recorder.actions[0]["params"]["generated_test_cases"][0][
-        "step_expectations"
-    ] == ["", "Text is selected."]
+    assert recorder.actions[0]["params"]["generated_test_cases"][0]["steps"] == [
+        {"action": "Open the PDF", "expectation": ""},
+        {"action": "Select text", "expectation": "Text is selected."},
+    ]
 
 
 def test_submit_test_plan_handler_is_registered():

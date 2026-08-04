@@ -23,6 +23,14 @@ from hackbot_runtime.actions.recorder import ActionsRecorder
 ACTION_TYPE = "testrail.submit_test_plan"
 
 
+class TestRailStepInput(BaseModel):
+    action: str = Field(description="Test step action.")
+    expectation: str | None = Field(
+        default=None,
+        description=("Expected result for this step."),
+    )
+
+
 class TestRailCaseInput(BaseModel):
     id: int
     title: str = Field(description="TestRail test case title.")
@@ -32,13 +40,11 @@ class TestRailCaseInput(BaseModel):
     preconditions: str | None = Field(
         default=None, description="Optional setup required before running this case."
     )
-    steps: list[str] = Field(
-        min_length=1, description="Ordered steps a QA engineer should follow."
-    )
-    step_expectations: list[str | None] = Field(
+    steps: list[TestRailStepInput] = Field(
+        min_length=1,
         description=(
-            "Expected results aligned by index with steps when present. Use null "
-            "for steps that do not directly verify the case title."
+            "Ordered steps a QA engineer should follow. Each step has an action "
+            "and an optional expectation."
         ),
     )
 
@@ -52,15 +58,16 @@ class TestRailCaseInput(BaseModel):
 
     @field_validator("steps")
     @classmethod
-    def steps_must_not_be_blank(cls, value: list[str]) -> list[str]:
-        steps = [step.strip() for step in value]
-        if any(not step for step in steps):
-            raise ValueError("steps must not contain blank items")
-        return steps
+    def steps_must_not_be_blank(
+        cls, value: list[TestRailStepInput]
+    ) -> list[TestRailStepInput]:
+        if any(not step.action.strip() for step in value):
+            raise ValueError("step's actions must not contain blank items")
+        return value
 
     @model_validator(mode="after")
     def expectations_must_include_verification(self) -> "TestRailCaseInput":
-        if not any(self.step_expectations):
+        if not any(step.expectation for step in self.steps):
             raise ValueError("at least one step must include an expected result")
         return self
 

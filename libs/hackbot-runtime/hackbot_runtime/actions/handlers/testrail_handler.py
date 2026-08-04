@@ -83,16 +83,13 @@ def _case_payload(
 
 
 def _separated_steps(test_case: dict[str, Any]) -> list[dict[str, str]]:
-    steps = [str(step) for step in test_case.get("steps", [])]
-    expectations = list(test_case.get("step_expectations") or [])
-
     separated_steps = []
-    for index, step in enumerate(steps):
-        expected = expectations[index] if index < len(expectations) else ""
+    for step in test_case.get("steps", []):
+        expectation = step.get("expectation")
         separated_steps.append(
             {
-                "content": step,
-                "expected": str(expected or ""),
+                "content": str(step["action"]),
+                "expected": "" if expectation is None else str(expectation),
             }
         )
 

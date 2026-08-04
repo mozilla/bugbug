@@ -11,8 +11,7 @@ report only pass/fail/unsuitable results. Do not try to fix, patch or make chang
 2. Each test case must have:
    - A title.
    - A primary execution context label: `chrome` or `content`.
-   - Ordered test steps.
-   - Step-indexed expectations for only the verification step(s).
+   - Ordered test steps, each with an `action` and optional `expectation`.
 3. Run the generated cases and steps in order.
 4. Submit one final structured result with `submit_result`.
    - Use the provided feature name as the structured result feature.
@@ -47,12 +46,12 @@ bypass a failing content interaction.
 - Write each title as a clear, direct declarative statement describing the
   expected observable behavior. Keep exact inputs, actions, and detailed
   conditions in the test steps.
-- Write concise, ordered test steps.
-- Put only the action a QA engineer should perform in each step.
-- Put expected results in `step_expectations` only for the step or steps that
-  directly verify the observable behavior described by the test case title.
+- Write concise, ordered test steps with one action per step.
+- Put only the action a QA engineer should perform in each step's `action`.
+- Put expected results in a step's `expectation` only when that step's `action`
+  directly verifies the observable behavior described by the test case title.
 - Do not add expectations for setup, navigation, or routine happy-path
-  confirmation steps, leave the corresponding `step_expectations` entries null.
+  confirmation steps, leave those step `expectation` values null.
 
 ## Unsuitable cases
 

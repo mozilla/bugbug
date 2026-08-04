@@ -1,4 +1,4 @@
-import { isPlainObject, isStringArray } from "@/lib/findings-format";
+import { isPlainObject } from "@/lib/findings-format";
 
 type TestCaseStatus = "passed" | "failed" | "unsuitable";
 
@@ -6,7 +6,11 @@ interface GeneratedTestCase {
   id: number;
   title: string;
   preconditions: string | null;
-  steps: string[];
+  steps: TestStep[];
+}
+
+interface TestStep {
+  action: string;
 }
 
 interface TestCaseResult {
@@ -27,6 +31,20 @@ function isStatus(value: unknown): value is TestCaseStatus {
   return value === "passed" || value === "failed" || value === "unsuitable";
 }
 
+function parseStep(value: unknown): TestStep | null {
+  if (typeof value === "string") {
+    return { action: value };
+  }
+  if (!isPlainObject(value) || typeof value.action !== "string") {
+    return null;
+  }
+  return { action: value.action };
+}
+
+function isTestStep(value: TestStep | null): value is TestStep {
+  return value !== null;
+}
+
 export function parseTestPlan(
   findings: Record<string, unknown>
 ): TestPlan | null {
@@ -41,9 +59,12 @@ export function parseTestPlan(
       !isPlainObject(value) ||
       typeof value.id !== "number" ||
       typeof value.title !== "string" ||
-      !Array.isArray(value.steps) ||
-      !isStringArray(value.steps)
+      !Array.isArray(value.steps)
     ) {
+      return null;
+    }
+    const steps = value.steps.map(parseStep);
+    if (!steps.every(isTestStep)) {
       return null;
     }
     generatedTestCases.push({
@@ -51,7 +72,7 @@ export function parseTestPlan(
       title: value.title,
       preconditions:
         typeof value.preconditions === "string" ? value.preconditions : null,
-      steps: value.steps,
+      steps,
     });
   }
 
@@ -130,7 +151,7 @@ export function TestPlanView({ testPlan }: { testPlan: TestPlan }) {
               <h4>Test steps</h4>
               <ol className="test-step-list">
                 {testCase.steps.map((step, index) => (
-                  <li key={index}>{step}</li>
+                  <li key={index}>{step.action}</li>
                 ))}
               </ol>
             </li>

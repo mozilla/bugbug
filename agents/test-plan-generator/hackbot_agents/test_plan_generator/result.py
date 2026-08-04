@@ -16,6 +16,14 @@ RESULT_SERVER_NAME = "test-plan-generator"
 SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
 
 
+class GeneratedTestStep(BaseModel):
+    action: str = Field(description="The action a QA engineer should perform.")
+    expectation: str | None = Field(
+        default=None,
+        description=("Expected result for this step."),
+    )
+
+
 class GeneratedTestCase(BaseModel):
     id: int = Field(description="Sequential case id starting at 1.")
     title: str
@@ -27,12 +35,10 @@ class GeneratedTestCase(BaseModel):
         )
     )
     preconditions: str | None = None
-    steps: list[str] = Field(description="Concise ordered test steps for this case.")
-    step_expectations: list[str | None] = Field(
+    steps: list[GeneratedTestStep] = Field(
         description=(
-            "Expected results aligned by index with steps when present. Use null "
-            "for setup, navigation, or happy-path steps that do not directly "
-            "verify the case title."
+            "Concise ordered test steps. Each step has an action and an optional "
+            "expectation."
         )
     )
 
@@ -40,7 +46,7 @@ class GeneratedTestCase(BaseModel):
     def _validate_steps(self) -> "GeneratedTestCase":
         if not self.steps:
             raise ValueError("each generated test case must have at least one step")
-        if not any(self.step_expectations):
+        if not any(step.expectation for step in self.steps):
             raise ValueError(
                 "each generated test case must include an expected result on at "
                 "least one verification step"
