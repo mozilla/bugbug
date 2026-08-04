@@ -199,19 +199,9 @@ export function RunDetail({ runId }: { runId: string }) {
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            type="button"
-            className="secondary"
-            onClick={retrigger}
-            disabled={retriggering || !canRetrigger}
-          >
-            {retriggerLabel}
-          </button>
-          <Link href="/" className="muted">
-            ← all runs
-          </Link>
-        </div>
+        <Link href="/" className="muted">
+          ← all runs
+        </Link>
       </div>
 
       {error && <div className="error-banner">Refresh error: {error}</div>}
@@ -239,6 +229,15 @@ export function RunDetail({ runId }: { runId: string }) {
             </>
           )}
         </dl>
+        <button
+          type="button"
+          className="secondary"
+          style={{ marginTop: 12 }}
+          onClick={retrigger}
+          disabled={retriggering || !canRetrigger}
+        >
+          {retriggerLabel}
+        </button>
       </div>
 
       {run.error && (
