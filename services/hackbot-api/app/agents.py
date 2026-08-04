@@ -58,6 +58,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Investigate a Bugzilla bug and produce a candidate fix patch against the Firefox source tree.",
         job_name="hackbot-agent-bug-fix",
         input_schema=BugFixInputs,
+        auto_apply_actions=True,
     ),
     "autowebcompat-repro": AgentSpec(
         name="autowebcompat-repro",
