@@ -6,6 +6,8 @@
 from datetime import timedelta
 from unittest.mock import MagicMock
 
+import pytest
+
 from bugbug import phabricator
 from bugbug.tools.core.platforms import phabricator as phab_platform
 
@@ -449,3 +451,82 @@ def test_historical_falls_back_on_transaction_error() -> None:
     patch = FakePatch()
     # Degrades to the current snapshot rather than raising.
     assert patch.historical_reviewer_project_phids == ["PHID-PROJ-current"]
+
+
+# ---------------------------------------------------------------------------
+# PhabricatorPatch.github_repo_ref() -> review_context_repo/branch defaults
+# ---------------------------------------------------------------------------
+
+
+def test_repo_callsign(monkeypatch) -> None:
+    phab_platform._repo_callsign.cache_clear()
+    response = {
+        "diffusion.repository.search": {
+            "data": [{"fields": {"callsign": "FIREFOXAUTOLAND"}}]
+        }
+    }
+    monkeypatch.setattr(
+        phab_platform, "get_phabricator_client", lambda: _fake_client(response)
+    )
+    assert phab_platform._repo_callsign("PHID-REPO-autoland") == "FIREFOXAUTOLAND"
+    phab_platform._repo_callsign.cache_clear()
+
+
+def test_repo_callsign_not_found(monkeypatch) -> None:
+    phab_platform._repo_callsign.cache_clear()
+    monkeypatch.setattr(
+        phab_platform,
+        "get_phabricator_client",
+        lambda: _fake_client({"diffusion.repository.search": {"data": []}}),
+    )
+    assert phab_platform._repo_callsign("PHID-REPO-missing") is None
+    phab_platform._repo_callsign.cache_clear()
+
+
+class _FakePatchWithRepo(phab_platform.PhabricatorPatch):
+    def __init__(self, repository_phid=None):
+        self._repository_phid = repository_phid
+
+    @property
+    def _revision_metadata(self):
+        return {"fields": {"repositoryPHID": self._repository_phid}}
+
+
+@pytest.mark.asyncio
+async def test_github_repo_known_callsign(monkeypatch) -> None:
+    phab_platform._repo_callsign.cache_clear()
+    response = {
+        "diffusion.repository.search": {
+            "data": [{"fields": {"callsign": "FIREFOXAUTOLAND"}}]
+        }
+    }
+    monkeypatch.setattr(
+        phab_platform, "get_phabricator_client", lambda: _fake_client(response)
+    )
+
+    patch = _FakePatchWithRepo("PHID-REPO-autoland")
+    assert await patch.github_repo_ref() == ("mozilla-firefox/firefox", "autoland")
+    phab_platform._repo_callsign.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_github_repo_unmapped_callsign(monkeypatch) -> None:
+    phab_platform._repo_callsign.cache_clear()
+    response = {
+        "diffusion.repository.search": {
+            "data": [{"fields": {"callsign": "COMMCENTRAL"}}]
+        }
+    }
+    monkeypatch.setattr(
+        phab_platform, "get_phabricator_client", lambda: _fake_client(response)
+    )
+
+    patch = _FakePatchWithRepo("PHID-REPO-comm")
+    assert await patch.github_repo_ref() is None
+    phab_platform._repo_callsign.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_github_repo_no_repository_phid() -> None:
+    patch = _FakePatchWithRepo(None)
+    assert await patch.github_repo_ref() is None

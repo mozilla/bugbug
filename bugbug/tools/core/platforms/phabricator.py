@@ -33,6 +33,32 @@ REVIEWHELPER_PHID = "PHID-USER-g7c2dpvg7k2uv6gacaqf"
 # Mozilla-operated bot accounts that should be treated as trusted
 TRUSTED_BOT_PHIDS = {REVIEWBOT_PHID, REVIEWHELPER_PHID}
 
+# Maps Phabricator repository callsigns to the (GitHub mirror, branch) where
+# that repo's review-context.toml lives. Repos not listed here have no known
+# GitHub mirror, so no external review context is loaded by default. Some of
+# these review-context.toml files don't exist yet Once one is
+# added the corresponding repo starts working automatically.
+PHABRICATOR_REPO_TO_GITHUB = {
+    "FIREFOXAUTOLAND": ("mozilla-firefox/firefox", "autoland"),
+    "FIREFOXBETA": ("mozilla-firefox/firefox", "beta"),
+    "FIREFOXRELEASE": ("mozilla-firefox/firefox", "release"),
+    "FIREFOXESRONEFOURZERO": ("mozilla-firefox/firefox", "esr140"),
+    "FIREFOXESRONEFIVETHREE": ("mozilla-firefox/firefox", "esr153"),
+    "FIREFOXESRONEONEFIVE": ("mozilla-firefox/firefox", "esr115"),
+    "THUNDERBIRDDESKTOPMAIN": ("thunderbird/thunderbird-desktop", "main"),
+    "THUNDERBIRDDESKTOPBETA": ("thunderbird/thunderbird-desktop", "beta"),
+    "THUNDERBIRDDESKTOPRELEASE": ("thunderbird/thunderbird-desktop", "release"),
+    "THUNDERBIRDDESKTOPESRONEFOURZERO": (
+        "thunderbird/thunderbird-desktop",
+        "esr140",
+    ),
+    "THUNDERBIRDDESKTOPESRONEFIVETHRE": (
+        "thunderbird/thunderbird-desktop",
+        "esr153",
+    ),
+    "NSS": ("mozilla/nss", "master"),
+}
+
 # Messages used when redacting untrusted content
 UNTRUSTED_CONTENT_REDACTED = "[Content from untrusted user removed for security]"
 REDACTED_TITLE = "[Unvalidated revision title redacted for security]"
@@ -85,6 +111,23 @@ def resolve_project_phid(slug: str) -> Optional[str]:
     if not data:
         return None
     return data[0]["phid"]
+
+
+@cache
+def _repo_callsign(repository_phid: str) -> Optional[str]:
+    """Resolve a Phabricator repository PHID to its callsign.
+
+    Cached for the process lifetime; callsigns are effectively static.
+    """
+    phabricator = get_phabricator_client()
+    response = phabricator.request(
+        "diffusion.repository.search",
+        constraints={"phids": [repository_phid]},
+    )
+    data = response.get("data") or []
+    if not data:
+        return None
+    return data[0]["fields"].get("callsign")
 
 
 @cache
@@ -523,6 +566,22 @@ class PhabricatorPatch(Patch):
             return await asyncio.get_event_loop().run_in_executor(None, _fetch)
         except Exception:
             return None
+
+    @alru_cache
+    async def github_repo_ref(self) -> Optional[tuple[str, str]]:
+        repository_phid = self._revision_metadata["fields"].get("repositoryPHID")
+        if not repository_phid:
+            return None
+
+        import asyncio
+
+        callsign = await asyncio.get_event_loop().run_in_executor(
+            None, _repo_callsign, repository_phid
+        )
+        if not callsign:
+            return None
+
+        return PHABRICATOR_REPO_TO_GITHUB.get(callsign)
 
     @property
     def bug_id(self) -> int:
