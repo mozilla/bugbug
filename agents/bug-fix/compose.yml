@@ -20,8 +20,7 @@ services:
     environment:
       - RUN_ID
       - BUG_ID=${BUG_ID:?error}
-      - BUGZILLA_MCP_URL=http://bug-fix-broker:8765/bugzilla/mcp
-      - PHABRICATOR_BROKER_URL=http://bug-fix-broker:8765
+      - BROKER_URL=http://bug-fix-broker:8765
       - REVISION_ID
       - COMMENT
       - SOURCE_REPO=/workspace/firefox

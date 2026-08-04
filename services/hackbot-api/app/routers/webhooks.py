@@ -15,6 +15,10 @@ from phabricator_client import PhabricatorClient
 from app.auth import require_phabricator_signature
 from app.client import HackbotClient
 from app.config import settings
+from app.phabricator_authorization import (
+    AUTHORIZED_GROUP_PHID,
+    PhabricatorAuthorizer,
+)
 from app.phabricator_webhook import (
     detect_mention_and_revision,
     triggering_transaction_phids,
@@ -35,6 +39,18 @@ def get_hackbot_client() -> HackbotClient:
     return HackbotClient(settings.hackbot_api_url, settings.external_api_key)
 
 
+def get_phabricator_authorizer(
+    request: Request,
+    phab_client: PhabricatorClient = Depends(get_phabricator_client),
+) -> PhabricatorAuthorizer:
+    """Dependency: lazily create the app-scoped authorizer and its member cache."""
+    authorizer = getattr(request.app.state, "phabricator_authorizer", None)
+    if authorizer is None:
+        authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
+        request.app.state.phabricator_authorizer = authorizer
+    return authorizer
+
+
 # Best-effort dedupe of retried deliveries, keyed by triggering transaction PHID.
 # Per-instance and reset on restart; a durable dedupe (using the DB) can replace
 # this if needed. Sized well above the number of mentions expected in a window.
@@ -51,6 +67,7 @@ _seen_transactions: TTLCache = TTLCache(
 async def phabricator_webhook(
     request: Request,
     phab_client: PhabricatorClient = Depends(get_phabricator_client),
+    authorizer: PhabricatorAuthorizer = Depends(get_phabricator_authorizer),
     api_client: HackbotClient = Depends(get_hackbot_client),
 ) -> dict:
     payload = await request.json()
@@ -82,6 +99,7 @@ async def phabricator_webhook(
         settings.webhook,
         object_phid,
         fresh,
+        authorizer=authorizer,
     )
     if detected is None:
         return {"status": "ignored", "reason": "no actionable @hackbot mention"}
