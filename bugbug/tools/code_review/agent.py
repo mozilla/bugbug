@@ -226,15 +226,21 @@ class CodeReviewTool(GenerativeModelTool):
     ) -> tuple[list[GeneratedReviewComment], list[dict]]:
         external_context = ""
         manifest: list[dict] = []
-        if self._review_context_repo:
+        review_context_repo = self._review_context_repo
+        review_context_branch = self._review_context_branch
+        if review_context_repo is None:
+            repo_ref = await patch.github_repo_ref()
+            if repo_ref:
+                review_context_repo, review_context_branch = repo_ref
+        if review_context_repo:
             from bugbug.tools.code_review.review_context import (
                 load_external_context_for_review,
             )
 
             external_context, manifest = await load_external_context_for_review(
                 patch,
-                self._review_context_repo,
-                review_context_branch=self._review_context_branch,
+                review_context_repo,
+                review_context_branch=review_context_branch,
                 extra_context_toml=self._extra_context_toml,
                 content_overrides=self._content_overrides,
             )

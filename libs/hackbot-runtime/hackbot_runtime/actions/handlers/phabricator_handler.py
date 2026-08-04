@@ -88,15 +88,14 @@ Bug #: {bug_id}
 """.strip()
 
 
-# Mirrors moz-phab's WIP_RE / revision_title (mozphab.commits): strip any
-# existing WIP prefix, then prepend "WIP: ". Everything hackbot creates is a
-# work-in-progress draft; a human promotes it out of WIP when they take it over.
+# Strip any WIP prefix from agent-provided titles. Phabricator's
+# ``plan-changes`` transaction already represents draft state, so keeping WIP
+# in the visible title only adds cleanup work when promoting to review.
 _WIP_PREFIX_RE = re.compile(r"^(?:WIP[: ]|WIP$)", re.IGNORECASE)
 
 
 def _revision_title(title: str) -> str:
-    title = _WIP_PREFIX_RE.sub("", title) or "WIP"
-    return f"WIP: {title.strip()}"
+    return _WIP_PREFIX_RE.sub("", title).strip()
 
 
 async def _revision_fields(revision_id: int) -> dict:
@@ -151,7 +150,7 @@ def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) 
 
     Mirrors ``Commit.build_arc_commit_message`` + ``amend_revision_url`` so the
     reconstructed commit reads identically to a moz-phab submission. Reviewers
-    are always empty: hackbot never assigns them (WIP submissions omit them).
+    are always empty: hackbot never assigns them (draft submissions omit them).
     """
     body = summary or ""
     if body:
@@ -177,9 +176,9 @@ async def _set_local_commits(
     """Complete and store moz-phab's ``local:commits`` diff property.
 
     The git-derived fields (author/time/tree/parents/node) come from the
-    agent-built artifact; ``summary`` (the resolved, possibly ``WIP:``-prefixed
-    revision title) and the arc-formatted ``message`` are filled in here, since
-    they need the revision URL.
+    agent-built artifact; ``summary`` (the resolved revision title) and the
+    arc-formatted ``message`` are filled in here, since they need the revision
+    URL.
     """
     message = _arc_commit_message(title, summary, bug_id, _revision_url(revision_id))
     for commit_info in local_commits.values():
@@ -240,10 +239,10 @@ class SubmitPatchHandler:
                 **submission["diff"],
             )
 
-            # Reviewers are never assigned by hackbot: a WIP draft gets them at
+            # Reviewers are never assigned by hackbot: a draft gets them at
             # promotion time, and the agent doesn't choose them. A new revision
             # has no status yet, so plan-changes rides this same edit.
-            title = _revision_title(params.get("title") or f"Bug {bug_id}")
+            title = _revision_title(params["title"])
             transactions: list[dict[str, Any]] = [
                 {"type": "update", "value": diff_result["phid"]},
                 {"type": "title", "value": title},

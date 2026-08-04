@@ -7,15 +7,21 @@ from .agent import BugFixResult, run_bug_fix
 
 class AgentInputs(BaseSettings):
     bug_id: int
-    bugzilla_mcp_url: str
+    broker_url: str
     revision_id: int | None = None
     comment: str | None = None
-    phabricator_broker_url: str
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
 
     model_config = SettingsConfigDict(extra="ignore")
+
+    def broker_endpoint(self, path: str) -> str:
+        return f"{self.broker_url.rstrip('/')}/{path.lstrip('/')}"
+
+    @property
+    def bugzilla_mcp_url(self) -> str:
+        return self.broker_endpoint("/bugzilla/mcp")
 
     @property
     def phabricator_mcp_url(self) -> str:
@@ -25,7 +31,7 @@ class AgentInputs(BaseSettings):
         endpoints are served by the same sidecar, so there is nothing for a
         caller to configure independently.
         """
-        return f"{self.phabricator_broker_url.rstrip('/')}/phabricator/mcp"
+        return self.broker_endpoint("/phabricator/mcp")
 
     @model_validator(mode="after")
     def _follow_up_with_comment(self) -> "AgentInputs":
@@ -43,7 +49,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
     inputs = AgentInputs()
 
     if inputs.revision_id:
-        await checkout_revision(ctx, inputs.revision_id, inputs.phabricator_broker_url)
+        await checkout_revision(ctx, inputs.revision_id, inputs.broker_url)
     else:
         await ctx.prepare_repo()
 

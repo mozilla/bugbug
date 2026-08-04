@@ -25,7 +25,7 @@ services:
       - GIT_COMMIT=${GIT_COMMIT:-}
       - FAILURE_TASKS=${FAILURE_TASKS:-}
       - RUN_TRY_PUSH=${RUN_TRY_PUSH:-false}
-      - BUGZILLA_MCP_URL=http://build-repair-broker:8765/mcp
+      - BROKER_URL=http://build-repair-broker:8765
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
       # Weave tracing locally: an API key enables it (deploys use W&B WIF instead).
@@ -56,7 +56,7 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
       - WANDB_API_KEY=${WANDB_API_KEY:-}
-      - BUGZILLA_MCP_URL=http://build-repair-broker:8765/mcp
+      - BROKER_URL=http://build-repair-broker:8765
       - FIREFOX_GIT_REPO=/firefox
     volumes:
       - ${FIREFOX_GIT_REPO:-/firefox}:/firefox

@@ -1,5 +1,4 @@
 import logging
-import os
 import tempfile
 from pathlib import Path
 
@@ -25,19 +24,9 @@ class AgentInputs(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
 
 
-def _pin_checkout(investigation: Investigation) -> None:
-    """Pin the shallow clone to the failure commit, deep enough for the range.
-
-    Read by the runtime when it prepares the source tree
-    (HackbotContext.source_repo).
-    """
-    os.environ.setdefault("SOURCE_REF", investigation.failure_commit)
-    os.environ.setdefault("SOURCE_DEPTH", str(investigation.commit_range.span + 1))
-    logger.info(
-        "Pinning checkout to %s with depth %s",
-        os.environ["SOURCE_REF"],
-        os.environ["SOURCE_DEPTH"],
-    )
+def _checkout_pin(investigation: Investigation) -> tuple[str, int]:
+    """The failure commit and a fetch depth deep enough to reach the range base."""
+    return investigation.failure_commit, investigation.commit_range.span + 1
 
 
 async def main(ctx: HackbotContext) -> TestRepairResult:
@@ -50,7 +39,6 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
     task_id = next(iter(inputs.failure_tasks.values()))
     logger.info("Starting test-repair for task %s", task_id)
     investigation: Investigation = resolve_investigation(task_id)
-    _pin_checkout(investigation)
 
     scratch_dir = Path(tempfile.mkdtemp(prefix="test-repair-"))
     scratch_in = scratch_dir / "in"
@@ -66,9 +54,13 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         if inputs.bugzilla_mcp_url
         else None
     )
+    ref, depth = _checkout_pin(investigation)
+    logger.info("Pinning checkout to %s with depth %s", ref, depth)
+    source_repo = await ctx.prepare_repo(ref=ref, depth=depth)
+
     return await run_test_repair(
         bugzilla_mcp_server=bugzilla_mcp_server,
-        source_repo=ctx.source_repo,
+        source_repo=source_repo,
         fx_ctx=ctx.firefox,
         investigation=investigation,
         task_logs=task_logs,

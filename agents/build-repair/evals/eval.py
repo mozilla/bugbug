@@ -61,11 +61,11 @@ def _collect_diff(worktree_path: Path, base_commit: str) -> str:
 def _bugzilla_server():
     """Bugzilla MCP server for the agent.
 
-    Prefer the broker (``BUGZILLA_MCP_URL``) so the eval container holds no
+    Prefer the broker (``BROKER_URL``) so the eval container holds no
     Bugzilla credentials -- same isolation as production. Falls back to an
     in-process server for local runs without a broker.
     """
-    mcp_url = os.environ.get("BUGZILLA_MCP_URL")
+    mcp_url = _broker_mcp_url()
     if mcp_url:
         return {"type": "http", "url": mcp_url}
     client = bugsy.Bugsy(
@@ -75,6 +75,14 @@ def _bugzilla_server():
         api_key=os.environ.get("BUGZILLA_API_KEY"),
     )
     return build_sdk_server("bugzilla", BugzillaContext(client=client), bugzilla.TOOLS)
+
+
+def _broker_mcp_url() -> str | None:
+    broker_url = os.environ.get("BROKER_URL")
+    if not broker_url:
+        # fall back to in-process Bugzilla server for local runs without a broker
+        return None
+    return f"{broker_url.rstrip('/')}/mcp"
 
 
 class BuildRepairModel(weave.Model):

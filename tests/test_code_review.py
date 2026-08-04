@@ -1352,3 +1352,87 @@ def test_run_appends_scope_suggestion_last():
     last = result.review_comments[-1]
     assert last.content == "Split this patch into smaller pieces"
     assert last.order == 2
+
+
+# ---------------------------------------------------------------------------
+# review_context_repo default: falls back to patch.github_repo_ref()
+# ---------------------------------------------------------------------------
+
+
+def _make_review_tool(review_context_repo=None):
+    """Build a CodeReviewTool without running __init__ (avoids create_agent)."""
+    pytest.importorskip("langchain")
+    from bugbug.tools.code_review.agent import AgentResponse, CodeReviewTool
+
+    tool = CodeReviewTool.__new__(CodeReviewTool)
+    tool.target_software = "Mozilla Firefox"
+    tool.is_experiment_env = False
+    tool.review_comments_db = None
+    tool.show_patch_example = False
+    tool._review_context_repo = review_context_repo
+    tool._review_context_branch = "main"
+    tool._extra_context_toml = None
+    tool._content_overrides = None
+
+    async def fake_astream(*args, **kwargs):
+        yield {"structured_response": AgentResponse(comments=[])}
+
+    tool.agent = SimpleNamespace(astream=fake_astream)
+    return tool
+
+
+def _make_review_patch(github_repo_ref_return=None):
+    patch_set = PatchSet.from_string("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,1 @@\n+a\n")
+    return SimpleNamespace(
+        raw_diff="diff",
+        patch_set=patch_set,
+        github_repo_ref=AsyncMock(return_value=github_repo_ref_return),
+    )
+
+
+def test_generate_review_comments_falls_back_to_patch_github_repo():
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch(
+        github_repo_ref_return=("mozilla-firefox/firefox", "autoland"),
+    )
+
+    with patch(
+        "bugbug.tools.code_review.review_context.load_external_context_for_review",
+        new=AsyncMock(return_value=("<external_context/>", [{"name": "x"}])),
+    ) as loader:
+        asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
+
+    fake_patch.github_repo_ref.assert_awaited_once()
+    loader.assert_awaited_once()
+    assert loader.await_args.args[1] == "mozilla-firefox/firefox"
+    assert loader.await_args.kwargs["review_context_branch"] == "autoland"
+
+
+def test_generate_review_comments_explicit_repo_skips_patch_lookup():
+    tool = _make_review_tool(review_context_repo="explicit/repo")
+    fake_patch = _make_review_patch(
+        github_repo_ref_return=("mozilla-firefox/firefox", "main")
+    )
+
+    with patch(
+        "bugbug.tools.code_review.review_context.load_external_context_for_review",
+        new=AsyncMock(return_value=("<external_context/>", [])),
+    ) as loader:
+        asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
+
+    fake_patch.github_repo_ref.assert_not_awaited()
+    assert loader.await_args.args[1] == "explicit/repo"
+
+
+def test_generate_review_comments_no_repo_configured_or_known():
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch(github_repo_ref_return=None)
+
+    with patch(
+        "bugbug.tools.code_review.review_context.load_external_context_for_review",
+        new=AsyncMock(return_value=("", [])),
+    ) as loader:
+        asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
+
+    fake_patch.github_repo_ref.assert_awaited_once()
+    loader.assert_not_awaited()

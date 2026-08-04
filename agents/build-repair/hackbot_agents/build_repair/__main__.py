@@ -9,7 +9,7 @@ class AgentInputs(BaseSettings):
     failure_tasks: dict[str, str]
     git_commit: str | None = None
     bug_id: int | None = None
-    bugzilla_mcp_url: str
+    broker_url: str
     run_try_push: bool = False
     model: str | None = None
     max_turns: int | None = None
@@ -17,6 +17,10 @@ class AgentInputs(BaseSettings):
     # Compose passes unset per-run inputs as empty strings (``${BUG_ID:-}``);
     # treat those as absent so optional fields fall back to their defaults.
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
+
+    @property
+    def bugzilla_mcp_url(self) -> str:
+        return f"{self.broker_url.rstrip('/')}/mcp"
 
 
 async def main(ctx: HackbotContext) -> BuildRepairResult:
