@@ -178,12 +178,12 @@ export function RunDetail({ runId }: { runId: string }) {
 
   const canRetrigger = isFailed(run.status);
   const retriggerLabel = retriggering
-    ? "Currently re-running"
+    ? "Currently retriggering"
     : canRetrigger
-      ? "Re-run with same inputs"
+      ? "Retrigger with same inputs"
       : run.status === "succeeded"
-        ? "Run succeeded, cannot re-run"
-        : "Run in progress, cannot re-run";
+        ? "Run succeeded, cannot retrigger"
+        : "Run in progress, cannot retrigger";
 
   return (
     <>
@@ -203,7 +203,7 @@ export function RunDetail({ runId }: { runId: string }) {
 
       {error && <div className="error-banner">Refresh error: {error}</div>}
       {retriggerError && (
-        <div className="error-banner">Re-run failed: {retriggerError}</div>
+        <div className="error-banner">Retrigger failed: {retriggerError}</div>
       )}
 
       <div className="panel">

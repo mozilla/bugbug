@@ -24,7 +24,9 @@ export async function POST(
     const doc = await getRun(runId);
     if (!isFailed(doc.status)) {
       return NextResponse.json(
-        { error: `Only failed runs can be re-run (this one is ${doc.status})` },
+        {
+          error: `Only failed runs can be retriggered (this one is ${doc.status})`,
+        },
         { status: 409 }
       );
     }
