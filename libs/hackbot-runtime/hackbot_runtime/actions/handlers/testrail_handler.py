@@ -83,17 +83,13 @@ def _case_payload(
 
 
 def _separated_steps(test_case: dict[str, Any]) -> list[dict[str, str]]:
-    separated_steps = []
-    for step in test_case.get("steps", []):
-        expectation = step.get("expectation")
-        separated_steps.append(
-            {
-                "content": str(step["action"]),
-                "expected": "" if expectation is None else str(expectation),
-            }
-        )
-
-    return separated_steps
+    return [
+        {
+            "content": str(step["action"]),
+            "expected": str(step.get("expectation") or ""),
+        }
+        for step in test_case.get("steps", [])
+    ]
 
 
 class SubmitTestPlanHandler:

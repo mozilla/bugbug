@@ -11,6 +11,7 @@ interface GeneratedTestCase {
 
 interface TestStep {
   action: string;
+  expectation: string | null;
 }
 
 interface TestCaseResult {
@@ -32,10 +33,19 @@ function isStatus(value: unknown): value is TestCaseStatus {
 }
 
 function parseStep(value: unknown): TestStep | null {
+  // Accept legacy string only steps for old run summaries while normalizing new
+  // step objects to the action/expectation shape rendered by this view.
+  if (typeof value === "string") {
+    return { action: value, expectation: null };
+  }
   if (!isPlainObject(value) || typeof value.action !== "string") {
     return null;
   }
-  return { action: value.action };
+  return {
+    action: value.action,
+    expectation:
+      typeof value.expectation === "string" ? value.expectation : null,
+  };
 }
 
 function isTestStep(value: TestStep | null): value is TestStep {
@@ -148,7 +158,15 @@ export function TestPlanView({ testPlan }: { testPlan: TestPlan }) {
               <h4>Test steps</h4>
               <ol className="test-step-list">
                 {testCase.steps.map((step, index) => (
-                  <li key={index}>{step.action}</li>
+                  <li key={index}>
+                    <p>{step.action}</p>
+                    {step.expectation && (
+                      <div className="test-step-expectation">
+                        <strong>Expected</strong>
+                        <p>{step.expectation}</p>
+                      </div>
+                    )}
+                  </li>
                 ))}
               </ol>
             </li>
