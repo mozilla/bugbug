@@ -32,9 +32,6 @@ function isStatus(value: unknown): value is TestCaseStatus {
 }
 
 function parseStep(value: unknown): TestStep | null {
-  if (typeof value === "string") {
-    return { action: value };
-  }
   if (!isPlainObject(value) || typeof value.action !== "string") {
     return null;
   }
