@@ -454,7 +454,7 @@ def test_historical_falls_back_on_transaction_error() -> None:
 
 
 # ---------------------------------------------------------------------------
-# PhabricatorPatch.github_repo() -> review_context_repo default
+# PhabricatorPatch.github_repo_ref() -> review_context_repo/branch defaults
 # ---------------------------------------------------------------------------
 
 
@@ -505,8 +505,7 @@ async def test_github_repo_known_callsign(monkeypatch) -> None:
     )
 
     patch = _FakePatchWithRepo("PHID-REPO-autoland")
-    assert await patch.github_repo() == "mozilla-firefox/firefox"
-    assert await patch.github_repo_branch() == "autoland"
+    assert await patch.github_repo_ref() == ("mozilla-firefox/firefox", "autoland")
     phab_platform._repo_callsign.cache_clear()
 
 
@@ -523,13 +522,11 @@ async def test_github_repo_unmapped_callsign(monkeypatch) -> None:
     )
 
     patch = _FakePatchWithRepo("PHID-REPO-comm")
-    assert await patch.github_repo() is None
-    assert await patch.github_repo_branch() == "main"
+    assert await patch.github_repo_ref() is None
     phab_platform._repo_callsign.cache_clear()
 
 
 @pytest.mark.asyncio
 async def test_github_repo_no_repository_phid() -> None:
     patch = _FakePatchWithRepo(None)
-    assert await patch.github_repo() is None
-    assert await patch.github_repo_branch() == "main"
+    assert await patch.github_repo_ref() is None

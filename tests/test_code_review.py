@@ -1355,7 +1355,7 @@ def test_run_appends_scope_suggestion_last():
 
 
 # ---------------------------------------------------------------------------
-# review_context_repo default: falls back to patch.github_repo()
+# review_context_repo default: falls back to patch.github_repo_ref()
 # ---------------------------------------------------------------------------
 
 
@@ -1381,21 +1381,19 @@ def _make_review_tool(review_context_repo=None):
     return tool
 
 
-def _make_review_patch(github_repo_return=None, github_repo_branch_return="main"):
+def _make_review_patch(github_repo_ref_return=None):
     patch_set = PatchSet.from_string("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,1 @@\n+a\n")
     return SimpleNamespace(
         raw_diff="diff",
         patch_set=patch_set,
-        github_repo=AsyncMock(return_value=github_repo_return),
-        github_repo_branch=AsyncMock(return_value=github_repo_branch_return),
+        github_repo_ref=AsyncMock(return_value=github_repo_ref_return),
     )
 
 
 def test_generate_review_comments_falls_back_to_patch_github_repo():
     tool = _make_review_tool(review_context_repo=None)
     fake_patch = _make_review_patch(
-        github_repo_return="mozilla-firefox/firefox",
-        github_repo_branch_return="autoland",
+        github_repo_ref_return=("mozilla-firefox/firefox", "autoland"),
     )
 
     with patch(
@@ -1404,8 +1402,7 @@ def test_generate_review_comments_falls_back_to_patch_github_repo():
     ) as loader:
         asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
 
-    fake_patch.github_repo.assert_awaited_once()
-    fake_patch.github_repo_branch.assert_awaited_once()
+    fake_patch.github_repo_ref.assert_awaited_once()
     loader.assert_awaited_once()
     assert loader.await_args.args[1] == "mozilla-firefox/firefox"
     assert loader.await_args.kwargs["review_context_branch"] == "autoland"
@@ -1413,7 +1410,9 @@ def test_generate_review_comments_falls_back_to_patch_github_repo():
 
 def test_generate_review_comments_explicit_repo_skips_patch_lookup():
     tool = _make_review_tool(review_context_repo="explicit/repo")
-    fake_patch = _make_review_patch(github_repo_return="mozilla-firefox/firefox")
+    fake_patch = _make_review_patch(
+        github_repo_ref_return=("mozilla-firefox/firefox", "main")
+    )
 
     with patch(
         "bugbug.tools.code_review.review_context.load_external_context_for_review",
@@ -1421,14 +1420,13 @@ def test_generate_review_comments_explicit_repo_skips_patch_lookup():
     ) as loader:
         asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
 
-    fake_patch.github_repo.assert_not_awaited()
-    fake_patch.github_repo_branch.assert_not_awaited()
+    fake_patch.github_repo_ref.assert_not_awaited()
     assert loader.await_args.args[1] == "explicit/repo"
 
 
 def test_generate_review_comments_no_repo_configured_or_known():
     tool = _make_review_tool(review_context_repo=None)
-    fake_patch = _make_review_patch(github_repo_return=None)
+    fake_patch = _make_review_patch(github_repo_ref_return=None)
 
     with patch(
         "bugbug.tools.code_review.review_context.load_external_context_for_review",
@@ -1436,5 +1434,5 @@ def test_generate_review_comments_no_repo_configured_or_known():
     ) as loader:
         asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
 
-    fake_patch.github_repo.assert_awaited_once()
+    fake_patch.github_repo_ref.assert_awaited_once()
     loader.assert_not_awaited()

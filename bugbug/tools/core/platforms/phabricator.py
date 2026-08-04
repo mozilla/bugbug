@@ -568,7 +568,7 @@ class PhabricatorPatch(Patch):
             return None
 
     @alru_cache
-    async def _github_mirror(self) -> Optional[tuple[str, str]]:
+    async def github_repo_ref(self) -> Optional[tuple[str, str]]:
         repository_phid = self._revision_metadata["fields"].get("repositoryPHID")
         if not repository_phid:
             return None
@@ -582,14 +582,6 @@ class PhabricatorPatch(Patch):
             return None
 
         return PHABRICATOR_REPO_TO_GITHUB.get(callsign)
-
-    async def github_repo(self) -> Optional[str]:
-        mirror = await self._github_mirror()
-        return mirror[0] if mirror else None
-
-    async def github_repo_branch(self) -> str:
-        mirror = await self._github_mirror()
-        return mirror[1] if mirror else "main"
 
     @property
     def bug_id(self) -> int:

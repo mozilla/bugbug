@@ -229,9 +229,9 @@ class CodeReviewTool(GenerativeModelTool):
         review_context_repo = self._review_context_repo
         review_context_branch = self._review_context_branch
         if review_context_repo is None:
-            review_context_repo = await patch.github_repo()
-            if review_context_repo:
-                review_context_branch = await patch.github_repo_branch()
+            repo_ref = await patch.github_repo_ref()
+            if repo_ref:
+                review_context_repo, review_context_branch = repo_ref
         if review_context_repo:
             from bugbug.tools.code_review.review_context import (
                 load_external_context_for_review,

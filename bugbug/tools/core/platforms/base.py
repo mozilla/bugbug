@@ -77,20 +77,14 @@ class Patch(ABC):
         """Return 'Product::Component' for the associated bug, or None."""
         return None
 
-    async def github_repo(self) -> Optional[str]:
-        """Return the 'org/project' GitHub mirror of the patch's source repo, or None.
+    async def github_repo_ref(self) -> Optional[tuple[str, str]]:
+        """Return the ('org/project', branch) of the patch's GitHub mirror, or None.
 
-        Used as the default `review_context_repo` when the caller doesn't
-        pass one explicitly.
+        The branch is the one holding review-context.toml. Used as the
+        default `review_context_repo`/`review_context_branch` when the
+        caller doesn't pass them explicitly.
         """
         return None
-
-    async def github_repo_branch(self) -> str:
-        """Return the branch of `github_repo()` holding review-context.toml.
-
-        Only consulted when `github_repo()` returns non-None.
-        """
-        return "main"
 
     @abstractmethod
     async def get_base_revision(self) -> Optional[str]:
