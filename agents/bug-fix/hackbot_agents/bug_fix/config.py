@@ -10,6 +10,13 @@ BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__download_attachment",
 ]
 
+# Phabricator MCP tool names as exposed to the agent (mcp__<server>__<tool>).
+PHABRICATOR_READ_TOOLS = [
+    "mcp__phabricator__get_revision",
+    "mcp__phabricator__get_revision_comments",
+    "mcp__phabricator__get_revision_diff",
+]
+
 # Action types that the agent may record during triage/fix runs.
 TRIAGE_AND_FIX_ACTIONS = [
     "bugzilla.update_bug",

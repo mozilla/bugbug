@@ -56,7 +56,15 @@ async def test_add_comment_handler_builds_comment_body(monkeypatch):
     await bugzilla_handler.AddCommentHandler().apply(
         {"bug_id": 5, "text": "hi", "is_private": True}, _ctx()
     )
-    assert calls == [("PUT", "bug/5", {"comment": {"body": "hi", "is_private": True}})]
+    # is_markdown is always set: agents author Markdown (permalinks, the italic
+    # footer), and without the flag Bugzilla renders the markup literally.
+    assert calls == [
+        (
+            "PUT",
+            "bug/5",
+            {"comment": {"body": "hi", "is_private": True, "is_markdown": True}},
+        )
+    ]
 
 
 async def test_add_attachment_handler_downloads_and_base64_encodes(monkeypatch):
@@ -186,7 +194,7 @@ def test_merge_resolved_combines_changes_and_single_comment():
     assert bugzilla_handler.merge_resolved(entries) == {
         "bug_id": 5,
         "changes": {"a": 2, "b": 3},  # later update wins on conflict
-        "comment": {"body": "hi", "is_private": True},
+        "comment": {"body": "hi", "is_private": True, "is_markdown": True},
     }
 
 

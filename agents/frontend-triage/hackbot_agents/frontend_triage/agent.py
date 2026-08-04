@@ -32,6 +32,14 @@ from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
+from hackbot_runtime.searchfox import (
+    PLACEHOLDER as SEARCHFOX_PLACEHOLDER,
+)
+from hackbot_runtime.searchfox import (
+    permalink_hook,
+    permalink_prefix,
+    resolve_index_revision,
+)
 from searchfox import AsyncSearchfoxClient
 
 from .config import (
@@ -67,12 +75,40 @@ class FrontendTriageResult(HackbotAgentResult):
     result: str | None = None
 
 
+# How to cite a source file in the recorded comment. Injected into system.md
+# rather than written there literally, because the template is run through
+# str.format and the placeholder's braces would need doubling twice over in the
+# prompt file; a substituted value passes through untouched.
+_EXAMPLE_PATH = "browser/components/tabbrowser/content/tabgroup.js"
+SEARCHFOX_LINKS_PROMPT = (
+    "Every source file you reference in your Bugzilla comment must be an inline "
+    f"Markdown link built from the `{SEARCHFOX_PLACEHOLDER}` placeholder, which "
+    "is expanded into a revision-pinned Searchfox URL when your comment is "
+    "recorded:\n\n"
+    f"    [{_EXAMPLE_PATH}]({SEARCHFOX_PLACEHOLDER}/{_EXAMPLE_PATH})\n\n"
+    "- Write the placeholder **literally**. Do not put a revision, `tip` or "
+    "`HEAD` in it, and do not write a searchfox.org URL yourself — you do not "
+    "know which revision is being linked.\n"
+    "- After it, give the repo-relative path, plus a line anchor when you know "
+    "the line: `#1234`, or `#1234-1250` for a range. No `L` prefix.\n"
+    "- Use the path as the link text, without backticks — backticked text does "
+    "not render as a link.\n"
+    "- Leave the paths in the trailing ```json plan block as **bare paths** — "
+    "that block is parsed by a downstream tool, and a link there would corrupt "
+    "it.\n"
+    "- Only cite a path you have confirmed exists (Read/Glob it, or take it from "
+    "a Searchfox result). A path that is not in the checkout is stripped back to "
+    "plain text rather than linked, so guessing costs you the link."
+)
+
+
 def load_system_prompt(rules_dir: Path, extra: str) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
     return tmpl.format(
         rules_dir=str(rules_dir.resolve()),
         extra_instructions=extra or "(none)",
+        searchfox_links=SEARCHFOX_LINKS_PROMPT,
     )
 
 
@@ -182,6 +218,21 @@ async def run_frontend_triage(
         "searchfox", SearchfoxContext(client=AsyncSearchfoxClient()), searchfox.TOOLS
     )
     vcs_server = build_sdk_server("mozilla_vcs", MozillaVcsContext(), mozilla_vcs.TOOLS)
+
+    # Pin every source-file reference in the recorded comment to one revision.
+    # The agent writes a placeholder (see SEARCHFOX_LINKS_PROMPT) that this hook
+    # expands as the comment is recorded, so the agent never handles the SHA. An
+    # unresolvable revision degrades to revision-agnostic /source/ links.
+    searchfox_rev = await resolve_index_revision()
+    if not searchfox_rev:
+        print(
+            "[frontend_triage] no searchfox revision; linking tip-of-tree",
+            file=sys.stderr,
+        )
+    actions_recorder.add_hook(
+        "bugzilla.add_comment",
+        permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
+    )
 
     system_prompt = load_system_prompt(rules_dir, instructions)
 
