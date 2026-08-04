@@ -1,33 +1,43 @@
-// REFERENCE — write your own script in this shape; don't copy this comment.
+// REFERENCE — use this structure, but replace this comment.
 //
-// Fill in `probe` (run the steps, return measurements) and `reproduced` (assert
-// broken in Firefox AND working in Chrome). Keep the rest as-is. Add a comment in
-// your script covering the bug data, the expected behaviour, and what breaks in Firefox.
+// This script checks whether one browser behaves as expected. Implement `probe`
+// to perform the test and return the relevant observations, and `isWorking` to
+// decide whether the expected behaviour occurred. Keep the rest of the script
+// unchanged.
 //
-// Run:
-//   FIREFOX_BIN=/path/to/firefox CHROME_BIN=/path/to/chrome node this-script.mjs
+// In your script, include a comment describing the reported bug, the expected
+// behaviour, and how Firefox differs. Write `isWorking` to verify the expected
+// behaviour itself, not just the absence of the reported symptom.
 //
-// Exit code:
-// 0 = Firefox-specific breakage reproduced: broken in Firefox, working in Chrome.
-// 1 = no Firefox-specific breakage: it worked in both, broke in both, or only Chrome broke.
-// 2 = no verdict — a browser wouldn't launch, or the script itself broke.
+// Run the script once per browser:
+//   BROWSER=firefox BROWSER_BIN=/path/to/firefox node this-script.mjs
+//   BROWSER=chrome  BROWSER_BIN=/path/to/chrome  node this-script.mjs
+//
+// Exit codes:
+//   0 = worked as expected
+//   1 = did not work as expected
+//   2 = no verdict because the browser or script failed
 
 import puppeteer from "puppeteer";
 
-const { FIREFOX_BIN, CHROME_BIN } = process.env;
-if (!FIREFOX_BIN || !CHROME_BIN) {
-  console.error("set FIREFOX_BIN and CHROME_BIN to the browser binaries");
+const { BROWSER, BROWSER_BIN } = process.env;
+if (BROWSER !== "firefox" && BROWSER !== "chrome") {
+  console.error("set BROWSER to firefox or chrome");
+  process.exit(2);
+}
+if (!BROWSER_BIN) {
+  console.error("set BROWSER_BIN to the browser binary");
   process.exit(2);
 }
 
 const TARGET = "https://example.com/";
 
-async function probe(name, executablePath) {
+async function probe() {
   const browser = await puppeteer.launch({
-    browser: name,
-    executablePath,
+    browser: BROWSER,
+    executablePath: BROWSER_BIN,
     headless: true,
-    ...(name === "chrome" ? { args: ["--no-sandbox"] } : {}),
+    ...(BROWSER === "chrome" ? { args: ["--no-sandbox"] } : {}),
   });
   try {
     const page = await browser.newPage();
@@ -40,29 +50,25 @@ async function probe(name, executablePath) {
   }
 }
 
-function reproduced(ff, cr) {
+function isWorking(state) {
   return false;
 }
 
 const RUNS = 3;
 
-let reproductions = 0;
+let workingRuns = 0;
 try {
   for (let i = 1; i <= RUNS; i++) {
-    const ff = await probe("firefox", FIREFOX_BIN);
-    const cr = await probe("chrome", CHROME_BIN);
-    const ok = reproduced(ff, cr);
-    if (ok) reproductions++;
-    console.log(
-      `Run ${i}: firefox=${JSON.stringify(ff)} chrome=${JSON.stringify(
-        cr
-      )} reproduced=${ok}`
-    );
+    const state = await probe();
+    const working = isWorking(state);
+    if (working) workingRuns++;
+    console.log(`Run ${i}: ${JSON.stringify(state)} working=${working}`);
   }
 } catch (error) {
   console.error("FATAL:", error);
   process.exit(2);
 }
 
-console.log(`\nReproduced ${reproductions}/${RUNS} runs.`);
-process.exit(reproductions === RUNS ? 0 : 1);
+console.log(`\n${BROWSER}: worked in ${workingRuns}/${RUNS} runs.`);
+
+process.exit(workingRuns === RUNS ? 0 : 1);

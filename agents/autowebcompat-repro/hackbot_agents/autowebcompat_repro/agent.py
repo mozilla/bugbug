@@ -240,7 +240,7 @@ class Task(ABC, Generic[ResultT]):
 
 
 def run_confirmation_script(
-    script_path: Path, firefox_path: Path, chrome_path: Path
+    script_path: Path, firefox_path: Path
 ) -> ReproductionResult | None:
     script_timeout = 5 * 60
     try:
@@ -248,8 +248,8 @@ def run_confirmation_script(
             ["node", str(script_path)],
             env={
                 **os.environ,
-                "FIREFOX_BIN": str(firefox_path),
-                "CHROME_BIN": str(chrome_path),
+                "BROWSER": "firefox",
+                "BROWSER_BIN": str(firefox_path),
             },
             capture_output=True,
             text=True,
@@ -265,7 +265,7 @@ def run_confirmation_script(
         proc.stdout,
         proc.stderr,
     )
-    if proc.returncode == 0:
+    if proc.returncode == 1:
         return ReproductionResult(
             confirmed_by_script=True,
             reproduced=True,
@@ -418,13 +418,17 @@ class BugReproduction(Task):
    `{repro_reference}`, write your script to exactly `{self.script_path}`
    (read the file before writing), then run it with
 
-   `FIREFOX_BIN={self.firefox_path} CHROME_BIN={self.chrome_path} node {self.script_path}`
+   `BROWSER=firefox BROWSER_BIN={self.firefox_path} node {self.script_path}`
+   `BROWSER=chrome BROWSER_BIN={self.chrome_path} node {self.script_path}`
 
-   On exit 0, set `script_path` to that path and `confirmed_by_script` to true.
-   Otherwise revise and re-run until the script both executes cleanly and
-   demonstrates the difference. If you're unable to do so, leave `script_path`
-   null and `confirmed_by_script` false, and judge the reproduction on the
-   evidence you gathered in steps 2 and 3.
+   The script checks one browser per run: the difference is demonstrated
+   when the Firefox run exits with 1 (not working) and the Chrome run exits with
+   0 (working).
+   When you get these exit codes exactly, set `script_path` to that path and
+   `confirmed_by_script` to true. Otherwise revise and re-run until both runs
+   execute cleanly and show that difference. If you're unable to get there,
+   leave `script_path` null and `confirmed_by_script` false, and judge
+   the reproduction on the evidence you gathered in steps 2 and 3.
 5. If the issue reproduces AND the breakage is visual in nature (incorrect
    layout or rendering, not broken interaction), capture a screenshot in Firefox
    showing it: call `screenshot_page` with `saveTo` set to
@@ -756,7 +760,7 @@ async def run_autowebcompat_repro(
         else:
             if initial_repro.script_path is not None:
                 script_result = run_confirmation_script(
-                    initial_repro.script_path, browser, chrome_browser.stable
+                    initial_repro.script_path, browser
                 )
                 if script_result is not None:
                     repro_results.set_result(channel, extra, script_result)
