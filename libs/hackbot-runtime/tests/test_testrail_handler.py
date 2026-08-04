@@ -19,14 +19,25 @@ def _plan():
                 "title": "The PDF opens",
                 "context": "content",
                 "preconditions": "A PDF is available.",
-                "steps": ["Open the PDF", "Select some text"],
+                "steps": [
+                    {"action": "Open the PDF", "expectation": None},
+                    {
+                        "action": "Select some text",
+                        "expectation": "Text selection is highlighted in the PDF.",
+                    },
+                ],
             },
             {
                 "id": 2,
                 "title": "The toolbar remains available",
                 "context": "chrome",
                 "preconditions": None,
-                "steps": ["Open the toolbar"],
+                "steps": [
+                    {
+                        "action": "Open the toolbar",
+                        "expectation": "The toolbar remains visible and usable.",
+                    },
+                ],
             },
         ],
         "results": [
@@ -143,9 +154,28 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         "custom_preconds": "A PDF is available.",
         "custom_steps_separated": [
             {"content": "Open the PDF", "expected": ""},
-            {"content": "Select some text", "expected": ""},
+            {
+                "content": "Select some text",
+                "expected": "Text selection is highlighted in the PDF.",
+            },
         ],
     }
+
+
+def test_separated_steps_maps_expectations_from_step_objects():
+    assert testrail_handler._separated_steps(
+        {
+            "steps": [
+                {"action": "Open the PDF", "expectation": None},
+                {"action": "Select text", "expectation": ""},
+                {"action": "Copy text", "expectation": "Text is copied."},
+            ],
+        }
+    ) == [
+        {"content": "Open the PDF", "expected": ""},
+        {"content": "Select text", "expected": ""},
+        {"content": "Copy text", "expected": "Text is copied."},
+    ]
 
 
 async def test_submit_test_plan_reports_api_failure(monkeypatch):
