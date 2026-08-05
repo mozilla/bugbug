@@ -163,7 +163,7 @@ def test_culprit_runs_fix_stage(tmp_path, monkeypatch):
         [
             {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.9},
             {
-                "recommendation": "land_fix",
+                "recommendation": "backout",
                 "culprit_commit": "HEAD",
                 "confidence": 0.9,
                 "proposed_patch": True,
@@ -174,7 +174,7 @@ def test_culprit_runs_fix_stage(tmp_path, monkeypatch):
     assert len(calls) == 2  # analysis + fix
     assert result.classification == "regression"
     assert result.culprit_commit == head
-    assert result.recommendation == "land_fix"
+    assert result.recommendation == "backout"
     assert result.proposed_patch is True
     assert result.last_green_revision == "greenhg"
     assert result.num_turns == 6
@@ -216,14 +216,14 @@ def test_fix_stage_verdict_rewrite_keeps_analysis_culprit(tmp_path, monkeypatch)
                 "culprit_bug": 123,
                 "confidence": 0.9,
             },
-            {"recommendation": "land_fix", "proposed_patch": True},
+            {"recommendation": "backout", "proposed_patch": True},
         ],
         monkeypatch,
     )
     assert result.culprit_commit == head
     assert result.culprit_bug == 123
     assert result.confidence == 0.9
-    assert result.recommendation == "land_fix"
+    assert result.recommendation == "backout"
 
 
 def test_failed_fix_stage_still_publishes_analysis(tmp_path, monkeypatch):
@@ -324,7 +324,7 @@ def test_coerce_recommendation_defaults_by_classification():
     assert (
         agent._coerce_recommendation("bogus", "intermittent", False) == "do_not_backout"
     )
-    assert agent._coerce_recommendation("land_fix", "regression", True) == "land_fix"
+    assert agent._coerce_recommendation("nonsense", "regression", True) == "backout"
     # "backout" is meaningless without a commit to back out.
     assert agent._coerce_recommendation("backout", "regression", False) == (
         "do_not_backout"
@@ -588,3 +588,25 @@ def test_prompt_omits_the_treeherder_line_without_matched_bugs(tmp_path, monkeyp
     # Treeherder matches nothing for plenty of failures; the prompt must not say so.
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
     assert "Treeherder already matches" not in calls[0]
+
+
+def test_analysis_prompt_frames_the_recommendation_as_the_sheriff_action(
+    tmp_path, monkeypatch
+):
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert '"backout", "do_not_backout" or "rerun"' in _flat(calls[0])
+    assert "land_fix" not in calls[0]
+    assert "sheriff's action" in calls[0]
+
+
+def test_fix_prompt_keeps_the_backout_and_asks_for_a_squashed_reland(
+    tmp_path, monkeypatch
+):
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
+        monkeypatch,
+    )
+    assert "squash" in calls[1]
+    assert "not a follow-up" in _flat(calls[1])
+    assert 'leave "recommendation" as "backout"' in _flat(calls[1])

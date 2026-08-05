@@ -64,13 +64,13 @@ from .prompts import (
 from .resolve import CommitRange, Investigation
 
 _CLASSIFICATIONS = ("regression", "intermittent")
-_RECOMMENDATIONS = ("backout", "do_not_backout", "land_fix", "rerun")
+_RECOMMENDATIONS = ("backout", "do_not_backout", "rerun")
 _SANITIZER_OPTIONS = {"asan": "address-sanitizer", "tsan": "thread-sanitizer"}
 
 
 class TestRepairResult(HackbotAgentResult):
     classification: Literal["regression", "intermittent"]
-    recommendation: Literal["backout", "do_not_backout", "land_fix", "rerun"]
+    recommendation: Literal["backout", "do_not_backout", "rerun"]
     culprit_commit: str | None = None
     # Ranked commits that could not be ruled out, when no single culprit convinced
     # the agent; lets sheriffs retrigger just these instead of backfilling.

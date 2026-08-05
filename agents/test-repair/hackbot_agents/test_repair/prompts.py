@@ -58,8 +58,11 @@ Do the following:
      candidate list above, or null if none is convincing), "candidate_commits"
      (see below), "culprit_bug" (integer or null), "intermittent_bug" (integer or
      null; the bug already tracking this intermittent, if you found one),
-     "recommendation" ("backout", "land_fix", "do_not_backout" or "rerun") and
-     "confidence" (0.0-1.0).
+     "recommendation" ("backout", "do_not_backout" or "rerun") and "confidence"
+     (0.0-1.0).
+
+"recommendation" is the sheriff's action, not advice for the developer. A genuine
+regression is always "backout"; there is no "land a fix instead".
 
 Set "candidate_commits" whenever you are not confident in a single culprit: up to
 {max_candidates} full shas from the range, most to least likely, so sheriffs can
@@ -108,6 +111,10 @@ FIX_TEMPLATE = """\
 You determined that commit {culprit_commit} regressed the failing test(s).
 Propose a minimal source patch that fixes the failure.
 
+The recommendation stays "backout". The patch is advice for the commit's author to
+squash into their existing patches and reland, so write it as a change to the
+original patch, not a follow-up on top of it.
+
 The source tree is at {source_repo} (your working directory); the scratch paths
 below are outside it -- `cd {source_repo}` to return. Search it with `git grep`,
 never `grep -r`: the tree is enormous and a recursive walk hits the Bash timeout.
@@ -116,8 +123,8 @@ never `grep -r`: the tree is enormous and a recursive walk hits the Bash timeout
    {scratch_out}/analysis.md.
 {verify_step}
 3. Update {scratch_out}/verdict.json in place, preserving every key it already
-   has: set "proposed_patch" to true if you made a fix, and set "recommendation"
-   to "land_fix" only if you are confident in the fix; otherwise keep "backout".
+   has: set "proposed_patch" to true if you made a fix, and leave "recommendation"
+   as "backout".
 
 Keep the patch minimal and focused on the regression.
 """
@@ -138,7 +145,8 @@ VERIFY_REMOTE = """\
    {platform}, so a failure here is real evidence the patch is wrong or breaks
    Linux, while a pass proves nothing about {platform} -- the test may even be
    skipped or absent here. Report a pass as "not verified" rather than as
-   verification, and do not set "land_fix" on the strength of it alone."""
+   verification, and say so in summary.md so the developer knows the patch is
+   unproven on the platform that failed."""
 
 # The image ships Xvfb, Firefox's runtime libraries and fonts, and bootstrap has
 # already run, so GUI harnesses are runnable -- but it is Debian, not CI's image.
