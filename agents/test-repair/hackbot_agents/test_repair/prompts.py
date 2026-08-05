@@ -154,6 +154,11 @@ VERIFY_REMOTE = """\
    verification, and say so in summary.md so the developer knows the patch is
    unproven on the platform that failed."""
 
+VERIFY_SKIPPED = """\
+2. Do not build, and do not try to run the test(s); no build tool is available.
+   Check by reading instead that the patch compiles and addresses the root cause.
+   State in summary.md that it is unverified, neither built nor run."""
+
 # The image ships Xvfb, Firefox's runtime libraries and fonts, and bootstrap has
 # already run, so GUI harnesses are runnable -- but it is Debian, not CI's image.
 ENVIRONMENT_NOTE = """

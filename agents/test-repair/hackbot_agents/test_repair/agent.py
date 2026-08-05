@@ -46,6 +46,7 @@ from .config import (
     BUGZILLA_READ_TOOLS,
     FIREFOX_TOOLS,
     FIX_MODEL,
+    SKIP_FIREFOX_BUILD,
 )
 from .logs import TaskLogs
 from .prompts import (
@@ -60,6 +61,7 @@ from .prompts import (
     MAX_TESTS_PER_GROUP,
     VERIFY_LOCAL,
     VERIFY_REMOTE,
+    VERIFY_SKIPPED,
 )
 from .resolve import CommitRange, Investigation
 
@@ -340,6 +342,7 @@ async def run_test_repair(
     investigation: Investigation,
     task_logs: dict[str, TaskLogs],
     scratch_out: Path,
+    skip_firefox_build: bool = SKIP_FIREFOX_BUILD,
     model: str | None = None,
     max_turns: int | None = None,
     verbose: bool = False,
@@ -354,9 +357,11 @@ async def run_test_repair(
         file=sys.stderr,
     )
 
-    firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
-    mcp_servers: dict[str, McpServerConfig] = {"firefox": firefox_server}
-    allowed_tools = [*ALLOWED_TOOLS, *FIREFOX_TOOLS]
+    mcp_servers: dict[str, McpServerConfig] = {}
+    allowed_tools = [*ALLOWED_TOOLS]
+    if not skip_firefox_build:
+        mcp_servers["firefox"] = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
+        allowed_tools += FIREFOX_TOOLS
     # Bugzilla is optional context (searching for a related bug); wire it only
     # when a broker URL is provided.
     if bugzilla_mcp_server:
@@ -430,12 +435,15 @@ async def run_test_repair(
         culprit_commit = _resolve_culprit(source_repo, verdict.get("culprit_commit"))
         if culprit_commit:
             reporter.header(f"{label}: fix")
-            _write_mozconfig(fx_ctx, investigation)
-            await _bootstrap(fx_ctx)
-            template = VERIFY_LOCAL if investigation.is_linux else VERIFY_REMOTE
-            verify_step = template.format(
-                harness=investigation.harness, platform=investigation.platform
-            ) + ENVIRONMENT_NOTE.format(platform=investigation.platform)
+            if skip_firefox_build:
+                verify_step = VERIFY_SKIPPED.format(scratch_out=scratch_out)
+            else:
+                _write_mozconfig(fx_ctx, investigation)
+                await _bootstrap(fx_ctx)
+                template = VERIFY_LOCAL if investigation.is_linux else VERIFY_REMOTE
+                verify_step = template.format(
+                    harness=investigation.harness, platform=investigation.platform
+                ) + ENVIRONMENT_NOTE.format(platform=investigation.platform)
             fix_prompt = FIX_TEMPLATE.format(
                 culprit_commit=culprit_commit,
                 verify_step=verify_step,

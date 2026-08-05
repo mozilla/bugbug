@@ -6,6 +6,7 @@ from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestRepairResult
+from .config import SKIP_FIREFOX_BUILD
 from .logs import download_failure_logs
 from .resolve import Investigation, resolve_investigation
 
@@ -16,6 +17,8 @@ class AgentInputs(BaseSettings):
     # Failing Taskcluster test tasks {task_name: task_id}. The agent resolves the
     # push, last-green revision and candidate commit range from the task id.
     failure_tasks: dict[str, str]
+    # When set, the fix stage proposes a patch but cannot build or run it.
+    skip_firefox_build: bool = SKIP_FIREFOX_BUILD
     bugzilla_mcp_url: str = ""
     model: str | None = None
     max_turns: int | None = None
@@ -65,6 +68,7 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         investigation=investigation,
         task_logs=task_logs,
         scratch_out=scratch_out,
+        skip_firefox_build=inputs.skip_firefox_build,
         model=inputs.model,
         max_turns=inputs.max_turns,
         log=ctx.log_path,

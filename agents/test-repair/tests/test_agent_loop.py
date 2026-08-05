@@ -4,6 +4,7 @@ import subprocess
 from types import SimpleNamespace
 
 from hackbot_agents.test_repair import agent
+from hackbot_agents.test_repair.config import BUILD_TOOL, SKIP_FIREFOX_BUILD
 from hackbot_agents.test_repair.prompts import MAX_TESTS_PER_GROUP
 from hackbot_agents.test_repair.resolve import (
     CommitRange,
@@ -97,6 +98,8 @@ def _run(
     groups=None,
     group_based=True,
     known_intermittent_bugs=None,
+    skip_firefox_build=SKIP_FIREFOX_BUILD,
+    options_out=None,
 ):
     repo = tmp_path / "src"
     repo.mkdir()
@@ -107,6 +110,8 @@ def _run(
 
     async def fake_session(reporter, options, prompt):
         calls.append(prompt)
+        if options_out is not None:
+            options_out.append(options)
         verdict = verdicts.pop(0)
         if verdict is not None:
             if verdict.get("culprit_commit") == "HEAD":
@@ -150,6 +155,7 @@ def _run(
             ),
             task_logs={},
             scratch_out=scratch_out,
+            skip_firefox_build=skip_firefox_build,
             verbose=False,
             log=None,
         )
@@ -178,8 +184,6 @@ def test_culprit_runs_fix_stage(tmp_path, monkeypatch):
     assert result.proposed_patch is True
     assert result.last_green_revision == "greenhg"
     assert result.num_turns == 6
-    # The fix stage can only verify anything if a mozconfig exists.
-    assert (tmp_path / ".mozconfig").exists()
 
 
 def test_no_culprit_skips_fix_stage(tmp_path, monkeypatch):
@@ -481,6 +485,7 @@ def test_linux_failure_expects_the_test_to_pass(tmp_path, monkeypatch):
         tmp_path,
         [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
         monkeypatch,
+        skip_firefox_build=False,
     )
     assert "mach" in calls[1]
     assert "They should pass." in calls[1]
@@ -497,6 +502,7 @@ def test_non_linux_failure_still_runs_the_test_but_discounts_a_pass(
         [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
         monkeypatch,
         platform="windows11-64-24h2/opt",
+        skip_firefox_build=False,
     )
     assert "mach" in calls[1]
     assert "proves nothing about windows11-64-24h2/opt" in calls[1]
@@ -535,6 +541,7 @@ def test_verify_step_states_the_container_limits(tmp_path, monkeypatch):
         [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
         monkeypatch,
         platform="linux1804-64-qr/debug",
+        skip_firefox_build=False,
     )
     assert "virtual display" in calls[1]
     assert "could not verify" in calls[1]
@@ -624,3 +631,72 @@ def test_analysis_prompt_rules_out_follow_ups(tmp_path, monkeypatch):
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
     assert "Never suggest a follow-up patch" in _flat(calls[0])
     assert "land in one push" in _flat(calls[0])
+
+
+def test_skip_firefox_build_still_patches_but_never_builds(tmp_path, monkeypatch):
+    # The fix stage is still worth running without a build: the patch is developer
+    # advice for the reland, and it costs nothing to compile it here.
+    options = []
+    result, calls, head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {
+                "recommendation": "backout",
+                "culprit_commit": "HEAD",
+                "confidence": 0.5,
+                "proposed_patch": True,
+            },
+        ],
+        monkeypatch,
+        skip_firefox_build=True,
+        options_out=options,
+    )
+    assert len(calls) == 2  # analysis + fix
+    assert result.culprit_commit == head
+    assert result.proposed_patch is True
+    # Nothing that leads to a build may have run.
+    assert not (tmp_path / ".mozconfig").exists()
+    # The build tool is not merely discouraged, it is not on offer.
+    for opts in options:
+        assert BUILD_TOOL not in opts.allowed_tools
+        assert "firefox" not in opts.mcp_servers
+    assert "Do not build" in calls[1]
+    assert "unverified" in calls[1]
+
+
+def test_not_building_is_the_default(tmp_path, monkeypatch):
+    # Pins config.SKIP_FIREFOX_BUILD: nothing is passed here, so a change to the
+    # default flips this test rather than silently changing every run.
+    assert SKIP_FIREFOX_BUILD is True
+    options = []
+    _result, calls, _head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+        ],
+        monkeypatch,
+        options_out=options,
+    )
+    assert not (tmp_path / ".mozconfig").exists()
+    assert BUILD_TOOL not in options[0].allowed_tools
+    assert "Do not build" in calls[1]
+
+
+def test_opting_into_the_build_verifies_the_fix(tmp_path, monkeypatch):
+    options = []
+    _result, calls, _head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+        ],
+        monkeypatch,
+        skip_firefox_build=False,
+        options_out=options,
+    )
+    assert (tmp_path / ".mozconfig").exists()
+    assert BUILD_TOOL in options[0].allowed_tools
+    assert "build_firefox tool" in calls[1]
+    assert "Do not build" not in calls[1]

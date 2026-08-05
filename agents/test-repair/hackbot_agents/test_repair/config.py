@@ -8,6 +8,10 @@
 ANALYSIS_MODEL = "claude-opus-5"
 FIX_MODEL = "claude-opus-5"
 
+# Building costs ten-odd minutes and only verifies a patch the sheriff does not act
+# on, so the fix stage proposes an unverified patch unless a run asks otherwise.
+SKIP_FIREFOX_BUILD = True
+
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",
