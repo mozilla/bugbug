@@ -22,6 +22,10 @@ def _result_msg(is_error=False):
     )
 
 
+def _flat(text):
+    return " ".join(text.split())
+
+
 def _git_repo(path):
     """A two-commit repo standing in for the pinned shallow checkout.
 
@@ -57,6 +61,7 @@ def _investigation(
     groups=None,
     group_based=True,
     label="test-linux1804-64/opt-mochitest-browser-chrome-swr-1",
+    known_intermittent_bugs=None,
 ):
     return Investigation(
         project="autoland",
@@ -70,6 +75,7 @@ def _investigation(
         commit_range=CommitRange(head=head, base=base, span=2, complete=complete),
         label=label,
         group_based=group_based,
+        known_intermittent_bugs=known_intermittent_bugs or [],
     )
 
 
@@ -90,6 +96,7 @@ def _run(
     platform="linux1804-64/opt",
     groups=None,
     group_based=True,
+    known_intermittent_bugs=None,
 ):
     repo = tmp_path / "src"
     repo.mkdir()
@@ -139,6 +146,7 @@ def _run(
                 platform,
                 groups,
                 group_based,
+                known_intermittent_bugs=known_intermittent_bugs,
             ),
             task_logs={},
             scratch_out=scratch_out,
@@ -554,3 +562,29 @@ def test_mozconfig_overwrites_a_foreign_one(tmp_path):
     assert "objdir-build-repair" not in written
     assert "--enable-release" not in written
     assert str(fx.objdir) in written
+
+
+def test_prompt_does_not_presume_intermittents_were_filtered_out(tmp_path, monkeypatch):
+    # Known intermittents do reach the agent, so finding the tracking bug is part
+    # of the job rather than something to rule out only if the logs insist.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "listener" not in calls[0].lower()
+    assert "known intermittent" in calls[0]
+    assert "intermittent_bug" in calls[0]
+
+
+def test_treeherder_matched_bugs_are_listed_when_any_matched(tmp_path, monkeypatch):
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": None}],
+        monkeypatch,
+        known_intermittent_bugs=[1805760, 2016093],
+    )
+    assert "1805760, 2016093" in calls[0]
+    assert "before blaming a commit" in calls[0]
+
+
+def test_prompt_omits_the_treeherder_line_without_matched_bugs(tmp_path, monkeypatch):
+    # Treeherder matches nothing for plenty of failures; the prompt must not say so.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "Treeherder already matches" not in calls[0]

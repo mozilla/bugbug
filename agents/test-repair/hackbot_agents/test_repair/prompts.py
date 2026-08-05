@@ -14,9 +14,8 @@ MAX_TESTS_PER_GROUP = 100
 MAX_CANDIDATE_COMMITS = 5
 
 ANALYSIS_TEMPLATE = """\
-You are investigating a failing Firefox CI test to find the commit that broke it.
-The CI listener already filtered out known intermittents, so treat this as a
-genuine regression unless the logs clearly show otherwise.
+You are investigating a failing Firefox CI test to find the commit that broke it,
+or to establish that it is a known intermittent.
 
 Failing test groups (manifests) and the tests that failed in each:
 {failing_tests}
@@ -46,8 +45,12 @@ Do the following:
    toolchain bumps, manifest or harness changes, and changes that only shift
    timing or memory elsewhere. If none of the path-matching commits explains the
    failure, go through the rest of the list before concluding that nothing does.
-   You may search Bugzilla for a related bug.
-3. Write these files to {scratch_out}:
+3. Search Bugzilla for an intermittent bug tracking this failure -- the test name,
+   or its file name plus "intermittent", finds most, including per-test "single
+   tracking bug" entries. If one matches, the classification is "intermittent" and
+   its id goes in "intermittent_bug", however suspicious a commit looks. Search
+   for the bug the culprit landed under too, for "culprit_bug".
+4. Write these files to {scratch_out}:
    - summary.md: a short (2-4 sentence) verdict.
    - analysis.md: the detailed reasoning, with evidence from the logs and diffs.
    - verdict.json: an object with keys "classification" ("regression" or
