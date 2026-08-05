@@ -400,3 +400,55 @@ def test_resolve_investigation_requires_revision(monkeypatch):
     monkeypatch.setattr(resolve, "_get_json", lambda url: {"tags": {}, "payload": {}})
     with pytest.raises(ValueError):
         resolve.resolve_investigation("TASK")
+
+
+def _suggestion(line, bugs, resolution="", keywords="intermittent-failure"):
+    return {
+        "search": line,
+        "bugs": {
+            "open_recent": [
+                {"id": bug, "resolution": resolution, "keywords": keywords}
+                for bug in bugs
+            ]
+        },
+    }
+
+
+def test_known_intermittent_bugs_reads_treeherder(monkeypatch):
+    calls = []
+
+    def fake_get(url):
+        calls.append(url)
+        if "jobs/?task_id=" in url:
+            return {"results": [{"id": 42}]}
+        return [
+            _suggestion("TEST-UNEXPECTED-FAIL | a.html | boom", [2016093]),
+            # Same bug on a second line must not be listed twice.
+            _suggestion("TEST-UNEXPECTED-TIMEOUT | a.html | hang", [2016093]),
+            # Not a harness failure line: matches junk bugs on nearly every job.
+            _suggestion("[taskcluster:error] exit status 1", [111111]),
+            # Resolved, and keyword-less: neither is evidence of a known flake.
+            _suggestion(
+                "TEST-UNEXPECTED-FAIL | b.html | x", [222222], resolution="FIXED"
+            ),
+            _suggestion(
+                "TEST-UNEXPECTED-FAIL | c.html | y", [333333], keywords="regression"
+            ),
+        ]
+
+    monkeypatch.setattr(resolve, "_get_json", fake_get)
+    assert resolve._known_intermittent_bugs("autoland", "TASK") == [2016093]
+    assert "bug_suggestions" in calls[-1]
+
+
+def test_known_intermittent_bugs_without_a_job(monkeypatch):
+    monkeypatch.setattr(resolve, "_get_json", lambda url: {"results": []})
+    assert resolve._known_intermittent_bugs("autoland", "TASK") == []
+
+
+def test_known_intermittent_bugs_survive_a_treeherder_error(monkeypatch):
+    def boom(url):
+        raise resolve.requests.exceptions.RequestException("down")
+
+    monkeypatch.setattr(resolve, "_get_json", boom)
+    assert resolve._known_intermittent_bugs("autoland", "TASK") == []

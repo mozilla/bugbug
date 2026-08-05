@@ -31,7 +31,7 @@ failure commit {failure_commit}. The log and scratch paths below are outside
 it -- `cd {source_repo}` to return. Search it with `git grep`, never `grep -r`:
 the tree is enormous and a recursive walk hits the Bash timeout.
 {candidate_intro}
-{last_green_line}
+{last_green_line}{known_intermittents_line}
 Failure logs (start with the sanitized failures file; fall back to the full log):
 {failure_logs}
 
@@ -94,6 +94,11 @@ the least implausible commit in the range."""
 LAST_GREEN_LINE = (
     "The test was last green at hg revision {last_green_revision} (not a git"
     " object; the base of the range above is its git equivalent).\n"
+)
+
+KNOWN_INTERMITTENTS_LINE = (
+    "Treeherder matches these failure lines to these bugs: {bugs}. Check whether"
+    " they explain this failure before blaming a commit.\n"
 )
 
 FIX_TEMPLATE = """\

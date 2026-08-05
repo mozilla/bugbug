@@ -54,6 +54,7 @@ from .prompts import (
     CANDIDATE_INTRO_PARTIAL,
     ENVIRONMENT_NOTE,
     FIX_TEMPLATE,
+    KNOWN_INTERMITTENTS_LINE,
     LAST_GREEN_LINE,
     MAX_CANDIDATE_COMMITS,
     MAX_TESTS_PER_GROUP,
@@ -372,6 +373,13 @@ async def run_test_repair(
         if investigation.last_green_revision
         else ""
     )
+    known_intermittents_line = (
+        KNOWN_INTERMITTENTS_LINE.format(
+            bugs=", ".join(str(bug) for bug in investigation.known_intermittent_bugs)
+        )
+        if investigation.known_intermittent_bugs
+        else ""
+    )
     range_expr = _range_expr(commit_range)
     intro = (
         CANDIDATE_INTRO_COMPLETE if commit_range.complete else CANDIDATE_INTRO_PARTIAL
@@ -387,6 +395,7 @@ async def run_test_repair(
         commit_range=range_expr,
         max_candidates=MAX_CANDIDATE_COMMITS,
         last_green_line=last_green_line,
+        known_intermittents_line=known_intermittents_line,
         failure_logs=failure_logs,
         scratch_out=scratch_out,
     )

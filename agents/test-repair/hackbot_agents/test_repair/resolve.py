@@ -17,7 +17,7 @@ task id; the pulse listener uses the same public Taskcluster / mozci / hg-pushlo
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
@@ -41,6 +41,9 @@ _REPO_PATHS = {
 }
 _HEADERS = {"User-Agent": "hackbot-test-repair/1.0"}
 _TIMEOUT = 30
+_TREEHERDER = "https://treeherder.mozilla.org/api/project"
+_FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
+_INTERMITTENT_KEYWORD = "intermittent-failure"
 # Ancestor pushes to walk looking for a green run. Each step is a live, uncached
 # group_summaries lookup, so raising this trades startup latency for a better range.
 LAST_GREEN_MAX_DEPTH = MAX_DEPTH
@@ -91,6 +94,7 @@ class Investigation:
     # where ``failing_groups`` is empty by nature rather than because the lookup
     # failed, and blame has to be anchored on the task as a whole.
     group_based: bool = True
+    known_intermittent_bugs: list[int] = field(default_factory=list)
 
     @property
     def failure_commit(self) -> str:
@@ -157,6 +161,45 @@ def _failing_groups(task_id: str) -> list[FailingGroup]:
             continue
         groups.append(FailingGroup(group=group, tests=[test for test, _type in fails]))
     return groups
+
+
+def _open_intermittent_bugs(suggestion: dict) -> list[int]:
+    """Ids of the unresolved intermittent-failure bugs a failure line matches."""
+    bugs = suggestion.get("bugs") or {}
+    matched = []
+    for bug in (bugs.get("open_recent") or []) + (bugs.get("all_others") or []):
+        keywords = [k.strip() for k in (bug.get("keywords") or "").split(",")]
+        if bug.get("id") and not bug.get("resolution"):
+            if _INTERMITTENT_KEYWORD in keywords:
+                matched.append(bug["id"])
+    return matched
+
+
+def _known_intermittent_bugs(project: str, task_id: str) -> list[int]:
+    """Open intermittent bugs Treeherder ties to this task's failure lines.
+
+    Best effort: an empty list on any error.
+    """
+    try:
+        jobs = (
+            _get_json(f"{_TREEHERDER}/{project}/jobs/?task_id={task_id}").get("results")
+            or []
+        )
+        if not jobs:
+            return []
+        suggestions = _get_json(
+            f"{_TREEHERDER}/{project}/jobs/{jobs[0]['id']}/bug_suggestions/"
+        )
+    except (requests.exceptions.RequestException, ValueError, KeyError):
+        logger.warning("Could not read bug suggestions for task %s", task_id)
+        return []
+
+    bugs: list[int] = []
+    for line in suggestions if isinstance(suggestions, list) else []:
+        if not (line.get("search") or "").startswith(_FAILURE_LINE_PREFIX):
+            continue
+        bugs += [bug for bug in _open_intermittent_bugs(line) if bug not in bugs]
+    return bugs
 
 
 def _same_platform(task, platform: str) -> bool:
@@ -372,6 +415,12 @@ def resolve_investigation(
         last_green = None
     logger.info("Last-green revision: %s", last_green or "not found")
 
+    intermittent_bugs = _known_intermittent_bugs(project, task_id)
+    logger.info(
+        "Known intermittent bugs: %s",
+        ", ".join(str(bug) for bug in intermittent_bugs) or "none matched",
+    )
+
     commit_range = _resolve_range(project, hg_revision, last_green, max_commits)
     if commit_range is None:
         raise ValueError(f"could not resolve a git commit for task {task_id}")
@@ -393,4 +442,5 @@ def resolve_investigation(
         commit_range=commit_range,
         label=label,
         group_based=group_based,
+        known_intermittent_bugs=intermittent_bugs,
     )
