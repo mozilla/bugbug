@@ -56,8 +56,8 @@ async def test_add_comment_handler_builds_comment_body(monkeypatch):
     await bugzilla_handler.AddCommentHandler().apply(
         {"bug_id": 5, "text": "hi", "is_private": True}, _ctx()
     )
-    # is_markdown is always set: agents author Markdown (permalinks, the italic
-    # footer), and without the flag Bugzilla renders the markup literally.
+    # is_markdown is always set: agents author Markdown (such as permalinks),
+    # and without the flag Bugzilla renders the markup literally.
     assert calls == [
         (
             "PUT",

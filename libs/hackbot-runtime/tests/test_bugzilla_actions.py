@@ -1,16 +1,15 @@
-"""Tests for the bugzilla action handlers (footers, mime, merge, errors)."""
+"""Tests for the bugzilla action handlers (comments, mime, merge, errors)."""
 
 import pytest
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder, bugzilla
 
 
-async def test_add_comment_appends_footer():
+async def test_add_comment_keeps_original_text():
     rec = ActionsRecorder()
     await bugzilla.add_comment(rec, bug_id=1, text="Looks invalid.", reasoning="r")
     text = rec.actions[0]["params"]["text"]
-    assert text.startswith("Looks invalid.")
-    assert "automated analysis result" in text
+    assert text == "Looks invalid."
     assert rec.actions[0]["params"]["is_private"] is False
 
 

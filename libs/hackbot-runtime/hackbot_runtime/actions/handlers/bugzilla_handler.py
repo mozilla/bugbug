@@ -57,10 +57,9 @@ def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any
 def _comment_body(params: dict[str, Any]) -> dict[str, Any]:
     """Build the ``comment`` object for a PUT /bug/{id}.
 
-    Agents author their comments in Markdown (paths as Searchfox permalinks,
-    the italic automated-analysis footer), so ``is_markdown`` is always set --
-    without it Bugzilla falls back to the API user's preference and renders the
-    markup literally.
+    Agents author their comments in Markdown (for example, Searchfox
+    permalinks), so ``is_markdown`` is always set -- without it Bugzilla falls
+    back to the API user's preference and renders the markup literally.
     """
     return {
         "body": params["text"],

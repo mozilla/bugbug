@@ -19,11 +19,6 @@ from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
-
-_COMMENT_FOOTER = (
-    "*This is an automated analysis result. If this result is incorrect "
-    "please add a needinfo and feel free to correct the error.* "
-)
 _ATTACHMENT_COMMENT_FOOTER = (
     "*This is the analysis tool's suggested fix. Feel welcome to adopt "
     "it as a starting point and evolve it as needed to meet our coding "
@@ -95,10 +90,9 @@ async def add_comment(
     Use is_private=true for security-sensitive notes. Recorded into the run
     summary for human review — does not post to Bugzilla.
     """
-    text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
     recorder.record(
         "bugzilla.add_comment",
-        {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
+        {"bug_id": bug_id, "text": text.rstrip(), "is_private": is_private},
         reasoning=reasoning,
     )
     return _confirm(recorder, "bugzilla.add_comment")
