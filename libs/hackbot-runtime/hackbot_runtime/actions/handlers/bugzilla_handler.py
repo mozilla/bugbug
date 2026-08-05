@@ -54,6 +54,21 @@ def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any
     return response.json()
 
 
+def _comment_body(params: dict[str, Any]) -> dict[str, Any]:
+    """Build the ``comment`` object for a PUT /bug/{id}.
+
+    Agents author their comments in Markdown (paths as Searchfox permalinks,
+    the italic automated-analysis footer), so ``is_markdown`` is always set --
+    without it Bugzilla falls back to the API user's preference and renders the
+    markup literally.
+    """
+    return {
+        "body": params["text"],
+        "is_private": bool(params.get("is_private", False)),
+        "is_markdown": True,
+    }
+
+
 class UpdateBugHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
@@ -75,12 +90,7 @@ class UpdateBugHandler:
 class AddCommentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
-        body = {
-            "comment": {
-                "body": params["text"],
-                "is_private": params.get("is_private", False),
-            }
-        }
+        body = {"comment": _comment_body(params)}
         try:
             _request("PUT", f"bug/{bug_id}", body)
         except Exception as exc:
@@ -207,10 +217,7 @@ def merge_resolved(entries: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
         if action_type == "bugzilla.update_bug":
             changes.update(params.get("changes", {}))
         elif action_type == "bugzilla.add_comment":
-            comment = {
-                "body": params["text"],
-                "is_private": bool(params.get("is_private", False)),
-            }
+            comment = _comment_body(params)
 
     combined: dict[str, Any] = {"bug_id": bug_id, "changes": changes}
     if comment is not None:

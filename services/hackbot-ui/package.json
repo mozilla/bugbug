@@ -7,11 +7,12 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --import tsx --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
-    "better-auth": "^1.6.0",
-    "next": "^15.1.0",
+    "better-auth": "^1.6.22",
+    "next": "^15.5.22",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
@@ -22,6 +23,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "tsx": "^4.23.1",
     "typescript": "^5.7.0"
   },
   "overrides": {

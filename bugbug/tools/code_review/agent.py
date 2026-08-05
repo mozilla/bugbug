@@ -7,7 +7,7 @@
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from logging import getLogger
 from typing import Optional
 
@@ -59,6 +59,10 @@ from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL, get_tokenizer
 from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
+
+
+def current_date_for_prompt() -> str:
+    return datetime.now(UTC).date().isoformat()
 
 
 class CodeReviewTool(GenerativeModelTool):
@@ -209,6 +213,7 @@ class CodeReviewTool(GenerativeModelTool):
         created_before = patch.date_created if self.is_experiment_env else None
 
         return FIRST_MESSAGE_TEMPLATE.format(
+            current_date=current_date_for_prompt(),
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
             external_context=external_context,
@@ -221,15 +226,21 @@ class CodeReviewTool(GenerativeModelTool):
     ) -> tuple[list[GeneratedReviewComment], list[dict]]:
         external_context = ""
         manifest: list[dict] = []
-        if self._review_context_repo:
+        review_context_repo = self._review_context_repo
+        review_context_branch = self._review_context_branch
+        if review_context_repo is None:
+            repo_ref = await patch.github_repo_ref()
+            if repo_ref:
+                review_context_repo, review_context_branch = repo_ref
+        if review_context_repo:
             from bugbug.tools.code_review.review_context import (
                 load_external_context_for_review,
             )
 
             external_context, manifest = await load_external_context_for_review(
                 patch,
-                self._review_context_repo,
-                review_context_branch=self._review_context_branch,
+                review_context_repo,
+                review_context_branch=review_context_branch,
                 extra_context_toml=self._extra_context_toml,
                 content_overrides=self._content_overrides,
             )

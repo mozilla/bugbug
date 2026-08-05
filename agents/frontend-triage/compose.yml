@@ -18,7 +18,7 @@ services:
     environment:
       - RUN_ID
       - BUG_ID=${BUG_ID:?error}
-      - BUGZILLA_MCP_URL=http://frontend-triage-broker:8765/mcp
+      - BROKER_URL=http://frontend-triage-broker:8765
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
       # No uploader locally: summary/logs/attachments are written under

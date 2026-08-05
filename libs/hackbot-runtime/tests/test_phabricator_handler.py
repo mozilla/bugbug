@@ -80,19 +80,13 @@ def test_each_patch_action_type_has_its_own_handler():
     assert all(get_handler(t) is not None for t in PATCH_ACTION_TYPES)
 
 
-def test_revision_title_strips_and_reprefixes():
+def test_revision_title_strips_wip_prefix():
     rt = phabricator_handler._revision_title
-    assert rt("Fix bug") == "WIP: Fix bug"
-    assert rt("WIP: Fix bug") == "WIP: Fix bug"  # not doubled
+    assert rt("Fix bug") == "Fix bug"
+    assert rt("WIP: Fix bug") == "Fix bug"
 
 
-def test_revision_title_never_blank_for_bare_wip_marker():
-    # A title that is only a WIP marker must fall back to the original, not go
-    # blank (which would be an invalid Phabricator title).
-    assert phabricator_handler._revision_title("WIP:") == "WIP: WIP"
-
-
-async def test_submit_patch_creates_wip_revision(monkeypatch):
+async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     fake, calls = _fake_conduit(
         {
             "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
@@ -123,9 +117,9 @@ async def test_submit_patch_creates_wip_revision(monkeypatch):
     assert "objectIdentifier" not in edit_call[1]
     transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
     assert transactions["update"] == "PHID-DIFF-1"
-    # Everything hackbot creates is a WIP draft: title prefixed, revision
-    # marked changes-planned, and reviewers are NOT requested.
-    assert transactions["title"] == "WIP: Fix"
+    # Everything hackbot creates is a draft: the revision is marked
+    # changes-planned, but the visible title does not carry a WIP prefix.
+    assert transactions["title"] == "Fix"
     assert transactions["plan-changes"] is True
     assert "reviewers.add" not in transactions
     assert transactions["bugzilla.bug-id"] == "1"
@@ -175,9 +169,9 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
     assert stored["author"] == "Hackbot Agent"
     assert stored["tree"] == "tree1"
     assert stored["parents"] == ["base1"]
-    # The stored title carries the WIP prefix and reviewers are empty.
-    assert stored["summary"] == "WIP: Fix the thing"
-    assert stored["message"].startswith("WIP: Fix the thing\n\nSummary:\ndoes it")
+    # The stored title matches the visible revision title and reviewers are empty.
+    assert stored["summary"] == "Fix the thing"
+    assert stored["message"].startswith("Fix the thing\n\nSummary:\ndoes it")
     assert (
         "Differential Revision: https://phabricator.services.mozilla.com/D77"
         in stored["message"]
@@ -264,6 +258,76 @@ async def test_update_patch_local_commits_use_the_revisions_own_fields(monkeypat
         "Differential Revision: https://phabricator.services.mozilla.com/D42"
         in stored["message"]
     )
+
+
+async def test_update_patch_preserves_previous_diff_commit_author(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-NEW", "diffid": 8},
+            "differential.revision.edit": {"object": {"id": 42}},
+            "differential.revision.search": {
+                "data": [
+                    {
+                        "fields": {
+                            "title": "WIP: Existing title",
+                            "summary": "old sum",
+                            "bugzilla.bug-id": "9",
+                            "diffID": 7,
+                        }
+                    }
+                ]
+            },
+            "differential.diff.search": {
+                "data": [
+                    {
+                        "id": 1335196,
+                        "type": "DIFF",
+                        "phid": "PHID-DIFF-j6xoinvjxogsqyfmelha",
+                        "attachments": {
+                            "commits": {
+                                "commits": [
+                                    {
+                                        "identifier": "d0b3319556e92ee5f25590c40562f4ce4d7909f2",
+                                        "author": {
+                                            "name": "Patch Author",
+                                            "email": "author@mozilla.example",
+                                            "raw": "Patch Author <author@mozilla.example>",
+                                            "epoch": 1,
+                                        },
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                ]
+            },
+            "differential.setdiffproperty": {},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.UpdatePatchHandler().apply(
+        {"revision_id": 42},
+        _ctx(
+            local_commits={
+                "new-node": {
+                    "author": "Hackbot Agent",
+                    "authorEmail": "hackbot@mozilla.tld",
+                    "commit": "new-node",
+                }
+            }
+        ),
+    )
+    assert result.status == "applied"
+
+    prop_call = next(c for c in calls if c[0] == "differential.setdiffproperty")
+    stored = json.loads(prop_call[1]["data"])["new-node"]
+    assert stored["author"] == "Patch Author"
+    assert stored["authorEmail"] == "author@mozilla.example"
+    assert stored["commit"] == "new-node"
 
 
 @pytest.mark.parametrize(

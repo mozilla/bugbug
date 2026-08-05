@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { AGENTS, type AgentValue } from "@/lib/agents";
+import { parseBugId } from "@/lib/bugzilla";
 import { saveRun } from "@/lib/store";
 import type { RunRef } from "@/lib/types";
 
@@ -47,7 +48,9 @@ export function TriggerForm() {
 
   const isReproAgent = agent === "autowebcompat-repro";
   const isBuildRepairAgent = agent === "build-repair";
+  const isTestRepairAgent = agent === "test-repair";
   const isTestPlanAgent = agent === "test-plan-generator";
+  const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,17 +58,19 @@ export function TriggerForm() {
 
     const inputs: Record<string, unknown> = {};
 
-    const parsedBugId = bugId.trim() ? Number.parseInt(bugId, 10) : Number.NaN;
-    const hasBugId = Number.isInteger(parsedBugId) && parsedBugId > 0;
+    const parsedBugId = parseBugId(bugId);
+    const hasBugId = parsedBugId !== null;
     const hasBugData = isReproAgent && bugData.trim().length > 0;
 
-    if (isBuildRepairAgent) {
-      if (hasBugId) inputs.bug_id = parsedBugId;
-      if (!gitCommit.trim()) {
-        setError("Enter a git commit hash.");
-        return;
+    if (needsFailureTasks) {
+      if (isBuildRepairAgent) {
+        if (hasBugId) inputs.bug_id = parsedBugId;
+        if (!gitCommit.trim()) {
+          setError("Enter a git commit hash.");
+          return;
+        }
+        inputs.git_commit = gitCommit.trim();
       }
-      inputs.git_commit = gitCommit.trim();
       if (!failureTasks.trim()) {
         setError("Enter failure tasks as a JSON object.");
         return;
@@ -90,7 +95,7 @@ export function TriggerForm() {
         return;
       }
       inputs.failure_tasks = parsedTasks;
-      inputs.run_try_push = runTryPush;
+      if (isBuildRepairAgent) inputs.run_try_push = runTryPush;
     } else if (isTestPlanAgent) {
       if (!featureName.trim()) {
         setError("Enter a feature name.");
@@ -109,13 +114,15 @@ export function TriggerForm() {
       inputs.test_scope = testScope.trim();
     } else if (!isReproAgent) {
       if (!hasBugId) {
-        setError("Enter a valid Bugzilla bug ID.");
+        setError("Enter a valid Bugzilla bug ID or bug URL.");
         return;
       }
       inputs.bug_id = parsedBugId;
     } else {
       if (!hasBugId && !hasBugData) {
-        setError("Provide a Bugzilla bug ID or paste report text.");
+        setError(
+          "Provide a Bugzilla bug ID (or bug URL) or paste report text."
+        );
         return;
       }
       if (hasBugId) inputs.bug_id = parsedBugId;
@@ -127,7 +134,7 @@ export function TriggerForm() {
       const n = Number.parseInt(maxTurns, 10);
       if (Number.isInteger(n) && n > 0) inputs.max_turns = n;
     }
-    if (!isBuildRepairAgent && effort.trim()) inputs.effort = effort.trim();
+    if (!needsFailureTasks && effort.trim()) inputs.effort = effort.trim();
 
     setSubmitting(true);
     try {
@@ -143,11 +150,14 @@ export function TriggerForm() {
       const run = body as RunRef;
       const label = isBuildRepairAgent
         ? `commit ${gitCommit.trim().slice(0, 12)}`
-        : isTestPlanAgent
-          ? featureName.trim()
-          : hasBugId
-            ? `bug ${parsedBugId}`
-            : "inline report";
+        : isTestRepairAgent
+          ? Object.keys(inputs.failure_tasks as Record<string, string>)[0] ??
+            "test failure"
+          : isTestPlanAgent
+            ? featureName.trim()
+            : hasBugId
+              ? `bug ${parsedBugId}`
+              : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -184,17 +194,16 @@ export function TriggerForm() {
         </select>
       </div>
 
-      {!isBuildRepairAgent && !isTestPlanAgent && (
+      {!needsFailureTasks && !isTestPlanAgent && (
         <div className="field">
           <label htmlFor="bugId">
             {isReproAgent
-              ? "Bugzilla bug ID (optional if report text provided)"
-              : "Bugzilla bug ID *"}
+              ? "Bugzilla bug ID or URL (optional if report text provided)"
+              : "Bugzilla bug ID or URL *"}
           </label>
           <input
             id="bugId"
-            inputMode="numeric"
-            placeholder="e.g. 1846789"
+            placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
             value={bugId}
             onChange={(e) => setBugId(e.target.value)}
             required={!isReproAgent}
@@ -220,11 +229,10 @@ export function TriggerForm() {
       {isBuildRepairAgent && (
         <>
           <div className="field">
-            <label htmlFor="bugId">Bugzilla bug ID (optional)</label>
+            <label htmlFor="bugId">Bugzilla bug ID or URL (optional)</label>
             <input
               id="bugId"
-              inputMode="numeric"
-              placeholder="e.g. 1846789"
+              placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
               value={bugId}
               onChange={(e) => setBugId(e.target.value)}
             />
@@ -240,32 +248,40 @@ export function TriggerForm() {
               required
             />
           </div>
-
-          <div className="field">
-            <label htmlFor="failureTasks">
-              Failure tasks * (JSON object: task name to task ID)
-            </label>
-            <textarea
-              id="failureTasks"
-              placeholder={'e.g. {"build-linux64": "Abc123XYZ"}'}
-              rows={4}
-              value={failureTasks}
-              onChange={(e) => setFailureTasks(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="field">
-            <label>
-              <input
-                type="checkbox"
-                checked={runTryPush}
-                onChange={(e) => setRunTryPush(e.target.checked)}
-              />{" "}
-              Run try push after fix
-            </label>
-          </div>
         </>
+      )}
+
+      {needsFailureTasks && (
+        <div className="field">
+          <label htmlFor="failureTasks">
+            Failure tasks * (JSON object: task name to task ID)
+          </label>
+          <textarea
+            id="failureTasks"
+            placeholder={
+              isTestRepairAgent
+                ? 'e.g. {"test-linux1804-64/opt-xpcshell-1": "Abc123XYZ"}'
+                : 'e.g. {"build-linux64": "Abc123XYZ"}'
+            }
+            rows={4}
+            value={failureTasks}
+            onChange={(e) => setFailureTasks(e.target.value)}
+            required
+          />
+        </div>
+      )}
+
+      {isBuildRepairAgent && (
+        <div className="field">
+          <label>
+            <input
+              type="checkbox"
+              checked={runTryPush}
+              onChange={(e) => setRunTryPush(e.target.checked)}
+            />{" "}
+            Run try push after fix
+          </label>
+        </div>
       )}
 
       {isTestPlanAgent && (
@@ -327,7 +343,7 @@ export function TriggerForm() {
             onChange={(e) => setMaxTurns(e.target.value)}
           />
         </div>
-        {!isBuildRepairAgent && (
+        {!needsFailureTasks && (
           <div className="field">
             <label htmlFor="effort">Effort (optional)</label>
             <input

@@ -1,0 +1,45 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""Models and tool allowlist for the test-repair agent."""
+
+ANALYSIS_MODEL = "claude-opus-5"
+FIX_MODEL = "claude-opus-5"
+
+# Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
+BUGZILLA_READ_TOOLS = [
+    "mcp__bugzilla__search_bugs",
+    "mcp__bugzilla__get_bugs",
+    "mcp__bugzilla__get_bug_comments",
+    "mcp__bugzilla__get_bug_attachments",
+    "mcp__bugzilla__download_attachment",
+]
+
+# In-process Firefox build MCP tool (reused from agent-tools). Only the build
+# tool: evaluate_testcase / evaluate_js_shell do not run the harnesses CI runs,
+# so the agent runs the failing test itself with mach over Bash, and bootstrap is
+# deterministic prep rather than something the agent has to decide to call.
+BUILD_TOOL = "mcp__firefox__build_firefox"
+FIREFOX_TOOLS = [BUILD_TOOL]
+
+# Built-in tools the agent may call alongside the MCP servers. The agent runs in
+# an isolated container (permission_mode="bypassPermissions"), and reads the
+# candidate commit diffs via Bash `git show`.
+ALLOWED_TOOLS = [
+    "Read",
+    "Grep",
+    "Glob",
+    "Bash",
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "WebFetch",
+    "WebSearch",
+]
+
+ADDITIONAL_DIRS = [
+    "~/.mozbuild",
+    "~/.cache/uv/",
+]

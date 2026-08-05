@@ -776,6 +776,26 @@ ul.chips li.chip {
 .test-step-list li:last-child {
   margin-bottom: 0;
 }
+.test-step-list li > p {
+  margin: 0;
+}
+.test-step-expectation {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--border);
+  border-radius: 4px;
+  background: rgba(154, 163, 178, 0.08);
+  font-size: 13px;
+}
+.test-step-expectation strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+}
+.test-step-expectation p {
+  margin: 0;
+  color: var(--text);
+}
 .badge.test-passed {
   background: rgba(46, 160, 67, 0.18);
   color: var(--green);

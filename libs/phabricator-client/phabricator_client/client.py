@@ -73,6 +73,58 @@ class PhabricatorClient:
         data = result.get("data") or []
         return data[0] if data else None
 
+    async def search_revision_by_id(
+        self, revision_id: int, *, attachments: dict[str, bool] | None = None
+    ) -> dict | None:
+        """Return the Differential revision ``D<revision_id>``, or ``None``.
+
+        The id-keyed counterpart of :meth:`search_revision`, for callers that
+        start from a revision monogram rather than a PHID. Conduit only returns
+        an ``attachments`` block (e.g. ``{"reviewers": True}``) when asked for it.
+        """
+        payload: dict[str, Any] = {"constraints": {"ids": [revision_id]}}
+        if attachments:
+            payload["attachments"] = attachments
+        result = await self.conduit_request("differential.revision.search", **payload)
+        data = result.get("data") or []
+        return data[0] if data else None
+
+    async def search_users(self, phids: list[str]) -> dict[str, dict]:
+        """Map user PHIDs to ``{"username", "real_name"}`` in one Conduit call.
+
+        Non-user PHIDs are dropped first: a reviewer list mixes users with
+        projects (review groups), which ``user.search`` rejects. Unresolvable
+        PHIDs are absent from the result.
+        """
+        wanted = [
+            phid
+            for phid in dict.fromkeys(phids)  # de-duplicate, keep order
+            if phid and phid.startswith("PHID-USER-")
+        ]
+        if not wanted:
+            return {}
+        result = await self.conduit_request(
+            "user.search", constraints={"phids": wanted}
+        )
+        return {
+            user["phid"]: {
+                "username": (user.get("fields") or {}).get("username"),
+                "real_name": (user.get("fields") or {}).get("realName"),
+            }
+            for user in result.get("data") or []
+            if user.get("phid")
+        }
+
+    async def get_project_members(self, project_phid: str) -> frozenset[str]:
+        """Return the user PHIDs belonging to a Phabricator project."""
+        result = await self.conduit_request(
+            "project.search",
+            constraints={"phids": [project_phid]},
+            attachments={"members": True},
+        )
+        members = result["data"][0]["attachments"]["members"]["members"]
+        return frozenset(member["phid"] for member in members)
+
     async def query_latest_diff(self, revision_id: int) -> PhabricatorDiff | None:
         """The most recent diff for a revision, or ``None`` if it has none.
 

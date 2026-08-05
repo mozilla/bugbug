@@ -120,6 +120,85 @@ async def test_search_revision_missing(monkeypatch):
     assert await _client().search_revision("PHID-DREV-1") is None
 
 
+async def test_search_revision_by_id_found(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": [{"id": 42}]}})
+    assert await _client().search_revision_by_id(42) == {"id": 42}
+    assert captured["params"]["constraints"] == {"ids": [42]}
+    # Attachments are only requested when asked for.
+    assert "attachments" not in captured["params"]
+
+
+async def test_search_revision_by_id_passes_attachments(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": [{"id": 42}]}})
+    await _client().search_revision_by_id(42, attachments={"reviewers": True})
+    assert captured["params"]["attachments"] == {"reviewers": True}
+
+
+async def test_search_revision_by_id_missing(monkeypatch):
+    _capture_post(monkeypatch, {"result": {"data": []}})
+    assert await _client().search_revision_by_id(42) is None
+
+
+async def test_search_users_maps_phids_to_names(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "data": [
+                    {
+                        "phid": "PHID-USER-1",
+                        "fields": {"username": "alice", "realName": "Alice A"},
+                    }
+                ]
+            }
+        },
+    )
+    users = await _client().search_users(["PHID-USER-1", "PHID-USER-1"])
+    assert users == {"PHID-USER-1": {"username": "alice", "real_name": "Alice A"}}
+    # De-duplicated into a single lookup.
+    assert captured["params"]["constraints"] == {"phids": ["PHID-USER-1"]}
+
+
+async def test_search_users_drops_non_user_phids(monkeypatch):
+    # A reviewer can be a project; user.search would reject that constraint.
+    captured = _capture_post(monkeypatch, {"result": {"data": []}})
+    await _client().search_users(["PHID-PROJ-1", "PHID-USER-2"])
+    assert captured["params"]["constraints"] == {"phids": ["PHID-USER-2"]}
+
+
+async def test_search_users_skips_call_when_nothing_to_resolve(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": []}})
+    assert await _client().search_users(["PHID-PROJ-1", None, ""]) == {}
+    assert captured == {}  # no request was made
+
+
+async def test_get_project_members(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "data": [
+                    {
+                        "attachments": {
+                            "members": {
+                                "members": [
+                                    {"phid": "PHID-USER-1"},
+                                    {"phid": "PHID-USER-2"},
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+    )
+    assert await _client().get_project_members("PHID-PROJ-1") == frozenset(
+        {"PHID-USER-1", "PHID-USER-2"}
+    )
+    assert captured["params"]["constraints"] == {"phids": ["PHID-PROJ-1"]}
+    assert captured["params"]["attachments"] == {"members": True}
+
+
 async def test_query_latest_diff_picks_highest_id(monkeypatch):
     _capture_post(
         monkeypatch,

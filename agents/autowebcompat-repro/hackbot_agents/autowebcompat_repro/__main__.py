@@ -22,7 +22,7 @@ logger = logging.getLogger("autowebcompat-repro")
 
 
 class AgentInputs(BaseSettings):
-    bugzilla_mcp_url: str
+    broker_url: str
     bug_data: str | None = None
     bug_id: int | None = None
     model: str | None = None
@@ -37,6 +37,10 @@ class AgentInputs(BaseSettings):
     ) = None
 
     model_config = SettingsConfigDict(extra="ignore")
+
+    @property
+    def bugzilla_mcp_url(self) -> str:
+        return f"{self.broker_url.rstrip('/')}/mcp"
 
 
 class AutowebcompatResult(HackbotAgentResult):

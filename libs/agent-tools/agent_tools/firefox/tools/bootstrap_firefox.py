@@ -30,8 +30,8 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
 
         process = await asyncio.create_subprocess_exec(
             "./mach",
-            "bootstrap",
             "--no-interactive",
+            "bootstrap",
             "--application-choice=browser",
             cwd=firefox_dir,
             stdout=asyncio.subprocess.PIPE,
