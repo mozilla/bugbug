@@ -5,13 +5,11 @@
 
 """Resolve a failing Taskcluster test task into everything the agent needs.
 
-From a task id alone, derive the push it belongs to (project + hg revision), the
-tests that failed, the revision at which those tests were last green on the same
-platform, and the git range that landed since then. Only the range endpoints are
-mapped to git -- the agent enumerates the commits between them with ``git log``
-in the checkout. The agent recomputes all of this itself so its only input is a
-task id; the pulse listener uses the same public Taskcluster / mozci / hg-pushlog
-/ lando lookups only to decide which failures are worth investigating.
+From a task id alone: the push it belongs to, the tests that failed, the revision
+those tests were last green at on the same platform, the git range that landed
+since, and the intermittent bugs Treeherder ties to the failure. Only the range
+endpoints are mapped to git; the agent enumerates the commits between them with
+``git log`` in the checkout.
 """
 
 from __future__ import annotations
@@ -44,10 +42,8 @@ _TIMEOUT = 30
 _TREEHERDER = "https://treeherder.mozilla.org/api/project"
 _FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
 _INTERMITTENT_KEYWORD = "intermittent-failure"
-# Ancestor pushes to walk looking for a green run. Each step is a live, uncached
-# group_summaries lookup, so raising this trades startup latency for a better range.
 LAST_GREEN_MAX_DEPTH = MAX_DEPTH
-# Cap on commits (not pushes) in the range, bounding the clone depth.
+# Bounds the shallow clone depth.
 MAX_RANGE_COMMITS = 100
 FALLBACK_RANGE_PUSHES = 20
 
@@ -64,11 +60,9 @@ class FailingGroup:
 class CommitRange:
     """The git commit range to search for the culprit."""
 
-    # The failure commit; what the checkout is pinned to.
     head: str
-    # The last-green commit, exclusive. None when unknown or outside the cap.
+    # Exclusive; None when unknown or outside the cap.
     base: str | None
-    # Commits in the range; bounds the shallow clone depth.
     span: int
     # Whether the culprit is provably inside the range.
     complete: bool
@@ -86,13 +80,9 @@ class Investigation:
     failing_groups: list[FailingGroup]
     last_green_revision: str | None
     commit_range: CommitRange
-    # Full task label, e.g. "test-linux1804-64-qr/debug-mochitest-browser-chrome-1".
-    # Unlike ``platform`` it also carries the test variant and chunk, which is what
-    # distinguishes two runs of the same suite on the same OS and build type.
+    # Carries the test variant and chunk, unlike ``platform``.
     label: str = ""
-    # False for suites that report no test manifests (gtest, jittest, talos, ...),
-    # where ``failing_groups`` is empty by nature rather than because the lookup
-    # failed, and blame has to be anchored on the task as a whole.
+    # False for suites that report no test manifests (gtest, jittest, talos, ...).
     group_based: bool = True
     known_intermittent_bugs: list[int] = field(default_factory=list)
 
@@ -111,7 +101,7 @@ class Investigation:
 
     @property
     def sanitizer(self) -> str | None:
-        """The sanitizer CI built with, if any; a plain build cannot trigger it."""
+        """The sanitizer CI built with, if any."""
         for name in ("asan", "tsan"):
             if f"-{name}" in self.platform:
                 return name
@@ -209,11 +199,8 @@ def _same_platform(task, platform: str) -> bool:
 def _test_status(push: Push, group: str, tests: list[str], platform: str) -> str | None:
     """'passed'/'failed'/None for ``tests`` of ``group`` on ``platform``.
 
-    Restricted to the failing tests and the failing platform: ``GroupSummary``
-    aggregates every platform and every test in the manifest, so a push where the
-    group ran green on Windows -- or where only other tests in it passed -- must
-    not anchor a last-green for a Linux-only failure. None means non-decisive
-    (the group did not run here, or is intermittent/unfinished).
+    Restricted to the failing tests and platform, since ``GroupSummary`` aggregates
+    across both. None means non-decisive.
     """
     summary = push.group_summaries.get(group)
     if summary is None:
@@ -237,14 +224,7 @@ def _test_status(push: Push, group: str, tests: list[str], platform: str) -> str
 
 
 def _label_status(push: Push, label: str) -> str | None:
-    """'passed'/'failed'/None for a whole task label on ``push``.
-
-    The fallback for suites that report no test manifests, where there is no group
-    to key on and the task is the finest granularity available. The label already
-    pins the platform, build type and variant, and ``label_summaries`` excludes
-    taskgraph-chunked tasks -- whose label covers different tests on each push --
-    so only genuinely comparable runs are considered.
-    """
+    """'passed'/'failed'/None for a whole task label, for suites without manifests."""
     summary = push.label_summaries.get(label)
     if summary is None:
         return None
@@ -339,9 +319,8 @@ def _resolve_range(
 ) -> CommitRange | None:
     """Resolve ``(last_green_rev, head_rev]`` into git endpoints and a commit count.
 
-    None when the head cannot be mapped: pinning the checkout to an older commit
-    would blame the wrong change. ``base`` is dropped when unknown or outside the
-    capped clone depth, which also marks the range incomplete.
+    None when the head cannot be mapped. ``base`` is dropped, and the range marked
+    incomplete, when it is unknown or outside ``max_commits``.
     """
     head_git = _hg_to_git(head_rev)
     if not head_git:
@@ -403,10 +382,6 @@ def resolve_investigation(
     )
 
     platform = tags.get("test-platform") or ""
-    # Group-less suites have nothing finer than the task to compare across pushes.
-    # A grouped suite whose lookup failed gets no last-green rather than a
-    # label-level one: its tasks are chunked, so the same label covers different
-    # tests on each push and ``label_summaries`` deliberately omits them.
     if groups:
         last_green = _last_green(project, hg_revision, groups[0], platform)
     elif not group_based and label:

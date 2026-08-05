@@ -14,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentInputs(BaseSettings):
-    # Failing Taskcluster test tasks {task_name: task_id}. The agent resolves the
-    # push, last-green revision and candidate commit range from the task id.
+    # {task_name: task_id}. Everything about the failure is resolved from the task id.
     failure_tasks: dict[str, str]
     # When set, the fix stage proposes a patch but cannot build or run it.
     skip_firefox_build: bool = SKIP_FIREFOX_BUILD

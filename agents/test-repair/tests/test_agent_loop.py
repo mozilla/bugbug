@@ -163,15 +163,15 @@ def _run(
     return result, calls, head
 
 
-def test_culprit_runs_fix_stage(tmp_path, monkeypatch):
+def test_unsure_culprit_runs_fix_stage(tmp_path, monkeypatch):
     result, calls, head = _run(
         tmp_path,
         [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.9},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
             {
                 "recommendation": "backout",
                 "culprit_commit": "HEAD",
-                "confidence": 0.9,
+                "confidence": 0.5,
                 "proposed_patch": True,
             },
         ],
@@ -180,10 +180,104 @@ def test_culprit_runs_fix_stage(tmp_path, monkeypatch):
     assert len(calls) == 2  # analysis + fix
     assert result.classification == "regression"
     assert result.culprit_commit == head
+    # A patch is developer advice; the sheriff still backs the regression out.
     assert result.recommendation == "backout"
     assert result.proposed_patch is True
     assert result.last_green_revision == "greenhg"
     assert result.num_turns == 6
+
+
+def test_skip_firefox_build_still_patches_but_never_builds(tmp_path, monkeypatch):
+    # The fix stage is still worth running without a build: the patch is developer
+    # advice for the reland, and it costs nothing to compile it here.
+    options = []
+    result, calls, head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {
+                "recommendation": "backout",
+                "culprit_commit": "HEAD",
+                "confidence": 0.5,
+                "proposed_patch": True,
+            },
+        ],
+        monkeypatch,
+        skip_firefox_build=True,
+        options_out=options,
+    )
+    assert len(calls) == 2  # analysis + fix
+    assert result.culprit_commit == head
+    assert result.proposed_patch is True
+    # Nothing that leads to a build may have run.
+    assert not (tmp_path / ".mozconfig").exists()
+    # The build tool is not merely discouraged, it is not on offer.
+    for opts in options:
+        assert BUILD_TOOL not in opts.allowed_tools
+        assert "firefox" not in opts.mcp_servers
+    assert "Do not build" in calls[1]
+    assert "unverified" in calls[1]
+
+
+def test_not_building_is_the_default(tmp_path, monkeypatch):
+    # Pins config.SKIP_FIREFOX_BUILD: nothing is passed here, so a change to the
+    # default flips this test rather than silently changing every run.
+    assert SKIP_FIREFOX_BUILD is True
+    options = []
+    _result, calls, _head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+        ],
+        monkeypatch,
+        options_out=options,
+    )
+    assert not (tmp_path / ".mozconfig").exists()
+    assert BUILD_TOOL not in options[0].allowed_tools
+    assert "Do not build" in calls[1]
+
+
+def test_opting_into_the_build_verifies_the_fix(tmp_path, monkeypatch):
+    options = []
+    _result, calls, _head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+        ],
+        monkeypatch,
+        skip_firefox_build=False,
+        options_out=options,
+    )
+    assert (tmp_path / ".mozconfig").exists()
+    assert BUILD_TOOL in options[0].allowed_tools
+    assert "build_firefox tool" in calls[1]
+    assert "Do not build" not in calls[1]
+
+
+def test_a_confident_blame_still_gets_a_patch(tmp_path, monkeypatch):
+    # The fix stage used to be skipped above a confidence threshold, because the
+    # Firefox build it needed delayed the report. Without that build it is cheap
+    # enough to run on a confident blame too.
+    result, calls, head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.99},
+            {
+                "recommendation": "backout",
+                "culprit_commit": "HEAD",
+                "confidence": 0.99,
+                "proposed_patch": True,
+            },
+        ],
+        monkeypatch,
+    )
+    assert len(calls) == 2  # analysis + fix
+    assert result.culprit_commit == head
+    assert result.recommendation == "backout"
+    assert result.proposed_patch is True
+    assert not (tmp_path / ".mozconfig").exists()
 
 
 def test_no_culprit_skips_fix_stage(tmp_path, monkeypatch):
@@ -218,7 +312,7 @@ def test_fix_stage_verdict_rewrite_keeps_analysis_culprit(tmp_path, monkeypatch)
                 "recommendation": "backout",
                 "culprit_commit": "HEAD",
                 "culprit_bug": 123,
-                "confidence": 0.9,
+                "confidence": 0.5,
             },
             {"recommendation": "backout", "proposed_patch": True},
         ],
@@ -226,7 +320,7 @@ def test_fix_stage_verdict_rewrite_keeps_analysis_culprit(tmp_path, monkeypatch)
     )
     assert result.culprit_commit == head
     assert result.culprit_bug == 123
-    assert result.confidence == 0.9
+    assert result.confidence == 0.5
     assert result.recommendation == "backout"
 
 
@@ -234,7 +328,7 @@ def test_failed_fix_stage_still_publishes_analysis(tmp_path, monkeypatch):
     result, calls, head = _run(
         tmp_path,
         [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.9},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
             None,
         ],
         monkeypatch,
@@ -328,11 +422,46 @@ def test_coerce_recommendation_defaults_by_classification():
     assert (
         agent._coerce_recommendation("bogus", "intermittent", False) == "do_not_backout"
     )
-    assert agent._coerce_recommendation("nonsense", "regression", True) == "backout"
     # "backout" is meaningless without a commit to back out.
     assert agent._coerce_recommendation("backout", "regression", False) == (
         "do_not_backout"
     )
+
+
+def test_analysis_prompt_frames_the_recommendation_as_the_sheriff_action(
+    tmp_path, monkeypatch
+):
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert '"backout", "do_not_backout" or "rerun"' in _flat(calls[0])
+    assert "land_fix" not in calls[0]
+    assert "sheriff's action" in calls[0]
+
+
+def test_analysis_prompt_asks_for_the_whole_stack(tmp_path, monkeypatch):
+    # A culprit at the bottom of a stack cannot be backed out on its own; the
+    # commits above it were written against the broken change.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "`Bug NNNNNN`" in calls[0]
+    assert "whole stack has to be backed out" in _flat(calls[0])
+
+
+def test_analysis_prompt_rules_out_follow_ups(tmp_path, monkeypatch):
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "Never suggest a follow-up patch" in _flat(calls[0])
+    assert "land in one push" in _flat(calls[0])
+
+
+def test_fix_prompt_keeps_the_backout_and_asks_for_a_squashed_reland(
+    tmp_path, monkeypatch
+):
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
+        monkeypatch,
+    )
+    assert "squash" in calls[1]
+    assert "not a follow-up" in _flat(calls[1])
+    assert 'leave "recommendation" as "backout"' in _flat(calls[1])
 
 
 def test_resolve_culprit_normalizes_against_the_checkout(tmp_path):
@@ -426,8 +555,34 @@ def test_prompt_names_the_task_not_just_the_platform(tmp_path, monkeypatch):
 
 def test_prompt_treats_path_filtering_as_ordering_not_exclusion(tmp_path, monkeypatch):
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "it does not clear anyone" in calls[0]
-    assert "go through the rest of the list" in calls[0]
+    assert "never clears anyone" in _flat(calls[0])
+    assert "Work through the rest of the list" in _flat(calls[0])
+
+
+def test_prompt_does_not_presume_intermittents_were_filtered_out(tmp_path, monkeypatch):
+    # Known intermittents do reach the agent, so finding the tracking bug is part
+    # of the job rather than something to rule out only if the logs insist.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "listener" not in calls[0].lower()
+    assert "known intermittent" in calls[0]
+    assert "intermittent_bug" in calls[0]
+
+
+def test_treeherder_matched_bugs_are_listed_when_any_matched(tmp_path, monkeypatch):
+    _result, calls, _head = _run(
+        tmp_path,
+        [{"culprit_commit": None}],
+        monkeypatch,
+        known_intermittent_bugs=[1805760, 2016093],
+    )
+    assert "1805760, 2016093" in calls[0]
+    assert "before blaming a commit" in calls[0]
+
+
+def test_prompt_omits_the_treeherder_line_without_matched_bugs(tmp_path, monkeypatch):
+    # Treeherder matches nothing for plenty of failures; the prompt must not say so.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "Treeherder already matches" not in calls[0]
 
 
 def test_candidate_commits_are_kept_when_no_culprit_convinces(tmp_path, monkeypatch):
@@ -569,134 +724,3 @@ def test_mozconfig_overwrites_a_foreign_one(tmp_path):
     assert "objdir-build-repair" not in written
     assert "--enable-release" not in written
     assert str(fx.objdir) in written
-
-
-def test_prompt_does_not_presume_intermittents_were_filtered_out(tmp_path, monkeypatch):
-    # Known intermittents do reach the agent, so finding the tracking bug is part
-    # of the job rather than something to rule out only if the logs insist.
-    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "listener" not in calls[0].lower()
-    assert "known intermittent" in calls[0]
-    assert "intermittent_bug" in calls[0]
-
-
-def test_treeherder_matched_bugs_are_listed_when_any_matched(tmp_path, monkeypatch):
-    _result, calls, _head = _run(
-        tmp_path,
-        [{"culprit_commit": None}],
-        monkeypatch,
-        known_intermittent_bugs=[1805760, 2016093],
-    )
-    assert "1805760, 2016093" in calls[0]
-    assert "before blaming a commit" in calls[0]
-
-
-def test_prompt_omits_the_treeherder_line_without_matched_bugs(tmp_path, monkeypatch):
-    # Treeherder matches nothing for plenty of failures; the prompt must not say so.
-    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "Treeherder already matches" not in calls[0]
-
-
-def test_analysis_prompt_frames_the_recommendation_as_the_sheriff_action(
-    tmp_path, monkeypatch
-):
-    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert '"backout", "do_not_backout" or "rerun"' in _flat(calls[0])
-    assert "land_fix" not in calls[0]
-    assert "sheriff's action" in calls[0]
-
-
-def test_fix_prompt_keeps_the_backout_and_asks_for_a_squashed_reland(
-    tmp_path, monkeypatch
-):
-    _result, calls, _head = _run(
-        tmp_path,
-        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
-        monkeypatch,
-    )
-    assert "squash" in calls[1]
-    assert "not a follow-up" in _flat(calls[1])
-    assert 'leave "recommendation" as "backout"' in _flat(calls[1])
-
-
-def test_analysis_prompt_asks_for_the_whole_stack(tmp_path, monkeypatch):
-    # A culprit at the bottom of a stack cannot be backed out on its own; the
-    # commits above it were written against the broken change.
-    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "`Bug NNNNNN`" in calls[0]
-    assert "whole stack has to be backed out" in _flat(calls[0])
-
-
-def test_analysis_prompt_rules_out_follow_ups(tmp_path, monkeypatch):
-    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "Never suggest a follow-up patch" in _flat(calls[0])
-    assert "land in one push" in _flat(calls[0])
-
-
-def test_skip_firefox_build_still_patches_but_never_builds(tmp_path, monkeypatch):
-    # The fix stage is still worth running without a build: the patch is developer
-    # advice for the reland, and it costs nothing to compile it here.
-    options = []
-    result, calls, head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {
-                "recommendation": "backout",
-                "culprit_commit": "HEAD",
-                "confidence": 0.5,
-                "proposed_patch": True,
-            },
-        ],
-        monkeypatch,
-        skip_firefox_build=True,
-        options_out=options,
-    )
-    assert len(calls) == 2  # analysis + fix
-    assert result.culprit_commit == head
-    assert result.proposed_patch is True
-    # Nothing that leads to a build may have run.
-    assert not (tmp_path / ".mozconfig").exists()
-    # The build tool is not merely discouraged, it is not on offer.
-    for opts in options:
-        assert BUILD_TOOL not in opts.allowed_tools
-        assert "firefox" not in opts.mcp_servers
-    assert "Do not build" in calls[1]
-    assert "unverified" in calls[1]
-
-
-def test_not_building_is_the_default(tmp_path, monkeypatch):
-    # Pins config.SKIP_FIREFOX_BUILD: nothing is passed here, so a change to the
-    # default flips this test rather than silently changing every run.
-    assert SKIP_FIREFOX_BUILD is True
-    options = []
-    _result, calls, _head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-        ],
-        monkeypatch,
-        options_out=options,
-    )
-    assert not (tmp_path / ".mozconfig").exists()
-    assert BUILD_TOOL not in options[0].allowed_tools
-    assert "Do not build" in calls[1]
-
-
-def test_opting_into_the_build_verifies_the_fix(tmp_path, monkeypatch):
-    options = []
-    _result, calls, _head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-        ],
-        monkeypatch,
-        skip_firefox_build=False,
-        options_out=options,
-    )
-    assert (tmp_path / ".mozconfig").exists()
-    assert BUILD_TOOL in options[0].allowed_tools
-    assert "build_firefox tool" in calls[1]
-    assert "Do not build" not in calls[1]

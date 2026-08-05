@@ -21,16 +21,11 @@ BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__download_attachment",
 ]
 
-# In-process Firefox build MCP tool (reused from agent-tools). Only the build
-# tool: evaluate_testcase / evaluate_js_shell do not run the harnesses CI runs,
-# so the agent runs the failing test itself with mach over Bash, and bootstrap is
-# deterministic prep rather than something the agent has to decide to call.
+# Only the build tool: evaluate_testcase / evaluate_js_shell do not run CI's
+# harnesses, so the agent runs the failing test itself with mach over Bash.
 BUILD_TOOL = "mcp__firefox__build_firefox"
 FIREFOX_TOOLS = [BUILD_TOOL]
 
-# Built-in tools the agent may call alongside the MCP servers. The agent runs in
-# an isolated container (permission_mode="bypassPermissions"), and reads the
-# candidate commit diffs via Bash `git show`.
 ALLOWED_TOOLS = [
     "Read",
     "Grep",
