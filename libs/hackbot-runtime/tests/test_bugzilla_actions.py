@@ -7,9 +7,9 @@ from hackbot_runtime.actions import ActionsRecorder, bugzilla
 
 async def test_add_comment_keeps_original_text():
     rec = ActionsRecorder()
-    await bugzilla.add_comment(rec, bug_id=1, text="Looks invalid.", reasoning="r")
+    await bugzilla.add_comment(rec, bug_id=1, text="Looks invalid.  \n", reasoning="r")
     text = rec.actions[0]["params"]["text"]
-    assert text == "Looks invalid."
+    assert text == "Looks invalid.  \n"
     assert rec.actions[0]["params"]["is_private"] is False
 
 

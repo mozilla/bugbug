@@ -92,7 +92,7 @@ async def add_comment(
     """
     recorder.record(
         "bugzilla.add_comment",
-        {"bug_id": bug_id, "text": text.rstrip(), "is_private": is_private},
+        {"bug_id": bug_id, "text": text, "is_private": is_private},
         reasoning=reasoning,
     )
     return _confirm(recorder, "bugzilla.add_comment")

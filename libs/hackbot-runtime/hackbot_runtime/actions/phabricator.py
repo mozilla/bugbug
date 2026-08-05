@@ -149,7 +149,7 @@ async def add_comment(
     """
     recorder.record(
         "phabricator.add_comment",
-        {"revision_id": revision_id, "text": text.rstrip()},
+        {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
     return _confirm(recorder, "phabricator.add_comment")

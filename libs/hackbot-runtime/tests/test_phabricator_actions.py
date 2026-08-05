@@ -75,5 +75,5 @@ async def test_add_comment_records_revision_and_text():
 
 async def test_add_comment_keeps_original_text():
     rec = ActionsRecorder()
-    await phabricator.add_comment(rec, revision_id=1, text="Answer.", reasoning="r")
-    assert rec.actions[0]["params"]["text"] == "Answer."
+    await phabricator.add_comment(rec, revision_id=1, text="Answer.\n", reasoning="r")
+    assert rec.actions[0]["params"]["text"] == "Answer.\n"
