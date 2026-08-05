@@ -610,3 +610,17 @@ def test_fix_prompt_keeps_the_backout_and_asks_for_a_squashed_reland(
     assert "squash" in calls[1]
     assert "not a follow-up" in _flat(calls[1])
     assert 'leave "recommendation" as "backout"' in _flat(calls[1])
+
+
+def test_analysis_prompt_asks_for_the_whole_stack(tmp_path, monkeypatch):
+    # A culprit at the bottom of a stack cannot be backed out on its own; the
+    # commits above it were written against the broken change.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "`Bug NNNNNN`" in calls[0]
+    assert "whole stack has to be backed out" in _flat(calls[0])
+
+
+def test_analysis_prompt_rules_out_follow_ups(tmp_path, monkeypatch):
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    assert "Never suggest a follow-up patch" in _flat(calls[0])
+    assert "land in one push" in _flat(calls[0])

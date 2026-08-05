@@ -50,7 +50,11 @@ Do the following:
    tracking bug" entries. If one matches, the classification is "intermittent" and
    its id goes in "intermittent_bug", however suspicious a commit looks. Search
    for the bug the culprit landed under too, for "culprit_bug".
-4. Write these files to {scratch_out}:
+4. Check whether the culprit sits in a stack: adjacent commits sharing a
+   `Bug NNNNNN` subject are one stack. If commits sit on top of the culprit, the
+   whole stack has to be backed out -- name it in summary.md, oldest sha first.
+   "culprit_commit" stays the single commit that introduced the regression.
+5. Write these files to {scratch_out}:
    - summary.md: a short (2-4 sentence) verdict.
    - analysis.md: the detailed reasoning, with evidence from the logs and diffs.
    - verdict.json: an object with keys "classification" ("regression" or
@@ -62,7 +66,9 @@ Do the following:
      (0.0-1.0).
 
 "recommendation" is the sheriff's action, not advice for the developer. A genuine
-regression is always "backout"; there is no "land a fix instead".
+regression is always "backout"; there is no "land a fix instead". Never suggest a
+follow-up patch on top of the culprit, however small -- the related changes land
+in one push, so "small enough to fix forward" is not a reason to skip the backout.
 
 Set "candidate_commits" whenever you are not confident in a single culprit: up to
 {max_candidates} full shas from the range, most to least likely, so sheriffs can
