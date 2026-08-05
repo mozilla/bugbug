@@ -193,13 +193,54 @@ def test_resolve_range_maps_only_the_endpoints(monkeypatch):
     assert looked_up == ["hgC", "hgA"]
 
 
-def test_resolve_range_without_last_green_is_incomplete(monkeypatch):
-    pushes = {"1": {"changesets": [{"node": "hgA"}]}}
+def test_resolve_range_without_last_green_widens_to_ancestor_pushes(monkeypatch):
+    # The head push alone was one l10n commit, which both hid the real culprit and
+    # left the shallow clone with nothing to enumerate.
+    urls = []
+
+    def fake_get_json(url):
+        urls.append(url)
+        if "changeset=hgA" in url:
+            return {"pushes": {"500": {"changesets": [{"node": "hgA"}]}}}
+        return {
+            "pushes": {
+                str(i): {"changesets": [{"node": f"hg{i}"}, {"node": f"hg{i}b"}]}
+                for i in range(481, 501)
+            }
+        }
+
+    monkeypatch.setattr(resolve, "_get_json", fake_get_json)
+    monkeypatch.setattr(resolve, "_hg_to_git", _hg2git)
+    rng = resolve._resolve_range("autoland", "hgA", None, 100)
+    assert f"startID={500 - resolve.FALLBACK_RANGE_PUSHES}&endID=500" in urls[1]
+    assert rng.head == "gitA"
+    assert rng.base is None
+    assert rng.span == 40
+    # Wider, but the culprit is still not provably inside it.
+    assert rng.complete is False
+
+
+def test_resolve_range_fallback_window_is_capped(monkeypatch):
+    pushes = {str(i): {"changesets": [{"node": f"hg{i}"}]} for i in range(1, 40)}
     monkeypatch.setattr(resolve, "_get_json", lambda url: {"pushes": pushes})
+    monkeypatch.setattr(resolve, "_hg_to_git", _hg2git)
+    rng = resolve._resolve_range("autoland", "hgA", None, 10)
+    # The span drives the clone depth, so the cap has to hold here too.
+    assert rng.span == 10
+    assert rng.complete is False
+
+
+def test_resolve_range_fallback_keeps_the_head_push_when_widening_fails(monkeypatch):
+    def fake_get_json(url):
+        if "changeset=hgA" in url:
+            return {"pushes": {"500": {"changesets": [{"node": "hgA"}]}}}
+        raise resolve.requests.exceptions.RequestException("hg down")
+
+    monkeypatch.setattr(resolve, "_get_json", fake_get_json)
     monkeypatch.setattr(resolve, "_hg_to_git", _hg2git)
     rng = resolve._resolve_range("autoland", "hgA", None, 100)
     assert rng.head == "gitA"
-    assert rng.base is None
+    assert rng.span == 1
     assert rng.complete is False
 
 

@@ -46,6 +46,7 @@ _TIMEOUT = 30
 LAST_GREEN_MAX_DEPTH = MAX_DEPTH
 # Cap on commits (not pushes) in the range, bounding the clone depth.
 MAX_RANGE_COMMITS = 100
+FALLBACK_RANGE_PUSHES = 20
 
 
 @dataclass(frozen=True)
@@ -267,6 +268,26 @@ def _count_commits(pushes: dict) -> int:
     return sum(len(p.get("changesets") or []) for p in pushes.values())
 
 
+def _pushlog(pushlog_url: str, query: str) -> dict:
+    """Pushes from one pushlog query; empty on any error."""
+    try:
+        return _get_json(f"{pushlog_url}?{query}&full=1&version=2").get("pushes") or {}
+    except requests.exceptions.RequestException:
+        logger.exception("Failed to fetch pushlog %s?%s", pushlog_url, query)
+        return {}
+
+
+def _fallback_pushes(pushlog_url: str, head_rev: str) -> dict:
+    """The head push plus the ``FALLBACK_RANGE_PUSHES`` pushes before it."""
+    head = _pushlog(pushlog_url, f"changeset={head_rev}")
+    if not head:
+        return {}
+    head_id = max(int(push_id) for push_id in head)
+    # startID is exclusive, endID inclusive.
+    start_id = max(head_id - FALLBACK_RANGE_PUSHES, 0)
+    return _pushlog(pushlog_url, f"startID={start_id}&endID={head_id}") or head
+
+
 def _resolve_range(
     project: str,
     head_rev: str,
@@ -285,25 +306,17 @@ def _resolve_range(
         return None
 
     path = _REPO_PATHS.get(project, project)
-    pushlog = f"{_HG_BASE}/{path}/json-pushes"
-    try:
-        if last_green_rev:
-            url = (
-                f"{pushlog}?fromchange={last_green_rev}"
-                f"&tochange={head_rev}&full=1&version=2"
-            )
-        else:
-            url = f"{pushlog}?changeset={head_rev}&full=1&version=2"
-        pushes = _get_json(url).get("pushes") or {}
-    except requests.exceptions.RequestException:
-        logger.exception(
-            "Failed to fetch %s pushlog (%s..%s)", project, last_green_rev, head_rev
+    pushlog_url = f"{_HG_BASE}/{path}/json-pushes"
+    if last_green_rev:
+        pushes = _pushlog(
+            pushlog_url, f"fromchange={last_green_rev}&tochange={head_rev}"
         )
-        pushes = {}
+    else:
+        pushes = _fallback_pushes(pushlog_url, head_rev)
 
     span = max(_count_commits(pushes), 1)
     if not last_green_rev or not pushes:
-        return CommitRange(head_git, None, span, False)
+        return CommitRange(head_git, None, min(span, max_commits), False)
 
     if span > max_commits:
         logger.warning(
