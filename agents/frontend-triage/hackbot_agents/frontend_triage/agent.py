@@ -56,6 +56,22 @@ HERE = Path(__file__).resolve().parent
 # machine-consumable for downstream handoff (summary.json -> execution agent).
 _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
+_FEEDBACK_TAGS = (
+    "If you want to categorize your feedback you can add one of the following "
+    "tags: ai-triage-wrong-file, ai-triage-wrong-cause, ai-triage-hallucination, "
+    "ai-triage-out-of-scope."
+)
+
+
+def feedback_tags_hook(action: dict) -> None:
+    """Offer the triage-specific feedback tags below the runtime's footer."""
+    params = action.get("params")
+    if not isinstance(params, dict):
+        return
+    text = params.get("text")
+    if isinstance(text, str):
+        params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}"
+
 
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
@@ -233,6 +249,7 @@ async def run_frontend_triage(
         "bugzilla.add_comment",
         permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
     )
+    actions_recorder.add_hook("bugzilla.add_comment", feedback_tags_hook)
 
     system_prompt = load_system_prompt(rules_dir, instructions)
 

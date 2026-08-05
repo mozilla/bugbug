@@ -21,8 +21,8 @@ from pydantic import Field
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
 _COMMENT_FOOTER = (
-    "*This is an automated analysis result. If this result is incorrect "
-    "please add a needinfo and feel free to correct the error.* "
+    "If you'd like to provide feedback on this comment, please use the 👍 or 👎 "
+    "reaction."
 )
 _ATTACHMENT_COMMENT_FOOTER = (
     "*This is the analysis tool's suggested fix. Feel welcome to adopt "
