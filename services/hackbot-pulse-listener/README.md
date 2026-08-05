@@ -19,12 +19,9 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
    - Tasks scheduled by an **action task** rather than by the push: `extra.parent` points
      at the decision task (= the task group) for everything the push scheduled, and at the
      action-callback task for a backfill or retrigger.
-   - Pushes that landed more than `MAX_PUSH_AGE_HOURS` ago (default 24). A failure can
-     surface long after its push, and by then the push has been superseded.
-   - Test suites that report no manifests (gtest, junit, talos, raptor, jittest, ... —
-     mozci's `is_no_groups_suite`). Their failures are overwhelmingly crashes and
-     timeouts, and the agent's method of re-running a failing manifest does not apply.
-     Judged on the label, so it costs nothing.
+   - Pushes that landed more than `MAX_PUSH_AGE_HOURS` ago (default 6, comfortably more
+     than a push needs to build and test). A failure can surface long after its push,
+     and by then the push has been superseded and a sheriff has dealt with it.
 4. **Dedupe** with in-memory TTL caches, both keyed by revision: one run per push per
    agent, triggered on the first failing task worth investigating. The test-repair
    agent works from a single task but reads the push's other failures itself, so a
@@ -35,20 +32,20 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
    error runs the agent rather than dropping a possible regression.
    - _Build:_ keep only failures this push introduced, waiting for an unsettled ancestor
      build to finish first.
-   - _Test:_ first drop whatever Treeherder judges not to be a new regression
-     (intermittent, infra, expected-fail, fixed-by-commit). Treeherder ingests a minute or
-     so behind us and classifies well after that — a median of ~19 minutes past the end of
-     the job for the intermittents we care about — so this gate waits for the job to
-     appear and then up to `TREEHERDER_CLASSIFICATION_WAIT_SECONDS` for its verdict. It is
-     the cheap filter, and most test failures stop here, before any group is fetched or
-     any ancestor walked. What survives is
-     narrowed to the groups that are new for this task's own configuration (platform and
-     build option), then Treeherder is asked once more, since a verdict can still land
-     while that walk runs. The run carries only the task id.
+   - _Test:_ first drop whatever a Treeherder classification says is not a new
+     regression (intermittent, infra, expected-fail, fixed-by-commit). Treeherder ingests
+     the job a minute or so behind us, and sheriffs classify it — mostly by hand — a
+     median of ~1 minute past the end of the job, ~11 minutes at p90 (measured over 40
+     recent autoland pushes), so this gate waits for the job to appear and then up to
+     `TREEHERDER_CLASSIFICATION_WAIT_SECONDS` for its verdict. It is the cheap filter,
+     and most test failures stop here, before any group is fetched or any ancestor
+     walked. What survives goes through the ancestor walk below, then Treeherder is
+     asked once more, since a verdict can still land while that walk runs. The run
+     carries only the task id.
    - _Both:_ a walk is abandoned as soon as another task triggers the run for that
      push. One push can emit dozens of failing tasks, and without this each one holds
      a worker for the full wait only to find the push already handed off.
-6. **Budget.** At most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs (default 100) may
+6. **Budget.** At most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs (default 50) may
    start in any rolling 24 hours. A slot is taken when a run is triggered and given
    back if the trigger fails, so only runs that really started count. Once the budget
    is spent, later test failures stop before any Treeherder work. Build-repair is not
@@ -61,6 +58,31 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
 
 The dedupe caches, the daily budget and pending-run tracking are all in-memory, so
 a restart resets them.
+
+## The ancestor walk
+
+Both paths ask the same question — did this push introduce the failure, or inherit it
+from an ancestor? — by walking the push's ancestors (mozci resolves the chain from the
+pushlog) until one gives a verdict on the failing unit, and both wait up to ten minutes
+for an ancestor still running before failing open. What differs is the unit compared:
+
+- _Build:_ the task **label**. A build label carries no chunk number, so it means the
+  same thing on every push: an ancestor whose same label passed makes the failure new,
+  one where it already failed makes it inherited.
+- _Test:_ each failing **manifest** (Treeherder's "group") separately, compared within
+  this task's own **configuration** — platform plus build option — and not by label. A
+  test label carries its chunk number and chunk assignments drift between pushes, so
+  comparing labels would make ancestors look as though they never ran the manifest,
+  whereas a manifest only appears on the tasks that actually ran it. Consulting one
+  configuration keeps a manifest already broken on another platform from masking a
+  genuine new failure here. Only the manifests that come back new are kept, and the task
+  is skipped if none do.
+- _Test with no manifests:_ a suite that reports no groups (gtest, talos, jittest, ...)
+  or a task-level failure (crash, timeout, harness error) has nothing finer to compare,
+  so the whole task is compared by label as on the build path — except that a chunked
+  label is reported as new rather than compared, since the chunk covers different tests
+  on each push. These cannot be reproduced by re-running a manifest, but the agent can
+  still identify the culprit commit.
 
 ## Run locally
 

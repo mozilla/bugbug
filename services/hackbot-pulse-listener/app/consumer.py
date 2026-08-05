@@ -4,11 +4,9 @@ import time
 from collections import deque
 from concurrent.futures import Executor
 
-import mozci.push  # noqa: F401  (imported first: mozci.task alone is circular)
 from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
-from mozci.task import is_no_groups_suite
 
 from app import client, lando, regression, taskcluster, treeherder, worker
 from app.config import settings
@@ -20,12 +18,14 @@ CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
 
-# Taskcluster ``kind`` tags that denote test tasks (vs build tasks).
+# Taskcluster ``kind`` tags that denote test tasks (vs build tasks). These are
+# taskgraph kinds, not harnesses: xpcshell, reftest and gtest all arrive as ``test``,
+# and the ``test-suite`` tag below catches any kind these miss.
 #
-# ``source-test`` is deliberately absent. It is not a Firefox test harness: on a
-# recent push its 22 task types were all mozlint, shadow-scheduler and file-metadata
-# checks. None can be repaired by the agent's method (clone, build Firefox, re-run
-# the failing test with mach), so routing them here only spends runs.
+# ``source-test`` is deliberately absent. Those tasks are mostly mozlint,
+# shadow-scheduler and file-metadata checks -- a few are python tests, but all of them
+# are closer to a build than to a test, and none is repaired by the agent's method
+# (clone, build Firefox, re-run the failing test with mach). Left out for now.
 TEST_KINDS = {"test", "mochitest", "web-platform-tests"}
 
 # In-memory dedupe of hg revisions already handed to the build-repair agent. A
@@ -242,21 +242,6 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
-    # Suites that report no manifests -- gtest, junit, talos, raptor, jittest and the
-    # rest of mozci's list. Their failures are overwhelmingly crashes and timeouts
-    # rather than regressions (every one the listener ran on so far was later
-    # classified intermittent), and the agent's method of re-running a failing
-    # manifest with mach does not apply to them. Checked on the label, so it costs
-    # nothing.
-    if is_no_groups_suite(label):
-        logger.info(
-            "Task %s (%s) is a suite that reports no test manifests; skipping -- %s",
-            task_id,
-            label,
-            job_link,
-        )
-        return None
-
     if regression.is_stale_push(
         project, hg_revision, settings.max_push_age_hours * 3600
     ):
@@ -283,8 +268,8 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
 
     # Cheapest gate first: it rules out intermittents and infra failures for every
-    # harness before any group resolution or ancestor walking. Treeherder classifies
-    # a few minutes after ingesting, so the verdict is waited for rather than read
+    # harness before any group resolution or ancestor walking. Sheriffs classify a
+    # minute or so after the job ends, so the verdict is waited for rather than read
     # once. The same record carries the configuration the regression check compares
     # against.
     job = treeherder.job_for_task(project, task_id)
@@ -307,9 +292,11 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     try:
         groups = treeherder.failing_groups(project, hg_revision, task_id)
     except treeherder.GroupResultsUnavailable as exc:
-        # Routine for a task-level failure (crash, timeout, harness error), which
-        # records no per-manifest results, or a log still being parsed. With no group
-        # to compare, fall back to comparing the task as a whole.
+        # Routine for a suite that reports no manifests (gtest, junit, talos, raptor,
+        # jittest, ...), for a task-level failure (crash, timeout, harness error), and
+        # for a log still being parsed. With no group to compare, fall back to comparing
+        # the task as a whole: the agent may still find the culprit commit even where it
+        # cannot re-run the failing manifest to reproduce.
         logger.info("%s; comparing the task as a whole -- %s", exc, job_link)
         groups, whole_task = [], True
     except Exception:

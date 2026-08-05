@@ -802,8 +802,8 @@ def test_losing_the_claim_race_gives_the_slot_back(env, monkeypatch):
 
 
 def test_source_test_tasks_are_not_routed_to_test_repair(env):
-    # source-test is lint / shadow-scheduler / file-metadata work, not a Firefox test
-    # harness, so the agent has no way to repair it.
+    # source-test is mostly lint / shadow-scheduler / file-metadata work, closer to a
+    # build than to a test, so the agent has no way to repair it by re-running a test.
     body = _test_msg()
     body["task"]["tags"]["kind"] = "source-test"
     body["task"]["tags"]["label"] = "source-test-node-newtab-unit-tests"
@@ -844,18 +844,17 @@ def test_an_unreadable_group_lookup_does_not_wait_on_an_ancestor(env):
     env.is_new_task_failure.assert_not_called()
 
 
-def test_group_less_suites_are_not_investigated(env):
-    # gtest / junit / talos and the rest report no manifests. Every one the listener
-    # ran on was later classified intermittent, and the agent cannot re-run a
-    # manifest that does not exist.
+def test_group_less_suites_are_investigated_as_a_whole_task(env):
+    # gtest / junit / talos and the rest report no manifests, so there is no group to
+    # compare -- but the agent can still find the culprit commit, so they go through the
+    # whole-task comparison rather than being dropped.
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.is_new_task_failure.return_value = True
     body = _test_msg()
     body["task"]["tags"]["label"] = "test-macosx1500-aarch64/debug-gtest-1proc"
 
-    assert consumer.process(body, env.executor) is None
-    # Rejected on the label alone: no ingest wait, no verdict wait, no walk.
-    env.job_for_task.assert_not_called()
-    env.failing_groups.assert_not_called()
-    env.trigger_run.assert_not_called()
+    assert consumer.process(body, env.executor) == "tr-1"
+    env.is_new_task_failure.assert_called_once()
 
 
 def test_manifest_suites_are_still_investigated(env):

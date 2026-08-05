@@ -1,14 +1,15 @@
 """Treeherder classification gate for test-repair.
 
-Treeherder ingests the same Taskcluster failures the listener sees and classifies
-each failing job while parsing its log -- a cross-push analysis of per-manifest
-pass rates, refined afterwards by sheriffs and by mozci's autoclassifier. Reading
-that verdict is cheaper and broader than judging intermittency ourselves: it covers
-every harness, where the tests.firefox.dev timings datasets it replaces published
-only mochitest and xpcshell, leaving reftest and web-platform-tests unjudged.
+Treeherder ingests the same Taskcluster failures the listener sees, and sheriffs
+classify each failing job there, mostly by hand (mozci's autoclassifier covers some
+of them). Reading that verdict is cheaper and broader than judging intermittency
+ourselves: it is a human triaging every harness, against the push's other results
+and the known intermittent bugs.
 
-Ingestion trails the failure message (measured on autoland: ~50s median, ~3min at
-p90), so the lookup waits for the job to appear before reading its classification.
+Two delays are waited out. Ingestion trails the failure message (measured on
+autoland: ~50s median, ~3min at p90), so the lookup waits for the job to appear.
+Classification then trails the job's end (measured over 40 recent autoland pushes:
+~1min median, ~11min at p90, with a long tail past an hour).
 """
 
 from __future__ import annotations
@@ -259,7 +260,7 @@ def await_skip_reason(project: str, task_id: str, job: dict | None) -> str | Non
     """Wait a bounded time for a verdict that this failure is not worth a run.
 
     ``job`` carries the verdict as of ingestion, which on an intermittent is usually
-    still "not classified": Treeherder classifies a few minutes later. Waiting for it
+    still "not classified": a sheriff gets to it a minute or so later. Waiting for it
     here rejects such a failure before the caller's ancestor walk rather than after,
     so the filter no longer depends on how long that walk happens to take.
 
