@@ -23,7 +23,7 @@ async def test_add_attachment_patch_forces_text_plain(tmp_path):
     params = rec.actions[0]["params"]
     assert params["content_type"] == "text/plain"
     assert params["is_patch"] is True
-    assert "suggested fix" in params["comment"]
+    assert params["comment"] == "fix"
     assert params["file_name"] == "fix.patch"
 
 

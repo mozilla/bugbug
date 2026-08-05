@@ -19,11 +19,6 @@ from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
-_ATTACHMENT_COMMENT_FOOTER = (
-    "*This is the analysis tool's suggested fix. Feel welcome to adopt "
-    "it as a starting point and evolve it as needed to meet our coding "
-    "standards.*"
-)
 
 
 def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
@@ -178,7 +173,7 @@ async def add_attachment(
         "size_bytes": size,
     }
     if comment:
-        params["comment"] = comment.rstrip() + "\n\n" + _ATTACHMENT_COMMENT_FOOTER
+        params["comment"] = comment
 
     recorder.record(
         "bugzilla.add_attachment",
