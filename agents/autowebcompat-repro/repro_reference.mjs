@@ -14,8 +14,8 @@
 //   BROWSER=chrome  BROWSER_BIN=/path/to/chrome  node this-script.mjs
 //
 // Exit codes:
-//   0 = worked as expected
-//   1 = did not work as expected
+//   0 = the reported functionality worked correctly in this browser
+//   1 = the reported functionality did not work (breakage reproduced in this browser)
 //   2 = no verdict because the browser or script failed
 
 import puppeteer from "puppeteer";
