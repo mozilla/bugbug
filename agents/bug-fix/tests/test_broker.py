@@ -40,7 +40,7 @@ def test_patch_route_returns_base_and_diff():
     fake.resolve_commit.assert_awaited_once_with("base9")
 
 
-def test_patch_route_falls_back_to_raw_base_when_unresolved():
+def test_patch_route_falls_back_to_raw_base_when_unresolved(caplog):
     fake = AsyncMock()
     fake.query_latest_diff = AsyncMock(
         return_value=PhabricatorDiff(id=9, base_commit="base9")
@@ -48,10 +48,12 @@ def test_patch_route_falls_back_to_raw_base_when_unresolved():
     fake.get_raw_diff = AsyncMock(return_value="diff --git a/f b/f\n")
     fake.resolve_commit = AsyncMock(return_value=None)
 
-    resp = _client(fake).get("/phabricator/revision/42/patch")
+    with caplog.at_level("WARNING", logger=broker.log.name):
+        resp = _client(fake).get("/phabricator/revision/42/patch")
 
     assert resp.status_code == 200
     assert resp.json()["base_commit"] == "base9"
+    assert "could not expand base commit base9 of D42" in caplog.text
 
 
 def test_patch_route_404_when_no_diff():

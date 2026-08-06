@@ -157,8 +157,24 @@ class PhabricatorClient:
         if _is_full_commit(ref):
             return ref
         result = await self.conduit_request("diffusion.querycommits", names=[ref])
-        commit_phid = (result.get("identifierMap") or {}).get(ref)
-        if not commit_phid:
+        data = result.get("data")
+        commit_phid = result.get("identifierMap").get(ref)
+        if commit_phid in data:
+            commits = [data[commit_phid]]
+        else:
+            # ``identifierMap`` only maps unambiguous commits, and a firefox
+            # commit is mirrored to autoland, beta, release, etc. Thus, the same
+            # hash can appear in multiple repos with different PHIDs.
+            commits = data.values()
+
+        identifiers = {
+            commit["identifier"]
+            for commit in commits
+            if commit["identifier"].startswith(ref)
+            and _is_full_commit(commit["identifier"])
+        }
+
+        if len(identifiers) != 1:
             return None
-        commit = (result.get("data") or {}).get(commit_phid) or {}
-        return commit.get("identifier") or None
+
+        return identifiers.pop()

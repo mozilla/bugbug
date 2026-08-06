@@ -248,6 +248,122 @@ async def test_resolve_commit_expands_abbreviated_hash(monkeypatch):
     assert captured["params"]["names"] == ["9f2e8c25f0b4"]
 
 
+async def test_resolve_commit_prefers_the_mapped_commit(monkeypatch):
+    # When Phabricator does map the name, that is the answer. Two commits share
+    # the abbreviation here, so weighing every match would refuse both.
+    full = "0397cc0f5dcabc6f44e0f742107ff3695882d5e4"
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "identifierMap": {"0397cc0f5dca": "PHID-CMIT-1"},
+                "data": {
+                    "PHID-CMIT-1": {"identifier": full},
+                    "PHID-CMIT-2": {"identifier": "0397cc0f5dca" + "b" * 28},
+                },
+            }
+        },
+    )
+    assert await _client().resolve_commit("0397cc0f5dca") == full
+
+
+async def test_resolve_commit_expands_when_mirrored_in_several_repos(monkeypatch):
+    # A firefox commit lands in autoland and is mirrored to beta and release, so
+    # the name matches four repositories and Phabricator maps it to none of
+    # them. The mirrors agree on the hash, which is all the expansion needs.
+    full = "0397cc0f5dcabc6f44e0f742107ff3695882d5e4"
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "identifierMap": {},
+                "data": {
+                    "PHID-CMIT-autoland": {"identifier": full},
+                    "PHID-CMIT-beta": {"identifier": full},
+                    "PHID-CMIT-release": {"identifier": full},
+                    "PHID-CMIT-infra": {"identifier": full},
+                },
+            }
+        },
+    )
+    assert await _client().resolve_commit("0397cc0f5dca") == full
+
+
+async def test_resolve_commit_ignores_matches_that_are_not_expansions(monkeypatch):
+    # `names` resolves monograms and branches too; only a commit whose hash
+    # starts with the abbreviation can be its expansion.
+    full = "0397cc0f5dcabc6f44e0f742107ff3695882d5e4"
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "identifierMap": {},
+                "data": {
+                    "PHID-CMIT-1": {"identifier": full},
+                    "PHID-CMIT-2": {"identifier": "b" * 40},
+                },
+            }
+        },
+    )
+    assert await _client().resolve_commit("0397cc0f5dca") == full
+
+
+async def test_resolve_commit_rejects_an_identifier_that_is_not_a_full_hash(
+    monkeypatch,
+):
+    # `identifier` names the commit in its repository and is not always a
+    # fetchable object id, so returning one defeats the expansion just as the
+    # abbreviation we started from does -- even when Phabricator maps the name.
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "identifierMap": {"0397cc0f5dca": "PHID-CMIT-1"},
+                "data": {"PHID-CMIT-1": {"identifier": "0397cc0f5dca"}},
+            }
+        },
+    )
+    assert await _client().resolve_commit("0397cc0f5dca") is None
+
+
+async def test_resolve_commit_scan_skips_identifiers_that_are_not_full_hashes(
+    monkeypatch,
+):
+    full = "0397cc0f5dcabc6f44e0f742107ff3695882d5e4"
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "identifierMap": {},
+                "data": {
+                    "PHID-CMIT-1": {"identifier": "0397cc0f5dca"},
+                    "PHID-CMIT-2": {"identifier": full},
+                },
+            }
+        },
+    )
+    # The unfetchable short id is dropped, leaving one usable expansion.
+    assert await _client().resolve_commit("0397cc0f5dca") == full
+
+
+async def test_resolve_commit_returns_none_when_ambiguous(monkeypatch):
+    # Two different commits share the abbreviation: expanding to either could
+    # check the agent out on the wrong tree, so refuse to guess.
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "identifierMap": {},
+                "data": {
+                    "PHID-CMIT-1": {"identifier": "0397cc0f5dca" + "a" * 28},
+                    "PHID-CMIT-2": {"identifier": "0397cc0f5dca" + "b" * 28},
+                },
+            }
+        },
+    )
+    assert await _client().resolve_commit("0397cc0f5dca") is None
+
+
 async def test_resolve_commit_returns_none_when_unresolved(monkeypatch):
     _capture_post(monkeypatch, {"result": {"identifierMap": {}, "data": {}}})
     assert await _client().resolve_commit("deadbeef") is None
