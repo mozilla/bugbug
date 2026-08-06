@@ -8,9 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.actions_applier import on_run_completed
+from app.agents import AGENT_REGISTRY
 from app.auth import require_push_auth
 from app.database.connection import get_db
 from app.database.models import Run
+from app.notify import notify_run_completed
 from app.routers.runs import finalize_run
 
 log = logging.getLogger(__name__)
@@ -115,12 +117,12 @@ async def agent_run_finished(
 async def apply_run_actions(
     request: Request, db: AsyncSession = Depends(get_db)
 ) -> None:
-    """Consumer of `run.completed`: record the run's actions, auto-apply if opted in.
+    """Consumer of `run.completed`: record the run's actions, auto-apply, notify.
 
-    Named for what it does, not the event it consumes, because the same
-    `run.completed` event will feed other consumers later (notifications,
-    webhooks) — each its own route named after its own job. The subscription
-    feeding this one is filtered to succeeded runs (see deploy-events.sh).
+    Named for its main job, not the event it consumes. The notification is not a second
+    consumer of the same event because it reports whether Bugzilla was actually written,
+    so it has to run after the apply rather than racing it. The subscription feeding this
+    one is filtered to succeeded runs (see deploy-events.sh).
     """
     body = await request.json()
     event = _decode_pubsub_push_body(body)
@@ -135,3 +137,14 @@ async def apply_run_actions(
         return
 
     await on_run_completed(db, run)
+
+    spec = AGENT_REGISTRY.get(run.agent)
+    if spec and spec.notify_completion:
+        try:
+            await notify_run_completed(db, run)
+        except Exception:
+            # By this point the Bugzilla writes have landed, so failing the route over a
+            # missed channel message would redeliver work that is already done.
+            log.exception(
+                "Could not notify for run %s; its actions were already applied", run_id
+            )

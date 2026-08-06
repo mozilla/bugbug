@@ -87,7 +87,11 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
 
 
 def _reported_confidence(run: Run) -> Confidence | None:
-    """The run's self-reported confidence, or None if it didn't report a usable one."""
+    """The run's self-reported confidence, or None if it didn't report a usable one.
+
+    Shared with `app/notify.py` via `parse_confidence`, so the level that decides an
+    unattended Bugzilla write is the level the channel is told about.
+    """
     return parse_confidence(
         ((run.summary or {}).get("findings") or {}).get("confidence")
     )

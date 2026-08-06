@@ -36,6 +36,9 @@ class AgentSpec:
     # Bounds what a run may write unattended, beyond what confidence already gates.
     # Returns the reason a human is needed, or None. See app/auto_apply.py.
     auto_apply_guard: Callable[[Run, list[RunAction]], str | None] | None = None
+    # Whether a succeeded run gets a completion notification (see app/notify.py).
+    # The destination is deployment config, not a per-agent choice.
+    notify_completion: bool = False
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -94,6 +97,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         auto_apply_actions=True,
         auto_apply_confidence=frozenset({Confidence.high}),
         auto_apply_guard=frontend_triage_guard,
+        notify_completion=True,
     ),
     "test-repair": AgentSpec(
         name="test-repair",
