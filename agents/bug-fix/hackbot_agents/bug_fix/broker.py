@@ -74,12 +74,12 @@ def _patch_endpoint(client: PhabricatorClient):
             )
         raw_diff = await client.get_raw_diff(diff.id)
         # The recorded base is often an abbreviated hash; git can only fetch a
-        # full object id, so expand it here (falling back to the raw value).
+        # full object id, so expand it here.
         try:
             base_commit = await client.resolve_commit(diff.base_commit)
         except UnresolvedCommitError as exc:
-            log.warning("Base commit of D%s stays unexpanded: %s", revision_id, exc)
-            base_commit = diff.base_commit
+            return JSONResponse({"error": str(exc)}, status_code=422)
+
         return JSONResponse({"base_commit": base_commit, "raw_diff": raw_diff})
 
     return get_patch

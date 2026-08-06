@@ -44,7 +44,9 @@ def test_patch_route_returns_base_and_diff():
     fake.resolve_commit.assert_awaited_once_with("base9")
 
 
-def test_patch_route_falls_back_to_raw_base_when_unresolved(caplog):
+def test_patch_route_422_when_base_cannot_be_expanded(caplog):
+    # Serving the abbreviation would only fail later in `git fetch`, which
+    # reports an exit status and not a reason, so fail here and say why.
     fake = AsyncMock()
     fake.query_latest_diff = AsyncMock(
         return_value=PhabricatorDiff(id=9, base_commit="base9")
@@ -57,9 +59,11 @@ def test_patch_route_falls_back_to_raw_base_when_unresolved(caplog):
     with caplog.at_level("WARNING", logger=broker.log.name):
         resp = _client(fake).get("/phabricator/revision/42/patch")
 
-    assert resp.status_code == 200
-    assert resp.json()["base_commit"] == "base9"
-    # The reason travels into the log, not just the fact that it happened.
+    # 422, not 404: the revision and its base exist, they are just unusable.
+    assert resp.status_code == 422
+    # The reason reaches the agent, which puts the response body in the error
+    # it raises, as well as the broker's own log.
+    assert resp.json()["error"] == "Cannot expand base9: not imported"
     assert "D42" in caplog.text
     assert "Cannot expand base9: not imported" in caplog.text
 
