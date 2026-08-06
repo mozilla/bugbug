@@ -14,6 +14,33 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class Confidence(str, Enum):
+    """How sure an agent is of its own findings.
+
+    Reported by the agent inside a free-form JSON block, so it arrives as untrusted
+    text — use `parse_confidence` rather than the constructor.
+    """
+
+    high = "high"
+    medium = "medium"
+    low = "low"
+
+
+def parse_confidence(value: object) -> Confidence | None:
+    """`value` as a `Confidence`, or None if it isn't one.
+
+    Tolerates casing and stray whitespace, because the value is parsed out of
+    model output and "High" must not silently read as "no confidence". Anything
+    else is None: callers fail closed rather than inventing a level.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return Confidence(value.strip().lower())
+    except ValueError:
+        return None
+
+
 class ArtifactRef(BaseModel):
     name: str
     size: int

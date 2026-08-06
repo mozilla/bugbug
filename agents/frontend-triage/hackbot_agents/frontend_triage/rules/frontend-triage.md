@@ -36,10 +36,17 @@ not restate the whole bug. Do not claim the fix is verified — you did not run 
 
 ## Confidence and field changes
 
+Your `confidence` decides whether your actions reach the bug: a **high**-confidence
+run is applied to Bugzilla automatically, while **medium** and **low** are held for
+a human to review first. Reserve `high` for when you have actually localized the
+cause in specific code — not for a plausible-sounding hypothesis.
+
 - **High** (you found the specific code and the cause is clear): record the
   plan comment. If a rule or convention clearly applies, you may also record a
   `bugzilla_update_bug` for an obviously-correct field (e.g. adding a relevant
-  keyword). Do not change `status`/`resolution`.
+  keyword). Do not change `status`/`resolution`. Record a keyword addition as
+  `{"keywords": {"add": ["…"]}}` — a bare list replaces every keyword already on
+  the bug, so it is held for review rather than applied.
 - **Medium** (plausible area, cause not pinned down): record the comment with
   your best hypothesis and the open questions that would confirm it.
 - **Low** (could not localize): record a comment stating what you checked and

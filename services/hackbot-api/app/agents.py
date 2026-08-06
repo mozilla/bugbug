@@ -4,10 +4,13 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from app.auto_apply import frontend_triage_guard
+from app.database.models import Run, RunAction
 from app.schemas import (
     AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
+    Confidence,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
@@ -27,6 +30,12 @@ class AgentSpec:
     # succeeds. Off by default: actions are still recorded and can always be
     # applied manually from the UI; only opted-in agents auto-apply.
     auto_apply_actions: bool = False
+    # Fail closed: when set, a run whose findings carry no usable confidence never
+    # qualifies. Widening the policy is an edit to this set, not to the applier.
+    auto_apply_confidence: frozenset[Confidence] | None = None
+    # Bounds what a run may write unattended, beyond what confidence already gates.
+    # Returns the reason a human is needed, or None. See app/auto_apply.py.
+    auto_apply_guard: Callable[[Run, list[RunAction]], str | None] | None = None
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -80,6 +89,11 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Triage a Firefox desktop frontend bug (read-only) and produce a root-cause analysis and proposed fix plan.",
         job_name="hackbot-agent-frontend-triage",
         input_schema=FrontendTriageInputs,
+        # Triage results reach a real bug unattended, so only the ones the agent
+        # localized to specific code qualify. Medium/low stays for manual apply.
+        auto_apply_actions=True,
+        auto_apply_confidence=frozenset({Confidence.high}),
+        auto_apply_guard=frontend_triage_guard,
     ),
     "test-repair": AgentSpec(
         name="test-repair",
