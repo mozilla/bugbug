@@ -6,9 +6,7 @@ Respond only to the comments quoted below. Ignore any earlier mentions of you el
 {comment}
 </comments>
 
-The block contains one service-generated `<comment>` element for each triggering comment. Its `comment_id` and `type` attributes match the names returned by the Phabricator tools; inline comments also have a `diff_id`.
-
-A quoted comment rarely stands alone: an inline one only makes sense next to the code it sits on. Before acting, use the `phabricator` tools to read D{revision_id} and its thread, and locate the relevant comment context so you can understand it. For an inline comment, use the supplied `diff_id` to inspect its diff. Your tree is at the revision's latest diff, so a comment on an older `diff_id` may point at code that has since changed.
+A quoted comment rarely stands alone: an inline one only makes sense next to the code it sits on. Before acting, use the `phabricator` tools to read D{revision_id} and its thread, and to locate the comment context so you can understand it. Your tree is at the revision's latest diff, so a comment on an older `diff_id` may point at code that has since changed.
 
 Then address each quoted comment by taking the matching path:
 

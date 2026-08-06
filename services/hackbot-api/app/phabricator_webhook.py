@@ -30,7 +30,7 @@ class HackbotMention:
     comment: str
     author_phid: str
     comment_id: int
-    comment_type: Literal["comment", "inline"]
+    comment_type: Literal["regular", "inline"]
     diff_id: int | None = None
 
 
@@ -41,46 +41,6 @@ def triggering_transaction_phids(payload: dict) -> list[str]:
         for t in (payload.get("transactions") or [])
         if isinstance(t, dict) and t.get("phid")
     ]
-
-
-def _build_hackbot_mention(
-    transaction: dict, comment: dict, author_phid: str
-) -> HackbotMention:
-    """Build the minimal agent context for a matching comment transaction."""
-    transaction_type = transaction["type"]
-    if transaction_type == "inline":
-        fields = transaction["fields"]
-        diff = fields["diff"]
-        diff_id = diff["id"]
-    else:
-        diff_id = None
-
-    return HackbotMention(
-        comment=comment["content"]["raw"],
-        author_phid=author_phid,
-        comment_id=comment["id"],
-        comment_type="inline" if transaction_type == "inline" else "comment",
-        diff_id=diff_id,
-    )
-
-
-def _get_hackbot_mention(
-    transaction: dict, *, bot_phid: str, token: str
-) -> HackbotMention | None:
-    """Return the matching comment and its anchor context from one transaction."""
-    transaction_type = transaction.get("type")
-    if transaction_type not in _COMMENT_TYPES:
-        return None
-
-    author_phid = transaction.get("authorPHID")
-    if not author_phid or (bot_phid and author_phid == bot_phid):
-        return None
-
-    for comment in transaction.get("comments") or []:
-        comment_text = comment["content"]["raw"]
-        if token in comment_text:
-            return _build_hackbot_mention(transaction, comment, author_phid)
-    return None
 
 
 def find_hackbot_mentions(
@@ -102,9 +62,35 @@ def find_hackbot_mentions(
     for transaction in transactions:
         if transaction.get("phid") not in triggering_phids:
             continue
-        mention = _get_hackbot_mention(transaction, bot_phid=bot_phid, token=token)
-        if mention is not None:
-            matches.append(mention)
+        if transaction.get("type") not in _COMMENT_TYPES:
+            continue
+
+        author_phid = transaction.get("authorPHID")
+        if not author_phid or (bot_phid and author_phid == bot_phid):
+            continue
+
+        for comment in transaction.get("comments") or []:
+            comment_text = comment["content"]["raw"]
+            if token not in comment_text:
+                continue
+
+            diff_id = (
+                transaction["fields"]["diff"]["id"]
+                if transaction["type"] == "inline"
+                else None
+            )
+            matches.append(
+                HackbotMention(
+                    comment=comment_text,
+                    author_phid=author_phid,
+                    comment_id=comment["id"],
+                    comment_type=(
+                        "inline" if transaction["type"] == "inline" else "regular"
+                    ),
+                    diff_id=diff_id,
+                )
+            )
+            break
     return matches
 
 
@@ -125,16 +111,6 @@ def _format_comment(mention: HackbotMention) -> str:
         attributes.append(f'diff_id="{mention.diff_id}"')
     body = "\n".join(f"    {line}" for line in escape(mention.comment).splitlines())
     return f"  <comment {' '.join(attributes)}>\n{body}\n  </comment>"
-
-
-def _join_comments(mentions: list[HackbotMention]) -> str:
-    """Combine one or more triggering comments into the agent's ``comment`` input.
-
-    Each comment is an XML element with the same identifiers used by the
-    Phabricator tools. The agent prompt supplies the enclosing ``<comments>``
-    element.
-    """
-    return "\n\n".join(_format_comment(mention) for mention in mentions)
 
 
 async def resolve_revision(
@@ -202,7 +178,7 @@ async def detect_mention_and_revision(
             object_phid,
         )
         return None
-    comment = _join_comments(authorized_mentions)
+    comment = "\n\n".join(_format_comment(mention) for mention in authorized_mentions)
 
     revision_id, bug_id = await resolve_revision(client, object_phid)
     if revision_id is None:

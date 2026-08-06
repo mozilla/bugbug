@@ -20,7 +20,7 @@ from app.phabricator_authorization import (
 )
 from app.phabricator_webhook import (
     HackbotMention,
-    _join_comments,
+    _format_comment,
     detect_mention_and_revision,
     find_hackbot_mentions,
     resolve_revision,
@@ -85,7 +85,7 @@ def test_find_mention_matches():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "hey @hackbot please fix")]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a", 1, "comment")]
+    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a", 1, "regular")]
 
 
 def test_find_mention_no_token():
@@ -234,14 +234,14 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
     ]
 
 
-def test_join_comments_renders_normal_comment_as_xml():
-    mention = HackbotMention("only one", "PHID-USER-a", 123, "comment")
-    assert _join_comments([mention]) == (
-        '  <comment comment_id="123" type="comment">\n    only one\n  </comment>'
+def test_format_comment_renders_regular_comment_as_xml():
+    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular")
+    assert _format_comment(mention) == (
+        '  <comment comment_id="123" type="regular">\n    only one\n  </comment>'
     )
 
 
-def test_join_comments_renders_inline_comment_as_xml():
+def test_format_comment_renders_inline_comment_as_xml():
     mention = HackbotMention(
         "fix this",
         "PHID-USER-a",
@@ -249,39 +249,37 @@ def test_join_comments_renders_inline_comment_as_xml():
         "inline",
         diff_id=456,
     )
-    assert _join_comments([mention]) == (
+    assert _format_comment(mention) == (
         '  <comment comment_id="456" type="inline" diff_id="456">\n'
         "    fix this\n"
         "  </comment>"
     )
 
 
-def test_join_comments_renders_mixed_comments_in_order():
-    joined = _join_comments(
-        [
-            HackbotMention("first", "PHID-USER-a", 1, "comment"),
-            HackbotMention(
-                "second",
-                "PHID-USER-a",
-                2,
-                "inline",
-                diff_id=456,
-            ),
-        ]
-    )
-    assert joined == (
-        '  <comment comment_id="1" type="comment">\n    first\n  </comment>\n\n'
+def test_format_comments_renders_mixed_comments_in_order():
+    mentions = [
+        HackbotMention("first", "PHID-USER-a", 1, "regular"),
+        HackbotMention(
+            "second",
+            "PHID-USER-a",
+            2,
+            "inline",
+            diff_id=456,
+        ),
+    ]
+    formatted = "\n\n".join(_format_comment(mention) for mention in mentions)
+    assert formatted == (
+        '  <comment comment_id="1" type="regular">\n    first\n  </comment>\n\n'
         '  <comment comment_id="2" type="inline" diff_id="456">\n'
         "    second\n"
         "  </comment>"
     )
 
 
-def test_join_comments_escapes_comment_body():
-    assert _join_comments(
-        [HackbotMention("@hackbot <fix> & explain", "PHID-USER-a", 1, "comment")]
-    ) == (
-        '  <comment comment_id="1" type="comment">\n'
+def test_format_comment_escapes_comment_body():
+    mention = HackbotMention("@hackbot <fix> & explain", "PHID-USER-a", 1, "regular")
+    assert _format_comment(mention) == (
+        '  <comment comment_id="1" type="regular">\n'
         "    @hackbot &lt;fix&gt; &amp; explain\n"
         "  </comment>"
     )
@@ -367,7 +365,7 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
     assert result == (
-        '  <comment comment_id="1" type="comment">\n'
+        '  <comment comment_id="1" type="regular">\n'
         "    @hackbot please fix\n"
         "  </comment>",
         42,
