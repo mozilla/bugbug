@@ -65,6 +65,22 @@ class Settings(BaseSettings):
     push_auth_audience: str = ""
     push_auth_service_account: str = ""
 
+    # Run-completion notification (email; the recipients are Slack channel
+    # addresses via Slack's "Email to channel"). Unset => notification skipped.
+    sendgrid_api_key: str | None = None
+    notification_sender: str | None = None
+    # Where to report a triaged bug, keyed by its `"<Product> :: <Component>"`: a
+    # channel belongs to the team that owns the component, so this is a map rather than
+    # one address. JSON-encoded in the environment, e.g.
+    # {"Firefox :: New Tab Page": "hnt-…@mozilla.org.slack.com"}.
+    notification_slack_emails: dict[str, str] = {}
+
+    # Bug links in notifications, and the base for the anonymous product/component
+    # lookup that routes them (see app/notify.py).
+    bugzilla_url: str = "https://bugzilla.mozilla.org"
+    # Base for run links in notifications. Unset => the link is omitted.
+    hackbot_ui_url: str = ""
+
     # Server
     port: int = 8080
     environment: str = "development"

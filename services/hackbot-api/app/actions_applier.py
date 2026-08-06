@@ -2,12 +2,12 @@
 
 On run completion the recorded actions from `summary["actions"]` are always
 upserted as `run_actions` rows (one per entry) so they're visible and
-manageable in the UI. Whether they're then applied *automatically* depends on
-the agent's `auto_apply_actions` opt-in (see `app/agents.py`); either way they
-can be applied on demand (manual apply-all from the UI). Application runs each
-pending row through the handler registry in `hackbot_runtime.actions.handlers`
-and is idempotent per action — an already-`applied` row is never re-applied, so
-Pub/Sub retries and repeated manual applies are safe.
+manageable in the UI. Whether they're then applied *automatically* is decided by
+`_should_auto_apply` (see `app/agents.py`); either way they can be applied on demand
+(manual apply-all from the UI). Application runs each pending row through the handler
+registry in `hackbot_runtime.actions.handlers` and is idempotent per action — an
+already-`applied` row is never re-applied, so Pub/Sub retries and repeated manual
+applies are safe.
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs
-from app.agents import AGENT_REGISTRY
+from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
-from app.schemas import RunStatus
+from app.schemas import Confidence, RunStatus, parse_confidence
 
 log = logging.getLogger(__name__)
 
@@ -84,6 +84,62 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     if isinstance(value, list):
         return [resolve_placeholders(v, results_by_ref) for v in value]
     return value
+
+
+def _reported_confidence(run: Run) -> Confidence | None:
+    """The run's self-reported confidence, or None if it didn't report a usable one.
+
+    Shared with `app/notify.py` via `parse_confidence`, so the level that decides an
+    unattended Bugzilla write is the level the channel is told about.
+    """
+    return parse_confidence(
+        ((run.summary or {}).get("findings") or {}).get("confidence")
+    )
+
+
+def _should_auto_apply(
+    spec: AgentSpec | None, run: Run, rows: list[tuple[RunAction, list[dict]]]
+) -> bool:
+    """Whether `run`'s recorded actions may be applied without a human.
+
+    The whole unattended-apply policy in one place, so "why didn't this apply?" has one
+    answer, and every gate fails closed.
+
+    Judged on the persisted rows rather than `summary["actions"]`, because the rows are
+    what gets dispatched: `ensure_action_rows` never rewrites an existing row, so if the
+    two diverge, checking the summary would approve one payload while a different one
+    went to Bugzilla.
+    """
+    if spec is None or not spec.auto_apply_actions:
+        return False
+
+    # `rules/scoping.md` pairs an out-of-scope report with `confidence: low`, but nothing
+    # makes the agent do so — a `high` + `actionable: false` run would otherwise post an
+    # out-of-scope note on the strength of the confidence alone. `is False`, so a missing
+    # `actionable` doesn't read as "out of scope".
+    findings = (run.summary or {}).get("findings") or {}
+    if findings.get("actionable") is False:
+        return False
+
+    if (
+        spec.auto_apply_confidence is not None
+        and _reported_confidence(run) not in spec.auto_apply_confidence
+    ):
+        return False
+
+    if spec.auto_apply_guard is not None:
+        reason = spec.auto_apply_guard(run, [row for row, _ in rows])
+        if reason is not None:
+            log.warning(
+                "Holding run %s for review: %s (agent %s)",
+                run.run_id,
+                reason,
+                run.agent,
+            )
+            return False
+
+    return True
+
 
 
 async def ensure_action_rows(
@@ -224,11 +280,11 @@ async def _apply_pending_rows(
 
 
 async def on_run_completed(db: AsyncSession, run: Run) -> None:
-    """Record a completed run's actions, and auto-apply them if the agent opts in.
+    """Record a completed run's actions, and auto-apply them if the agent qualifies.
 
-    Called from the `apply-run-actions` push route. Actions are always recorded
-    (so the UI can show/manually apply them); they're applied automatically only
-    when the run's agent has `auto_apply_actions=True`.
+    Called from the `apply-run-actions` push route. Actions are always recorded (so the
+    UI can show/manually apply them); they're applied automatically only when
+    `_should_auto_apply` says so.
     """
     # Defense-in-depth: only a succeeded run's actions are recorded/applied. A
     # failed/timed-out run may have recorded actions before erroring, but acting
@@ -243,15 +299,17 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
     await db.commit()
 
     spec = AGENT_REGISTRY.get(run.agent)
-    if spec and spec.auto_apply_actions:
+    if _should_auto_apply(spec, run, rows):
         await _apply_pending_rows(db, run, rows)
-    else:
-        log.info(
-            "Recorded %d action(s) for run %s; auto-apply off for agent %s",
-            len(rows),
-            run.run_id,
-            run.agent,
-        )
+        return
+
+    log.info(
+        "Recorded %d action(s) for run %s; not auto-applying (agent %s, confidence %s)",
+        len(rows),
+        run.run_id,
+        run.agent,
+        _reported_confidence(run),
+    )
 
 
 async def apply_all_pending(db: AsyncSession, run: Run) -> None:

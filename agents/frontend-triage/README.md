@@ -99,14 +99,24 @@ Each run writes to `~/hackbot/artifacts/<run_id>/`:
 
 - **`summary.json`** — `findings` holds the structured plan (`root_cause`,
   `proposed_fix`, `target_files`, `confidence`) plus the executor handoff fields
-  `actionable`, `regressor_node` and `relevant_tests`. `actions` holds the single
-  **recorded** `bugzilla.add_comment` — written here for review, not posted.
+  `actionable`, `regressor_node` and `relevant_tests`. `actions` holds the
+  **recorded** `bugzilla.add_comment` (and, at high confidence, possibly a
+  `bugzilla.update_bug`). Recording is not posting — but see below: hackbot posts
+  a high-confidence run's actions to the bug unattended.
 - **`logs/agent.log`** — the streamed reasoning and every tool call, and the only
   record of which model actually ran.
 - **No `changes/` directory.** Its absence confirms the run stayed read-only.
 
-Two things to know before acting on a plan:
+Three things to know before acting on a plan:
 
+- **`confidence` decides whether the actions are posted.** A `high`-confidence
+  run has its recorded actions applied to the real bug automatically; `medium`
+  and `low` are held for a human to apply from the hackbot UI. Only the fields
+  the agent is trusted with (`keywords`, `severity`) can go up unattended, and
+  only against the bug the run was asked about — anything else holds the whole
+  run for review. See `auto_apply_confidence` in
+  `services/hackbot-api/app/agents.py` and `frontend_triage_guard` in
+  `services/hackbot-api/app/auto_apply.py`.
 - **`confidence` describes the diagnosis, not the fix.** It reflects how clearly
   the agent pinned a root cause in the code, never whether the fix works — it
   cannot run anything. Read `high` as "trust the diagnosis, still review the

@@ -14,6 +14,48 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class Confidence(str, Enum):
+    """How sure an agent is of its own findings.
+
+    Defined once here because two modules act on it: the applier decides whether to
+    write to Bugzilla unattended, and the notifier repeats it to the channel. Reported
+    by the agent inside a free-form JSON block, so it arrives as untrusted text — use
+    `parse_confidence` rather than the constructor.
+    """
+
+    high = "high"
+    medium = "medium"
+    low = "low"
+
+
+def parse_confidence(value: object) -> Confidence | None:
+    """`value` as a `Confidence`, or None if it isn't one.
+
+    Tolerates casing and stray whitespace, because the value is parsed out of
+    model output and "High" must not silently read as "no confidence". Anything
+    else is None: callers fail closed rather than inventing a level.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return Confidence(value.strip().lower())
+    except ValueError:
+        return None
+
+
+class RunActionOutcome(str, Enum):
+    """What became of a completed run's recorded actions.
+
+    "We decided to apply" and "Bugzilla accepted it" are deliberately distinct: a
+    reader being told about a run needs to know which of the two happened.
+    """
+
+    posted = "posted"  # every action landed on Bugzilla
+    held = "held"  # not applied; awaiting human review
+    failed = "failed"  # apply ran but at least one action did not land
+    no_actions = "no_actions"  # the run recorded nothing to apply
+
+
 class ArtifactRef(BaseModel):
     name: str
     size: int

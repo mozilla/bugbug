@@ -33,6 +33,10 @@ MOZILLA_VCS_TOOLS = [
 # and plans only: it records a comment with its findings/plan and, at high
 # confidence, may propose field updates (e.g. keyword/severity). It never
 # creates bugs or attaches files.
+#
+# `bugzilla.update_bug` needs `editbugs` on the apply account. The apply step coalesces
+# a same-bug field change with the nearest comment into one PUT, so losing that
+# privilege would take the analysis comment down with the rejected field change.
 ENABLED_ACTION_TYPES = [
     "bugzilla.add_comment",
     "bugzilla.update_bug",

@@ -64,7 +64,9 @@ async def update_bug(
 ) -> str:
     """Record an intended change to a Bugzilla bug.
 
-    Recorded into the run summary for human review — does not modify Bugzilla.
+    Recorded into the run summary rather than sent from here. Some agents have their
+    recorded changes applied without human review, so record only changes you would
+    stand behind unreviewed.
     """
     recorder.record(
         "bugzilla.update_bug",
@@ -92,8 +94,9 @@ async def add_comment(
 ) -> str:
     """Record an intended comment on a bug.
 
-    Use is_private=true for security-sensitive notes. Recorded into the run
-    summary for human review — does not post to Bugzilla.
+    Use is_private=true for security-sensitive notes. Recorded into the run summary
+    rather than posted from here. Some agents have their recorded comments posted
+    without human review, so write it as if it will be read on the bug unreviewed.
     """
     text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
     recorder.record(
