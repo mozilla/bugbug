@@ -4,7 +4,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 from hackbot_agents.bug_fix import broker
-from phabricator_client import PhabricatorDiff, PhabricatorSettings
+from phabricator_client import (
+    PhabricatorDiff,
+    PhabricatorSettings,
+    UnresolvedCommitError,
+)
 from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.routing import Mount, Route
@@ -46,14 +50,18 @@ def test_patch_route_falls_back_to_raw_base_when_unresolved(caplog):
         return_value=PhabricatorDiff(id=9, base_commit="base9")
     )
     fake.get_raw_diff = AsyncMock(return_value="diff --git a/f b/f\n")
-    fake.resolve_commit = AsyncMock(return_value=None)
+    fake.resolve_commit = AsyncMock(
+        side_effect=UnresolvedCommitError("Cannot expand base9: not imported")
+    )
 
     with caplog.at_level("WARNING", logger=broker.log.name):
         resp = _client(fake).get("/phabricator/revision/42/patch")
 
     assert resp.status_code == 200
     assert resp.json()["base_commit"] == "base9"
-    assert "could not expand base commit base9 of D42" in caplog.text
+    # The reason travels into the log, not just the fact that it happened.
+    assert "D42" in caplog.text
+    assert "Cannot expand base9: not imported" in caplog.text
 
 
 def test_patch_route_404_when_no_diff():

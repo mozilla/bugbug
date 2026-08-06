@@ -4,7 +4,11 @@ import json
 
 import httpx
 import pytest
-from phabricator_client import PhabricatorClient, PhabricatorSettings
+from phabricator_client import (
+    PhabricatorClient,
+    PhabricatorSettings,
+    UnresolvedCommitError,
+)
 from phabricator_client import client as client_module
 from pydantic import ValidationError
 
@@ -323,7 +327,8 @@ async def test_resolve_commit_rejects_an_identifier_that_is_not_a_full_hash(
             }
         },
     )
-    assert await _client().resolve_commit("0397cc0f5dca") is None
+    with pytest.raises(UnresolvedCommitError, match="Diffusion does not know one"):
+        await _client().resolve_commit("0397cc0f5dca")
 
 
 async def test_resolve_commit_scan_skips_identifiers_that_are_not_full_hashes(
@@ -346,7 +351,7 @@ async def test_resolve_commit_scan_skips_identifiers_that_are_not_full_hashes(
     assert await _client().resolve_commit("0397cc0f5dca") == full
 
 
-async def test_resolve_commit_returns_none_when_ambiguous(monkeypatch):
+async def test_resolve_commit_raises_when_ambiguous(monkeypatch):
     # Two different commits share the abbreviation: expanding to either could
     # check the agent out on the wrong tree, so refuse to guess.
     _capture_post(
@@ -361,12 +366,18 @@ async def test_resolve_commit_returns_none_when_ambiguous(monkeypatch):
             }
         },
     )
-    assert await _client().resolve_commit("0397cc0f5dca") is None
+    with pytest.raises(UnresolvedCommitError, match="matches 2 commits"):
+        await _client().resolve_commit("0397cc0f5dca")
 
 
-async def test_resolve_commit_returns_none_when_unresolved(monkeypatch):
+async def test_resolve_commit_raises_when_unresolved(monkeypatch):
     _capture_post(monkeypatch, {"result": {"identifierMap": {}, "data": {}}})
-    assert await _client().resolve_commit("deadbeef") is None
+    with pytest.raises(UnresolvedCommitError) as excinfo:
+        await _client().resolve_commit("deadbeef")
+    message = str(excinfo.value)
+    # The ref and the likeliest cause: enough to act on.
+    assert "deadbeef" in message
+    assert "may not be imported" in message
 
 
 def test_revision_url_default_base():

@@ -26,7 +26,11 @@ from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.phabricator import PhabricatorContext
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from phabricator_client import PhabricatorClient, PhabricatorSettings
+from phabricator_client import (
+    PhabricatorClient,
+    PhabricatorSettings,
+    UnresolvedCommitError,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -71,14 +75,10 @@ def _patch_endpoint(client: PhabricatorClient):
         raw_diff = await client.get_raw_diff(diff.id)
         # The recorded base is often an abbreviated hash; git can only fetch a
         # full object id, so expand it here (falling back to the raw value).
-        base_commit = await client.resolve_commit(diff.base_commit)
-        if not base_commit:
-            log.warning(
-                "Phabricator could not expand base commit %s of D%s; "
-                "returning it unexpanded",
-                diff.base_commit,
-                revision_id,
-            )
+        try:
+            base_commit = await client.resolve_commit(diff.base_commit)
+        except UnresolvedCommitError as exc:
+            log.warning("Base commit of D%s stays unexpanded: %s", revision_id, exc)
             base_commit = diff.base_commit
         return JSONResponse({"base_commit": base_commit, "raw_diff": raw_diff})
 
