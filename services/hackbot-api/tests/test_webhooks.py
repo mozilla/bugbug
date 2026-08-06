@@ -63,12 +63,21 @@ def test_signature_unconfigured_secret(monkeypatch):
 # --- mention detection / loop prevention ---
 
 
-def _comment_txn(phid: str, author: str, raw: str, txn_type: str = "comment") -> dict:
+def _comment_txn(
+    phid: str,
+    author: str,
+    raw: str,
+    txn_type: str = "comment",
+    *,
+    comment_id: int = 1,
+    fields: dict | None = None,
+) -> dict:
     return {
         "phid": phid,
         "type": txn_type,
         "authorPHID": author,
-        "comments": [{"content": {"raw": raw}}],
+        "comments": [{"id": comment_id, "content": {"raw": raw}}],
+        "fields": fields or {},
     }
 
 
@@ -76,7 +85,7 @@ def test_find_mention_matches():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "hey @hackbot please fix")]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a")]
+    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a", 1, "comment")]
 
 
 def test_find_mention_no_token():
@@ -122,20 +131,59 @@ def test_find_mention_ignores_non_comment_type():
 
 def test_find_mention_matches_inline_comment():
     txns = [
-        _comment_txn("PHID-XACT-1", "PHID-USER-a", "@hackbot here", txn_type="inline")
+        _comment_txn(
+            "PHID-XACT-1",
+            "PHID-USER-a",
+            "@hackbot here",
+            txn_type="inline",
+            fields={
+                "diff": {"id": 456},
+                "path": "browser/foo.cpp",
+                "line": 42,
+            },
+        )
     ]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("@hackbot here", "PHID-USER-a")]
+    ) == [
+        HackbotMention(
+            "@hackbot here",
+            "PHID-USER-a",
+            1,
+            "inline",
+            diff_id=456,
+        )
+    ]
 
 
 def test_find_mention_collects_all_inline_matches():
     # A review with several inline @hackbot comments (each its own transaction)
     # yields all of them, in order; comments without the token are skipped.
     txns = [
-        _comment_txn("PHID-XACT-1", "PHID-USER-a", "@hackbot fix this", "inline"),
-        _comment_txn("PHID-XACT-2", "PHID-USER-a", "no mention here", "inline"),
-        _comment_txn("PHID-XACT-3", "PHID-USER-a", "@hackbot and this too", "inline"),
+        _comment_txn(
+            "PHID-XACT-1",
+            "PHID-USER-a",
+            "@hackbot fix this",
+            "inline",
+            comment_id=1,
+            fields={"diff": {"id": 1}, "path": "a.cpp", "line": 10},
+        ),
+        _comment_txn(
+            "PHID-XACT-2",
+            "PHID-USER-a",
+            "no mention here",
+            "inline",
+            comment_id=2,
+            fields={"diff": {"id": 2}, "path": "b.cpp", "line": 20},
+        ),
+        _comment_txn(
+            "PHID-XACT-3",
+            "PHID-USER-a",
+            "@hackbot and this too",
+            "inline",
+            comment_id=3,
+            fields={"diff": {"id": 3}, "path": "c.cpp", "line": 30},
+        ),
     ]
     assert find_hackbot_mentions(
         txns,
@@ -143,8 +191,20 @@ def test_find_mention_collects_all_inline_matches():
         bot_phid="PHID-USER-bot",
         token="@hackbot",
     ) == [
-        HackbotMention("@hackbot fix this", "PHID-USER-a"),
-        HackbotMention("@hackbot and this too", "PHID-USER-a"),
+        HackbotMention(
+            "@hackbot fix this",
+            "PHID-USER-a",
+            1,
+            "inline",
+            diff_id=1,
+        ),
+        HackbotMention(
+            "@hackbot and this too",
+            "PHID-USER-a",
+            3,
+            "inline",
+            diff_id=3,
+        ),
     ]
 
 
@@ -156,23 +216,75 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
         "type": "inline",
         "authorPHID": "PHID-USER-a",
         "comments": [
-            {"content": {"raw": "@hackbot v1"}},
-            {"content": {"raw": "@hackbot v2 edited"}},
+            {"id": 456, "content": {"raw": "@hackbot v1"}},
+            {"id": 456, "content": {"raw": "@hackbot v2 edited"}},
         ],
+        "fields": {"diff": {"id": 456}, "path": "browser/foo.cpp", "line": 42},
     }
     assert find_hackbot_mentions(
         [txn], {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("@hackbot v1", "PHID-USER-a")]
+    ) == [
+        HackbotMention(
+            "@hackbot v1",
+            "PHID-USER-a",
+            456,
+            "inline",
+            diff_id=456,
+        )
+    ]
 
 
-def test_join_comments_single_passthrough():
-    assert _join_comments(["only one"]) == "only one"
+def test_join_comments_renders_normal_comment_as_xml():
+    mention = HackbotMention("only one", "PHID-USER-a", 123, "comment")
+    assert _join_comments([mention]) == (
+        '  <comment comment_id="123" type="comment">\n    only one\n  </comment>'
+    )
 
 
-def test_join_comments_numbers_multiple():
-    joined = _join_comments(["first", "second"])
-    assert "[comment 1]\nfirst" in joined
-    assert "[comment 2]\nsecond" in joined
+def test_join_comments_renders_inline_comment_as_xml():
+    mention = HackbotMention(
+        "fix this",
+        "PHID-USER-a",
+        456,
+        "inline",
+        diff_id=456,
+    )
+    assert _join_comments([mention]) == (
+        '  <comment comment_id="456" type="inline" diff_id="456">\n'
+        "    fix this\n"
+        "  </comment>"
+    )
+
+
+def test_join_comments_renders_mixed_comments_in_order():
+    joined = _join_comments(
+        [
+            HackbotMention("first", "PHID-USER-a", 1, "comment"),
+            HackbotMention(
+                "second",
+                "PHID-USER-a",
+                2,
+                "inline",
+                diff_id=456,
+            ),
+        ]
+    )
+    assert joined == (
+        '  <comment comment_id="1" type="comment">\n    first\n  </comment>\n\n'
+        '  <comment comment_id="2" type="inline" diff_id="456">\n'
+        "    second\n"
+        "  </comment>"
+    )
+
+
+def test_join_comments_escapes_comment_body():
+    assert _join_comments(
+        [HackbotMention("@hackbot <fix> & explain", "PHID-USER-a", 1, "comment")]
+    ) == (
+        '  <comment comment_id="1" type="comment">\n'
+        "    @hackbot &lt;fix&gt; &amp; explain\n"
+        "  </comment>"
+    )
 
 
 # --- revision resolution ---
@@ -254,7 +366,54 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         ["PHID-XACT-1"],
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
-    assert result == ("@hackbot please fix", 42, 12345)
+    assert result == (
+        '  <comment comment_id="1" type="comment">\n'
+        "    @hackbot please fix\n"
+        "  </comment>",
+        42,
+        12345,
+    )
+    client.search_transactions.assert_awaited_once_with("PHID-DREV-x")
+
+
+async def test_detect_mention_enriches_inline_anchor(monkeypatch):
+    client = _FakeClient(
+        {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
+        members={"PHID-USER-authorized"},
+    )
+    transactions = [
+        _comment_txn(
+            "PHID-XACT-1",
+            "PHID-USER-authorized",
+            "@hackbot please fix",
+            "inline",
+            fields={
+                "diff": {"id": 456},
+                "path": "browser/foo.cpp",
+                "line": 42,
+            },
+        )
+    ]
+    monkeypatch.setattr(
+        client,
+        "search_transactions",
+        AsyncMock(return_value=transactions),
+    )
+
+    result = await detect_mention_and_revision(
+        client,
+        settings.webhook,
+        "PHID-DREV-x",
+        ["PHID-XACT-1"],
+        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+    )
+    assert result == (
+        '  <comment comment_id="1" type="inline" diff_id="456">\n'
+        "    @hackbot please fix\n"
+        "  </comment>",
+        42,
+        12345,
+    )
 
 
 # --- payload parsing ---

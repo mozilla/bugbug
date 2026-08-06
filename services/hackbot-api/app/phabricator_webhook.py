@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+from xml.sax.saxutils import escape
 
 if TYPE_CHECKING:
     from phabricator_client import PhabricatorClient
@@ -28,6 +29,9 @@ _COMMENT_TYPES = frozenset({"comment", "inline"})
 class HackbotMention:
     comment: str
     author_phid: str
+    comment_id: int
+    comment_type: Literal["comment", "inline"]
+    diff_id: int | None = None
 
 
 def triggering_transaction_phids(payload: dict) -> list[str]:
@@ -37,6 +41,46 @@ def triggering_transaction_phids(payload: dict) -> list[str]:
         for t in (payload.get("transactions") or [])
         if isinstance(t, dict) and t.get("phid")
     ]
+
+
+def _build_hackbot_mention(
+    transaction: dict, comment: dict, author_phid: str
+) -> HackbotMention:
+    """Build the minimal agent context for a matching comment transaction."""
+    transaction_type = transaction["type"]
+    if transaction_type == "inline":
+        fields = transaction["fields"]
+        diff = fields["diff"]
+        diff_id = diff["id"]
+    else:
+        diff_id = None
+
+    return HackbotMention(
+        comment=comment["content"]["raw"],
+        author_phid=author_phid,
+        comment_id=comment["id"],
+        comment_type="inline" if transaction_type == "inline" else "comment",
+        diff_id=diff_id,
+    )
+
+
+def _get_hackbot_mention(
+    transaction: dict, *, bot_phid: str, token: str
+) -> HackbotMention | None:
+    """Return the matching comment and its anchor context from one transaction."""
+    transaction_type = transaction.get("type")
+    if transaction_type not in _COMMENT_TYPES:
+        return None
+
+    author_phid = transaction.get("authorPHID")
+    if not author_phid or (bot_phid and author_phid == bot_phid):
+        return None
+
+    for comment in transaction.get("comments") or []:
+        comment_text = comment["content"]["raw"]
+        if token in comment_text:
+            return _build_hackbot_mention(transaction, comment, author_phid)
+    return None
 
 
 def find_hackbot_mentions(
@@ -58,35 +102,39 @@ def find_hackbot_mentions(
     for transaction in transactions:
         if transaction.get("phid") not in triggering_phids:
             continue
-        if transaction.get("type") not in _COMMENT_TYPES:
-            continue
-        author_phid = transaction.get("authorPHID")
-        if not author_phid:
-            continue
-        if bot_phid and author_phid == bot_phid:
-            continue
-        for comment in transaction.get("comments") or []:
-            comment_text = (comment.get("content") or {}).get("raw") or ""
-            if token in comment_text:
-                matches.append(
-                    HackbotMention(
-                        comment=comment_text,
-                        author_phid=author_phid,
-                    )
-                )
-                break
+        mention = _get_hackbot_mention(transaction, bot_phid=bot_phid, token=token)
+        if mention is not None:
+            matches.append(mention)
     return matches
 
 
-def _join_comments(comments: list[str]) -> str:
+def _format_comment(mention: HackbotMention) -> str:
+    """Render one triggering comment as a service-generated XML element.
+
+    For example, an inline comment is rendered as::
+
+        <comment comment_id="102" type="inline" diff_id="456">
+          @hackbot fix this
+        </comment>
+    """
+    attributes = [
+        f'comment_id="{mention.comment_id}"',
+        f'type="{mention.comment_type}"',
+    ]
+    if mention.comment_type == "inline":
+        attributes.append(f'diff_id="{mention.diff_id}"')
+    body = "\n".join(f"    {line}" for line in escape(mention.comment).splitlines())
+    return f"  <comment {' '.join(attributes)}>\n{body}\n  </comment>"
+
+
+def _join_comments(mentions: list[HackbotMention]) -> str:
     """Combine one or more triggering comments into the agent's ``comment`` input.
 
-    A lone comment is passed through unchanged; multiple are numbered so the
-    agent can tell them apart and address each.
+    Each comment is an XML element with the same identifiers used by the
+    Phabricator tools. The agent prompt supplies the enclosing ``<comments>``
+    element.
     """
-    if len(comments) == 1:
-        return comments[0]
-    return "\n\n".join(f"[comment {i}]\n{c}" for i, c in enumerate(comments, 1))
+    return "\n\n".join(_format_comment(mention) for mention in mentions)
 
 
 async def resolve_revision(
@@ -135,10 +183,10 @@ async def detect_mention_and_revision(
         bot_phid=webhook.bot_phid,
         token=webhook.mention_token,
     )
-    comments: list[str] = []
+    authorized_mentions: list[HackbotMention] = []
     for mention in mentions:
         if await authorizer.is_authorized(mention.author_phid):
-            comments.append(mention.comment)
+            authorized_mentions.append(mention)
         else:
             log.warning(
                 "Ignoring %s mention from non-editbugs user %s on %s",
@@ -146,7 +194,7 @@ async def detect_mention_and_revision(
                 mention.author_phid,
                 object_phid,
             )
-    if not comments:
+    if not authorized_mentions:
         log.warning(
             "No actionable %s mention found in triggering transactions %s on %s",
             webhook.mention_token,
@@ -154,7 +202,7 @@ async def detect_mention_and_revision(
             object_phid,
         )
         return None
-    comment = _join_comments(comments)
+    comment = _join_comments(authorized_mentions)
 
     revision_id, bug_id = await resolve_revision(client, object_phid)
     if revision_id is None:
