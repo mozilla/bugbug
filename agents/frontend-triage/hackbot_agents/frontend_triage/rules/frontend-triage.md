@@ -39,11 +39,16 @@ not restate the whole bug. Do not claim the fix is verified — you did not run 
 
 ## Confidence and field changes
 
+Your `confidence` decides whether your actions reach the bug unreviewed — see
+**Recording actions** in the system prompt before you pick a level.
+
 - **High** (you found the specific code and the cause is clear): record the
   plan comment. If a rule or convention clearly applies, you may also record a
   `bugzilla_update_bug` for an obviously-correct field — e.g. adding a relevant
   keyword, or a `severity` (per `severity-assessment`). Do not change
-  `status`/`resolution`.
+  `status`/`resolution`. Record a keyword addition as
+  `{"keywords": {"add": ["…"]}}` — a bare list replaces every keyword already on
+  the bug.
 - **Medium** (plausible area, cause not pinned down): record the comment with
   your best hypothesis and the open questions that would confirm it.
 - **Low** (could not localize): record a comment stating what you checked and
