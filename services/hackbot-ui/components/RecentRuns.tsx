@@ -6,7 +6,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { AGENT_NAMES } from "@/lib/agents";
 import { useSession } from "@/lib/auth-client";
-import { isTerminal, type RunDoc, type RunStatus } from "@/lib/types";
+import { isFailed, isTerminal, type RunDoc, type RunStatus } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
 
 // Poll the status of any non-terminal, currently-loaded runs so the dashboard
@@ -61,7 +61,7 @@ function toRow(d: RunDoc): RunRow {
 }
 
 function hasErrorDetail(r: RunRow): boolean {
-  return (r.status === "failed" || r.status === "timed_out") && !!r.error;
+  return isFailed(r.status) && !!r.error;
 }
 
 // Compact requester cell: the email's local part (full email on hover). Runs
