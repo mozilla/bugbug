@@ -30,8 +30,7 @@ from bugbug.tools.core.data_types import InlineComment, ReviewRequest
 
 # Exceptions (backward compatibility)
 from bugbug.tools.core.exceptions import (
-    FileNotInPatchError,
-    HunkNotInPatchError,
+    CommentNotLocatedError,
     LargeDiffError,
     ModelResultError,
 )
@@ -56,8 +55,7 @@ __all__ = [
     "InlineComment",
     "ReviewRequest",
     # Exceptions
-    "FileNotInPatchError",
-    "HunkNotInPatchError",
+    "CommentNotLocatedError",
     "LargeDiffError",
     "ModelResultError",
     # Base classes
