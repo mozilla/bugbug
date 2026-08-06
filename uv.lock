@@ -732,7 +732,7 @@ requires-dist = [
     { name = "tenacity", specifier = "~=9.1.4" },
     { name = "tqdm", specifier = ">=4.67.3,<4.70.0" },
     { name = "unidiff", specifier = "~=0.7.5" },
-    { name = "weave", specifier = ">=0.50.0" },
+    { name = "weave", specifier = ">=0.53.4" },
     { name = "xgboost", specifier = ">=3.2,<3.4" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
@@ -2739,7 +2739,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
     { name = "testrail-client", editable = "libs/testrail-client" },
-    { name = "weave", specifier = ">=0.53.1" },
+    { name = "weave", specifier = ">=0.53.4" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
 

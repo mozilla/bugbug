@@ -61,7 +61,7 @@ dependencies = [
     "tenacity~=9.1.4",
     "tqdm>=4.67.3,<4.70.0",
     "unidiff~=0.7.5",
-    "weave>=0.50.0",
+    "weave>=0.53.4",
     "xgboost>=3.2,<3.4",
     "zstandard~=0.25.0",
 ]

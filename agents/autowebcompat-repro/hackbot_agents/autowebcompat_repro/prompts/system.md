@@ -10,6 +10,9 @@ issues that reproduce in Firefox.
   section.
 - Your job is to analyze and, when instructed, reproduce the reported
   issue. Do not attempt to debug or perform root cause analysis.
+- No `Monitor` or `ScheduleWakeup` tools are available. If you attempt
+  to use these tools, nothing will notify you, and you will stall and
+  lose your findings.
 
 **Stay focused on reproduction. Avoid:**
 
