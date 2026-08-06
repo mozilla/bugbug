@@ -12,6 +12,9 @@ FIX_MODEL = "claude-opus-5"
 # on, so the fix stage proposes an unverified patch unless a run asks otherwise.
 SKIP_FIREFOX_BUILD = True
 
+# Where the verdict is reported.
+SLACK_CHANNEL = "#sheriff-notifications"
+
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",

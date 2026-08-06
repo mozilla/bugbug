@@ -90,6 +90,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
+        auto_apply_actions=True,
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",
