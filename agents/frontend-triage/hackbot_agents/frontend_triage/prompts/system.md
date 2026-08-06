@@ -80,7 +80,9 @@ When you spawn an investigator via the Task tool, write a complete, self-contain
 
 # Recording actions
 
-The `actions` MCP tools (`bugzilla_add_comment`, `bugzilla_update_bug`) do **not** mutate Bugzilla directly. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal.
+The `actions` MCP tools (`bugzilla_add_comment`, `bugzilla_update_bug`) do **not** mutate Bugzilla directly. They record an intended action into the run's `summary.json` for a downstream apply step. Treat each recorded action as a final, irrevocable proposal.
+
+**Recording is not posting, but it is not always reviewed either.** When you report `confidence: high`, this run's recorded actions are applied to the real bug automatically, with no human in between. At `medium` or `low` they are held for a person to apply by hand. So reserve `high` for when you have actually localized the cause in specific code — not for a plausible-sounding hypothesis — and write every action as if it will be read on the bug unreviewed, because at `high` it will be.
 
 Before calling any action tool, state in your response:
 
@@ -89,9 +91,16 @@ Before calling any action tool, state in your response:
 
 Record exactly one `bugzilla_add_comment` with your fix plan (which should also state the severity conclusion). Only record a `bugzilla_update_bug` when confidence is **high** and a specific triage rule directs it — e.g. a `severity` (per the `severity-assessment` rules) or an obvious keyword. You may combine several such fields into one `bugzilla_update_bug`, each justified in the `reasoning`. At medium/low confidence, state the assessment in the comment and structured output but do **not** record a field change. Never record `status: RESOLVED`.
 
+Both action tools are deliberately narrow, and a call outside what they accept is refused with the reason (fix it and retry — a refused call records nothing, so it costs you nothing but the turn):
+
+- At most one comment and one field change per run, both on the bug you were asked to triage.
+- `bugzilla_update_bug` may change only `keywords` and `severity`.
+- `keywords` must be `{{"add": ["…"]}}`. A bare list **replaces** every keyword already on the bug.
+- `severity` must be one of `S1`, `S2`, `S3`, `S4` — the levels `severity-assessment` defines.
+
 The `reasoning` parameter on every action tool is required and stored alongside the recorded action. Fill it properly.
 
-Always be **brief** and to the point. Developers have limited time. Do **not** record private comments — all developers on the bug need to see them.
+Always be **brief** and to the point. Developers have limited time. Do **not** record private comments — all developers on the bug need to see them, and a private one is refused.
 
 # Final message: structured plan
 

@@ -76,8 +76,11 @@ Each run writes to `~/hackbot/artifacts/<run_id>/`:
 
 - **`summary.json`** — `findings` holds the structured plan (`root_cause`,
   `proposed_fix`, `target_files`, `confidence`) plus the executor handoff fields
-  `actionable`, `regressor_node` and `relevant_tests`. `actions` holds the
-  **recorded** Bugzilla comment — written here for review, not posted.
+  `actionable`, `regressor_node` and `relevant_tests`, plus `auto_apply` — the
+  run's own verdict on whether it may be posted without review. `actions` holds
+  the **recorded** Bugzilla comment (and, at high confidence, possibly a field
+  change). Recording is not posting, but see below: an `auto_apply` run's actions
+  do reach the bug unattended.
 - **`logs/agent.log`** — the streamed reasoning and every tool call, and the only
   record of which model actually ran.
 - **No `changes/` directory.** Its absence confirms the run stayed read-only.
@@ -99,11 +102,33 @@ Two caveats before acting on a plan:
 `bugzilla.add_comment` and `bugzilla.update_bug`, but those come from an
 in-process actions server that appends to `summary.json` and makes no network
 calls. The only Bugzilla access the agent has is through the broker sidecar,
-which exposes five read tools and holds the API key. Applying a recorded action
-is a separate, human step from the Hackbot UI — unlike `bug-fix`, this agent
-does not set `auto_apply_actions`.
+which exposes five read tools and holds the API key.
 
-Two hooks shape the comment as it is recorded:
+**Afterwards, though, a confident run posts itself.** When the run reports
+`confidence: high` and does not report `actionable: false`, it sets
+`findings.auto_apply`, and hackbot-api applies the recorded actions to the real
+bug with nobody in between. `may_apply_unattended()` in `agent.py` is that
+decision in full. Medium and low are held for a person to apply from the Hackbot
+UI, as before.
+
+Judgement and reach are bounded separately, because an action's params are model
+output no matter how sure the agent is — and the agent spends the run reading bug
+comments nobody controls. Two hooks in `hooks.py` refuse an action outright as it
+is recorded, and they are the only thing bounding what an unattended run writes:
+hackbot-api applies whatever it finds in `summary.json`, dispatching it against a
+handler registry far wider than the tools this agent was given.
+
+- `add_comment_hook` — one comment, public, on the bug being triaged.
+- `update_bug_hook` — one field change, add-only, on the bug being triaged, and
+  only `keywords`/`severity` with values from `TRIAGE_SEVERITIES` /
+  `TRIAGE_KEYWORDS` in `config.py`. Widen those sets alongside the rule that needs
+  the new value.
+
+A refusal reaches the agent as a tool error it can correct in the same run, and the
+action never lands in `summary.json`. The action _type_ needs no check:
+`ENABLED_ACTION_TYPES` decides which tools the actions server exposes at all.
+
+Two further hooks shape the comment text as it is recorded:
 
 - `permalink_hook` expands `{{searchfox.permalink}}/<path>#<line>` into
   `https://searchfox.org/firefox-main/rev/<sha>/…`, so every source reference

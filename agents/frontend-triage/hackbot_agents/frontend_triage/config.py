@@ -33,7 +33,41 @@ MOZILLA_VCS_TOOLS = [
 # and plans only: it records a comment with its findings/plan and, at high
 # confidence, may propose field updates (e.g. keyword/severity). It never
 # creates bugs or attaches files.
+#
+# `bugzilla.update_bug` needs `editbugs` on the apply account. The apply step coalesces
+# a same-bug field change with the nearest comment into one PUT, so losing that
+# privilege would take the analysis comment down with the rejected field change.
 ENABLED_ACTION_TYPES = [
     "bugzilla.add_comment",
     "bugzilla.update_bug",
 ]
+
+# What a `bugzilla.update_bug` from this agent may touch. Enforced at record time
+# by `hooks.update_bug_hook`, so an out-of-bounds change is refused while the agent
+# can still correct it, rather than recorded and held for a human later.
+
+TRIAGE_FIELDS = frozenset({"keywords", "severity"})
+
+# Bugzilla's `bug_severity` legal values are `--`, `blocker`, `S1`, `critical`,
+# `S2`, `major`, `normal`, `S3`, `minor`, `S4`, `trivial`, `N/A`, `enhancement`
+# (https://bugzilla.mozilla.org/rest/field/bug/bug_severity). Narrowed to the four
+# `rules/severity-assessment.md` actually defines: the word forms are legacy, kept
+# for old bugs, and `--`/`N/A` mean unset or not-applicable, which is a metadata
+# regression rather than a triage judgment.
+TRIAGE_SEVERITIES = frozenset({"S1", "S2", "S3", "S4"})
+
+# Bugzilla defines ~340 keywords (https://bugzilla.mozilla.org/rest/field/bug/keywords,
+# or https://bugzilla.mozilla.org/describekeywords.cgi for the annotated list), several
+# of which drive automation. These six are the ones a frontend triage pass can add
+# without side effects. No ruleset in `rules/` directs a keyword addition today, so
+# widen this set alongside the rule that needs it rather than ahead of one.
+TRIAGE_KEYWORDS = frozenset(
+    {
+        "access",
+        "dataloss",
+        "good-first-bug",
+        "papercut",
+        "perf",
+        "regression",
+    }
+)
