@@ -13,9 +13,11 @@ and creating that commit is safe.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import logging
 import os
+import re
 import subprocess
 import tempfile
 from collections.abc import Iterator
@@ -23,6 +25,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 log = logging.getLogger("hackbot_runtime.changes")
+
+_FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 
 # Author stamped on the synthetic commit that wraps any uncommitted remainder.
 _WIP_NAME = "Hackbot Agent"
@@ -276,6 +280,38 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     return {
         "diff": diff_payload,
         "local_commits": _local_commits_property(repo, node, base),
+    }
+
+
+def build_try_push(repo: Path, base: str) -> dict | None:
+    """Build the artifact for pushing the agent's changes to the try server."""
+    if not _FULL_SHA_RE.fullmatch(base):
+        log.warning(
+            "Cannot build a try push from base commit %r: Lando needs a full "
+            "40-character published commit hash",
+            base,
+        )
+        return None
+
+    # Normally already done by `collect`; repeated here (it is a no-op on a
+    # clean tree) so this does not silently drop the agent's uncommitted work if
+    # it is ever called on its own.
+    _wrap_uncommitted(repo)
+
+    revisions = _git(repo, "rev-list", "--reverse", f"{base}..HEAD").split()
+    if not revisions:
+        return None
+
+    return {
+        "base_commit": base,
+        "base_commit_vcs": "git",
+        "patch_format": "git-format-patch",
+        "patches": [
+            base64.b64encode(
+                _git_bytes(repo, "format-patch", "--binary", "--stdout", "-1", revision)
+            ).decode("ascii")
+            for revision in revisions
+        ],
     }
 
 
