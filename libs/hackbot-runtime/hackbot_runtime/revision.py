@@ -9,7 +9,8 @@ broker sidecar (which holds the Phabricator key) for the revision's base commit 
 the patches to replay onto it over a keyless loopback URL, then checks out that
 base and applies them locally (``git apply`` needs no key). The broker endpoint
 contract is ``GET {broker_url}/phabricator/revision/{id}/patch`` ->
-``{base_commit, patches: [{revision_id, diff_id, raw_diff}]}``, bottom-first.
+``{base_commit, patches: [{revision_id, diff_id, base_commit, raw_diff}]}``,
+bottom-first.
 
 There is more than one patch when the revision is stacked on parent revisions
 that have not landed: the commit it was built on then exists only in the
@@ -92,8 +93,12 @@ async def checkout_revision(
             f"(unlanded parent of D{revision_id})",
         )
     if ancestors:
-        # The parents are now history, not this run's work.
-        ctx.reset_source_base()
+        # The parents are now history, not this run's work. The commit they end
+        # at is local to this container, so an updated diff keeps declaring the
+        # base D<revision_id> already recorded: nothing was rebased, and a
+        # made-up hash would strand the next run (and `moz-phab patch`) on a
+        # commit no repository has.
+        ctx.reset_source_base(reported_base=revision_patch["base_commit"])
 
     _apply(repo, revision_patch, base)
 

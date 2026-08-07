@@ -472,9 +472,9 @@ async def test_get_patch_stack_returns_one_patch_on_a_fetchable_base(monkeypatch
     )
     stack = await _client().get_patch_stack(42)
     assert stack.base_commit == LANDED
-    assert [(p.revision_id, p.diff_id, p.raw_diff) for p in stack.patches] == [
-        (42, 9, "child\n")
-    ]
+    assert [
+        (p.revision_id, p.diff_id, p.base_commit, p.raw_diff) for p in stack.patches
+    ] == [(42, 9, LANDED, "child\n")]
 
 
 async def test_get_patch_stack_walks_down_to_a_fetchable_base(monkeypatch):
@@ -499,6 +499,9 @@ async def test_get_patch_stack_walks_down_to_a_fetchable_base(monkeypatch):
         (41, 8, "parent\n"),
         (42, 9, "child\n"),
     ]
+    # Each patch keeps the base its own revision recorded, so an updated diff
+    # can be declared to sit where the revision already said it did.
+    assert [p.base_commit for p in stack.patches] == [LANDED, UNLANDED]
 
 
 async def test_get_patch_stack_raises_when_the_bottom_base_is_unknown(monkeypatch):

@@ -19,10 +19,17 @@ class PhabricatorDiff(BaseModel):
 
 
 class RevisionPatch(BaseModel):
-    """One revision's diff, as raw unified-diff text."""
+    """One revision's diff, as raw unified-diff text.
+
+    ``base_commit`` is what the revision itself recorded as the commit it was
+    built on, unexpanded and possibly unfetchable (see :class:`PhabricatorDiff`).
+    Keep it so an updated diff can declare the base the revision already had,
+    rather than whatever local commit the tree was rebuilt from.
+    """
 
     revision_id: int
     diff_id: int
+    base_commit: str
     raw_diff: str
 
 

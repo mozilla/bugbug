@@ -27,8 +27,15 @@ CHILD_DIFF = """diff --git a/f.txt b/f.txt
 """
 
 
-def _patch(revision_id: int, diff_id: int, raw_diff: str) -> dict:
-    return {"revision_id": revision_id, "diff_id": diff_id, "raw_diff": raw_diff}
+def _patch(
+    revision_id: int, diff_id: int, raw_diff: str, base_commit: str = "recorded-base"
+) -> dict:
+    return {
+        "revision_id": revision_id,
+        "diff_id": diff_id,
+        "base_commit": base_commit,
+        "raw_diff": raw_diff,
+    }
 
 
 class _FakeCtx:
@@ -40,6 +47,7 @@ class _FakeCtx:
         self.prepared_ref = None
         self.source_base = None
         self.source_base_resets = 0
+        self.reported_base = None
 
     async def prepare_repo(
         self, ref: str | None = None, depth: int | None = None
@@ -49,8 +57,9 @@ class _FakeCtx:
             self.source_base = changes.base_commit(self._repo)
         return self._repo
 
-    def reset_source_base(self) -> None:
+    def reset_source_base(self, reported_base: str | None = None) -> None:
         self.source_base_resets += 1
+        self.reported_base = reported_base
         if self._track_head:
             self.source_base = changes.base_commit(self._repo)
 
@@ -208,7 +217,10 @@ async def test_checkout_rebuilds_a_stack_onto_the_fetchable_base(monkeypatch, re
         monkeypatch,
         payload={
             "base_commit": "base9",
-            "patches": [_patch(41, 8, PARENT_DIFF), _patch(42, 9, CHILD_DIFF)],
+            "patches": [
+                _patch(41, 8, PARENT_DIFF, base_commit="landed-base"),
+                _patch(42, 9, CHILD_DIFF, base_commit="69706d7a081e"),
+            ],
         },
     )
     ctx = _FakeCtx(repo, track_head=True)
@@ -222,6 +234,9 @@ async def test_checkout_rebuilds_a_stack_onto_the_fetchable_base(monkeypatch, re
     # and only D42's own diff is left uncommitted for the agent to build on.
     assert ctx.source_base_resets == 1
     assert ctx.source_base == _git_out(repo, "rev-parse", "HEAD") != base
+    # An updated diff still declares the base D42 recorded: the commit the tree
+    # was rebuilt at is local to this container, and nothing was rebased.
+    assert ctx.reported_base == "69706d7a081e"
     assert _git_out(repo, "show", "HEAD:f.txt") == "one\ntwo"
     assert _git_out(repo, "log", "-1", "--format=%s") == (
         "D41 diff 8 (unlanded parent of D42)"

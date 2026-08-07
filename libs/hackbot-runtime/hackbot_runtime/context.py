@@ -79,6 +79,9 @@ class HackbotContext(BaseSettings):
     # prepared. Stays None for agents that never touch source, which is how
     # publish_changes() knows there are no changes to collect.
     _source_base: str | None = PrivateAttr(default=None)
+    # What a submitted Phabricator diff declares as its base, when that differs
+    # from _source_base (see reset_source_base).
+    _reported_base: str | None = PrivateAttr(default=None)
     # The prepared checkout path + the ref it was prepared at, so the source is
     # prepared exactly once and a conflicting re-prepare is caught.
     _repo_path: Path | None = PrivateAttr(default=None)
@@ -143,7 +146,7 @@ class HackbotContext(BaseSettings):
         self._prepared_ref = resolved_ref
         return path
 
-    def reset_source_base(self) -> None:
+    def reset_source_base(self, reported_base: str | None = None) -> None:
         """Re-record the change base at the checkout's current HEAD.
 
         :meth:`prepare_repo` records the commit the agent's changes are later
@@ -153,8 +156,13 @@ class HackbotContext(BaseSettings):
         commit instead. Unlike the initial recording this is not best-effort:
         a stale base would silently publish someone else's changes as the
         run's.
+
+        That new base is a commit this container made up, so a Phabricator diff
+        must not declare it: pass ``reported_base`` to declare a meaningful one
+        (for a stacked revision, the base it already recorded) instead.
         """
         self._source_base = changes.base_commit(self.repo_path)
+        self._reported_base = reported_base
 
     @property
     def repo_path(self) -> Path:
@@ -273,7 +281,10 @@ class HackbotContext(BaseSettings):
         )
         if wants_phabricator:
             diff_payload = changes.build_phabricator_diff(
-                self.repo_path, self._source_base, self._config.source.repo_url
+                self.repo_path,
+                self._source_base,
+                self._config.source.repo_url,
+                reported_base=self._reported_base,
             )
             if diff_payload is not None:
                 self.publish_json(phabricator_diff_key, diff_payload)

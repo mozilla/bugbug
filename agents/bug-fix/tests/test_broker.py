@@ -33,7 +33,10 @@ def test_patch_route_returns_base_and_patches():
             base_commit="base9full",
             patches=[
                 RevisionPatch(
-                    revision_id=42, diff_id=9, raw_diff="diff --git a/f b/f\n"
+                    revision_id=42,
+                    diff_id=9,
+                    base_commit="base9",
+                    raw_diff="diff --git a/f b/f\n",
                 )
             ],
         )
@@ -45,7 +48,12 @@ def test_patch_route_returns_base_and_patches():
     assert resp.json() == {
         "base_commit": "base9full",
         "patches": [
-            {"revision_id": 42, "diff_id": 9, "raw_diff": "diff --git a/f b/f\n"}
+            {
+                "revision_id": 42,
+                "diff_id": 9,
+                "base_commit": "base9",
+                "raw_diff": "diff --git a/f b/f\n",
+            }
         ],
     }
     fake.get_patch_stack.assert_awaited_once_with(42)
@@ -59,8 +67,18 @@ def test_patch_route_serves_a_stack_bottom_first():
         return_value=PatchStack(
             base_commit="landed",
             patches=[
-                RevisionPatch(revision_id=41, diff_id=8, raw_diff="parent\n"),
-                RevisionPatch(revision_id=42, diff_id=9, raw_diff="child\n"),
+                RevisionPatch(
+                    revision_id=41,
+                    diff_id=8,
+                    base_commit="landed",
+                    raw_diff="parent\n",
+                ),
+                RevisionPatch(
+                    revision_id=42,
+                    diff_id=9,
+                    base_commit="unlanded",
+                    raw_diff="child\n",
+                ),
             ],
         )
     )

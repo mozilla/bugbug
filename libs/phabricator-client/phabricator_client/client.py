@@ -260,6 +260,7 @@ class PhabricatorClient:
                 RevisionPatch(
                     revision_id=current,
                     diff_id=diff.id,
+                    base_commit=diff.base_commit,
                     raw_diff=await self.get_raw_diff(diff.id),
                 ),
             )
