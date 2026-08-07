@@ -190,6 +190,43 @@ def test_publish_changes_builds_phabricator_diff_when_action_recorded(
     assert submission["local_commits"]["node"]["author"] == "A"
 
 
+def test_publish_changes_builds_try_push_when_action_recorded(tmp_path, monkeypatch):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_try_push",
+        lambda repo, base: {"base_commit": base, "patches": ["cGF0Y2g="]},
+    )
+    hb.actions.record(
+        "try_server.push", {"tasks": ["build-linux64/opt"]}, reasoning="r"
+    )
+
+    hb.publish_changes()
+
+    payload = json.loads(
+        (
+            tmp_path / "artifacts" / "local-test" / "changes" / "try_push.json"
+        ).read_text()
+    )
+    assert payload["base_commit"] == "basecommit"
+
+
+def test_publish_changes_skips_try_push_without_action(tmp_path, monkeypatch):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    called = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_try_push",
+        lambda *a, **k: called.append(a) or {},
+    )
+    hb.actions.record("bugzilla.add_comment", {"bug_id": 1}, reasoning="r")
+
+    hb.publish_changes()
+
+    assert called == []
+    assert not (
+        tmp_path / "artifacts" / "local-test" / "changes" / "try_push.json"
+    ).exists()
+
+
 def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeypatch):
     hb = _hb_with_source(tmp_path, monkeypatch)
     called = []
