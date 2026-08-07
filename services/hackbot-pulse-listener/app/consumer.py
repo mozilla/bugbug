@@ -50,6 +50,13 @@ _seen_tests: TTLCache = TTLCache(
 )
 _seen_tests_lock = threading.Lock()
 
+# A manifest stays broken on the pushes following the one that broke it, so per-push
+# dedupe alone still mails a near-identical analysis for each.
+_seen_groups: TTLCache = TTLCache(
+    maxsize=settings.dedupe_max_size, ttl=settings.group_dedupe_ttl_seconds
+)
+_seen_groups_lock = threading.Lock()
+
 # When each test-repair run of the last day was started, oldest first, capping how
 # many may run in any rolling 24 hours. A slot is taken at the moment of triggering
 # and given back if the trigger fails, so only runs that really started count.
@@ -273,6 +280,7 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     # once. The same record carries the configuration the regression check compares
     # against.
     job = treeherder.job_for_task(project, task_id)
+
     # Populated at ingestion, so this needs no wait for a sheriff to star the job.
     intermittent = treeherder.intermittent_match(project, job)
     if intermittent.known:
@@ -363,6 +371,15 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
+    if _groups_claimed(project, fresh):
+        logger.info(
+            "Every failing group of task %s was already investigated on a recent "
+            "push; skipping -- %s",
+            task_id,
+            job_link,
+        )
+        return None
+
     # One last cheap look before spending a run. The gate above already waited for a
     # verdict, so this catches one that landed during the walk: a sheriff's
     # classification, or autoclassification once a retrigger came back green.
@@ -405,6 +422,24 @@ def _claim_push(hg_revision: str) -> bool:
             return False
         _seen_tests[hg_revision] = True
         return True
+
+
+def _groups_claimed(project: str, groups: list[str]) -> bool:
+    """Whether a recent run already covered every one of these groups.
+
+    All, not any: a task that also broke an unanalysed manifest is still worth a run.
+    """
+    with _seen_groups_lock:
+        return bool(groups) and all((project, g) in _seen_groups for g in groups)
+
+
+def _claim_groups(project: str, groups: list[str]) -> list[tuple[str, str]]:
+    """Record the groups a run covers; returns the keys to release if it fails."""
+    keys = [(project, group) for group in groups]
+    with _seen_groups_lock:
+        for key in keys:
+            _seen_groups[key] = True
+    return keys
 
 
 def _test_runs_today() -> int:
@@ -500,6 +535,8 @@ def _trigger_test_repair(
         _release_test_run()
         return None
 
+    group_keys = _claim_groups(project, test_groups)
+
     try:
         run_id = client.trigger_run(
             {"failure_tasks": {label: task_id}},
@@ -510,6 +547,7 @@ def _trigger_test_repair(
             "Failed to trigger test-repair run for task %s -- %s", task_id, job_link
         )
         _release(_seen_tests, _seen_tests_lock, [hg_revision])
+        _release(_seen_groups, _seen_groups_lock, group_keys)
         _release_test_run()
         return None
 
