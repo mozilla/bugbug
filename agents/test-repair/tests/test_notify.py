@@ -69,7 +69,7 @@ def test_reports_the_verdict_and_its_context_in_five_lines():
         "|hg c338a2c1c8d3>",
         f"Culprit: <{GIT_URL}|github 7b15e34863cf> by standard8@mozilla.com "
         "(<https://bugzilla.mozilla.org/show_bug.cgi?id=2061487|bug 2061487>)",
-        "<https://hackbot.moz.tools/runs/1218e630-78c8|hackbot run details>",
+        "<https://hackbot.moz.tools/runs/1218e630-78c8|Hackbot run details>",
         "",
         "Verdict",
         "",

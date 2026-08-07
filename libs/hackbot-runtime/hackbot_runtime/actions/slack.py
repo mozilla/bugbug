@@ -23,16 +23,6 @@ from hackbot_runtime.actions.recorder import ActionsRecorder
 ACTION_TYPE = "slack.post_message"
 HACKBOT_UI_URL = "https://hackbot.moz.tools"
 
-_CHANNEL_DESCRIPTION = (
-    'Where to post: a Slack channel ("#example-channel", or a channel '
-    'ID), or an audience key the deployment maps to one ("example", '
-    '"<Product> :: <Component>").'
-)
-_TEXT_DESCRIPTION = (
-    "Message body in Slack mrkdwn: *bold*, `code`, and <url|label> for links. "
-    "Keep it to the few lines the channel needs, with links out for detail."
-)
-
 
 def _params(channel: str, text: str) -> dict[str, str]:
     channel = channel.strip()
@@ -47,8 +37,24 @@ def _params(channel: str, text: str) -> dict[str, str]:
 @tool
 async def post_message(
     recorder: ActionsRecorder,
-    channel: Annotated[str, Field(description=_CHANNEL_DESCRIPTION)],
-    text: Annotated[str, Field(description=_TEXT_DESCRIPTION)],
+    channel: Annotated[
+        str,
+        Field(
+            description=(
+                'Where to post: a Slack channel ("#example-channel") or a channel ID.'
+            )
+        ),
+    ],
+    text: Annotated[
+        str,
+        Field(
+            description=(
+                "Message body in Slack mrkdwn: *bold*, `code`, and <url|label> for "
+                "links. Keep it to the few lines the channel needs, with links out "
+                "for detail."
+            )
+        ),
+    ],
     reasoning: Annotated[
         str,
         Field(description="Why this channel needs to hear about it (for audit log)."),

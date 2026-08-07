@@ -17,9 +17,8 @@ def _ctx():
 
 
 @pytest.fixture(autouse=True)
-def _no_deployment_config(monkeypatch):
-    for name in ("SLACK_BOT_TOKEN", "SLACK_CHANNELS"):
-        monkeypatch.delenv(name, raising=False)
+def _no_token(monkeypatch):
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
 
 
 class _FakeClient:
@@ -55,34 +54,12 @@ async def test_posts_recorded_message_and_returns_the_timestamp(monkeypatch):
     assert result.result == {"channel": "C1", "ts": "1700000000.000100"}
 
 
-async def test_resolves_a_configured_audience_to_its_channel(monkeypatch):
-    monkeypatch.setenv("SLACK_CHANNELS", '{"sheriffs": "C123", "default": "C999"}')
+async def test_posts_to_a_channel_id_as_recorded(monkeypatch):
     client = _fake_client(monkeypatch)
     await slack_handler.PostMessageHandler().apply(
-        {"channel": "sheriffs", "text": "hi"}, _ctx()
+        {"channel": "C0123456789", "text": "hi"}, _ctx()
     )
-    assert client.calls[0]["channel"] == "C123"
-
-
-async def test_unmapped_audience_falls_back_to_the_default_channel(monkeypatch):
-    monkeypatch.setenv("SLACK_CHANNELS", '{"default": "C999"}')
-    client = _fake_client(monkeypatch)
-    await slack_handler.PostMessageHandler().apply(
-        {"channel": "Firefox :: New Tab Page", "text": "hi"}, _ctx()
-    )
-    assert client.calls[0]["channel"] == "C999"
-
-
-@pytest.mark.parametrize("channels", ["", "not json", '["#c"]'])
-async def test_unusable_channel_map_leaves_the_recorded_channel_alone(
-    monkeypatch, channels
-):
-    monkeypatch.setenv("SLACK_CHANNELS", channels)
-    client = _fake_client(monkeypatch)
-    await slack_handler.PostMessageHandler().apply(
-        {"channel": "#sheriff-notifications", "text": "hi"}, _ctx()
-    )
-    assert client.calls[0]["channel"] == "#sheriff-notifications"
+    assert client.calls[0]["channel"] == "C0123456789"
 
 
 async def test_a_slack_error_is_not_a_delivered_message(monkeypatch):
