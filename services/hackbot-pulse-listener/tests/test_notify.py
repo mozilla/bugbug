@@ -521,3 +521,33 @@ def test_attaches_patch_file(monkeypatch):
     assert len(attachments) == 1
     assert attachments[0]["filename"] == "changes.patch"
     assert base64.b64decode(attachments[0]["content"]).decode() == "DIFF-CONTENT"
+
+
+def test_the_headline_names_the_sheriffs_action_not_a_landing():
+    findings = _test_repair_findings(recommendation="land_fix")
+    body = notify._build_test_repair_body(_test_repair_ctx(), findings, None, None)
+    assert "LAND the proposed fix" not in body
+    assert "BACK OUT the culprit, reland with the proposed fix squashed in" in body
+
+
+def test_the_patch_is_presented_as_advice_for_a_squashed_reland():
+    findings = _test_repair_findings(recommendation="land_fix")
+    body = notify._build_test_repair_body(
+        _test_repair_ctx(), findings, "--- a/f\n+++ b/f\n", None
+    )
+    assert "squash this into your existing patches and reland" in body
+    assert "not a follow-up to land on its own" in body
+
+
+def test_no_patch_advice_without_a_patch():
+    body = notify._build_test_repair_body(
+        _test_repair_ctx(), _test_repair_findings(), None, None
+    )
+    assert "squash this into your existing patches" not in body
+
+
+def test_an_unknown_recommendation_is_shown_verbatim():
+    assert notify._banner({"recommendation": "backout_and_reland"}) == (
+        "backout_and_reland"
+    )
+    assert notify._banner({}) == "analysis"

@@ -147,15 +147,16 @@ def _recipients(primary: str | None, secondary: str | None = None) -> list[str]:
     return recipients
 
 
+# The headline names the sheriff's action, which is always a backout.
 _RECOMMENDATION_BANNER = {
     "backout": "BACK OUT the culprit",
     "do_not_backout": "DO NOT back out (intermittent)",
-    "land_fix": "LAND the proposed fix",
+    "land_fix": "BACK OUT the culprit, reland with the proposed fix squashed in",
 }
 
 
 def _banner(findings: dict) -> str:
-    """The recommendation as a human-readable headline."""
+    """The recommendation as a human-readable headline, or the raw value."""
     recommendation = findings.get("recommendation")
     return _RECOMMENDATION_BANNER.get(recommendation, recommendation or "analysis")
 
@@ -216,8 +217,19 @@ def _build_test_repair_body(
         lines.append(f"- **Bug:** [{bug}]({_bug_url(bug)})")
 
     lines += _run_details(ctx) + _analysis_sections(findings) + _patch_section(patch)
-    lines += _team_footer()
+    lines += _patch_advice(patch) + _team_footer()
     return "\n".join(lines)
+
+
+def _patch_advice(patch: str | None) -> list[str]:
+    """Say who the patch is for, next to the patch itself."""
+    if not patch:
+        return []
+    return [
+        "",
+        "_For the author: squash this into your existing patches and reland. It is a "
+        "suggestion, not a follow-up to land on its own._",
+    ]
 
 
 def _run_details(ctx: RunContext) -> list[str]:
