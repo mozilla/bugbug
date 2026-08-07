@@ -46,8 +46,13 @@ Steps:
    whole stack has to be backed out -- name it in summary.md, oldest sha first.
    "culprit_commit" stays the single commit that introduced the regression.
 5. Write to {scratch_out}:
-   - summary.md: a 2-4 sentence verdict.
-   - analysis.md: the reasoning, with evidence from the logs and diffs.
+   - summary.md: a 2-4 sentence verdict, in plain prose -- no headings, lists or
+     code blocks. It is posted verbatim to Slack, so it has to read at a glance:
+     what failed, what caused it, what to do. Everything else belongs in
+     analysis.md.
+   - analysis.md: the reasoning, with evidence from the logs and diffs. This is
+     where quoted log lines, diffs and alternatives you ruled out go, at whatever
+     length the case needs.
    - verdict.json: "classification" ("regression" or "intermittent"),
      "culprit_commit" (full sha from the range, or null), "candidate_commits" (up
      to {max_candidates} full shas, most to least likely, whenever no single
@@ -102,7 +107,12 @@ The source tree is at {source_repo} (your working directory). Search it with
 
 1. Make the smallest change that addresses the root cause.
 {verify_step}
-3. Update {scratch_out}/verdict.json in place, preserving its existing keys: set
+3. Describe the patch in {scratch_out}/analysis.md: what it changes and why that
+   addresses the root cause.
+4. Add at most one sentence to {scratch_out}/summary.md saying a patch is
+   proposed. Do not rewrite or restructure it -- it stays the short verdict
+   posted to Slack, and the patch write-up goes in analysis.md.
+5. Update {scratch_out}/verdict.json in place, preserving its existing keys: set
    "proposed_patch" to true if you made a fix, and leave "recommendation" as
    "backout".
 """
@@ -117,12 +127,13 @@ VERIFY_REMOTE = """\
    mach -- see the tree's AGENTS.md / CLAUDE.md for how it runs {harness} tests.
    This container is Linux and the failure is on {platform}: a failure here is
    evidence the patch is wrong, but a pass proves nothing about {platform}. Report
-   a pass as "not verified" and say so in summary.md."""
+   a pass as "not verified" and say so in the summary sentence below."""
 
 VERIFY_SKIPPED = """\
 2. Do not build, and do not try to run the test(s); no build tool is available.
    Check by reading instead that the patch compiles and addresses the root cause.
-   State in summary.md that it is unverified, neither built nor run."""
+   State in the summary sentence below that it is unverified, neither built nor
+   run."""
 
 ENVIRONMENT_NOTE = """
    Environment: a Debian container with a virtual display and the build toolchain
