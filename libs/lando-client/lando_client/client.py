@@ -80,7 +80,10 @@ class LandoClient:
             response = await client.post(
                 self.try_patches_url,
                 json=payload,
-                headers={"Authorization": f"Bearer {self.settings.access_token}"},
+                headers={
+                    "Authorization": f"Bearer {self.settings.access_token}",
+                    "User-Agent": self.settings.user_agent,
+                },
             )
 
         if response.status_code >= 400:
