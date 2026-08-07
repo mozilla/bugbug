@@ -521,3 +521,95 @@ def test_attaches_patch_file(monkeypatch):
     assert len(attachments) == 1
     assert attachments[0]["filename"] == "changes.patch"
     assert base64.b64decode(attachments[0]["content"]).decode() == "DIFF-CONTENT"
+
+
+def test_the_headline_names_the_sheriffs_action_not_a_landing():
+    findings = _test_repair_findings(recommendation="land_fix")
+    body = notify._build_test_repair_body(_test_repair_ctx(), findings, None, None)
+    assert "LAND the proposed fix" not in body
+    assert "BACK OUT the culprit, reland with the proposed fix squashed in" in body
+
+
+def test_the_patch_is_presented_as_advice_for_a_squashed_reland():
+    findings = _test_repair_findings(recommendation="land_fix")
+    body = notify._build_test_repair_body(
+        _test_repair_ctx(), findings, "--- a/f\n+++ b/f\n", None
+    )
+    assert "squash this into your existing patches and reland" in body
+    assert "not a follow-up to land on its own" in body
+
+
+def test_no_patch_advice_without_a_patch():
+    body = notify._build_test_repair_body(
+        _test_repair_ctx(), _test_repair_findings(), None, None
+    )
+    assert "squash this into your existing patches" not in body
+
+
+def test_an_unknown_recommendation_is_shown_verbatim():
+    assert notify._banner({"recommendation": "backout_and_reland"}) == (
+        "backout_and_reland"
+    )
+    assert notify._banner({}) == "analysis"
+
+
+def test_already_actioned_body_leads_with_the_banner():
+    body = notify._build_test_repair_body(
+        _test_repair_ctx(),
+        _test_repair_findings(),
+        None,
+        None,
+        already_actioned="fixed by commit",
+    )
+    banner, _ = body.split("# Test failure analysis", 1)
+    assert "Already actioned by a sheriff" in banner
+    assert "fixed by commit" in banner
+    assert "BACK OUT the culprit" in body
+    assert "## Analysis" in body
+
+
+def test_an_unactioned_body_has_no_banner():
+    body = notify._build_test_repair_body(
+        _test_repair_ctx(), _test_repair_findings(), None, None
+    )
+    assert "Already actioned" not in body
+    assert body.startswith("# Test failure analysis")
+
+
+def test_already_actioned_is_marked_in_the_subject(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(
+        notify.settings, "notification_override_email", "me@mozilla.com"
+    )
+
+    run_doc = {"status": "succeeded", "summary": {"findings": _test_repair_findings()}}
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with (
+        patch("sendgrid.SendGridAPIClient", return_value=fake_client),
+        patch.object(notify.github, "commit_author_email", return_value=None),
+    ):
+        notify.send_email(_test_repair_ctx(), run_doc, "fixed by commit")
+
+    message = fake_client.send.call_args.kwargs["message"].get()
+    assert message["subject"].startswith("[test-repair] [already actioned] ")
+    assert "Already actioned by a sheriff" in message["content"][0]["value"]
+
+
+def test_build_repair_ignores_the_actioned_flag(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "key")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(
+        notify.settings, "notification_override_email", "me@mozilla.com"
+    )
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", False)
+
+    run_doc = {"status": "succeeded", "summary": {"findings": {}}}
+    fake_client = MagicMock()
+    fake_client.send.return_value = MagicMock(status_code=202)
+    with patch("sendgrid.SendGridAPIClient", return_value=fake_client):
+        notify.send_email(_ctx(), run_doc, "fixed by commit")
+
+    message = fake_client.send.call_args.kwargs["message"].get()
+    assert "already actioned" not in message["subject"]

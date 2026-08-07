@@ -9,7 +9,7 @@ Recorded as a ``slack.post_message`` action rather than posted from the run: it 
 then visible in the hackbot UI before it lands, and the apply step delivers it at
 most once (see ``hackbot_runtime.actions.slack``).
 
-Five lines of context, then the verdict in full. Every identifier a sheriff would
+A few lines of context, then the verdict in full. Every identifier a sheriff would
 otherwise have to look up -- revisions, task, bug, run -- is a link, the way the
 pulse listener's email does it
 (``services/hackbot-pulse-listener/app/notify.py``); unlike the email this stays
@@ -120,9 +120,17 @@ def _culprit_line(result: TestRepairResult, culprit_author: str | None) -> str:
     bug = result.culprit_bug or result.intermittent_bug
     if bug:
         line += f" ({_bug_link(bug)})"
-    if result.proposed_patch:
-        line += ", patch attached"
     return line
+
+
+def _patch_line(result: TestRepairResult) -> str | None:
+    """Who the attached patch is for, so it is not read as an alternative action."""
+    if not result.proposed_patch:
+        return None
+    return (
+        "Patch attached for the author: squash it into the existing patches and"
+        " reland, rather than landing it as a follow-up. The backout still stands."
+    )
 
 
 def build_message(
@@ -144,6 +152,9 @@ def build_message(
         _culprit_line(result, culprit_author),
         _link(RUN_URL.format(run_id=run_id), "Hackbot run details"),
     ]
+    patch = _patch_line(result)
+    if patch:
+        lines.insert(-1, patch)
     if result.summary.strip():
         lines += ["", result.summary.strip()]
     return "\n".join(lines)
