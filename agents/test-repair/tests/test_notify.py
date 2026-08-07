@@ -122,12 +122,16 @@ def test_names_a_known_intermittent():
     )
 
 
-def test_mentions_a_proposed_patch():
-    assert (
-        _message(_result(proposed_patch=True))
-        .splitlines()[4]
-        .endswith(", patch attached")
-    )
+def test_a_patch_is_advice_for_the_author_not_an_alternative_action():
+    message = _message(_result(proposed_patch=True))
+    assert "*test-repair: BACK OUT the culprit*" in message.splitlines()[0]
+    assert "squash it into the existing patches and reland" in message
+    assert "rather than landing it as a follow-up" in message
+    assert "The backout still stands." in message
+
+
+def test_no_patch_line_without_a_patch():
+    assert "Patch attached" not in _message()
 
 
 def test_lists_every_failing_group():
