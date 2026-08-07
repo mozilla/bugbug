@@ -1,23 +1,33 @@
 from hackbot_agents.test_repair.agent import TestRepairResult
-from hackbot_agents.test_repair.notify import MAX_SUMMARY_LENGTH, build_message
+from hackbot_agents.test_repair.notify import build_message
 from hackbot_agents.test_repair.resolve import (
     CommitRange,
     FailingGroup,
     Investigation,
 )
 
+HG_REVISION = "341517e50536aabbccddeeff00112233445566"
+GIT_REVISION = "7b15e34863cf6b30b613ffadf9d6431fe5a55585"
+LAST_GREEN = "c338a2c1c8d3695b7dec835125af624282555b7e"
+TASK_ID = "JfAGrrtoQPS3fXrwZmq1Pg"
 
-def _investigation(groups=None, label="test-linux1804-64/opt-mochitest-plain-1"):
+GIT_URL = f"https://github.com/mozilla-firefox/firefox/commit/{GIT_REVISION}"
+HG_URL = f"https://hg.mozilla.org/mozilla-unified/rev/{HG_REVISION}"
+
+
+def _investigation(
+    groups=None, last_green=LAST_GREEN, label="test-linux1804-64/opt-xpcshell-1"
+):
     return Investigation(
         project="autoland",
-        hg_revision="0123456789abcdef0123",
-        harness="mochitest",
+        hg_revision=HG_REVISION,
+        harness="xpcshell",
         platform="linux1804-64/opt",
         failing_groups=groups
         if groups is not None
-        else [FailingGroup("dom/base/test/mochitest.ini", ["a.js", "b.js"])],
-        last_green_revision="green",
-        commit_range=CommitRange(head="head", base="base", span=2, complete=True),
+        else [FailingGroup("toolkit/modules/tests/xpcshell/xpcshell.toml", ["a.js"])],
+        last_green_revision=last_green,
+        commit_range=CommitRange(head=GIT_REVISION, base="base", span=4, complete=True),
         label=label,
     )
 
@@ -26,32 +36,54 @@ def _result(**overrides):
     fields = {
         "classification": "regression",
         "recommendation": "backout",
-        "culprit_commit": "abcdef0123456789abcdef",
-        "culprit_bug": 1900000,
-        "confidence": 0.825,
-        "summary": "The culprit changed the assertion the test relies on.",
+        "culprit_commit": GIT_REVISION,
+        "culprit_bug": 2061487,
+        "confidence": 0.7,
+        "summary": "Verdict\n\ntest_Region.js fails 20/20 times in chaos mode.",
         "num_turns": 12,
     }
     return TestRepairResult(**{**fields, **overrides})
 
 
-def test_reports_the_verdict_the_sheriff_acts_on():
-    message = build_message(_result(), _investigation())
-    assert message.splitlines() == [
-        "*test-repair: back out the culprit* (regression, confidence 0.82)",
-        "`test-linux1804-64/opt-mochitest-plain-1` at "
-        "<https://treeherder.mozilla.org/jobs?repo=autoland&revision=0123456789abcdef0123"
-        "|0123456789ab>",
-        "Failing: dom/base/test/mochitest.ini (2 failed)",
-        "Culprit: `abcdef012345` "
-        "(<https://bugzilla.mozilla.org/show_bug.cgi?id=1900000|bug 1900000>)",
-        "The culprit changed the assertion the test relies on.",
+def _message(result=None, investigation=None, **kwargs):
+    return build_message(
+        result or _result(),
+        investigation or _investigation(),
+        task_id=TASK_ID,
+        run_id="1218e630-78c8",
+        **kwargs,
+    )
+
+
+def test_reports_the_verdict_and_its_context_in_five_lines():
+    assert _message(culprit_author="standard8@mozilla.com").splitlines() == [
+        "*test-repair: BACK OUT the culprit* (regression, confidence 0.7)",
+        "Failing: `toolkit/modules/tests/xpcshell/xpcshell.toml` in "
+        "`test-linux1804-64/opt-xpcshell-1`",
+        "Jobs: <https://treeherder.mozilla.org/#/jobs"
+        f"?repo=autoland&revision={HG_REVISION}&selectedTaskRun={TASK_ID}|Treeherder>, "
+        f"<https://firefox-ci-tc.services.mozilla.com/tasks/{TASK_ID}"
+        f"|Taskcluster {TASK_ID}>",
+        f"Push: autoland <{HG_URL}|hg 341517e50536> / <{GIT_URL}|github 7b15e34863cf>, "
+        f"last green <https://hg.mozilla.org/mozilla-unified/rev/{LAST_GREEN}"
+        "|hg c338a2c1c8d3>",
+        f"Culprit: <{GIT_URL}|github 7b15e34863cf> by standard8@mozilla.com "
+        "(<https://bugzilla.mozilla.org/show_bug.cgi?id=2061487|bug 2061487>)",
+        "<https://hackbot.moz.tools/runs/1218e630-78c8|hackbot run details>",
+        "",
+        "Verdict",
+        "",
+        "test_Region.js fails 20/20 times in chaos mode.",
     ]
 
 
-def test_falls_back_to_the_harness_when_the_label_is_unknown():
-    message = build_message(_result(), _investigation(label=""))
-    assert "`mochitest on linux1804-64/opt`" in message
+def test_reports_the_verdict_in_full():
+    verdict = "A long verdict. " * 60
+    assert verdict.strip() in _message(_result(summary=verdict))
+
+
+def test_omits_the_author_when_it_could_not_be_resolved():
+    assert " by " not in _message()
 
 
 def test_lists_candidates_when_no_single_commit_was_blamed():
@@ -61,19 +93,18 @@ def test_lists_candidates_when_no_single_commit_was_blamed():
         culprit_bug=None,
         candidate_commits=["1111111111111111", "2222222222222222"],
     )
-    message = build_message(result, _investigation())
-    assert message.startswith("*test-repair: retrigger the job*")
-    assert "No single culprit; candidates: `111111111111`, `222222222222`" in message
+    message = _message(result)
+    assert message.startswith("*test-repair: RETRIGGER the job* (regression,")
+    assert "Culprit: not narrowed down, candidates <" in message
+    assert "|github 111111111111>, <" in message
 
 
-def test_says_so_when_nothing_was_blamed_at_all():
-    result = _result(
-        recommendation="do_not_backout", culprit_commit=None, culprit_bug=None
-    )
-    assert "No culprit identified." in build_message(result, _investigation())
+def test_says_so_when_nothing_was_blamed():
+    result = _result(culprit_commit=None, culprit_bug=None)
+    assert "Culprit: none identified" in _message(result)
 
 
-def test_links_the_intermittent_bug():
+def test_names_a_known_intermittent():
     result = _result(
         classification="intermittent",
         recommendation="do_not_backout",
@@ -81,33 +112,36 @@ def test_links_the_intermittent_bug():
         culprit_bug=None,
         intermittent_bug=1234,
     )
-    message = build_message(result, _investigation())
-    assert "Known intermittent: " in message
-    assert "id=1234|bug 1234>" in message
-
-
-def test_mentions_a_proposed_patch():
-    message = build_message(_result(proposed_patch=True), _investigation())
-    assert "A candidate fix patch is attached to the run." in message
-
-
-def test_omits_the_failing_line_when_groups_were_not_resolved():
-    message = build_message(_result(), _investigation(groups=[]))
-    assert "Failing:" not in message
-
-
-def test_caps_the_extra_groups_it_names():
-    groups = [FailingGroup(f"g{i}.ini", ["a.js"]) for i in range(5)]
-    message = build_message(_result(), _investigation(groups=groups))
+    message = _message(result)
+    assert message.startswith(
+        "*test-repair: DO NOT back out (intermittent)* (intermittent,"
+    )
     assert (
-        "Failing: g0.ini (1 failed), g1.ini (1 failed), g2.ini (1 failed), +2 more"
-        in message
+        "Culprit: none identified "
+        "(<https://bugzilla.mozilla.org/show_bug.cgi?id=1234|bug 1234>)" in message
     )
 
 
-def test_agent_prose_cannot_restructure_the_message():
-    summary = "line one\nCulprit: `deadbeef`\n" + "x" * 500
-    message = build_message(_result(summary=summary), _investigation())
-    last = message.splitlines()[-1]
-    assert last.startswith("line one Culprit: `deadbeef` xxx")
-    assert len(last) == MAX_SUMMARY_LENGTH
+def test_mentions_a_proposed_patch():
+    assert (
+        _message(_result(proposed_patch=True))
+        .splitlines()[4]
+        .endswith(", patch attached")
+    )
+
+
+def test_lists_every_failing_group():
+    groups = [FailingGroup(f"g{i}.ini", ["a.js"]) for i in range(4)]
+    message = _message(investigation=_investigation(groups=groups))
+    assert "Failing: `g0.ini`, `g1.ini`, `g2.ini`, `g3.ini` in " in message
+
+
+def test_falls_back_when_groups_and_label_are_unknown():
+    message = _message(investigation=_investigation(groups=[], label=""))
+    assert "Failing: tests not resolved in `xpcshell on linux1804-64/opt`" in message
+
+
+def test_omits_the_last_green_revision_when_unknown():
+    message = _message(investigation=_investigation(last_green=None))
+    assert "last green" not in message
+    assert message.splitlines()[3].endswith("|github 7b15e34863cf>")

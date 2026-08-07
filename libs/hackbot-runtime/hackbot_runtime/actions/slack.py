@@ -18,7 +18,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionHook, ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder
 
 ACTION_TYPE = "slack.post_message"
 HACKBOT_UI_URL = "https://hackbot.moz.tools"
@@ -75,28 +75,6 @@ def record_message(
     a model turn, and the message is recorded once the result exists.
     """
     return recorder.record(ACTION_TYPE, _params(channel, text), ref=ref)
-
-
-def run_link_hook(run_id: str, base_url: str = HACKBOT_UI_URL) -> ActionHook:
-    """A hook appending a link back to the run to every message recorded.
-
-    Registered by the agent (``recorder.add_hook(ACTION_TYPE, ...)``) rather than
-    added where the message is posted: what a notification says belongs with the
-    run that decided to send it, and only the agent knows whether its readers
-    want the run at all.
-    """
-    base = base_url.rstrip("/")
-
-    def hook(action: dict) -> None:
-        params = action.get("params")
-        if not base or not isinstance(params, dict):
-            return
-        text = params.get("text")
-        if isinstance(text, str):
-            link = f"<{base}/runs/{run_id}|hackbot run {run_id}>"
-            params["text"] = f"{text.rstrip()}\n{link}"
-
-    return hook
 
 
 TOOLS = tools_in(__name__)

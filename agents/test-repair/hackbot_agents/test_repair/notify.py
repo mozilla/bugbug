@@ -9,30 +9,38 @@ Recorded as a ``slack.post_message`` action rather than posted from the run: it 
 then visible in the hackbot UI before it lands, and the apply step delivers it at
 most once (see ``hackbot_runtime.actions.slack``).
 
-The wording is code rather than a model turn -- every run reaches a verdict worth
-reporting, and sheriffs read these at a glance, so the fields and their order are
-fixed. The agent's own prose is included as a single line so it cannot restructure
-the message.
+Five lines of context, then the verdict in full. Every identifier a sheriff would
+otherwise have to look up -- revisions, task, bug, run -- is a link, the way the
+pulse listener's email does it
+(``services/hackbot-pulse-listener/app/notify.py``); unlike the email this stays
+short enough to read in a channel, since the run holds the detail. The verdict is
+what a sheriff acts on, so it is never truncated.
 """
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
+from hackbot_runtime.actions.slack import HACKBOT_UI_URL
+
 from .agent import TestRepairResult
 from .resolve import Investigation
 
-TREEHERDER_PUSH = (
-    "https://treeherder.mozilla.org/jobs?repo={project}&revision={revision}"
+GIT_COMMIT_URL = "https://github.com/mozilla-firefox/firefox/commit/{sha}"
+HG_REV_URL = "https://hg.mozilla.org/mozilla-unified/rev/{rev}"
+TASK_URL = "https://firefox-ci-tc.services.mozilla.com/tasks/{task_id}"
+TREEHERDER_JOB_URL = (
+    "https://treeherder.mozilla.org/#/jobs"
+    "?repo={project}&revision={revision}&selectedTaskRun={task_id}"
 )
 BUG_URL = "https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}"
-
-MAX_GROUPS = 3
-MAX_SUMMARY_LENGTH = 300
+RUN_URL = HACKBOT_UI_URL.rstrip("/") + "/runs/{run_id}"
 
 _RECOMMENDATIONS = {
-    "backout": "back out the culprit",
-    "land_fix": "land a fix",
-    "do_not_backout": "do not back out",
-    "rerun": "retrigger the job",
+    "backout": "BACK OUT the culprit",
+    "do_not_backout": "DO NOT back out (intermittent)",
+    "rerun": "RETRIGGER the job",
 }
 
 
@@ -40,71 +48,102 @@ def _link(url: str, label: str) -> str:
     return f"<{url}|{label}>"
 
 
+def _commit_link(sha: str) -> str:
+    return _link(GIT_COMMIT_URL.format(sha=sha), f"github {sha[:12]}")
+
+
+def _hg_link(rev: str) -> str:
+    return _link(HG_REV_URL.format(rev=rev), f"hg {rev[:12]}")
+
+
 def _bug_link(bug_id: int) -> str:
     return _link(BUG_URL.format(bug_id=bug_id), f"bug {bug_id}")
 
 
-def _short(sha: str) -> str:
-    return sha[:12]
-
-
-def _one_line(text: str) -> str:
-    collapsed = " ".join(text.split())
-    if len(collapsed) > MAX_SUMMARY_LENGTH:
-        collapsed = collapsed[: MAX_SUMMARY_LENGTH - 1].rstrip() + "…"
-    return collapsed
-
-
-def _headline(result: TestRepairResult) -> str:
-    advice = _RECOMMENDATIONS.get(result.recommendation, result.recommendation)
-    return (
-        f"*test-repair: {advice}* ({result.classification}, "
-        f"confidence {result.confidence:.2f})"
-    )
-
-
-def _failure_line(investigation: Investigation) -> str:
-    job = investigation.label or f"{investigation.harness} on {investigation.platform}"
-    push = TREEHERDER_PUSH.format(
-        project=investigation.project, revision=investigation.hg_revision
-    )
-    return f"`{job}` at {_link(push, _short(investigation.hg_revision))}"
-
-
-def _failing_line(investigation: Investigation) -> str | None:
-    groups = investigation.failing_groups[:MAX_GROUPS]
-    if not groups:
+def resolve_culprit_author(source_repo: Path, sha: str | None) -> str | None:
+    """The culprit's author email, so the notification names who to ask."""
+    if not sha:
         return None
-    shown = ", ".join(f"{g.group} ({len(g.tests)} failed)" for g in groups)
-    extra = len(investigation.failing_groups) - len(groups)
-    return "Failing: " + shown + (f", +{extra} more" if extra > 0 else "")
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(source_repo), "show", "-s", "--format=%ae", sha],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    return proc.stdout.strip() or None
 
 
-def _blame_line(result: TestRepairResult) -> str:
+def _failing_line(investigation: Investigation) -> str:
+    groups = (
+        ", ".join(f"`{group.group}`" for group in investigation.failing_groups)
+        or "tests not resolved"
+    )
+    job = investigation.label or f"{investigation.harness} on {investigation.platform}"
+    return f"Failing: {groups} in `{job}`"
+
+
+def _jobs_line(investigation: Investigation, task_id: str) -> str:
+    treeherder = _link(
+        TREEHERDER_JOB_URL.format(
+            project=investigation.project,
+            revision=investigation.hg_revision,
+            task_id=task_id,
+        ),
+        "Treeherder",
+    )
+    task = _link(TASK_URL.format(task_id=task_id), f"Taskcluster {task_id}")
+    return f"Jobs: {treeherder}, {task}"
+
+
+def _push_line(investigation: Investigation) -> str:
+    line = (
+        f"Push: {investigation.project} {_hg_link(investigation.hg_revision)}"
+        f" / {_commit_link(investigation.failure_commit)}"
+    )
+    if investigation.last_green_revision:
+        line += f", last green {_hg_link(investigation.last_green_revision)}"
+    return line
+
+
+def _culprit_line(result: TestRepairResult, culprit_author: str | None) -> str:
     if result.culprit_commit:
-        bug = f" ({_bug_link(result.culprit_bug)})" if result.culprit_bug else ""
-        return f"Culprit: `{_short(result.culprit_commit)}`{bug}"
-    if result.candidate_commits:
-        candidates = ", ".join(f"`{_short(sha)}`" for sha in result.candidate_commits)
-        return f"No single culprit; candidates: {candidates}"
-    return "No culprit identified."
+        author = f" by {culprit_author}" if culprit_author else ""
+        line = f"Culprit: {_commit_link(result.culprit_commit)}{author}"
+    elif result.candidate_commits:
+        candidates = ", ".join(_commit_link(sha) for sha in result.candidate_commits)
+        line = f"Culprit: not narrowed down, candidates {candidates}"
+    else:
+        line = "Culprit: none identified"
 
-
-def build_message(result: TestRepairResult, investigation: Investigation) -> str:
-    """Render the sheriff notification for a finished run."""
-    lines = [_headline(result), _failure_line(investigation)]
-
-    failing = _failing_line(investigation)
-    if failing:
-        lines.append(failing)
-
-    lines.append(_blame_line(result))
-
-    if result.classification == "intermittent" and result.intermittent_bug:
-        lines.append(f"Known intermittent: {_bug_link(result.intermittent_bug)}")
+    bug = result.culprit_bug or result.intermittent_bug
+    if bug:
+        line += f" ({_bug_link(bug)})"
     if result.proposed_patch:
-        lines.append("A candidate fix patch is attached to the run.")
-    if result.summary.strip():
-        lines.append(_one_line(result.summary))
+        line += ", patch attached"
+    return line
 
+
+def build_message(
+    result: TestRepairResult,
+    investigation: Investigation,
+    *,
+    task_id: str,
+    run_id: str,
+    culprit_author: str | None = None,
+) -> str:
+    """Render the notification for a finished run."""
+    recommendation = _RECOMMENDATIONS.get(result.recommendation, result.recommendation)
+    lines = [
+        f"*test-repair: {recommendation}*"
+        f" ({result.classification}, confidence {result.confidence})",
+        _failing_line(investigation),
+        _jobs_line(investigation, task_id),
+        _push_line(investigation),
+        _culprit_line(result, culprit_author),
+        _link(RUN_URL.format(run_id=run_id), "Hackbot run details"),
+    ]
+    if result.summary.strip():
+        lines += ["", result.summary.strip()]
     return "\n".join(lines)

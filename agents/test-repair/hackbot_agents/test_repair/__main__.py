@@ -3,13 +3,13 @@ import tempfile
 from pathlib import Path
 
 from hackbot_runtime import HackbotContext, run_async
-from hackbot_runtime.actions.slack import ACTION_TYPE, record_message, run_link_hook
+from hackbot_runtime.actions.slack import record_message
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestRepairResult
 from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
 from .logs import download_failure_logs
-from .notify import build_message
+from .notify import build_message, resolve_culprit_author
 from .resolve import Investigation, resolve_investigation
 
 logger = logging.getLogger(__name__)
@@ -78,8 +78,14 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
     )
 
     # Notifications are active for all runs
-    ctx.actions.add_hook(ACTION_TYPE, run_link_hook(ctx.run_id))
-    record_message(ctx.actions, SLACK_CHANNEL, build_message(result, investigation))
+    message = build_message(
+        result,
+        investigation,
+        task_id=task_id,
+        run_id=ctx.run_id,
+        culprit_author=resolve_culprit_author(source_repo, result.culprit_commit),
+    )
+    record_message(ctx.actions, SLACK_CHANNEL, message)
     return result
 
 
