@@ -12,6 +12,7 @@ dependencies = [
     "agent-tools",
     "phabricator-client",
     "testrail-client",
+    "slack-sdk>=3.27.0",
     "weave>=0.53.4"
 ]
 
