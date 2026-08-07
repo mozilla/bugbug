@@ -31,6 +31,7 @@ class LandoSettings(BaseModel):
     url: str = "https://lando.moz.tools"
     instance_id: str | None = None
     timeout_seconds: int = 60
+    user_agent: str = "Lando-User/Hackbot"
 
     @model_validator(mode="after")
     def _resolve_instance_id(self) -> LandoSettings:
