@@ -273,6 +273,18 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     # once. The same record carries the configuration the regression check compares
     # against.
     job = treeherder.job_for_task(project, task_id)
+    # Populated at ingestion, so this needs no wait for a sheriff to star the job.
+    intermittent = treeherder.intermittent_match(project, job)
+    if intermittent.known:
+        logger.info(
+            "Task %s failed only lines already known in this revision and tracked by "
+            "intermittent bug(s) %s; skipping -- %s",
+            task_id,
+            ", ".join(str(bug) for bug in intermittent.bug_ids),
+            job_link,
+        )
+        return None
+
     reason = treeherder.await_skip_reason(project, task_id, job)
     if reason:
         logger.info(

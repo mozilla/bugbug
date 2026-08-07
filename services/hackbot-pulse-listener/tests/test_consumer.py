@@ -341,6 +341,9 @@ def env(monkeypatch):
         ),
         recheck_skip_reason=MagicMock(return_value=None),
         await_skip_reason=MagicMock(return_value=None),
+        intermittent_match=MagicMock(
+            return_value=consumer.treeherder.IntermittentMatch()
+        ),
         new_test_failures=MagicMock(
             side_effect=lambda p, r, cfg, groups, abort=None: set(groups)
         ),
@@ -357,6 +360,9 @@ def env(monkeypatch):
     )
     monkeypatch.setattr(
         consumer.treeherder, "await_skip_reason", mocks.await_skip_reason
+    )
+    monkeypatch.setattr(
+        consumer.treeherder, "intermittent_match", mocks.intermittent_match
     )
     monkeypatch.setattr(
         consumer.regression, "new_test_failures", mocks.new_test_failures
@@ -896,3 +902,45 @@ def test_the_group_less_walk_is_also_abandoned(env):
     env.is_new_task_failure.side_effect = consumer.regression.WalkAborted("task at rev")
     assert consumer.process(_test_msg(), env.executor) is None
     env.trigger_run.assert_not_called()
+
+
+def _known_intermittent(*bug_ids):
+    return consumer.treeherder.IntermittentMatch(list(bug_ids), known=True)
+
+
+def test_a_known_intermittent_bug_skips_before_waiting_for_a_verdict(env):
+    env.intermittent_match.return_value = _known_intermittent(2016093)
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.await_skip_reason.assert_not_called()
+    env.failing_groups.assert_not_called()
+    env.trigger_run.assert_not_called()
+
+
+def test_the_skipped_bug_is_logged(env, caplog):
+    env.intermittent_match.return_value = _known_intermittent(2016093)
+    with caplog.at_level(logging.INFO, logger="app.consumer"):
+        assert consumer.process(_test_msg(), env.executor) is None
+    assert "2016093" in caplog.text
+    assert _LINK in caplog.text
+
+
+def test_the_ingested_job_is_what_the_gate_reads(env):
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert env.intermittent_match.call_args.args == (
+        "autoland",
+        env.job_for_task.return_value,
+    )
+
+
+def test_a_known_intermittent_does_not_claim_its_push(env):
+    env.intermittent_match.side_effect = [
+        _known_intermittent(2016093),
+        consumer.treeherder.IntermittentMatch(),
+    ]
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+
+
+def test_no_intermittent_match_still_runs(env):
+    env.intermittent_match.return_value = consumer.treeherder.IntermittentMatch()
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
