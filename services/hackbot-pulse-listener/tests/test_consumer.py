@@ -15,6 +15,7 @@ DECISION_TASK_ID = "DECISION"
 def setup_function():
     consumer._seen.clear()
     consumer._seen_tests.clear()
+    consumer._seen_groups.clear()
     consumer._test_run_times.clear()
 
 
@@ -584,11 +585,11 @@ def test_backfill_in_a_new_task_group_is_deduped(env):
 
 
 def test_different_pushes_are_not_deduped(env):
-    # Dedupe is per push: the same manifest newly failing on a later push is a
+    # Dedupe is per push: a different manifest newly failing on a later push is a
     # separate regression and must be investigated again.
-    revisions = iter(["rev-one", "rev-two"])
-    env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+    _consecutive_pushes(env, "rev-one", "rev-two")
     consumer.process(_test_msg(task_id="A"), env.executor)
+    env.failing_groups.return_value = ["other/test/mochitest.ini"]
     consumer.process(_test_msg(task_id="B"), env.executor)
     assert env.trigger_run.call_count == 2
 
@@ -704,6 +705,7 @@ def test_runs_stop_at_the_daily_limit(env, monkeypatch):
     monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 2)
     revisions = iter(["rev-1", "rev-2", "rev-3"])
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+    _distinct_groups(env)
 
     assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
     assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
@@ -716,6 +718,7 @@ def test_the_limit_is_a_rolling_window(env, monkeypatch):
     monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
     revisions = iter(["rev-1", "rev-2"])
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+    _distinct_groups(env)
 
     assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
     consumer._test_run_times[0] -= consumer._RATE_WINDOW_SECONDS + 1
@@ -752,6 +755,7 @@ def test_a_budget_blocked_task_does_not_claim_its_push(env, monkeypatch):
     monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
     revisions = iter(["rev-1", "rev-2", "rev-2"])
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
+    env.failing_groups.side_effect = [[_GROUP], ["other/mochitest.ini"]] * 2
 
     assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
     assert consumer.process(_test_msg(task_id="B"), env.executor) is None
@@ -944,3 +948,83 @@ def test_a_known_intermittent_does_not_claim_its_push(env):
 def test_no_intermittent_match_still_runs(env):
     env.intermittent_match.return_value = consumer.treeherder.IntermittentMatch()
     assert consumer.process(_test_msg(), env.executor) == "tr-1"
+
+
+def _consecutive_pushes(env, *revisions):
+    """Make each message look like it came from a different push."""
+    it = iter(revisions)
+    env.get_task.side_effect = lambda task_id: _task_def(next(it))
+
+
+def test_the_same_manifest_on_later_pushes_is_deduped(env):
+    _consecutive_pushes(env, "rev-one", "rev-two", "rev-three")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="C"), env.executor) is None
+    env.trigger_run.assert_called_once()
+
+
+def test_a_new_manifest_on_a_later_push_still_runs(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    env.failing_groups.return_value = ["layout/style/test/mochitest.toml"]
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert env.trigger_run.call_count == 2
+
+
+def test_one_unseen_manifest_is_enough_to_run(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    env.failing_groups.return_value = [_GROUP, "layout/style/test/mochitest.toml"]
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+
+
+def test_manifest_dedupe_is_per_project():
+    consumer._claim_groups("autoland", [_GROUP])
+    assert consumer._groups_claimed("autoland", [_GROUP]) is True
+    assert consumer._groups_claimed("mozilla-central", [_GROUP]) is False
+
+
+def test_a_skipped_task_does_not_claim_its_manifests(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    env.await_skip_reason.side_effect = ["intermittent", None]
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+
+
+def test_a_failed_trigger_releases_the_manifests(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    env.trigger_run.side_effect = [RuntimeError("boom"), "tr-2"]
+    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-2"
+
+
+def test_a_group_less_task_is_not_suppressed_by_the_manifest_cache(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+
+
+def test_the_deduped_task_is_logged_with_a_treeherder_link(env, caplog):
+    _consecutive_pushes(env, "rev-one", "hgrev")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    with caplog.at_level(logging.INFO, logger="app.consumer"):
+        assert consumer.process(_test_msg(task_id="TT"), env.executor) is None
+    assert "already investigated on a recent push" in caplog.text
+    assert _LINK in caplog.text
+
+
+def test_a_manifest_dedupe_costs_no_recheck(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    env.recheck_skip_reason.reset_mock()
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    env.recheck_skip_reason.assert_not_called()
+
+
+def _distinct_groups(env):
+    """Give every task its own failing manifest, so only the gate under test applies."""
+    env.failing_groups.side_effect = lambda project, rev, task_id: [
+        f"{task_id}/mochitest.ini"
+    ]
