@@ -25,6 +25,10 @@ from phabricator_client.models import PhabricatorDiff
 _FULL_COMMIT_LEN = 40
 
 
+class UnresolvedCommitError(Exception):
+    """A commit identifier could not be expanded to a full, fetchable hash."""
+
+
 def _is_full_commit(ref: str) -> bool:
     """True if ``ref`` is a full 40-char lowercase-hex git commit hash."""
     ref = ref.lower()
@@ -145,20 +149,47 @@ class PhabricatorClient:
         """The raw unified-diff text for a diff (``differential.getrawdiff``)."""
         return await self.conduit_request("differential.getrawdiff", diffID=diff_id)
 
-    async def resolve_commit(self, ref: str) -> str | None:
-        """Expand a commit identifier to its full 40-char hash, or ``None``.
+    async def resolve_commit(self, ref: str) -> str:
+        """Expand a commit identifier to its full 40-char hash.
 
         A diff's ``sourceControlBaseRevision`` is often abbreviated (moz-phab
         records a short hash for a large repo like firefox), and git can only
         fetch a full object id, not an abbreviation. ``diffusion.querycommits``
         resolves the short hash to the full ``identifier``. Already-full hashes
         are returned as-is without a Conduit call.
+
+        Raises :class:`UnresolvedCommitError` when no full hash can be named.
         """
         if _is_full_commit(ref):
             return ref
         result = await self.conduit_request("diffusion.querycommits", names=[ref])
-        commit_phid = (result.get("identifierMap") or {}).get(ref)
-        if not commit_phid:
-            return None
-        commit = (result.get("data") or {}).get(commit_phid) or {}
-        return commit.get("identifier") or None
+        data = result.get("data")
+        commit_phid = result.get("identifierMap").get(ref)
+        if commit_phid in data:
+            commits = [data[commit_phid]]
+        else:
+            # ``identifierMap`` only maps unambiguous commits, and a firefox
+            # commit is mirrored to autoland, beta, release, etc. Thus, the same
+            # hash can appear in multiple repos with different PHIDs.
+            commits = data.values()
+
+        identifiers = {
+            commit["identifier"]
+            for commit in commits
+            if commit["identifier"].startswith(ref)
+            and _is_full_commit(commit["identifier"])
+        }
+
+        if len(identifiers) != 1:
+            if identifiers:
+                reason = f"it matches {len(identifiers)} commits"
+            else:
+                reason = (
+                    "Diffusion does not know one; the commit may not be "
+                    "imported, e.g. an unlanded parent of a stacked patch"
+                )
+            raise UnresolvedCommitError(
+                f"Cannot expand {ref} to a full commit hash: {reason}."
+            )
+
+        return identifiers.pop()

@@ -1,11 +1,13 @@
 import logging
+import os
 import signal
 from concurrent.futures import ThreadPoolExecutor
 
+# Configures logging on import; must precede the imports that pull in mozci.
+import app.logging_setup  # noqa: F401
 from app import consumer
 from app.config import settings
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -30,14 +32,35 @@ def main() -> None:
     signal.signal(signal.SIGINT, shutdown)
 
     logger.info(
-        "Listening for build failures on %s; watched repos: %s",
+        "Listening for build and test failures on %s; watched repos: %s%s",
         ", ".join(consumer.EXCHANGES),
         sorted(settings.watched_repos_set),
+        " (DRY RUN: no agent runs will be triggered)" if settings.dry_run else "",
     )
+    code = 0
     try:
         consumer_obj.run()
+    except Exception:
+        logger.exception("Consumer loop failed")
+        code = 1
     finally:
-        executor.shutdown(wait=False)
+        _exit_now(executor, code)
+
+
+def _exit_now(executor: ThreadPoolExecutor, code: int) -> None:
+    """Drop in-flight work and exit immediately.
+
+    Worker threads block for a long time by design (a regression check waits up
+    to an hour for an ancestor push, run polling up to ``run_max_age_minutes``),
+    and ThreadPoolExecutor's threads are non-daemon: its atexit hook joins them,
+    so a normal exit would hang for hours and Ctrl+C would appear to do nothing.
+    That hook also breaks any thread still submitting to a pool mid-shutdown.
+    In-flight work is disposable (pending runs are only tracked in memory), so
+    abandon it rather than wait.
+    """
+    executor.shutdown(wait=False, cancel_futures=True)
+    logging.shutdown()
+    os._exit(code)
 
 
 if __name__ == "__main__":
