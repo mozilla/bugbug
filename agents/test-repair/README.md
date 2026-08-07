@@ -1,68 +1,67 @@
 # Test Repair Agent
 
 Two-stage Claude agent that finds the commit which regressed a failing Firefox CI
-test and proposes a fix. Agent logic in `hackbot_agents/test_repair/`.
-
-The pulse listener only forwards failures that already passed its regression and
-flakiness filters, so a regression is the prior, but the agent still reports the
-classification it reaches. Its only input is a Taskcluster task id.
+test, or identifies the failure as a known intermittent, and proposes a fix. Agent
+logic in `hackbot_agents/test_repair/`.
 
 Run the Docker command below from the repo root, with secrets in a local `.env`
 (`ANTHROPIC_API_KEY`; `BUGZILLA_API_KEY` is optional).
 
 ## Deterministic prep
 
-Before Claude is invoked, `resolve.py` turns the task id into everything the
-investigation needs (no log parsing):
+Before Claude is invoked, `resolve.py` turns the task id into the investigation
+context (no log parsing):
 
 1. Project + hg revision from the Taskcluster task.
 2. The failing test groups, via mozci.
-3. The revision at which the failing tests were last green, by walking mozci push
-   ancestors. Restricted to the failing tests on the failing platform, since a
-   manifest can be green on another platform or for its other tests.
-4. The git range that landed since then, from the hg pushlog + lando. Only the
-   range endpoints are mapped to git; the commit count sizes the clone and is
-   capped so an old last-green can't produce an unbounded one.
+3. The revision the failing tests were last green at, by walking mozci push
+   ancestors, restricted to those tests on the failing platform.
+4. The git range that landed since, from the hg pushlog + lando. Only the range
+   endpoints are mapped to git; the commit count sizes the shallow clone and is
+   capped.
+5. Open intermittent bugs Treeherder's `bug_suggestions` ties to the failure.
 
-The agent gets the range (`base..head`), not a list of shas, and enumerates and
-narrows it itself with `git log`. When the range isn't known to reach a green run
-it is passed as `HEAD~N..HEAD` and the prompt stops asserting the culprit is in
-it.
+The agent gets the range (`base..head`), not a list of shas, and narrows it itself
+with `git log`. When the range is not known to reach a green run it is passed as
+`HEAD~N..HEAD` and the prompt stops asserting the culprit is in it.
 
-`SOURCE_REF` / `SOURCE_DEPTH` pin the shallow clone to the failure commit, deep
-enough to walk the range. The task's full and sanitized logs are written to files
-for the agent to search.
+## Stages
 
-The fix stage writes a mozconfig mirroring the failing CI build (debug/opt, plus
-asan/tsan/ccov), runs `mach bootstrap`, builds with the `build_firefox` tool, and
-runs the failing tests with mach over Bash. The image ships Xvfb (started by the
-entrypoint on `DISPLAY=:99`) with Firefox's runtime libraries and fonts, so GUI
-harnesses run too, not just xpcshell and gtest. The container is Linux, so for a Windows or Mac failure the
-run is read asymmetrically: a failure is real evidence the patch is wrong, while
-a pass proves nothing about the failing platform and is reported as unverified.
+Stage 1 (analysis) is read-only and always runs. Stage 2 (fix) runs whenever
+stage 1 blamed a commit.
+
+By default the fix stage does not build (`SKIP_FIREFOX_BUILD`): the patch is
+written but never compiled or run, and is reported as unverified. With
+`SKIP_FIREFOX_BUILD=false` it writes a mozconfig mirroring the failing CI build
+(debug/opt, plus asan/tsan/ccov), runs `mach bootstrap`, builds, and runs the
+failing tests with mach. The container is Linux, so for a Windows or Mac failure a
+failure here is evidence the patch is wrong while a pass proves nothing.
 
 ## Input
 
-- `FAILURE_TASKS` - a dictionary of failed Taskcluster test tasks
+- `FAILURE_TASKS` - failed Taskcluster test tasks,
   `{task_name: taskcluster_task_id}`. Everything else is resolved from the first
   task id.
+- `SKIP_FIREFOX_BUILD` (optional, default from `config.SKIP_FIREFOX_BUILD`) - skip
+  the build and report the patch as unverified.
 
 ## Output
 
-First stage - analysis (read-only):
+Stage 1:
 
 - `summary.md` - a short verdict
 - `analysis.md` - detailed reasoning, with evidence from the logs and diffs
 - `verdict.json` - `classification` (`regression` / `intermittent`),
-  `culprit_commit`, `culprit_bug`, `intermittent_bug`, `recommendation`
-  (`backout` / `land_fix` / `do_not_backout` / `rerun`) and `confidence`
+  `culprit_commit`, `candidate_commits`, `culprit_bug`, `intermittent_bug`,
+  `recommendation` (`backout` / `do_not_backout` / `rerun`) and `confidence`
 
-Second stage - fixing (only when a culprit was identified):
+`recommendation` is the action for the sheriff, so a genuine regression is always
+`backout`. A patch is reported separately, via `proposed_patch`, as advice for the
+developer to squash into their existing patches and reland.
+
+Stage 2:
 
 - A patch in Hackbot format
-
-The result reports the `culprit_commit` so the caller can attribute the
-regression to a developer.
 
 ## Test the agent
 
