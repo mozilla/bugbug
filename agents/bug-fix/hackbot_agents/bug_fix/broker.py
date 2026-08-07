@@ -11,8 +11,8 @@ credentials:
   a follow-up run can read the revision it was called on: its metadata, the
   full comment thread, and where each inline comment sits.
 - Phabricator: `GET /phabricator/revision/{id}/patch` returns a revision's base
-  commit + raw diff, so the agent can check its source tree out at the revision
-  before running (see ``revision.checkout_revision``).
+  commit + the patches to replay onto it, so the agent can check its source tree
+  out at the revision before running (see ``revision.checkout_revision``).
 """
 
 import logging
@@ -27,6 +27,7 @@ from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.phabricator import PhabricatorContext
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from phabricator_client import (
+    MissingPatchError,
     PhabricatorClient,
     PhabricatorSettings,
     UnresolvedCommitError,
@@ -54,33 +55,32 @@ class BrokerInputs(BaseSettings):
 
 
 def _patch_endpoint(client: PhabricatorClient):
-    """A read-only endpoint returning a revision's base commit + raw diff.
+    """A read-only endpoint returning a revision's base commit + its patches.
 
     The broker holds the Conduit key; the agent only ever sees this loopback URL,
     so it can reproduce the revision's tree without any credentials.
+
+    ``patches`` is bottom-first and usually holds just the revision's own diff;
+    a revision stacked on unlanded parents is preceded by their diffs, since the
+    commit it was built on exists only in the author's repository (see
+    ``PhabricatorClient.get_patch_stack``).
     """
 
     async def get_patch(request):
         revision_id = int(request.path_params["revision_id"])
-        diff = await client.query_latest_diff(revision_id)
-        if diff is None:
-            return JSONResponse(
-                {"error": f"D{revision_id} has no diffs"}, status_code=404
-            )
-        if not diff.base_commit:
-            return JSONResponse(
-                {"error": f"D{revision_id} diff {diff.id} has no base commit"},
-                status_code=404,
-            )
-        raw_diff = await client.get_raw_diff(diff.id)
-        # The recorded base is often an abbreviated hash; git can only fetch a
-        # full object id, so expand it here.
         try:
-            base_commit = await client.resolve_commit(diff.base_commit)
+            stack = await client.get_patch_stack(revision_id)
+        except MissingPatchError as exc:
+            log.warning("No patch for D%s: %s", revision_id, exc)
+            return JSONResponse({"error": str(exc)}, status_code=404)
         except UnresolvedCommitError as exc:
+            # 422, not 404: the revision and its base exist, they are just
+            # unusable. Say why here; `git fetch` would only report an exit
+            # status later on.
+            log.warning("Cannot serve a patch for D%s: %s", revision_id, exc)
             return JSONResponse({"error": str(exc)}, status_code=422)
 
-        return JSONResponse({"base_commit": base_commit, "raw_diff": raw_diff})
+        return JSONResponse(stack.model_dump())
 
     return get_patch
 

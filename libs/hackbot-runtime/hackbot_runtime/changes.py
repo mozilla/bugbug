@@ -73,11 +73,14 @@ def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
 
-def _wrap_uncommitted(repo: Path) -> bool:
-    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+def commit_all(repo: Path, message: str) -> bool:
+    """Commit everything in ``repo``'s tree, untracked files included.
 
-    Returns ``True`` if such a commit was created, ``False`` if the tree was
-    already clean.
+    Returns ``False`` without committing when the tree is already clean (``git
+    commit`` would fail there). Stamped with a fixed identity (as the synthetic
+    commits below are): the checkout is ephemeral and has no git identity
+    configured, and the commit's authorship is throwaway: only its tree is ever
+    used.
     """
     if not _has_uncommitted(repo):
         return False
@@ -91,9 +94,18 @@ def _wrap_uncommitted(repo: Path) -> bool:
         "commit",
         "--no-verify",
         "-m",
-        _WIP_MESSAGE,
+        message,
     )
     return True
+
+
+def _wrap_uncommitted(repo: Path) -> bool:
+    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+
+    Returns ``True`` if such a commit was created, ``False`` if the tree was
+    already clean.
+    """
+    return commit_all(repo, _WIP_MESSAGE)
 
 
 def _commit_metadata(repo: Path, base: str) -> list[dict]:

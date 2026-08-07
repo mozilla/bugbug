@@ -143,6 +143,19 @@ class HackbotContext(BaseSettings):
         self._prepared_ref = resolved_ref
         return path
 
+    def reset_source_base(self) -> None:
+        """Re-record the change base at the checkout's current HEAD.
+
+        :meth:`prepare_repo` records the commit the agent's changes are later
+        collected against. Call this after committing groundwork the run must
+        not claim as its own (e.g. the unlanded parents of a stacked
+        Phabricator revision), so :meth:`publish_changes` diffs against that
+        commit instead. Unlike the initial recording this is not best-effort:
+        a stale base would silently publish someone else's changes as the
+        run's.
+        """
+        self._source_base = changes.base_commit(self.repo_path)
+
     @property
     def repo_path(self) -> Path:
         """The prepared source checkout path. Call :meth:`prepare_repo` first."""
