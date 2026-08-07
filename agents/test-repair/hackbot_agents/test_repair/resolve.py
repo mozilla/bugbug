@@ -21,7 +21,7 @@ import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
 from mozci import data
 from mozci.errors import ParentPushNotFound
-from mozci.push import MAX_DEPTH, Push
+from mozci.push import Push
 from mozci.task import Status, is_no_groups_suite
 
 logger = logging.getLogger(__name__)
@@ -42,10 +42,17 @@ _TIMEOUT = 30
 _TREEHERDER = "https://treeherder.mozilla.org/api/project"
 _FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
 _INTERMITTENT_KEYWORD = "intermittent-failure"
-LAST_GREEN_MAX_DEPTH = MAX_DEPTH
-# Bounds the shallow clone depth.
-MAX_RANGE_COMMITS = 100
-FALLBACK_RANGE_PUSHES = 20
+# The walk stops at the first decisive ancestor, so the depth is only paid in full
+# when the task ran on none of them -- a coalesced or low-frequency config, which is
+# exactly the case worth reaching. Measured at ~3s per ancestor, so a full-depth walk
+# is a few minutes.
+LAST_GREEN_MAX_DEPTH = 100
+# Matches the walk: having failed to find green within that many pushes, the blind
+# window handed over instead covers the same span rather than a narrower one.
+FALLBACK_RANGE_PUSHES = LAST_GREEN_MAX_DEPTH
+# Bounds the shallow clone depth. Must stay above what those pushes can hold
+# (~1.9 commits/push on autoland) or the cap discards the base found above.
+MAX_RANGE_COMMITS = 500
 
 
 @dataclass(frozen=True)
