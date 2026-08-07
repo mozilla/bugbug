@@ -42,7 +42,11 @@ def _headers() -> dict[str, str]:
     return {"X-Bugzilla-API-Key": api_key, "Content-Type": "application/json"}
 
 
-def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any]:
+def _request(
+    method: str, path: str, json_body: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    # `json_body` defaults to None so this also serves the read in
+    # _resolve_comment_id -- requests omits the body entirely when it is None.
     response = requests.request(
         method,
         f"{_base_url()}/{path}",
@@ -52,6 +56,50 @@ def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any
     )
     response.raise_for_status()
     return response.json()
+
+
+def _normalize(text: str) -> str:
+    """Compare comment bodies without tripping over whitespace round-tripping."""
+    return "\n".join(
+        line.rstrip() for line in text.replace("\r\n", "\n").split("\n")
+    ).strip()
+
+
+def _resolve_comment_id(bug_id: int, text: str) -> int | None:
+    """Find the comment a ``PUT /bug/{id}`` just created.
+
+    Bugzilla's update response carries only ``{bugs: [{id, changes,
+    last_change_time}]}`` -- no comment id -- so the id has to be read back.
+    Matching on the text we posted is exact and account-agnostic, unlike "the
+    newest comment", which would pick up an engineer replying in the same
+    moment. ``is_markdown`` affects rendering only, so the stored text is what
+    we sent.
+
+    Best-effort in both directions: the comment is already posted by the time we
+    get here, so a failure must not fail the action, and an uncertain match is
+    reported as None rather than guessed. Consumers that need attribution for
+    older comments infer it from text/timestamp anyway, and a wrong id there is
+    worse than a missing one.
+    """
+    try:
+        data = _request("GET", f"bug/{bug_id}/comment")
+    except Exception:
+        log.exception("Could not read back comments for bug %s", bug_id)
+        return None
+
+    bug = (data.get("bugs") or {}).get(str(bug_id)) or {}
+    wanted = _normalize(text)
+    # Newest wins: a re-run that posted identical text should resolve to the
+    # comment this call actually created.
+    matches = [
+        c["id"]
+        for c in (bug.get("comments") or [])
+        if _normalize(c.get("text") or "") == wanted
+    ]
+    if not matches:
+        log.warning("No comment on bug %s matched the text just posted", bug_id)
+        return None
+    return max(matches)
 
 
 def _comment_body(params: dict[str, Any]) -> dict[str, Any]:
@@ -84,7 +132,17 @@ class UpdateBugHandler:
         except Exception as exc:
             log.exception("Failed to update bug %s", bug_id)
             return ActionResult.failed(str(exc))
-        return ActionResult.ok({"bug_id": bug_id, "url": _bug_url(bug_id)})
+
+        result: dict[str, Any] = {"bug_id": bug_id, "url": _bug_url(bug_id)}
+        # Only when this PUT actually carried a comment — a changes-only update
+        # created nothing to point at.
+        if params.get("comment"):
+            comment_id = _resolve_comment_id(
+                bug_id, params["comment"].get("body") or ""
+            )
+            if comment_id is not None:
+                result["comment_id"] = comment_id
+        return ActionResult.ok(result)
 
 
 class AddCommentHandler:
@@ -96,7 +154,14 @@ class AddCommentHandler:
         except Exception as exc:
             log.exception("Failed to add comment to bug %s", bug_id)
             return ActionResult.failed(str(exc))
-        return ActionResult.ok({"bug_id": bug_id, "url": _bug_url(bug_id)})
+
+        # Recorded so downstream consumers can attribute the comment to this
+        # run's agent without having to re-derive it from text or timing.
+        result: dict[str, Any] = {"bug_id": bug_id, "url": _bug_url(bug_id)}
+        comment_id = _resolve_comment_id(bug_id, params["text"])
+        if comment_id is not None:
+            result["comment_id"] = comment_id
+        return ActionResult.ok(result)
 
 
 class AddAttachmentHandler:
