@@ -75,7 +75,7 @@ nn = []
 [dependency-groups]
 test = [
     "coverage==7.15.3",
-    "hypothesis==6.161.5",
+    "hypothesis==6.164.0",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
     "pre-commit==4.6.1",
