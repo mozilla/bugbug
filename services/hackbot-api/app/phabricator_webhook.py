@@ -31,7 +31,6 @@ class HackbotMention:
     author_phid: str
     comment_id: int
     comment_type: Literal["regular", "inline"]
-    diff_id: int | None = None
 
 
 def triggering_transaction_phids(payload: dict) -> list[str]:
@@ -74,11 +73,6 @@ def find_hackbot_mentions(
             if token not in comment_text:
                 continue
 
-            diff_id = (
-                transaction["fields"]["diff"]["id"]
-                if transaction["type"] == "inline"
-                else None
-            )
             matches.append(
                 HackbotMention(
                     comment=comment_text,
@@ -87,7 +81,6 @@ def find_hackbot_mentions(
                     comment_type=(
                         "inline" if transaction["type"] == "inline" else "regular"
                     ),
-                    diff_id=diff_id,
                 )
             )
             break
@@ -99,7 +92,7 @@ def _format_comment(mention: HackbotMention) -> str:
 
     For example, an inline comment is rendered as::
 
-        <comment comment_id="102" type="inline" diff_id="456">
+        <comment comment_id="102" type="inline">
           @hackbot fix this
         </comment>
     """
@@ -107,8 +100,6 @@ def _format_comment(mention: HackbotMention) -> str:
         f'comment_id="{mention.comment_id}"',
         f'type="{mention.comment_type}"',
     ]
-    if mention.comment_type == "inline":
-        attributes.append(f'diff_id="{mention.diff_id}"')
     body = "\n".join(f"    {line}" for line in escape(mention.comment).splitlines())
     return f"  <comment {' '.join(attributes)}>\n{body}\n  </comment>"
 
