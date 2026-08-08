@@ -20,13 +20,22 @@ from typing import Any
 import httpx
 
 from phabricator_client.config import PhabricatorSettings
-from phabricator_client.models import PhabricatorDiff
+from phabricator_client.models import PatchStack, PhabricatorDiff, RevisionPatch
 
 _FULL_COMMIT_LEN = 40
+
+# How far down a stack :meth:`PhabricatorClient.get_patch_stack` walks looking
+# for a fetchable base. Deep stacks exist, but a walk that long more likely
+# means every base is unresolvable, and failing beats collecting diffs forever.
+_MAX_STACK_DEPTH = 20
 
 
 class UnresolvedCommitError(Exception):
     """A commit identifier could not be expanded to a full, fetchable hash."""
+
+
+class MissingPatchError(Exception):
+    """A revision has no diff to check out."""
 
 
 def _is_full_commit(ref: str) -> bool:
@@ -193,3 +202,109 @@ class PhabricatorClient:
             )
 
         return identifiers.pop()
+
+    async def get_parent_revision_ids(self, revision_id: int) -> list[int]:
+        """The ids of the revisions ``D<revision_id>`` is stacked on top of.
+
+        Phabricator records a stack as ``revision.parent`` edges between
+        revisions, so ``edge.search`` names the parents by PHID and a revision
+        search turns those back into ids. Empty for a standalone revision or
+        the bottom of a stack.
+        """
+        revision = await self.search_revision_by_id(revision_id)
+        if revision is None:
+            return []
+        result = await self.conduit_request(
+            "edge.search",
+            sourcePHIDs=[revision["phid"]],
+            types=["revision.parent"],
+        )
+        parent_phids = [
+            edge["destinationPHID"]
+            for edge in result.get("data") or []
+            if edge.get("destinationPHID")
+        ]
+        if not parent_phids:
+            return []
+        result = await self.conduit_request(
+            "differential.revision.search", constraints={"phids": parent_phids}
+        )
+        return [parent["id"] for parent in result.get("data") or []]
+
+    async def get_patch_stack(self, revision_id: int) -> PatchStack:
+        """A fetchable base commit plus the patches that rebuild a revision.
+
+        Usually that is the revision's own diff on the commit it was built on.
+        A stacked revision is built on its parent revision's commit, which only
+        exists in the author's local repository: no remote can fetch it, so the
+        tree cannot be checked out there. In that case, walk down the stack
+        collecting each ancestor's latest diff until a revision whose base does
+        resolve, and let the caller replay the collected diffs onto it.
+
+        Raises :class:`MissingPatchError` when a revision on the way down has
+        nothing to apply, and :class:`UnresolvedCommitError` when the walk runs
+        out of stack (or of parents to choose between) before finding a base.
+        """
+        patches: list[RevisionPatch] = []
+        visited: set[int] = set()
+        current = revision_id
+        while True:
+            visited.add(current)
+            diff = await self.query_latest_diff(current)
+            if diff is None:
+                raise MissingPatchError(f"D{current} has no diffs")
+            if not diff.base_commit:
+                raise MissingPatchError(f"D{current} diff {diff.id} has no base commit")
+            patches.insert(
+                0,
+                RevisionPatch(
+                    revision_id=current,
+                    diff_id=diff.id,
+                    base_commit=diff.base_commit,
+                    raw_diff=await self.get_raw_diff(diff.id),
+                ),
+            )
+            try:
+                base_commit = await self.resolve_commit(diff.base_commit)
+            except UnresolvedCommitError as error:
+                current = self._next_in_stack(
+                    current,
+                    await self.get_parent_revision_ids(current),
+                    visited,
+                    error,
+                )
+                continue
+            return PatchStack(base_commit=base_commit, patches=patches)
+
+    @staticmethod
+    def _next_in_stack(
+        revision_id: int,
+        parent_ids: list[int],
+        visited: set[int],
+        error: UnresolvedCommitError,
+    ) -> int:
+        """The single unvisited parent to continue the walk down a stack with.
+
+        Anything else (no parent, a fork with several parents, a stack deeper
+        than :data:`_MAX_STACK_DEPTH`) leaves no one series of patches to
+        rebuild, so re-raise the unresolved base that started the walk with the
+        reason the walk stopped.
+        """
+        candidates = [parent_id for parent_id in parent_ids if parent_id not in visited]
+        if len(candidates) == 1 and len(visited) < _MAX_STACK_DEPTH:
+            return candidates[0]
+
+        if not parent_ids:
+            reason = f"D{revision_id} has no parent revision to fall back on"
+        elif not candidates:
+            reason = f"D{revision_id}'s parent revisions are already in the stack"
+        elif len(candidates) > 1:
+            reason = (
+                f"D{revision_id} has {len(candidates)} parent revisions, so the "
+                "patches to apply are ambiguous"
+            )
+        else:
+            reason = (
+                f"gave up after walking {_MAX_STACK_DEPTH} revisions down the stack"
+            )
+        raise UnresolvedCommitError(f"{error} Cannot rebuild the tree: {reason}.")
