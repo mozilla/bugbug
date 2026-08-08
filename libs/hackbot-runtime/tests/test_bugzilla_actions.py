@@ -9,8 +9,7 @@ async def test_add_comment_appends_footer():
     rec = ActionsRecorder()
     await bugzilla.add_comment(rec, bug_id=1, text="Looks invalid.", reasoning="r")
     text = rec.actions[0]["params"]["text"]
-    assert text.startswith("Looks invalid.")
-    assert text.endswith(bugzilla._COMMENT_FOOTER)
+    assert text == "Looks invalid.\n\n---\n\n" + bugzilla._COMMENT_FOOTER
     assert rec.actions[0]["params"]["is_private"] is False
 
 
