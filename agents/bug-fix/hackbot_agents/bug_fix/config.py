@@ -29,7 +29,6 @@ TRIAGE_AND_FIX_ACTIONS = [
 # Action types that the agent may record during follow-up runs on a revision.
 PHABRICATOR_FOLLOW_UP_ACTIONS = [
     "bugzilla.update_bug",
-    "bugzilla.add_comment",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
     "phabricator.update_patch",

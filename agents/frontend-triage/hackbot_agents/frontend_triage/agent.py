@@ -40,6 +40,7 @@ from hackbot_runtime.searchfox import (
     permalink_prefix,
     resolve_index_revision,
 )
+from pydantic import BaseModel, ValidationError
 from searchfox import AsyncSearchfoxClient
 
 from .config import (
@@ -73,6 +74,14 @@ def feedback_tags_hook(action: dict) -> None:
         params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}"
 
 
+class SeverityAssessment(BaseModel):
+    """Severity judgment (see severity-assessment rules)."""
+
+    suggested: str | None = None  # S1 | S2 | S3 | S4
+    confidence: str | None = None  # high | medium | low
+    rationale: str | None = None
+
+
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
     # Structured plan (best-effort, parsed from the agent's final message).
@@ -87,6 +96,8 @@ class FrontendTriageResult(HackbotAgentResult):
     relevant_tests: list[str] | None = (
         None  # existing tests covering the area (verify anchor)
     )
+    # Triage judgments (best-effort, parsed from the agent's final message).
+    severity_assessment: SeverityAssessment | None = None
     # The agent's full final message, always present as a fallback.
     result: str | None = None
 
@@ -180,6 +191,14 @@ def parse_plan(text: str | None) -> dict:
             return [value]
         return value if isinstance(value, list) else None
 
+    def _as_model(model, value):
+        if not isinstance(value, dict):
+            return None
+        try:
+            return model.model_validate(value)
+        except ValidationError:
+            return None
+
     actionable = data.get("actionable")
     if not isinstance(actionable, bool):
         actionable = None
@@ -192,6 +211,9 @@ def parse_plan(text: str | None) -> dict:
         "actionable": actionable,
         "regressor_node": data.get("regressor_node"),
         "relevant_tests": _as_list(data.get("relevant_tests")),
+        "severity_assessment": _as_model(
+            SeverityAssessment, data.get("severity_assessment")
+        ),
     }
 
 
