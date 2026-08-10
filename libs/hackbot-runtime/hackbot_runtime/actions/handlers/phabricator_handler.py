@@ -1,12 +1,18 @@
-"""Apply-side Phabricator action: submits an already-built diff payload.
+"""Apply-side Phabricator actions: submit an already-built diff payload.
+
+``SubmitPatchHandler`` creates a revision and ``UpdatePatchHandler`` adds a diff
+to an existing one — one handler per recorded action type, so neither carries
+the other's conditionals. What they share (loading the diff artifact, the
+``creatediff`` call, the transactions common to both edits) lives in the
+module-level helpers above them.
 
 Pairs with the recording side in ``actions/phabricator.py`` and the payload
 built agent-side in ``hackbot_runtime.changes.build_phabricator_diff`` (while
 the agent still has its own checkout — nothing here ever touches git, a
-local repo, or ``moz-phab``). Talks to Phabricator's Conduit API directly
-with a small ``requests``-based client, mirroring ``bugzilla_handler.py``'s
-choice to avoid ``libmozdata``'s heavier, bulk/futures-oriented client for a
-single lightweight call.
+local repo, or ``moz-phab``). Talks to Phabricator's Conduit API through the
+shared ``phabricator_client`` lib, a small ``httpx``-based client that avoids
+``libmozdata``'s heavier, bulk/futures-oriented client for these single
+lightweight calls.
 """
 
 from __future__ import annotations
@@ -18,50 +24,31 @@ import re
 from functools import lru_cache
 from typing import Any
 
-import requests
+from async_lru import alru_cache
+from phabricator_client import PhabricatorClient
 
 from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_PHABRICATOR_URL = "https://phabricator.services.mozilla.com"
 _DIFF_ARTIFACT_KEY = "changes/phabricator_diff.json"
-_TIMEOUT_SECONDS = 60
-
-
-def _base_url() -> str:
-    return os.environ.get("PHABRICATOR_URL", _DEFAULT_PHABRICATOR_URL).rstrip("/")
-
-
-def _revision_url(revision_id: int) -> str:
-    return f"{_base_url()}/D{revision_id}"
-
-
-def _api_key() -> str:
-    token = os.environ.get("PHABRICATOR_API_KEY", "")
-    if not token:
-        raise RuntimeError("PHABRICATOR_API_KEY is not configured")
-    return token
-
-
-def _conduit_request(method: str, **payload: Any) -> dict:
-    payload["__conduit__"] = {"token": _api_key()}
-    response = requests.post(
-        f"{_base_url()}/api/{method}",
-        data={"params": json.dumps(payload), "output": "json"},
-        timeout=_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    data = response.json()
-    if data.get("error_code"):
-        raise RuntimeError(
-            f"Conduit error {data['error_code']}: {data.get('error_info')}"
-        )
-    return data["result"]
 
 
 @lru_cache(maxsize=1)
-def _repository_phid() -> str:
+def _client() -> PhabricatorClient:
+    return PhabricatorClient()
+
+
+async def _conduit_request(method: str, **payload: Any) -> dict:
+    return await _client().conduit_request(method, **payload)
+
+
+def _revision_url(revision_id: int) -> str:
+    return _client().revision_url(revision_id)
+
+
+@alru_cache(maxsize=1)
+async def _repository_phid() -> str:
     """The target repository's PHID, needed on every `differential.creatediff` call.
 
     Prefers an explicit `PHABRICATOR_REPOSITORY_PHID` (simplest, most robust —
@@ -74,7 +61,7 @@ def _repository_phid() -> str:
         return configured
 
     name = os.environ.get("PHABRICATOR_REPOSITORY_NAME", "mozilla-central")
-    result = _conduit_request("diffusion.repository.search")
+    result = await _conduit_request("diffusion.repository.search")
     for repository in result.get("data", []):
         fields = repository.get("fields", {})
         if fields.get("shortName") == name or fields.get("name") == name:
@@ -101,24 +88,61 @@ Bug #: {bug_id}
 """.strip()
 
 
-# Mirrors moz-phab's WIP_RE / revision_title (mozphab.commits): strip any
-# existing WIP prefix, then prepend "WIP: " for a work-in-progress revision.
+# Strip any WIP prefix from agent-provided titles. Phabricator's
+# ``plan-changes`` transaction already represents draft state, so keeping WIP
+# in the visible title only adds cleanup work when promoting to review.
 _WIP_PREFIX_RE = re.compile(r"^(?:WIP[: ]|WIP$)", re.IGNORECASE)
 
 
-def _revision_title(title: str, wip: bool) -> str:
-    title = _WIP_PREFIX_RE.sub("", title) or "WIP"
-    title = title.strip()
-    return f"WIP: {title}" if wip else title
+def _revision_title(title: str) -> str:
+    return _WIP_PREFIX_RE.sub("", title).strip()
 
 
-def _revision_fields(revision_id: int) -> dict:
+async def _revision_fields(revision_id: int) -> dict:
     """The current fields (title/summary/status) of an existing revision."""
-    result = _conduit_request(
+    result = await _conduit_request(
         "differential.revision.search", constraints={"ids": [int(revision_id)]}
     )
     data = result.get("data") or []
     return data[0].get("fields", {}) if data else {}
+
+
+async def _diff_commits(diff_id: Any) -> list[dict]:
+    """Return a diff's existing local commits from ``differential.diff.search``."""
+    if not diff_id:
+        return []
+
+    result = await _conduit_request(
+        "differential.diff.search",
+        constraints={"ids": [int(diff_id)]},
+        attachments={"commits": True},
+        limit=1,
+    )
+    data = result.get("data") or []
+    if not data:
+        return []
+
+    commits = data[0].get("attachments", {}).get("commits", {}).get("commits", [])
+    return commits if isinstance(commits, list) else []
+
+
+def _local_commit_author_fields(previous_commits: list[dict]) -> dict[str, str]:
+    """Return the previous diff's commit author identity."""
+    if not previous_commits:
+        return {}
+
+    previous_author = previous_commits[-1].get("author") or {}
+    if not previous_author.get("name") or not previous_author.get("email"):
+        log.warning(
+            "Could not preserve local commit author: previous diff author metadata "
+            "is incomplete"
+        )
+        return {}
+
+    return {
+        "author": previous_author["name"],
+        "authorEmail": previous_author["email"],
+    }
 
 
 def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) -> str:
@@ -126,7 +150,7 @@ def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) 
 
     Mirrors ``Commit.build_arc_commit_message`` + ``amend_revision_url`` so the
     reconstructed commit reads identically to a moz-phab submission. Reviewers
-    are always empty: hackbot never assigns them (WIP submissions omit them).
+    are always empty: hackbot never assigns them (draft submissions omit them).
     """
     body = summary or ""
     if body:
@@ -141,7 +165,7 @@ def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) 
     )
 
 
-def _set_local_commits(
+async def _set_local_commits(
     diff_id: Any,
     local_commits: dict,
     title: str,
@@ -152,16 +176,16 @@ def _set_local_commits(
     """Complete and store moz-phab's ``local:commits`` diff property.
 
     The git-derived fields (author/time/tree/parents/node) come from the
-    agent-built artifact; ``summary`` (the resolved, possibly ``WIP:``-prefixed
-    revision title) and the arc-formatted ``message`` are filled in here, since
-    they need the revision URL.
+    agent-built artifact; ``summary`` (the resolved revision title) and the
+    arc-formatted ``message`` are filled in here, since they need the revision
+    URL.
     """
     message = _arc_commit_message(title, summary, bug_id, _revision_url(revision_id))
     for commit_info in local_commits.values():
         commit_info["summary"] = title
         commit_info["message"] = message
 
-    _conduit_request(
+    await _conduit_request(
         "differential.setdiffproperty",
         diff_id=diff_id,
         name="local:commits",
@@ -169,10 +193,33 @@ def _set_local_commits(
     )
 
 
+class AddCommentHandler:
+    async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        revision_id = params["revision_id"]
+        try:
+            await _conduit_request(
+                "differential.revision.edit",
+                objectIdentifier=revision_id,
+                transactions=[{"type": "comment", "value": params["text"]}],
+            )
+        except Exception as exc:
+            log.exception("Failed to comment on revision D%s", revision_id)
+            return ActionResult.failed(str(exc))
+        return ActionResult.ok(
+            {"revision_id": revision_id, "revision_url": _revision_url(revision_id)}
+        )
+
+
 class SubmitPatchHandler:
+    """Applies ``phabricator.submit_patch``: the diff becomes a new revision.
+
+    Nothing exists on the Phabricator side yet, so the agent's title, summary,
+    and bug id are what the revision gets, created in a single edit.
+    """
+
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
-        revision_id = params.get("revision_id")
+        summary = params.get("summary")
 
         try:
             raw = await ctx.download_artifact(_DIFF_ARTIFACT_KEY)
@@ -185,101 +232,108 @@ class SubmitPatchHandler:
                 f"No Phabricator submission artifact for this run: {exc}"
             )
 
-        # The creatediff payload plus the git side of the local:commits property
-        # (completed and stored after the revision edit). Tolerate a bare diff
-        # payload without the wrapper too.
-        diff_payload = submission.get("diff", submission)
-        local_commits = submission.get("local_commits")
-
-        wip = params.get("wip", True)
-
         try:
-            diff_result = _conduit_request(
+            diff_result = await _conduit_request(
                 "differential.creatediff",
-                repositoryPHID=_repository_phid(),
-                **diff_payload,
+                repositoryPHID=await _repository_phid(),
+                **submission["diff"],
             )
-            diff_phid = diff_result["phid"]
 
-            # Resolve title/summary (and, for updates, the current status) once;
-            # reused for the transactions and the local:commits property.
-            raw_title = params.get("title")
-            raw_summary = params.get("summary")
-            existing_status = None
-            if revision_id:
-                fields = _revision_fields(revision_id)
-                existing_status = (fields.get("status") or {}).get("value")
-                if not raw_title:
-                    raw_title = fields.get("title")
-                if raw_summary is None:
-                    raw_summary = fields.get("summary")
-            title = _revision_title(raw_title or f"Bug {bug_id}", wip)
-
-            # Reviewers are never assigned by hackbot: a WIP draft gets them at
-            # promotion time, and the agent doesn't choose them.
+            # Reviewers are never assigned by hackbot: a draft gets them at
+            # promotion time, and the agent doesn't choose them. A new revision
+            # has no status yet, so plan-changes rides this same edit.
+            title = _revision_title(params["title"])
             transactions: list[dict[str, Any]] = [
-                {"type": "update", "value": diff_phid},
+                {"type": "update", "value": diff_result["phid"]},
                 {"type": "title", "value": title},
+                {"type": "bugzilla.bug-id", "value": str(bug_id)},
+                {"type": "plan-changes", "value": True},
             ]
-            if raw_summary:
-                transactions.append({"type": "summary", "value": raw_summary})
-            transactions.append({"type": "bugzilla.bug-id", "value": str(bug_id)})
+            if summary:
+                transactions.append({"type": "summary", "value": summary})
 
-            # Mark WIP via a `plan-changes` transaction, mirroring moz-phab. If
-            # the revision is already `changes-planned`, Phabricator errors on a
-            # no-op status change, so send it in a separate follow-up edit.
-            post_transactions: list[dict[str, Any]] = []
-            if wip:
-                plan_changes = {"type": "plan-changes", "value": True}
-                if existing_status == "changes-planned":
-                    post_transactions.append(plan_changes)
-                else:
-                    transactions.append(plan_changes)
-            elif existing_status and existing_status not in (
-                "needs-review",
-                "accepted",
-            ):
-                transactions.append({"type": "request-review", "value": True})
-
-            edit_args: dict[str, Any] = {"transactions": transactions}
-            if revision_id:
-                edit_args["objectIdentifier"] = revision_id
-            revision_result = _conduit_request(
-                "differential.revision.edit", **edit_args
+            revision_result = await _conduit_request(
+                "differential.revision.edit", transactions=transactions
             )
-
-            object_data = revision_result.get("object") or {}
-            new_revision_id = object_data.get("id") or revision_id
-
-            if post_transactions and new_revision_id:
-                _conduit_request(
-                    "differential.revision.edit",
-                    objectIdentifier=new_revision_id,
-                    transactions=post_transactions,
-                )
+            revision_id = revision_result["object"]["id"]
 
             # Store commit info on the diff, exactly as moz-phab does *after*
             # creating the revision (so the message can embed the Differential
             # Revision URL). Without this, `moz-phab patch` on the revision
             # fails with "a diff without commit information detected".
-            if local_commits and new_revision_id:
-                _set_local_commits(
-                    diff_result["diffid"],
-                    local_commits,
-                    title,
-                    raw_summary,
-                    bug_id,
-                    new_revision_id,
-                )
+            await _set_local_commits(
+                diff_result["diffid"],
+                submission["local_commits"],
+                title,
+                summary,
+                bug_id,
+                revision_id,
+            )
         except Exception as exc:
             log.exception("Failed to submit Phabricator diff for bug %s", bug_id)
             return ActionResult.failed(str(exc))
 
         return ActionResult.ok(
-            {
-                "revision_id": new_revision_id,
-                "revision_url": (
-                    _revision_url(new_revision_id) if new_revision_id else None
-                ),
-            }
+            {"revision_id": revision_id, "url": _revision_url(revision_id)}
         )
+
+
+class UpdatePatchHandler:
+    """Applies ``phabricator.update_patch``: a new diff on an existing revision.
+
+    Only the diff changes: title, summary, bug id, and review status are left
+    exactly as they are, so an update never overwrites something a reviewer or
+    the patch author has since edited. The revision's fields are read only to
+    rebuild the ``local:commits`` message, which has to match the revision. The
+    previous diff's commit author is preserved so updating a patch does not
+    silently replace the author's identity with Hackbot's synthetic commit
+    identity.
+    """
+
+    async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        revision_id = params["revision_id"]
+
+        try:
+            raw = await ctx.download_artifact(_DIFF_ARTIFACT_KEY)
+            submission = json.loads(raw)
+        except Exception as exc:
+            log.exception(
+                "Failed to load Phabricator submission artifact for run %s", ctx.run_id
+            )
+            return ActionResult.failed(
+                f"No Phabricator submission artifact for this run: {exc}"
+            )
+
+        try:
+            fields = await _revision_fields(revision_id)
+            previous_diff_id = fields.get("diffID")
+            author_fields = _local_commit_author_fields(
+                await _diff_commits(previous_diff_id)
+            )
+            for commit_info in submission["local_commits"].values():
+                commit_info.update(author_fields)
+
+            diff_result = await _conduit_request(
+                "differential.creatediff",
+                repositoryPHID=await _repository_phid(),
+                **submission["diff"],
+            )
+            await _conduit_request(
+                "differential.revision.edit",
+                objectIdentifier=revision_id,
+                transactions=[{"type": "update", "value": diff_result["phid"]}],
+            )
+
+            await _set_local_commits(
+                diff_result["diffid"],
+                submission["local_commits"],
+                fields.get("title") or f"D{revision_id}",
+                fields.get("summary"),
+                fields.get("bugzilla.bug-id"),
+                revision_id,
+            )
+        except Exception as exc:
+            log.exception("Failed to update Phabricator revision D%s", revision_id)
+            return ActionResult.failed(str(exc))
+
+        return ActionResult.ok()

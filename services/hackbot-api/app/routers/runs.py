@@ -2,8 +2,10 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +29,16 @@ from app.schemas import (
 log = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
+
+
+def _normalize_identity(email: str | None) -> str | None:
+    if not email:
+        return None
+
+    return email.strip().lower() or None
+
+
+UserEmail = Annotated[str | None, BeforeValidator(_normalize_identity)]
 
 
 def _lookup_agent(name: str) -> AgentSpec:
@@ -55,6 +67,13 @@ async def list_agents() -> list[AgentDescriptor]:
 async def create_run(
     agent_name: str,
     payload: dict,
+    on_behalf_of: Annotated[
+        UserEmail,
+        Header(
+            alias="X-On-Behalf-Of",
+            description="Email of the user this run is requested for.",
+        ),
+    ] = None,
     db: AsyncSession = Depends(get_db),
 ) -> RunRef:
     agent = _lookup_agent(agent_name)
@@ -73,6 +92,7 @@ async def create_run(
         agent=agent.name,
         status=RunStatus.pending.value,
         inputs=inputs.model_dump(mode="json"),
+        requested_by=on_behalf_of,
         results_prefix=results_prefix,
         artifacts=[],
     )
@@ -109,9 +129,32 @@ async def create_run(
 @router.get("/runs", response_model=list[RunDoc])
 async def list_runs(
     limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    agent: str | None = Query(default=None),
+    # Aliased so the query param is `status` without shadowing fastapi.status.
+    status_filter: RunStatus | None = Query(default=None, alias="status"),
+    requested_by: Annotated[
+        UserEmail,
+        Query(description="Only return runs requested by this user."),
+    ] = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
-    result = await db.execute(select(Run).order_by(Run.created_at.desc()).limit(limit))
+    stmt = select(Run)
+    if agent is not None:
+        stmt = stmt.where(Run.agent == agent)
+    if status_filter is not None:
+        stmt = stmt.where(Run.status == status_filter.value)
+    if requested_by is not None:
+        stmt = stmt.where(Run.requested_by == requested_by)
+    # created_at is the sort key; run_id is a deterministic tiebreaker so offset
+    # paging is stable when timestamps collide. (agent/status/requested_by and
+    # created_at are all indexed, so filtering + ordering stay index-backed.)
+    stmt = (
+        stmt.order_by(Run.created_at.desc(), Run.run_id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
     return [RunDoc.model_validate(r) for r in result.scalars()]
 
 

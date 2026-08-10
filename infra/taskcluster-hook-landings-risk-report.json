@@ -38,7 +38,7 @@
       "image": "mozilla/bugbug-spawn-pipeline",
       "maxRunTime": 7200
     },
-    "priority": "normal",
+    "priority": "lowest",
     "provisionerId": "proj-bugbug",
     "retries": 5,
     "routes": ["notify.email.bugbug-team@mozilla.com.on-failed"],

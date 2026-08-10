@@ -13,18 +13,27 @@ TRIAGE_TASK = (
 )
 
 
+DEFAULT_MODEL = "claude-opus-5"
+
+
 class AgentInputs(BaseSettings):
     bug_id: int
-    bugzilla_mcp_url: str
-    model: str | None = None
+    broker_url: str
+    model: str = DEFAULT_MODEL
     max_turns: int | None = None
     effort: str | None = None
 
     model_config = SettingsConfigDict(extra="ignore")
 
+    @property
+    def bugzilla_mcp_url(self) -> str:
+        return f"{self.broker_url.rstrip('/')}/mcp"
+
 
 async def main(ctx: HackbotContext) -> FrontendTriageResult:
     inputs = AgentInputs()
+
+    await ctx.prepare_repo()
 
     return await run_frontend_triage(
         task=TRIAGE_TASK,
@@ -32,7 +41,7 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
             "type": "http",
             "url": inputs.bugzilla_mcp_url,
         },
-        source_repo=ctx.source_repo,
+        source_repo=ctx.repo_path,
         bug=inputs.bug_id,
         model=inputs.model,
         max_turns=inputs.max_turns,

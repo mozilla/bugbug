@@ -89,7 +89,9 @@ Here is the patch you need to assess:
 """
 
 
-FIRST_MESSAGE_TEMPLATE = """Here is a summary of the patch:
+FIRST_MESSAGE_TEMPLATE = """Current date: {current_date}
+
+Here is a summary of the patch:
 
 <patch_summary>
 {patch_summarization}

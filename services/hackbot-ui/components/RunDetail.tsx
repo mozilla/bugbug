@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { updateRunStatus } from "@/lib/store";
-import { isTerminal, type RunAction, type RunDoc } from "@/lib/types";
+import {
+  isFailed,
+  isTerminal,
+  type RunAction,
+  type RunDoc,
+  type RunRef,
+} from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
 import { StatusBadge } from "./StatusBadge";
@@ -46,12 +53,15 @@ function extractLog(run: RunDoc): string | null {
 }
 
 export function RunDetail({ runId }: { runId: string }) {
+  const router = useRouter();
   const [run, setRun] = useState<RunDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(true);
   const [actions, setActions] = useState<RunAction[] | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [retriggering, setRetriggering] = useState(false);
+  const [retriggerError, setRetriggerError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchRun = useCallback(async () => {
@@ -124,6 +134,24 @@ export function RunDetail({ runId }: { runId: string }) {
     }
   }, [runId]);
 
+  const retrigger = useCallback(async () => {
+    setRetriggering(true);
+    setRetriggerError(null);
+    try {
+      const res = await fetch(`/api/runs/${runId}/retrigger`, {
+        method: "POST",
+      });
+      const body = await res.json();
+      if (!res.ok)
+        throw new Error(body?.error ?? `Request failed (${res.status})`);
+      // Left disabled through the navigation; the remount clears it.
+      router.push(`/runs/${(body as RunRef).run_id}`);
+    } catch (err) {
+      setRetriggerError((err as Error).message);
+      setRetriggering(false);
+    }
+  }, [runId, router]);
+
   if (!run && error) {
     return <div className="error-banner">{error}</div>;
   }
@@ -148,6 +176,15 @@ export function RunDetail({ runId }: { runId: string }) {
         ? "Retry failed actions"
         : "Apply pending actions";
 
+  const canRetrigger = isFailed(run.status);
+  const retriggerLabel = retriggering
+    ? "Currently retriggering"
+    : canRetrigger
+      ? "Retrigger with same inputs"
+      : run.status === "succeeded"
+        ? "Run succeeded, cannot retrigger"
+        : "Run in progress, cannot retrigger";
+
   return (
     <>
       <div className="toolbar">
@@ -165,6 +202,9 @@ export function RunDetail({ runId }: { runId: string }) {
       </div>
 
       {error && <div className="error-banner">Refresh error: {error}</div>}
+      {retriggerError && (
+        <div className="error-banner">Retrigger failed: {retriggerError}</div>
+      )}
 
       <div className="panel">
         <h2>Run</h2>
@@ -186,6 +226,15 @@ export function RunDetail({ runId }: { runId: string }) {
             </>
           )}
         </dl>
+        <button
+          type="button"
+          className="secondary"
+          style={{ marginTop: 12 }}
+          onClick={retrigger}
+          disabled={retriggering || !canRetrigger}
+        >
+          {retriggerLabel}
+        </button>
       </div>
 
       {run.error && (
@@ -202,7 +251,7 @@ export function RunDetail({ runId }: { runId: string }) {
         </div>
       )}
 
-      {hasFindings && <FindingsView findings={findings} />}
+      {hasFindings && <FindingsView findings={findings} agent={run.agent} />}
 
       {actions && actions.length > 0 && (
         <div className="panel">

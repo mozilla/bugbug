@@ -63,6 +63,7 @@ class RunDoc(BaseModel):
     agent: str
     status: RunStatus
     inputs: dict[str, Any]
+    requested_by: str | None = None
     created_at: datetime
     updated_at: datetime
     execution_name: str | None = None
@@ -77,6 +78,11 @@ class RunDoc(BaseModel):
 
 class BugFixInputs(BaseModel):
     bug_id: int
+    # When following up on an existing Phabricator revision (e.g. triggered by a
+    # webhook), the revision to update and the comment that mentioned Hackbot, to
+    # act on. Both optional: omitted for a plain "fix this bug" run.
+    revision_id: int | None = None
+    comment: str | None = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
@@ -103,6 +109,15 @@ class BuildRepairInputs(BaseModel):
     git_commit: str | None = None
     bug_id: int | None = None
     run_try_push: bool = False
+    model: str | None = None
+    max_turns: int | None = None
+
+
+class TestRepairInputs(BaseModel):
+    # Failing Taskcluster test tasks {task_name: task_id}. The agent resolves the
+    # push, the last-green revision and the candidate commit range itself from the
+    # task id (the listener only filters which failures are worth investigating).
+    failure_tasks: dict[str, str]
     model: str | None = None
     max_turns: int | None = None
 

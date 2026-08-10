@@ -10,6 +10,7 @@ from app.schemas import (
     BuildRepairInputs,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
+    TestRepairInputs,
 )
 
 
@@ -57,6 +58,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Investigate a Bugzilla bug and produce a candidate fix patch against the Firefox source tree.",
         job_name="hackbot-agent-bug-fix",
         input_schema=BugFixInputs,
+        auto_apply_actions=True,
     ),
     "autowebcompat-repro": AgentSpec(
         name="autowebcompat-repro",
@@ -78,6 +80,17 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Triage a Firefox desktop frontend bug (read-only) and produce a root-cause analysis and proposed fix plan.",
         job_name="hackbot-agent-frontend-triage",
         input_schema=FrontendTriageInputs,
+    ),
+    "test-repair": AgentSpec(
+        name="test-repair",
+        description=(
+            "Analyze a Firefox CI test failure: classify it as a regression or an "
+            "intermittent, blame the culprit commit, and propose a fix patch for "
+            "regressions."
+        ),
+        job_name="hackbot-agent-test-repair",
+        input_schema=TestRepairInputs,
+        auto_apply_actions=True,
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",

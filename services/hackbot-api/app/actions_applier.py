@@ -36,11 +36,6 @@ log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 
-# Whether Phabricator patches are submitted as work-in-progress is hardcoded
-# here for now; later this should come from per-agent config (hackbot.toml),
-# which isn't wired into hackbot-api yet.
-SUBMIT_PATCHES_AS_WIP = True
-
 
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     """Substitute `{{actions.<ref>.<field>}}` in `value` using prior results.
@@ -49,15 +44,39 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     action's params, not just at the top level. A placeholder referencing a
     ref that hasn't been applied yet (or lacks that field) is left as-is
     rather than raising — the action then fails downstream with an error a
-    human can actually read, instead of a silent substitution glitch.
+    human can actually read, instead of a silent substitution glitch. Any such
+    unresolved placeholder is logged as an error so the literal text landing in
+    a posted comment doesn't go unnoticed.
     """
     if isinstance(value, str):
 
         def _sub(match: re.Match) -> str:
-            result = results_by_ref.get(match.group(1))
-            if result is None or match.group(2) not in result:
-                return match.group(0)
-            return str(result[match.group(2)])
+            placeholder = match.group(0)
+            ref = match.group(1)
+            field = match.group(2)
+
+            if ref not in results_by_ref:
+                log.warning(
+                    "Unresolved action reference %s: no applied action with "
+                    "ref '%s' (left as-is)",
+                    placeholder,
+                    ref,
+                )
+                return placeholder
+
+            ref_result = results_by_ref[ref]
+            if field not in ref_result:
+                log.warning(
+                    "Unresolved action reference %s: action '%s' has no field "
+                    "'%s' (available: %s) (left as-is)",
+                    placeholder,
+                    ref,
+                    field,
+                    ", ".join(sorted(ref_result)) or "none",
+                )
+                return placeholder
+
+            return str(ref_result[field])
 
         return _PLACEHOLDER_RE.sub(_sub, value)
     if isinstance(value, dict):
@@ -112,10 +131,6 @@ async def _dispatch(
         return ActionResult.failed(
             f"No handler registered for action type '{action_type}'"
         )
-
-    if action_type == "phabricator.submit_patch":
-        # WIP is a hackbot-api policy, not an agent choice; inject it here.
-        params = {**params, "wip": SUBMIT_PATCHES_AS_WIP}
 
     ctx = ApplyContext(
         run_id=str(run.run_id),

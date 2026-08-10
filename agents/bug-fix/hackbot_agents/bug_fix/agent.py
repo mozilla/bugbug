@@ -28,12 +28,15 @@ from hackbot_runtime.claude import Reporter
 
 from .config import (
     BUGZILLA_READ_TOOLS,
-    ENABLED_ACTION_TYPES,
     FIREFOX_TOOLS,
+    PHABRICATOR_FOLLOW_UP_ACTIONS,
+    PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
+    TRIAGE_AND_FIX_ACTIONS,
 )
 
 HERE = Path(__file__).resolve().parent
+PROMPTS = HERE / "prompts"
 
 
 class BugFixResult(HackbotAgentResult):
@@ -41,13 +44,15 @@ class BugFixResult(HackbotAgentResult):
     result: str | None = None
 
 
-def load_system_prompt(rules_dir: Path, extra: str) -> str:
-    tmpl = (HERE / "prompts" / "system.md").read_text()
+def render_prompt(name: str, **fields: object) -> str:
+    """Render a prompt template from ``prompts/`` via ``str.format``.
 
-    return tmpl.format(
-        rules_dir=str(rules_dir.resolve()),
-        extra_instructions=extra or "(none)",
-    )
+    Prompt text lives in ``prompts/*.md`` rather than inline in Python, so it
+    stays readable and editable. Substituted values are inserted verbatim
+    (``str.format`` does not re-scan them), so an untrusted ``comment`` cannot
+    break out of its ``{comment}`` placeholder.
+    """
+    return (PROMPTS / name).read_text().format(**fields)
 
 
 def make_investigator() -> AgentDefinition:
@@ -80,11 +85,12 @@ def make_investigator() -> AgentDefinition:
 async def run_bug_fix(
     *,
     bugzilla_mcp_server: McpServerConfig,
+    phabricator_mcp_server: McpServerConfig,
     source_repo: Path,
     fx_ctx: FirefoxContext,
     bug: int,
-    instructions: str = "",
-    task: str | None = None,
+    comment: str | None = None,
+    revision_id: int | None = None,
     rules_dir: Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
@@ -108,20 +114,32 @@ async def run_bug_fix(
     # hackbot.toml; here we only wrap its tools as an MCP server.
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
+    if revision_id:
+        action_types = PHABRICATOR_FOLLOW_UP_ACTIONS
+        user_prompt = render_prompt(
+            "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
+        )
+    else:
+        action_types = TRIAGE_AND_FIX_ACTIONS
+        user_prompt = render_prompt(
+            "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
+        )
+
     # Action-recording MCP server (in-process). Standalone/script runs pass
     # actions_recorder=None and get a local recorder that copies attachments
     # under ./artifacts (no uploader).
     actions_recorder, actions_server = actions_server_for(
-        actions_recorder, types=ENABLED_ACTION_TYPES
+        actions_recorder, types=action_types
     )
-    enabled_action_tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
+    enabled_action_tools = actions_to_tool_names(action_types)
 
-    system_prompt = load_system_prompt(rules_dir, instructions)
+    system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         mcp_servers={
             "bugzilla": bugzilla_mcp_server,
+            "phabricator": phabricator_mcp_server,
             "firefox": firefox_server,
             ACTIONS_SERVER_NAME: actions_server,
         },
@@ -137,6 +155,7 @@ async def run_bug_fix(
             "Task",
             *SOURCE_WRITE_TOOLS,
             *BUGZILLA_READ_TOOLS,
+            *PHABRICATOR_READ_TOOLS,
             *enabled_action_tools,
             *FIREFOX_TOOLS,
         ],
@@ -145,20 +164,6 @@ async def run_bug_fix(
         **({"effort": effort} if effort else {}),
         setting_sources=[],
     )
-
-    rules_path = rules_dir.resolve()
-    if task:
-        user_prompt = (
-            f"Bug to work on: {bug}\n\n"
-            f"Task: {task}\n\n"
-            f"The rules in {rules_path} are available if the task "
-            f"calls for them, but the task above is your primary "
-            f"directive — it overrides the default triage workflow."
-        )
-    else:
-        user_prompt = (
-            f"Triage bug {bug}.\n\nConsult the relevant rules in {rules_path}."
-        )
 
     result_msg: ResultMessage | None = None
     with Reporter(verbose=verbose, log_path=log) as reporter:

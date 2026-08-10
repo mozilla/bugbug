@@ -9,7 +9,7 @@ import type { AgentDescriptor, RunAction, RunDoc, RunRef } from "./types";
 export class HackbotError extends Error {
   constructor(
     message: string,
-    readonly status: number,
+    readonly status: number
   ) {
     super(message);
     this.name = "HackbotError";
@@ -28,10 +28,7 @@ function config(): { baseUrl: string; apiKey: string } {
   return { baseUrl: baseUrl.replace(/\/$/, ""), apiKey };
 }
 
-async function request<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { baseUrl, apiKey } = config();
   const res = await fetch(`${baseUrl}${path}`, {
     ...init,
@@ -73,22 +70,35 @@ export function listAgents(): Promise<AgentDescriptor[]> {
 export function createRun(
   agentName: string,
   inputs: Record<string, unknown>,
+  requestedBy?: string | null
 ): Promise<RunRef> {
-  return request<RunRef>(
-    `/agents/${encodeURIComponent(agentName)}/runs`,
-    {
-      method: "POST",
-      body: JSON.stringify(inputs),
-    },
-  );
+  return request<RunRef>(`/agents/${encodeURIComponent(agentName)}/runs`, {
+    method: "POST",
+    body: JSON.stringify(inputs),
+    headers: requestedBy ? { "X-On-Behalf-Of": requestedBy } : undefined,
+  });
 }
 
 export function getRun(runId: string): Promise<RunDoc> {
   return request<RunDoc>(`/runs/${encodeURIComponent(runId)}`);
 }
 
-export function listRuns(limit = 50): Promise<RunDoc[]> {
-  return request<RunDoc[]>(`/runs?limit=${limit}`);
+export interface ListRunsParams {
+  limit?: number;
+  offset?: number;
+  agent?: string;
+  status?: string;
+  requestedBy?: string;
+}
+
+export function listRuns(params: ListRunsParams = {}): Promise<RunDoc[]> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(params.limit ?? 50));
+  if (params.offset) qs.set("offset", String(params.offset));
+  if (params.agent) qs.set("agent", params.agent);
+  if (params.status) qs.set("status", params.status);
+  if (params.requestedBy) qs.set("requested_by", params.requestedBy);
+  return request<RunDoc[]>(`/runs?${qs.toString()}`);
 }
 
 export function listRunActions(runId: string): Promise<RunAction[]> {
@@ -99,7 +109,7 @@ export function listRunActions(runId: string): Promise<RunAction[]> {
 export function applyRunActions(runId: string): Promise<RunAction[]> {
   return request<RunAction[]>(
     `/runs/${encodeURIComponent(runId)}/actions/apply`,
-    { method: "POST" },
+    { method: "POST" }
   );
 }
 
@@ -108,13 +118,10 @@ export function applyRunActions(runId: string): Promise<RunAction[]> {
 // the upstream `{artifact_path:path}` route still sees the directory structure.
 export function getArtifactDownloadUrl(
   runId: string,
-  artifactName: string,
+  artifactName: string
 ): Promise<{ url: string }> {
-  const encodedPath = artifactName
-    .split("/")
-    .map(encodeURIComponent)
-    .join("/");
+  const encodedPath = artifactName.split("/").map(encodeURIComponent).join("/");
   return request<{ url: string }>(
-    `/runs/${encodeURIComponent(runId)}/artifacts/${encodedPath}`,
+    `/runs/${encodeURIComponent(runId)}/artifacts/${encodedPath}`
   );
 }

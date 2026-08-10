@@ -41,7 +41,7 @@ def main() -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Skip the regression gate so a run always triggers",
+        help="Skip the regression, backfill and push-age gates so a run always triggers",
     )
     args = parser.parse_args()
 
@@ -51,8 +51,13 @@ def main() -> int:
             "not the real developer."
         )
 
+    # Any real failing task is necessarily older than the push-age limit by the
+    # time you find it on Treeherder, and may well be a backfill, so --force has
+    # to lift those gates too.
     if args.force:
         consumer.regression.is_new_build_failure = lambda *a, **k: True
+        consumer.regression.is_stale_push = lambda *a, **k: False
+        consumer.taskcluster.is_action_scheduled = lambda *a, **k: False
 
     if args.project not in settings.watched_repos_set:
         settings.watched_repos = f"{settings.watched_repos},{args.project}"

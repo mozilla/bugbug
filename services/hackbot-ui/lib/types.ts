@@ -17,6 +17,10 @@ export function isTerminal(status: RunStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
 
+export function isFailed(status: RunStatus): boolean {
+  return status === "failed" || status === "timed_out";
+}
+
 export interface AgentDescriptor {
   name: string;
   description: string;
@@ -62,6 +66,7 @@ export interface RunDoc {
   agent: string;
   status: RunStatus;
   inputs: Record<string, unknown>;
+  requested_by: string | null;
   created_at: string;
   updated_at: string;
   execution_name: string | null;

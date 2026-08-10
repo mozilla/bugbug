@@ -25,6 +25,7 @@ from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts, changes
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
@@ -78,6 +79,10 @@ class HackbotContext(BaseSettings):
     # prepared. Stays None for agents that never touch source, which is how
     # publish_changes() knows there are no changes to collect.
     _source_base: str | None = PrivateAttr(default=None)
+    # The prepared checkout path + the ref it was prepared at, so the source is
+    # prepared exactly once and a conflicting re-prepare is caught.
+    _repo_path: Path | None = PrivateAttr(default=None)
+    _prepared_ref: str | None = PrivateAttr(default=None)
 
     @classmethod
     def from_config(cls, config_path: Path) -> "HackbotContext":
@@ -97,25 +102,36 @@ class HackbotContext(BaseSettings):
 
     # --- Platform capabilities (declared in hackbot.toml) ------------- #
 
-    @cached_property
-    def source_repo(self) -> Path:
-        """The prepared source checkout, cloned/refreshed on first access.
+    async def prepare_repo(
+        self, ref: str | None = None, depth: int | None = None
+    ) -> Path:
+        """Clone/refresh the source checkout (prerequisite) and return its path.
 
-        The path comes from ``SOURCE_REPO`` (set by the orchestrator) or, failing
-        that, the ``[source].checkout_path`` in ``hackbot.toml``. The checkout is
-        prepared lazily so agents that never touch source pay no git cost.
+        Call this once, up front; afterwards read :attr:`repo_path`. ``ref``
+        selects the checkout point (e.g. a Phabricator revision's base commit);
+        when omitted it falls back to ``SOURCE_REF`` then the ``[source].ref`` in
+        ``hackbot.toml``. ``depth`` bounds the shallow fetch (agents that need
+        history — e.g. build-repair — pass it explicitly). The path comes from
+        ``SOURCE_REPO`` or ``[source].checkout_path``. Passing a ``ref`` that
+        conflicts with an already-prepared checkout raises.
         """
         if self._config.source is None:
             raise RuntimeError(
                 "This agent did not declare a [source] in hackbot.toml; "
                 "no source repository is available."
             )
+        resolved_ref = ref or os.environ.get("SOURCE_REF") or self._config.source.ref
+        if self._repo_path is not None:
+            if ref is not None and ref != self._prepared_ref:
+                raise RuntimeError(
+                    f"source already prepared at ref {self._prepared_ref!r}; "
+                    f"cannot re-prepare at {ref!r} (prepare it before first use)"
+                )
+            return self._repo_path
+
         env_path = os.environ.get("SOURCE_REPO")
         path = Path(env_path) if env_path else self._config.source.checkout_path
-        ref = os.environ.get("SOURCE_REF") or self._config.source.ref
-        depth_env = os.environ.get("SOURCE_DEPTH")
-        depth = int(depth_env) if depth_env else None
-        ensure_source_repo(path, self._config.source.repo_url, ref, depth)
+        ensure_source_repo(path, self._config.source.repo_url, resolved_ref, depth)
         # Record where the agent starts editing, so publish_changes() can later
         # diff the final tree against it. Best-effort: a failure here must not
         # break the agent's access to source — it only disables change capture.
@@ -123,7 +139,18 @@ class HackbotContext(BaseSettings):
             self._source_base = changes.base_commit(path)
         except Exception:
             log.warning("Could not record source base commit at %s", path)
+        self._repo_path = path
+        self._prepared_ref = resolved_ref
         return path
+
+    @property
+    def repo_path(self) -> Path:
+        """The prepared source checkout path. Call :meth:`prepare_repo` first."""
+        if self._repo_path is None:
+            raise RuntimeError(
+                "source repo not prepared; call prepare_repo() before repo_path"
+            )
+        return self._repo_path
 
     @cached_property
     def firefox(self) -> "FirefoxContext":
@@ -140,7 +167,7 @@ class HackbotContext(BaseSettings):
         from agent_tools.firefox import FirefoxContext
 
         return FirefoxContext.from_source_repo(
-            self.source_repo, objdir=self._config.firefox.objdir
+            self.repo_path, objdir=self._config.firefox.objdir
         )
 
     @cached_property
@@ -206,7 +233,7 @@ class HackbotContext(BaseSettings):
         Returns the patch key, or ``None`` when the agent never prepared a source
         checkout or made no changes at all.
 
-        If the agent recorded a ``phabricator.submit_patch`` action, also builds
+        If the agent recorded a Phabricator patch action, also builds
         and publishes the Phabricator submission payload here — while the
         checkout the agent already has is still around — so the downstream
         apply step never needs its own checkout (see
@@ -215,7 +242,7 @@ class HackbotContext(BaseSettings):
         if self._source_base is None:
             return None
         change_set = changes.collect(
-            self.source_repo, self._source_base, self._config.source.repo_url
+            self.repo_path, self._source_base, self._config.source.repo_url
         )
         if change_set is None:
             return None
@@ -229,12 +256,11 @@ class HackbotContext(BaseSettings):
         self.publish_json(meta_key, change_set.metadata)
 
         wants_phabricator = any(
-            action["type"] == "phabricator.submit_patch"
-            for action in self.actions.actions
+            action["type"] in PATCH_ACTION_TYPES for action in self.actions.actions
         )
         if wants_phabricator:
             diff_payload = changes.build_phabricator_diff(
-                self.source_repo, self._source_base, self._config.source.repo_url
+                self.repo_path, self._source_base, self._config.source.repo_url
             )
             if diff_payload is not None:
                 self.publish_json(phabricator_diff_key, diff_payload)

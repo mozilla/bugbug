@@ -25,19 +25,25 @@ ruleset does not apply — note that and stop.
 3. **Write a fix plan**: root cause, the specific files/functions/selectors to
    change, and the approach. Prefer a comprehensive fix at the right level over a
    spot fix.
+4. **Assess severity.** Apply the `severity-assessment` rules to judge the bug's
+   severity from its user impact. It belongs in your comment and structured
+   output.
 
 ## Comment
 
 Record a single brief comment (a few sentences) with: the suspected root cause,
-the target file(s), and the proposed approach. Cite concrete paths. Do not
-restate the whole bug. Do not claim the fix is verified — you did not run it.
+the target file(s), and the proposed approach. Cite concrete paths, each as an
+inline Markdown link to its Searchfox permalink (with a line anchor where you
+know the line) per the **Linking source files** section of the system prompt. Do
+not restate the whole bug. Do not claim the fix is verified — you did not run it.
 
 ## Confidence and field changes
 
 - **High** (you found the specific code and the cause is clear): record the
   plan comment. If a rule or convention clearly applies, you may also record a
-  `bugzilla_update_bug` for an obviously-correct field (e.g. adding a relevant
-  keyword). Do not change `status`/`resolution`.
+  `bugzilla_update_bug` for an obviously-correct field — e.g. adding a relevant
+  keyword, or a `severity` (per `severity-assessment`). Do not change
+  `status`/`resolution`.
 - **Medium** (plausible area, cause not pinned down): record the comment with
   your best hypothesis and the open questions that would confirm it.
 - **Low** (could not localize): record a comment stating what you checked and

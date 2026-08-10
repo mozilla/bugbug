@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import tempfile
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -48,7 +49,6 @@ HERE = Path(__file__).resolve().parent
 
 logger = logging.getLogger("autowebcompat-repro")
 
-
 PublishFile = Callable[[str, Path, str | None], str]
 
 
@@ -79,6 +79,7 @@ class AutowebcompatReproResult(BaseModel):
     failure_reason: str | None
     steps: str
     screenshot_url: str | None
+    script_url: str | None
     plan_result: TestPlanResult
     reproductions: list[tuple[str, BugReproductionResult | ReproductionResult]]
     chrome_mask_fixed: bool | None
@@ -238,6 +239,42 @@ class Task(ABC, Generic[ResultT]):
         return self.result_collector.result
 
 
+def run_confirmation_script(
+    script_path: Path, firefox_path: Path
+) -> ReproductionResult | None:
+    script_timeout = 5 * 60
+    try:
+        proc = subprocess.run(
+            ["node", str(script_path)],
+            env={
+                **os.environ,
+                "BROWSER": "firefox",
+                "BROWSER_BIN": str(firefox_path),
+            },
+            capture_output=True,
+            text=True,
+            timeout=script_timeout,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("Confirmation script timed out after %ss", script_timeout)
+        return None
+
+    logger.info(
+        "Confirmation script exited %s\nstdout:\n%s\nstderr:\n%s",
+        proc.returncode,
+        proc.stdout,
+        proc.stderr,
+    )
+    if proc.returncode == 1:
+        return ReproductionResult(
+            confirmed_by_script=True,
+            reproduced=True,
+            failure_reason=None,
+            screenshot_path=None,
+        )
+    return None
+
+
 def make_empty_temp_file(dir: Path, prefix: str | None, suffix: str) -> Path:
     fd, path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=dir)
     f = os.fdopen(fd)
@@ -308,6 +345,7 @@ likely to be affected by the issue. In particular:
 class BugReproduction(Task):
     name = "bug_reproduction"
     result_cls = BugReproductionResult
+    repro_dir = Path("/app/repro")
 
     def __init__(
         self,
@@ -322,9 +360,12 @@ class BugReproduction(Task):
     ):
         super().__init__(task_config, run_tracker)
         self.input_data = input_data
+        self.firefox_path = firefox_path
+        self.chrome_path = chrome_path
         self.screenshot_path = make_empty_temp_file(
             screenshot_dir, "reproduction=", ".png"
         )
+        self.script_path = make_empty_temp_file(self.repro_dir, "reproduction=", ".mjs")
         self.add_mcp_server(
             "firefox-devtools",
             build_firefox_devtools_server(
@@ -349,14 +390,15 @@ class BugReproduction(Task):
         return self.input_data.subject()
 
     def system_prompt(self) -> str:
+        repro_reference = self.repro_dir / "repro_reference.mjs"
         return (
             super()
             .system_prompt()
             .format(
                 task_details=f"""
 1. Identify the affected URL and the described broken behavior.
-2. Baseline: Navigate to the URL with the Firefox DevTools MCP
-   and try to reproduce the described broken behaviour.
+2. Baseline: Navigate to the URL with the Firefox DevTools MCP (headless, as is
+   every browser on this system) and try to reproduce the described broken behaviour.
    - Reproduce against the actual reported site. If you cannot reach or
      reproduce on that site — e.g. it is behind a login wall, blocked,
      gated by a captcha, or down — do not substitute a reduced testcase,
@@ -371,14 +413,30 @@ class BugReproduction(Task):
      web-compat issue; refine the steps and re-check before concluding.
    - If the reported broken behaviour reproduces in both browsers, it is not a
      Firefox web-compat issue: set `failure_reason` to `non_compat`.
-4. If the issue reproduces AND the breakage is visual in nature (incorrect
+4. If the issue reproduces, write and run a Puppeteer script that drives the real
+   reported site in both browsers and demonstrates the difference: follow the spec in
+   `{repro_reference}`, write your script to exactly `{self.script_path}`
+   (read the file before writing), then run it with
+
+   `BROWSER=firefox BROWSER_BIN={self.firefox_path} node {self.script_path}`
+   `BROWSER=chrome BROWSER_BIN={self.chrome_path} node {self.script_path}`
+
+   The script checks one browser per run: the difference is demonstrated
+   when the Firefox run exits with 1 (not working) and the Chrome run exits with
+   0 (working).
+   When you get these exit codes exactly, set `script_path` to that path and
+   `confirmed_by_script` to true. Otherwise revise and re-run until both runs
+   execute cleanly and show that difference. If you're unable to get there,
+   leave `script_path` null and `confirmed_by_script` false, and judge
+   the reproduction on the evidence you gathered in steps 2 and 3.
+5. If the issue reproduces AND the breakage is visual in nature (incorrect
    layout or rendering, not broken interaction), capture a screenshot in Firefox
    showing it: call `screenshot_page` with `saveTo` set to
    `{self.screenshot_path}`. This writes the image to that file instead of
    returning it — do not capture or paste the image data yourself. Then set
    `screenshot_path` in your result to exactly `{self.screenshot_path}`. For
    non-visual issues, take no screenshot and leave `screenshot_path` null.
-5. Submit your findings via `submit_result` (see "Reporting your result").
+6. Submit your findings via `submit_result` (see "Reporting your result").
 """
             )
         )
@@ -513,6 +571,7 @@ class InitialReproduction:
     steps: str
     summary: str
     screenshot_path: Path | None
+    script_path: Path | None
     chrome_reproduced: bool | None
 
 
@@ -578,6 +637,20 @@ class ReproductionResults:
 
         return None
 
+    @property
+    def script_url(self) -> str | None:
+        if (
+            self.initial_repro is not None
+            and self.initial_repro.script_path is not None
+        ):
+            return self.publish_file(
+                f"reproduction-{self.initial_repro.channel}.mjs",
+                self.initial_repro.script_path,
+                "text/javascript",
+            )
+
+        return None
+
     def set_result(
         self,
         channel: FirefoxChannel,
@@ -595,6 +668,7 @@ class ReproductionResults:
                 result.steps,
                 result.summary,
                 result.screenshot_path,
+                result.script_path,
                 result.chrome_reproduced,
             )
         elif isinstance(result, ChromeMaskResult):
@@ -611,9 +685,15 @@ class ReproductionResults:
             failure_reason=self.failure_reason,
             steps=self.steps,
             screenshot_url=self.screenshot_url,
+            script_url=self.script_url,
             plan_result=self.plan_result,
             reproductions=[
-                (key[0].value, value.model_copy(update={"screenshot_path": None}))
+                (
+                    key[0].value,
+                    value.model_copy(
+                        update={"screenshot_path": None, "script_path": None}
+                    ),
+                )
                 for key, value in self.results.items()
                 if isinstance(value, ReproductionResult)
             ],
@@ -659,7 +739,14 @@ async def run_autowebcompat_repro(
     ) -> None:
         browser = getattr(firefox_browser, channel.value)
         profile = setup_profile(browser)
-        if repro_results.initial_repro is None:
+        logger.info(
+            "Trying reproduction in %s%s",
+            channel,
+            f" {extra}" if extra is not None else "",
+        )
+
+        initial_repro = repro_results.initial_repro
+        if initial_repro is None:
             task: Task = BugReproduction(
                 config,
                 tracker,
@@ -671,18 +758,25 @@ async def run_autowebcompat_repro(
                 chrome_browser.stable,
             )
         else:
+            if initial_repro.script_path is not None:
+                script_result = run_confirmation_script(
+                    initial_repro.script_path, browser
+                )
+                if script_result is not None:
+                    repro_results.set_result(channel, extra, script_result)
+                    return
+                logger.info(
+                    "Confirmation script did not reach a verdict in %s; "
+                    "falling back to the reproduction steps",
+                    channel,
+                )
             task = StepsReproduction(
                 config,
                 tracker,
                 browser,
                 profile,
-                repro_results.initial_repro.steps,
+                initial_repro.steps,
             )
-        logger.info(
-            "Trying reproduction in %s%s",
-            channel,
-            f" {extra}" if extra is not None else "",
-        )
         repro_results.set_result(channel, extra, await task.run())
 
     screenshots_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-screenshots-"))

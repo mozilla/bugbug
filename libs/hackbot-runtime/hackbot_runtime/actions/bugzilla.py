@@ -21,13 +21,8 @@ from pydantic import Field
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
 _COMMENT_FOOTER = (
-    "*This is an automated analysis result. If this result is incorrect "
-    "please add a needinfo and feel free to correct the error.* "
-)
-_ATTACHMENT_COMMENT_FOOTER = (
-    "*This is the analysis tool's suggested fix. Feel welcome to adopt "
-    "it as a starting point and evolve it as needed to meet our coding "
-    "standards.*"
+    "If you'd like to provide feedback on this comment, please use the 👍 or 👎 "
+    "reaction."
 )
 
 
@@ -95,7 +90,7 @@ async def add_comment(
     Use is_private=true for security-sensitive notes. Recorded into the run
     summary for human review — does not post to Bugzilla.
     """
-    text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
+    text_with_footer = text.rstrip() + "\n\n---\n\n" + _COMMENT_FOOTER
     recorder.record(
         "bugzilla.add_comment",
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
@@ -184,7 +179,7 @@ async def add_attachment(
         "size_bytes": size,
     }
     if comment:
-        params["comment"] = comment.rstrip() + "\n\n" + _ATTACHMENT_COMMENT_FOOTER
+        params["comment"] = comment
 
     recorder.record(
         "bugzilla.add_attachment",

@@ -10,6 +10,7 @@ _ALL = [
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
+    "testrail.submit_test_plan",
 ]
 
 
@@ -53,6 +54,7 @@ async def test_lists_expected_tools_without_recorder():
         "bugzilla_add_comment",
         "bugzilla_add_attachment",
         "bugzilla_create_bug",
+        "testrail_submit_test_plan",
     }
     for t in tools:
         assert "recorder" not in t.inputSchema.get("properties", {})
@@ -105,3 +107,11 @@ async def test_actions_server_for_exposes_selected_tools():
     _, config = actions_server_for(ActionsRecorder(), types=["bugzilla.update_bug"])
     tools = await _list(config["instance"])
     assert {t.name for t in tools} == {"bugzilla_update_bug"}
+
+
+async def test_actions_server_exposes_selected_testrail_tool():
+    _, config = actions_server_for(
+        ActionsRecorder(), types=["testrail.submit_test_plan"]
+    )
+    tools = await _list(config["instance"])
+    assert {t.name for t in tools} == {"testrail_submit_test_plan"}
