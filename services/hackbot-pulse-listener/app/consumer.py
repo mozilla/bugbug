@@ -1,4 +1,5 @@
 import logging
+import re
 import threading
 import time
 from collections import deque
@@ -27,6 +28,9 @@ EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
 # are closer to a build than to a test, and none is repaired by the agent's method
 # (clone, build Firefox, re-run the failing test with mach). Left out for now.
 TEST_KINDS = {"test", "mochitest", "web-platform-tests"}
+
+# "test-verify" and its "-tv" chunked variants, anywhere in the label.
+_TEST_VERIFY = re.compile(r"(^|[-/])test-verify([-/]|$)")
 
 # In-memory dedupe of hg revisions already handed to the build-repair agent. A
 # revision is recorded only once we actually trigger a run, so an inherited
@@ -243,6 +247,19 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         logger.info(
             "Task %s (%s) was scheduled by an action task, not by the push "
             "(backfill or retrigger); skipping -- %s",
+            task_id,
+            label,
+            job_link,
+        )
+        return None
+
+    # test-verify re-runs the tests the push itself changed, many times over, to shake
+    # out flakiness. Ancestors rarely ran the same thing, so the regression check
+    # cannot settle and fails open: in a dry run every test-verify task seen reached
+    # the agent, against 2% of tasks overall.
+    if _TEST_VERIFY.search(label):
+        logger.info(
+            "Task %s (%s) is a test-verify task; skipping -- %s",
             task_id,
             label,
             job_link,

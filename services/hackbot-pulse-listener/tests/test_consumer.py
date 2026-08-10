@@ -1028,3 +1028,20 @@ def _distinct_groups(env):
     env.failing_groups.side_effect = lambda project, rev, task_id: [
         f"{task_id}/mochitest.ini"
     ]
+
+
+def test_test_verify_tasks_are_skipped(env):
+    label = "test-linux2404-64/opt-test-verify"
+    assert consumer.process(_test_msg(label=label), env.executor) is None
+    env.job_for_task.assert_not_called()
+    env.trigger_run.assert_not_called()
+
+
+def test_a_chunked_test_verify_task_is_skipped(env):
+    label = "test-linux64/opt-test-verify-wpt-1"
+    assert consumer.process(_test_msg(label=label), env.executor) is None
+    env.trigger_run.assert_not_called()
+
+
+def test_an_ordinary_task_is_not_mistaken_for_test_verify(env):
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
