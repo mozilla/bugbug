@@ -5,16 +5,10 @@
 
 """Test-repair agent for Firefox CI test failures.
 
-Blame the commit that regressed a failing test and propose a fix. The pulse
-listener only forwards failures that already passed its regression and flakiness
-filters, so a regression is the prior, but the agent still reports the
-classification it reaches from the logs.
-
-A two-stage claude-agent-sdk loop. Stage 1 (analysis, read-only) inspects the
-candidate commit diffs and writes a verdict naming the culprit; Stage 2 (fix)
-runs when a culprit is found and proposes a source patch, which the runtime
-collects into ``changes.patch``. The :class:`TestRepairResult` is serialized into
-``summary.json``'s ``findings`` and read by the notifier.
+Blame the commit that regressed a failing test, or identify it as a known
+intermittent, and propose a fix. Stage 1 (analysis, read-only) inspects the
+candidate commit diffs and writes the verdict; stage 2 (fix) proposes a source
+patch and runs whenever stage 1 blamed a commit.
 """
 
 from __future__ import annotations
@@ -46,6 +40,7 @@ from .config import (
     BUGZILLA_READ_TOOLS,
     FIREFOX_TOOLS,
     FIX_MODEL,
+    SKIP_FIREFOX_BUILD,
 )
 from .logs import TaskLogs
 from .prompts import (
@@ -54,25 +49,25 @@ from .prompts import (
     CANDIDATE_INTRO_PARTIAL,
     ENVIRONMENT_NOTE,
     FIX_TEMPLATE,
+    KNOWN_INTERMITTENTS_LINE,
     LAST_GREEN_LINE,
     MAX_CANDIDATE_COMMITS,
     MAX_TESTS_PER_GROUP,
     VERIFY_LOCAL,
     VERIFY_REMOTE,
+    VERIFY_SKIPPED,
 )
 from .resolve import CommitRange, Investigation
 
 _CLASSIFICATIONS = ("regression", "intermittent")
-_RECOMMENDATIONS = ("backout", "do_not_backout", "land_fix", "rerun")
+_RECOMMENDATIONS = ("backout", "do_not_backout", "rerun")
 _SANITIZER_OPTIONS = {"asan": "address-sanitizer", "tsan": "thread-sanitizer"}
 
 
 class TestRepairResult(HackbotAgentResult):
     classification: Literal["regression", "intermittent"]
-    recommendation: Literal["backout", "do_not_backout", "land_fix", "rerun"]
+    recommendation: Literal["backout", "do_not_backout", "rerun"]
     culprit_commit: str | None = None
-    # Ranked commits that could not be ruled out, when no single culprit convinced
-    # the agent; lets sheriffs retrigger just these instead of backfilling.
     candidate_commits: list[str] = []
     culprit_bug: int | None = None
     confidence: float = 0.0
@@ -93,8 +88,6 @@ def _build_options(
     allowed_tools: list[str],
     max_turns: int | None,
 ) -> ClaudeAgentOptions:
-    # The agent runs inside an isolated container, so tools run without
-    # per-command permission prompts.
     return ClaudeAgentOptions(
         model=model,
         cwd=str(cwd),
@@ -167,11 +160,7 @@ def _coerce_recommendation(value, classification: str, has_culprit: bool) -> str
 
 
 def _resolve_culprit(source_repo: Path, sha) -> str | None:
-    """Normalize a model-authored sha to a full commit hash in the checkout.
-
-    The shallow clone holds exactly the candidate range, so a sha git cannot
-    resolve there was invented or is out of range; either way it is dropped.
-    """
+    """Normalize a model-authored sha to a full commit hash, or None if unresolvable."""
     if not isinstance(sha, str) or not sha.strip():
         return None
     sha = sha.strip()
@@ -198,12 +187,7 @@ def _resolve_culprit(source_repo: Path, sha) -> str | None:
 
 
 def _resolve_candidates(source_repo: Path, value, culprit: str | None) -> list[str]:
-    """Validate the model's ranked fallback candidates, preserving their order.
-
-    Same discard rule as the culprit: a sha git cannot resolve in the shallow clone
-    is not in the range. The culprit is dropped so the list stays a strict
-    alternative to it rather than repeating it.
-    """
+    """Resolve the ranked fallback candidates, preserving order and excluding the culprit."""
     if not isinstance(value, list):
         return []
     resolved: list[str] = []
@@ -217,15 +201,7 @@ def _resolve_candidates(source_repo: Path, value, culprit: str | None) -> list[s
 
 
 def _write_mozconfig(fx_ctx: FirefoxContext, investigation: Investigation) -> None:
-    """Write a mozconfig mirroring the failing CI build.
-
-    ``build_firefox`` fails outright without one. The variant is mirrored because
-    a plain build cannot trigger an assertion, sanitizer or coverage failure.
-
-    Always overwritten: ``/workspace`` is a persistent volume shared with the
-    other agents, so a leftover mozconfig from a previous run points the build at
-    a foreign objdir with foreign flags.
-    """
+    """Write a mozconfig mirroring the failing CI build's variant."""
     options = ["ac_add_options --enable-application=browser"]
     if investigation.debug_build:
         options.append("ac_add_options --enable-debug")
@@ -246,12 +222,7 @@ def _write_mozconfig(fx_ctx: FirefoxContext, investigation: Investigation) -> No
 
 
 async def _bootstrap(fx_ctx: FirefoxContext) -> None:
-    """Install the build toolchain before the fix stage needs it.
-
-    Deterministic prep rather than a tool call: it is slow and unconditional, so
-    spending agent turns deciding to run it wastes budget. Idempotent, and a
-    failure here is not fatal -- build_firefox reports its own errors.
-    """
+    """Install the build toolchain. Idempotent; a failure is not fatal."""
     result = await bootstrap_firefox(fx_ctx.source_dir)
     if not result.get("success"):
         print(f"[test-repair] bootstrap: {result.get('message')}", file=sys.stderr)
@@ -339,6 +310,7 @@ async def run_test_repair(
     investigation: Investigation,
     task_logs: dict[str, TaskLogs],
     scratch_out: Path,
+    skip_firefox_build: bool = SKIP_FIREFOX_BUILD,
     model: str | None = None,
     max_turns: int | None = None,
     verbose: bool = False,
@@ -353,11 +325,11 @@ async def run_test_repair(
         file=sys.stderr,
     )
 
-    firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
-    mcp_servers: dict[str, McpServerConfig] = {"firefox": firefox_server}
-    allowed_tools = [*ALLOWED_TOOLS, *FIREFOX_TOOLS]
-    # Bugzilla is optional context (searching for a related bug); wire it only
-    # when a broker URL is provided.
+    mcp_servers: dict[str, McpServerConfig] = {}
+    allowed_tools = [*ALLOWED_TOOLS]
+    if not skip_firefox_build:
+        mcp_servers["firefox"] = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
+        allowed_tools += FIREFOX_TOOLS
     if bugzilla_mcp_server:
         mcp_servers["bugzilla"] = bugzilla_mcp_server
         allowed_tools += BUGZILLA_READ_TOOLS
@@ -370,6 +342,13 @@ async def run_test_repair(
     last_green_line = (
         LAST_GREEN_LINE.format(last_green_revision=investigation.last_green_revision)
         if investigation.last_green_revision
+        else ""
+    )
+    known_intermittents_line = (
+        KNOWN_INTERMITTENTS_LINE.format(
+            bugs=", ".join(str(bug) for bug in investigation.known_intermittent_bugs)
+        )
+        if investigation.known_intermittent_bugs
         else ""
     )
     range_expr = _range_expr(commit_range)
@@ -387,6 +366,7 @@ async def run_test_repair(
         commit_range=range_expr,
         max_candidates=MAX_CANDIDATE_COMMITS,
         last_green_line=last_green_line,
+        known_intermittents_line=known_intermittents_line,
         failure_logs=failure_logs,
         scratch_out=scratch_out,
     )
@@ -416,17 +396,19 @@ async def run_test_repair(
         total_cost += result_msg.total_cost_usd or 0.0
         total_turns += result_msg.num_turns or 0
 
-        # Stage 2 (fix) runs only when the analysis blamed a real commit.
         verdict = _read_verdict(scratch_out)
         culprit_commit = _resolve_culprit(source_repo, verdict.get("culprit_commit"))
         if culprit_commit:
             reporter.header(f"{label}: fix")
-            _write_mozconfig(fx_ctx, investigation)
-            await _bootstrap(fx_ctx)
-            template = VERIFY_LOCAL if investigation.is_linux else VERIFY_REMOTE
-            verify_step = template.format(
-                harness=investigation.harness, platform=investigation.platform
-            ) + ENVIRONMENT_NOTE.format(platform=investigation.platform)
+            if skip_firefox_build:
+                verify_step = VERIFY_SKIPPED.format(scratch_out=scratch_out)
+            else:
+                _write_mozconfig(fx_ctx, investigation)
+                await _bootstrap(fx_ctx)
+                template = VERIFY_LOCAL if investigation.is_linux else VERIFY_REMOTE
+                verify_step = template.format(
+                    harness=investigation.harness, platform=investigation.platform
+                ) + ENVIRONMENT_NOTE.format(platform=investigation.platform)
             fix_prompt = FIX_TEMPLATE.format(
                 culprit_commit=culprit_commit,
                 verify_step=verify_step,

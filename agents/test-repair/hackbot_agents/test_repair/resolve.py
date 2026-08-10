@@ -5,25 +5,23 @@
 
 """Resolve a failing Taskcluster test task into everything the agent needs.
 
-From a task id alone, derive the push it belongs to (project + hg revision), the
-tests that failed, the revision at which those tests were last green on the same
-platform, and the git range that landed since then. Only the range endpoints are
-mapped to git -- the agent enumerates the commits between them with ``git log``
-in the checkout. The agent recomputes all of this itself so its only input is a
-task id; the pulse listener uses the same public Taskcluster / mozci / hg-pushlog
-/ lando lookups only to decide which failures are worth investigating.
+From a task id alone: the push it belongs to, the tests that failed, the revision
+those tests were last green at on the same platform, the git range that landed
+since, and the intermittent bugs Treeherder ties to the failure. Only the range
+endpoints are mapped to git; the agent enumerates the commits between them with
+``git log`` in the checkout.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
 from mozci import data
 from mozci.errors import ParentPushNotFound
-from mozci.push import MAX_DEPTH, Push
+from mozci.push import Push
 from mozci.task import Status, is_no_groups_suite
 
 logger = logging.getLogger(__name__)
@@ -41,11 +39,20 @@ _REPO_PATHS = {
 }
 _HEADERS = {"User-Agent": "hackbot-test-repair/1.0"}
 _TIMEOUT = 30
-# Ancestor pushes to walk looking for a green run. Each step is a live, uncached
-# group_summaries lookup, so raising this trades startup latency for a better range.
-LAST_GREEN_MAX_DEPTH = MAX_DEPTH
-# Cap on commits (not pushes) in the range, bounding the clone depth.
-MAX_RANGE_COMMITS = 100
+_TREEHERDER = "https://treeherder.mozilla.org/api/project"
+_FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
+_INTERMITTENT_KEYWORD = "intermittent-failure"
+# The walk stops at the first decisive ancestor, so the depth is only paid in full
+# when the task ran on none of them -- a coalesced or low-frequency config, which is
+# exactly the case worth reaching. Measured at ~3s per ancestor, so a full-depth walk
+# is a few minutes.
+LAST_GREEN_MAX_DEPTH = 100
+# Matches the walk: having failed to find green within that many pushes, the blind
+# window handed over instead covers the same span rather than a narrower one.
+FALLBACK_RANGE_PUSHES = LAST_GREEN_MAX_DEPTH
+# Bounds the shallow clone depth. Must stay above what those pushes can hold
+# (~1.9 commits/push on autoland) or the cap discards the base found above.
+MAX_RANGE_COMMITS = 500
 
 
 @dataclass(frozen=True)
@@ -60,11 +67,9 @@ class FailingGroup:
 class CommitRange:
     """The git commit range to search for the culprit."""
 
-    # The failure commit; what the checkout is pinned to.
     head: str
-    # The last-green commit, exclusive. None when unknown or outside the cap.
+    # Exclusive; None when unknown or outside the cap.
     base: str | None
-    # Commits in the range; bounds the shallow clone depth.
     span: int
     # Whether the culprit is provably inside the range.
     complete: bool
@@ -82,14 +87,11 @@ class Investigation:
     failing_groups: list[FailingGroup]
     last_green_revision: str | None
     commit_range: CommitRange
-    # Full task label, e.g. "test-linux1804-64-qr/debug-mochitest-browser-chrome-1".
-    # Unlike ``platform`` it also carries the test variant and chunk, which is what
-    # distinguishes two runs of the same suite on the same OS and build type.
+    # Carries the test variant and chunk, unlike ``platform``.
     label: str = ""
-    # False for suites that report no test manifests (gtest, jittest, talos, ...),
-    # where ``failing_groups`` is empty by nature rather than because the lookup
-    # failed, and blame has to be anchored on the task as a whole.
+    # False for suites that report no test manifests (gtest, jittest, talos, ...).
     group_based: bool = True
+    known_intermittent_bugs: list[int] = field(default_factory=list)
 
     @property
     def failure_commit(self) -> str:
@@ -106,7 +108,7 @@ class Investigation:
 
     @property
     def sanitizer(self) -> str | None:
-        """The sanitizer CI built with, if any; a plain build cannot trigger it."""
+        """The sanitizer CI built with, if any."""
         for name in ("asan", "tsan"):
             if f"-{name}" in self.platform:
                 return name
@@ -158,6 +160,45 @@ def _failing_groups(task_id: str) -> list[FailingGroup]:
     return groups
 
 
+def _open_intermittent_bugs(suggestion: dict) -> list[int]:
+    """Ids of the unresolved intermittent-failure bugs a failure line matches."""
+    bugs = suggestion.get("bugs") or {}
+    matched = []
+    for bug in (bugs.get("open_recent") or []) + (bugs.get("all_others") or []):
+        keywords = [k.strip() for k in (bug.get("keywords") or "").split(",")]
+        if bug.get("id") and not bug.get("resolution"):
+            if _INTERMITTENT_KEYWORD in keywords:
+                matched.append(bug["id"])
+    return matched
+
+
+def _known_intermittent_bugs(project: str, task_id: str) -> list[int]:
+    """Open intermittent bugs Treeherder ties to this task's failure lines.
+
+    Best effort: an empty list on any error.
+    """
+    try:
+        jobs = (
+            _get_json(f"{_TREEHERDER}/{project}/jobs/?task_id={task_id}").get("results")
+            or []
+        )
+        if not jobs:
+            return []
+        suggestions = _get_json(
+            f"{_TREEHERDER}/{project}/jobs/{jobs[0]['id']}/bug_suggestions/"
+        )
+    except (requests.exceptions.RequestException, ValueError, KeyError):
+        logger.warning("Could not read bug suggestions for task %s", task_id)
+        return []
+
+    bugs: list[int] = []
+    for line in suggestions if isinstance(suggestions, list) else []:
+        if not (line.get("search") or "").startswith(_FAILURE_LINE_PREFIX):
+            continue
+        bugs += [bug for bug in _open_intermittent_bugs(line) if bug not in bugs]
+    return bugs
+
+
 def _same_platform(task, platform: str) -> bool:
     return task.platform == platform or platform in (task.label or "")
 
@@ -165,11 +206,8 @@ def _same_platform(task, platform: str) -> bool:
 def _test_status(push: Push, group: str, tests: list[str], platform: str) -> str | None:
     """'passed'/'failed'/None for ``tests`` of ``group`` on ``platform``.
 
-    Restricted to the failing tests and the failing platform: ``GroupSummary``
-    aggregates every platform and every test in the manifest, so a push where the
-    group ran green on Windows -- or where only other tests in it passed -- must
-    not anchor a last-green for a Linux-only failure. None means non-decisive
-    (the group did not run here, or is intermittent/unfinished).
+    Restricted to the failing tests and platform, since ``GroupSummary`` aggregates
+    across both. None means non-decisive.
     """
     summary = push.group_summaries.get(group)
     if summary is None:
@@ -193,14 +231,7 @@ def _test_status(push: Push, group: str, tests: list[str], platform: str) -> str
 
 
 def _label_status(push: Push, label: str) -> str | None:
-    """'passed'/'failed'/None for a whole task label on ``push``.
-
-    The fallback for suites that report no test manifests, where there is no group
-    to key on and the task is the finest granularity available. The label already
-    pins the platform, build type and variant, and ``label_summaries`` excludes
-    taskgraph-chunked tasks -- whose label covers different tests on each push --
-    so only genuinely comparable runs are considered.
-    """
+    """'passed'/'failed'/None for a whole task label, for suites without manifests."""
     summary = push.label_summaries.get(label)
     if summary is None:
         return None
@@ -267,6 +298,26 @@ def _count_commits(pushes: dict) -> int:
     return sum(len(p.get("changesets") or []) for p in pushes.values())
 
 
+def _pushlog(pushlog_url: str, query: str) -> dict:
+    """Pushes from one pushlog query; empty on any error."""
+    try:
+        return _get_json(f"{pushlog_url}?{query}&full=1&version=2").get("pushes") or {}
+    except requests.exceptions.RequestException:
+        logger.exception("Failed to fetch pushlog %s?%s", pushlog_url, query)
+        return {}
+
+
+def _fallback_pushes(pushlog_url: str, head_rev: str) -> dict:
+    """The head push plus the ``FALLBACK_RANGE_PUSHES`` pushes before it."""
+    head = _pushlog(pushlog_url, f"changeset={head_rev}")
+    if not head:
+        return {}
+    head_id = max(int(push_id) for push_id in head)
+    # startID is exclusive, endID inclusive.
+    start_id = max(head_id - FALLBACK_RANGE_PUSHES, 0)
+    return _pushlog(pushlog_url, f"startID={start_id}&endID={head_id}") or head
+
+
 def _resolve_range(
     project: str,
     head_rev: str,
@@ -275,9 +326,8 @@ def _resolve_range(
 ) -> CommitRange | None:
     """Resolve ``(last_green_rev, head_rev]`` into git endpoints and a commit count.
 
-    None when the head cannot be mapped: pinning the checkout to an older commit
-    would blame the wrong change. ``base`` is dropped when unknown or outside the
-    capped clone depth, which also marks the range incomplete.
+    None when the head cannot be mapped. ``base`` is dropped, and the range marked
+    incomplete, when it is unknown or outside ``max_commits``.
     """
     head_git = _hg_to_git(head_rev)
     if not head_git:
@@ -285,25 +335,17 @@ def _resolve_range(
         return None
 
     path = _REPO_PATHS.get(project, project)
-    pushlog = f"{_HG_BASE}/{path}/json-pushes"
-    try:
-        if last_green_rev:
-            url = (
-                f"{pushlog}?fromchange={last_green_rev}"
-                f"&tochange={head_rev}&full=1&version=2"
-            )
-        else:
-            url = f"{pushlog}?changeset={head_rev}&full=1&version=2"
-        pushes = _get_json(url).get("pushes") or {}
-    except requests.exceptions.RequestException:
-        logger.exception(
-            "Failed to fetch %s pushlog (%s..%s)", project, last_green_rev, head_rev
+    pushlog_url = f"{_HG_BASE}/{path}/json-pushes"
+    if last_green_rev:
+        pushes = _pushlog(
+            pushlog_url, f"fromchange={last_green_rev}&tochange={head_rev}"
         )
-        pushes = {}
+    else:
+        pushes = _fallback_pushes(pushlog_url, head_rev)
 
     span = max(_count_commits(pushes), 1)
     if not last_green_rev or not pushes:
-        return CommitRange(head_git, None, span, False)
+        return CommitRange(head_git, None, min(span, max_commits), False)
 
     if span > max_commits:
         logger.warning(
@@ -347,10 +389,6 @@ def resolve_investigation(
     )
 
     platform = tags.get("test-platform") or ""
-    # Group-less suites have nothing finer than the task to compare across pushes.
-    # A grouped suite whose lookup failed gets no last-green rather than a
-    # label-level one: its tasks are chunked, so the same label covers different
-    # tests on each push and ``label_summaries`` deliberately omits them.
     if groups:
         last_green = _last_green(project, hg_revision, groups[0], platform)
     elif not group_based and label:
@@ -358,6 +396,12 @@ def resolve_investigation(
     else:
         last_green = None
     logger.info("Last-green revision: %s", last_green or "not found")
+
+    intermittent_bugs = _known_intermittent_bugs(project, task_id)
+    logger.info(
+        "Known intermittent bugs: %s",
+        ", ".join(str(bug) for bug in intermittent_bugs) or "none matched",
+    )
 
     commit_range = _resolve_range(project, hg_revision, last_green, max_commits)
     if commit_range is None:
@@ -380,4 +424,5 @@ def resolve_investigation(
         commit_range=commit_range,
         label=label,
         group_based=group_based,
+        known_intermittent_bugs=intermittent_bugs,
     )

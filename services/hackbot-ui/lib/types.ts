@@ -17,6 +17,10 @@ export function isTerminal(status: RunStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
 
+export function isFailed(status: RunStatus): boolean {
+  return status === "failed" || status === "timed_out";
+}
+
 export interface AgentDescriptor {
   name: string;
   description: string;

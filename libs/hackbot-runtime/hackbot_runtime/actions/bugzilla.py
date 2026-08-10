@@ -95,7 +95,7 @@ async def add_comment(
     Use is_private=true for security-sensitive notes. Recorded into the run
     summary for human review — does not post to Bugzilla.
     """
-    text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
+    text_with_footer = text.rstrip() + "\n\n---\n\n" + _COMMENT_FOOTER
     recorder.record(
         "bugzilla.add_comment",
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
