@@ -72,8 +72,8 @@ nlp = [
 ]
 nn = []
 performance-regression-predictor = [
-    "torch>=2.6,<3",
-    "transformers==4.56.2",
+    "torch==2.13.0",
+    "transformers==5.15.0",
 ]
 
 [dependency-groups]
