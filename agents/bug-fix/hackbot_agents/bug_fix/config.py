@@ -36,6 +36,15 @@ PHABRICATOR_FOLLOW_UP_ACTIONS = [
     "phabricator.add_comment",
 ]
 
+# Action types available after a Bugzilla needinfo request. In particular this
+# mode can create a revision, but cannot update an existing one.
+BUGZILLA_NEEDINFO_ACTIONS = [
+    "bugzilla.update_bug",
+    "bugzilla.add_comment",
+    "bugzilla.add_attachment",
+    "phabricator.submit_patch",
+]
+
 # Firefox build/test tools.
 FIREFOX_TOOLS = [
     "mcp__firefox__evaluate_testcase",

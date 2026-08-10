@@ -46,6 +46,25 @@ async def require_phabricator_signature(
         )
 
 
+def verify_bugzilla_webhook_secret(secret: str | None) -> bool:
+    """Constant-time-check BMO's configured shared-secret header."""
+    expected = settings.bugzilla_webhook.secret
+    if not expected or not secret:
+        return False
+    return hmac.compare_digest(secret, expected)
+
+
+async def require_bugzilla_webhook_secret(
+    x_bugzilla_webhook_secret: str | None = Header(default=None),
+) -> None:
+    """Reject requests without the dedicated Bugzilla webhook secret."""
+    if not verify_bugzilla_webhook_secret(x_bugzilla_webhook_secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Bugzilla webhook secret",
+        )
+
+
 async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     if not settings.external_api_key:
         raise HTTPException(

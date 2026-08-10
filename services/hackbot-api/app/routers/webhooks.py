@@ -1,9 +1,9 @@
-"""Inbound webhook receivers that trigger hackbot runs.
+"""Inbound Phabricator and Bugzilla webhooks that trigger Hackbot runs.
 
-Starts with Phabricator: an ``@hackbot`` mention in a comment on a Differential
-revision triggers a bug-fix follow-up run against that revision. Authenticated
-by Phabricator's HMAC signature (not the ``X-API-Key`` the other routes use), so
-this lives on its own router without ``require_api_key``.
+For Phabricator, an ``@hackbot`` mention on a Differential revision triggers a
+follow-up run. For Bugzilla, a structured ``flag.needinfo`` modification aimed
+at Hackbot triggers a bug-based follow-up. Each endpoint uses its webhook's own
+authentication rather than the public API's ``X-API-Key``.
 """
 
 import logging
@@ -12,7 +12,11 @@ from cachetools import TTLCache
 from fastapi import APIRouter, Depends, Request, status
 from phabricator_client import PhabricatorClient
 
-from app.auth import require_phabricator_signature
+from app.auth import (
+    require_bugzilla_webhook_secret,
+    require_phabricator_signature,
+)
+from app.bugzilla_webhook import detect_needinfo_request
 from app.client import HackbotClient
 from app.config import settings
 from app.phabricator_authorization import (
@@ -56,6 +60,13 @@ def get_phabricator_authorizer(
 # this if needed. Sized well above the number of mentions expected in a window.
 _seen_transactions: TTLCache = TTLCache(
     maxsize=4096, ttl=settings.webhook.dedupe_ttl_seconds
+)
+
+# Best-effort dedupe of retried BMO deliveries. The key hashes the bug id and
+# complete event, including its timestamp and changes, so a later needinfo on
+# the same bug remains a separate run.
+_seen_bugzilla_events: TTLCache = TTLCache(
+    maxsize=4096, ttl=settings.bugzilla_webhook.dedupe_ttl_seconds
 )
 
 
@@ -124,5 +135,43 @@ async def phabricator_webhook(
         run_id,
         revision_id,
         bug_id,
+    )
+    return {"status": "triggered", "run_id": run_id}
+
+
+@router.post(
+    "/bugzilla",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_bugzilla_webhook_secret)],
+)
+async def bugzilla_webhook(
+    request: Request,
+    api_client: HackbotClient = Depends(get_hackbot_client),
+) -> dict:
+    """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
+    payload = await request.json()
+    detected = detect_needinfo_request(
+        payload,
+        bot_login=settings.bugzilla_webhook.bot_login,
+    )
+    if detected is None:
+        return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
+    if detected.dedupe_key in _seen_bugzilla_events:
+        return {"status": "ignored", "reason": "duplicate delivery"}
+
+    run_id = await api_client.trigger_run(
+        "bug-fix",
+        {
+            "bug_id": detected.bug_id,
+            "bugzilla_needinfo": True,
+        },
+    )
+    # Do not consume an event until run creation succeeds; a transient failure
+    # must remain retryable by Bugzilla.
+    _seen_bugzilla_events[detected.dedupe_key] = True
+    log.info(
+        "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request",
+        run_id,
+        detected.bug_id,
     )
     return {"status": "triggered", "run_id": run_id}

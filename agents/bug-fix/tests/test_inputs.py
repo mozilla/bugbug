@@ -40,6 +40,17 @@ def test_no_revision_ok_without_comment():
     assert inputs.comment is None
 
 
+def test_bugzilla_needinfo_rejects_phabricator_context():
+    with pytest.raises(ValidationError, match="cannot be combined"):
+        AgentInputs(
+            bug_id=1,
+            broker_url="http://broker",
+            revision_id=42,
+            comment="@hackbot please fix",
+            bugzilla_needinfo=True,
+        )
+
+
 def test_mcp_urls_derived_from_broker_url():
     inputs = AgentInputs(
         bug_id=1,

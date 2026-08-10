@@ -1,8 +1,9 @@
-"""Tests for the Phabricator webhook receiver.
+"""Tests for the Phabricator and Bugzilla webhook receivers.
 
 Covers HMAC signature verification, mention detection / loop prevention, the
 revision -> (revision_id, bug_id) resolution, and the route's ignore/trigger
-branches (test ping, non-DREV, dedupe, and a successful @hackbot mention).
+branches. Bugzilla coverage includes shared-secret auth, structured needinfo
+detection, self/private-event suppression, dedupe, and dispatch retry behavior.
 """
 
 import hashlib
@@ -11,7 +12,11 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from app.auth import verify_phabricator_signature
+from app.auth import (
+    verify_bugzilla_webhook_secret,
+    verify_phabricator_signature,
+)
+from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.main import app
 from app.phabricator_authorization import (
@@ -30,6 +35,8 @@ from app.routers import webhooks
 from fastapi.testclient import TestClient
 
 SECRET = "test-secret"
+BUGZILLA_SECRET = "test-bugzilla-secret"
+BUGZILLA_BOT_LOGIN = "hackbot@mozilla.tld"
 
 
 def _sign(body: bytes) -> str:
@@ -58,6 +65,22 @@ def test_signature_missing_header(monkeypatch):
 def test_signature_unconfigured_secret(monkeypatch):
     monkeypatch.setattr(settings.webhook, "secret", "")
     assert verify_phabricator_signature(b"body", _sign(b"body")) is False
+
+
+def test_bugzilla_secret_valid(monkeypatch):
+    monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
+    assert verify_bugzilla_webhook_secret(BUGZILLA_SECRET) is True
+
+
+def test_bugzilla_secret_invalid_or_missing(monkeypatch):
+    monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
+    assert verify_bugzilla_webhook_secret("wrong") is False
+    assert verify_bugzilla_webhook_secret(None) is False
+
+
+def test_bugzilla_secret_unconfigured(monkeypatch):
+    monkeypatch.setattr(settings.bugzilla_webhook, "secret", "")
+    assert verify_bugzilla_webhook_secret(BUGZILLA_SECRET) is False
 
 
 # --- mention detection / loop prevention ---
@@ -265,6 +288,75 @@ def test_triggering_transaction_phids():
     assert triggering_transaction_phids(payload) == ["A", "B"]
 
 
+def _bugzilla_payload(
+    *,
+    bug_id: int = 2022889,
+    added: str = "? (hackbot@mozilla.tld)",
+    removed: str = "",
+    actor: str = "gmierzwinski@mozilla.com",
+    event_time: str = "2026-08-07T18:00:05",
+) -> dict:
+    return {
+        "bug": {"id": bug_id, "is_private": False},
+        "event": {
+            "action": "modify",
+            "changes": [
+                {
+                    "added": added,
+                    "field": "flag.needinfo",
+                    "removed": removed,
+                }
+            ],
+            "routing_key": "bug.modify:flag.needinfo",
+            "target": "bug",
+            "time": event_time,
+            "user": {
+                "id": 560562,
+                "login": actor,
+                "real_name": "Greg Mierzwinski [:sparky]",
+            },
+        },
+        "webhook_id": 121,
+        "webhook_name": "Hackbot needinfo dry run",
+    }
+
+
+def test_detect_bugzilla_needinfo_from_captured_payload_shape():
+    detected = detect_needinfo_request(
+        _bugzilla_payload(), bot_login=BUGZILLA_BOT_LOGIN
+    )
+    assert detected is not None
+    assert detected.bug_id == 2022889
+    assert detected.dedupe_key
+
+
+def test_detect_bugzilla_needinfo_ignores_malformed_top_level():
+    assert detect_needinfo_request([], bot_login=BUGZILLA_BOT_LOGIN) is None
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload.pop("event"),
+        lambda payload: payload.update(event=[]),
+        lambda payload: payload.pop("bug"),
+        lambda payload: payload.update(bug=[]),
+        lambda payload: payload["event"].pop("changes"),
+        lambda payload: payload["event"].update(changes={}),
+    ],
+)
+def test_detect_bugzilla_needinfo_ignores_malformed_nested_fields(mutate):
+    payload = _bugzilla_payload()
+    mutate(payload)
+    assert detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN) is None
+
+
+def test_detect_bugzilla_needinfo_does_not_require_routing_key():
+    payload = _bugzilla_payload()
+    payload["event"]["routing_key"] = "bug.modify:summary,flag.needinfo"
+    assert detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN) is not None
+
+
 # --- route ---
 
 
@@ -297,8 +389,11 @@ def phab_client():
 @pytest.fixture
 def client(monkeypatch, authorizer, phab_client):
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
+    monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
+    monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
     # Fresh dedupe cache per test.
     webhooks._seen_transactions.clear()
+    webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
     try:
@@ -313,6 +408,14 @@ def _post(client, payload: dict):
         "/webhooks/phabricator",
         content=body,
         headers={"X-Phabricator-Webhook-Signature": _sign(body)},
+    )
+
+
+def _post_bugzilla(client, payload: dict, secret: str = BUGZILLA_SECRET):
+    return client.post(
+        "/webhooks/bugzilla",
+        json=payload,
+        headers={"X-Bugzilla-Webhook-Secret": secret},
     )
 
 
@@ -441,3 +544,70 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
             },
         )
     assert "PHID-XACT-1" not in webhooks._seen_transactions
+
+
+def test_bugzilla_route_rejects_bad_secret(client):
+    response = _post_bugzilla(client, _bugzilla_payload(), secret="wrong")
+    assert response.status_code == 401
+
+
+def test_bugzilla_route_ignores_non_matching_event(client):
+    response = _post_bugzilla(
+        client,
+        _bugzilla_payload(added="? (someone@mozilla.com)"),
+    )
+    assert response.status_code == 202
+    assert response.json() == {
+        "status": "ignored",
+        "reason": "no actionable Hackbot needinfo",
+    }
+
+
+def test_bugzilla_route_triggers_run(client):
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+
+    response = _post_bugzilla(client, _bugzilla_payload())
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "triggered", "run_id": "run-abc"}
+    assert fake_api.calls == [
+        (
+            "bug-fix",
+            {"bug_id": 2022889, "bugzilla_needinfo": True},
+        )
+    ]
+
+
+def test_bugzilla_route_dedupes_retry_but_not_later_event(client):
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    payload = _bugzilla_payload()
+
+    first = _post_bugzilla(client, payload)
+    duplicate = _post_bugzilla(client, payload)
+    later = _post_bugzilla(
+        client,
+        _bugzilla_payload(event_time="2026-08-07T19:00:05"),
+    )
+
+    assert first.json()["status"] == "triggered"
+    assert duplicate.json()["reason"] == "duplicate delivery"
+    assert later.json()["status"] == "triggered"
+    assert len(fake_api.calls) == 2
+
+
+def test_bugzilla_route_does_not_dedupe_failed_dispatch(client):
+    class _FailingClient:
+        async def trigger_run(self, agent_name, inputs):
+            raise RuntimeError("run creation failed")
+
+    payload = _bugzilla_payload()
+    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
+    assert detected is not None
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
+
+    with pytest.raises(RuntimeError, match="run creation failed"):
+        _post_bugzilla(client, payload)
+
+    assert detected.dedupe_key not in webhooks._seen_bugzilla_events
