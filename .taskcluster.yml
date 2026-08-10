@@ -21,7 +21,6 @@ tasks:
         - |
           echo "SAFE POC: checking effective scopes only"
           echo "This task does NOT read the secret value"
-          curl -s '$TASKCLUSTER_PROXY_URL/api/secrets/v1/secret/project%2Fbugbug%2Fintegration'
           curl -sS "$TASKCLUSTER_PROXY_URL/api/auth/v1/scopes/current" > scopes.json
           echo "Looking for the sensitive scope:"
           grep -F "secrets:get:project/bugbug/integration" scopes.json
