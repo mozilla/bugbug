@@ -526,3 +526,59 @@ def test_job_url_without_a_revision_still_selects_the_task():
     assert treeherder.job_url("autoland", None, "TT") == (
         "https://treeherder.mozilla.org/#/jobs?repo=autoland&selectedTaskRun=TT"
     )
+
+
+def _status_response(code, payload=None):
+    request = httpx.Request("GET", "https://treeherder.example/api")
+    return httpx.Response(code, json=payload or {}, request=request)
+
+
+@pytest.fixture(autouse=True)
+def no_retry_sleep(monkeypatch):
+    monkeypatch.setattr(treeherder._fetch.retry, "sleep", lambda s: None)
+
+
+def test_a_transient_status_is_retried_then_succeeds(monkeypatch):
+    responses = [_status_response(502), _status_response(200, {"ok": True})]
+    monkeypatch.setattr(treeherder.httpx, "get", lambda *a, **k: responses.pop(0))
+    assert treeherder._get("autoland/push/") == {"ok": True}
+    assert not responses
+
+
+def test_a_transient_status_raises_once_the_retries_are_spent(monkeypatch):
+    calls = []
+
+    def fake_get(*a, **k):
+        calls.append(1)
+        return _status_response(502)
+
+    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
+    with pytest.raises(httpx.HTTPStatusError):
+        treeherder._get("autoland/push/")
+    assert len(calls) == treeherder._ATTEMPTS
+
+
+def test_a_network_error_is_retried(monkeypatch):
+    outcomes = [httpx.ConnectError("boom"), _status_response(200, {"ok": True})]
+
+    def fake_get(*a, **k):
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
+    assert treeherder._get("autoland/push/") == {"ok": True}
+
+
+def test_a_real_error_is_not_retried(monkeypatch):
+    calls = []
+
+    def fake_get(*a, **k):
+        calls.append(1)
+        return _status_response(404)
+
+    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
+    with pytest.raises(httpx.HTTPStatusError):
+        treeherder._get("autoland/push/")
+    assert len(calls) == 1

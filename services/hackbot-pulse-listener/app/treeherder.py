@@ -22,12 +22,23 @@ from urllib.parse import quote
 
 import httpx
 from cachetools import TTLCache
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 15
+# Treeherder 502s under load. A failed read makes the caller fail open and spend a
+# run, so transient statuses are retried before that happens.
+_RETRY_STATUS = {429, 502, 503, 504}
+_ATTEMPTS = 3
 
 # Read-through caches, so one ancestor walk fetches each push once instead of once
 # per failing group, and the many failing tasks of a push share a fetch. The TTL is
@@ -75,6 +86,33 @@ def job_url(project: str, revision: str | None, task_id: str) -> str:
     return f"{push_url(project, revision)}&selectedTaskRun={task_id}"
 
 
+def _is_transient(exc: BaseException) -> bool:
+    if isinstance(exc, httpx.TransportError):
+        return True
+    return (
+        isinstance(exc, httpx.HTTPStatusError)
+        and exc.response.status_code in _RETRY_STATUS
+    )
+
+
+@retry(
+    retry=retry_if_exception(_is_transient),
+    stop=stop_after_attempt(_ATTEMPTS),
+    wait=wait_exponential_jitter(initial=2, max=15, jitter=1),
+    before_sleep=before_sleep_log(logger, logging.INFO),
+    reraise=True,
+)
+def _fetch(url: str) -> httpx.Response:
+    """GET, retrying the transient failures Treeherder returns under load.
+
+    A caller that cannot read fails open and spends an agent run, so a single 502 --
+    routine on this API -- must not be taken as an answer.
+    """
+    resp = httpx.get(url, timeout=_TIMEOUT, follow_redirects=True)
+    resp.raise_for_status()
+    return resp
+
+
 def _job(project: str, task_id: str) -> dict | None:
     """The Treeherder job for a Taskcluster task, or None if not ingested yet.
 
@@ -86,17 +124,13 @@ def _job(project: str, task_id: str) -> dict | None:
         f"{settings.treeherder_url.rstrip('/')}/api/project/{project}/jobs/"
         f"?task_id={task_id}"
     )
-    resp = httpx.get(url, timeout=_TIMEOUT, follow_redirects=True)
-    resp.raise_for_status()
-    results = resp.json().get("results") or []
+    results = _fetch(url).json().get("results") or []
     return results[0] if results else None
 
 
 def _get(path: str) -> dict | list:
     url = f"{settings.treeherder_url.rstrip('/')}/api/project/{path}"
-    resp = httpx.get(url, timeout=_TIMEOUT, follow_redirects=True)
-    resp.raise_for_status()
-    return resp.json()
+    return _fetch(url).json()
 
 
 def group_results(
