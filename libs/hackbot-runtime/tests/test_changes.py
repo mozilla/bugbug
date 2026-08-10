@@ -112,6 +112,7 @@ def test_build_phabricator_diff_with_real_change(tmp_path):
     node, entry = next(iter(local_commits.items()))
     assert entry["commit"] == node
     assert entry["parents"] == [base]
+    assert entry["author"] == "Hackbot"
     assert entry["authorEmail"]  # populated from the synthesized commit
     assert entry["tree"]
     assert isinstance(entry["time"], int)
