@@ -18,7 +18,12 @@ from redis import Redis
 from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
-from bugbug.models import testselect
+from bugbug.models import get_model_class, testselect
+from bugbug.models.performance_regression_predictor import (
+    MODEL_IDENTIFIER as PERFORMANCE_REGRESSION_PREDICTOR,
+)
+from bugbug.models.performance_regression_predictor import combine_commit_messages
+from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -41,6 +46,8 @@ MODELS_NAMES = [
     "worksforme",
     "fenixcomponent",
 ]
+MODELS_TO_DOWNLOAD = [*MODELS_NAMES, PERFORMANCE_REGRESSION_PREDICTOR]
+PERFORMANCE_REGRESSION_LOG_PREFIX = "[performance-regression-predictor]"
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
@@ -53,8 +60,14 @@ redis = Redis(
     ssl_cert_reqs=None,
 )
 
+
+def load_model(model_name: str) -> Model:
+    """Load a model using the implementation registered for its name."""
+    return get_model_class(model_name).load(f"{model_name}model")
+
+
 MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
-    timedelta(hours=1), lambda m: Model.load(f"{m}model")
+    timedelta(hours=1), load_model
 )
 MODEL_CACHE.start_ttl_thread()
 
@@ -222,6 +235,91 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
         job = JobInfo(classify_broken_site_report, model_name, report_uuid)
         setkey(job.result_key, orjson.dumps(data), compress=True)
 
+    return "OK"
+
+
+def classify_performance_regression(diff_id: int) -> str:
+    """Predict performance-regression risk for one immutable Phabricator diff."""
+    from bugbug_http.app import JobInfo
+
+    job = JobInfo(classify_performance_regression, diff_id)
+    LOGGER.info(
+        "%s Processing prediction for diff_id=%d",
+        PERFORMANCE_REGRESSION_LOG_PREFIX,
+        diff_id,
+    )
+    patch = PhabricatorPatch(diff_id=diff_id)
+
+    if not patch.is_accessible() or not patch.is_public():
+        LOGGER.warning(
+            "%s Prediction unavailable for diff_id=%d",
+            PERFORMANCE_REGRESSION_LOG_PREFIX,
+            diff_id,
+        )
+        setkey(job.result_key, orjson.dumps({"available": False}))
+        return "OK"
+
+    commit_messages = patch.commit_messages
+    if commit_messages:
+        if len(commit_messages) > 1:
+            LOGGER.warning(
+                "%s Diff %d has %d uploaded commit messages; combining them "
+                "for inference",
+                PERFORMANCE_REGRESSION_LOG_PREFIX,
+                diff_id,
+                len(commit_messages),
+            )
+        commit_message = combine_commit_messages(commit_messages)
+        commit_message_source = "diff_metadata"
+    else:
+        LOGGER.warning(
+            "%s Diff %d has no uploaded commit message metadata; using revision "
+            "title and summary fallback",
+            PERFORMANCE_REGRESSION_LOG_PREFIX,
+            diff_id,
+        )
+        commit_message = "\n\n".join(
+            part for part in (patch.patch_title, patch.patch_description) if part
+        )
+        commit_message_source = "revision_title_and_summary_fallback"
+
+    LOGGER.info(
+        "%s Using commit message source %s for diff_id=%d with commit_message_count=%d",
+        PERFORMANCE_REGRESSION_LOG_PREFIX,
+        commit_message_source,
+        diff_id,
+        len(commit_messages),
+    )
+
+    model = MODEL_CACHE.get(PERFORMANCE_REGRESSION_PREDICTOR)
+
+    probabilities = model.classify(
+        [{"commit_message": commit_message, "diff": patch.raw_diff}],
+        probabilities=True,
+    )[0]
+    predicted_class = int(probabilities.argmax())
+    data = {
+        "revision_id": patch.revision_id,
+        "diff_id": diff_id,
+        "prob": probabilities.tolist(),
+        "class": predicted_class,
+        "risk_score": float(probabilities[1]),
+        "extra_data": {
+            **model.get_extra_data(),
+            "commit_message_source": commit_message_source,
+            "commit_message_count": len(commit_messages),
+        },
+    }
+    setkey(job.result_key, orjson.dumps(data), compress=True)
+    LOGGER.info(
+        "%s Finished prediction for diff_id=%d, "
+        "revision_id=%d, class=%d, risk_score=%f",
+        PERFORMANCE_REGRESSION_LOG_PREFIX,
+        diff_id,
+        patch.revision_id,
+        predicted_class,
+        float(probabilities[1]),
+    )
     return "OK"
 
 

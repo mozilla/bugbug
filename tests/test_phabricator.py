@@ -324,6 +324,43 @@ def test_get_project_members_empty(monkeypatch) -> None:
     phab_platform.get_project_members.cache_clear()
 
 
+def test_diff_commit_messages(monkeypatch) -> None:
+    client = MagicMock()
+    client.search_diffs.return_value = [
+        {
+            "attachments": {
+                "commits": {
+                    "commits": [
+                        {"identifier": "abc", "message": "First message"},
+                        {"identifier": "def", "message": ""},
+                        {"identifier": "ghi", "message": "Second message\n\nBody"},
+                    ]
+                }
+            }
+        }
+    ]
+    monkeypatch.setattr(phab_platform, "get_phabricator_client", lambda: client)
+
+    patch = phab_platform.PhabricatorPatch(diff_id=123)
+
+    assert patch.commit_messages == ["First message", "Second message\n\nBody"]
+    client.search_diffs.assert_called_once_with(
+        diff_id=123,
+        attachments={"commits": True},
+    )
+
+
+def test_missing_diff_is_not_accessible(monkeypatch) -> None:
+    client = MagicMock()
+    client.search_diffs.return_value = []
+    monkeypatch.setattr(phab_platform, "get_phabricator_client", lambda: client)
+
+    patch = phab_platform.PhabricatorPatch(diff_id=123)
+
+    assert not patch.is_accessible()
+    client.search_diffs.assert_called_once_with(diff_id=123)
+
+
 # ---------------------------------------------------------------------------
 # Rotation recovery: historical_reviewer_project_phids
 # ---------------------------------------------------------------------------
