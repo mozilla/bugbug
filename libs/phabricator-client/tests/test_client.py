@@ -5,6 +5,7 @@ import json
 import httpx
 import pytest
 from phabricator_client import (
+    MissingPatchError,
     PhabricatorClient,
     PhabricatorSettings,
     UnresolvedCommitError,
@@ -52,6 +53,40 @@ def _capture_post(monkeypatch, payload: dict) -> dict:
 
     monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
     return captured
+
+
+def _route_posts(monkeypatch, handlers: dict) -> list[tuple[str, dict]]:
+    """Stub httpx so each Conduit method is answered from ``handlers``.
+
+    A handler is the method's ``result`` payload, a callable taking the request
+    params, or a list serving one payload per call, enough to script the
+    several calls a walk down a stack makes. Returns the (method, params) log.
+    """
+    calls: list[tuple[str, dict]] = []
+
+    class _FakeAsyncClient:
+        def __init__(self, timeout=None):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, data=None):
+            method = url.rsplit("/api/", 1)[1]
+            params = json.loads(data["params"])
+            calls.append((method, params))
+            handler = handlers[method]
+            if isinstance(handler, list):
+                handler = handler.pop(0)
+            if callable(handler):
+                handler = handler(params)
+            return _FakeResponse({"result": handler})
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
+    return calls
 
 
 async def test_conduit_request_returns_result(monkeypatch):
@@ -378,6 +413,192 @@ async def test_resolve_commit_raises_when_unresolved(monkeypatch):
     # The ref and the likeliest cause: enough to act on.
     assert "deadbeef" in message
     assert "may not be imported" in message
+
+
+LANDED = "0397cc0f5dcabc6f44e0f742107ff3695882d5e4"
+# What a stacked revision records as its base: the author's local commit for the
+# parent revision, which no repository has.
+UNLANDED = "69706d7a081e"
+
+
+def _diffs(base_commit: str, diff_id: int) -> dict:
+    """A ``differential.querydiffs`` result holding one diff."""
+    return {
+        str(diff_id): {"id": str(diff_id), "sourceControlBaseRevision": base_commit}
+    }
+
+
+def _revisions(*ids: int) -> dict:
+    """A ``differential.revision.search`` result naming revisions by id."""
+    return {"data": [{"id": id_, "phid": f"PHID-DREV-{id_}"} for id_ in ids]}
+
+
+def _parents(*ids: int) -> dict:
+    """An ``edge.search`` result pointing at parent revisions."""
+    return {"data": [{"destinationPHID": f"PHID-DREV-{id_}"} for id_ in ids]}
+
+
+async def test_get_parent_revision_ids(monkeypatch):
+    calls = _route_posts(
+        monkeypatch,
+        {
+            "differential.revision.search": [_revisions(42), _revisions(40, 41)],
+            "edge.search": _parents(40, 41),
+        },
+    )
+    assert await _client().get_parent_revision_ids(42) == [40, 41]
+    edge_params = dict(calls)["edge.search"]
+    assert edge_params["sourcePHIDs"] == ["PHID-DREV-42"]
+    assert edge_params["types"] == ["revision.parent"]
+
+
+async def test_get_parent_revision_ids_empty_at_the_bottom_of_a_stack(monkeypatch):
+    calls = _route_posts(
+        monkeypatch,
+        {"differential.revision.search": _revisions(42), "edge.search": _parents()},
+    )
+    assert await _client().get_parent_revision_ids(42) == []
+    # No parent PHIDs to look up, so no second revision search.
+    assert [method for method, _ in calls].count("differential.revision.search") == 1
+
+
+async def test_get_patch_stack_returns_one_patch_on_a_fetchable_base(monkeypatch):
+    _route_posts(
+        monkeypatch,
+        {
+            "differential.querydiffs": _diffs(LANDED, 9),
+            "differential.getrawdiff": "child\n",
+        },
+    )
+    stack = await _client().get_patch_stack(42)
+    assert stack.base_commit == LANDED
+    assert [
+        (p.revision_id, p.diff_id, p.base_commit, p.raw_diff) for p in stack.patches
+    ] == [(42, 9, LANDED, "child\n")]
+
+
+async def test_get_patch_stack_walks_down_to_a_fetchable_base(monkeypatch):
+    # D42 sits on D41, which has not landed: D42's base commit is unknown to
+    # Diffusion, so the tree is rebuilt from D41's base by applying both diffs.
+    _route_posts(
+        monkeypatch,
+        {
+            "differential.querydiffs": [_diffs(UNLANDED, 9), _diffs(LANDED, 8)],
+            "differential.getrawdiff": lambda params: (
+                "child\n" if params["diffID"] == 9 else "parent\n"
+            ),
+            "diffusion.querycommits": {"identifierMap": {}, "data": {}},
+            "differential.revision.search": [_revisions(42), _revisions(41)],
+            "edge.search": _parents(41),
+        },
+    )
+    stack = await _client().get_patch_stack(42)
+    assert stack.base_commit == LANDED
+    # Bottom-first: the parent's diff has to be applied before the child's.
+    assert [(p.revision_id, p.diff_id, p.raw_diff) for p in stack.patches] == [
+        (41, 8, "parent\n"),
+        (42, 9, "child\n"),
+    ]
+    # Each patch keeps the base its own revision recorded, so an updated diff
+    # can be declared to sit where the revision already said it did.
+    assert [p.base_commit for p in stack.patches] == [LANDED, UNLANDED]
+
+
+async def test_get_patch_stack_raises_when_the_bottom_base_is_unknown(monkeypatch):
+    _route_posts(
+        monkeypatch,
+        {
+            "differential.querydiffs": _diffs(UNLANDED, 9),
+            "differential.getrawdiff": "child\n",
+            "diffusion.querycommits": {"identifierMap": {}, "data": {}},
+            "differential.revision.search": _revisions(42),
+            "edge.search": _parents(),
+        },
+    )
+    with pytest.raises(UnresolvedCommitError) as excinfo:
+        await _client().get_patch_stack(42)
+    # Both halves of the story: the base could not be expanded, and there was
+    # no parent revision to rebuild it from.
+    assert UNLANDED in str(excinfo.value)
+    assert "D42 has no parent revision" in str(excinfo.value)
+
+
+async def test_get_patch_stack_raises_when_a_revision_has_several_parents(monkeypatch):
+    _route_posts(
+        monkeypatch,
+        {
+            "differential.querydiffs": _diffs(UNLANDED, 9),
+            "differential.getrawdiff": "child\n",
+            "diffusion.querycommits": {"identifierMap": {}, "data": {}},
+            "differential.revision.search": [_revisions(42), _revisions(40, 41)],
+            "edge.search": _parents(40, 41),
+        },
+    )
+    with pytest.raises(UnresolvedCommitError, match="2 parent revisions"):
+        await _client().get_patch_stack(42)
+
+
+async def test_get_patch_stack_gives_up_on_an_endless_stack(monkeypatch):
+    # Every revision claims an unlanded base and one more parent below it.
+    _route_posts(
+        monkeypatch,
+        {
+            "differential.querydiffs": lambda params: _diffs(
+                UNLANDED, params["revisionIDs"][0]
+            ),
+            "differential.getrawdiff": lambda params: f"diff {params['diffID']}\n",
+            "diffusion.querycommits": {"identifierMap": {}, "data": {}},
+            "differential.revision.search": lambda params: _revisions(
+                *(
+                    params["constraints"]["ids"]
+                    if "ids" in params["constraints"]
+                    else [
+                        int(phid.rsplit("-", 1)[1])
+                        for phid in params["constraints"]["phids"]
+                    ]
+                )
+            ),
+            "edge.search": lambda params: _parents(
+                int(params["sourcePHIDs"][0].rsplit("-", 1)[1]) - 1
+            ),
+        },
+    )
+    with pytest.raises(UnresolvedCommitError, match="gave up after walking"):
+        await _client().get_patch_stack(1000)
+
+
+async def test_get_patch_stack_stops_on_a_parent_cycle(monkeypatch):
+    _route_posts(
+        monkeypatch,
+        {
+            "differential.querydiffs": lambda params: _diffs(
+                UNLANDED, params["revisionIDs"][0]
+            ),
+            "differential.getrawdiff": "diff\n",
+            "diffusion.querycommits": {"identifierMap": {}, "data": {}},
+            "differential.revision.search": [
+                _revisions(42),
+                _revisions(41),
+                _revisions(41),
+                _revisions(42),
+            ],
+            "edge.search": [_parents(41), _parents(42)],
+        },
+    )
+    with pytest.raises(UnresolvedCommitError, match="already in the stack"):
+        await _client().get_patch_stack(42)
+
+
+async def test_get_patch_stack_raises_when_a_revision_has_no_diff(monkeypatch):
+    _route_posts(monkeypatch, {"differential.querydiffs": {}})
+    with pytest.raises(MissingPatchError, match="D42 has no diffs"):
+        await _client().get_patch_stack(42)
+
+
+async def test_get_patch_stack_raises_when_a_diff_has_no_base_commit(monkeypatch):
+    _route_posts(monkeypatch, {"differential.querydiffs": {"9": {"id": "9"}}})
+    with pytest.raises(MissingPatchError, match="D42 diff 9 has no base commit"):
+        await _client().get_patch_stack(42)
 
 
 def test_revision_url_default_base():

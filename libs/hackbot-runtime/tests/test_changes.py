@@ -120,6 +120,28 @@ def test_build_phabricator_diff_with_real_change(tmp_path):
     assert "message" not in entry
 
 
+def test_build_phabricator_diff_declares_the_reported_base(tmp_path):
+    # A stacked run diffs against a commit it recreated locally for an unlanded
+    # parent revision. That hash means nothing to Phabricator, so the diff is
+    # declared to sit on the base the revision itself recorded.
+    base = _init_repo(tmp_path)
+    _commit_change(tmp_path, "line1\nline2 modified\nline3\n")
+
+    result = build_phabricator_diff(
+        tmp_path,
+        base,
+        "https://example.com/repo.git",
+        reported_base="69706d7a081e",
+    )
+
+    assert result is not None
+    assert result["diff"]["sourceControlBaseRevision"] == "69706d7a081e"
+    # The diff content is still what changed since the local base.
+    assert len(result["diff"]["changes"]) == 1
+    entry = next(iter(result["local_commits"].values()))
+    assert entry["parents"] == ["69706d7a081e"]
+
+
 def test_build_phabricator_diff_without_arcconfig_returns_none(tmp_path):
     base = _init_repo(tmp_path, with_arcconfig=False)
     _commit_change(tmp_path, "line1\nline2 modified\nline3\n")

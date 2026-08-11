@@ -171,8 +171,8 @@ def test_publish_changes_builds_phabricator_diff_when_action_recorded(
     hb = _hb_with_source(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "hackbot_runtime.context.changes.build_phabricator_diff",
-        lambda repo, base, repo_url: {
-            "diff": {"changes": [], "sourceControlBaseRevision": base},
+        lambda repo, base, repo_url, reported_base=None: {
+            "diff": {"changes": [], "sourceControlBaseRevision": reported_base or base},
             "local_commits": {"node": {"author": "A"}},
         },
     )
@@ -188,6 +188,35 @@ def test_publish_changes_builds_phabricator_diff_when_action_recorded(
     )
     assert submission["diff"]["sourceControlBaseRevision"] == "basecommit"
     assert submission["local_commits"]["node"]["author"] == "A"
+
+
+def test_publish_changes_declares_the_reported_base(tmp_path, monkeypatch):
+    # After a stacked checkout the change base is a commit made up in this
+    # container, so the submitted diff declares the revision's own base instead.
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.base_commit", lambda repo: "localparent"
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_phabricator_diff",
+        lambda repo, base, repo_url, reported_base=None: {
+            "diff": {"base": base, "sourceControlBaseRevision": reported_base or base},
+            "local_commits": {},
+        },
+    )
+    hb.reset_source_base(reported_base="69706d7a081e")
+    hb.actions.record("phabricator.update_patch", {"revision_id": 42}, reasoning="r")
+
+    hb.publish_changes()
+
+    submission = json.loads(
+        (
+            tmp_path / "artifacts" / "local-test" / "changes" / "phabricator_diff.json"
+        ).read_text()
+    )
+    # Diffed against the local commit, declared on the recorded one.
+    assert submission["diff"]["base"] == "localparent"
+    assert submission["diff"]["sourceControlBaseRevision"] == "69706d7a081e"
 
 
 def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeypatch):

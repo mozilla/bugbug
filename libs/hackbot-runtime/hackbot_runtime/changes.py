@@ -73,11 +73,14 @@ def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
 
-def _wrap_uncommitted(repo: Path) -> bool:
-    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+def commit_all(repo: Path, message: str) -> bool:
+    """Commit everything in ``repo``'s tree, untracked files included.
 
-    Returns ``True`` if such a commit was created, ``False`` if the tree was
-    already clean.
+    Returns ``False`` without committing when the tree is already clean (``git
+    commit`` would fail there). Stamped with a fixed identity (as the synthetic
+    commits below are): the checkout is ephemeral and has no git identity
+    configured, and the commit's authorship is throwaway: only its tree is ever
+    used.
     """
     if not _has_uncommitted(repo):
         return False
@@ -91,9 +94,18 @@ def _wrap_uncommitted(repo: Path) -> bool:
         "commit",
         "--no-verify",
         "-m",
-        _WIP_MESSAGE,
+        message,
     )
     return True
+
+
+def _wrap_uncommitted(repo: Path) -> bool:
+    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+
+    Returns ``True`` if such a commit was created, ``False`` if the tree was
+    already clean.
+    """
+    return commit_all(repo, _WIP_MESSAGE)
 
 
 def _commit_metadata(repo: Path, base: str) -> list[dict]:
@@ -151,16 +163,19 @@ def _synthetic_commit(repo: Path, base: str) -> str:
     ).strip()
 
 
-def _local_commits_property(repo: Path, node: str, base: str) -> dict:
+def _local_commits_property(repo: Path, node: str, parent: str) -> dict:
     """The git side of moz-phab's ``local:commits`` diff property for ``node``.
 
     Phabricator stores this alongside the diff so ``moz-phab patch`` can
     reconstruct a real local commit from the revision; without it, patching a
     hackbot-created revision fails with "a diff without commit information
     detected". Only the fields knowable from git are set here (author, time,
-    tree, node, parents); the apply-side handler fills in ``summary`` and the
+    tree, parents); the apply-side handler fills in ``summary`` and the
     arc-formatted ``message`` once it has the revision URL, matching moz-phab's
     ``conduit.set_diff_property``.
+
+    ``parent`` is the commit the diff is declared to sit on, which is not always
+    the local commit it was diffed against (see :func:`build_phabricator_diff`).
     """
     fmt = _FIELD_SEP.join(["%an", "%ae", "%at", "%T"])
     out = _git(repo, "show", "-s", f"--format={fmt}", node)
@@ -171,7 +186,7 @@ def _local_commits_property(repo: Path, node: str, base: str) -> dict:
             "authorEmail": author_email,
             "time": int(epoch),
             "commit": node,
-            "parents": [base],
+            "parents": [parent],
             "tree": tree,
         }
     }
@@ -205,7 +220,9 @@ def _ambient_git_identity() -> Iterator[None]:
                     os.environ[key] = prev
 
 
-def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
+def build_phabricator_diff(
+    repo: Path, base: str, repo_url: str, reported_base: str | None = None
+) -> dict | None:
     """Build the artifact for submitting a Phabricator revision.
 
     Returns ``{"diff": <differential.creatediff payload>, "local_commits":
@@ -230,6 +247,13 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     the apply-side handler instead, since it's specific to which Phabricator
     instance/environment (staging vs. prod) the diff actually gets submitted
     to, and that shouldn't be baked into an artifact built at agent-run time.
+
+    The diff is always computed against ``base``, the local commit the agent
+    started from, but it is *declared* to sit on ``reported_base`` when given.
+    A run on a stacked revision starts from a commit it recreated locally for
+    an unlanded parent revision: that hash means nothing outside this
+    container, so the revision keeps declaring the base it already recorded
+    (which is what every stacked patch does, hackbot's or moz-phab's).
     """
     try:
         from mozphab.args import parse_args
@@ -261,11 +285,12 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     if not changes_payload:
         return None
 
+    declared_base = reported_base or base
     diff_payload = {
         "changes": changes_payload,
         "sourceMachine": repo_url,
         "sourcePath": str(repo),
-        "sourceControlBaseRevision": base,
+        "sourceControlBaseRevision": declared_base,
         "sourceControlPath": "/",
         "sourceControlSystem": "git",
         "branch": "HEAD",
@@ -275,7 +300,7 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     }
     return {
         "diff": diff_payload,
-        "local_commits": _local_commits_property(repo, node, base),
+        "local_commits": _local_commits_property(repo, node, declared_base),
     }
 
 
