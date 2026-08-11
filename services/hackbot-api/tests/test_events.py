@@ -6,11 +6,18 @@ a Cloud Run Jobs `system_event` completion LogEntry (routed via a logging sink).
 
 import base64
 import json
+import uuid
+from dataclasses import dataclass, field
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
+import pytest
+from app.routers import events
 from app.routers.events import (
     _decode_pubsub_push_body,
     _execution_name_from_completion_log,
 )
+from app.schemas import RunStatus
 
 
 def _push_envelope(payload: dict) -> dict:
@@ -73,3 +80,54 @@ def test_execution_name_falls_back_to_labels():
 def test_execution_name_missing():
     assert _execution_name_from_completion_log({"protoPayload": {}}) is None
     assert _execution_name_from_completion_log({}) is None
+
+
+# --- apply-run-actions: undecodable input is acked, not retried ----------- #
+
+
+@dataclass
+class _FakeRun:
+    run_id: uuid.UUID = field(default_factory=lambda: uuid.UUID(int=7))
+    agent: str = "frontend-triage"
+    status: str = RunStatus.succeeded.value
+    summary: dict | None = None
+    inputs: dict = field(default_factory=dict)
+
+
+class _FakeDB:
+    def __init__(self, run):
+        self._run = run
+
+    async def get(self, model, run_id):
+        return self._run
+
+    async def commit(self):
+        pass
+
+
+def _patch_route(monkeypatch):
+    """Stub the applier; record that it was called."""
+    calls = {"order": []}
+
+    async def fake_on_run_completed(db, run):
+        calls["order"].append("apply")
+
+    monkeypatch.setattr(events, "on_run_completed", fake_on_run_completed)
+    return calls
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},  # no envelope
+        {"message": {"data": "bm90LWpzb24="}},  # decodes to "not-json"
+        {"message": {"data": base64.b64encode(b'{"run_id": "nope"}').decode()}},
+    ],
+    ids=["no-envelope", "not-json", "bad-uuid"],
+)
+async def test_an_undecodable_message_is_acked_not_retried(monkeypatch, body):
+    # A message that can never become valid must not 5xx: Pub/Sub would nack, and
+    # with no dead-letter topic it would come back for the whole retention window.
+    _patch_route(monkeypatch)
+    request = SimpleNamespace(json=AsyncMock(return_value=body))
+    await events.apply_run_actions(request, db=_FakeDB(_FakeRun()))

@@ -122,14 +122,22 @@ async def apply_run_actions(
     webhooks) — each its own route named after its own job. The subscription
     feeding this one is filtered to succeeded runs (see deploy-events.sh).
     """
-    body = await request.json()
-    event = _decode_pubsub_push_body(body)
-    run_id = event.get("run_id")
-    if not run_id:
+    # Input that can never become valid is acked, not retried: with no dead-letter topic
+    # configured, a 5xx here would replay the same unparsable message for the whole
+    # retention window. Only *retryable* failures should reach the client as an error.
+    try:
+        event = _decode_pubsub_push_body(await request.json())
+        run_id = event.get("run_id")
+        run_uuid = uuid.UUID(run_id) if run_id else None
+    except Exception:
+        log.exception("Discarding an undecodable apply-run-actions message")
+        return
+
+    if run_uuid is None:
         log.warning("apply-run-actions event missing run_id: %s", event)
         return
 
-    run = await db.get(Run, uuid.UUID(run_id))
+    run = await db.get(Run, run_uuid)
     if run is None:
         log.warning("No run found for run_id %s", run_id)
         return
