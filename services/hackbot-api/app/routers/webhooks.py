@@ -1,10 +1,4 @@
-"""Inbound Phabricator and Bugzilla webhooks that trigger Hackbot runs.
-
-For Phabricator, an ``@hackbot`` mention on a Differential revision triggers a
-follow-up run. For Bugzilla, a structured ``flag.needinfo`` modification aimed
-at Hackbot triggers a bug-based follow-up. Each endpoint uses its webhook's own
-authentication rather than the public API's ``X-API-Key``.
-"""
+"""Inbound webhooks that trigger Hackbot runs."""
 
 import logging
 
