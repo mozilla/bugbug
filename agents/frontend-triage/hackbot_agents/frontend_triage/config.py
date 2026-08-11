@@ -29,11 +29,10 @@ MOZILLA_VCS_TOOLS = [
 ]
 
 
-# Recordable action types the agent may take, by dotted id. This agent triages
-# and plans only: it records a comment with its findings/plan and, at high
-# confidence, may propose field updates (e.g. keyword/severity). It never
-# creates bugs or attaches files.
+# Actions-server tools available to the agent, by dotted id.
 ENABLED_ACTION_TYPES = [
+    "recorded_actions.list_actions",
+    "recorded_actions.remove_action",
     "bugzilla.add_comment",
     "bugzilla.update_bug",
 ]

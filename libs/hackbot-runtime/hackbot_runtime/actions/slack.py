@@ -65,7 +65,7 @@ async def post_message(
     Recorded into the run summary for human review -- does not post to Slack.
     """
     recorder.record(ACTION_TYPE, _params(channel, text), reasoning=reasoning)
-    return f"Recorded {ACTION_TYPE} (#{len(recorder.actions) - 1})."
+    return f"Recorded {ACTION_TYPE} as {recorder.last_action_id}."
 
 
 def record_message(

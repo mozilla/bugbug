@@ -32,7 +32,7 @@ PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_
 
 
 def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
+    return f"Recorded {action_type} as {recorder.last_action_id}."
 
 
 @tool

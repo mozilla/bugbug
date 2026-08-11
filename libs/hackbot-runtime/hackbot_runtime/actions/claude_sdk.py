@@ -15,6 +15,7 @@ from agent_tools.registry import tool_name_for
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions import bugzilla as _bugzilla
 from hackbot_runtime.actions import phabricator as _phabricator
+from hackbot_runtime.actions import recorded_actions as _recorded_actions
 from hackbot_runtime.actions import slack as _slack
 from hackbot_runtime.actions import testrail as _testrail
 from hackbot_runtime.actions.recorder import ActionsRecorder
@@ -35,7 +36,13 @@ def actions_server_for(
     """
     if recorder is None:
         recorder = ActionsRecorder(artifacts_dir=fallback_artifacts_dir)
-    tools = _bugzilla.TOOLS + _phabricator.TOOLS + _testrail.TOOLS + _slack.TOOLS
+    tools = (
+        _recorded_actions.TOOLS
+        + _bugzilla.TOOLS
+        + _phabricator.TOOLS
+        + _testrail.TOOLS
+        + _slack.TOOLS
+    )
     if types is not None:
         wanted = set(types)
         tools = [t for t in tools if t.dotted in wanted]

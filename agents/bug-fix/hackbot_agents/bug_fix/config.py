@@ -19,6 +19,8 @@ PHABRICATOR_READ_TOOLS = [
 
 # Action types that the agent may record during triage/fix runs.
 TRIAGE_AND_FIX_ACTIONS = [
+    "recorded_actions.list_actions",
+    "recorded_actions.remove_action",
     "bugzilla.update_bug",
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
@@ -28,6 +30,8 @@ TRIAGE_AND_FIX_ACTIONS = [
 
 # Action types that the agent may record during follow-up runs on a revision.
 PHABRICATOR_FOLLOW_UP_ACTIONS = [
+    "recorded_actions.list_actions",
+    "recorded_actions.remove_action",
     "bugzilla.update_bug",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",

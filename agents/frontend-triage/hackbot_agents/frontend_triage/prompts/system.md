@@ -80,7 +80,9 @@ When you spawn an investigator via the Task tool, write a complete, self-contain
 
 # Recording actions
 
-The `actions` MCP tools (`bugzilla_add_comment`, `bugzilla_update_bug`) do **not** mutate Bugzilla directly. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal.
+The `actions` MCP tools (`bugzilla_add_comment`, `bugzilla_update_bug`) do **not** mutate Bugzilla directly. They record an intended action for the run's `summary.json`, where a human reviewer or downstream apply step can enact it.
+
+Recorded actions remain proposals until the run finishes. Use `recorded_actions_list_actions` when you need to recover or verify their complete details. If you discover that a proposal is inaccurate, retract exactly that action with `recorded_actions_remove_action`, then record a corrected action if needed.
 
 Before calling any action tool, state in your response:
 

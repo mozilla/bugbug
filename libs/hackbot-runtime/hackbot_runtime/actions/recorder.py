@@ -1,5 +1,8 @@
+import copy
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+
+from agent_tools.registry import ToolError
 
 from hackbot_runtime.artifacts import publish_file
 from hackbot_runtime.uploader import SignedPolicyUploader
@@ -37,7 +40,12 @@ class ActionsRecorder:
         artifacts_dir: Path | None = None,
         hooks: Mapping[str, Sequence[ActionHook]] = {},
     ) -> None:
-        self._actions: list[dict] = []
+        # IDs are deliberately separate from the serialized action payload. They
+        # are handles for managing proposals while the agent is running, not a
+        # new field in the summary/API contract.
+        self._actions: dict[str, dict] = {}
+        self._next_action_sequence = 0
+        self._last_action_id: str | None = None
         self._uploader = uploader
         self._artifacts_dir = artifacts_dir
         self._hooks = {
@@ -68,11 +76,12 @@ class ActionsRecorder:
         ``phabricator.create_revision``). ``params`` is action-specific data
         the apply step will need. ``attachments`` maps a logical name to a
         local file path; each file is preserved under the stable key
-        ``attachments/<action_index>/<name>``: uploaded via the runtime
+        ``attachments/<action_sequence>/<name>``: uploaded via the runtime
         uploader when one is configured, otherwise copied into the local
         artifacts directory (so it is retrievable from compose/direct runs).
-        The recorded action references it by that key; the original local
-        path is not persisted (it disappears with the container).
+        The sequence is never reused, even after action removal. The recorded
+        action references it by that key; the original local path is not
+        persisted (it disappears with the container).
 
         ``ref`` optionally labels this action so a *later* action in the same
         run can reference its apply-time result (e.g. a Bugzilla comment's
@@ -88,7 +97,9 @@ class ActionsRecorder:
         recording leaves nothing behind: the action the hooks see carries no
         ``attachments`` key yet.
         """
-        idx = len(self._actions)
+        sequence = self._next_action_sequence
+        self._next_action_sequence += 1
+        action_id = f"action-{sequence}"
         action: dict = {
             "type": action_type,
             "params": params,
@@ -106,15 +117,49 @@ class ActionsRecorder:
                 key = publish_file(
                     self._uploader,
                     self._artifacts_dir,
-                    f"attachments/{idx}/{name}",
+                    f"attachments/{sequence}/{name}",
                     path,
                 )
                 recorded_attachments.append({"name": name, "uploaded_key": key})
             action["attachments"] = recorded_attachments
 
-        self._actions.append(action)
+        self._actions[action_id] = action
+        self._last_action_id = action_id
         return action
+
+    def list_actions(self) -> list[dict]:
+        """Return complete copies of the current actions with stable in-run IDs."""
+        return [
+            {**copy.deepcopy(action), "action_id": action_id}
+            for action_id, action in self._actions.items()
+        ]
+
+    def remove_action(self, action_id: str) -> dict:
+        """Remove one action.
+
+        The returned payload includes the stable ID and is detached from recorder
+        state. Removing an action only changes the proposals that will be written
+        to ``summary.json``; an attachment already uploaded for it may remain as
+        an unreferenced artifact until normal storage cleanup.
+        """
+        action = self._actions.get(action_id)
+        if action is None:
+            raise ToolError(f"No recorded action with ID {action_id!r}.")
+
+        removed = {**copy.deepcopy(action), "action_id": action_id}
+        del self._actions[action_id]
+        return removed
+
+    @property
+    def last_action_id(self) -> str:
+        if self._last_action_id is None:
+            raise RuntimeError("No action has been recorded.")
+        return self._last_action_id
+
+    @property
+    def action_count(self) -> int:
+        return len(self._actions)
 
     @property
     def actions(self) -> list[dict]:
-        return list(self._actions)
+        return list(self._actions.values())

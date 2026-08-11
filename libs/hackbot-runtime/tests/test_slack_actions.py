@@ -14,7 +14,7 @@ async def test_post_message_records_action():
         text="  a test regressed  ",
         reasoning="sheriffs decide on the backout",
     )
-    assert "slack.post_message (#0)" in confirmation
+    assert confirmation == "Recorded slack.post_message as action-0."
     assert rec.actions == [
         {
             "type": "slack.post_message",
