@@ -7,7 +7,7 @@ tasks:
     user: ${event.sender.login}
 
     head_branch:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.head.ref}
       else:
         $if: 'tasks_for == "github-push"'
@@ -15,7 +15,7 @@ tasks:
         else: ${event.release.target_commitish}
 
     head_rev:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.head.sha}
       else:
         $if: 'tasks_for == "github-push"'
@@ -23,12 +23,12 @@ tasks:
         else: ${event.release.tag_name}
 
     repository:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
     pr_description:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.body}
 
     taskboot_image: "mozilla/taskboot:0.4.2"
@@ -46,7 +46,7 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
     in:
-      $if: '(tasks_for == "github-push" && head_branch[:18] != "refs/heads/deploy/") || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
+      $if: '(tasks_for == "github-push" && head_branch[:18] != "refs/heads/deploy/") || (tasks_for[:19] == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
       then:
         - $mergeDeep:
             - { $eval: default_task_definition }
@@ -212,7 +212,7 @@ tasks:
                 name: bugbug docker build
                 description: bugbug docker build
 
-        - $if: 'tasks_for == "github-pull-request" && "Train on Taskcluster: " in pr_description'
+        - $if: 'tasks_for[:19] == "github-pull-request" && "Train on Taskcluster: " in pr_description'
           then:
             $mergeDeep:
               - { $eval: default_task_definition }
