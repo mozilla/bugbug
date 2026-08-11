@@ -28,7 +28,7 @@ class BugzillaWebhookSettings(BaseModel):
     # BMO sends this value verbatim in X-Bugzilla-Webhook-Secret.
     secret: str
     # The Bugzilla account to which the needinfo request must be directed.
-    bot_login: str
+    bot_login: str = "hackbot@mozilla.tld"
     # Best-effort in-memory dedupe of retried bug-modification deliveries.
     dedupe_ttl_seconds: int = 6 * 60 * 60
 

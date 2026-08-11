@@ -35,8 +35,7 @@ PHABRICATOR_FOLLOW_UP_ACTIONS = [
     "phabricator.add_comment",
 ]
 
-# Action types available after a Bugzilla needinfo request. In particular this
-# mode can create a revision, but cannot update an existing one.
+# Action types available after a Bugzilla needinfo request.
 BUGZILLA_NEEDINFO_ACTIONS = [
     "bugzilla.update_bug",
     "bugzilla.add_comment",
