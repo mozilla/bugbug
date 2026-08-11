@@ -66,7 +66,7 @@ def find_hackbot_mentions(
             continue
 
         author_phid = transaction.get("authorPHID")
-        if not author_phid or (bot_phid and author_phid == bot_phid):
+        if not author_phid or author_phid == bot_phid:
             continue
 
         for comment in transaction.get("comments") or []:
