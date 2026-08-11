@@ -35,7 +35,7 @@ def _commit_all(source_dir: Path) -> None:
         [
             "git",
             "-c",
-            "user.name=hackbot",
+            "user.name=Hackbot",
             "-c",
             "user.email=hackbot@mozilla.com",
             "commit",

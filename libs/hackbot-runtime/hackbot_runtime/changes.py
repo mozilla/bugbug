@@ -25,7 +25,7 @@ from typing import NamedTuple
 log = logging.getLogger("hackbot_runtime.changes")
 
 # Author stamped on the synthetic commit that wraps any uncommitted remainder.
-_WIP_NAME = "Hackbot Agent"
+_WIP_NAME = "Hackbot"
 _WIP_EMAIL = "hackbot@mozilla.tld"
 _WIP_MESSAGE = "Uncommitted agent changes"
 
