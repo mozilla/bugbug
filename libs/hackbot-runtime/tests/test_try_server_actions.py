@@ -138,11 +138,19 @@ def test_validate_test_paths_normalises_paths():
     assert cleaned == {"mochitest-browser-chrome": ["browser/base/test"]}
 
 
-def test_validate_test_paths_accepts_a_bare_string():
-    """An agent naming one path is easy to get as a string rather than a list."""
-    assert try_server.validate_test_paths({"xpcshell": "dom/base/test"}) == {
-        "xpcshell": ["dom/base/test"]
-    }
+def test_validate_test_paths_rejects_a_bare_string():
+    """`mach` always emits lists, so a string is a mistake worth reporting.
+
+    Never coerce it: the tool layer does not check arguments against the schema,
+    and iterating a string would turn "dom/base" into the paths d, o, m, b, a, s, e.
+    """
+    with pytest.raises(ToolError, match="must be a list"):
+        try_server.validate_test_paths({"xpcshell": "dom/base/test"})
+
+
+def test_validate_test_paths_rejects_a_non_list_value():
+    with pytest.raises(ToolError, match="must be a list"):
+        try_server.validate_test_paths({"xpcshell": 42})
 
 
 def test_validate_test_paths_rejects_a_suite_with_no_paths():

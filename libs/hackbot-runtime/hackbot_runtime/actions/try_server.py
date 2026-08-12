@@ -32,8 +32,13 @@ def validate_test_paths(tests: dict[str, list[str]]) -> dict[str, list[str]]:
                 "`tasks` and `env.MOZHARNESS_TEST_PATHS`."
             )
 
-        if isinstance(paths, str):
-            paths = [paths]
+        if not isinstance(paths, (list, tuple)):
+            raise ToolError(
+                f"The paths for suite {name!r} must be a list of "
+                f"repository-relative paths, not a {type(paths).__name__}. This "
+                "is the shape mach prints in MOZHARNESS_TEST_PATHS, so copy it "
+                "from there as-is."
+            )
         wanted = sorted({path.strip().strip("/") for path in paths if path.strip()})
         if not wanted:
             raise ToolError(
