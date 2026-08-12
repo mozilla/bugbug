@@ -31,6 +31,7 @@ members = [
     "hackbot-api",
     "hackbot-pulse-listener",
     "hackbot-runtime",
+    "lando-client",
     "phabricator-client",
     "reviewhelper-api",
     "testrail-client",
@@ -2737,6 +2738,7 @@ dependencies = [
     { name = "async-lru" },
     { name = "google-auth" },
     { name = "httpx" },
+    { name = "lando-client" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
@@ -2762,6 +2764,7 @@ requires-dist = [
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
+    { name = "lando-client", editable = "libs/lando-client" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
@@ -3489,6 +3492,30 @@ sdist = { url = "https://files.pythonhosted.org/packages/b6/a5/607e533ed6c83ae1a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/0f/834427d8c03ff1d7e867d3db3d176470c64871753252b21b4f4897d1fa45/kombu-5.6.2-py3-none-any.whl", hash = "sha256:efcfc559da324d41d61ca311b0c64965ea35b4c55cc04ee36e55386145dace93", size = 214219, upload-time = "2025-12-29T20:30:05.74Z" },
 ]
+
+[[package]]
+name = "lando-client"
+version = "0.1.0"
+source = { editable = "libs/lando-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "langchain"
