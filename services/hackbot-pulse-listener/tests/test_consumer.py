@@ -118,6 +118,7 @@ def test_build_failure_triggers_run_and_submits_poll():
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
@@ -144,6 +145,7 @@ def test_only_failure_tasks_sent_to_agent():
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
@@ -161,6 +163,7 @@ def test_same_revision_triggers_once():
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
@@ -174,6 +177,7 @@ def test_inherited_failure_is_skipped_before_mapping():
     executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=False),
         patch.object(consumer.lando, "hg_to_git") as hg_to_git,
         patch.object(consumer.client, "trigger_run") as trigger,
@@ -190,6 +194,7 @@ def test_multiple_builds_same_revision_trigger_once():
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
@@ -244,6 +249,7 @@ def test_backfilled_task_skipped_before_push_checks(fresh_push):
     backfill = _task_def(parent="ACTION-CALLBACK")
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=backfill),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure") as is_new,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
@@ -260,6 +266,7 @@ def test_stale_push_skipped_before_regression_check(fresh_push):
     fresh_push.return_value = True
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure") as is_new,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
@@ -280,6 +287,7 @@ def test_stale_push_is_not_marked_seen():
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.regression, "is_stale_push", side_effect=[True, False]),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1"),
     ):
@@ -293,6 +301,7 @@ def test_unmappable_revision_skipped():
     executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.lando, "hg_to_git", return_value=None),
         patch.object(consumer.client, "trigger_run") as trigger,
@@ -308,6 +317,7 @@ def test_trigger_failure_releases_revision_for_retry():
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(
             consumer.client, "trigger_run", side_effect=[RuntimeError("boom"), "run-2"]
@@ -767,6 +777,7 @@ def test_the_limit_does_not_apply_to_build_repair(env, monkeypatch):
     # The cap is on test-repair; build failures are far rarer and cheaper to judge.
     monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 0)
     with (
+        patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.lando, "hg_to_git", return_value="gitH"),
         patch.object(consumer.client, "trigger_run", return_value="br-1") as trigger,
@@ -1045,3 +1056,35 @@ def test_a_chunked_test_verify_task_is_skipped(env):
 
 def test_an_ordinary_task_is_not_mistaken_for_test_verify(env):
     assert consumer.process(_test_msg(), env.executor) == "tr-1"
+
+
+def _build_env(monkeypatch, reason=None, introduced=True):
+    trigger = MagicMock(return_value="run-1")
+    monkeypatch.setattr(consumer.taskcluster, "get_task", lambda tid: _task_def())
+    monkeypatch.setattr(consumer.lando, "hg_to_git", lambda rev: "deadbeef")
+    walk = MagicMock(return_value=introduced)
+    monkeypatch.setattr(consumer.regression, "is_new_build_failure", walk)
+    monkeypatch.setattr(
+        consumer.treeherder, "recheck_skip_reason", MagicMock(return_value=reason)
+    )
+    monkeypatch.setattr(consumer.client, "trigger_run", trigger)
+    return SimpleNamespace(trigger=trigger, walk=walk, executor=MagicMock())
+
+
+def test_an_infra_build_failure_is_skipped(monkeypatch):
+    env = _build_env(monkeypatch, reason="infra")
+    assert consumer.process(_build_msg(), env.executor) is None
+    env.trigger.assert_not_called()
+
+
+def test_a_classified_build_failure_is_read_after_the_walk(monkeypatch):
+    # Before the walk it would cost the ingest and classification waits the test
+    # path pays; after it, Treeherder has had minutes and it is one request.
+    env = _build_env(monkeypatch, reason="intermittent")
+    assert consumer.process(_build_msg(), env.executor) is None
+    env.walk.assert_called_once()
+
+
+def test_an_unclassified_build_failure_still_runs(monkeypatch):
+    env = _build_env(monkeypatch)
+    assert consumer.process(_build_msg(), env.executor) == "run-1"

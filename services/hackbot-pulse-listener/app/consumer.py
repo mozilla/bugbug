@@ -164,6 +164,21 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
+    # Builds bust for reasons no commit caused -- a timed-out fetch, a toolchain or
+    # signing hiccup -- which Treeherder classifies as infra; the agent otherwise
+    # reports that the push is innocent. Read after the walk rather than before it:
+    # by then Treeherder has had minutes to ingest and classify, and this costs one
+    # request instead of the wait the test path pays.
+    reason = treeherder.recheck_skip_reason(project, task_id)
+    if reason:
+        logger.info(
+            "Treeherder classified build task %s as %s; skipping -- %s",
+            task_id,
+            reason,
+            job_link,
+        )
+        return None
+
     with _seen_lock:
         if hg_revision in _seen:
             logger.info(
