@@ -31,8 +31,6 @@ MOZILLA_VCS_TOOLS = [
 
 # Actions-server tools available to the agent, by dotted id.
 ENABLED_ACTION_TYPES = [
-    "recorded_actions.list_actions",
-    "recorded_actions.remove_action",
     "bugzilla.add_comment",
     "bugzilla.update_bug",
 ]
