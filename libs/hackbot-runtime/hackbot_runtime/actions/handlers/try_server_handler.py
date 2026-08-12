@@ -63,34 +63,76 @@ def _client() -> LandoClient:
     return LandoClient()
 
 
-def try_task_config(tasks: list[str]) -> dict:
-    """The ``try_task_config.json`` contents selecting ``tasks``.
+def try_task_config(
+    tasks: list[str] | None = None,
+    *,
+    auto: bool = False,
+    test_paths: dict[str, list[str]] | None = None,
+) -> dict:
+    """The ``try_task_config.json`` contents for one push.
 
-    Version 2 of the format, matching what ``mach try``'s
-    ``generate_try_task_config`` writes: the labels go in verbatim and
-    ``optimize_target_tasks`` is off, so the tasks asked for are the tasks that
-    run (their dependencies can still be optimised away).
+    Two shapes, matching the two `mach try` selectors this mirrors:
 
-    ``TRY_SELECTOR`` is reported as ``fuzzy``, the selector whose pushes this one
-    is shaped like (an explicit list of task labels). It reaches the tasks as an
-    environment variable, so an invented value such as "hackbot" would be a
-    value no in-tree consumer has ever seen; a push should not be the thing that
-    finds out what happens then.
+    * ``auto`` — CI decides the tasks from the changed files, i.e. what
+      ``mach try auto`` pushes.
+    * ``tasks`` — the given labels run verbatim, with
+      ``optimize_target_tasks`` off so the selection is honoured (their
+      dependencies can still be optimised away). ``TRY_SELECTOR`` is reported as
+      ``fuzzy``, the selector whose pushes this is shaped like: it reaches the
+      tasks as an environment variable, so an invented value would be one no
+      in-tree consumer has ever seen.
+
+    ``test_paths`` (``{suite: [paths]}``, resolved agent-side) narrows either
+    shape to those tests via ``MOZHARNESS_TEST_PATHS``, as ``mach try``'s path
+    argument does. It is a modifier, never a selection of its own: mozharness
+    only consults it for a suite that is already scheduled.
     """
-    return {
-        "version": 2,
-        "parameters": {
+    if auto and tasks:
+        raise ValueError("A try push selects tasks either automatically or by label")
+    if not auto and not tasks:
+        raise ValueError("A try push needs `auto` or a non-empty `tasks`")
+
+    if auto:
+        # Copied from TRY_AUTO_PARAMETERS in tools/tryselect/selectors/auto.py.
+        parameters = {
+            "filters": ["try_auto"],
+            "optimize_strategies": (
+                "gecko_taskgraph.optimize:tryselect."
+                "bugbug_reduced_manifests_config_selection_medium"
+            ),
+            "optimize_target_tasks": True,
+            "test_manifest_loader": "bugbug",
+            "try_mode": "try_auto",
+            # Empty upstream too: auto sets no TRY_SELECTOR, because it builds its
+            # config directly instead of going through generate_try_task_config.
+            "try_task_config": {},
+        }
+    else:
+        parameters = {
             "optimize_target_tasks": False,
             "try_task_config": {
                 "env": {"TRY_SELECTOR": "fuzzy"},
-                "tasks": sorted(set(tasks)),
+                "tasks": sorted(set(tasks or [])),
             },
-        },
-    }
+        }
+
+    if test_paths:
+        env = parameters["try_task_config"].setdefault("env", {})
+        env["MOZHARNESS_TEST_PATHS"] = json.dumps(
+            {suite: sorted(set(paths)) for suite, paths in test_paths.items()},
+            sort_keys=True,
+        )
+
+    return {"version": 2, "parameters": parameters}
 
 
 def try_task_config_patch(
-    tasks: list[str], title: str | None = None, now: datetime | None = None
+    tasks: list[str] | None = None,
+    title: str | None = None,
+    now: datetime | None = None,
+    *,
+    auto: bool = False,
+    test_paths: dict[str, list[str]] | None = None,
 ) -> bytes:
     """A ``git format-patch`` email whose one commit adds ``try_task_config.json``.
 
@@ -99,7 +141,9 @@ def try_task_config_patch(
     """
     content = (
         json.dumps(
-            try_task_config(tasks), indent=4, separators=(",", ": "), sort_keys=True
+            try_task_config(tasks, auto=auto, test_paths=test_paths),
+            indent=4,
+            sort_keys=True,
         )
         + "\n"
     )
@@ -132,8 +176,12 @@ class PushHandler:
 
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         tasks = params.get("tasks") or []
-        if not tasks:
-            return ActionResult.failed("A try push needs at least one task label")
+        auto = bool(params.get("auto"))
+        test_paths = params.get("test_paths") or None
+        if not tasks and not auto:
+            return ActionResult.failed(
+                "A try push needs a selection: either `auto` or task labels"
+            )
 
         try:
             raw = await ctx.download_artifact(_TRY_PUSH_ARTIFACT_KEY)
@@ -147,7 +195,14 @@ class PushHandler:
             job_id = await client.submit_try_patches(
                 [
                     *submission["patches"],
-                    encode_patch(try_task_config_patch(tasks, params.get("title"))),
+                    encode_patch(
+                        try_task_config_patch(
+                            tasks,
+                            params.get("title"),
+                            auto=auto,
+                            test_paths=test_paths,
+                        )
+                    ),
                 ],
                 submission["base_commit"],
                 base_commit_vcs=submission["base_commit_vcs"],
@@ -165,6 +220,10 @@ class PushHandler:
                 # so it is the one a human would want from a try push.
                 "url": client.treeherder_url(job_id, _TRY_REPO_NAME),
                 "lando_url": client.job_url(job_id),
+                # What was actually selected, so the row records it without a
+                # reader having to re-read the recorded params.
+                "selection": "auto" if auto else "tasks",
                 "tasks": sorted(set(tasks)),
+                **({"test_paths": test_paths} if test_paths else {}),
             }
         )

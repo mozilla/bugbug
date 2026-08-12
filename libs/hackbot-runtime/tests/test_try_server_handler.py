@@ -10,6 +10,7 @@ to diagnose.
 
 import json
 from base64 import b64decode
+from datetime import datetime, timezone
 
 import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, try_server_handler
@@ -80,6 +81,86 @@ def test_try_task_config_selects_the_requested_tasks():
         "build-linux64/opt",
         "source-test-mozlint-eslint",
     ]
+
+
+def test_try_task_config_auto_matches_mach_try_auto():
+    """Copied from TRY_AUTO_PARAMETERS; these name in-tree strategies verbatim."""
+    parameters = try_server_handler.try_task_config(auto=True)["parameters"]
+
+    assert parameters["try_mode"] == "try_auto"
+    assert parameters["filters"] == ["try_auto"]
+    assert parameters["test_manifest_loader"] == "bugbug"
+    assert parameters["optimize_strategies"] == (
+        "gecko_taskgraph.optimize:tryselect."
+        "bugbug_reduced_manifests_config_selection_medium"
+    )
+    # auto lets CI choose, so optimisation is *on* and no labels are named.
+    assert parameters["optimize_target_tasks"] is True
+    assert parameters["try_task_config"] == {}
+    # auto builds its config directly rather than via generate_try_task_config,
+    # so unlike a label push it sets no TRY_SELECTOR.
+    assert "env" not in parameters["try_task_config"]
+
+
+def test_try_task_config_auto_calls_are_independent():
+    """One push's narrowing must not bleed into the next one's config."""
+    first = try_server_handler.try_task_config(
+        auto=True, test_paths={"mochitest": ["dom/base/test"]}
+    )
+    second = try_server_handler.try_task_config(auto=True)
+
+    assert "env" in first["parameters"]["try_task_config"]
+    assert second["parameters"]["try_task_config"] == {}
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},  # neither a selection nor auto
+        {"tasks": ["build-linux64/opt"], "auto": True},  # both at once
+    ],
+)
+def test_try_task_config_demands_exactly_one_selection(kwargs):
+    with pytest.raises(ValueError):
+        try_server_handler.try_task_config(**kwargs)
+
+
+@pytest.mark.parametrize("auto", [True, False])
+def test_try_task_config_narrows_either_selection_to_test_paths(auto):
+    """MOZHARNESS_TEST_PATHS is a modifier: it works with auto and with labels."""
+    config = try_server_handler.try_task_config(
+        None if auto else ["test-linux2404-64/opt-mochitest-1"],
+        auto=auto,
+        test_paths={"mochitest": ["dom/base/test", "dom/base/test"]},
+    )
+
+    env = config["parameters"]["try_task_config"]["env"]
+    # mozharness looks the running suite up as a key, so the value has to stay a
+    # JSON-encoded {suite: [paths]} mapping, deduplicated.
+    assert json.loads(env["MOZHARNESS_TEST_PATHS"]) == {"mochitest": ["dom/base/test"]}
+
+
+def test_try_task_config_patch_is_byte_identical_for_equivalent_requests():
+    """Why everything is sorted: this config becomes a commit in the push.
+
+    A re-applied action must rebuild the same commit, so the ordering the caller
+    happened to use must not leak into the bytes.
+    """
+    stamp = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
+    first = try_server_handler.try_task_config_patch(
+        ["source-test-mozlint-eslint", "build-linux64/opt", "build-linux64/opt"],
+        "Bug 1 - verify",
+        stamp,
+        test_paths={"xpcshell": ["dom/b", "dom/a"], "mochitest-plain": ["dom/c"]},
+    )
+    second = try_server_handler.try_task_config_patch(
+        ["build-linux64/opt", "source-test-mozlint-eslint"],
+        "Bug 1 - verify",
+        stamp,
+        test_paths={"mochitest-plain": ["dom/c"], "xpcshell": ["dom/a", "dom/b"]},
+    )
+
+    assert first == second
 
 
 def test_try_task_config_deduplicates_tasks():
@@ -192,11 +273,33 @@ async def test_apply_fails_without_a_patch_artifact(submitted):
     assert submitted == []
 
 
-async def test_apply_fails_without_tasks(submitted):
+async def test_apply_fails_without_any_selection(submitted):
     result = await try_server_handler.PushHandler().apply({"tasks": []}, _ctx())
 
     assert result.status == "failed"
     assert submitted == []
+
+
+async def test_apply_pushes_an_auto_selection_without_task_labels(submitted):
+    result = await try_server_handler.PushHandler().apply(
+        {"tasks": None, "auto": True}, _ctx()
+    )
+
+    assert result.status == "applied"
+    assert result.result["selection"] == "auto"
+    tip = b64decode(submitted[0]["patches"][-1]).decode()
+    assert '"try_mode": "try_auto"' in tip
+
+
+async def test_apply_carries_resolved_test_paths_into_the_config(submitted):
+    result = await try_server_handler.PushHandler().apply(
+        {"auto": True, "test_paths": {"mochitest": ["dom/base/test"]}}, _ctx()
+    )
+
+    assert result.result["test_paths"] == {"mochitest": ["dom/base/test"]}
+    tip = b64decode(submitted[0]["patches"][-1]).decode()
+    assert "MOZHARNESS_TEST_PATHS" in tip
+    assert "dom/base/test" in tip
 
 
 async def test_apply_reports_a_missing_lando_token(monkeypatch):
