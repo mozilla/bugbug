@@ -3,7 +3,9 @@
 Triages a Firefox desktop frontend bug from Bugzilla and produces a **root-cause
 analysis plus a proposed fix plan**. It reads the source tree, navigates the
 codebase with Searchfox, and inspects regressor changesets on hg.mozilla.org. It
-does **not** build Firefox, edit source, reproduce the bug, or write to Bugzilla.
+does **not** build Firefox, edit source, or reproduce the bug. It writes to
+Bugzilla only after the run, and only when it rated itself confident — see [What
+it writes back to Bugzilla](#what-it-writes-back-to-bugzilla).
 
 It deliberately stops at a plan: visual and interaction bugs can't be verified by
 the crash-reproduction loop the [`bug-fix`](../bug-fix/) agent relies on, so a
@@ -145,6 +147,36 @@ Two further hooks shape the comment text as it is recorded:
 Below both sits the runtime's shared footer inviting a 👍 or 👎 reaction. Those
 reactions and tags are the feedback channel — the agent does not request needinfo.
 
+## Slack notification
+
+A run that applies itself reports two lines to the channel of the team that owns
+the bug's component: the bug, linked, with the run's one-line summary, and a link
+to the run. An `S1` severity assessment adds a `:red_circle:` and names the level.
+Nothing else — the analysis is on the bug, the detail is in the run, and the
+channel already says which component this is.
+
+The audience is the team whose bug was just written to by nobody, so only an
+auto-applied run notifies. A medium or low result wrote nothing to Bugzilla and
+stays silent, even if someone applies it by hand later.
+
+Routing is `SLACK_CHANNELS` in `config.py`, keyed by `"<Product> :: <Component>"`
+— today just `Firefox :: New Tab Page` → `#hnt-dev`. A component that is not
+listed notifies nobody; there is deliberately no default channel, since posting one
+team's triage into another team's channel is worse than silence. Product and
+component come from the agent's `product`/`component` plan fields, because nothing
+else carries them out of a run whose only input is a bug id, so a garbled value
+matches no team and sends nothing.
+
+`notify.py` builds and records the message; the wording is code, not a model turn,
+so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is never
+given the tool. Like every other action it is recorded rather than sent, so it
+shows up in the Hackbot UI before it lands and is delivered at most once. Delivery
+needs `SLACK_BOT_TOKEN` on hackbot-api and the app in the channel — see
+`libs/hackbot-runtime/hackbot_runtime/actions/handlers/slack_handler.py`. A failed
+Slack post does not affect the Bugzilla writes, and it does not go the other way
+either: the applier runs each action independently, so a rejected `PUT` still
+notifies. The run page shows the failed action.
+
 ## Tuning
 
 `rules/` and `prompts/` both live under `hackbot_agents/frontend_triage/`.
@@ -167,5 +199,9 @@ Registered with `hackbot-api` as `FrontendTriageInputs` in
 `app/agents.py` (job `hackbot-agent-frontend-triage`). Local Compose runs don't
 need the API.
 
-There are no unit tests for this agent; CI covers the shared machinery it builds
-on via the `libs/agent-tools` and `libs/hackbot-runtime` suites.
+`tests/` covers what an unattended run's reach depends on: the record-time hooks
+(`test_hooks.py`), the plan parsing and `may_apply_unattended` (`test_plan.py`), and
+the Slack message and its routing (`test_notify.py`). Run them with
+`uv run --package hackbot-agent-frontend-triage pytest agents/frontend-triage/tests`.
+CI covers the shared machinery this builds on via the `libs/agent-tools` and
+`libs/hackbot-runtime` suites.

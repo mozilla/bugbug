@@ -108,6 +108,8 @@ After recording your comment, end your final message with a fenced ```json block
 
 ```json
 {{
+  "product": "Firefox",
+  "component": "New Tab Page",
   "summary": "one-line restatement of the bug",
   "root_cause": "the likely cause, or null if undetermined",
   "proposed_fix": "the approach a developer should take",
@@ -126,6 +128,7 @@ After recording your comment, end your final message with a fenced ```json block
 
 Field guidance for the handoff:
 
+- **`product`** and **`component`** — the bug's product and component, copied **verbatim** from Bugzilla (`get_bugs`), e.g. `"Firefox"` and `"New Tab Page"`. Do not infer them from the code you read or tidy up their spelling: they route a notification to the team that owns the component, and a value that isn't Bugzilla's own matches no team and notifies nobody. If the bug moved component while you were working, report where it is now.
 - **`actionable`** — `false` when the bug is out of scope or skipped per the scoping rules (meta/tracking, intermittent/test-infra, enhancement/task), or when there is simply nothing to fix-plan; `true` when you produced a real fix plan. The executor uses this to decide whether to act.
 - **`regressor_node`** — when the bug is a regression and you identified/confirmed the introducing changeset (via the `mozilla_vcs` tools or `get_blame`), put its hg node here so the executor has a direct pointer; otherwise `null`.
 - **`relevant_tests`** — existing tests that cover the affected area (typically browser-chrome mochitests under a component's `tests/browser/` dir, or xpcshell tests). These are the executor's **verification anchor** — it can run them. Use `[]` if you searched and found none (a signal that the executor should add a test).
