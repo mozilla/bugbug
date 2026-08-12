@@ -29,7 +29,7 @@ _COMMIT_BODY = "Pushed via hackbot."
 
 # Author of the generated try_task_config.json commit. Cosmetic (Lando attributes
 # the push to the authenticated user), but it keeps the commit identifiable.
-_AUTHOR = "Hackbot Agent <hackbot@mozilla.tld>"
+_AUTHOR = "Hackbot <hackbot@mozilla.tld>"
 
 # `git format-patch`'s version-info trailer. Lando's parser needs it: it finds
 # the end of the diff by scanning back for the "--" barrier and raises

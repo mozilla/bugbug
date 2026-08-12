@@ -194,7 +194,9 @@ def test_try_task_config_patch_applies_as_a_real_git_patch(tmp_path):
 
     log = _apply_with_git_am(tmp_path, patch)
 
-    assert log.startswith("Hackbot Agent <hackbot@mozilla.tld>")
+    # Same identity `changes.py` stamps on the agent's own commits, so one push
+    # does not show two different authors.
+    assert log.startswith("Hackbot <hackbot@mozilla.tld>")
     assert "Bug 1 - verify the fix" in log
     written = json.loads((tmp_path / "try_task_config.json").read_text())
     assert written == try_server_handler.try_task_config(["build-linux64/opt"])
