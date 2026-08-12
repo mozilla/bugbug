@@ -27,6 +27,12 @@ class AgentSpec:
     # succeeds. Off by default: actions are still recorded and can always be
     # applied manually from the UI; only opted-in agents auto-apply.
     auto_apply_actions: bool = False
+    # Whether auto-apply additionally needs the run's own say-so: `findings.auto_apply`
+    # must be True, or the actions are recorded and held. Set this for agents that
+    # judge their results one run at a time, since only the agent knows how sure it
+    # was; this is where that verdict is honored. Fails closed, so a run that reports
+    # no verdict never qualifies.
+    auto_apply_requires_consent: bool = False
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -80,6 +86,10 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Triage a Firefox desktop frontend bug (read-only) and produce a root-cause analysis and proposed fix plan.",
         job_name="hackbot-agent-frontend-triage",
         input_schema=FrontendTriageInputs,
+        # Triage results reach a real bug unattended, so only the ones the agent
+        # marked `auto_apply` qualify. Everything else stays for manual apply.
+        auto_apply_actions=True,
+        auto_apply_requires_consent=True,
     ),
     "test-repair": AgentSpec(
         name="test-repair",

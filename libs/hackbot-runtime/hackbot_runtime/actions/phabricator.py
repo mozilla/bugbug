@@ -20,11 +20,6 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
-_COMMENT_FOOTER = (
-    "*This is an automated response. If it is incorrect, reply on this "
-    "revision to correct it.*"
-)
-
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
@@ -152,10 +147,9 @@ async def add_comment(
     changes, use ``submit_patch`` instead. Recorded into the run summary for
     human review; nothing is posted to Phabricator during the run.
     """
-    text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
     recorder.record(
         "phabricator.add_comment",
-        {"revision_id": revision_id, "text": text_with_footer},
+        {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
     return _confirm(recorder, "phabricator.add_comment")

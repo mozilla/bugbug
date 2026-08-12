@@ -49,6 +49,7 @@ from .config import (
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
 )
+from .hooks import add_comment_hook, update_bug_hook
 
 HERE = Path(__file__).resolve().parent
 
@@ -84,6 +85,11 @@ class SeverityAssessment(BaseModel):
 
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
+    # Where the bug lives, as the agent read it off Bugzilla. Reported rather than
+    # derived because nothing else carries it out of the run: the inputs are just a
+    # bug id. Only `notify.py` uses it, to pick the channel that owns the component.
+    product: str | None = None
+    component: str | None = None
     # Structured plan (best-effort, parsed from the agent's final message).
     summary: str | None = None
     root_cause: str | None = None
@@ -98,6 +104,10 @@ class FrontendTriageResult(HackbotAgentResult):
     )
     # Triage judgments (best-effort, parsed from the agent's final message).
     severity_assessment: SeverityAssessment | None = None
+    # This run's verdict on whether its recorded actions may reach the bug without a
+    # human, computed by `may_apply_unattended`. hackbot-api reads it and still has
+    # the final say.
+    auto_apply: bool = False
     # The agent's full final message, always present as a fallback.
     result: str | None = None
 
@@ -168,6 +178,42 @@ def make_investigator() -> AgentDefinition:
     )
 
 
+CONFIDENCE_LEVELS = ("high", "medium", "low")
+
+
+def parse_confidence(value: object) -> str | None:
+    """One of :data:`CONFIDENCE_LEVELS`, or None if ``value`` isn't one.
+
+    The value comes out of the agent's free-form JSON block and decides whether the
+    run's actions are posted, so casing and stray whitespace are tolerated rather
+    than letting `"High"` read as "not high". Anything else returns None, so callers
+    fail closed rather than inventing a level.
+    """
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized in CONFIDENCE_LEVELS else None
+
+
+def may_apply_unattended(plan: dict) -> bool:
+    """Whether this run's recorded actions may reach the bug without a human.
+
+    Recorded as ``findings.auto_apply``. This lives in the agent rather than in
+    hackbot-api because it turns on the agent's self-reported rating, which arrives
+    in the final message *after* every action is already recorded.
+
+    Two conditions, both failing closed on a plan that didn't parse:
+
+    - ``confidence: high`` — the run localized the cause in specific code.
+    - ``actionable`` is not false. ``rules/scoping.md`` pairs an out-of-scope report
+      with ``confidence: low``, but nothing makes the agent pair them, so a
+      ``high`` + ``actionable: false`` run would otherwise post an out-of-scope note
+      on the strength of the confidence alone. The test is ``is not False`` so that
+      a missing ``actionable`` doesn't read as out of scope.
+    """
+    return plan.get("confidence") == "high" and plan.get("actionable") is not False
+
+
 def parse_plan(text: str | None) -> dict:
     """Extract the structured plan from the agent's final message, if present.
 
@@ -191,6 +237,11 @@ def parse_plan(text: str | None) -> dict:
             return [value]
         return value if isinstance(value, list) else None
 
+    def _as_str(value):
+        # A non-string would fail FrontendTriageResult's validation and lose the whole
+        # run's result, and these two only route a notification.
+        return value.strip() or None if isinstance(value, str) else None
+
     def _as_model(model, value):
         if not isinstance(value, dict):
             return None
@@ -203,11 +254,13 @@ def parse_plan(text: str | None) -> dict:
     if not isinstance(actionable, bool):
         actionable = None
     return {
+        "product": _as_str(data.get("product")),
+        "component": _as_str(data.get("component")),
         "summary": data.get("summary"),
         "root_cause": data.get("root_cause"),
         "proposed_fix": data.get("proposed_fix"),
         "target_files": _as_list(data.get("target_files")),
-        "confidence": data.get("confidence"),
+        "confidence": parse_confidence(data.get("confidence")),
         "actionable": actionable,
         "regressor_node": data.get("regressor_node"),
         "relevant_tests": _as_list(data.get("relevant_tests")),
@@ -267,6 +320,17 @@ async def run_frontend_triage(
             "[frontend_triage] no searchfox revision; linking tip-of-tree",
             file=sys.stderr,
         )
+    # Bound what the agent may record, at the moment it records it. These are the
+    # only check on what an unattended run writes to a bug — see hooks.py. Registered
+    # ahead of the hooks below so a refusal happens before the comment body is
+    # rewritten.
+    actions_recorder.add_hook(
+        "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
+    )
+    actions_recorder.add_hook(
+        "bugzilla.update_bug", update_bug_hook(actions_recorder, bug)
+    )
+
     actions_recorder.add_hook(
         "bugzilla.add_comment",
         permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
@@ -344,5 +408,6 @@ async def run_frontend_triage(
         result=result_msg.result,
         num_turns=result_msg.num_turns,
         total_cost_usd=result_msg.total_cost_usd,
+        auto_apply=may_apply_unattended(plan),
         **plan,
     )

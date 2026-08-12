@@ -2,12 +2,12 @@
 
 On run completion the recorded actions from `summary["actions"]` are always
 upserted as `run_actions` rows (one per entry) so they're visible and
-manageable in the UI. Whether they're then applied *automatically* depends on
-the agent's `auto_apply_actions` opt-in (see `app/agents.py`); either way they
-can be applied on demand (manual apply-all from the UI). Application runs each
-pending row through the handler registry in `hackbot_runtime.actions.handlers`
-and is idempotent per action — an already-`applied` row is never re-applied, so
-Pub/Sub retries and repeated manual applies are safe.
+manageable in the UI. Whether they're then applied *automatically* is decided by
+`_auto_apply_blocker` (see `app/agents.py`); either way they
+can be applied on demand (manual apply-all from the UI). Application runs each pending
+row through the handler registry in `hackbot_runtime.actions.handlers` and is
+idempotent per action — an already-`applied` row is never re-applied, so Pub/Sub
+retries and repeated manual applies are safe.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs
-from app.agents import AGENT_REGISTRY
+from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
 
@@ -84,6 +84,28 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     if isinstance(value, list):
         return [resolve_placeholders(v, results_by_ref) for v in value]
     return value
+
+
+def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
+    """Why `run`'s recorded actions need a human, or None if they may be applied.
+
+    This holds no policy about what an agent may record. That is bounded on the agent
+    side, as it records, where a refusal reaches the agent as a tool error it can
+    correct in the same run — frontend-triage does it with action hooks. Whether a
+    given result is safe to apply is also the agent's call, since only it knows how
+    sure it was; it reports that as `findings.auto_apply`. This function honors both
+    and fails closed.
+    """
+    if spec is None or not spec.auto_apply_actions:
+        return "auto-apply is off for this agent"
+
+    # `is not True`, so a run that reports no verdict — or something that isn't a
+    # boolean — is held rather than read as consent.
+    findings = (run.summary or {}).get("findings") or {}
+    if spec.auto_apply_requires_consent and findings.get("auto_apply") is not True:
+        return "the agent did not mark this result safe to apply unattended"
+
+    return None
 
 
 async def ensure_action_rows(
@@ -224,11 +246,11 @@ async def _apply_pending_rows(
 
 
 async def on_run_completed(db: AsyncSession, run: Run) -> None:
-    """Record a completed run's actions, and auto-apply them if the agent opts in.
+    """Record a completed run's actions, and auto-apply them if the agent qualifies.
 
-    Called from the `apply-run-actions` push route. Actions are always recorded
-    (so the UI can show/manually apply them); they're applied automatically only
-    when the run's agent has `auto_apply_actions=True`.
+    Called from the `apply-run-actions` push route. Actions are always recorded (so the
+    UI can show/manually apply them); they're applied automatically only when
+    `_auto_apply_blocker` finds nothing in the way.
     """
     # Defense-in-depth: only a succeeded run's actions are recorded/applied. A
     # failed/timed-out run may have recorded actions before erroring, but acting
@@ -243,15 +265,18 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
     await db.commit()
 
     spec = AGENT_REGISTRY.get(run.agent)
-    if spec and spec.auto_apply_actions:
+    blocker = _auto_apply_blocker(spec, run)
+    if blocker is None:
         await _apply_pending_rows(db, run, rows)
-    else:
-        log.info(
-            "Recorded %d action(s) for run %s; auto-apply off for agent %s",
-            len(rows),
-            run.run_id,
-            run.agent,
-        )
+        return
+
+    log.info(
+        "Recorded %d action(s) for run %s; holding for review: %s (agent %s)",
+        len(rows),
+        run.run_id,
+        blocker,
+        run.agent,
+    )
 
 
 async def apply_all_pending(db: AsyncSession, run: Run) -> None:
