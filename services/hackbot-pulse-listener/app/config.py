@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     # hackbot-api
     hackbot_api_url: str = ""
     hackbot_api_key: str = ""
-    hackbot_ui_url: str = ""
+    hackbot_ui_url: str = "https://hackbot.moz.tools"
     agent_name: str = "build-repair"
     # Agent that analyzes test failures (separate Cloud Run Job from build-repair).
     test_repair_agent_name: str = "test-repair"
