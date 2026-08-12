@@ -31,11 +31,6 @@ _COMMIT_BODY = "Pushed via hackbot."
 # the push to the authenticated user), but it keeps the commit identifiable.
 _AUTHOR = "Hackbot <hackbot@mozilla.tld>"
 
-# `git format-patch`'s version-info trailer. Lando's parser needs it: it finds
-# the end of the diff by scanning back for the "--" barrier and raises
-# "Malformed patch" without one. Built by concatenation because the barrier
-# carries a trailing space that an editor or linter would strip from a literal.
-_PATCH_TRAILER = "-- " + "\n2.51.0\n"
 
 # One `git format-patch` email adding `try_task_config.json`. The diffstat block
 # a real format-patch puts after "---" is omitted: Lando skips everything
@@ -55,6 +50,7 @@ new file mode 100644
 +++ b/{filename}
 @@ -0,0 +1,{line_count} @@
 {added_lines}
+--
 """
 
 
@@ -157,7 +153,7 @@ def try_task_config_patch(
         line_count=len(added_lines),
         added_lines="\n".join(f"+{line}" for line in added_lines),
     )
-    return (patch + _PATCH_TRAILER).encode()
+    return patch.encode()
 
 
 def _commit_title(title: str | None) -> str:
