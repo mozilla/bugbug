@@ -41,6 +41,25 @@ def test_an_unusable_confidence_is_none():
         assert parse_confidence(raw) is None
 
 
+def test_parse_plan_carries_the_product_and_component():
+    # They route the Slack notification (see notify.py) and come from nowhere else --
+    # the run's inputs are just a bug id.
+    plan = parse_plan(_block('{"product": " Firefox ", "component": "New Tab Page"}'))
+    assert plan["product"] == "Firefox"
+    assert plan["component"] == "New Tab Page"
+
+
+def test_parse_plan_drops_an_unusable_product_or_component():
+    # A non-string would fail FrontendTriageResult's validation and lose the whole
+    # run's result over a field that only picks a channel.
+    plan = parse_plan(_block('{"product": 42, "component": ["New Tab Page"]}'))
+    assert plan["product"] is None
+    assert plan["component"] is None
+    plan = parse_plan(_block('{"summary": "s"}'))
+    assert plan["product"] is None
+    assert plan["component"] is None
+
+
 def test_parse_plan_normalizes_confidence():
     plan = parse_plan(_block('{"summary": "s", "confidence": "High"}'))
     assert plan["confidence"] == "high"

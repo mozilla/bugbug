@@ -85,6 +85,11 @@ class SeverityAssessment(BaseModel):
 
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
+    # Where the bug lives, as the agent read it off Bugzilla. Reported rather than
+    # derived because nothing else carries it out of the run: the inputs are just a
+    # bug id. Only `notify.py` uses it, to pick the channel that owns the component.
+    product: str | None = None
+    component: str | None = None
     # Structured plan (best-effort, parsed from the agent's final message).
     summary: str | None = None
     root_cause: str | None = None
@@ -232,6 +237,11 @@ def parse_plan(text: str | None) -> dict:
             return [value]
         return value if isinstance(value, list) else None
 
+    def _as_str(value):
+        # A non-string would fail FrontendTriageResult's validation and lose the whole
+        # run's result, and these two only route a notification.
+        return value.strip() or None if isinstance(value, str) else None
+
     def _as_model(model, value):
         if not isinstance(value, dict):
             return None
@@ -244,6 +254,8 @@ def parse_plan(text: str | None) -> dict:
     if not isinstance(actionable, bool):
         actionable = None
     return {
+        "product": _as_str(data.get("product")),
+        "component": _as_str(data.get("component")),
         "summary": data.get("summary"),
         "root_cause": data.get("root_cause"),
         "proposed_fix": data.get("proposed_fix"),

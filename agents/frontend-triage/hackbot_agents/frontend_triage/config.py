@@ -42,6 +42,18 @@ ENABLED_ACTION_TYPES = [
     "bugzilla.update_bug",
 ]
 
+# Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. A channel
+# belongs to the team that owns the component, so the routing does too: a component
+# that is not listed sends nothing, since posting one team's triage into another team's
+# channel is worse than silence. There is deliberately no default channel.
+#
+# `slack.post_message` is left out of `ENABLED_ACTION_TYPES` on purpose. The message is
+# code (see notify.py), not a model turn, so it goes through the recorder directly and
+# the agent is never given the tool — it has no say in what is said or where.
+SLACK_CHANNELS = {
+    "Firefox :: New Tab Page": "#hnt-dev",
+}
+
 # What a `bugzilla.update_bug` from this agent may touch. Enforced at record time
 # by `hooks.update_bug_hook`, so an out-of-bounds change is refused while the agent
 # can still correct it, rather than recorded and held for a human later.
