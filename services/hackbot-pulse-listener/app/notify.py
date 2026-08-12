@@ -326,6 +326,8 @@ def _build_body(
 ) -> str:
     summary = run_doc.get("summary") or {}
     findings = summary.get("findings") or {}
+    # A null verdict is the agent clearing the push; an absent one is no verdict.
+    cleared = "blamed_commit" in findings and not findings["blamed_commit"]
     blamed_commit = findings.get("blamed_commit")
 
     lines = [
@@ -339,7 +341,12 @@ def _build_body(
         f"[jobs]({treeherder.job_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
     ]
 
-    if blamed_commit:
+    if cleared:
+        lines.append(
+            "- **Not caused by this push:** the failure is pre-existing or "
+            "infrastructure, so no commit here is blamed."
+        )
+    elif blamed_commit:
         by = f" by {blamed_author}" if blamed_author else ""
         lines.append(
             f"- **Likely culprit:** "

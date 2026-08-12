@@ -35,9 +35,12 @@ determine which single commit introduced the build failure.
 
 PUSH_COMMIT_LINE = "- {commit}"
 
-BLAME_STEP = """4. {scratch_out}/blame.json identifying the single commit that introduced the failure,
-   as JSON: {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Choose
-   blamed_commit from the push commits listed above.
+BLAME_STEP = """4. {scratch_out}/blame.json naming the commit that introduced the failure, as JSON:
+   {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Use one of the
+   push commits listed above when there are several, otherwise the checked-out
+   commit. Set "blamed_commit" to null if none of them caused the failure -- it is
+   infrastructure, a toolchain or fetch problem, or it already failed before this
+   push -- rather than naming the least implausible commit.
 """
 
 BUG_CONTEXT = "\nThe commit attempted to fix Bugzilla bug {bug_id}.\n"

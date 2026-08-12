@@ -613,3 +613,43 @@ def test_build_repair_ignores_the_actioned_flag(monkeypatch):
 
     message = fake_client.send.call_args.kwargs["message"].get()
     assert "already actioned" not in message["subject"]
+
+
+def _pre_existing_doc():
+    return {
+        "status": "succeeded",
+        "summary": {"findings": {"blamed_commit": None}},
+    }
+
+
+def test_a_cleared_push_blames_nobody():
+    body = notify._build_body(_ctx(), _pre_existing_doc())
+    assert "Likely culprit" not in body
+    assert "Not caused by this push" in body
+
+
+def test_a_cleared_push_does_not_claim_an_author_introduced_it():
+    body = notify._build_body(
+        _ctx(), _pre_existing_doc(), blamed_author="innocent@mozilla.com"
+    )
+    assert "introduced the failure" not in body
+
+
+def test_no_verdict_is_not_reported_as_cleared():
+    # An absent blamed_commit is missing data, not the agent clearing the push.
+    body = notify._build_body(_ctx(), {"status": "succeeded", "summary": {}})
+    assert "Not caused by this push" not in body
+    assert "Likely culprit" not in body
+
+
+def test_a_cleared_push_does_not_mail_an_author(monkeypatch):
+    monkeypatch.setattr(notify.settings, "sendgrid_api_key", "k")
+    monkeypatch.setattr(notify.settings, "notification_sender", "from@mozilla.com")
+    monkeypatch.setattr(notify.settings, "notification_override_email", None)
+    monkeypatch.setattr(notify.settings, "notify_only_with_patch", False)
+    author = MagicMock(return_value="innocent@mozilla.com")
+    monkeypatch.setattr(notify.github, "commit_author_email", author)
+    with patch.object(notify, "_deliver") as deliver:
+        notify.send_email(_ctx(), _pre_existing_doc())
+    author.assert_not_called()
+    assert "innocent@mozilla.com" not in deliver.call_args.args[2]
