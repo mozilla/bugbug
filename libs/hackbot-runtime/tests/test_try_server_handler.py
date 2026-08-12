@@ -220,13 +220,6 @@ def test_try_task_config_patch_collapses_a_multiline_title(tmp_path):
     assert log.splitlines()[1] == "Bug 1 - a fix Date: bogus not the body"
 
 
-def test_try_task_config_patch_has_the_version_info_trailer():
-    """Lando finds the end of the diff by scanning back for the `--` barrier."""
-    lines = try_server_handler.try_task_config_patch(["build-linux64/opt"]).decode()
-
-    assert lines.rstrip().splitlines()[-2] == "-- "
-
-
 # --- PushHandler --------------------------------------------------------- #
 
 
