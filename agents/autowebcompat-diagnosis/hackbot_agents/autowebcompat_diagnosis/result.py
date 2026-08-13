@@ -166,11 +166,15 @@ class DiagnosisResult(BaseModel):
 
     root_cause: str = Field(
         description=(
-            "Your root-cause hypothesis for why the site behaves differently in "
-            "Firefox: what the page does, which behavior it depends on, and why "
-            "that produces the reported breakage in Firefox but not Chrome. Be "
-            "specific about the mechanism (e.g. the API, CSS property, or "
-            "user-agent check involved). Do not propose a fix."
+            """Your root-cause hypothesis for why the site behaves differently in
+            Firefox: what the page does, which behavior it depends on, and why
+            that produces the reported breakage in Firefox but not Chrome. Be
+            specific about the mechanism (e.g. the API, CSS property, or
+            user-agent check involved). Where the behavior is related to a browser
+            engine difference covered by a web-standard such as HTML or CSS
+            then if possible provide links to the relevant parts of the specification
+            document that define the behaviour. Skip these links if you don't know the
+            right specification or section. Do not propose a fix."""
         ),
     )
 
@@ -179,7 +183,8 @@ class DiagnosisResult(BaseModel):
             "The concrete observations supporting the hypothesis: console "
             "errors, network requests, DOM or computed-style measurements, "
             "feature-detection results, and what the reduced testcase showed in "
-            "each browser. Cite what you actually observed, not what you expect."
+            "each browser. Be brief, this will be read by a busy engineer."
+            "Cite what you actually observed, not what you expect."
         ),
     )
     testcase_path: Path | None = Field(

@@ -538,7 +538,13 @@ as your starting evidence.
    DevTools tools to compare the two browsers on the reported site and
    isolate the divergence, then form a root-cause hypothesis based on that evidence.
 
-3. Create a minimal reduced test case that reproduces the difference between the
+3. If the difference between the browsers is not a browser engine
+   implementation difference, but due to the site explicitly switching behaviours
+   between browsers (e.g. through UA sniffing or other browser-specific codepaths)
+   then leave `testcase_path` null.
+
+4. Otherwise, the difference is a browser engine implementation difference. In this case
+   create a minimal reduced test case that reproduces the difference between the
    browsers and write it to exactly this path: {self.testcase_path}.
    The test case must include an inline explanation (a comment or on-page text)
    of what should happen and how Firefox differs from Chrome. Then load that
