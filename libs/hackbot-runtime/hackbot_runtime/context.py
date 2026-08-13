@@ -144,6 +144,17 @@ class HackbotContext(BaseSettings):
         self._prepared_ref = resolved_ref
         return path
 
+    def record_source_base(self) -> None:
+        """Re-record the commit the agent starts editing from (current HEAD).
+
+        :meth:`prepare_repo` records it at checkout time. A caller that then
+        seeds the checkout with commits that are not the agent's work — e.g. the
+        unlanded ancestors of a stacked Phabricator revision, see
+        ``revision.checkout_revision`` — calls this afterwards so
+        :meth:`publish_changes` collects only what the agent itself did.
+        """
+        self._source_base = changes.base_commit(self.repo_path)
+
     @property
     def repo_path(self) -> Path:
         """The prepared source checkout path. Call :meth:`prepare_repo` first."""

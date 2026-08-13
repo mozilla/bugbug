@@ -77,14 +77,12 @@ def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
 
-def _wrap_uncommitted(repo: Path) -> bool:
-    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+def commit_all(repo: Path, message: str) -> None:
+    """Stage everything in ``repo`` and commit it under the hackbot identity.
 
-    Returns ``True`` if such a commit was created, ``False`` if the tree was
-    already clean.
+    The identity is passed explicitly because agent containers often have no git
+    identity configured, which would make ``git commit`` fail outright.
     """
-    if not _has_uncommitted(repo):
-        return False
     _git(repo, "add", "-A")
     _git(
         repo,
@@ -95,8 +93,19 @@ def _wrap_uncommitted(repo: Path) -> bool:
         "commit",
         "--no-verify",
         "-m",
-        _WIP_MESSAGE,
+        message,
     )
+
+
+def _wrap_uncommitted(repo: Path) -> bool:
+    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+
+    Returns ``True`` if such a commit was created, ``False`` if the tree was
+    already clean.
+    """
+    if not _has_uncommitted(repo):
+        return False
+    commit_all(repo, _WIP_MESSAGE)
     return True
 
 

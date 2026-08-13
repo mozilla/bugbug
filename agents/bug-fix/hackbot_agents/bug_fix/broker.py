@@ -1,4 +1,4 @@
-"""Bugzilla MCP + Phabricator patch broker.
+"""Bugzilla MCP + read-only Phabricator broker.
 
 Sidecar container that holds the privileged API keys and serves them over HTTP
 to the agent process (a sibling container in the same Cloud Run Job task), which
@@ -10,15 +10,21 @@ credentials:
 - Phabricator: the read-only `phabricator` MCP tools over `/phabricator/mcp`, so
   a follow-up run can read the revision it was called on: its metadata, the
   full comment thread, and where each inline comment sits.
-- Phabricator: `GET /phabricator/revision/{id}/patch` returns a revision's base
-  commit + raw diff, so the agent can check its source tree out at the revision
-  before running (see ``revision.checkout_revision``).
+- Phabricator: `POST /api/{method}` is a read-only Conduit façade — the broker
+  looks enough like a Phabricator instance for a Conduit client to talk to it,
+  but only for an allow-listed set of read methods, and it swaps in the real key
+  so the caller never holds one. That is how the agent checks its source tree
+  out at a (possibly stacked) revision before running, driving moz-phab's own
+  Conduit client against this URL (see ``revision.checkout_revision``).
 """
 
+import json
 import logging
+import urllib.parse
 from contextlib import asynccontextmanager
 
 import bugsy
+import httpx
 import uvicorn
 from agent_tools import bugzilla
 from agent_tools import phabricator as phabricator_tools
@@ -26,17 +32,30 @@ from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.phabricator import PhabricatorContext
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from phabricator_client import (
-    PhabricatorClient,
-    PhabricatorSettings,
-    UnresolvedCommitError,
-)
+from phabricator_client import PhabricatorClient, PhabricatorSettings
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
 log = logging.getLogger("bugzilla-broker")
+
+# The only Conduit methods the proxy will forward. Everything needed to
+# reconstruct a revision's stack and its diffs, and nothing that writes:
+# an allow list (not a deny list) so a Conduit method added upstream is
+# refused by default rather than silently exposed with the broker's key.
+READ_ONLY_CONDUIT_METHODS = frozenset(
+    {
+        # The stack graph and each revision's current diff PHID.
+        "differential.revision.search",
+        # Diff metadata, including the base commit each diff was built on.
+        "differential.diff.search",
+        # The patch text itself.
+        "differential.getrawdiff",
+        # Expanding an abbreviated base commit to a full, fetchable hash.
+        "diffusion.querycommits",
+    }
+)
 
 
 class BrokerInputs(BaseSettings):
@@ -53,36 +72,57 @@ class BrokerInputs(BaseSettings):
     )
 
 
-def _patch_endpoint(client: PhabricatorClient):
-    """A read-only endpoint returning a revision's base commit + raw diff.
+def _conduit_error(code: str, info: str, status: int) -> JSONResponse:
+    """A Conduit-shaped error body, so a Conduit client can read the refusal."""
+    return JSONResponse(
+        {"result": None, "error_code": code, "error_info": info}, status_code=status
+    )
 
-    The broker holds the Conduit key; the agent only ever sees this loopback URL,
-    so it can reproduce the revision's tree without any credentials.
+
+def _conduit_proxy_endpoint(client: PhabricatorClient):
+    """A read-only Conduit proxy: `POST /api/{method}`.
+
+    The broker holds the Conduit key; the agent only ever sees this loopback
+    URL, so it can read what it needs to reconstruct a revision's stack without
+    any credentials. Requests are forwarded only for
+    :data:`READ_ONLY_CONDUIT_METHODS`, and whatever ``__conduit__`` token the
+    caller sent is discarded and replaced with the real key by
+    ``PhabricatorClient.conduit_call``.
+
+    The body is parsed as a url-encoded form directly rather than via
+    ``request.form()``: moz-phab's Conduit client posts a url-encoded body with
+    no ``Content-Type`` header, which ``request.form()`` would read as empty.
     """
 
-    async def get_patch(request):
-        revision_id = int(request.path_params["revision_id"])
-        diff = await client.query_latest_diff(revision_id)
-        if diff is None:
-            return JSONResponse(
-                {"error": f"D{revision_id} has no diffs"}, status_code=404
+    async def proxy(request):
+        method = request.path_params["method"]
+        if method not in READ_ONLY_CONDUIT_METHODS:
+            log.warning("refusing to proxy Conduit method %s", method)
+            return _conduit_error(
+                "ERR-CONDUIT-METHOD-NOT-ALLOWED",
+                f"{method} is not on the broker's read-only allow list",
+                403,
             )
-        if not diff.base_commit:
-            return JSONResponse(
-                {"error": f"D{revision_id} diff {diff.id} has no base commit"},
-                status_code=404,
-            )
-        raw_diff = await client.get_raw_diff(diff.id)
-        # The recorded base is often an abbreviated hash; git can only fetch a
-        # full object id, so expand it here.
+
+        body = urllib.parse.parse_qs((await request.body()).decode())
         try:
-            base_commit = await client.resolve_commit(diff.base_commit)
-        except UnresolvedCommitError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=422)
+            params = json.loads(body.get("params", ["{}"])[0])
+        except ValueError as exc:
+            return _conduit_error("ERR-CONDUIT-CORE", f"Malformed params: {exc}", 400)
+        if not isinstance(params, dict):
+            return _conduit_error(
+                "ERR-CONDUIT-CORE", "params must be a JSON object", 400
+            )
 
-        return JSONResponse({"base_commit": base_commit, "raw_diff": raw_diff})
+        try:
+            return JSONResponse(await client.conduit_call(method, params))
+        except httpx.HTTPError as exc:
+            log.warning("proxied Conduit call %s failed: %s", method, exc)
+            return _conduit_error(
+                "ERR-CONDUIT-CORE", f"Upstream Phabricator call failed: {exc}", 502
+            )
 
-    return get_patch
+    return proxy
 
 
 def _mcp_endpoint(manager: StreamableHTTPSessionManager):
@@ -120,7 +160,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
         async with bugzilla_manager.run(), phabricator_manager.run():
             log.info(
                 "broker ready on %s:%d (bugzilla + phabricator read-only, "
-                "phabricator patch)",
+                "phabricator conduit proxy)",
                 inputs.host,
                 inputs.port,
             )
@@ -130,9 +170,13 @@ def build_app(inputs: BrokerInputs) -> Starlette:
         routes=[
             Mount("/bugzilla/mcp", app=_mcp_endpoint(bugzilla_manager)),
             Mount("/phabricator/mcp", app=_mcp_endpoint(phabricator_manager)),
+            # Mounted at the root, mirroring a real Phabricator instance's
+            # layout: a Conduit client derives its API URL as `<base>/api/`,
+            # so this is the path that makes the broker usable as one.
             Route(
-                "/phabricator/revision/{revision_id:int}/patch",
-                _patch_endpoint(phabricator_client),
+                "/api/{method}",
+                _conduit_proxy_endpoint(phabricator_client),
+                methods=["POST"],
             ),
         ],
         lifespan=lifespan,

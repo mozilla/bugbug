@@ -71,6 +71,24 @@ async def test_conduit_request_raises_on_error_code(monkeypatch):
         await _client().conduit_request("some.method")
 
 
+async def test_conduit_call_returns_the_envelope_without_raising(monkeypatch):
+    # The broker's read-only proxy relays Conduit's own answer, errors included.
+    envelope = {"result": None, "error_code": "ERR-CONDUIT", "error_info": "nope"}
+    _capture_post(monkeypatch, envelope)
+    assert await _client().conduit_call("some.method", {}) == envelope
+
+
+async def test_conduit_call_overrides_a_caller_supplied_token(monkeypatch):
+    # A proxied caller must not be able to choose the credentials the request
+    # is made with, only the method and its arguments.
+    captured = _capture_post(monkeypatch, {"result": {}})
+    await _client().conduit_call(
+        "some.method", {"foo": "bar", "__conduit__": {"token": "api-not-mine"}}
+    )
+    assert captured["params"]["__conduit__"] == {"token": VALID_TOKEN}
+    assert captured["params"]["foo"] == "bar"
+
+
 def test_valid_api_key_accepted():
     assert PhabricatorSettings(api_key=VALID_TOKEN).api_key == VALID_TOKEN
 

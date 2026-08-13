@@ -29,10 +29,53 @@ class UnresolvedCommitError(Exception):
     """A commit identifier could not be expanded to a full, fetchable hash."""
 
 
-def _is_full_commit(ref: str) -> bool:
+def is_full_commit(ref: str) -> bool:
     """True if ``ref`` is a full 40-char lowercase-hex git commit hash."""
     ref = ref.lower()
     return len(ref) == _FULL_COMMIT_LEN and all(c in "0123456789abcdef" for c in ref)
+
+
+def select_full_commit(ref: str, result: dict) -> str:
+    """Pick the one full commit hash matching ``ref`` in a Diffusion result.
+
+    ``result`` is a ``diffusion.querycommits`` response. Split out from
+    :meth:`PhabricatorClient.resolve_commit` so callers that reach Conduit by
+    another route (e.g. the agent talking to the broker's read-only proxy
+    through moz-phab's own client) share the same resolution rules.
+
+    Raises :class:`UnresolvedCommitError` when no single full hash can be named.
+    """
+    if is_full_commit(ref):
+        return ref
+    data = result.get("data") or {}
+    commit_phid = (result.get("identifierMap") or {}).get(ref)
+    if commit_phid in data:
+        commits = [data[commit_phid]]
+    else:
+        # ``identifierMap`` only maps unambiguous commits, and a firefox
+        # commit is mirrored to autoland, beta, release, etc. Thus, the same
+        # hash can appear in multiple repos with different PHIDs.
+        commits = data.values()
+
+    identifiers = {
+        commit["identifier"]
+        for commit in commits
+        if commit["identifier"].startswith(ref) and is_full_commit(commit["identifier"])
+    }
+
+    if len(identifiers) != 1:
+        if identifiers:
+            reason = f"it matches {len(identifiers)} commits"
+        else:
+            reason = (
+                "Diffusion does not know one; the commit may not be "
+                "imported, e.g. an unlanded parent of a stacked patch"
+            )
+        raise UnresolvedCommitError(
+            f"Cannot expand {ref} to a full commit hash: {reason}."
+        )
+
+    return identifiers.pop()
 
 
 class PhabricatorClient:
@@ -46,16 +89,30 @@ class PhabricatorClient:
     def revision_url(self, revision_id: int) -> str:
         return f"{self.base_url}/D{revision_id}"
 
-    async def conduit_request(self, method: str, **payload: Any) -> dict:
-        """Call a Conduit method, returning its ``result`` (raising on error)."""
-        payload["__conduit__"] = {"token": self.settings.api_key}
+    async def conduit_call(self, method: str, params: dict) -> dict:
+        """Call a Conduit method, returning its full response envelope.
+
+        The envelope (``{"result", "error_code", "error_info"}``) is returned
+        as-is, without raising on a Conduit-level error — for callers that need
+        to relay Conduit's own answer verbatim (e.g. the broker's read-only
+        Conduit proxy). Most callers want :meth:`conduit_request` instead.
+
+        Any ``__conduit__`` block in ``params`` is replaced with this client's
+        key, so a caller (or a proxied client) never gets to choose the
+        credentials the request is made with.
+        """
+        payload = {**params, "__conduit__": {"token": self.settings.api_key}}
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
             response = await client.post(
                 f"{self.base_url}/api/{method}",
                 data={"params": json.dumps(payload), "output": "json"},
             )
         response.raise_for_status()
-        data = response.json()
+        return response.json()
+
+    async def conduit_request(self, method: str, **payload: Any) -> dict:
+        """Call a Conduit method, returning its ``result`` (raising on error)."""
+        data = await self.conduit_call(method, payload)
         if data.get("error_code"):
             raise RuntimeError(
                 f"Conduit error {data['error_code']}: {data.get('error_info')}"
@@ -160,36 +217,7 @@ class PhabricatorClient:
 
         Raises :class:`UnresolvedCommitError` when no full hash can be named.
         """
-        if _is_full_commit(ref):
+        if is_full_commit(ref):
             return ref
         result = await self.conduit_request("diffusion.querycommits", names=[ref])
-        data = result.get("data")
-        commit_phid = result.get("identifierMap").get(ref)
-        if commit_phid in data:
-            commits = [data[commit_phid]]
-        else:
-            # ``identifierMap`` only maps unambiguous commits, and a firefox
-            # commit is mirrored to autoland, beta, release, etc. Thus, the same
-            # hash can appear in multiple repos with different PHIDs.
-            commits = data.values()
-
-        identifiers = {
-            commit["identifier"]
-            for commit in commits
-            if commit["identifier"].startswith(ref)
-            and _is_full_commit(commit["identifier"])
-        }
-
-        if len(identifiers) != 1:
-            if identifiers:
-                reason = f"it matches {len(identifiers)} commits"
-            else:
-                reason = (
-                    "Diffusion does not know one; the commit may not be "
-                    "imported, e.g. an unlanded parent of a stacked patch"
-                )
-            raise UnresolvedCommitError(
-                f"Cannot expand {ref} to a full commit hash: {reason}."
-            )
-
-        return identifiers.pop()
+        return select_full_commit(ref, result)

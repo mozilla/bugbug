@@ -1,91 +1,167 @@
-"""Tests for the broker's Phabricator patch route and MCP mounts."""
+"""Tests for the broker's read-only Conduit proxy and MCP mounts."""
 
+import json
+import urllib.parse
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 from hackbot_agents.bug_fix import broker
-from phabricator_client import (
-    PhabricatorDiff,
-    PhabricatorSettings,
-    UnresolvedCommitError,
-)
+from phabricator_client import PhabricatorClient, PhabricatorSettings
+from phabricator_client import client as client_module
 from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
 VALID_TOKEN = "api-" + "a" * 28
+ALLOWED_METHOD = "differential.revision.search"
 
 
-def _client(fake) -> TestClient:
+def _client(phabricator_client) -> TestClient:
     route = Route(
-        "/phabricator/revision/{revision_id:int}/patch", broker._patch_endpoint(fake)
+        "/api/{method}",
+        broker._conduit_proxy_endpoint(phabricator_client),
+        methods=["POST"],
     )
     return TestClient(Starlette(routes=[route]))
 
 
-def test_patch_route_returns_base_and_diff():
-    fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(
-        return_value=PhabricatorDiff(id=9, base_commit="base9")
-    )
-    fake.get_raw_diff = AsyncMock(return_value="diff --git a/f b/f\n")
-    # The abbreviated base is expanded to a full, fetchable hash.
-    fake.resolve_commit = AsyncMock(return_value="base9full")
+def _conduit_body(params: dict) -> bytes:
+    """A request body shaped like moz-phab's: url-encoded, no Content-Type.
 
-    resp = _client(fake).get("/phabricator/revision/42/patch")
+    Posted with httpx's `content=`, which sets no Content-Type — exactly what
+    moz-phab's urllib3-based Conduit client sends.
+    """
+    return urllib.parse.urlencode(
+        {"params": json.dumps(params), "output": "json"}
+    ).encode()
+
+
+def test_proxy_forwards_an_allow_listed_method():
+    fake = AsyncMock()
+    fake.conduit_call = AsyncMock(
+        return_value={"result": {"data": []}, "error_code": None, "error_info": None}
+    )
+
+    resp = _client(fake).post(
+        f"/api/{ALLOWED_METHOD}", content=_conduit_body({"constraints": {"ids": [42]}})
+    )
 
     assert resp.status_code == 200
     assert resp.json() == {
-        "base_commit": "base9full",
-        "raw_diff": "diff --git a/f b/f\n",
+        "result": {"data": []},
+        "error_code": None,
+        "error_info": None,
     }
-    fake.get_raw_diff.assert_awaited_once_with(9)
-    fake.resolve_commit.assert_awaited_once_with("base9")
+    fake.conduit_call.assert_awaited_once_with(
+        ALLOWED_METHOD, {"constraints": {"ids": [42]}}
+    )
 
 
-def test_patch_route_422_when_base_cannot_be_expanded(caplog):
-    # Serving the abbreviation would only fail later in `git fetch`, which
-    # reports an exit status and not a reason, so fail here and say why.
+def test_proxy_refuses_a_method_that_writes(caplog):
     fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(
-        return_value=PhabricatorDiff(id=9, base_commit="base9")
-    )
-    fake.get_raw_diff = AsyncMock(return_value="diff --git a/f b/f\n")
-    fake.resolve_commit = AsyncMock(
-        side_effect=UnresolvedCommitError("Cannot expand base9: not imported")
-    )
 
     with caplog.at_level("WARNING", logger=broker.log.name):
-        resp = _client(fake).get("/phabricator/revision/42/patch")
+        resp = _client(fake).post(
+            "/api/differential.revision.edit", content=_conduit_body({})
+        )
 
-    # 422, not 404: the revision and its base exist, they are just unusable.
-    assert resp.status_code == 422
-    # The reason reaches the agent, which puts the response body in the error
-    # it raises, as well as the broker's own log.
-    assert resp.json()["error"] == "Cannot expand base9: not imported"
-    assert "D42" in caplog.text
-    assert "Cannot expand base9: not imported" in caplog.text
-
-
-def test_patch_route_404_when_no_diff():
-    fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(return_value=None)
-
-    resp = _client(fake).get("/phabricator/revision/42/patch")
-
-    assert resp.status_code == 404
+    assert resp.status_code == 403
+    assert resp.json()["error_code"] == "ERR-CONDUIT-METHOD-NOT-ALLOWED"
+    # Nothing reached Phabricator, so the broker's key was never used.
+    fake.conduit_call.assert_not_awaited()
+    assert "differential.revision.edit" in caplog.text
 
 
-def test_patch_route_404_when_no_base_commit():
-    fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(
-        return_value=PhabricatorDiff(id=9, base_commit=None)
+def test_proxy_substitutes_the_brokers_own_conduit_token(monkeypatch):
+    # The whole point of the proxy: whatever token the caller sends is
+    # discarded, so the agent never needs (or gets) a real one.
+    captured: dict = {}
+
+    class _FakeAsyncClient:
+        def __init__(self, timeout=None):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, data=None):
+            captured["url"] = url
+            captured["params"] = json.loads(data["params"])
+            return httpx.Response(
+                200,
+                json={"result": {}, "error_code": None},
+                request=httpx.Request("POST", url),
+            )
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
+    real = PhabricatorClient(
+        PhabricatorSettings(api_key=VALID_TOKEN, url="https://phab.example.com")
     )
 
-    resp = _client(fake).get("/phabricator/revision/42/patch")
+    resp = _client(real).post(
+        f"/api/{ALLOWED_METHOD}",
+        content=_conduit_body(
+            {"constraints": {}, "__conduit__": {"token": "api-caller-supplied"}}
+        ),
+    )
 
-    assert resp.status_code == 404
+    assert resp.status_code == 200
+    assert captured["url"] == f"https://phab.example.com/api/{ALLOWED_METHOD}"
+    assert captured["params"]["__conduit__"] == {"token": VALID_TOKEN}
+
+
+def test_proxy_relays_a_conduit_error_verbatim():
+    # Conduit reports failures in the response body, and the caller's client
+    # knows how to read them; passing the envelope through unchanged keeps that
+    # working instead of flattening it into an HTTP error.
+    fake = AsyncMock()
+    fake.conduit_call = AsyncMock(
+        return_value={
+            "result": None,
+            "error_code": "ERR-CONDUIT-CORE",
+            "error_info": "No such revision",
+        }
+    )
+
+    resp = _client(fake).post(f"/api/{ALLOWED_METHOD}", content=_conduit_body({}))
+
+    assert resp.status_code == 200
+    assert resp.json()["error_info"] == "No such revision"
+
+
+def test_proxy_rejects_malformed_params():
+    fake = AsyncMock()
+
+    resp = _client(fake).post(f"/api/{ALLOWED_METHOD}", content=b"params=not-json")
+
+    assert resp.status_code == 400
+    fake.conduit_call.assert_not_awaited()
+
+
+def test_proxy_reports_an_upstream_failure():
+    fake = AsyncMock()
+    fake.conduit_call = AsyncMock(side_effect=httpx.ConnectError("refused"))
+
+    resp = _client(fake).post(f"/api/{ALLOWED_METHOD}", content=_conduit_body({}))
+
+    assert resp.status_code == 502
+    assert "refused" in resp.json()["error_info"]
+
+
+def test_allow_list_holds_only_the_reads_the_checkout_needs():
+    # Pinned deliberately: this list is what the agent can reach with the
+    # broker's Conduit key, so widening it should be a conscious edit.
+    assert broker.READ_ONLY_CONDUIT_METHODS == {
+        "differential.revision.search",
+        "differential.diff.search",
+        "differential.getrawdiff",
+        "diffusion.querycommits",
+    }
 
 
 def _app() -> Starlette:
@@ -136,6 +212,8 @@ def test_app_serves_both_mcp_endpoints():
     assert mounts == {"/bugzilla/mcp", "/phabricator/mcp"}
 
 
-def test_app_serves_the_patch_route():
-    paths = {r.path for r in _app().routes if isinstance(r, Route)}
-    assert "/phabricator/revision/{revision_id:int}/patch" in paths
+def test_app_serves_the_conduit_proxy_route():
+    # At the root, because a Conduit client derives its API URL as `<base>/api/`.
+    routes = {r.path: r for r in _app().routes if isinstance(r, Route)}
+    assert "/api/{method}" in routes
+    assert routes["/api/{method}"].methods == {"POST"}
