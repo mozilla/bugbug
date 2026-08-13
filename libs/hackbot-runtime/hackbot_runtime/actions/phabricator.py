@@ -44,8 +44,8 @@ def _validate_summary(summary: str | None) -> None:
     if match:
         raise ToolError(
             f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
-            "a line is interpreted as a Test Plan field. Add a leading space or "
-            "rephrase that line, then call submit_patch again."
+            "a line is interpreted as a Test Plan field. Call submit_patch again "
+            "with that fixed."
         )
 
 
@@ -67,14 +67,7 @@ async def submit_patch(
     ],
     summary: Annotated[
         str | None,
-        Field(
-            default=None,
-            description=(
-                "Revision summary/description. Do not start a line with a Test "
-                "Plan header or alias such as Tests:, Test Plan:, Testplan:, or "
-                "Tested:; indent or rephrase it."
-            ),
-        ),
+        Field(default=None, description="Revision summary/description."),
     ] = None,
     ref: Annotated[
         str | None,

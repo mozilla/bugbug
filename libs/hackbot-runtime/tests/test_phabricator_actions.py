@@ -37,7 +37,7 @@ async def test_submit_rejects_test_plan_headers(header):
         )
 
     assert header in str(exc.value)
-    assert "Add a leading space or rephrase that line" in str(exc.value)
+    assert "Call submit_patch again with that fixed" in str(exc.value)
     assert rec.actions == []
 
 
