@@ -1,21 +1,44 @@
-# Frontend papercut triage
+# User-facing Firefox defect triage
 
-These rules apply to **Firefox desktop frontend defects** — UI/UX papercuts in
-the browser chrome and built-in pages. Typical components: `Firefox :: Tabbed
-Browser`, `Firefox :: Tabbed Browser: Split View`, `Firefox :: New Tab Page`,
-`Firefox :: Address Bar`, `Firefox :: Menus`, `Firefox :: Toolbars and
-Customization`, `Firefox :: Sidebar`, `Firefox :: Theme`. These are usually
-documented with a **video or screenshot** and steps to reproduce, and are
-**not** crashes, hangs, or sanitizer reports.
+These rules apply to **defects in user-facing Firefox** — the desktop frontend,
+Firefox for Android, and the Windows installer and application updater. Typical
+components:
 
-If the bug is a crash/assertion/sanitizer report, or is not a frontend bug, this
-ruleset does not apply — note that and stop.
+- Desktop frontend, all under `Firefox`: `Tabbed Browser`,
+  `Tabbed Browser: Split View`, `New Tab Page`, `Address Bar`, `Menus`,
+  `Toolbars and Customization`, `Sidebar`, `Theme`.
+- Android: `Firefox for Android :: History`.
+- Install and update: `Firefox :: Installer`, `Toolkit :: Application Update`.
+
+Desktop and Android bugs here are usually UI/UX papercuts, documented with a
+**video or screenshot** and steps to reproduce.
+
+**Install and update bugs look different, and that is not a reason to skip them.**
+An installer or updater bug is normally a _failure_ rather than a papercut: an update
+that did not apply, an install that rolled back, a version that stayed where it was,
+a wrong or unhelpful error dialog — reported with an error or status code, an
+`update.log` or installer log excerpt, and an OS and channel rather than a
+screenshot. Triage those normally: read the log the reporter pasted, map the status
+code to its definition in `toolkit/mozapps/update/common/` or to the NSIS `.nsh` that
+emits it, and localize from there. Missing steps to reproduce is the norm in this area
+and is not by itself grounds to call a bug unactionable — say what you would need
+instead.
+
+If the bug is a crash, assertion failure, or sanitizer report, this ruleset does not
+apply — note that and stop. "The installer failed" and "the update did not apply" are
+**not** crash reports. Also stop if the bug is not in user-facing Firefox at all — a
+Core, DevTools-internals, or build-system bug — and say which area it looks like.
 
 ## What to produce
 
-1. **Localize the cause in the source.** Frontend code lives mostly under
-   `browser/`, `toolkit/`, and `devtools/`. Find the JS/JSM module, the CSS, the
-   XUL/HTML, and any relevant pref (often `modules/libpref/init/all.js`) that
+1. **Localize the cause in the source.** Where to look and what language to expect
+   depend on the component — see **Source repository** in the system prompt for the
+   per-area layout. In short: desktop frontend under `browser/`, `toolkit/`, and
+   `devtools/` (JS/JSM, CSS, XUL/HTML); Android under `mobile/android/` (Kotlin,
+   Fragment/Store/Middleware/View); the updater under `toolkit/mozapps/update/`
+   (`.sys.mjs`, IDL, C++); the installer under `browser/installer/windows/nsis/`
+   (NSIS `.nsi`/`.nsh`). Find the module, the markup or layout, and any relevant pref
+   (often `modules/libpref/init/all.js`, or `app.update.*` for the updater) that
    governs the behaviour. Use the `investigator` subagent for deep searches.
 2. **Confirm the area is still live.** Check the referenced code/strings still
    exist and aren't already changed by a recent commit. If the bug looks already

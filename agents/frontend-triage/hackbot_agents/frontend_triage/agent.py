@@ -1,6 +1,7 @@
 """Frontend triage tool -- a read-only Bugzilla triage + fix-planning agent.
 
-Orchestrates a Claude agent that triages Firefox desktop *frontend* bugs
+Orchestrates a Claude agent that triages user-facing Firefox bugs -- the desktop
+frontend, Firefox for Android, and the Windows installer and application updater --
 according to rulesets in the rules/ directory. The agent investigates the
 source repository READ-ONLY (no build, no source edits, no reproduction) and
 produces a root-cause analysis plus a proposed fix plan, which it records as a

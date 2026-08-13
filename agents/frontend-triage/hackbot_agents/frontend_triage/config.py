@@ -51,7 +51,13 @@ ENABLED_ACTION_TYPES = [
 # code (see notify.py), not a model turn, so it goes through the recorder directly and
 # the agent is never given the tool — it has no say in what is said or where.
 SLACK_CHANNELS = {
-    "Firefox :: New Tab Page": "#hnt-dev",
+    "Firefox :: New Tab Page": "#hnt-dev-triage",
+    "Firefox for Android :: History": "#android-core-dev",
+    # The installer and the updater are triaged by the same team, so two components
+    # share a channel. Keying by product-and-component rather than by channel is what
+    # lets them, without either one having to know about the other.
+    "Toolkit :: Application Update": "#installer-updater-bug-triage",
+    "Firefox :: Installer": "#installer-updater-bug-triage",
 }
 
 # What a `bugzilla.update_bug` from this agent may touch. Enforced at record time

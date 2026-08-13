@@ -1,6 +1,6 @@
 # frontend-triage agent
 
-Triages a Firefox desktop frontend bug from Bugzilla and produces a **root-cause
+Triages a user-facing Firefox bug from Bugzilla and produces a **root-cause
 analysis plus a proposed fix plan**. It reads the source tree, navigates the
 codebase with Searchfox, and inspects regressor changesets on hg.mozilla.org. It
 does **not** build Firefox, edit source, or reproduce the bug. It writes to
@@ -13,14 +13,28 @@ human (or a downstream execution agent) takes it from there.
 
 ## What it triages
 
-Firefox desktop **frontend defects** — the kind documented with a screenshot or
-steps to reproduce rather than a stack trace: Tabbed Browser (incl. Split View
-and Tab Groups), New Tab Page, Address Bar, Menus, Toolbars and Customization,
-Sidebar, Theme.
+**Defects in user-facing Firefox** — the kind documented with a screenshot, steps
+to reproduce, or a log rather than a stack trace:
+
+- **Desktop frontend**, under `Firefox`: Tabbed Browser (incl. Split View and Tab
+  Groups), New Tab Page, Address Bar, Menus, Toolbars and Customization, Sidebar,
+  Theme.
+- **Firefox for Android**: History. Kotlin under `mobile/android/fenix/`.
+- **Install and update**: `Firefox :: Installer` (NSIS) and
+  `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
+
+Install and update bugs are the odd ones out: they arrive as a failure with an
+error code and an `update.log` or installer log, usually with no steps to
+reproduce and no screenshot. That is the normal shape of a bug in that area, so
+`frontend-triage.md` says so explicitly — otherwise the ruleset's papercut
+framing reads as a reason to skip them. `severity-assessment.md` starts them at
+S2 rather than the S3 a papercut would get, since a user who cannot update is
+left on an unpatched build with no in-product workaround.
 
 Poor fits: crashes, hangs, assertions and sanitizer reports (those belong to
-[`bug-fix`](../bug-fix/)), anything with no frontend component, and bugs whose
-fix can only be judged by _seeing_ the rendered result.
+[`bug-fix`](../bug-fix/)) — note that "the installer failed" is not a crash
+report — anything outside user-facing Firefox, and bugs whose fix can only be
+judged by _seeing_ the rendered result.
 
 The `scoping.md` ruleset runs first and filters out non-defects, tracking/`meta`
 bugs and intermittent test failures with a short note instead of an invented fix
@@ -159,13 +173,21 @@ The audience is the team whose bug was just written to by nobody, so only an
 auto-applied run notifies. A medium or low result wrote nothing to Bugzilla and
 stays silent, even if someone applies it by hand later.
 
-Routing is `SLACK_CHANNELS` in `config.py`, keyed by `"<Product> :: <Component>"`
-— today just `Firefox :: New Tab Page` → `#hnt-dev`. A component that is not
-listed notifies nobody; there is deliberately no default channel, since posting one
-team's triage into another team's channel is worse than silence. Product and
-component come from the agent's `product`/`component` plan fields, because nothing
-else carries them out of a run whose only input is a bug id, so a garbled value
-matches no team and sends nothing.
+Routing is `SLACK_CHANNELS` in `config.py`, keyed by `"<Product> :: <Component>"`:
+
+| Product :: Component             | Channel                         |
+| -------------------------------- | ------------------------------- |
+| `Firefox :: New Tab Page`        | `#hnt-dev-triage`               |
+| `Firefox for Android :: History` | `#android-core-dev`             |
+| `Toolkit :: Application Update`  | `#installer-updater-bug-triage` |
+| `Firefox :: Installer`           | `#installer-updater-bug-triage` |
+
+Two components may share a channel, as the installer and the updater do; the key is
+the component, not the team. A component that is not listed notifies nobody; there is
+deliberately no default channel, since posting one team's triage into another team's
+channel is worse than silence. Product and component come from the agent's
+`product`/`component` plan fields, because nothing else carries them out of a run
+whose only input is a bug id, so a garbled value matches no team and sends nothing.
 
 `notify.py` builds and records the message; the wording is code, not a model turn,
 so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is never
