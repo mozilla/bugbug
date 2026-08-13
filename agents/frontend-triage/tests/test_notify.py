@@ -88,8 +88,17 @@ def test_a_missing_summary_leaves_the_bug_link_alone():
 
 def test_the_channel_belongs_to_the_component():
     assert channel_for("Firefox", "New Tab Page") == "#hnt-dev"
+    assert channel_for("Firefox for Android", "History") == "#android-core-dev"
     # Surrounding whitespace is the agent's, not Bugzilla's.
     assert channel_for(" Firefox ", " New Tab Page ") == "#hnt-dev"
+
+
+def test_the_installer_and_the_updater_share_a_channel():
+    # One team triages both, and a key that is off by a character notifies nobody
+    # rather than failing, so each one is asserted rather than assumed from the other.
+    triage = "#installer-updater-bug-triage"
+    assert channel_for("Toolkit", "Application Update") == triage
+    assert channel_for("Firefox", "Installer") == triage
 
 
 def test_an_unowned_component_has_no_channel():
@@ -97,6 +106,9 @@ def test_an_unowned_component_has_no_channel():
     # worse outcome than silence.
     assert channel_for("Firefox", "Address Bar") is None
     assert channel_for("Core", "New Tab Page") is None
+    # A component name is only owned within its own product: `History` routes to
+    # #android-core-dev under Firefox for Android and nowhere at all under Firefox.
+    assert channel_for("Firefox", "History") is None
     assert channel_for("Firefox", None) is None
     assert channel_for(None, "New Tab Page") is None
     assert channel_for("", "") is None

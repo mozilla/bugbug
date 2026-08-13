@@ -21,6 +21,13 @@ user is affected, how many users hit it, and whether a workaround exists.
 - Frontend UI/UX papercuts are usually **S3** (or **S4** when purely cosmetic). Reserve
   **S1 / S2** for genuine breakage: crashes, data/state loss, or a broken core workflow
   with no easy workaround.
+- **Install and update failures do not default to S3.** "Papercut usually means S3" is a
+  desktop-frontend heuristic and does not carry over: a user whose update does not apply
+  is left on an older, unpatched build, and a user whose install fails does not have
+  Firefox at all. Neither has a workaround inside the product. Judge these on reach — a
+  failure specific to one antivirus product or one locale is narrower than one that hits
+  a whole channel or OS version — but start from **S2** and move up or down from there,
+  rather than starting from S3.
 - Weigh: is it functional vs cosmetic? Is there a workaround? How frequently and how
   broadly is it hit (mainline path vs rare configuration)?
 - Do **not downgrade** an existing higher severity unless you have strong evidence the
