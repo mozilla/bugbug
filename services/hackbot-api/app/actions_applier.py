@@ -160,6 +160,7 @@ async def _dispatch(
             gcs.download_artifact_bytes(run_id, key)
         ),
         attachments=attachments,
+        agent=run.agent,
     )
     try:
         return await handler.apply(params, ctx)
