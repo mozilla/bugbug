@@ -86,6 +86,31 @@ def test_revision_title_strips_wip_prefix():
     assert rt("WIP: Fix bug") == "Fix bug"
 
 
+@pytest.mark.parametrize(
+    "header",
+    ["Tests", "tests", "Test Plan", "Testplan", "Tested"],
+)
+def test_sanitize_summary_indents_test_plan_headers(header):
+    summary = f"Explanation\n\n{header}: details"
+    assert phabricator_handler._sanitize_summary(summary) == (
+        f"Explanation\n\n {header}: details"
+    )
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        None,
+        "",
+        "Testing: details",
+        "Some Tests: details",
+        " Tests: already indented",
+    ],
+)
+def test_sanitize_summary_leaves_safe_text_unchanged(summary):
+    assert phabricator_handler._sanitize_summary(summary) == summary
+
+
 async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     fake, calls = _fake_conduit(
         {
@@ -98,8 +123,12 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
         phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
     )
 
+    summary = (
+        "The migration picker now defaults to Documents.\n\n"
+        "Tests: `browser_file_migration.js` passes."
+    )
     result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 1, "title": "Fix", "summary": "s"},
+        {"bug_id": 1, "title": "Fix", "summary": summary},
         _ctx(),
     )
 
@@ -123,6 +152,7 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     assert transactions["plan-changes"] is True
     assert "reviewers.add" not in transactions
     assert transactions["bugzilla.bug-id"] == "1"
+    assert transactions["summary"] == summary.replace("\nTests:", "\n Tests:")
 
 
 async def test_submit_patch_sets_local_commits_property(monkeypatch):

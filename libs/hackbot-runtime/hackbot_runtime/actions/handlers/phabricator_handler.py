@@ -93,9 +93,23 @@ Bug #: {bug_id}
 # in the visible title only adds cleanup work when promoting to review.
 _WIP_PREFIX_RE = re.compile(r"^(?:WIP[: ]|WIP$)", re.IGNORECASE)
 
+# Phabricator reparses summaries as commit messages. Test Plan aliases at the
+# start of a line are interpreted as fields, making the summary ambiguous.
+_PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
+    r"^(?=(?:Test Plan|Testplan|Tested|Tests):)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 
 def _revision_title(title: str) -> str:
     return _WIP_PREFIX_RE.sub("", title).strip()
+
+
+def _sanitize_summary(summary: str | None) -> str | None:
+    """Indent lines Phabricator would parse as Test Plan field headers."""
+    if not summary:
+        return summary
+    return _PHABRICATOR_TEST_PLAN_HEADER_RE.sub(" ", summary)
 
 
 async def _revision_fields(revision_id: int) -> dict:
@@ -152,7 +166,7 @@ def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) 
     reconstructed commit reads identically to a moz-phab submission. Reviewers
     are always empty: hackbot never assigns them (draft submissions omit them).
     """
-    body = summary or ""
+    body = _sanitize_summary(summary) or ""
     if body:
         body += "\n"
     body += f"\nDifferential Revision: {url}"
@@ -219,7 +233,7 @@ class SubmitPatchHandler:
 
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
-        summary = params.get("summary")
+        summary = _sanitize_summary(params.get("summary"))
 
         try:
             raw = await ctx.download_artifact(_DIFF_ARTIFACT_KEY)
