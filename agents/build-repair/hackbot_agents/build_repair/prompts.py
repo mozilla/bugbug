@@ -16,10 +16,19 @@ Analyze the following:
 {failure_logs}
 
 Create these documents:
-1. {scratch_out}/analysis.md with your detailed analysis of what caused the failure
-2. {scratch_out}/planning.md with a fixing plan
-3. {scratch_out}/summary.md with a brief one-paragraph summary of the analysis and plan
-   that can point a developer in the right direction
+1. {scratch_out}/analysis.md -- the developer's reference, readable in under a
+   minute. Under 40 lines, in exactly these sections, each a short paragraph or a
+   few bullets:
+     ## Verdict -- which commit broke the build, or that none of them did
+     ## Error -- what the build reports, with the line that shows it
+     ## Cause -- the change that produces that error
+     ## Fix -- what to change
+   Quote only what decides something. Do not restate a diff you already pointed
+   at, and do not narrate the steps you took to get here.
+2. {scratch_out}/planning.md with the fix as a short numbered list of edits
+3. {scratch_out}/summary.md -- 2-3 sentences of plain prose, no headings or lists.
+   Open with whether a commit in this push broke the build and which one, then
+   give the error and the fix in a clause each.
 {blame_step}
 Do not prompt to edit those documents. Do not write any code yet. Work fully
 autonomously and do not ask any questions.
