@@ -130,6 +130,13 @@ def test_a_patch_is_advice_for_the_author_not_an_alternative_action():
     assert "The backout still stands." in message
 
 
+def test_the_patch_line_comes_before_the_run_link():
+    lines = _message(_result(proposed_patch=True)).splitlines()
+    patch = next(i for i, line in enumerate(lines) if "Patch attached" in line)
+    run = next(i for i, line in enumerate(lines) if "Hackbot run details" in line)
+    assert patch < run
+
+
 def test_no_patch_line_without_a_patch():
     assert "Patch attached" not in _message()
 

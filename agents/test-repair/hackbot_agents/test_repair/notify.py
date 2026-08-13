@@ -123,14 +123,14 @@ def _culprit_line(result: TestRepairResult, culprit_author: str | None) -> str:
     return line
 
 
-def _patch_line(result: TestRepairResult) -> str | None:
+def _patch_lines(result: TestRepairResult) -> list[str]:
     """Who the attached patch is for, so it is not read as an alternative action."""
     if not result.proposed_patch:
-        return None
-    return (
+        return []
+    return [
         "Patch attached for the author: squash it into the existing patches and"
         " reland, rather than landing it as a follow-up. The backout still stands."
-    )
+    ]
 
 
 def build_message(
@@ -150,11 +150,9 @@ def build_message(
         _jobs_line(investigation, task_id),
         _push_line(investigation),
         _culprit_line(result, culprit_author),
+        *_patch_lines(result),
         _link(RUN_URL.format(run_id=run_id), "Hackbot run details"),
     ]
-    patch = _patch_line(result)
-    if patch:
-        lines.insert(-1, patch)
     if result.summary.strip():
         lines += ["", result.summary.strip()]
     return "\n".join(lines)
