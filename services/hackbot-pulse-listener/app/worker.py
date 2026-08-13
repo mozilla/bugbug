@@ -1,7 +1,7 @@
 import logging
 import time
 
-from app import client, notify
+from app import client, notify, treeherder
 from app.config import settings
 from app.models import RunContext
 
@@ -30,9 +30,33 @@ def poll_and_notify(ctx: RunContext) -> None:
         return
 
     try:
-        notify.send_email(ctx, run_doc)
+        notify.send_email(ctx, run_doc, _already_actioned(ctx))
     except Exception:
         logger.exception("Failed to send notification for run %s", ctx.run_id)
+
+
+def _already_actioned(ctx: RunContext) -> str | None:
+    """Treeherder's verdict now that the run has finished, or None.
+
+    A sheriff often acts while a run works. Never raises: the email goes out unmarked.
+    """
+    try:
+        reason = treeherder.recheck_skip_reason(ctx.repo, ctx.task_id)
+    except Exception:
+        logger.exception(
+            "Could not re-check the classification of task %s before notifying",
+            ctx.task_id,
+        )
+        return None
+    if reason:
+        logger.info(
+            "Task %s was classified as %s while run %s was working; "
+            "the notification will say so",
+            ctx.task_id,
+            reason,
+            ctx.run_id,
+        )
+    return reason
 
 
 def _poll_until_terminal(run_id: str) -> dict | None:

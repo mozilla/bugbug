@@ -2739,6 +2739,7 @@ dependencies = [
     { name = "sendgrid" },
     { name = "sentry-sdk" },
     { name = "taskcluster" },
+    { name = "tenacity" },
     { name = "zstandard" },
 ]
 
@@ -2759,6 +2760,7 @@ requires-dist = [
     { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
     { name = "taskcluster", specifier = ">=97.1,<102.1" },
+    { name = "tenacity", specifier = "~=9.1.4" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
 provides-extras = ["dev"]
