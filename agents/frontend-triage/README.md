@@ -177,7 +177,7 @@ Routing is `SLACK_CHANNELS` in `config.py`, keyed by `"<Product> :: <Component>"
 
 | Product :: Component             | Channel                         |
 | -------------------------------- | ------------------------------- |
-| `Firefox :: New Tab Page`        | `#hnt-dev`                      |
+| `Firefox :: New Tab Page`        | `#hnt-dev-triage`               |
 | `Firefox for Android :: History` | `#android-core-dev`             |
 | `Toolkit :: Application Update`  | `#installer-updater-bug-triage` |
 | `Firefox :: Installer`           | `#installer-updater-bug-triage` |

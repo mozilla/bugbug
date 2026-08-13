@@ -87,10 +87,10 @@ def test_a_missing_summary_leaves_the_bug_link_alone():
 
 
 def test_the_channel_belongs_to_the_component():
-    assert channel_for("Firefox", "New Tab Page") == "#hnt-dev"
+    assert channel_for("Firefox", "New Tab Page") == "#hnt-dev-triage"
     assert channel_for("Firefox for Android", "History") == "#android-core-dev"
     # Surrounding whitespace is the agent's, not Bugzilla's.
-    assert channel_for(" Firefox ", " New Tab Page ") == "#hnt-dev"
+    assert channel_for(" Firefox ", " New Tab Page ") == "#hnt-dev-triage"
 
 
 def test_the_installer_and_the_updater_share_a_channel():
@@ -120,7 +120,7 @@ def test_an_auto_applied_run_records_one_slack_action():
 
     assert action is not None
     assert [a["type"] for a in recorder.actions] == ["slack.post_message"]
-    assert action["params"]["channel"] == "#hnt-dev"
+    assert action["params"]["channel"] == "#hnt-dev-triage"
     assert action["params"]["text"] == build_message(_result(), run_id=RUN_ID)
 
 
