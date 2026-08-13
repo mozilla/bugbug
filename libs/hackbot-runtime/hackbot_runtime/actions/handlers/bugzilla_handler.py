@@ -79,6 +79,7 @@ class UpdateBugHandler:
         body = dict(params.get("changes", {}))
         if params.get("comment"):
             body["comment"] = params["comment"]
+            body["comment_tags"] = [ctx.agent]
         try:
             _request("PUT", f"bug/{bug_id}", body)
         except Exception as exc:
@@ -90,7 +91,8 @@ class UpdateBugHandler:
 class AddCommentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
-        body = {"comment": _comment_body(params)}
+        body: dict[str, Any] = {"comment": _comment_body(params)}
+        body["comment_tags"] = [ctx.agent]
         try:
             _request("PUT", f"bug/{bug_id}", body)
         except Exception as exc:
