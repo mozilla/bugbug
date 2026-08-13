@@ -292,9 +292,9 @@ async def test_conduit_talks_to_the_brokers_proxy_with_a_placeholder_token(
 
     await revision.checkout_revision(_FakeCtx(tmp_path), 42, BROKER)
 
-    # Every call went to the broker, carrying the placeholder token the broker
-    # swaps out — the agent never holds a real Conduit key.
-    assert seen["api_url"] == f"{BROKER}/api/"
+    # Every call went to the broker's proxy mount, carrying the placeholder
+    # token it swaps out — the agent never holds a real Conduit key.
+    assert seen["api_url"] == f"{BROKER}/phabricator/api/"
     assert seen["token"] == revision._PROXY_API_TOKEN
     # And nothing was left configured for the rest of the run.
     assert conduit.repo is None

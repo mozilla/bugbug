@@ -40,6 +40,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Where the broker mounts its read-only Conduit proxy (``phabricator_proxy``).
+# A Conduit client treats this as the API root and appends the method name.
+_PROXY_PATH = "/phabricator/api/"
+
 # The environment variable moz-phab reads a Conduit token from, ahead of
 # ``~/.arcrc``.
 _TOKEN_ENV = "MOZPHAB_PHABRICATOR_API_TOKEN"
@@ -247,6 +251,11 @@ class _ProxyRepo:
     ``mozphab.git.Git`` instead would drag in an ``.arcconfig`` lookup (the
     checked-out firefox one names the real Phabricator) and moz-phab's
     https-only check, neither of which suits a loopback sidecar.
+
+    Setting ``api_url`` outright is also what lets the broker mount the proxy
+    wherever it likes: moz-phab would otherwise derive it as
+    ``urljoin(phab_url, "api/")``, which replaces the last path segment and so
+    only ever yields ``<host>/api/``.
     """
 
     def __init__(self, api_url: str) -> None:
@@ -266,7 +275,7 @@ def _proxied_conduit(conduit, broker_url: str) -> Iterator[None]:
     """
     previous_repo = getattr(conduit, "repo", None)
     previous_token = os.environ.get(_TOKEN_ENV)
-    conduit.set_repo(_ProxyRepo(f"{broker_url.rstrip('/')}/api/"))
+    conduit.set_repo(_ProxyRepo(f"{broker_url.rstrip('/')}{_PROXY_PATH}"))
     os.environ[_TOKEN_ENV] = _PROXY_API_TOKEN
     try:
         yield
