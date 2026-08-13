@@ -43,7 +43,7 @@ def _ctx(submission=None, missing=False):
             raise FileNotFoundError(key)
         return json.dumps(submission or _SUBMISSION).encode()
 
-    return ApplyContext(run_id="run-1", download_artifact=download)
+    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
 
 
 @pytest.fixture
