@@ -17,9 +17,8 @@ def send_email(
 ) -> None:
     """Email the failure analysis. Only succeeded runs are notified.
 
-    Routes on the agent that produced the run: test-repair sends a
-    verdict-led body to the test-repair notification address; build-repair keeps its
-    existing behavior.
+    Routes on the agent that produced the run: test-repair sends a verdict-led body to
+    the hackbot team address; build-repair keeps its existing behavior.
 
     ``already_actioned`` is Treeherder's classification when a sheriff has already
     dealt with the failure.
@@ -70,10 +69,11 @@ def _send_test_repair_email(
     # test-repair verdicts are always notified (including do-not-backout verdicts), so
     # the build-repair notify_only_with_patch gate does not apply here.
     #
-    # The distribution list and the team address only. A verdict is a triage signal
-    # for the team, not something to mail at the developer whose commit the agent
-    # happens to blame -- the culprit is still named in the body.
-    recipients = _recipients(settings.test_repair_notification_email)
+    # The hackbot team address only: sheriffs are notified in Slack, by the agent, and
+    # only for the verdicts they act on, while the team gets every verdict here to track
+    # what the agent decided. Never the developer whose commit the agent happens to
+    # blame -- the culprit is still named in the body.
+    recipients = _recipients(settings.notification_team_email)
     if not recipients:
         logger.info(
             "No recipients for test-repair run %s; skipping notification", ctx.run_id
@@ -84,7 +84,7 @@ def _send_test_repair_email(
         return
 
     patch = _fetch_patch(ctx.run_id, run_doc)
-    # In the subject too, so a sheriff can skip it from the inbox.
+    # In the subject too, so it can be skipped from the inbox.
     prefix = "[already actioned] " if already_actioned else ""
     subject = (
         f"[test-repair] {prefix}{_banner(findings)} - "
@@ -146,9 +146,9 @@ def _recipients(primary: str | None, secondary: str | None = None) -> list[str]:
     """Recipients for a run, deduped and ordered by priority, team address last.
 
     build-repair puts the blamed commit's author first and the pushing developer
-    second; test-repair passes only its distribution address and so reaches no
-    individual. ``notification_override_email`` short-circuits to a single address so
-    local testing never mails real developers or the team.
+    second; test-repair passes only the team address and so reaches no individual.
+    ``notification_override_email`` short-circuits to a single address so local testing
+    never mails real developers or the team.
     """
     if settings.notification_override_email:
         return [settings.notification_override_email]
@@ -187,8 +187,7 @@ def _already_actioned_banner(reason: str | None) -> list[str]:
         return []
     return [
         f"> **Already actioned by a sheriff.** Treeherder now classifies this job as "
-        f"_{reason}_, so the tree has been dealt with and this analysis needs no "
-        f"action from a sheriff. It is sent for the developer's reland.",
+        f"_{reason}_, so the tree has been dealt with.",
         "",
     ]
 
@@ -243,7 +242,8 @@ def _build_test_repair_body(
         lines.append(f"- **Bug:** [{bug}]({_bug_url(bug)})")
 
     lines += _run_details(ctx) + _analysis_sections(findings) + _patch_section(patch)
-    lines += _patch_advice(patch) + _team_footer()
+    # No team footer: the team is the only recipient.
+    lines += _patch_advice(patch)
     return "\n".join(lines)
 
 

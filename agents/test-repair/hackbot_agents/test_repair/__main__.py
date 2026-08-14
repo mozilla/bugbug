@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from .agent import TestRepairResult
 from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
 from .logs import download_failure_logs
-from .notify import build_message, resolve_culprit_author
+from .notify import build_message, resolve_culprit_author, sheriff_action_required
 from .resolve import Investigation, resolve_investigation
 
 logger = logging.getLogger(__name__)
@@ -77,15 +77,19 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         publish_file=ctx.publish_file,
     )
 
-    # Notifications are active for all runs
-    message = build_message(
-        result,
-        investigation,
-        task_id=task_id,
-        run_id=ctx.run_id,
-        culprit_author=resolve_culprit_author(source_repo, result.culprit_commit),
-    )
-    record_message(ctx.actions, SLACK_CHANNEL, message)
+    if sheriff_action_required(result):
+        message = build_message(
+            result,
+            investigation,
+            task_id=task_id,
+            run_id=ctx.run_id,
+            culprit_author=resolve_culprit_author(source_repo, result.culprit_commit),
+        )
+        record_message(ctx.actions, SLACK_CHANNEL, message)
+    else:
+        logger.info(
+            "Verdict is %s; not notifying %s", result.classification, SLACK_CHANNEL
+        )
     return result
 
 

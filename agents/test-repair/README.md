@@ -65,10 +65,12 @@ Stage 2:
 
 ## Slack notification
 
-Every run records a `slack.post_message` action carrying its verdict -- the
-recommendation, the classification and confidence, the failing job (linked to the
-push in Treeherder), the culprit or the candidates that could not be ruled out,
-and whether a patch is attached.
+A run whose verdict a sheriff has to act on records a `slack.post_message` action
+carrying it -- the recommendation, the classification and confidence, the failing job
+(linked to the push in Treeherder), the culprit or the candidates that could not be
+ruled out, and whether a patch is attached. An `intermittent` verdict is not posted:
+it asks nothing of a sheriff and is the majority verdict, so it would be noise. The
+hackbot team still gets every verdict by email, from the pulse listener.
 
 The message is posted by the apply step, not from the run, so it is visible in the
 hackbot UI before it lands and is delivered at most once. `test-repair` opts into
