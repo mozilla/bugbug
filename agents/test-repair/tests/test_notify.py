@@ -55,7 +55,7 @@ def _message(result=None, investigation=None, **kwargs):
     )
 
 
-def test_an_intermittent_verdict_is_not_worth_a_notification():
+def test_a_known_intermittent_is_not_worth_a_notification():
     assert not sheriff_action_required(
         _result(
             classification="intermittent",
@@ -65,9 +65,24 @@ def test_an_intermittent_verdict_is_not_worth_a_notification():
     )
 
 
+def test_an_unconfirmed_intermittent_still_asks_for_a_retrigger():
+    assert sheriff_action_required(
+        _result(
+            classification="intermittent",
+            recommendation="rerun",
+            culprit_commit=None,
+        )
+    )
+
+
 def test_every_regression_verdict_is_notified():
     assert sheriff_action_required(_result())
     assert sheriff_action_required(_result(recommendation="rerun"))
+    # No culprit survived, so there is nothing to back out -- but a regression the
+    # agent could not pin down is still a sheriff's problem.
+    assert sheriff_action_required(
+        _result(recommendation="do_not_backout", culprit_commit=None)
+    )
 
 
 def test_reports_the_verdict_and_its_context_in_five_lines():

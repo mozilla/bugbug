@@ -49,10 +49,14 @@ _RECOMMENDATIONS = {
 def sheriff_action_required(result: TestRepairResult) -> bool:
     """Whether the verdict is one a sheriff has to act on.
 
-    An intermittent needs no backout, no retrigger and no bug filed by a sheriff, and
-    it is the majority verdict, so posting those to the channel is pure noise.
+    A known intermittent asks for nothing -- no backout, no retrigger -- and it is the
+    majority verdict, so posting those is pure noise. ``rerun`` is not one of them: an
+    intermittent the agent could not confirm still asks for a retrigger.
     """
-    return result.classification != "intermittent"
+    return not (
+        result.classification == "intermittent"
+        and result.recommendation == "do_not_backout"
+    )
 
 
 def _link(url: str, label: str) -> str:

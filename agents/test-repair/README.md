@@ -68,9 +68,11 @@ Stage 2:
 A run whose verdict a sheriff has to act on records a `slack.post_message` action
 carrying it -- the recommendation, the classification and confidence, the failing job
 (linked to the push in Treeherder), the culprit or the candidates that could not be
-ruled out, and whether a patch is attached. An `intermittent` verdict is not posted:
-it asks nothing of a sheriff and is the majority verdict, so it would be noise. The
-hackbot team still gets every verdict by email, from the pulse listener.
+ruled out, and whether a patch is attached. A known intermittent -- `intermittent`
+classified `do_not_backout` -- is not posted: it asks nothing of a sheriff and is the
+majority verdict, so it would be noise. An intermittent recommending `rerun` is still
+posted, since the retrigger is the sheriff's to run. The hackbot team gets every
+verdict either way, by email from the pulse listener.
 
 The message is posted by the apply step, not from the run, so it is visible in the
 hackbot UI before it lands and is delivered at most once. `test-repair` opts into
