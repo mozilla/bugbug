@@ -46,13 +46,20 @@ Steps:
    whole stack has to be backed out -- name it in summary.md, oldest sha first.
    "culprit_commit" stays the single commit that introduced the regression.
 5. Write to {scratch_out}:
-   - summary.md: a 2-4 sentence verdict, in plain prose -- no headings, lists or
-     code blocks. It is posted verbatim to Slack, so it has to read at a glance:
-     what failed, what caused it, what to do. Everything else belongs in
-     analysis.md.
-   - analysis.md: the reasoning, with evidence from the logs and diffs. This is
-     where quoted log lines, diffs and alternatives you ruled out go, at whatever
-     length the case needs.
+   - summary.md: 2-3 sentences of plain prose -- no headings, lists or code
+     blocks. It is posted verbatim to Slack and has to answer "do I back this
+     out?" at a glance. Open with the action -- back out <sha>, do not back out,
+     or retrigger -- and the one fact that settles it, then say what failed.
+   - analysis.md: the developer's reference, readable in under a minute. Under 50
+     lines, in exactly these sections, each a short paragraph or a few bullets:
+       ## Verdict -- the action, the culprit and its bug, the confidence
+       ## Failure -- how the test fails, with the log line that shows it
+       ## Cause -- the hunk in the culprit that produces that failure
+       ## Ruled out -- a line per alternative you seriously weighed; drop the
+          section when there was none
+     Quote only what decides something. Do not narrate the searches you ran, do
+     not restate a diff you already pointed at, and do not add a section to
+     report that a check passed.
    - verdict.json: "classification" ("regression" or "intermittent"),
      "culprit_commit" (full sha from the range, or null), "candidate_commits" (up
      to {max_candidates} full shas, most to least likely, whenever no single
@@ -107,11 +114,11 @@ The source tree is at {source_repo} (your working directory). Search it with
 
 1. Make the smallest change that addresses the root cause.
 {verify_step}
-3. Describe the patch in {scratch_out}/analysis.md: what it changes and why that
-   addresses the root cause.
+3. Append a "## Patch" section to {scratch_out}/analysis.md, under 10 lines: the
+   files it touches, the root cause it addresses, and whether it was verified.
+   The diff is attached, so do not walk through it.
 4. Add at most one sentence to {scratch_out}/summary.md saying a patch is
-   proposed. Do not rewrite or restructure it -- it stays the short verdict
-   posted to Slack, and the patch write-up goes in analysis.md.
+   proposed and whether it is verified. Leave the rest of it alone.
 5. Update {scratch_out}/verdict.json in place, preserving its existing keys: set
    "proposed_patch" to true if you made a fix, and leave "recommendation" as
    "backout".

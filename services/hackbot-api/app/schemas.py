@@ -102,6 +102,20 @@ class AutowebcompatReproInputs(BaseModel):
         return self
 
 
+class AutowebcompatDiagnosisInputs(BaseModel):
+    bug_data: str | None = None
+    bug_id: int | None = None
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None
+
+    @model_validator(mode="after")
+    def _require_subject(self) -> "AutowebcompatDiagnosisInputs":
+        if self.bug_data is None and self.bug_id is None:
+            raise ValueError("provide at least one of bug_data or bug_id")
+        return self
+
+
 class BuildRepairInputs(BaseModel):
     # Failing Taskcluster build tasks {task_name: task_id}; the agent resolves the
     # push commits from them. git_commit / bug_id are optional overrides.

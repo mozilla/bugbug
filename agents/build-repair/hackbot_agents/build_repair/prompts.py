@@ -16,10 +16,19 @@ Analyze the following:
 {failure_logs}
 
 Create these documents:
-1. {scratch_out}/analysis.md with your detailed analysis of what caused the failure
-2. {scratch_out}/planning.md with a fixing plan
-3. {scratch_out}/summary.md with a brief one-paragraph summary of the analysis and plan
-   that can point a developer in the right direction
+1. {scratch_out}/analysis.md -- the developer's reference, readable in under a
+   minute. Under 40 lines, in exactly these sections, each a short paragraph or a
+   few bullets:
+     ## Verdict -- which commit broke the build, or that none of them did
+     ## Error -- what the build reports, with the line that shows it
+     ## Cause -- the change that produces that error
+     ## Fix -- what to change
+   Quote only what decides something. Do not restate a diff you already pointed
+   at, and do not narrate the steps you took to get here.
+2. {scratch_out}/planning.md with the fix as a short numbered list of edits
+3. {scratch_out}/summary.md -- 2-3 sentences of plain prose, no headings or lists.
+   Open with whether a commit in this push broke the build and which one, then
+   give the error and the fix in a clause each.
 {blame_step}
 Do not prompt to edit those documents. Do not write any code yet. Work fully
 autonomously and do not ask any questions.
@@ -35,9 +44,12 @@ determine which single commit introduced the build failure.
 
 PUSH_COMMIT_LINE = "- {commit}"
 
-BLAME_STEP = """4. {scratch_out}/blame.json identifying the single commit that introduced the failure,
-   as JSON: {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Choose
-   blamed_commit from the push commits listed above.
+BLAME_STEP = """4. {scratch_out}/blame.json naming the commit that introduced the failure, as JSON:
+   {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Use one of the
+   push commits listed above when there are several, otherwise the checked-out
+   commit. Set "blamed_commit" to null if none of them caused the failure -- it is
+   infrastructure, a toolchain or fetch problem, or it already failed before this
+   push -- rather than naming the least implausible commit.
 """
 
 BUG_CONTEXT = "\nThe commit attempted to fix Bugzilla bug {bug_id}.\n"

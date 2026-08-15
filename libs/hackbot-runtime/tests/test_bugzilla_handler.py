@@ -10,14 +10,17 @@ import base64
 from hackbot_runtime.actions.handlers import ApplyContext, bugzilla_handler
 
 
-def _ctx(attachments=None, artifacts=None):
+def _ctx(attachments=None, artifacts=None, agent="test-agent"):
     artifacts = artifacts or {}
 
     async def download(key):
         return artifacts[key]
 
     return ApplyContext(
-        run_id="run-1", download_artifact=download, attachments=attachments or []
+        run_id="run-1",
+        download_artifact=download,
+        attachments=attachments or [],
+        agent=agent,
     )
 
 
@@ -62,8 +65,36 @@ async def test_add_comment_handler_builds_comment_body(monkeypatch):
         (
             "PUT",
             "bug/5",
-            {"comment": {"body": "hi", "is_private": True, "is_markdown": True}},
+            {
+                "comment": {
+                    "body": "hi",
+                    "is_private": True,
+                    "is_markdown": True,
+                },
+                "comment_tags": ["test-agent"],
+            },
         )
+    ]
+
+
+async def test_comment_handlers_add_acting_agent_tag(monkeypatch):
+    bodies = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
+    )
+
+    await bugzilla_handler.AddCommentHandler().apply(
+        {"bug_id": 5, "text": "standalone"},
+        _ctx(agent="frontend-triage"),
+    )
+    await bugzilla_handler.UpdateBugHandler().apply(
+        {"bug_id": 5, "changes": {}, "comment": {"body": "coalesced"}},
+        _ctx(agent="bug-fix"),
+    )
+
+    assert [body["comment_tags"] for body in bodies] == [
+        ["frontend-triage"],
+        ["bug-fix"],
     ]
 
 
@@ -128,7 +159,11 @@ async def test_update_bug_handler_merges_changes_and_comment(monkeypatch):
         (
             "PUT",
             "bug/7",
-            {"status": "RESOLVED", "comment": {"body": "done", "is_private": False}},
+            {
+                "status": "RESOLVED",
+                "comment": {"body": "done", "is_private": False},
+                "comment_tags": ["test-agent"],
+            },
         )
     ]
     # The caller's `changes` dict must not be mutated by folding in the comment.
@@ -144,7 +179,16 @@ async def test_update_bug_handler_comment_only(monkeypatch):
         {"bug_id": 7, "changes": {}, "comment": {"body": "hi", "is_private": True}},
         _ctx(),
     )
-    assert calls == [("PUT", "bug/7", {"comment": {"body": "hi", "is_private": True}})]
+    assert calls == [
+        (
+            "PUT",
+            "bug/7",
+            {
+                "comment": {"body": "hi", "is_private": True},
+                "comment_tags": ["test-agent"],
+            },
+        )
+    ]
 
 
 def test_plan_coalesced_groups_update_plus_comment():

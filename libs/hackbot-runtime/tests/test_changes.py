@@ -1,17 +1,20 @@
-"""Tests for building the Phabricator diff payload from a real git repo.
+"""Tests for building submission payloads from a real git repo.
 
 `collect()` (the pre-existing git-am patch collector) has no test coverage
-either way and is out of scope here — this covers the new
-`_synthetic_commit`/`build_phabricator_diff`, which run against the agent's
-already-checked-out repo (see hackbot_runtime.context.publish_changes).
+either way and is out of scope here — this covers
+`_synthetic_commit`/`build_phabricator_diff` and `build_try_push`, which run
+against the agent's already-checked-out repo (see
+hackbot_runtime.context.publish_changes).
 """
 
+import base64
 import builtins
 
 from hackbot_runtime.changes import (
     _git,
     _synthetic_commit,
     build_phabricator_diff,
+    build_try_push,
 )
 
 
@@ -154,3 +157,54 @@ def test_build_phabricator_diff_missing_mozphab_returns_none(tmp_path, monkeypat
     payload = build_phabricator_diff(tmp_path, base, "https://example.com/repo.git")
 
     assert payload is None
+
+
+# --- build_try_push ------------------------------------------------------ #
+
+
+def _decoded_patches(payload):
+    return [base64.b64decode(patch).decode() for patch in payload["patches"]]
+
+
+def test_build_try_push_one_patch_per_commit(tmp_path):
+    base = _init_repo(tmp_path)
+    _commit_change(tmp_path, "line1\nline2 modified\nline3\n", message="first fix")
+    _commit_change(tmp_path, "line1\nline2 modified\nline3 too\n", message="second fix")
+
+    payload = build_try_push(tmp_path, base)
+
+    assert payload["base_commit"] == base
+    assert payload["base_commit_vcs"] == "git"
+    assert payload["patch_format"] == "git-format-patch"
+    patches = _decoded_patches(payload)
+    assert len(patches) == 2
+    # Oldest first, and each patch is a standalone format-patch email (Lando
+    # parses every array entry on its own).
+    assert "Subject: [PATCH] first fix" in patches[0]
+    assert "Subject: [PATCH] second fix" in patches[1]
+    assert "second fix" not in patches[0]
+
+
+def test_build_try_push_includes_uncommitted_work(tmp_path):
+    base = _init_repo(tmp_path)
+    (tmp_path / "file.txt").write_text("line1\nuncommitted\nline3\n")
+
+    payload = build_try_push(tmp_path, base)
+
+    assert len(payload["patches"]) == 1
+    assert "+uncommitted" in _decoded_patches(payload)[0]
+
+
+def test_build_try_push_no_changes_returns_none(tmp_path):
+    base = _init_repo(tmp_path)
+
+    assert build_try_push(tmp_path, base) is None
+
+
+def test_build_try_push_rejects_abbreviated_base(tmp_path):
+    base = _init_repo(tmp_path)
+    _commit_change(tmp_path, "line1\nline2 modified\nline3\n")
+
+    # Lando needs a full published hash; a short one would fail server-side with
+    # a far less obvious error.
+    assert build_try_push(tmp_path, base[:12]) is None

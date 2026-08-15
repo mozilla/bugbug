@@ -7,7 +7,7 @@ def _ctx():
     async def download(_key):
         raise AssertionError("TestRail submissions do not use artifacts")
 
-    return ApplyContext(run_id="run-1", download_artifact=download)
+    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
 
 
 def _plan():

@@ -10,6 +10,7 @@ dependencies = [
     "google-auth>=2.0.0",
     "async-lru>=2.0.0",
     "agent-tools",
+    "lando-client",
     "phabricator-client",
     "testrail-client",
     "slack-sdk>=3.27.0",
@@ -25,6 +26,7 @@ phabricator = ["MozPhab==2.15.3"]
 
 [tool.uv.sources]
 agent-tools = { workspace = true }
+lando-client = { workspace = true }
 phabricator-client = { workspace = true }
 testrail-client = { workspace = true }
 

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     # hackbot-api
     hackbot_api_url: str = ""
     hackbot_api_key: str = ""
-    hackbot_ui_url: str = ""
+    hackbot_ui_url: str = "https://hackbot.moz.tools"
     agent_name: str = "build-repair"
     # Agent that analyzes test failures (separate Cloud Run Job from build-repair).
     test_repair_agent_name: str = "test-repair"
@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60
     dedupe_max_size: int = 4096
+    # Dedupe by failing manifest, on top of the per-push one above.
+    group_dedupe_ttl_seconds: int = 12 * 60 * 60
 
     # Cap on test-repair runs started in any rolling 24 hours. Each run clones and
     # builds Firefox in its own container, so a bad day on autoland -- a broken
