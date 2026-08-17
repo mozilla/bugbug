@@ -94,6 +94,12 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android", "History", "Firefox for Android", "#android-core-dev"
     ),
+    ScopedComponent(
+        "Firefox for Android", "Toolbar", "Firefox for Android", "#android-core-dev"
+    ),
+    ScopedComponent(
+        "Firefox for Android", "Homepage", "Firefox for Android", "#android-core-dev"
+    ),
     # The installer and the updater are triaged by the same team, so two components
     # share a channel. Keying by product-and-component rather than by channel is what
     # lets them, without either one having to know about the other.
