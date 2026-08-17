@@ -91,6 +91,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox", "Site Permissions", "Site permissions", "#privacy-team-automation"
     ),
+    ScopedComponent("Firefox", "Sharing", "Sharing", "#content-sharing-automation"),
     ScopedComponent(
         "Firefox",
         "IP Protection",
