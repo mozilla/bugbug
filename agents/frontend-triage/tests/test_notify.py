@@ -89,6 +89,7 @@ def test_a_missing_summary_leaves_the_bug_link_alone():
 def test_the_channel_belongs_to_the_component():
     assert channel_for("Firefox", "New Tab Page") == "#hnt-dev-triage"
     assert channel_for("Firefox for Android", "History") == "#android-core-dev"
+    assert channel_for("Firefox", "Site Permissions") == "#privacy-team-automation"
     # Surrounding whitespace is the agent's, not Bugzilla's.
     assert channel_for(" Firefox ", " New Tab Page ") == "#hnt-dev-triage"
 

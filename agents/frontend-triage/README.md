@@ -18,7 +18,7 @@ to reproduce, or a log rather than a stack trace:
 
 - **Desktop frontend**, under `Firefox`: Tabbed Browser (incl. Split View and Tab
   Groups), New Tab Page, Address Bar, Menus, Toolbars and Customization, Sidebar,
-  Theme.
+  Site Permissions, Theme.
 - **Firefox for Android**: History. Kotlin under `mobile/android/fenix/`.
 - **Install and update**: `Firefox :: Installer` (NSIS) and
   `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
@@ -181,6 +181,7 @@ Routing is `SLACK_CHANNELS` in `config.py`, keyed by `"<Product> :: <Component>"
 | `Firefox for Android :: History` | `#android-core-dev`             |
 | `Toolkit :: Application Update`  | `#installer-updater-bug-triage` |
 | `Firefox :: Installer`           | `#installer-updater-bug-triage` |
+| `Firefox :: Site Permissions`    | `#privacy-team-automation`      |
 
 Two components may share a channel, as the installer and the updater do; the key is
 the component, not the team. A component that is not listed notifies nobody; there is
