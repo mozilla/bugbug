@@ -94,7 +94,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'vcs'" },
     { name = "prefpicker", marker = "extra == 'firefox'" },
     { name = "pydantic", specifier = ">=2.6.0" },
-    { name = "searchfox", marker = "extra == 'searchfox'", specifier = ">=0.16.0" },
+    { name = "searchfox", marker = "extra == 'searchfox'", specifier = ">=0.20.3" },
     { name = "six", marker = "extra == 'bugzilla'" },
 ]
 provides-extras = ["bugzilla", "firefox", "claude-sdk", "searchfox", "vcs"]
@@ -725,7 +725,7 @@ requires-dist = [
     { name = "rs-parsepatch", specifier = "~=0.4.6" },
     { name = "scikit-learn", specifier = "~=1.7.2" },
     { name = "scipy", specifier = ">=1.17.1,<1.19.0" },
-    { name = "searchfox", specifier = ">=0.16.0" },
+    { name = "searchfox", specifier = ">=0.20.3" },
     { name = "sendgrid", specifier = "~=6.12.5" },
     { name = "shap", extras = ["plots"], specifier = ">=0.51,<0.53" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = "==3.8.15" },
@@ -6682,13 +6682,14 @@ wheels = [
 
 [[package]]
 name = "searchfox"
-version = "0.20.1"
+version = "0.20.3"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/1a/f1f3277c008158f8b45127d9eda3b3e184a621fbc214edf0cf2cef9954e0/searchfox-0.20.1-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:476c9231651a9111ae260da4e8f8a7204a35bfa7e813aa0c15e747d1208952a8", size = 4345654, upload-time = "2026-08-05T18:33:41.293Z" },
-    { url = "https://files.pythonhosted.org/packages/74/15/bf2d1737c1f8987c8937fcbb50f1666d852572d540e646d1494274f5b8a2/searchfox-0.20.1-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:19f066d6cc3b1b7506b235326990073094528517e008c39f4ab3c66748c5048b", size = 4195606, upload-time = "2026-08-05T18:33:43.493Z" },
-    { url = "https://files.pythonhosted.org/packages/3b/5c/fb131409593e17c8cc81b63a5ab80a8655c6e83f0394031edbd135f0a3f4/searchfox-0.20.1-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a446ba2c239784b360fa61c8ad176df6f7aa091d220acb8808d242717be90715", size = 4699703, upload-time = "2026-08-05T18:33:46.4Z" },
-    { url = "https://files.pythonhosted.org/packages/14/ea/f810dc89bb1e94e258e7f8bff646d81c8cfc77eb6cd8d4b382b5e9b1c225/searchfox-0.20.1-cp38-abi3-win_amd64.whl", hash = "sha256:356bb38f44d54017c9c35e6b0dbf863e1ceb35248b45758910510b31b9cf0c00", size = 4109890, upload-time = "2026-08-05T18:33:48.386Z" },
+    { url = "https://files.pythonhosted.org/packages/08/5d/bd34c4c7271d450aaf726bfd292ea2133274569255279fe864c365db996b/searchfox-0.20.3-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:6b06589581908ab54c1083beee1c3eb114d5472bcf583c2f17e2c8214ba39841", size = 4345619, upload-time = "2026-08-14T06:14:21.99Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/4c/93386cdcb923d9913139171a7c6f1c53767e2bc69aaa1e031e21015fde8d/searchfox-0.20.3-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:bebb7e3421619f9d0cddb24c2568c5f045dab61825cd54cd7232d909bbe75a28", size = 4195721, upload-time = "2026-08-14T06:14:23.806Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/95/33a674d3b8f86b493985f7a91838896a850a9b503bdd9a650f4ae55d2a92/searchfox-0.20.3-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:07b2c696f2d6ae77c9d2c5fdb8392b97c15687dbe48de30237883795fadbb56c", size = 4688288, upload-time = "2026-08-14T06:14:25.839Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/b7/ec716f68ab31e4ddbe9e7164e0661904234fd2d884a617024a126d4e0d2b/searchfox-0.20.3-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4dc80cb241784e3c49396d55cb5fae8f78f7b7ffc2c196a225c64edd8c13fdec", size = 4699711, upload-time = "2026-08-14T06:14:27.315Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/be/bd95a581e1edcfd030e39adb739d3e561366a88739c9b32c8cef06c8a22a/searchfox-0.20.3-cp38-abi3-win_amd64.whl", hash = "sha256:c5525e71842cfaa973f4f4112d8dde4be329e980f5489b1ef20011ca85592453", size = 4109896, upload-time = "2026-08-14T06:14:28.846Z" },
 ]
 
 [[package]]
