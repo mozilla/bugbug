@@ -157,9 +157,5 @@ class ActionsRecorder:
         return self._last_action_id
 
     @property
-    def action_count(self) -> int:
-        return len(self._actions)
-
-    @property
     def actions(self) -> list[dict]:
         return list(self._actions.values())

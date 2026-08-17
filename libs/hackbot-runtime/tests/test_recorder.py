@@ -259,7 +259,6 @@ def test_remove_action_deletes_only_the_requested_action():
 
     assert removed["action_id"] == "action-0"
     assert removed["reasoning"] == "first"
-    assert rec.action_count == 1
     assert rec.list_actions()[0]["action_id"] == "action-1"
     assert [action["type"] for action in rec.actions] == ["bugzilla.add_comment"]
 

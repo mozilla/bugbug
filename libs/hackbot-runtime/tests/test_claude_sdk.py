@@ -150,8 +150,7 @@ async def test_recorded_actions_tools_list_and_remove_complete_action():
         srv, "recorded_actions_remove_action", {"action_id": "action-0"}
     )
     removed = json.loads(removed_result.content[0].text)
-    assert removed["removed"] == listed[0]
-    assert removed["remaining_count"] == 0
+    assert removed == listed[0]
     assert recorder.actions == []
 
 

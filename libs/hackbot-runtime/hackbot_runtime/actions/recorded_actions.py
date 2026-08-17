@@ -41,8 +41,7 @@ async def remove_action(
     applied. This operation accepts exactly one action ID and has no cascade or
     force mode.
     """
-    removed = recorder.remove_action(action_id)
-    return {"removed": removed, "remaining_count": recorder.action_count}
+    return recorder.remove_action(action_id)
 
 
 TOOLS = tools_in(__name__)
