@@ -92,6 +92,12 @@ TRIAGE_SCOPE = (
         "Firefox", "Site Permissions", "Site permissions", "#privacy-team-automation"
     ),
     ScopedComponent(
+        "Firefox",
+        "IP Protection",
+        "IP Protection",
+        "#team-eng-ip-protection-triage",
+    ),
+    ScopedComponent(
         "Firefox for Android", "History", "Firefox for Android", "#android-core-dev"
     ),
     ScopedComponent(
