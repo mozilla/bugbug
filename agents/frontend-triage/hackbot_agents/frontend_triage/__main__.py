@@ -5,7 +5,7 @@ from .agent import FrontendTriageResult, run_frontend_triage
 from .notify import record_notification
 
 TRIAGE_TASK = (
-    "Triage this Firefox desktop frontend bug. Investigate the source tree "
+    "Triage this user-facing Firefox bug. Investigate the source tree "
     "READ-ONLY (Read/Grep/Glob/Bash) to determine the likely root cause, then "
     "produce a concrete proposed fix plan: the target files and the approach. "
     "Do NOT build, run, or modify the source, and do NOT attempt to reproduce "
