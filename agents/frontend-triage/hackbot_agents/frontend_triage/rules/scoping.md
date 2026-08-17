@@ -29,8 +29,8 @@ output's `actionable` to `false`, `confidence` to `low`, and `root_cause` to nul
 
 Everything else — a `defect` in a user-facing Firefox component without the skip signals
 above — is in scope. That covers the desktop frontend (Bookmarks & History, New Tab Page,
-Session Restore, Sidebar, Tabbed Browser: Split View / Tab Groups, Toolbars and
-Customization, …), Firefox for Android (History, …), and install and update
+Session Restore, Sidebar, Site Permissions, Tabbed Browser: Split View / Tab Groups,
+Toolbars and Customization, …), Firefox for Android (History, …), and install and update
 (`Firefox :: Installer`, `Toolkit :: Application Update`). Continue to the
 `frontend-triage` ruleset.
 

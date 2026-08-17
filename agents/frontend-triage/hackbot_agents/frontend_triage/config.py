@@ -58,6 +58,7 @@ SLACK_CHANNELS = {
     # lets them, without either one having to know about the other.
     "Toolkit :: Application Update": "#installer-updater-bug-triage",
     "Firefox :: Installer": "#installer-updater-bug-triage",
+    "Firefox :: Site Permissions": "#privacy-team-automation",
 }
 
 # What a `bugzilla.update_bug` from this agent may touch. Enforced at record time

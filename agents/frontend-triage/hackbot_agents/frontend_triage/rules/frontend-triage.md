@@ -6,7 +6,7 @@ components:
 
 - Desktop frontend, all under `Firefox`: `Tabbed Browser`,
   `Tabbed Browser: Split View`, `New Tab Page`, `Address Bar`, `Menus`,
-  `Toolbars and Customization`, `Sidebar`, `Theme`.
+  `Toolbars and Customization`, `Sidebar`, `Site Permissions`, `Theme`.
 - Android: `Firefox for Android :: History`.
 - Install and update: `Firefox :: Installer`, `Toolkit :: Application Update`.
 
