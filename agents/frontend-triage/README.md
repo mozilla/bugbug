@@ -14,14 +14,19 @@ human (or a downstream execution agent) takes it from there.
 ## What it triages
 
 **Defects in user-facing Firefox** — the kind documented with a screenshot, steps
-to reproduce, or a log rather than a stack trace:
+to reproduce, or a log rather than a stack trace, across four areas:
 
-- **Desktop frontend**, under `Firefox`: Tabbed Browser (incl. Split View and Tab
-  Groups), New Tab Page, Address Bar, Menus, Toolbars and Customization, Sidebar,
-  Site Permissions, Theme.
-- **Firefox for Android**: History. Kotlin under `mobile/android/fenix/`.
+- **Desktop frontend**, under `Firefox`. JS/JSM modules, CSS, XUL/HTML.
+- **Site permissions**, also desktop, but split across the doorhanger, the state,
+  and a C++ store outside `browser/`.
+- **Firefox for Android**. Kotlin under `mobile/android/fenix/` and
+  `mobile/android/android-components/`.
 - **Install and update**: `Firefox :: Installer` (NSIS) and
   `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
+
+`TRIAGE_SCOPE` in `config.py` is the component list, one entry per component,
+carrying the area and the Slack channel. `prompts/system.md` renders it into the
+system prompt and describes each area's code layout.
 
 Install and update bugs are the odd ones out: they arrive as a failure with an
 error code and an `update.log` or installer log, usually with no steps to
@@ -173,22 +178,25 @@ The audience is the team whose bug was just written to by nobody, so only an
 auto-applied run notifies. A medium or low result wrote nothing to Bugzilla and
 stays silent, even if someone applies it by hand later.
 
-Routing is `SLACK_CHANNELS` in `config.py`, keyed by `"<Product> :: <Component>"`:
+Routing is the `channel` on each `TRIAGE_SCOPE` entry in `config.py`, looked up by
+`"<Product> :: <Component>"` through the derived `SLACK_CHANNELS` — so
+`ScopedComponent("Firefox", "New Tab Page", "Desktop frontend", "#hnt-dev-triage")`
+sends a New Tab Page run to `#hnt-dev-triage`.
 
-| Product :: Component             | Channel                         |
-| -------------------------------- | ------------------------------- |
-| `Firefox :: New Tab Page`        | `#hnt-dev-triage`               |
-| `Firefox for Android :: History` | `#android-core-dev`             |
-| `Toolkit :: Application Update`  | `#installer-updater-bug-triage` |
-| `Firefox :: Installer`           | `#installer-updater-bug-triage` |
-| `Firefox :: Site Permissions`    | `#privacy-team-automation`      |
+Four things about that which are not obvious from reading the registry:
 
-Two components may share a channel, as the installer and the updater do; the key is
-the component, not the team. A component that is not listed notifies nobody; there is
-deliberately no default channel, since posting one team's triage into another team's
-channel is worse than silence. Product and component come from the agent's
-`product`/`component` plan fields, because nothing else carries them out of a run
-whose only input is a bug id, so a garbled value matches no team and sends nothing.
+- **The key is the component, not the team**, so two components may share a channel, as
+  the installer and the updater do, without either knowing about the other.
+- **A `channel=None` entry is in scope and notifies nobody.** The agent has a ruleset
+  for it if a human hands it that bug; no team is told. This is not the same as being
+  outside bugbot's automatic scope — bugbot decides what gets sent, and a pair it sends
+  whose component has no channel here gets unattended triage in silence.
+- **There is deliberately no default channel**, since posting one team's triage into
+  another team's channel is worse than silence.
+- **Product and component come from the agent's `product`/`component` plan fields**,
+  because nothing else carries them out of a run whose only input is a bug id. A garbled
+  value matches no team and sends nothing, which is why the system prompt asks for them
+  verbatim even for components the scope list does not name.
 
 `notify.py` builds and records the message; the wording is code, not a model turn,
 so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is never
@@ -205,12 +213,14 @@ notifies. The run page shows the failed action.
 `rules/` and `prompts/` both live under `hackbot_agents/frontend_triage/`.
 
 - **`rules/`** is the main behavior dial. `scoping.md` decides what gets skipped;
-  `frontend-triage.md` sets in-scope components, comment content, and the
-  confidence thresholds for recording an action. The agent globs the directory
-  and reads only what it judges relevant, so new `.md` files extend it — see
-  `rules/README.md` for how to author one.
+  `frontend-triage.md` sets comment content and the confidence thresholds for
+  recording an action. The agent globs the directory and reads only what it judges
+  relevant, so new `.md` files extend it — see `rules/README.md` for how to author
+  one. Neither file lists components; `TRIAGE_SCOPE` in `config.py` does.
 - **`prompts/system.md`** holds the standing instructions: output format, the
-  read-only mandate, and when to reach for Searchfox versus reading a file.
+  read-only mandate, when to reach for Searchfox versus reading a file, and the
+  per-area code layout. A component in a new area needs a **Source repository**
+  bullet here, and `tests/test_plan.py` fails until it has one.
 - **Cost** scales with tool use, not just turns — Searchfox results are
   token-heavy, so narrowing queries (`path_filter`, a modest `limit`) matters
   more than `MAX_TURNS` when batching.
