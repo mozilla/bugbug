@@ -18,6 +18,7 @@ from hackbot_runtime.actions import phabricator as _phabricator
 from hackbot_runtime.actions import recorded_actions as _recorded_actions
 from hackbot_runtime.actions import slack as _slack
 from hackbot_runtime.actions import testrail as _testrail
+from hackbot_runtime.actions import try_server as _try_server
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
 
@@ -42,6 +43,7 @@ def actions_server_for(
         + _phabricator.TOOLS
         + _testrail.TOOLS
         + _slack.TOOLS
+        + _try_server.TOOLS
     )
     if types is not None:
         wanted = set(types)

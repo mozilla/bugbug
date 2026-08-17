@@ -12,18 +12,23 @@ PATCH_ARTIFACT = "changes/changes.patch"
 MAX_PATCH_LINES = 400
 
 
-def send_email(ctx: RunContext, run_doc: dict) -> None:
+def send_email(
+    ctx: RunContext, run_doc: dict, already_actioned: str | None = None
+) -> None:
     """Email the failure analysis. Only succeeded runs are notified.
 
     Routes on the agent that produced the run: test-repair sends a
     verdict-led body to the test-repair notification address; build-repair keeps its
     existing behavior.
+
+    ``already_actioned`` is Treeherder's classification when a sheriff has already
+    dealt with the failure.
     """
     if run_doc.get("status") != "succeeded":
         logger.info("Run %s did not succeed; skipping notification", ctx.run_id)
         return
     if ctx.agent == settings.test_repair_agent_name:
-        _send_test_repair_email(ctx, run_doc)
+        _send_test_repair_email(ctx, run_doc, already_actioned)
     else:
         _send_build_repair_email(ctx, run_doc)
 
@@ -52,7 +57,9 @@ def _send_build_repair_email(ctx: RunContext, run_doc: dict) -> None:
     _deliver(subject, body_md, recipients, patch)
 
 
-def _send_test_repair_email(ctx: RunContext, run_doc: dict) -> None:
+def _send_test_repair_email(
+    ctx: RunContext, run_doc: dict, already_actioned: str | None = None
+) -> None:
     findings = (run_doc.get("summary") or {}).get("findings") or {}
     culprit = findings.get("culprit_commit")
     culprit_author = (
@@ -77,10 +84,15 @@ def _send_test_repair_email(ctx: RunContext, run_doc: dict) -> None:
         return
 
     patch = _fetch_patch(ctx.run_id, run_doc)
+    # In the subject too, so a sheriff can skip it from the inbox.
+    prefix = "[already actioned] " if already_actioned else ""
     subject = (
-        f"[test-repair] {_banner(findings)} - {_test_groups_label(ctx)} ({ctx.repo})"
+        f"[test-repair] {prefix}{_banner(findings)} - "
+        f"{_test_groups_label(ctx)} ({ctx.repo})"
     )
-    body_md = _build_test_repair_body(ctx, findings, patch, culprit_author)
+    body_md = _build_test_repair_body(
+        ctx, findings, patch, culprit_author, already_actioned
+    )
     _deliver(subject, body_md, recipients, patch)
 
 
@@ -147,15 +159,16 @@ def _recipients(primary: str | None, secondary: str | None = None) -> list[str]:
     return recipients
 
 
+# The headline names the sheriff's action, which is always a backout.
 _RECOMMENDATION_BANNER = {
     "backout": "BACK OUT the culprit",
     "do_not_backout": "DO NOT back out (intermittent)",
-    "land_fix": "LAND the proposed fix",
+    "land_fix": "BACK OUT the culprit, reland with the proposed fix squashed in",
 }
 
 
 def _banner(findings: dict) -> str:
-    """The recommendation as a human-readable headline."""
+    """The recommendation as a human-readable headline, or the raw value."""
     recommendation = findings.get("recommendation")
     return _RECOMMENDATION_BANNER.get(recommendation, recommendation or "analysis")
 
@@ -168,14 +181,28 @@ def _test_groups_label(ctx: RunContext) -> str:
     return f"{first} (+{len(rest)} more)" if rest else first
 
 
+def _already_actioned_banner(reason: str | None) -> list[str]:
+    """Say up front that the tree has been dealt with, when it has."""
+    if not reason:
+        return []
+    return [
+        f"> **Already actioned by a sheriff.** Treeherder now classifies this job as "
+        f"_{reason}_, so the tree has been dealt with and this analysis needs no "
+        f"action from a sheriff. It is sent for the developer's reland.",
+        "",
+    ]
+
+
 def _build_test_repair_body(
     ctx: RunContext,
     findings: dict,
     patch: str | None,
     culprit_author: str | None,
+    already_actioned: str | None = None,
 ) -> str:
     groups = ", ".join(f"`{g}`" for g in ctx.test_groups) or "not resolved"
     lines = [
+        *_already_actioned_banner(already_actioned),
         "# Test failure analysis",
         "",
         f"- **Recommendation:** {_banner(findings)}",
@@ -216,8 +243,19 @@ def _build_test_repair_body(
         lines.append(f"- **Bug:** [{bug}]({_bug_url(bug)})")
 
     lines += _run_details(ctx) + _analysis_sections(findings) + _patch_section(patch)
-    lines += _team_footer()
+    lines += _patch_advice(patch) + _team_footer()
     return "\n".join(lines)
+
+
+def _patch_advice(patch: str | None) -> list[str]:
+    """Say who the patch is for, next to the patch itself."""
+    if not patch:
+        return []
+    return [
+        "",
+        "_For the author: squash this into your existing patches and reland. It is a "
+        "suggestion, not a follow-up to land on its own._",
+    ]
 
 
 def _run_details(ctx: RunContext) -> list[str]:
@@ -288,6 +326,8 @@ def _build_body(
 ) -> str:
     summary = run_doc.get("summary") or {}
     findings = summary.get("findings") or {}
+    # A null verdict is the agent clearing the push; an absent one is no verdict.
+    cleared = "blamed_commit" in findings and not findings["blamed_commit"]
     blamed_commit = findings.get("blamed_commit")
 
     lines = [
@@ -301,7 +341,12 @@ def _build_body(
         f"[jobs]({treeherder.job_url(ctx.repo, ctx.hg_revision, ctx.task_id)})",
     ]
 
-    if blamed_commit:
+    if cleared:
+        lines.append(
+            "- **Not caused by this push:** the failure is pre-existing or "
+            "infrastructure, so no commit here is blamed."
+        )
+    elif blamed_commit:
         by = f" by {blamed_author}" if blamed_author else ""
         lines.append(
             f"- **Likely culprit:** "

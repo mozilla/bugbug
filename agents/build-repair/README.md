@@ -22,11 +22,12 @@ It also optionally bootstraps Firefox build if needed.
 
 First stage - analysis:
 
-- `summary.md` - a quick summary for a developer
-- `analysis.md` - detailed analysis
+- `summary.md` - 2-3 sentences: whether a commit in the push broke the build, the error,
+  the fix
+- `analysis.md` - verdict, error, cause and fix, under a page
 - `planning.md` - intermediate file that outlines fixing steps for the second stage
-- `blame.json` - the commit that introduced the failure (`blamed_commit`, `reason`); written
-  only when the push has more than one commit
+- `blame.json` - the commit that introduced the failure (`blamed_commit`, `reason`), null
+  when no commit in the push is to blame
 
 Second stage - fixing:
 

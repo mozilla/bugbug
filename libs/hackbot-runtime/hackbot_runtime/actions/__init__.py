@@ -13,6 +13,7 @@ from hackbot_runtime.actions import (
     recorded_actions,
     slack,
     testrail,
+    try_server,
 )
 from hackbot_runtime.actions.recorder import ActionHook, ActionsRecorder
 
@@ -27,4 +28,5 @@ __all__ = [
     "recorded_actions",
     "slack",
     "testrail",
+    "try_server",
 ]

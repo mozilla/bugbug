@@ -71,8 +71,8 @@ class BuildRepairResult(HackbotAgentResult):
     try_build_passed: bool | None = None
     lando_job_id: str | None = None
     treeherder_url: str | None = None
-    # Which commit in the push introduced the failure. Equals ``git_commit`` when
-    # the push has a single commit; chosen by the agent otherwise.
+    # Which commit introduced the failure, or None when the agent found that none
+    # of the push's commits did (infra, toolchain, or already failing).
     blamed_commit: str | None = None
 
 
@@ -348,9 +348,11 @@ def _push_context(git_commits: list[str]) -> str:
 
 
 def _blame_step(git_commits: list[str], scratch_out: Path) -> str:
-    """The blame.json instruction, only when the push has more than one commit."""
-    if len(git_commits) <= 1:
-        return ""
+    """The blame.json instruction.
+
+    Asked for even on a single-commit push: without it the agent has no way to say
+    that the lone commit is innocent and the bustage came from somewhere else.
+    """
     return BLAME_STEP.format(scratch_out=scratch_out)
 
 
@@ -364,25 +366,31 @@ def _match_commit(sha: str | None, git_commits: list[str]) -> str | None:
     return None
 
 
-def _resolve_blame(scratch_out: Path, git_commits: list[str]) -> str | None:
-    """Return the commit the agent blamed for the failure.
+def _read_blame(scratch_out: Path) -> dict:
+    path = scratch_out / "blame.json"
+    if not path.exists():
+        return {}
+    try:
+        blame = json.loads(path.read_text())
+    except (ValueError, OSError):
+        return {}
+    return blame if isinstance(blame, dict) else {}
 
-    Single-commit pushes are trivially blamed on that commit. Otherwise the agent
-    records its choice in ``blame.json``; we normalize it to a full hash from
-    ``git_commits`` and fall back to the failure commit when the file is missing
-    or unparsable.
+
+def _resolve_blame(scratch_out: Path, git_commits: list[str]) -> str | None:
+    """The commit the agent blamed, or None when it cleared the whole push.
+
+    An explicit null is a verdict and is kept; blaming a commit the agent just
+    cleared is worse than naming none. A missing or unparsable file is not a
+    verdict, so that still falls back to the failure commit.
     """
     if not git_commits:
         return None
     failure_commit = git_commits[0]
-    if len(git_commits) == 1:
+    blame = _read_blame(scratch_out)
+    if "blamed_commit" not in blame:
         return failure_commit
-
-    blamed: str | None = None
-    path = scratch_out / "blame.json"
-    if path.exists():
-        try:
-            blamed = (json.loads(path.read_text()).get("blamed_commit") or "").strip()
-        except (ValueError, OSError):
-            blamed = None
+    blamed = str(blame["blamed_commit"] or "").strip()
+    if not blamed:
+        return None
     return _match_commit(blamed, git_commits) or failure_commit

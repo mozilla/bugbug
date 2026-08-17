@@ -49,8 +49,8 @@ failure here is evidence the patch is wrong while a pass proves nothing.
 
 Stage 1:
 
-- `summary.md` - a short verdict
-- `analysis.md` - detailed reasoning, with evidence from the logs and diffs
+- `summary.md` - 2-3 sentences: the action, the fact that settles it, what failed
+- `analysis.md` - verdict, failure, cause and alternatives ruled out, under a page
 - `verdict.json` - `classification` (`regression` / `intermittent`),
   `culprit_commit`, `candidate_commits`, `culprit_bug`, `intermittent_bug`,
   `recommendation` (`backout` / `do_not_backout` / `rerun`) and `confidence`
