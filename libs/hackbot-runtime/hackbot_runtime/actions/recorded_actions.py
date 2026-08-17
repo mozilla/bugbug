@@ -28,10 +28,7 @@ async def remove_action(
     action_id: Annotated[
         str,
         Field(
-            description=(
-                "Exact stable ID returned when the action was recorded or by "
-                "list_actions (for example, action-2)."
-            )
+            description="ID returned when the action was recorded or by list_actions."
         ),
     ],
 ) -> dict:

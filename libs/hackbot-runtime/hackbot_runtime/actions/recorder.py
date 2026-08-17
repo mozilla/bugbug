@@ -1,4 +1,5 @@
 import copy
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
@@ -40,12 +41,8 @@ class ActionsRecorder:
         artifacts_dir: Path | None = None,
         hooks: Mapping[str, Sequence[ActionHook]] = {},
     ) -> None:
-        # IDs are deliberately separate from the serialized action payload. They
-        # are handles for managing proposals while the agent is running, not a
-        # new field in the summary/API contract.
         self._actions: dict[str, dict] = {}
         self._next_action_sequence = 0
-        self._last_action_id: str | None = None
         self._uploader = uploader
         self._artifacts_dir = artifacts_dir
         self._hooks = {
@@ -70,7 +67,7 @@ class ActionsRecorder:
         attachments: dict[str, Path] | None = None,
         ref: str | None = None,
     ) -> dict:
-        """Record an intended action.
+        """Record an action and return a detached copy with its ID.
 
         ``action_type`` uses ``<domain>.<verb>`` (e.g. ``bugzilla.update_bug``,
         ``phabricator.create_revision``). ``params`` is action-specific data
@@ -99,7 +96,7 @@ class ActionsRecorder:
         """
         sequence = self._next_action_sequence
         self._next_action_sequence += 1
-        action_id = f"action-{sequence}"
+        action_id = f"action-{uuid.uuid4().hex}"
         action: dict = {
             "type": action_type,
             "params": params,
@@ -124,38 +121,29 @@ class ActionsRecorder:
             action["attachments"] = recorded_attachments
 
         self._actions[action_id] = action
-        self._last_action_id = action_id
-        return action
+        return _detach(action_id, action)
 
     def list_actions(self) -> list[dict]:
         """Return complete copies of the current actions with stable in-run IDs."""
         return [
-            {**copy.deepcopy(action), "action_id": action_id}
-            for action_id, action in self._actions.items()
+            _detach(action_id, action) for action_id, action in self._actions.items()
         ]
 
     def remove_action(self, action_id: str) -> dict:
-        """Remove one action.
-
-        The returned payload includes the stable ID and is detached from recorder
-        state. Removing an action only changes the proposals that will be written
-        to ``summary.json``; an attachment already uploaded for it may remain as
-        an unreferenced artifact until normal storage cleanup.
-        """
+        """Remove and return an action."""
         action = self._actions.get(action_id)
         if action is None:
             raise ToolError(f"No recorded action with ID {action_id!r}.")
 
-        removed = {**copy.deepcopy(action), "action_id": action_id}
+        removed = _detach(action_id, action)
         del self._actions[action_id]
         return removed
 
     @property
-    def last_action_id(self) -> str:
-        if self._last_action_id is None:
-            raise RuntimeError("No action has been recorded.")
-        return self._last_action_id
-
-    @property
     def actions(self) -> list[dict]:
         return list(self._actions.values())
+
+
+def _detach(action_id: str, action: dict) -> dict:
+    """Return a detached copy of an action with its ID."""
+    return {**copy.deepcopy(action), "action_id": action_id}

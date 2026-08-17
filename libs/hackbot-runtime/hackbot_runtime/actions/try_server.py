@@ -150,8 +150,8 @@ async def push(
     if tests:
         params["test_paths"] = validate_test_paths(tests)
 
-    recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning, ref=ref)
-    return f"Recorded {TRY_PUSH_ACTION_TYPE} as {recorder.last_action_id}."
+    action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning, ref=ref)
+    return f"Recorded {TRY_PUSH_ACTION_TYPE} (ID: {action['action_id']})."
 
 
 TOOLS = tools_in(__name__)

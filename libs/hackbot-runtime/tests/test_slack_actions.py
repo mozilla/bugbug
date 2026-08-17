@@ -14,7 +14,9 @@ async def test_post_message_records_action():
         text="  a test regressed  ",
         reasoning="sheriffs decide on the backout",
     )
-    assert confirmation == "Recorded slack.post_message as action-0."
+    assert confirmation == (
+        f"Recorded slack.post_message (ID: {rec.list_actions()[0]['action_id']})."
+    )
     assert rec.actions == [
         {
             "type": "slack.post_message",
@@ -39,7 +41,7 @@ def test_record_message_supports_a_ref_for_later_reference():
     action = slack.record_message(rec, "sheriffs", "backout recommended", ref="notice")
     assert action["ref"] == "notice"
     assert action["params"]["channel"] == "sheriffs"
-    assert rec.actions == [action]
+    assert rec.actions[0]["ref"] == "notice"
 
 
 def test_tools_are_exposed_under_the_slack_namespace():

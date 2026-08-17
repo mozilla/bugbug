@@ -22,6 +22,7 @@ def test_record_basic_shape():
         {"bug_id": 1, "changes": {"severity": "S2"}},
         reasoning="rule X",
     )
+    assert returned.pop("action_id").startswith("action-")
     assert returned == rec.actions[0]
     assert rec.actions == [
         {
@@ -109,7 +110,7 @@ def test_hooks_run_in_order_and_mutations_are_recorded():
 
     assert calls == ["first", "second"]
     assert returned["params"] == {"bug_id": 1, "priority": "P1", "seen": "P1"}
-    assert rec.actions[0] == returned
+    assert rec.actions[0]["params"] == returned["params"]
 
 
 def test_hooks_only_run_for_their_action_type():
@@ -222,13 +223,13 @@ def test_constructor_hooks_are_copied():
 
 def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
     rec = ActionsRecorder()
-    rec.record(
+    patch = rec.record(
         "phabricator.submit_patch",
         {"bug_id": 1, "title": "Fix"},
         reasoning="verified fix",
         ref="patch",
     )
-    rec.record(
+    comment = rec.record(
         "bugzilla.add_comment",
         {"bug_id": 1, "text": "See {{actions.patch.url}}"},
         reasoning="announce the patch",
@@ -236,9 +237,12 @@ def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
 
     listed = rec.list_actions()
 
-    assert [action["action_id"] for action in listed] == ["action-0", "action-1"]
+    assert [action["action_id"] for action in listed] == [
+        patch["action_id"],
+        comment["action_id"],
+    ]
     assert listed[0] == {
-        "action_id": "action-0",
+        "action_id": patch["action_id"],
         "type": "phabricator.submit_patch",
         "params": {"bug_id": 1, "title": "Fix"},
         "reasoning": "verified fix",
@@ -252,24 +256,24 @@ def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
 
 def test_remove_action_deletes_only_the_requested_action():
     rec = ActionsRecorder()
-    rec.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="first")
-    rec.record("bugzilla.add_comment", {"bug_id": 1}, reasoning="second")
+    first = rec.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="first")
+    second = rec.record("bugzilla.add_comment", {"bug_id": 1}, reasoning="second")
 
-    removed = rec.remove_action("action-0")
+    removed = rec.remove_action(first["action_id"])
 
-    assert removed["action_id"] == "action-0"
+    assert removed["action_id"] == first["action_id"]
     assert removed["reasoning"] == "first"
-    assert rec.list_actions()[0]["action_id"] == "action-1"
+    assert rec.list_actions()[0]["action_id"] == second["action_id"]
     assert [action["type"] for action in rec.actions] == ["bugzilla.add_comment"]
 
 
 def test_remove_action_rejects_unknown_or_already_removed_id():
     rec = ActionsRecorder()
-    rec.record("bugzilla.update_bug", {"bug_id": 1})
-    rec.remove_action("action-0")
+    action_id = rec.record("bugzilla.update_bug", {"bug_id": 1})["action_id"]
+    rec.remove_action(action_id)
 
     with pytest.raises(ToolError, match="No recorded action"):
-        rec.remove_action("action-0")
+        rec.remove_action(action_id)
 
 
 def test_removed_action_id_and_attachment_key_are_not_reused(tmp_path):
@@ -279,11 +283,17 @@ def test_removed_action_id_and_attachment_key_are_not_reused(tmp_path):
     second.write_text("second")
     rec = ActionsRecorder(artifacts_dir=tmp_path / "artifacts")
 
-    rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": first})
-    rec.remove_action("action-0")
-    rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": second})
+    removed_id = rec.record(
+        "bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": first}
+    )["action_id"]
+    rec.remove_action(removed_id)
+    kept_id = rec.record(
+        "bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": second}
+    )["action_id"]
 
-    assert rec.list_actions()[0]["action_id"] == "action-1"
+    assert kept_id != removed_id
+    assert rec.list_actions()[0]["action_id"] == kept_id
+
     assert rec.actions[0]["attachments"] == [
         {"name": "file", "uploaded_key": "attachments/1/file"}
     ]

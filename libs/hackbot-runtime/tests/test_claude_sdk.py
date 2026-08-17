@@ -128,11 +128,11 @@ async def test_actions_server_exposes_selected_testrail_tool():
 
 async def test_recorded_actions_tools_list_and_remove_complete_action():
     recorder = ActionsRecorder()
-    recorder.record(
+    action_id = recorder.record(
         "bugzilla.update_bug",
         {"bug_id": 7, "changes": {"severity": "S2"}},
         reasoning="rule X",
-    )
+    )["action_id"]
     srv = _server(recorder)
 
     listed_result = await _call(srv, "recorded_actions_list_actions", {})
@@ -142,12 +142,12 @@ async def test_recorded_actions_tools_list_and_remove_complete_action():
             "type": "bugzilla.update_bug",
             "params": {"bug_id": 7, "changes": {"severity": "S2"}},
             "reasoning": "rule X",
-            "action_id": "action-0",
+            "action_id": action_id,
         }
     ]
 
     removed_result = await _call(
-        srv, "recorded_actions_remove_action", {"action_id": "action-0"}
+        srv, "recorded_actions_remove_action", {"action_id": action_id}
     )
     removed = json.loads(removed_result.content[0].text)
     assert removed == listed[0]

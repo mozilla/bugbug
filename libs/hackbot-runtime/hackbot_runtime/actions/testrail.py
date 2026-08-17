@@ -87,8 +87,8 @@ class SubmitTestPlanInput(BaseModel):
         return value
 
 
-def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} as {recorder.last_action_id}."
+def _confirm(action: dict) -> str:
+    return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
 def _validated_params(feature: str, generated_test_cases: list[Any]) -> dict[str, Any]:
@@ -128,8 +128,8 @@ async def submit_test_plan(
     Nothing is sent to TestRail during the agent run.
     """
     params = _validated_params(feature, generated_test_cases)
-    recorder.record(ACTION_TYPE, params)
-    return _confirm(recorder, ACTION_TYPE)
+    action = recorder.record(ACTION_TYPE, params)
+    return _confirm(action)
 
 
 def record_test_plan(

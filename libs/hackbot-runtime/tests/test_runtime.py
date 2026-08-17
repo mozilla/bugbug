@@ -58,7 +58,7 @@ def test_summary_written_for_exception(tmp_path):
 
 def test_removed_action_is_absent_from_summary(tmp_path):
     ctx = _ctx(tmp_path)
-    ctx.actions.record(
+    inaccurate = ctx.actions.record(
         "bugzilla.update_bug",
         {"bug_id": 1, "changes": {"severity": "S2"}},
         reasoning="inaccurate",
@@ -68,7 +68,7 @@ def test_removed_action_is_absent_from_summary(tmp_path):
         {"bug_id": 1, "text": "Corrected assessment"},
         reasoning="corrected",
     )
-    ctx.actions.remove_action("action-0")
+    ctx.actions.remove_action(inaccurate["action_id"])
 
     code = _finish(ctx, HackbotAgentResult(num_turns=1))
 
