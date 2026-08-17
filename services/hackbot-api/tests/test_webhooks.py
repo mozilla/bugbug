@@ -84,15 +84,31 @@ def _comment_txn(
 def test_find_mention_matches():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "hey @hackbot please fix")]
     assert find_hackbot_mentions(
-        txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a", 1, "regular")]
+        txns,
+        {"PHID-XACT-1"},
+        bot_phid="PHID-USER-bot",
+        token="@hackbot",
+        revision_diff_id=456,
+    ) == [
+        HackbotMention(
+            "hey @hackbot please fix",
+            "PHID-USER-a",
+            1,
+            "regular",
+            diff_id=456,
+        )
+    ]
 
 
 def test_find_mention_no_token():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "just a normal comment")]
     assert (
         find_hackbot_mentions(
-            txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
+            txns,
+            {"PHID-XACT-1"},
+            bot_phid="PHID-USER-bot",
+            token="@hackbot",
+            revision_diff_id=456,
         )
         == []
     )
@@ -103,7 +119,11 @@ def test_find_mention_ignores_bot_author():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-bot", "@hackbot did the thing")]
     assert (
         find_hackbot_mentions(
-            txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
+            txns,
+            {"PHID-XACT-1"},
+            bot_phid="PHID-USER-bot",
+            token="@hackbot",
+            revision_diff_id=456,
         )
         == []
     )
@@ -113,7 +133,11 @@ def test_find_mention_ignores_non_triggering_transaction():
     txns = [_comment_txn("PHID-XACT-OLD", "PHID-USER-a", "@hackbot fix")]
     assert (
         find_hackbot_mentions(
-            txns, {"PHID-XACT-NEW"}, bot_phid="PHID-USER-bot", token="@hackbot"
+            txns,
+            {"PHID-XACT-NEW"},
+            bot_phid="PHID-USER-bot",
+            token="@hackbot",
+            revision_diff_id=456,
         )
         == []
     )
@@ -123,7 +147,11 @@ def test_find_mention_ignores_non_comment_type():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "@hackbot", txn_type="status")]
     assert (
         find_hackbot_mentions(
-            txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
+            txns,
+            {"PHID-XACT-1"},
+            bot_phid="PHID-USER-bot",
+            token="@hackbot",
+            revision_diff_id=456,
         )
         == []
     )
@@ -144,7 +172,11 @@ def test_find_mention_matches_inline_comment():
         )
     ]
     assert find_hackbot_mentions(
-        txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
+        txns,
+        {"PHID-XACT-1"},
+        bot_phid="PHID-USER-bot",
+        token="@hackbot",
+        revision_diff_id=789,
     ) == [
         HackbotMention(
             "@hackbot here",
@@ -190,6 +222,7 @@ def test_find_mention_collects_all_inline_matches():
         {"PHID-XACT-1", "PHID-XACT-2", "PHID-XACT-3"},
         bot_phid="PHID-USER-bot",
         token="@hackbot",
+        revision_diff_id=789,
     ) == [
         HackbotMention(
             "@hackbot fix this",
@@ -222,7 +255,11 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
         "fields": {"diff": {"id": 456}, "path": "browser/foo.cpp", "line": 42},
     }
     assert find_hackbot_mentions(
-        [txn], {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
+        [txn],
+        {"PHID-XACT-1"},
+        bot_phid="PHID-USER-bot",
+        token="@hackbot",
+        revision_diff_id=789,
     ) == [
         HackbotMention(
             "@hackbot v1",
@@ -235,9 +272,11 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
 
 
 def test_format_comment_renders_regular_comment_as_xml():
-    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular")
+    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular", diff_id=456)
     assert _format_comment(mention) == (
-        '  <comment comment_id="123" type="regular">\n    only one\n  </comment>'
+        '  <comment comment_id="123" type="regular" diff_id="456">\n'
+        "    only one\n"
+        "  </comment>"
     )
 
 
@@ -305,18 +344,20 @@ class _FakeClient:
 
 
 async def test_resolve_revision_with_bug():
-    client = _FakeClient({"id": 42, "fields": {"bugzilla.bug-id": "12345"}})
-    assert await resolve_revision(client, "PHID-DREV-x") == (42, 12345)
+    client = _FakeClient(
+        {"id": 42, "fields": {"bugzilla.bug-id": "12345", "diffID": 456}}
+    )
+    assert await resolve_revision(client, "PHID-DREV-x") == (42, 12345, 456)
 
 
 async def test_resolve_revision_no_bug():
     client = _FakeClient({"id": 42, "fields": {"bugzilla.bug-id": ""}})
-    assert await resolve_revision(client, "PHID-DREV-x") == (42, None)
+    assert await resolve_revision(client, "PHID-DREV-x") == (42, None, None)
 
 
 async def test_resolve_revision_not_found():
     client = _FakeClient(None)
-    assert await resolve_revision(client, "PHID-DREV-x") == (None, None)
+    assert await resolve_revision(client, "PHID-DREV-x") == (None, None, None)
 
 
 async def test_detect_mention_requires_editbugs_membership(monkeypatch):
@@ -345,7 +386,7 @@ async def test_detect_mention_requires_editbugs_membership(monkeypatch):
 
 async def test_detect_mention_accepts_editbugs_member(monkeypatch):
     client = _FakeClient(
-        {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
+        {"id": 42, "fields": {"bugzilla.bug-id": "12345", "diffID": 456}},
         members={"PHID-USER-authorized"},
     )
     transactions = [
@@ -365,7 +406,7 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
     assert result == (
-        '  <comment comment_id="1" type="regular">\n'
+        '  <comment comment_id="1" type="regular" diff_id="456">\n'
         "    @hackbot please fix\n"
         "  </comment>",
         42,
@@ -376,7 +417,7 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
 
 async def test_detect_mention_enriches_inline_anchor(monkeypatch):
     client = _FakeClient(
-        {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
+        {"id": 42, "fields": {"bugzilla.bug-id": "12345", "diffID": 789}},
         members={"PHID-USER-authorized"},
     )
     transactions = [

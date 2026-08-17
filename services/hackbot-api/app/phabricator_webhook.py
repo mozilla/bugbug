@@ -49,6 +49,7 @@ def find_hackbot_mentions(
     *,
     bot_phid: str,
     token: str,
+    revision_diff_id: int | None,
 ) -> list[HackbotMention]:
     """Return every triggering comment that mentions ``token``.
 
@@ -57,6 +58,8 @@ def find_hackbot_mentions(
     several inline comments (each its own transaction), so all matches are
     returned, in transaction order. At most one per transaction: a transaction's
     ``comments`` list is that comment's version history, not distinct comments.
+    Inline comments carry their own diff anchor; regular comments use the
+    revision's current diff.
     """
     matches: list[HackbotMention] = []
     for transaction in transactions:
@@ -77,7 +80,7 @@ def find_hackbot_mentions(
             diff_id = (
                 transaction["fields"]["diff"]["id"]
                 if transaction["type"] == "inline"
-                else None
+                else revision_diff_id
             )
             matches.append(
                 HackbotMention(
@@ -107,7 +110,7 @@ def _format_comment(mention: HackbotMention) -> str:
         f'comment_id="{mention.comment_id}"',
         f'type="{mention.comment_type}"',
     ]
-    if mention.comment_type == "inline":
+    if mention.diff_id is not None:
         attributes.append(f'diff_id="{mention.diff_id}"')
     body = "\n".join(f"    {line}" for line in escape(mention.comment).splitlines())
     return f"  <comment {' '.join(attributes)}>\n{body}\n  </comment>"
@@ -115,23 +118,28 @@ def _format_comment(mention: HackbotMention) -> str:
 
 async def resolve_revision(
     client: PhabricatorClient, revision_phid: str
-) -> tuple[int | None, int | None]:
-    """Resolve a DREV PHID to its ``(revision_id, bug_id)``.
+) -> tuple[int | None, int | None, int | None]:
+    """Resolve a DREV PHID to ``(revision_id, bug_id, current_diff_id)``.
 
-    Either element is ``None`` if the revision can't be found or has no
-    associated Bugzilla bug.
+    Elements are ``None`` when the revision can't be found or does not have the
+    corresponding field.
     """
     revision = await client.search_revision(revision_phid)
     if revision is None:
-        return None, None
+        return None, None, None
     revision_id = revision.get("id")
     fields = revision.get("fields") or {}
     bug_id_raw = fields.get("bugzilla.bug-id")
+    diff_id_raw = fields.get("diffID")
     try:
         bug_id = int(bug_id_raw) if bug_id_raw not in (None, "") else None
     except (TypeError, ValueError):
         bug_id = None
-    return revision_id, bug_id
+    try:
+        diff_id = int(diff_id_raw) if diff_id_raw not in (None, "") else None
+    except (TypeError, ValueError):
+        diff_id = None
+    return revision_id, bug_id, diff_id
 
 
 async def detect_mention_and_revision(
@@ -152,12 +160,25 @@ async def detect_mention_and_revision(
     Returns ``None`` when there is no qualifying ``@hackbot`` mention, the
     revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
+    revision_id, bug_id, revision_diff_id = await resolve_revision(client, object_phid)
+    if revision_id is None:
+        log.warning("Could not resolve revision for %s", object_phid)
+        return None
+    if bug_id is None:
+        log.warning(
+            "Revision D%s (%s) has no Bugzilla bug id; skipping",
+            revision_id,
+            object_phid,
+        )
+        return None
+
     transactions = await client.search_transactions(object_phid)
     mentions = find_hackbot_mentions(
         transactions,
         set(triggering_phids),
         bot_phid=webhook.bot_phid,
         token=webhook.mention_token,
+        revision_diff_id=revision_diff_id,
     )
     authorized_mentions: list[HackbotMention] = []
     for mention in mentions:
@@ -179,17 +200,5 @@ async def detect_mention_and_revision(
         )
         return None
     comment = "\n\n".join(_format_comment(mention) for mention in authorized_mentions)
-
-    revision_id, bug_id = await resolve_revision(client, object_phid)
-    if revision_id is None:
-        log.warning("Could not resolve revision for %s", object_phid)
-        return None
-    if bug_id is None:
-        log.warning(
-            "Revision D%s (%s) has no Bugzilla bug id; skipping",
-            revision_id,
-            object_phid,
-        )
-        return None
 
     return comment, revision_id, bug_id
