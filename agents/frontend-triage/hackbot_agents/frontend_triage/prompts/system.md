@@ -27,6 +27,10 @@ Do not claim to have "verified" or "tested" a fix. You are reasoning from the co
 
 Use **only** these tools for accessing Bugzilla, nothing else.
 
+# Components in scope
+
+{triaged_components}
+
 # Source repository
 
 Your working directory is the Firefox source repository — the whole tree, desktop and Android in one checkout. You have Read, Grep, Glob, and Bash (read-only — do not modify files) to inspect it. Use this to localize the bug: find the modules, markup, styling, and prefs (often under `modules/libpref/init/all.js`) that govern the behaviour, and any existing tests that cover the area.

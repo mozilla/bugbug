@@ -11,7 +11,9 @@ from hackbot_agents.frontend_triage.agent import (
     may_apply_unattended,
     parse_confidence,
     parse_plan,
+    render_scope,
 )
+from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE, ScopedComponent
 
 
 def _block(body: str) -> str:
@@ -25,6 +27,49 @@ def test_the_system_prompt_renders():
     prompt = load_system_prompt(Path("rules"), "")
     assert '{"add": ["…"]}' in prompt
     assert "{rules_dir}" not in prompt
+    assert "{triaged_components}" not in prompt
+    # The component list reaches the prompt as full routing keys, since a bare component
+    # name would not say which product it belongs to.
+    assert "Firefox :: New Tab Page" in prompt
+    assert "Toolkit :: Application Update" in prompt
+
+
+def test_the_scope_is_grouped_by_area_in_registry_order():
+    # Asserted against a fixed registry rather than the real one, so this keeps testing
+    # the grouping when TRIAGE_SCOPE changes.
+    scope = (
+        ScopedComponent("Firefox", "New Tab Page", "Desktop", "#one"),
+        ScopedComponent("Toolkit", "Application Update", "Updater", "#two"),
+        ScopedComponent("Firefox", "Theme", "Desktop", "#one"),
+    )
+    rendered = render_scope(scope)
+    assert rendered.startswith(
+        "- **Desktop** — Firefox :: New Tab Page, Firefox :: Theme.\n"
+        "- **Updater** — Toolkit :: Application Update.\n"
+    )
+
+
+def test_the_scope_says_it_is_neither_a_limit_nor_a_vocabulary():
+    # Two ways to misread a list of components in a system prompt, both expensive.
+    # Reading it as exhaustive declares an in-scope bug out of scope, which is the
+    # mistake ecea6ca6 was fixing. Reading it as a vocabulary gets a component adjusted
+    # to match, and the component is the Slack routing key, so the notification then
+    # goes nowhere without failing.
+    rendered = render_scope()
+    assert "not the limit" in rendered
+    assert "verbatim" in rendered
+
+
+def test_every_area_has_prompt_guidance():
+    # The registry is what makes a component triaged; this is what makes it triageable.
+    # `Source repository` carries the per-area code layout, and an area with no bullet
+    # there means the agent is pointed at a component with no idea where its code lives
+    # -- which is how a bug gets read as out of scope and skipped. So a new area costs
+    # two files, visibly, rather than one file plus a prompt nobody remembered.
+    prompt = load_system_prompt(Path("rules"), "")
+    source_section = prompt.split("# Source repository", 1)[1]
+    for area in {entry.area for entry in TRIAGE_SCOPE}:
+        assert f"**{area}**" in source_section, area
 
 
 def test_confidence_is_normalized():
