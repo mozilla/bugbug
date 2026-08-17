@@ -49,6 +49,8 @@ from .config import (
     ENABLED_ACTION_TYPES,
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
+    TRIAGE_SCOPE,
+    ScopedComponent,
 )
 from .hooks import add_comment_hook, update_bug_hook
 
@@ -140,6 +142,44 @@ SEARCHFOX_LINKS_PROMPT = (
 )
 
 
+def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
+    """Render `config.TRIAGE_SCOPE` as the prompt's component list, grouped by area.
+
+    Generated rather than written into the prompt so that the component list has one
+    home. The per-area guidance under `Source repository` stays hand-authored: it is
+    prose about a codebase, and only the enumeration is mechanical.
+
+    Takes the registry as an argument so a test can assert the grouping against a fixed
+    input rather than against whatever the real scope happens to be today.
+    """
+    by_area: dict[str, list[str]] = {}
+    for entry in scope:
+        by_area.setdefault(entry.area, []).append(entry.key)
+
+    lines = [f"- **{area}** — {', '.join(keys)}." for area, keys in by_area.items()]
+
+    return "\n".join(
+        lines
+        + [
+            "",
+            # Two failure modes to close off, in order of how much they cost. Reading the
+            # list as exhaustive gets an in-scope bug declared out of scope, which is the
+            # `ecea6ca6` mistake. Reading it as a vocabulary gets a component "tidied" to
+            # match, and since the component is also the routing key, `notify.py` then
+            # silently tells nobody.
+            "**This list is not the limit of what you triage.** It is where bugs "
+            "normally come from, and which team each one reports to. `scoping.md` is "
+            "what decides scope: any user-facing Firefox defect is in scope, including "
+            "in a component not named above — triage it normally rather than calling it "
+            "out of scope for being absent here.",
+            "",
+            "It is also **not** a vocabulary for the `product` and `component` fields "
+            "of your plan. Copy those from Bugzilla verbatim, even when they are not "
+            "listed above.",
+        ]
+    )
+
+
 def load_system_prompt(rules_dir: Path, extra: str) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
@@ -147,6 +187,7 @@ def load_system_prompt(rules_dir: Path, extra: str) -> str:
         rules_dir=str(rules_dir.resolve()),
         extra_instructions=extra or "(none)",
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
+        triaged_components=render_scope(),
     )
 
 
