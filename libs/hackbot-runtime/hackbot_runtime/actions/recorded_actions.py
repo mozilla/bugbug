@@ -10,16 +10,31 @@ from pydantic import Field
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
 
-@tool
-async def list_actions(recorder: ActionsRecorder) -> list[dict]:
-    """List every action currently proposed by this agent run.
+def _table_cell(value: str | None) -> str:
+    """Format one value for a Markdown table cell."""
+    if value is None:
+        return ""
+    return "<br>".join(value.splitlines()).replace("|", r"\|")
 
-    Returns each action's stable in-run ID and its complete recorded payload,
-    including parameters, reasoning, references, and attachment metadata. Use
-    this when earlier action details are no longer present in your context or
-    before deciding whether a proposal needs to be retracted.
+
+@tool
+async def list_actions(recorder: ActionsRecorder) -> str:
+    """List the actions currently proposed by this agent run.
+
+    Returns a Markdown table with each action's ID, type, and reasoning.
     """
-    return recorder.list_actions()
+    actions = recorder.list_actions()
+    if not actions:
+        return "No recorded actions."
+
+    rows = ["| ID | Action | Reasoning |", "| --- | --- | --- |"]
+    rows.extend(
+        f"| {_table_cell(action['action_id'])} "
+        f"| {_table_cell(action['type'])} "
+        f"| {_table_cell(action.get('reasoning'))} |"
+        for action in actions
+    )
+    return "\n".join(rows)
 
 
 @tool

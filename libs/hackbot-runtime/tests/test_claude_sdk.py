@@ -136,21 +136,22 @@ async def test_recorded_actions_tools_list_and_remove_complete_action():
     srv = _server(recorder)
 
     listed_result = await _call(srv, "recorded_actions_list_actions", {})
-    listed = json.loads(listed_result.content[0].text)
-    assert listed == [
-        {
-            "type": "bugzilla.update_bug",
-            "params": {"bug_id": 7, "changes": {"severity": "S2"}},
-            "reasoning": "rule X",
-            "action_id": action_id,
-        }
+    assert listed_result.content[0].text.splitlines() == [
+        "| ID | Action | Reasoning |",
+        "| --- | --- | --- |",
+        f"| {action_id} | bugzilla.update_bug | rule X |",
     ]
 
     removed_result = await _call(
         srv, "recorded_actions_remove_action", {"action_id": action_id}
     )
     removed = json.loads(removed_result.content[0].text)
-    assert removed == listed[0]
+    assert removed == {
+        "type": "bugzilla.update_bug",
+        "params": {"bug_id": 7, "changes": {"severity": "S2"}},
+        "reasoning": "rule X",
+        "action_id": action_id,
+    }
     assert recorder.actions == []
 
 
