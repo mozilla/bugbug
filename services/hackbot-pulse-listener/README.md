@@ -53,8 +53,8 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
 7. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
    terminal, then email a hackbot UI link, the analysis summary, a Treeherder link, and the
    commit the agent blamed. Build-repair looks the blamed commit up in the firefox GitHub
-   mirror and mails its author; test-repair mails the notification address
-   (`TEST_REPAIR_NOTIFICATION_EMAIL`).
+   mirror and mails its author; test-repair mails only the team address
+   (`NOTIFICATION_TEAM_EMAIL`) -- sheriffs are notified by the agent in Slack instead.
 
 The dedupe caches, the daily budget and pending-run tracking are all in-memory, so
 a restart resets them.
@@ -98,9 +98,10 @@ uv run --package hackbot-pulse-listener python -m app
 Email is sent only when `SENDGRID_API_KEY` and `NOTIFICATION_SENDER` are set; otherwise it
 is logged and skipped. Build-repair mails the blamed commit's author (looked up in the
 firefox GitHub mirror), the pushing developer, and the `NOTIFICATION_TEAM_EMAIL` team
-address if set; test-repair mails only `TEST_REPAIR_NOTIFICATION_EMAIL` and the team address --
-never the culprit author or the pushing developer, though the culprit is still named
-in the body. Set
+address if set; test-repair mails only the team address -- never the culprit author or
+the pushing developer, though the culprit is still named in the body. Its verdicts are
+tracking for the hackbot team, so every verdict is mailed, intermittents included; what
+reaches sheriffs is the agent's Slack message, and only when they have to act. Set
 `NOTIFICATION_OVERRIDE_EMAIL` to route every notification to a single address (useful for
 local testing). By default only build-repair runs that produced a patch are emailed; set
 `NOTIFY_ONLY_WITH_PATCH=false` to also notify on transient / not-to-blame runs (test-repair always

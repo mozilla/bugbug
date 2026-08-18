@@ -9,6 +9,8 @@ Recorded as a ``slack.post_message`` action rather than posted from the run: it 
 then visible in the hackbot UI before it lands, and the apply step delivers it at
 most once (see ``hackbot_runtime.actions.slack``).
 
+Only verdicts a sheriff acts on are posted -- see :func:`sheriff_action_required`.
+
 A few lines of context, then the verdict in full. Every identifier a sheriff would
 otherwise have to look up -- revisions, task, bug, run -- is a link, the way the
 pulse listener's email does it
@@ -42,6 +44,19 @@ _RECOMMENDATIONS = {
     "do_not_backout": "DO NOT back out (intermittent)",
     "rerun": "RETRIGGER the job",
 }
+
+
+def sheriff_action_required(result: TestRepairResult) -> bool:
+    """Whether the verdict is one a sheriff has to act on.
+
+    A known intermittent asks for nothing -- no backout, no retrigger -- and it is the
+    majority verdict, so posting those is pure noise. ``rerun`` is not one of them: an
+    intermittent the agent could not confirm still asks for a retrigger.
+    """
+    return not (
+        result.classification == "intermittent"
+        and result.recommendation == "do_not_backout"
+    )
 
 
 def _link(url: str, label: str) -> str:
