@@ -43,7 +43,7 @@ Core, DevTools-internals, or build-system bug — and say which area it looks li
    `devtools/` (JS/JSM, CSS, XUL/HTML); Android under `mobile/android/` (Kotlin,
    Fragment/Store/Middleware/View); the updater under `toolkit/mozapps/update/`
    (`.sys.mjs`, IDL, C++); the installer under `browser/installer/windows/nsis/`
-   (NSIS `.nsi`/`.nsh`), Messaging System under `browser/components/asrouter/`,
+   (NSIS `.nsi`/`.nsh`); the Messaging System under `browser/components/asrouter/`,
    `browser/components/aboutwelcome/`, `toolkit/components/messaging-system/`
    (JS/JSM, CSS, XUL/HTML, JSON, JSON Schema). Find the module, the markup or layout,
    and any relevant pref (often `modules/libpref/init/all.js`, or `app.update.*`
