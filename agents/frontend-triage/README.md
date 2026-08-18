@@ -200,24 +200,7 @@ Routing is the `channel` on each `TRIAGE_SCOPE` entry in `config.py`, looked up 
 `ScopedComponent("Firefox", "New Tab Page", "Desktop frontend", "#hnt-dev-triage")`
 sends a New Tab Page run to `#hnt-dev-triage`.
 
-<<<<<<< HEAD
 Four things about that which are not obvious from reading the registry:
-||||||| parent of 5d6d8e9c (Route Firefox :: Messaging System bugs to #omc-triage)
-| Product :: Component             | Channel                         |
-| -------------------------------- | ------------------------------- |
-| `Firefox :: New Tab Page`        | `#hnt-dev-triage`               |
-| `Firefox for Android :: History` | `#android-core-dev`             |
-| `Toolkit :: Application Update`  | `#installer-updater-bug-triage` |
-| `Firefox :: Installer`           | `#installer-updater-bug-triage` |
-=======
-| Product :: Component             | Channel                         |
-| -------------------------------- | ------------------------------- |
-| `Firefox :: New Tab Page`        | `#hnt-dev-triage`               |
-| `Firefox for Android :: History` | `#android-core-dev`             |
-| `Toolkit :: Application Update`  | `#installer-updater-bug-triage` |
-| `Firefox :: Installer`           | `#installer-updater-bug-triage` |
-| `Firefox :: Messaging System`    | `#omc-triage`                   |
->>>>>>> 5d6d8e9c (Route Firefox :: Messaging System bugs to #omc-triage)
 
 - **The key is the component, not the team**, so two components may share a channel, as
   the installer and the updater do, without either knowing about the other.
