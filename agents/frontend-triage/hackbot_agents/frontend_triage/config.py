@@ -98,6 +98,7 @@ TRIAGE_SCOPE = (
         "IP Protection",
         "#team-eng-ip-protection-triage",
     ),
+    ScopedComponent("Firefox", "Messaging System", "Messaging System", "#omc-triage"),
     ScopedComponent(
         "Firefox for Android", "History", "Firefox for Android", "#android-core-dev"
     ),
@@ -124,10 +125,6 @@ TRIAGE_SCOPE = (
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
 # that `notify.py` keeps one flat mapping to look up.
 SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
-    "Toolkit :: Application Update": "#installer-updater-bug-triage",
-    "Firefox :: Installer": "#installer-updater-bug-triage",
-    "Firefox :: Messaging System": "#omc-triage",
-}
 
 # What a `bugzilla.update_bug` from this agent may touch. Enforced at record time
 # by `hooks.update_bug_hook`, so an out-of-bounds change is refused while the agent
