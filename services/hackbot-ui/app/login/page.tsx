@@ -4,6 +4,26 @@ import { useState } from "react";
 
 import { signIn } from "@/lib/auth-client";
 
+const DEFAULT_PATH = "/";
+
+function safeRedirectPath(raw: string | null): string {
+  if (
+    !raw ||
+    !raw.startsWith("/") ||
+    raw.startsWith("//") ||
+    raw.includes("\\")
+  ) {
+    return DEFAULT_PATH;
+  }
+
+  const path = raw.split(/[?#]/)[0];
+  if (path === "/login" || path.startsWith("/login/")) {
+    return DEFAULT_PATH;
+  }
+
+  return raw;
+}
+
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -11,11 +31,17 @@ export default function LoginPage() {
   async function onGoogle() {
     setError(null);
     setLoading(true);
+    const params = new URLSearchParams(window.location.search);
+    const next = safeRedirectPath(params.get("next"));
+
+    // Keep the target across a denied sign-in so a retry still lands on it.
+    const errorParams = new URLSearchParams({ error: "denied", next });
+
     try {
       await signIn.social({
         provider: "google",
-        callbackURL: "/",
-        errorCallbackURL: "/login?error=denied",
+        callbackURL: next,
+        errorCallbackURL: `/login?${errorParams.toString()}`,
       });
     } catch (err) {
       setError((err as Error).message);
