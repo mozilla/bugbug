@@ -5,13 +5,16 @@ import { useState } from "react";
 import { signIn } from "@/lib/auth-client";
 
 const DEFAULT_PATH = "/";
+// Browsers may strip these characters and change how the URL is parsed.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
 function safeRedirectPath(raw: string | null): string {
   if (
     !raw ||
     !raw.startsWith("/") ||
     raw.startsWith("//") ||
-    raw.includes("\\")
+    raw.includes("\\") ||
+    CONTROL_CHARS.test(raw)
   ) {
     return DEFAULT_PATH;
   }
