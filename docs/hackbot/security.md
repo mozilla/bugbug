@@ -41,10 +41,10 @@ Today `bug-fix`, `build-repair`, `frontend-triage` and `autowebcompat-repro` run
 Anthropic and W&B both accept a Google-signed OIDC identity token exchanged for a
 short-lived access token, so neither needs a static key in the container.
 
-The runtime fetches the token from the GCP metadata server (`format=full`, so it carries the
-`email` claim the federation rule matches on), writes it to a file in a 0700 directory with
-an atomic replace, points the SDK at that file, and refreshes it every 30 minutes on a daemon
-thread — tokens live ~1h and runs can be longer.
+The runtime fetches that token from the GCP metadata server, writes it to a private file the
+SDK reads, and keeps refreshing it in the background — Google tokens outlive neither a long
+run nor a single exchange, so the file has to stay fresh for the whole run
+(`hackbot_runtime/anthropic_wif.py`).
 
 Federation is enabled by the presence of `ANTHROPIC_FEDERATION_RULE_ID`. An
 `ANTHROPIC_API_KEY` set _alongside_ it is refused with an error, because the key would take

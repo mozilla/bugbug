@@ -50,48 +50,28 @@ Weave tracing has its own per-environment projects (`hackbot-prod`, `hackbot-dev
 
 ## Configuration reference
 
-Each service parses its config once with `pydantic-settings` from env or `.env`. Nested
-models bind from prefixed vars, splitting on the first underscore only
-(`PHABRICATOR_API_KEY` → `phabricator.api_key`).
+Every service parses its config once with `pydantic-settings`, so its `Settings` class is
+the authoritative list of what it reads — defaults included, which is the part that drifts
+fastest:
 
-### hackbot-api
+| Service                  | Read the config from                                                          |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `hackbot-api`            | `services/hackbot-api/app/config.py`                                          |
+| `hackbot-pulse-listener` | `services/hackbot-pulse-listener/app/config.py`                               |
+| `hackbot-ui`             | `services/hackbot-ui/.env.example`                                            |
+| Agent containers         | `libs/hackbot-runtime/hackbot_runtime/context.py` + the agent's `AgentInputs` |
 
-| Group       | Vars                                                                                      |
-| ----------- | ----------------------------------------------------------------------------------------- |
-| GCP         | `GCP_PROJECT`, `GCP_REGION`, `RESULTS_BUCKET`                                             |
-| Database    | `CLOUD_SQL_INSTANCE`, `DB_USER`, `DB_PASS`, `DB_NAME`                                     |
-| Jobs        | `JOB_EXECUTION_TIMEOUT_SECONDS`, `SIGNED_POLICY_MAX_BYTES`, `SIGNED_POLICY_GRACE_SECONDS` |
-| Auth        | `EXTERNAL_API_KEY`, `PUSH_AUTH_AUDIENCE`, `PUSH_AUTH_SERVICE_ACCOUNT`                     |
-| Phabricator | `PHABRICATOR_URL`, `PHABRICATOR_API_KEY`                                                  |
-| Webhook     | `WEBHOOK_SECRET` (**required**), `WEBHOOK_BOT_PHID`, `WEBHOOK_MENTION_TOKEN`              |
-| Events      | `RUN_EVENTS_TOPIC`                                                                        |
-| Misc        | `HACKBOT_API_URL`, `PORT`, `ENVIRONMENT`, `SENTRY_DSN`                                    |
+Two things those files do not tell you:
 
-### Agent containers
+- **Nested models bind from prefixed vars**, splitting on the first underscore only:
+  `PHABRICATOR_API_KEY` → `phabricator.api_key`, `WEBHOOK_SECRET` → `webhook.secret`.
+- **An agent container's env arrives from three places.** Per-execution overrides from the
+  API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field); static
+  Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
+  `WEAVE_PROJECT`); and local-only fallbacks (`ANTHROPIC_API_KEY`, `WANDB_API_KEY`,
+  `ARTIFACTS_DIR`). Only the first varies per run.
 
-Set by the platform per execution: `RUN_ID`, `RESULTS_BUCKET`, `RESULTS_PREFIX`,
-`RESULTS_POLICY_URL`, `RESULTS_POLICY_FIELDS`, plus one var per input-schema field
-(`BUG_ID`, `FAILURE_TASKS`, …).
-
-Set at deploy time: `BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids
-(`ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`,
-`ANTHROPIC_SERVICE_ACCOUNT_ID`, `ANTHROPIC_WORKSPACE_ID`), `WEAVE_PROJECT`.
-
-Local only: `ANTHROPIC_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`.
-
-### hackbot-ui
-
-`HACKBOT_API_URL`, `HACKBOT_API_KEY`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`,
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Every instance must share
-`BETTER_AUTH_SECRET` — that is the only shared session state.
-
-### hackbot-pulse-listener
-
-`PULSE_USER`, `PULSE_PASSWORD`, `HACKBOT_API_URL`, `HACKBOT_API_KEY`, `HACKBOT_UI_URL`,
-`WATCHED_REPOS`, plus the filter tuning (`MAX_PUSH_AGE_HOURS`,
-`TREEHERDER_CLASSIFICATION_WAIT_SECONDS`, `MAX_TEST_REPAIRS_PER_DAY`, …) and SendGrid
-notification settings. `DRY_RUN=true` logs intended calls without POSTing. See its
-[README](../../services/hackbot-pulse-listener/README.md).
+The listener also honours `DRY_RUN=true`, which logs intended calls without POSTing them.
 
 ## Running locally
 

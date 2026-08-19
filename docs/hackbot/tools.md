@@ -59,9 +59,10 @@ world mid-run" invariant checkable by looking at which library a tool came from.
 
 ## The catalog
 
-Every tool below is read-only. Nothing is exposed by default: an agent allowlists the
-individual tools it wants in its `config.py`, by their MCP name
-(`mcp__<server>__<tool>`, e.g. `mcp__bugzilla__get_bugs`).
+Every tool below is read-only, and the `@tool` handlers in each module stay the
+authoritative list. Nothing is exposed by default: an agent allowlists the individual tools
+it wants in its `config.py`, by their MCP name (`mcp__<server>__<tool>`, e.g.
+`mcp__bugzilla__get_bugs`).
 
 | Namespace     | Tool                    | Returns                                                         |
 | ------------- | ----------------------- | --------------------------------------------------------------- |
@@ -92,13 +93,13 @@ individual tools it wants in its `config.py`, by their MCP name
 Each namespace has a context object carrying what its tools need, and an optional
 dependency extra so an agent installs only what it uses:
 
-| Namespace     | Context              | Extra                   | Backed by                         |
-| ------------- | -------------------- | ----------------------- | --------------------------------- |
-| `bugzilla`    | `BugzillaContext`    | `agent-tools[bugzilla]` | `bugsy`                           |
-| `phabricator` | `PhabricatorContext` | —                       | injected `PhabricatorClient`      |
-| `searchfox`   | `SearchfoxContext`   | `[searchfox]`           | `searchfox` client                |
-| `mozilla_vcs` | `MozillaVcsContext`  | `[vcs]`                 | `hg.mozilla.org` over `httpx`     |
-| `firefox`     | `FirefoxContext`     | `[firefox]`             | `grizzly-framework`, `prefpicker` |
+| Namespace     | Context              | Extra                   |
+| ------------- | -------------------- | ----------------------- |
+| `bugzilla`    | `BugzillaContext`    | `agent-tools[bugzilla]` |
+| `phabricator` | `PhabricatorContext` | — (injected client)     |
+| `searchfox`   | `SearchfoxContext`   | `[searchfox]`           |
+| `mozilla_vcs` | `MozillaVcsContext`  | `[vcs]`                 |
+| `firefox`     | `FirefoxContext`     | `[firefox]`             |
 
 `FirefoxContext.from_source_repo(path, objdir=...)` derives every build path from the
 prepared checkout, which is why `ctx.firefox` on the runtime context just works once

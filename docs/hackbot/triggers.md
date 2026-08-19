@@ -53,21 +53,11 @@ finishes it polls the result and emails a report.
 failing tests itself from the task id. The listener only decides _what to hand off_ — which
 keeps the expensive reasoning in one place and lets the filter stay cheap.
 
-The filtering is the substance of this service, and
-[`services/hackbot-pulse-listener/README.md`](../../services/hackbot-pulse-listener/README.md)
-documents it properly. The shape:
-
-1. **Route** by watched project and task kind.
-2. **Discard** what isn't this push's failure: action-task-scheduled tasks (backfills,
-   retriggers) and pushes older than `MAX_PUSH_AGE_HOURS`.
-3. **Dedupe** per push per agent, in memory.
-4. **Judge** whether the failure is new. Test failures go through a Treeherder
-   classification gate first (the cheap filter — most stop here), then an ancestor walk
-   comparing failing manifests within the same configuration; build failures compare task
-   labels.
-5. **Budget** — at most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs per rolling 24h, since
-   each one clones and builds Firefox.
-6. **Dispatch and report** — trigger, poll to terminal, email.
+The filtering is the substance of this service and changes often, so it is documented
+where it lives: [`services/hackbot-pulse-listener/README.md`](../../services/hackbot-pulse-listener/README.md).
+In outline, a failure has to survive routing by project and task kind, a discard pass for
+failures this push did not introduce, per-push dedupe, a newness check (Treeherder
+classification then an ancestor walk), and a daily run budget before an agent is dispatched.
 
 Three properties worth carrying in your head when changing it:
 

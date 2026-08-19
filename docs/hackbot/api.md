@@ -106,17 +106,16 @@ retention and schema separable.
 
 ## Data model
 
-**`runs`** — `run_id` (uuid, pk), `agent`, `status`, `inputs`, `requested_by`,
-`execution_name`, `results_prefix`, `summary`, `artifacts`, `error`, `created_at`,
-`updated_at`, `finalized_at`. Indexed on `agent`, `status`, `requested_by`, `created_at`;
-listing orders by `created_at desc, run_id desc` so offset paging is stable when timestamps
-collide.
+Two tables, defined in `app/database/models.py`; schema changes go through Alembic
+(`services/hackbot-api/alembic/`).
 
-**`run_actions`** — one row per entry in a run's `summary.json` actions, unique on
-`(run_id, idx)`: `type`, `params`, `ref`, `status` (`pending`/`applied`/`failed`),
-`result`, `error`, `applied_at`. See [actions.md](actions.md).
+**`runs`** is the system of record for a run — its inputs, execution name, summary,
+artifacts and terminal state. Listing orders by `created_at desc, run_id desc` rather than
+timestamp alone, so offset paging stays stable when two runs share a timestamp.
 
-Schema changes go through Alembic (`services/hackbot-api/alembic/`).
+**`run_actions`** holds one row per entry in a run's `summary.json` actions, unique on
+`(run_id, idx)`, carrying that action's apply state. That uniqueness is what makes replays
+idempotent — see [actions.md](actions.md).
 
 ## Local development
 
