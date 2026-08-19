@@ -25,6 +25,11 @@ def _plan():
                         "expectation": "Text selection is highlighted in the PDF.",
                     },
                 ],
+                "result": {
+                    "status": "passed",
+                    "summary": "The PDF behaved as expected.",
+                    "failure_reason": None,
+                },
             },
             {
                 "id": 2,
@@ -36,42 +41,11 @@ def _plan():
                         "expectation": "The toolbar remains visible and usable.",
                     },
                 ],
-            },
-        ],
-        "results": [
-            {
-                "id": 1,
-                "status": "passed",
-                "summary": "The PDF behaved as expected.",
-                "failure_reason": None,
-                "step_results": [
-                    {
-                        "step_number": 1,
-                        "status": "passed",
-                        "observation": "The PDF opened.",
-                        "failure_reason": None,
-                    },
-                    {
-                        "step_number": 2,
-                        "status": "passed",
-                        "observation": "Text was selected.",
-                        "failure_reason": None,
-                    },
-                ],
-            },
-            {
-                "id": 2,
-                "status": "unsuitable",
-                "summary": "The toolbar could not be inspected.",
-                "failure_reason": "No available tool can inspect it.",
-                "step_results": [
-                    {
-                        "step_number": 1,
-                        "status": "not_run",
-                        "observation": "Not run.",
-                        "failure_reason": None,
-                    }
-                ],
+                "result": {
+                    "status": "unsuitable",
+                    "summary": "The toolbar could not be inspected.",
+                    "failure_reason": "No available tool can inspect it.",
+                },
             },
         ],
         "summary": "One passed and one was unsuitable.",
