@@ -85,7 +85,7 @@ class SubmitTestPlanInput(BaseModel):
         case_ids = [case.id for case in self.generated_test_cases]
         expected_ids = list(range(1, len(self.generated_test_cases) + 1))
         if case_ids != expected_ids:
-            raise ValueError("test case ids must be sequential starting at 1")
+            raise ToolError("test case ids must be sequential starting at 1")
         return self
 
 

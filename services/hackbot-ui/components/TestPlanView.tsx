@@ -128,7 +128,8 @@ export function TestPlanView({ testPlan }: { testPlan: TestPlan }) {
   );
 
   return (
-    <div className="test-plan">
+    <div className="panel test-plan">
+      <h2>Test plan</h2>
       {testPlan.feature && (
         <section className="test-plan-section">
           <h3 className="test-plan-label">Feature name</h3>

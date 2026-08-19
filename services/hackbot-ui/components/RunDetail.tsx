@@ -15,6 +15,7 @@ import {
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
 import { StatusBadge } from "./StatusBadge";
+import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
 // Proposed bugzilla.add_comment actions carry the comment body in params.text;
 // pull it out so we can preview what would be posted to the bug.
@@ -162,15 +163,12 @@ export function RunDetail({ runId }: { runId: string }) {
   const log = extractLog(run);
   const findings = run.summary?.findings ?? {};
   const hasFindings = Object.keys(findings).length > 0;
-  const hasTestPlanAction =
-    run.agent === "test-plan-generator" &&
-    Boolean(
-      actions?.some(
-        (action) =>
-          action.type === "testrail.submit_test_plan" &&
-          Array.isArray(action.params?.generated_test_cases)
-      )
-    );
+  // The QA agent gets its own purpose-built view; its plan lives on the
+  // TestRail action, so findings are usually empty (raw data is in summary.json).
+  const testPlan =
+    run.agent === "test-plan-generator"
+      ? parseTestPlan(findings, actions)
+      : null;
 
   // Both pending and failed actions are (re)applied by the apply endpoint — it
   // skips only already-applied ones — so one button covers applying and retry.
@@ -260,8 +258,10 @@ export function RunDetail({ runId }: { runId: string }) {
         </div>
       )}
 
-      {(hasFindings || hasTestPlanAction) && (
-        <FindingsView findings={findings} agent={run.agent} actions={actions} />
+      {testPlan ? (
+        <TestPlanView testPlan={testPlan} />
+      ) : (
+        hasFindings && <FindingsView findings={findings} />
       )}
 
       {actions && actions.length > 0 && (
