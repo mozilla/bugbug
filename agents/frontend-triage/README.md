@@ -14,14 +14,26 @@ human (or a downstream execution agent) takes it from there.
 ## What it triages
 
 **Defects in user-facing Firefox** — the kind documented with a screenshot, steps
-to reproduce, or a log rather than a stack trace:
+to reproduce, or a log rather than a stack trace. `scoping.md` is what decides
+scope, and it is broad: any user-facing Firefox defect qualifies.
 
-- **Desktop frontend**, under `Firefox`: Tabbed Browser (incl. Split View and Tab
-  Groups), New Tab Page, Address Bar, Menus, Toolbars and Customization, Sidebar,
-  Theme.
-- **Firefox for Android**: History. Kotlin under `mobile/android/fenix/`.
-- **Install and update**: `Firefox :: Installer` (NSIS) and
-  `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
+What is _routed_ is narrower. `TRIAGE_SCOPE` in `config.py` lists the components
+bugs normally arrive from, one entry each, carrying the Slack channel and the area
+whose code layout `prompts/system.md` describes. A bug handed to the agent by hand
+in some other component — `Firefox :: Menus`, say — is triaged the same way and
+reports to nobody. The areas, which are also how the rendered scope list is
+grouped:
+
+- **Desktop frontend**, under `Firefox`. JS/JSM modules, CSS, XUL/HTML.
+- **Site permissions**, also desktop, but split across the doorhanger, the state,
+  and a C++ store outside `browser/`.
+- **IP Protection**, the built-in VPN. Panel UI in
+  `browser/components/ipprotection/`, the proxy and entitlement state machines in
+  `toolkit/components/ipprotection/`.
+- **Firefox for Android**. Kotlin under `mobile/android/fenix/` and
+  `mobile/android/android-components/`.
+- **Application updater** — `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
+- **Windows installer** — `Firefox :: Installer` (NSIS).
 
 Install and update bugs are the odd ones out: they arrive as a failure with an
 error code and an `update.log` or installer log, usually with no steps to
@@ -30,6 +42,11 @@ reproduce and no screenshot. That is the normal shape of a bug in that area, so
 framing reads as a reason to skip them. `severity-assessment.md` starts them at
 S2 rather than the S3 a papercut would get, since a user who cannot update is
 left on an unpatched build with no in-product workaround.
+
+IP Protection has the same S2 floor, for the same reason: turning the VPN off is
+not a workaround for it not working. It carries one extra instruction, because the
+distinction does not survive a bug report — state merely _displayed_ wrong is a UI
+bug, while state actually wrong means traffic is unproxied and belongs above S2.
 
 Poor fits: crashes, hangs, assertions and sanitizer reports (those belong to
 [`bug-fix`](../bug-fix/)) — note that "the installer failed" is not a crash
@@ -173,21 +190,27 @@ The audience is the team whose bug was just written to by nobody, so only an
 auto-applied run notifies. A medium or low result wrote nothing to Bugzilla and
 stays silent, even if someone applies it by hand later.
 
-Routing is `SLACK_CHANNELS` in `config.py`, keyed by `"<Product> :: <Component>"`:
+Routing is the `channel` on each `TRIAGE_SCOPE` entry in `config.py`, looked up by
+`"<Product> :: <Component>"` through the derived `SLACK_CHANNELS` — so
+`ScopedComponent("Firefox", "New Tab Page", "Desktop frontend", "#hnt-dev-triage")`
+sends a New Tab Page run to `#hnt-dev-triage`.
 
-| Product :: Component             | Channel                         |
-| -------------------------------- | ------------------------------- |
-| `Firefox :: New Tab Page`        | `#hnt-dev-triage`               |
-| `Firefox for Android :: History` | `#android-core-dev`             |
-| `Toolkit :: Application Update`  | `#installer-updater-bug-triage` |
-| `Firefox :: Installer`           | `#installer-updater-bug-triage` |
+Four things about that which are not obvious from reading the registry:
 
-Two components may share a channel, as the installer and the updater do; the key is
-the component, not the team. A component that is not listed notifies nobody; there is
-deliberately no default channel, since posting one team's triage into another team's
-channel is worse than silence. Product and component come from the agent's
-`product`/`component` plan fields, because nothing else carries them out of a run
-whose only input is a bug id, so a garbled value matches no team and sends nothing.
+- **The key is the component, not the team**, so two components may share a channel, as
+  the installer and the updater do, without either knowing about the other.
+- **There is deliberately no default channel**, since posting one team's triage into
+  another team's channel is worse than silence.
+- **`TRIAGE_SCOPE` is narrower than what the agent will triage.** It is the routing
+  table, and it should stay in step with bugbot's `TRIAGED_COMPONENTS`, which decides
+  what arrives automatically. `scoping.md` puts _any_ user-facing Firefox defect in
+  scope, so a bug handed to the agent by hand in some other component is triaged
+  normally and reports to nobody. The system prompt says so explicitly, because a list
+  of components read as exhaustive is how an in-scope bug gets declared out of scope.
+- **Product and component come from the agent's `product`/`component` plan fields**,
+  because nothing else carries them out of a run whose only input is a bug id. A garbled
+  value matches no team and sends nothing, which is why the system prompt asks for them
+  verbatim even for components the scope list does not name.
 
 `notify.py` builds and records the message; the wording is code, not a model turn,
 so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is never
@@ -204,12 +227,14 @@ notifies. The run page shows the failed action.
 `rules/` and `prompts/` both live under `hackbot_agents/frontend_triage/`.
 
 - **`rules/`** is the main behavior dial. `scoping.md` decides what gets skipped;
-  `frontend-triage.md` sets in-scope components, comment content, and the
-  confidence thresholds for recording an action. The agent globs the directory
-  and reads only what it judges relevant, so new `.md` files extend it — see
-  `rules/README.md` for how to author one.
+  `frontend-triage.md` sets comment content and the confidence thresholds for
+  recording an action. The agent globs the directory and reads only what it judges
+  relevant, so new `.md` files extend it — see `rules/README.md` for how to author
+  one. Neither file lists components; `TRIAGE_SCOPE` in `config.py` does.
 - **`prompts/system.md`** holds the standing instructions: output format, the
-  read-only mandate, and when to reach for Searchfox versus reading a file.
+  read-only mandate, when to reach for Searchfox versus reading a file, and the
+  per-area code layout. A component in a new area needs a **Source repository**
+  bullet here, and `tests/test_plan.py` fails until it has one.
 - **Cost** scales with tool use, not just turns — Searchfox results are
   token-heavy, so narrowing queries (`path_filter`, a modest `limit`) matters
   more than `MAX_TURNS` when batching.

@@ -123,6 +123,7 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     assert transactions["plan-changes"] is True
     assert "reviewers.add" not in transactions
     assert transactions["bugzilla.bug-id"] == "1"
+    assert transactions["summary"] == "s"
 
 
 async def test_submit_patch_sets_local_commits_property(monkeypatch):

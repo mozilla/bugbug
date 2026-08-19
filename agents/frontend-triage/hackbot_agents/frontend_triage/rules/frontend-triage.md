@@ -1,14 +1,11 @@
 # User-facing Firefox defect triage
 
 These rules apply to **defects in user-facing Firefox** — the desktop frontend,
-Firefox for Android, and the Windows installer and application updater. Typical
-components:
-
-- Desktop frontend, all under `Firefox`: `Tabbed Browser`,
-  `Tabbed Browser: Split View`, `New Tab Page`, `Address Bar`, `Menus`,
-  `Toolbars and Customization`, `Sidebar`, `Theme`.
-- Android: `Firefox for Android :: History`.
-- Install and update: `Firefox :: Installer`, `Toolkit :: Application Update`.
+Firefox for Android, and the Windows installer and application updater. **Components in
+scope** in the system prompt lists the components bugs normally arrive from, grouped by
+the area whose code layout **Source repository** describes. Any user-facing Firefox
+defect is in scope, though, whether or not its component is on that list; see
+`scoping.md`.
 
 Desktop and Android bugs here are usually UI/UX papercuts, documented with a
 **video or screenshot** and steps to reproduce.

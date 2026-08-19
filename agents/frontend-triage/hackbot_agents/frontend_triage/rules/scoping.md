@@ -28,11 +28,11 @@ output's `actionable` to `false`, `confidence` to `low`, and `root_cause` to nul
 ## Proceed normally
 
 Everything else — a `defect` in a user-facing Firefox component without the skip signals
-above — is in scope. That covers the desktop frontend (Bookmarks & History, New Tab Page,
-Session Restore, Sidebar, Tabbed Browser: Split View / Tab Groups, Toolbars and
-Customization, …), Firefox for Android (History, …), and install and update
-(`Firefox :: Installer`, `Toolkit :: Application Update`). Continue to the
-`frontend-triage` ruleset.
+above — is in scope. That covers the desktop frontend, Firefox for Android, and install
+and update. **Components in scope** in the system prompt lists the components bugs
+normally arrive from, but it is not a limit: a user-facing Firefox defect in a component
+that is not on it is still in scope, and being absent from it is not a reason to skip a
+bug. Continue to the `frontend-triage` ruleset.
 
 An install or update failure reported as an error code and a log, with no steps to
 reproduce and no screenshot, is an in-scope defect — it is the usual shape of a bug in

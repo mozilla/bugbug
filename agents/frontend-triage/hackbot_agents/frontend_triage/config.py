@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",
@@ -42,23 +44,86 @@ ENABLED_ACTION_TYPES = [
     "bugzilla.update_bug",
 ]
 
-# Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. A channel
-# belongs to the team that owns the component, so the routing does too: a component
-# that is not listed sends nothing, since posting one team's triage into another team's
-# channel is worse than silence. There is deliberately no default channel.
+
+class ScopedComponent(NamedTuple):
+    """A Bugzilla component sent here for triage, and where a finished run reports it."""
+
+    product: str
+    component: str
+    # Which `Source repository` bullet in prompts/system.md describes this component's
+    # code. `tests/test_plan.py` asserts every area named here has one, so a new area
+    # cannot be added without the guidance that makes it triageable.
+    area: str
+    # Required, because an entry without one would be a component getting unattended
+    # triage with nobody told -- which is what `channel_for` failing closed produces,
+    # and not something to be able to express by accident.
+    channel: str
+
+    @property
+    def key(self) -> str:
+        return f"{self.product} :: {self.component}"
+
+
+# The components that are sent here for triage, and the channel that owns each. The
+# single source of truth for both: `SLACK_CHANNELS` below is derived from it, and
+# `render_scope` in agent.py renders it into the system prompt, so adding a component is
+# one entry here rather than the same name written into three prose lists and a test.
+#
+# This is narrower than what the agent will triage. `rules/scoping.md` puts any
+# user-facing Firefox defect in scope, and a bug handed to the agent by hand is triaged
+# on that rule whether or not its component is named here -- it just reports to nobody.
+# What this tuple decides is routing, and it should stay in step with bugbot's
+# `TRIAGED_COMPONENTS`, which decides what arrives automatically.
+#
+# A channel belongs to the team that owns the component, so the routing does too: a
+# component that is not listed sends nothing, since posting one team's triage into
+# another team's channel is worse than silence. There is deliberately no default channel.
 #
 # `slack.post_message` is left out of `ENABLED_ACTION_TYPES` on purpose. The message is
 # code (see notify.py), not a model turn, so it goes through the recorder directly and
 # the agent is never given the tool — it has no say in what is said or where.
-SLACK_CHANNELS = {
-    "Firefox :: New Tab Page": "#hnt-dev-triage",
-    "Firefox for Android :: History": "#android-core-dev",
+#
+# Ordered by area, grouped by first appearance — `render_scope` preserves that order, so
+# this is also the order the model reads. There is no separate list of areas to keep in
+# sync with this one.
+TRIAGE_SCOPE = (
+    ScopedComponent("Firefox", "New Tab Page", "Desktop frontend", "#hnt-dev-triage"),
+    ScopedComponent(
+        "Firefox", "Site Permissions", "Site permissions", "#privacy-team-automation"
+    ),
+    ScopedComponent("Firefox", "Sharing", "Sharing", "#content-sharing-automation"),
+    ScopedComponent(
+        "Firefox",
+        "IP Protection",
+        "IP Protection",
+        "#team-eng-ip-protection-triage",
+    ),
+    ScopedComponent(
+        "Firefox for Android", "History", "Firefox for Android", "#android-core-dev"
+    ),
+    ScopedComponent(
+        "Firefox for Android", "Toolbar", "Firefox for Android", "#android-core-dev"
+    ),
+    ScopedComponent(
+        "Firefox for Android", "Homepage", "Firefox for Android", "#android-core-dev"
+    ),
     # The installer and the updater are triaged by the same team, so two components
     # share a channel. Keying by product-and-component rather than by channel is what
     # lets them, without either one having to know about the other.
-    "Toolkit :: Application Update": "#installer-updater-bug-triage",
-    "Firefox :: Installer": "#installer-updater-bug-triage",
-}
+    ScopedComponent(
+        "Toolkit",
+        "Application Update",
+        "Application updater",
+        "#installer-updater-bug-triage",
+    ),
+    ScopedComponent(
+        "Firefox", "Installer", "Windows installer", "#installer-updater-bug-triage"
+    ),
+)
+
+# Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
+# that `notify.py` keeps one flat mapping to look up.
+SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
 
 # What a `bugzilla.update_bug` from this agent may touch. Enforced at record time
 # by `hooks.update_bug_hook`, so an out-of-bounds change is refused while the agent

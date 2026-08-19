@@ -28,6 +28,16 @@ user is affected, how many users hit it, and whether a workaround exists.
   failure specific to one antivirus product or one locale is narrower than one that hits
   a whole channel or OS version — but start from **S2** and move up or down from there,
   rather than starting from S3.
+- **IP Protection failures do not default to S3 either.** The user is paying for the
+  feature, and turning it off is not a workaround for it not working — it is the absence
+  of the thing they bought. A proxy that will not connect, that drops without saying so,
+  or that reports itself active while traffic goes around `IPPChannelFilter` leaves them
+  without the protection they believe they have. Start from **S2** and move up or down on
+  reach, rather than starting from S3. Separate two cases that read identically in a bug
+  report: the state is merely _displayed_ wrong (the panel disagrees with the proxy) or
+  it is actually wrong (traffic is unproxied). The first is a UI bug, the second is a
+  privacy exposure and belongs above S2. Say which one you concluded and what in the code
+  told you.
 - Weigh: is it functional vs cosmetic? Is there a workaround? How frequently and how
   broadly is it hit (mainline path vs rare configuration)?
 - Do **not downgrade** an existing higher severity unless you have strong evidence the
