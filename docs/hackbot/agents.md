@@ -1,7 +1,7 @@
 # Agents
 
 > For the hands-on recipe — copy the reference agent, folder layout, running it locally —
-> see [`agents/README.md`](../../agents/README.md). This page covers the contract and how
+> see [agents/README.md](../../agents/README.md). This page covers the contract and how
 > an agent integrates with the platform.
 
 ## The contract
@@ -73,12 +73,12 @@ Agents needing credentialed reads also ship a **broker sidecar** holding the API
 
 ## Registering an agent
 
-Two additions in `services/hackbot-api/`:
+Two additions in [services/hackbot-api/](../../services/hackbot-api/):
 
-1. **`app/schemas.py`** — a Pydantic input model. This _is_ the agent's public API: it is
+1. **[app/schemas.py](../../services/hackbot-api/app/schemas.py)** — a Pydantic input model. This _is_ the agent's public API: it is
    what `GET /agents` publishes as a JSON schema, what `POST /agents/{name}/runs`
    validates against, and what becomes the run's env overrides.
-2. **`app/agents.py`** — one `AGENT_REGISTRY` entry: `name`, `description`, `job_name`
+2. **[app/agents.py](../../services/hackbot-api/app/agents.py)** — one `AGENT_REGISTRY` entry: `name`, `description`, `job_name`
    (the Cloud Run Job), `input_schema`, and optionally `auto_apply_actions=True`.
 
 Env vars are derived from the schema (`bug_id` → `BUG_ID`, lists and dicts JSON-encoded),
@@ -88,13 +88,14 @@ an agent whose env genuinely doesn't map 1:1, and should stay unused.
 **Deploy-time constants are not inputs.** The broker's loopback URL, model defaults, and
 similar belong in the Job's static env, not in the input schema.
 
-The UI's agent list (`services/hackbot-ui/lib/agents.ts`) is a separate list and needs the
+The UI's agent list ([services/hackbot-ui/lib/agents.ts](../../services/hackbot-ui/lib/agents.ts)) is a separate list and needs the
 new name too.
 
 ## Conventions worth keeping
 
 **One folder per agent, self-contained.** Logic, `hackbot.toml`, `Dockerfile`,
-`compose.yml`, prompts and rules all live under `agents/<name>/`. You should be able to
+`compose.yml`, prompts and rules all live under that agent's own directory in
+[agents/](../../agents/). You should be able to
 understand one agent without reading another.
 
 **Prompts and rules are files, not string literals.** `prompts/*.md` and `rules/*.md` are
@@ -105,5 +106,5 @@ package; an `__init__.py` makes agents overwrite each other when installed side 
 
 **Reuse the shared pieces** rather than reimplementing them: `Reporter` for rendering the
 streamed model messages into the run log, `actions_server_for` for recordable write
-actions, [`agent-tools`](tools.md) for read tools. Assembling `ClaudeAgentOptions` and driving the
+actions, [agent-tools](tools.md) for read tools. Assembling `ClaudeAgentOptions` and driving the
 client loop stays in the agent — that is the part that should differ.

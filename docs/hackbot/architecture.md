@@ -6,7 +6,7 @@
 what inputs they take, and what state their runs are in. Owns the Postgres database,
 starts executions, and applies recorded actions. FastAPI on Cloud Run.
 
-**Agent images** (`agents/<name>/`) — one container image per agent, deployed as a Cloud
+**Agent images** — one subdirectory of [agents/](../../agents/) per agent, each a container image deployed as a Cloud
 Run **Job**; a run is one execution of that Job. See [agents.md](agents.md).
 
 **`hackbot-runtime`** — the library inside the agent container. It owns everything that
@@ -115,5 +115,5 @@ adding an execution platform means adding a payload parser, not rewriting the li
 
 The deploy scripts for **hackbot-api**, the **agent Cloud Run Jobs**, and the **Pub/Sub
 topics, subscriptions and Eventarc triggers** are managed outside this repo. Only
-`services/hackbot-ui/deploy.sh` and `services/hackbot-pulse-listener/deploy.sh` live here.
+[services/hackbot-ui/deploy.sh](../../services/hackbot-ui/deploy.sh) and [services/hackbot-pulse-listener/deploy.sh](../../services/hackbot-pulse-listener/deploy.sh) live here.
 See [deployment.md](deployment.md).

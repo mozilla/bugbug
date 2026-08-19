@@ -63,15 +63,15 @@ what it proposed.
 
 ## Code map
 
-| Path                                                | What it is                                                          |
-| --------------------------------------------------- | ------------------------------------------------------------------- |
-| `libs/hackbot-runtime/`                             | The in-container runtime: agent contract, context, results, actions |
-| `libs/agent-tools/`                                 | The tools a model can call: declarations + per-framework adapters   |
-| `libs/phabricator-client/`, `libs/testrail-client/` | Shared API clients                                                  |
-| `agents/<name>/`                                    | One self-contained agent: logic, image, local compose               |
-| `services/hackbot-api/`                             | Control plane (FastAPI): runs, artifacts, actions, webhooks         |
-| `services/hackbot-ui/`                              | Web UI (Next.js): trigger, observe, review and apply actions        |
-| `services/hackbot-pulse-listener/`                  | Watches Taskcluster CI failures and dispatches repair runs          |
+| Path                                                                                                             | What it is                                                             |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [libs/hackbot-runtime/](../../libs/hackbot-runtime/)                                                             | The in-container runtime: agent contract, context, results, actions    |
+| [libs/agent-tools/](../../libs/agent-tools/)                                                                     | The tools a model can call: declarations + per-framework adapters      |
+| [libs/phabricator-client/](../../libs/phabricator-client/), [libs/testrail-client/](../../libs/testrail-client/) | Shared API clients                                                     |
+| [agents/](../../agents/)                                                                                         | One self-contained agent per subdirectory: logic, image, local compose |
+| [services/hackbot-api/](../../services/hackbot-api/)                                                             | Control plane (FastAPI): runs, artifacts, actions, webhooks            |
+| [services/hackbot-ui/](../../services/hackbot-ui/)                                                               | Web UI (Next.js): trigger, observe, review and apply actions           |
+| [services/hackbot-pulse-listener/](../../services/hackbot-pulse-listener/)                                       | Watches Taskcluster CI failures and dispatches repair runs             |
 
 ## Conventions in these docs
 

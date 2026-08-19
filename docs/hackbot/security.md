@@ -44,7 +44,7 @@ short-lived access token, so neither needs a static key in the container.
 The runtime fetches that token from the GCP metadata server, writes it to a private file the
 SDK reads, and keeps refreshing it in the background — Google tokens outlive neither a long
 run nor a single exchange, so the file has to stay fresh for the whole run
-(`hackbot_runtime/anthropic_wif.py`).
+([hackbot_runtime/anthropic_wif.py](../../libs/hackbot-runtime/hackbot_runtime/anthropic_wif.py)).
 
 Federation is enabled by the presence of `ANTHROPIC_FEDERATION_RULE_ID`. An
 `ANTHROPIC_API_KEY` set _alongside_ it is refused with an error, because the key would take

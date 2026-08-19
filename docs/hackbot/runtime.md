@@ -102,8 +102,8 @@ and failure modes: [security.md](security.md).
 
 ## Tools and actions
 
-The tools a model can call are **not** in this library — read tools live in `agent-tools`
-([tools.md](tools.md)), recordable write-actions in `hackbot_runtime/actions/`
+The tools a model can call are **not** in this library — read tools live in [agent-tools/](../../libs/agent-tools/)
+([tools.md](tools.md)), recordable write-actions in [hackbot_runtime/actions/](../../libs/hackbot-runtime/hackbot_runtime/actions/)
 ([actions.md](actions.md)). The runtime's part is `ctx.actions`, the recorder those
 write-actions append to.
 

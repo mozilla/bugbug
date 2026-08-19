@@ -106,8 +106,8 @@ retention and schema separable.
 
 ## Data model
 
-Two tables, defined in `app/database/models.py`; schema changes go through Alembic
-(`services/hackbot-api/alembic/`).
+Two tables, defined in [app/database/models.py](../../services/hackbot-api/app/database/models.py); schema changes go through Alembic
+([services/hackbot-api/alembic/](../../services/hackbot-api/alembic/)).
 
 **`runs`** is the system of record for a run — its inputs, execution name, summary,
 artifacts and terminal state. Listing orders by `created_at desc, run_id desc` rather than

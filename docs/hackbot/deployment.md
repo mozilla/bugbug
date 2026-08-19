@@ -2,13 +2,13 @@
 
 Everything runs on GCP in a Hackbot-only project.
 
-| Component                | Runs as                                               | Deployed by                                 |
-| ------------------------ | ----------------------------------------------------- | ------------------------------------------- |
-| `hackbot-api`            | Cloud Run **service** + Cloud SQL Postgres            | Outside this repo                           |
-| Agents                   | Cloud Run **Job**, one per agent                      | Outside this repo                           |
-| Event wiring             | Logging sink, Pub/Sub topic + subscriptions, Eventarc | Outside this repo                           |
-| `hackbot-ui`             | Cloud Run **service**                                 | `services/hackbot-ui/deploy.sh`             |
-| `hackbot-pulse-listener` | Cloud Run **worker pool** (no HTTP)                   | `services/hackbot-pulse-listener/deploy.sh` |
+| Component                | Runs as                                               | Deployed by                                                                                  |
+| ------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `hackbot-api`            | Cloud Run **service** + Cloud SQL Postgres            | Outside this repo                                                                            |
+| Agents                   | Cloud Run **Job**, one per agent                      | Outside this repo                                                                            |
+| Event wiring             | Logging sink, Pub/Sub topic + subscriptions, Eventarc | Outside this repo                                                                            |
+| `hackbot-ui`             | Cloud Run **service**                                 | [services/hackbot-ui/deploy.sh](../../services/hackbot-ui/deploy.sh)                         |
+| `hackbot-pulse-listener` | Cloud Run **worker pool** (no HTTP)                   | [services/hackbot-pulse-listener/deploy.sh](../../services/hackbot-pulse-listener/deploy.sh) |
 
 **Only the UI and listener have deploy scripts in this repository.** Provisioning for the
 API, the agent Jobs, and the event plumbing lives elsewhere; code comments referring to a
@@ -54,12 +54,12 @@ Every service parses its config once with `pydantic-settings`, so its `Settings`
 the authoritative list of what it reads — defaults included, which is the part that drifts
 fastest:
 
-| Service                  | Read the config from                                                          |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| `hackbot-api`            | `services/hackbot-api/app/config.py`                                          |
-| `hackbot-pulse-listener` | `services/hackbot-pulse-listener/app/config.py`                               |
-| `hackbot-ui`             | `services/hackbot-ui/.env.example`                                            |
-| Agent containers         | `libs/hackbot-runtime/hackbot_runtime/context.py` + the agent's `AgentInputs` |
+| Service                  | Read the config from                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `hackbot-api`            | [services/hackbot-api/app/config.py](../../services/hackbot-api/app/config.py)                                                       |
+| `hackbot-pulse-listener` | [services/hackbot-pulse-listener/app/config.py](../../services/hackbot-pulse-listener/app/config.py)                                 |
+| `hackbot-ui`             | [services/hackbot-ui/.env.example](../../services/hackbot-ui/.env.example)                                                           |
+| Agent containers         | [libs/hackbot-runtime/hackbot_runtime/context.py](../../libs/hackbot-runtime/hackbot_runtime/context.py) + the agent's `AgentInputs` |
 
 Two things those files do not tell you:
 

@@ -1,7 +1,7 @@
 # Agent tools (`agent-tools`)
 
 The tools an agent's model can call. A separate library from the runtime
-(`libs/agent-tools/`) because nothing in it is Hackbot-specific: it declares tools and
+([libs/agent-tools/](../../libs/agent-tools/)) because nothing in it is Hackbot-specific: it declares tools and
 adapts them to agent frameworks, and knows nothing about runs, artifacts or the platform.
 
 ## Declaring a tool
@@ -31,7 +31,7 @@ Collect a module's tools with `tools_in(__name__)`, conventionally exported as `
 
 ## Framework-neutrality
 
-`agent_tools.registry` imports only pydantic — no agent framework. Adapters translate a
+[agent_tools.registry](../../libs/agent-tools/agent_tools/registry.py) imports only pydantic — no agent framework. Adapters translate a
 `ToolDefinition` into a specific framework's server:
 
 - **`agent_tools.claude_sdk.build_sdk_server(name, ctx, tools)`** — an in-process MCP
@@ -40,7 +40,7 @@ Collect a module's tools with `tools_in(__name__)`, conventionally exported as `
   `actions` server for write-actions. Namespace-prefixed (`bugzilla_update_bug`) because
   one server hosts every write domain.
 
-`claude_sdk.py` is the only module in the library that imports `claude-agent-sdk`, behind
+[claude_sdk.py](../../libs/agent-tools/agent_tools/claude_sdk.py) is the only module in the library that imports `claude-agent-sdk`, behind
 the `[claude-sdk]` extra. Adding LangChain support means adding one adapter, not touching
 any handler — `ToolDefinition.args_model` is already a plain pydantic model usable as an
 `args_schema`.

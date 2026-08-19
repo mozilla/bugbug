@@ -18,7 +18,7 @@ with the same inputs.
 
 **The API key never reaches the browser.** Every call goes through a server-side route
 handler under `app/api/*` that re-validates the session and injects `X-API-Key`
-(`lib/hackbot.ts`). Retrigger reads the original inputs server-side, so the browser only
+([lib/hackbot.ts](../../services/hackbot-ui/lib/hackbot.ts)). Retrigger reads the original inputs server-side, so the browser only
 sends a run id.
 
 **Auth is Google OAuth via better-auth, `@mozilla.com` only, and completely stateless** —
@@ -54,7 +54,7 @@ failing tests itself from the task id. The listener only decides _what to hand o
 keeps the expensive reasoning in one place and lets the filter stay cheap.
 
 The filtering is the substance of this service and changes often, so it is documented
-where it lives: [`services/hackbot-pulse-listener/README.md`](../../services/hackbot-pulse-listener/README.md).
+where it lives: [services/hackbot-pulse-listener/README.md](../../services/hackbot-pulse-listener/README.md).
 In outline, a failure has to survive routing by project and task kind, a discard pass for
 failures this push did not introduce, per-push dedupe, a newness check (Treeherder
 classification then an ancestor walk), and a daily run budget before an agent is dispatched.

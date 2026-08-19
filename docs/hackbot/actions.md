@@ -16,7 +16,7 @@ Why the indirection:
 
 ## Recording (inside the run)
 
-The write-action tools are declared in `hackbot_runtime/actions/` — one module per domain,
+The write-action tools are declared in [hackbot_runtime/actions/](../../libs/hackbot-runtime/hackbot_runtime/actions/) — one module per domain,
 using the same `@tool` decorator as [read tools](tools.md). Calling one records the intent
 against the run's `ActionsRecorder` instead of performing it.
 
@@ -27,7 +27,7 @@ container.
 ### The catalog
 
 Each action type has a declaration the agent calls and a handler that applies it.
-`actions/handlers/registry.py` is the authoritative type → handler map.
+[actions/handlers/registry.py](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/registry.py) is the authoritative type → handler map.
 
 As with read tools, nothing is exposed by default: an agent lists the dotted types it may
 record in its `config.py` and passes them to `actions_server_for`, which builds a server
@@ -132,13 +132,13 @@ result).
 
 ## Where to look
 
-| Concern                          | File                                                       |
-| -------------------------------- | ---------------------------------------------------------- |
-| Recording mechanics, hooks       | `libs/hackbot-runtime/hackbot_runtime/actions/recorder.py` |
-| Action declarations (per domain) | `libs/hackbot-runtime/hackbot_runtime/actions/*.py`        |
-| Apply-side handlers              | `libs/hackbot-runtime/hackbot_runtime/actions/handlers/`   |
-| Type → handler map               | `.../actions/handlers/registry.py`                         |
-| Orchestration, refs, coalescing  | `services/hackbot-api/app/actions_applier.py`              |
+| Concern                          | File                                                                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Recording mechanics, hooks       | [libs/hackbot-runtime/hackbot_runtime/actions/recorder.py](../../libs/hackbot-runtime/hackbot_runtime/actions/recorder.py) |
+| Action declarations (per domain) | [hackbot_runtime/actions/](../../libs/hackbot-runtime/hackbot_runtime/actions/)                                            |
+| Apply-side handlers              | [libs/hackbot-runtime/hackbot_runtime/actions/handlers/](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/)     |
+| Type → handler map               | [actions/handlers/registry.py](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/registry.py)                    |
+| Orchestration, refs, coalescing  | [services/hackbot-api/app/actions_applier.py](../../services/hackbot-api/app/actions_applier.py)                           |
 
 Record side and apply side deliberately live in the **same library**, so the set of
 actions an agent can request and the set the platform can apply cannot drift apart.
