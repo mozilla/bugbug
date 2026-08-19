@@ -33,6 +33,17 @@ class BugzillaWebhookSettings(BaseModel):
     dedupe_ttl_seconds: int = 6 * 60 * 60
 
 
+class SlackSettings(BaseModel):
+    """Inbound Slack interactivity config (clicks on the app's own messages).
+
+    Populated from SLACK_* env vars as part of the single settings parse.
+    """
+
+    # Slack's app-level signing secret (Basic Information -> App Credentials),
+    # used to verify the HMAC on every interaction delivery.
+    signing_secret: str
+
+
 class Settings(BaseSettings):
     # GCP
     gcp_project: str = ""
@@ -65,6 +76,8 @@ class Settings(BaseSettings):
     # from BUGZILLA_WEBHOOK_SECRET, BUGZILLA_WEBHOOK_BOT_LOGIN, and
     # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
+
+    slack: SlackSettings
 
     # The webhook receiver triggers runs over the public API (rather than calling
     # the DB/jobs internals directly), so splitting it into its own service later

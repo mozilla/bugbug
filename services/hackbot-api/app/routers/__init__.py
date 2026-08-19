@@ -1,5 +1,6 @@
 from app.routers.events import router as events_router
 from app.routers.runs import router as runs_router
+from app.routers.slack import router as slack_router
 from app.routers.webhooks import router as webhooks_router
 
-__all__ = ["events_router", "runs_router", "webhooks_router"]
+__all__ = ["events_router", "runs_router", "slack_router", "webhooks_router"]

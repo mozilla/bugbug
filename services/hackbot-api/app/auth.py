@@ -5,6 +5,7 @@ import logging
 from fastapi import Header, HTTPException, Request, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
+from slack_sdk.signature import SignatureVerifier
 
 from app.config import settings
 
@@ -56,6 +57,50 @@ def require_bugzilla_webhook_secret(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Bugzilla webhook secret",
+        )
+
+
+def verify_slack_signature(
+    raw_body: bytes, timestamp: str | None, signature: str | None
+) -> bool:
+    """Constant-time-check Slack's `X-Slack-Signature` over the raw request body.
+
+    Slack signs `v0:{timestamp}:{body}` with the app's signing secret and sends the
+    digest as `v0=<hex>` in the header. `slack_sdk`'s verifier does that comparison
+    and additionally rejects a timestamp more than five minutes from now, which is
+    what stops a captured delivery from being replayed later. The Phabricator
+    signature has no such window, so this cannot simply reuse it.
+
+    Returns False if the secret is unconfigured or either header is missing or
+    garbled, so a service without `SLACK_SIGNING_SECRET` rejects every delivery
+    instead of accepting them all.
+    """
+    secret = settings.slack.signing_secret
+    if not secret or not timestamp or not signature:
+        return False
+    try:
+        return SignatureVerifier(secret).is_valid(raw_body, timestamp, signature)
+    except ValueError:
+        # A non-numeric timestamp header reaches an `int()` inside the verifier.
+        return False
+
+
+async def require_slack_signature(
+    request: Request,
+    x_slack_request_timestamp: str | None = Header(default=None),
+    x_slack_signature: str | None = Header(default=None),
+) -> None:
+    """Reject the request unless Slack's delivery signature is valid.
+
+    Same shape as `require_phabricator_signature`: the raw body is read here (and
+    cached by Starlette, so the route can read it again) because the signature
+    covers the bytes as sent, which a parse-and-reserialise would not reproduce.
+    """
+    raw = await request.body()
+    if not verify_slack_signature(raw, x_slack_request_timestamp, x_slack_signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Slack signature",
         )
 
 
