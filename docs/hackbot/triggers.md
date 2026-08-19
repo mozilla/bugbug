@@ -41,6 +41,9 @@ the trigger form and the run filter.
 
 ## hackbot-pulse-listener — Taskcluster CI
 
+> **Being migrated to Treeherder.** This section documents the current implementation; it
+> should be removed from these docs once the migration lands.
+
 An always-on Cloud Run **worker pool** (no HTTP port) that consumes `task-failed` messages
 from `pulse.mozilla.org`, decides which failures are worth an agent, and dispatches
 `build-repair` (failed build tasks) or `test-repair` (failed test tasks). When the run
