@@ -409,10 +409,10 @@ class BugReproduction(Task):
 3. Cross-check in Chrome: run the same steps in Chrome using the Chrome DevTools
    MCP and report `chrome_reproduced`.
    - A genuine web-compat issue reproduces in Firefox but not in Chrome. If the
-     behavior is identical in both, your steps may be wrong or this may not be a
-     web-compat issue; refine the steps and re-check before concluding.
-   - If the reported broken behaviour reproduces in both browsers, it is not a
-     Firefox web-compat issue: set `failure_reason` to `non_compat`.
+     behavior is identical in both, your steps may be wrong; refine the steps
+     and re-check before concluding.
+   - If you confirmed that the reported broken behaviour reproduces in both browsers,
+   set `failure_reason` to `not_firefox_specific`.
 4. If the issue reproduces, write and run a Puppeteer script that drives the real
    reported site in both browsers and demonstrates the difference: follow the spec in
    `{repro_reference}`, write your script to exactly `{self.script_path}`
@@ -723,13 +723,13 @@ async def run_autowebcompat_repro(
 
     if not test_plan_result.is_webcompat:
         result = repro_results.into_result()
-        result.summary = "Test was identified as a non-compat issue"
-        result.failure_reason = "non_compat"
+        result.summary = "Test was identified as a not platform issue"
+        result.failure_reason = "not_platform_related"
         return result
     elif test_plan_result.affects_platforms == ["ios"]:
         result = repro_results.into_result()
         result.summary = "Issue was identified as iOS only"
-        result.failure_reason = "unsupported_platform"
+        result.failure_reason = "unsupported_ios"
         return result
 
     async def next_repro_task(
@@ -785,16 +785,16 @@ async def run_autowebcompat_repro(
     await next_repro_task(FirefoxChannel.nightly)
 
     # If the reported behavior reproduced in both Firefox and Chrome it is not a
-    # Firefox web-compat issue: stop early.
+    # Firefox specific issue: stop early.
     if repro_results.reproduced and repro_results.chrome_reproduced:
         result = repro_results.into_result()
-        if result.failure_reason != "non_compat":
+        if result.failure_reason != "not_firefox_specific":
             logger.warning(
                 "Issue reproduced in both Firefox and Chrome but failure_reason "
-                "was %r, should have been non_compat",
+                "was %r, should have been not_firefox_specific",
                 result.failure_reason,
             )
-        result.failure_reason = "non_compat"
+        result.failure_reason = "not_firefox_specific"
         return result
 
     if not repro_results.reproduced and test_plan_result.affects_platforms == [
@@ -802,7 +802,7 @@ async def run_autowebcompat_repro(
     ]:
         result = repro_results.into_result()
         result.summary = "Issue was identified as Android only and didn't reproduce on desktop nightly"
-        result.failure_reason = "unsupported_platform"
+        result.failure_reason = "unsupported_android"
         return result
 
     # If we don't think this is ESR only, try stable

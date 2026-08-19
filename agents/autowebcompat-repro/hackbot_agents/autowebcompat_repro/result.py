@@ -45,8 +45,8 @@ class TestPlanResult(BaseModel):
     ) = Field(
         description="""List of desktop issues known to be affected.
         - `null` if the issue does not affect desktop.
-        - "all" if there is no strong evidence that the issue is platform specific"
-        - Otherwise a list of platform names which are likely affected
+        - "all" if there is no strong evidence that the issue is OS specific"
+        - Otherwise a list of OS names which are likely affected
         """
     )
 
@@ -78,9 +78,12 @@ class ReproductionResult(BaseModel):
     )
 
     failure_reason: (
-        Literal["not_reproducable"]
-        | Literal["non_compat"]
-        | Literal["unsupported_platform"]
+        Literal["not_reproducible"]
+        | Literal["not_platform_related"]
+        | Literal["not_firefox_specific"]
+        | Literal["unsupported_android"]
+        | Literal["unsupported_ios"]
+        | Literal["unsupported_desktop_os"]
         | Literal["blocked"]
         | Literal["blocked_captcha"]
         | Literal["blocked_geo"]
@@ -91,17 +94,20 @@ class ReproductionResult(BaseModel):
     ) = Field(
         description="""If an issue was reproduced as a Firefox web-compat issue then `null`.
         Otherwise, one of the following categories describing the reason for the failure:
-          * not_reproducable - When it was possible to run all the steps to reproduce, but no issue was found
-          * non_compat - When the issue is not a Firefox web-compat issue. This covers reports that don't refer
-          to site breakage (e.g. issues with the Firefox UI or product features such as reader mode) and reports
-          whose behavior reproduces identically in both Firefox and Chrome.
-          * unsupported_platform - When the report is specific to a platform that isn't available e.g. iOS
+          * not_reproducible - When it was possible to run all the steps to reproduce, but no issue was found
+          * not_platform_related - When the issue is not related to the the web content itself. This covers reports that don't refer
+          to site breakage (e.g. issues with the Firefox UI or product features such as reader mode)
+          * not_firefox_specific - When report behavior reproduces in both Firefox and Chrome
+          * unsupported_android - When the report is specific to Android and you're unable to reproduce despite best efforts
+          * unsupported_ios - When the report is specific to iOS
+          * unsupported_desktop_os - When the report is specific to a desktop OS that isn't available in current environment,
+          (e.g. macOS) and you're unable to reproduce despite best efforts
           * blocked_captcha - When access to the site was blocked because the page requires solving a captcha
           * blocked_geo - When access to the site was blocked based on location ("geoblocking")
           * blocked - When access to the site was blocked for some reason that couldn't be identified as a captcha or geoblocking
           * login - When reproducing the issue requires completing a login flow
           * down - When the site down or unavailable in a way that is unrelated to the issue report
-          * other - When the issue could not be reproduced for some other reason (please give details in the summary text)
+          * other - When the issue could not be reproduced for some other reason (briefly state the reason in the summary)
 """
     )
 
@@ -136,8 +142,13 @@ class BugReproductionResult(ReproductionResult):
     """
 
     summary: str = Field(
-        description="""A concise account of whether the issue represents a real
-        webcompat issue i.e. it can be reproduced in Firefox."""
+        description="""A 2-4 sentence summary of your findings: what breaks in Firefox,
+        and how Chrome differs.
+
+        Hard limit: 500 characters. State conclusions, not the investigation.
+        Do NOT include: measurements or coordinates, script exit codes or
+        pass/fail counts, how the script works, restatements of other result
+        fields, or justification that the issue qualifies as webcompat."""
     )
 
     chrome_reproduced: bool | None = Field(
