@@ -1,4 +1,5 @@
 import { isPlainObject } from "@/lib/findings-format";
+import type { RunAction } from "@/lib/types";
 
 type TestCaseStatus = "passed" | "failed" | "unsuitable";
 
@@ -53,9 +54,18 @@ function isTestStep(value: TestStep | null): value is TestStep {
 }
 
 export function parseTestPlan(
-  findings: Record<string, unknown>
+  findings: Record<string, unknown>,
+  actions: RunAction[] | null = null
 ): TestPlan | null {
-  const result = findings.result;
+  // The agent now records the plan straight onto the action, so that is the
+  // source of truth. Runs from before the switch still carry it in findings.
+  const testRailAction = actions?.find(
+    (action) =>
+      action.type === "testrail.submit_test_plan" &&
+      isPlainObject(action.params) &&
+      Array.isArray(action.params.generated_test_cases)
+  );
+  const result = testRailAction?.params ?? findings.result;
   if (!isPlainObject(result) || !Array.isArray(result.generated_test_cases)) {
     return null;
   }

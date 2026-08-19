@@ -17,7 +17,6 @@ def _plan():
             {
                 "id": 1,
                 "title": "The PDF opens",
-                "context": "content",
                 "preconditions": "A PDF is available.",
                 "steps": [
                     {"action": "Open the PDF", "expectation": None},
@@ -30,7 +29,6 @@ def _plan():
             {
                 "id": 2,
                 "title": "The toolbar remains available",
-                "context": "chrome",
                 "preconditions": None,
                 "steps": [
                     {

@@ -9,6 +9,7 @@ import {
   isStringArray,
   titleize,
 } from "@/lib/findings-format";
+import type { RunAction } from "@/lib/types";
 import { Markdown } from "./Markdown";
 import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
@@ -212,12 +213,14 @@ function FriendlyFindings({ findings }: { findings: Record<string, unknown> }) {
 export function FindingsView({
   findings,
   agent,
+  actions = null,
 }: {
   findings: Record<string, unknown>;
   agent: string;
+  actions?: RunAction[] | null;
 }) {
   const testPlan =
-    agent === "test-plan-generator" ? parseTestPlan(findings) : null;
+    agent === "test-plan-generator" ? parseTestPlan(findings, actions) : null;
 
   // Default to the friendly, readable view; raw JSON is opt-in.
   const [mode, setMode] = useState<ViewMode>("friendly");

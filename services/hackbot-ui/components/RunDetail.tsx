@@ -162,6 +162,15 @@ export function RunDetail({ runId }: { runId: string }) {
   const log = extractLog(run);
   const findings = run.summary?.findings ?? {};
   const hasFindings = Object.keys(findings).length > 0;
+  const hasTestPlanAction =
+    run.agent === "test-plan-generator" &&
+    Boolean(
+      actions?.some(
+        (action) =>
+          action.type === "testrail.submit_test_plan" &&
+          Array.isArray(action.params?.generated_test_cases)
+      )
+    );
 
   // Both pending and failed actions are (re)applied by the apply endpoint — it
   // skips only already-applied ones — so one button covers applying and retry.
@@ -251,7 +260,9 @@ export function RunDetail({ runId }: { runId: string }) {
         </div>
       )}
 
-      {hasFindings && <FindingsView findings={findings} agent={run.agent} />}
+      {(hasFindings || hasTestPlanAction) && (
+        <FindingsView findings={findings} agent={run.agent} actions={actions} />
+      )}
 
       {actions && actions.length > 0 && (
         <div className="panel">
