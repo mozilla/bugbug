@@ -32,13 +32,6 @@ the download to that run's prefix and prevents probing unrelated objects.
 Authenticated by Phabricator's own HMAC signature over the raw body, so it sits on its own
 router without the API-key dependency. See [triggers.md](triggers.md).
 
-### Internal events — Google OIDC token
-
-| POST | `/internal/events/agent-run-finished` | An execution reached a terminal state |
-| POST | `/internal/events/apply-run-actions` | Consumer of `run.completed` |
-
-Named for the domain outcome or the job they do, not the GCP mechanism that feeds them.
-
 ## Creating a run
 
 ```
