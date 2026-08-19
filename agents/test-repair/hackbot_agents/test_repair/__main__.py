@@ -3,11 +3,13 @@ import tempfile
 from pathlib import Path
 
 from hackbot_runtime import HackbotContext, run_async
+from hackbot_runtime.actions.slack import record_message
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestRepairResult
-from .config import SKIP_FIREFOX_BUILD
+from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
 from .logs import download_failure_logs
+from .notify import build_message, resolve_culprit_author, sheriff_action_required
 from .resolve import Investigation, resolve_investigation
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
     logger.info("Pinning checkout to %s with depth %s", ref, depth)
     source_repo = await ctx.prepare_repo(ref=ref, depth=depth)
 
-    return await run_test_repair(
+    result = await run_test_repair(
         bugzilla_mcp_server=bugzilla_mcp_server,
         source_repo=source_repo,
         fx_ctx=ctx.firefox,
@@ -74,6 +76,21 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         verbose=True,
         publish_file=ctx.publish_file,
     )
+
+    if sheriff_action_required(result):
+        message = build_message(
+            result,
+            investigation,
+            task_id=task_id,
+            run_id=ctx.run_id,
+            culprit_author=resolve_culprit_author(source_repo, result.culprit_commit),
+        )
+        record_message(ctx.actions, SLACK_CHANNEL, message)
+    else:
+        logger.info(
+            "Verdict is %s; not notifying %s", result.classification, SLACK_CHANNEL
+        )
+    return result
 
 
 if __name__ == "__main__":

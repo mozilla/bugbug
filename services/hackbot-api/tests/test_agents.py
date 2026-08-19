@@ -99,7 +99,7 @@ def test_test_repair_registry_entry():
     assert spec.build_env is None
     assert spec.input_schema is TestRepairInputs
     assert spec.job_name == "hackbot-agent-test-repair"
-    assert spec.auto_apply_actions is False
+    assert spec.auto_apply_actions is True
 
 
 def test_test_repair_env_serialization():

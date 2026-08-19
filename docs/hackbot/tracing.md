@@ -1,4 +1,4 @@
-## Tracing (Weave)
+# Tracing (Weave)
 
 Dashboards: [prod](https://wandb.ai/moz-bugbug/hackbot-prod/weave/agents), [dev](https://wandb.ai/moz-bugbug/hackbot-dev), [test](https://wandb.ai/moz-bugbug/hackbot-test)
 
@@ -30,4 +30,5 @@ environment:
 ```
 
 **In deployment**, the agent container holds no long-lived key: it authenticates
-via W&B [Identity Federation](https://docs.wandb.ai/platform/hosting/iam/identity_federation).
+via W&B [Identity Federation](https://docs.wandb.ai/platform/hosting/iam/identity_federation),
+the same mechanism the runtime uses for Anthropic — see [security.md](security.md).

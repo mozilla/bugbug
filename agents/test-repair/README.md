@@ -49,8 +49,8 @@ failure here is evidence the patch is wrong while a pass proves nothing.
 
 Stage 1:
 
-- `summary.md` - a short verdict
-- `analysis.md` - detailed reasoning, with evidence from the logs and diffs
+- `summary.md` - 2-3 sentences: the action, the fact that settles it, what failed
+- `analysis.md` - verdict, failure, cause and alternatives ruled out, under a page
 - `verdict.json` - `classification` (`regression` / `intermittent`),
   `culprit_commit`, `candidate_commits`, `culprit_bug`, `intermittent_bug`,
   `recommendation` (`backout` / `do_not_backout` / `rerun`) and `confidence`
@@ -62,6 +62,21 @@ developer to squash into their existing patches and reland.
 Stage 2:
 
 - A patch in Hackbot format
+
+## Slack notification
+
+A run whose verdict a sheriff has to act on records a `slack.post_message` action
+carrying it -- the recommendation, the classification and confidence, the failing job
+(linked to the push in Treeherder), the culprit or the candidates that could not be
+ruled out, and whether a patch is attached. A known intermittent -- `intermittent`
+classified `do_not_backout` -- is not posted: it asks nothing of a sheriff and is the
+majority verdict, so it would be noise. An intermittent recommending `rerun` is still
+posted, since the retrigger is the sheriff's to run. The hackbot team gets every
+verdict either way, by email from the pulse listener.
+
+The message is posted by the apply step, not from the run, so it is visible in the
+hackbot UI before it lands and is delivered at most once. `test-repair` opts into
+auto-apply, so a succeeded run posts without waiting for a human.
 
 ## Test the agent
 

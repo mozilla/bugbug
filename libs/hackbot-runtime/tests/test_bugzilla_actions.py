@@ -1,4 +1,4 @@
-"""Tests for the bugzilla action handlers (footers, mime, merge, errors)."""
+"""Tests for the bugzilla action handlers (comments, mime, merge, errors)."""
 
 import pytest
 from agent_tools.registry import ToolError
@@ -9,8 +9,7 @@ async def test_add_comment_appends_footer():
     rec = ActionsRecorder()
     await bugzilla.add_comment(rec, bug_id=1, text="Looks invalid.", reasoning="r")
     text = rec.actions[0]["params"]["text"]
-    assert text.startswith("Looks invalid.")
-    assert text.endswith(bugzilla._COMMENT_FOOTER)
+    assert text == "Looks invalid.\n\n---\n\n" + bugzilla._COMMENT_FOOTER
     assert rec.actions[0]["params"]["is_private"] is False
 
 
@@ -24,7 +23,6 @@ async def test_add_attachment_patch_forces_text_plain(tmp_path):
     params = rec.actions[0]["params"]
     assert params["content_type"] == "text/plain"
     assert params["is_patch"] is True
-    assert "suggested fix" in params["comment"]
     assert params["file_name"] == "fix.patch"
 
 

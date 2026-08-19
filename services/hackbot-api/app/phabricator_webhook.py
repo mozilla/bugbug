@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+from xml.sax.saxutils import escape
 
 if TYPE_CHECKING:
     from phabricator_client import PhabricatorClient
@@ -28,6 +29,9 @@ _COMMENT_TYPES = frozenset({"comment", "inline"})
 class HackbotMention:
     comment: str
     author_phid: str
+    comment_id: int
+    comment_type: Literal["regular", "inline"]
+    diff_id: int | None = None
 
 
 def triggering_transaction_phids(payload: dict) -> list[str]:
@@ -60,33 +64,53 @@ def find_hackbot_mentions(
             continue
         if transaction.get("type") not in _COMMENT_TYPES:
             continue
+
         author_phid = transaction.get("authorPHID")
-        if not author_phid:
+        if not author_phid or author_phid == bot_phid:
             continue
-        if bot_phid and author_phid == bot_phid:
-            continue
+
         for comment in transaction.get("comments") or []:
-            comment_text = (comment.get("content") or {}).get("raw") or ""
-            if token in comment_text:
-                matches.append(
-                    HackbotMention(
-                        comment=comment_text,
-                        author_phid=author_phid,
-                    )
+            comment_text = comment["content"]["raw"]
+            if token not in comment_text:
+                continue
+
+            diff_id = (
+                transaction["fields"]["diff"]["id"]
+                if transaction["type"] == "inline"
+                else None
+            )
+            matches.append(
+                HackbotMention(
+                    comment=comment_text,
+                    author_phid=author_phid,
+                    comment_id=comment["id"],
+                    comment_type=(
+                        "inline" if transaction["type"] == "inline" else "regular"
+                    ),
+                    diff_id=diff_id,
                 )
-                break
+            )
+            break
     return matches
 
 
-def _join_comments(comments: list[str]) -> str:
-    """Combine one or more triggering comments into the agent's ``comment`` input.
+def _format_comment(mention: HackbotMention) -> str:
+    """Render one triggering comment as a service-generated XML element.
 
-    A lone comment is passed through unchanged; multiple are numbered so the
-    agent can tell them apart and address each.
+    For example, an inline comment is rendered as::
+
+        <comment comment_id="102" type="inline" diff_id="456">
+          @hackbot fix this
+        </comment>
     """
-    if len(comments) == 1:
-        return comments[0]
-    return "\n\n".join(f"[comment {i}]\n{c}" for i, c in enumerate(comments, 1))
+    attributes = [
+        f'comment_id="{mention.comment_id}"',
+        f'type="{mention.comment_type}"',
+    ]
+    if mention.comment_type == "inline":
+        attributes.append(f'diff_id="{mention.diff_id}"')
+    body = "\n".join(f"    {line}" for line in escape(mention.comment).splitlines())
+    return f"  <comment {' '.join(attributes)}>\n{body}\n  </comment>"
 
 
 async def resolve_revision(
@@ -135,10 +159,10 @@ async def detect_mention_and_revision(
         bot_phid=webhook.bot_phid,
         token=webhook.mention_token,
     )
-    comments: list[str] = []
+    authorized_mentions: list[HackbotMention] = []
     for mention in mentions:
         if await authorizer.is_authorized(mention.author_phid):
-            comments.append(mention.comment)
+            authorized_mentions.append(mention)
         else:
             log.warning(
                 "Ignoring %s mention from non-editbugs user %s on %s",
@@ -146,7 +170,7 @@ async def detect_mention_and_revision(
                 mention.author_phid,
                 object_phid,
             )
-    if not comments:
+    if not authorized_mentions:
         log.warning(
             "No actionable %s mention found in triggering transactions %s on %s",
             webhook.mention_token,
@@ -154,7 +178,7 @@ async def detect_mention_and_revision(
             object_phid,
         )
         return None
-    comment = _join_comments(comments)
+    comment = "\n\n".join(_format_comment(mention) for mention in authorized_mentions)
 
     revision_id, bug_id = await resolve_revision(client, object_phid)
     if revision_id is None:

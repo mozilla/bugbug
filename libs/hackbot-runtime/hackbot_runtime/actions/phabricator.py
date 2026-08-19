@@ -13,26 +13,40 @@ argument wrong.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
-from agent_tools.registry import tool, tools_in
+from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
-
-_COMMENT_FOOTER = (
-    "*This is an automated response. If it is incorrect, reply on this "
-    "revision to correct it.*"
-)
 
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
 PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
 
+_PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
+    r"^(?:Test Plan|Testplan|Tested|Tests):",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 
 def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
     return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
+
+
+def _validate_summary(summary: str | None) -> None:
+    if not summary:
+        return
+
+    match = _PHABRICATOR_TEST_PLAN_HEADER_RE.search(summary)
+    if match:
+        raise ToolError(
+            f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
+            "a line is interpreted as a Test Plan field. Call submit_patch again "
+            "with that fixed."
+        )
 
 
 @tool
@@ -85,6 +99,7 @@ async def submit_patch(
     in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
     bug comment).
     """
+    _validate_summary(summary)
     recorder.record(
         "phabricator.submit_patch",
         {"bug_id": bug_id, "title": title, "summary": summary},
@@ -152,10 +167,9 @@ async def add_comment(
     changes, use ``submit_patch`` instead. Recorded into the run summary for
     human review; nothing is posted to Phabricator during the run.
     """
-    text_with_footer = text.rstrip() + "\n\n" + _COMMENT_FOOTER
     recorder.record(
         "phabricator.add_comment",
-        {"revision_id": revision_id, "text": text_with_footer},
+        {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
     return _confirm(recorder, "phabricator.add_comment")

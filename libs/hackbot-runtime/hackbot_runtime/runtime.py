@@ -132,7 +132,7 @@ def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | N
 def _publish_log(ctx: HackbotContext) -> None:
     """Publish the run log under the canonical key, if the agent wrote one."""
     if ctx.log_path.exists():
-        ctx.publish_file(_AGENT_LOG_KEY, ctx.log_path, "text/plain")
+        ctx.publish_file(_AGENT_LOG_KEY, ctx.log_path, "text/plain; charset=utf-8")
 
 
 def _finish(ctx: HackbotContext, outcome: object) -> int:
