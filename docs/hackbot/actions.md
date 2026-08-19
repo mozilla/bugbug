@@ -17,19 +17,8 @@ Why the indirection:
 ## Recording (inside the run)
 
 The write-action tools are declared in `hackbot_runtime/actions/` — one module per domain,
-using the same `@tool` decorator as [read tools](tools.md). The tool context is the
-`ActionsRecorder`, and each handler does one thing: `recorder.record(...)` and return a
-confirmation string.
-
-```python
-recorder.record(
-    "phabricator.submit_patch",              # <domain>.<verb>
-    {"bug_id": ..., "title": ...},           # params the apply step will need
-    reasoning="why the agent is doing this", # audit trail
-    attachments={"log": Path(...)},          # optional files, published as artifacts
-    ref="patch",                             # optional label, see cross-references below
-)
-```
+using the same `@tool` decorator as [read tools](tools.md). Calling one records the intent
+against the run's `ActionsRecorder` instead of performing it.
 
 The recorded list becomes `summary.json`'s `actions` array. Attachments are published
 under the stable key `attachments/<action_index>/<name>` and referenced by that key — the
