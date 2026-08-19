@@ -20,9 +20,9 @@ The write-action tools are declared in `hackbot_runtime/actions/` — one module
 using the same `@tool` decorator as [read tools](tools.md). Calling one records the intent
 against the run's `ActionsRecorder` instead of performing it.
 
-The recorded list becomes `summary.json`'s `actions` array. Attachments are published
-under the stable key `attachments/<action_index>/<name>` and referenced by that key — the
-local path disappears with the container.
+The recorded list becomes `summary.json`'s `actions` array. Any attached files are
+published as run artifacts and referenced by key, since the local path disappears with the
+container.
 
 ### The catalog
 
