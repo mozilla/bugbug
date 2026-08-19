@@ -26,7 +26,7 @@ container.
 
 ### The catalog
 
-Nine action types, each with a declaration the agent calls and a handler that applies it.
+Each action type has a declaration the agent calls and a handler that applies it.
 `actions/handlers/registry.py` is the authoritative type → handler map.
 
 As with read tools, nothing is exposed by default: an agent lists the dotted types it may
