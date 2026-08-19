@@ -1,6 +1,7 @@
 """Tests for the phabricator recording tools (submit/update patch, comment)."""
 
 import pytest
+from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder, phabricator
 
 
@@ -17,6 +18,47 @@ async def test_submit_records_create_params_only():
         "summary": "Details",
     }
     assert "ref" not in action
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["Tests", "tests", "Test Plan", "Testplan", "Tested"],
+)
+async def test_submit_rejects_test_plan_headers(header):
+    rec = ActionsRecorder()
+
+    with pytest.raises(ToolError) as exc:
+        await phabricator.submit_patch(
+            rec,
+            bug_id=1,
+            title="Fix",
+            reasoning="r",
+            summary=f"Explanation\n\n{header}: details",
+        )
+
+    assert header in str(exc.value)
+    assert "Call submit_patch again with that fixed" in str(exc.value)
+    assert rec.actions == []
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        None,
+        "",
+        "Testing: details",
+        "Some Tests: details",
+        " Tests: already indented",
+    ],
+)
+async def test_submit_accepts_safe_summary(summary):
+    rec = ActionsRecorder()
+
+    await phabricator.submit_patch(
+        rec, bug_id=1, title="Fix", reasoning="r", summary=summary
+    )
+
+    assert rec.actions[0]["params"]["summary"] == summary
 
 
 async def test_submit_requires_title():

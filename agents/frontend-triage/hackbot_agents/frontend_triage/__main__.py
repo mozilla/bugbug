@@ -2,9 +2,10 @@ from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import FrontendTriageResult, run_frontend_triage
+from .notify import record_notification
 
 TRIAGE_TASK = (
-    "Triage this Firefox desktop frontend bug. Investigate the source tree "
+    "Triage this user-facing Firefox bug. Investigate the source tree "
     "READ-ONLY (Read/Grep/Glob/Bash) to determine the likely root cause, then "
     "produce a concrete proposed fix plan: the target files and the approach. "
     "Do NOT build, run, or modify the source, and do NOT attempt to reproduce "
@@ -35,7 +36,7 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
 
     await ctx.prepare_repo()
 
-    return await run_frontend_triage(
+    result = await run_frontend_triage(
         task=TRIAGE_TASK,
         bugzilla_mcp_server={
             "type": "http",
@@ -50,6 +51,11 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
         verbose=True,
         actions_recorder=ctx.actions,
     )
+
+    # Recorded last, so it applies after the Bugzilla writes it reports. Only an
+    # auto-applied run in a component with a channel records anything -- see notify.py.
+    record_notification(ctx.actions, result, run_id=ctx.run_id)
+    return result
 
 
 if __name__ == "__main__":

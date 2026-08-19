@@ -1,5 +1,5 @@
 from hackbot_agents.test_repair.agent import TestRepairResult
-from hackbot_agents.test_repair.notify import build_message
+from hackbot_agents.test_repair.notify import build_message, sheriff_action_required
 from hackbot_agents.test_repair.resolve import (
     CommitRange,
     FailingGroup,
@@ -52,6 +52,36 @@ def _message(result=None, investigation=None, **kwargs):
         task_id=TASK_ID,
         run_id="1218e630-78c8",
         **kwargs,
+    )
+
+
+def test_a_known_intermittent_is_not_worth_a_notification():
+    assert not sheriff_action_required(
+        _result(
+            classification="intermittent",
+            recommendation="do_not_backout",
+            culprit_commit=None,
+        )
+    )
+
+
+def test_an_unconfirmed_intermittent_still_asks_for_a_retrigger():
+    assert sheriff_action_required(
+        _result(
+            classification="intermittent",
+            recommendation="rerun",
+            culprit_commit=None,
+        )
+    )
+
+
+def test_every_regression_verdict_is_notified():
+    assert sheriff_action_required(_result())
+    assert sheriff_action_required(_result(recommendation="rerun"))
+    # No culprit survived, so there is nothing to back out -- but a regression the
+    # agent could not pin down is still a sheriff's problem.
+    assert sheriff_action_required(
+        _result(recommendation="do_not_backout", culprit_commit=None)
     )
 
 
@@ -122,12 +152,23 @@ def test_names_a_known_intermittent():
     )
 
 
-def test_mentions_a_proposed_patch():
-    assert (
-        _message(_result(proposed_patch=True))
-        .splitlines()[4]
-        .endswith(", patch attached")
-    )
+def test_a_patch_is_advice_for_the_author_not_an_alternative_action():
+    message = _message(_result(proposed_patch=True))
+    assert "*test-repair: BACK OUT the culprit*" in message.splitlines()[0]
+    assert "squash it into the existing patches and reland" in message
+    assert "rather than landing it as a follow-up" in message
+    assert "The backout still stands." in message
+
+
+def test_the_patch_line_comes_before_the_run_link():
+    lines = _message(_result(proposed_patch=True)).splitlines()
+    patch = next(i for i, line in enumerate(lines) if "Patch attached" in line)
+    run = next(i for i, line in enumerate(lines) if "Hackbot run details" in line)
+    assert patch < run
+
+
+def test_no_patch_line_without_a_patch():
+    assert "Patch attached" not in _message()
 
 
 def test_lists_every_failing_group():
