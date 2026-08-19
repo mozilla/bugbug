@@ -1,6 +1,6 @@
-# Performance Regression Predictor
+# Perf Regression Predictor
 
-The Performance Regression Predictor is an inference-only binary transformer
+The Perf Regression Predictor is an inference-only binary transformer
 model. It predicts whether a public Phabricator diff is likely to
 introduce a performance regression.
 
@@ -30,18 +30,18 @@ Hugging Face checkpoint:
 ```sh
 cd /path/to/bugbug
 
-uv run --extra performance-regression-predictor \
-  bugbug-predict-performance-regression \
+uv run --extra perf-regression-predictor \
+  bugbug-predict-perf-regression \
   --model-dir /absolute/path/to/predictor_model \
-  --patch-file examples/performance_regression_predictor.patch
+  --patch-file examples/perf_regression_predictor.patch
 ```
 
 The sample is a Git `format-patch`, so the command extracts its commit message
 automatically. For a raw diff, provide the message directly:
 
 ```sh
-uv run --extra performance-regression-predictor \
-  bugbug-predict-performance-regression \
+uv run --extra perf-regression-predictor \
+  bugbug-predict-perf-regression \
   --model-dir /absolute/path/to/predictor_model \
   --patch-file /absolute/path/to/change.patch \
   --commit-message "Bug 123456 - Improve rendering performance"
@@ -61,7 +61,7 @@ The endpoint uses the service's existing Redis/RQ worker and API-key presence
 check:
 
 ```text
-GET /performanceregressionpredictor/predict/phabricator/{diff_id}
+GET /perfregressionpredictor/predict/phabricator/{diff_id}
 X-Api-Key: ...
 ```
 
@@ -69,9 +69,9 @@ The first request normally returns `202 {"ready": false}`. Poll the same URL
 until it returns `200`. The worker requires `PHABRICATOR_API_KEY`; a custom
 Phabricator host can be set with `PHABRICATOR_URL`.
 
-See [HTTP service local development](../../http_service/README.md) for the
-complete Docker Compose setup, including the local model mount and secret
-file.
+See [HTTP service local development](../../http_service/README.perf-regression-predictor.md)
+for the complete Docker Compose setup, including the local model mount and
+secret file.
 
 Example result:
 
@@ -83,7 +83,7 @@ Example result:
   "class": 1,
   "risk_score": 0.75,
   "extra_data": {
-    "model_name": "Performance Regression Predictor",
+    "model_name": "Perf Regression Predictor",
     "model_version": null,
     "max_length": 512,
     "calibrated": false,
@@ -100,19 +100,19 @@ the diff metadata.
 ## Model artifact
 
 Production follows the existing Bugbug model-artifact convention. The
-checkpoint directory must be named `performanceregressionpredictormodel` and
+checkpoint directory must be named `perfregressionpredictormodel` and
 published as:
 
 ```text
-public/performanceregressionpredictormodel.tar.zst
+public/perfregressionpredictormodel.tar.zst
 ```
 
 under the indexed Taskcluster namespace
-`project.bugbug.train_performanceregressionpredictor.<version>`. For this first
+`project.bugbug.train_perfregressionpredictor.<version>`. For this first
 iteration, the archive can be created and published by a one-off Taskcluster
 task; no `bugbug-train` workflow is registered for this model. The standard
 background-worker image then downloads it alongside the other model artifacts.
 
 For local Docker development before the artifact is published, mount the local
-checkpoint at `/code/performanceregressionpredictormodel` in the background
+checkpoint at `/code/perfregressionpredictormodel` in the background
 worker. This is the same fixed-directory convention used by the other models.

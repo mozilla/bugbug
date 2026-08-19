@@ -32,11 +32,11 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from bugbug import bugzilla, get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
-    PERFORMANCE_REGRESSION_LOG_PREFIX,
+    PERF_REGRESSION_LOG_PREFIX,
     classify_broken_site_report,
     classify_bug,
     classify_issue,
-    classify_performance_regression,
+    classify_perf_regression,
     get_config_specific_groups,
     schedule_tests,
     schedule_tests_from_patch,
@@ -537,9 +537,9 @@ def model_prediction(model_name, bug_id):
     return compress_response(data, status_code)
 
 
-@application.route("/performanceregressionpredictor/predict/phabricator/<int:diff_id>")
+@application.route("/perfregressionpredictor/predict/phabricator/<int:diff_id>")
 @cross_origin()
-def performance_regression_prediction(diff_id: int):
+def perf_regression_prediction(diff_id: int):
     """
     ---
     get:
@@ -574,11 +574,11 @@ def performance_regression_prediction(diff_id: int):
 
     LOGGER.info(
         "%s Received prediction request for diff_id=%d",
-        PERFORMANCE_REGRESSION_LOG_PREFIX,
+        PERF_REGRESSION_LOG_PREFIX,
         diff_id,
     )
 
-    job = JobInfo(classify_performance_regression, diff_id)
+    job = JobInfo(classify_perf_regression, diff_id)
     data = get_result(job)
     status_code = 200
 
@@ -586,14 +586,14 @@ def performance_regression_prediction(diff_id: int):
         if not is_pending(job):
             LOGGER.info(
                 "%s Queueing prediction job for diff_id=%d",
-                PERFORMANCE_REGRESSION_LOG_PREFIX,
+                PERF_REGRESSION_LOG_PREFIX,
                 diff_id,
             )
             schedule_job(job)
         else:
             LOGGER.info(
                 "%s Prediction job is pending for diff_id=%d",
-                PERFORMANCE_REGRESSION_LOG_PREFIX,
+                PERF_REGRESSION_LOG_PREFIX,
                 diff_id,
             )
         status_code = 202
@@ -601,7 +601,7 @@ def performance_regression_prediction(diff_id: int):
     else:
         LOGGER.info(
             "%s Returning cached prediction for diff_id=%d",
-            PERFORMANCE_REGRESSION_LOG_PREFIX,
+            PERF_REGRESSION_LOG_PREFIX,
             diff_id,
         )
 

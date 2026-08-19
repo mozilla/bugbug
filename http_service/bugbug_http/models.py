@@ -19,10 +19,10 @@ from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import get_model_class, testselect
-from bugbug.models.performance_regression_predictor import (
-    MODEL_IDENTIFIER as PERFORMANCE_REGRESSION_PREDICTOR,
+from bugbug.models.perf_regression_predictor import (
+    MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
-from bugbug.models.performance_regression_predictor import combine_commit_messages
+from bugbug.models.perf_regression_predictor import combine_commit_messages
 from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
@@ -46,8 +46,8 @@ MODELS_NAMES = [
     "worksforme",
     "fenixcomponent",
 ]
-MODELS_TO_DOWNLOAD = [*MODELS_NAMES, PERFORMANCE_REGRESSION_PREDICTOR]
-PERFORMANCE_REGRESSION_LOG_PREFIX = "[performance-regression-predictor]"
+MODELS_TO_DOWNLOAD = [*MODELS_NAMES, PERF_REGRESSION_PREDICTOR]
+PERF_REGRESSION_LOG_PREFIX = "[perf-regression-predictor]"
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
@@ -238,14 +238,14 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
     return "OK"
 
 
-def classify_performance_regression(diff_id: int) -> str:
+def classify_perf_regression(diff_id: int) -> str:
     """Predict performance-regression risk for one immutable Phabricator diff."""
     from bugbug_http.app import JobInfo
 
-    job = JobInfo(classify_performance_regression, diff_id)
+    job = JobInfo(classify_perf_regression, diff_id)
     LOGGER.info(
         "%s Processing prediction for diff_id=%d",
-        PERFORMANCE_REGRESSION_LOG_PREFIX,
+        PERF_REGRESSION_LOG_PREFIX,
         diff_id,
     )
     patch = PhabricatorPatch(diff_id=diff_id)
@@ -253,7 +253,7 @@ def classify_performance_regression(diff_id: int) -> str:
     if not patch.is_accessible() or not patch.is_public():
         LOGGER.warning(
             "%s Prediction unavailable for diff_id=%d",
-            PERFORMANCE_REGRESSION_LOG_PREFIX,
+            PERF_REGRESSION_LOG_PREFIX,
             diff_id,
         )
         setkey(job.result_key, orjson.dumps({"available": False}))
@@ -265,7 +265,7 @@ def classify_performance_regression(diff_id: int) -> str:
             LOGGER.warning(
                 "%s Diff %d has %d uploaded commit messages; combining them "
                 "for inference",
-                PERFORMANCE_REGRESSION_LOG_PREFIX,
+                PERF_REGRESSION_LOG_PREFIX,
                 diff_id,
                 len(commit_messages),
             )
@@ -275,7 +275,7 @@ def classify_performance_regression(diff_id: int) -> str:
         LOGGER.warning(
             "%s Diff %d has no uploaded commit message metadata; using revision "
             "title and summary fallback",
-            PERFORMANCE_REGRESSION_LOG_PREFIX,
+            PERF_REGRESSION_LOG_PREFIX,
             diff_id,
         )
         commit_message = "\n\n".join(
@@ -285,13 +285,13 @@ def classify_performance_regression(diff_id: int) -> str:
 
     LOGGER.info(
         "%s Using commit message source %s for diff_id=%d with commit_message_count=%d",
-        PERFORMANCE_REGRESSION_LOG_PREFIX,
+        PERF_REGRESSION_LOG_PREFIX,
         commit_message_source,
         diff_id,
         len(commit_messages),
     )
 
-    model = MODEL_CACHE.get(PERFORMANCE_REGRESSION_PREDICTOR)
+    model = MODEL_CACHE.get(PERF_REGRESSION_PREDICTOR)
 
     probabilities = model.classify(
         [{"commit_message": commit_message, "diff": patch.raw_diff}],
@@ -314,7 +314,7 @@ def classify_performance_regression(diff_id: int) -> str:
     LOGGER.info(
         "%s Finished prediction for diff_id=%d, "
         "revision_id=%d, class=%d, risk_score=%f",
-        PERFORMANCE_REGRESSION_LOG_PREFIX,
+        PERF_REGRESSION_LOG_PREFIX,
         diff_id,
         patch.revision_id,
         predicted_class,

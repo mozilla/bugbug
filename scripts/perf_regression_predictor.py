@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Run the Performance Regression Predictor against a local patch."""
+"""Run the Perf Regression Predictor against a local patch."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ from email import policy
 from email.parser import Parser
 from pathlib import Path
 
-from bugbug.models.performance_regression_predictor import (
-    PerformanceRegressionPredictorModel,
+from bugbug.models.perf_regression_predictor import (
+    PerfRegressionPredictorModel,
 )
 
 
@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
 
-    model = PerformanceRegressionPredictorModel.load(args.model_dir)
+    model = PerfRegressionPredictorModel.load(args.model_dir)
     probabilities = model.classify(
         [{"commit_message": commit_message, "diff": raw_diff}],
         probabilities=True,

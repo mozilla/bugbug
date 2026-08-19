@@ -71,7 +71,7 @@ nlp = [
     "spacy==3.8.14",
 ]
 nn = []
-performance-regression-predictor = [
+perf-regression-predictor = [
     "torch==2.13.0",
     "transformers==5.15.0",
 ]
@@ -120,7 +120,7 @@ bugbug-fixed-comments = "scripts.inline_comments_data_collection:main"
 bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
 bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
 bugbug-validate-review-context = "bugbug.tools.code_review.review_context_schema:main"
-bugbug-predict-performance-regression = "scripts.performance_regression_predictor:main"
+bugbug-predict-perf-regression = "scripts.perf_regression_predictor:main"
 
 [tool.hatch.version]
 path = "VERSION"

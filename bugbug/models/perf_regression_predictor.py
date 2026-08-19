@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Inference-only performance regression predictor."""
+"""Inference-only perf regression predictor."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ import numpy as np
 
 from bugbug.model import Model
 
-MODEL_NAME = "Performance Regression Predictor"
-MODEL_IDENTIFIER = "performanceregressionpredictor"
+MODEL_NAME = "Perf Regression Predictor"
+MODEL_IDENTIFIER = "perfregressionpredictor"
 DEFAULT_MODEL_DIRECTORY = f"{MODEL_IDENTIFIER}model"
 POSITIVE_CLASS_ID = 1
 
@@ -181,7 +181,7 @@ def build_model_input(commit_message: str | None, raw_diff: str) -> str:
     )
 
 
-class PerformanceRegressionPredictorModel(Model):
+class PerfRegressionPredictorModel(Model):
     """Hugging Face sequence classifier used only for inference."""
 
     training_supported = False
@@ -195,7 +195,7 @@ class PerformanceRegressionPredictorModel(Model):
         self.model_metadata: dict[str, Any] = {}
 
     @classmethod
-    def load(cls, model_directory: str) -> "PerformanceRegressionPredictorModel":
+    def load(cls, model_directory: str) -> "PerfRegressionPredictorModel":
         """Load a local Hugging Face checkpoint directory."""
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -230,9 +230,7 @@ class PerformanceRegressionPredictorModel(Model):
 
         config = self.transformer_model.config
         if int(config.num_labels) != 2:
-            raise ValueError(
-                "Performance Regression Predictor requires exactly two labels"
-            )
+            raise ValueError("Perf Regression Predictor requires exactly two labels")
 
         id2label = {
             int(label_id): label

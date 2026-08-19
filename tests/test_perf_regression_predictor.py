@@ -3,13 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from bugbug.models.performance_regression_predictor import (
+from bugbug.models.perf_regression_predictor import (
     build_model_input,
     clean_commit_message,
     combine_commit_messages,
     diff_to_structured_text,
 )
-from scripts.performance_regression_predictor import (
+from scripts.perf_regression_predictor import (
     extract_commit_message_from_patch,
 )
 

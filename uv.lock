@@ -665,7 +665,7 @@ dependencies = [
 nlp = [
     { name = "spacy" },
 ]
-performance-regression-predictor = [
+perf-regression-predictor = [
     { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "transformers" },
@@ -738,16 +738,16 @@ requires-dist = [
     { name = "tabulate", specifier = "~=0.10.0" },
     { name = "taskcluster", specifier = ">=97.1,<102.1" },
     { name = "tenacity", specifier = "~=9.1.4" },
-    { name = "torch", marker = "(sys_platform == 'linux' and extra == 'performance-regression-predictor') or (sys_platform == 'win32' and extra == 'performance-regression-predictor')", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'performance-regression-predictor'", specifier = "==2.13.0" },
+    { name = "torch", marker = "(sys_platform == 'linux' and extra == 'perf-regression-predictor') or (sys_platform == 'win32' and extra == 'perf-regression-predictor')", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'perf-regression-predictor'", specifier = "==2.13.0" },
     { name = "tqdm", specifier = ">=4.67.3,<4.71.0" },
-    { name = "transformers", marker = "extra == 'performance-regression-predictor'", specifier = "==5.15.0" },
+    { name = "transformers", marker = "extra == 'perf-regression-predictor'", specifier = "==5.15.0" },
     { name = "unidiff", specifier = "~=0.7.5" },
     { name = "weave", specifier = ">=0.53.4" },
     { name = "xgboost", specifier = ">=3.2,<3.4" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
-provides-extras = ["nlp", "nn", "performance-regression-predictor"]
+provides-extras = ["nlp", "nn", "perf-regression-predictor"]
 
 [package.metadata.requires-dev]
 spawn-pipeline = [
@@ -775,7 +775,7 @@ source = { editable = "http_service" }
 dependencies = [
     { name = "apispec", extra = ["yaml"] },
     { name = "apispec-webframeworks" },
-    { name = "bugbug", extra = ["performance-regression-predictor"] },
+    { name = "bugbug", extra = ["perf-regression-predictor"] },
     { name = "cerberus" },
     { name = "flask" },
     { name = "flask-apispec" },
@@ -792,7 +792,7 @@ dependencies = [
 requires-dist = [
     { name = "apispec", extras = ["yaml"], specifier = "~=6.10.0" },
     { name = "apispec-webframeworks", specifier = "~=1.2.0" },
-    { name = "bugbug", extras = ["performance-regression-predictor"], editable = "." },
+    { name = "bugbug", extras = ["perf-regression-predictor"], editable = "." },
     { name = "cerberus", specifier = "~=1.3.8" },
     { name = "flask", specifier = "~=3.1.3" },
     { name = "flask-apispec", specifier = "~=0.11.4" },

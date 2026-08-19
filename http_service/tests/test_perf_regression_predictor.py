@@ -21,13 +21,13 @@ def _response_json(response):
 
 
 def test_endpoint_queues_and_returns_prediction(client, jobs, add_result) -> None:
-    endpoint = "/performanceregressionpredictor/predict/phabricator/789012"
+    endpoint = "/perfregressionpredictor/predict/phabricator/789012"
 
     unauthorized = client.get(endpoint)
     assert unauthorized.status_code == 401
 
     wrong_input_kind = client.get(
-        "/performanceregressionpredictor/predict/123456",
+        "/perfregressionpredictor/predict/123456",
         headers={API_TOKEN: "test"},
     )
     assert wrong_input_kind.status_code == 404
@@ -88,7 +88,7 @@ def test_worker_uses_diff_commit_metadata(monkeypatch) -> None:
         lambda model_name: fake_model,
     )
 
-    assert models.classify_performance_regression(789012) == "OK"
+    assert models.classify_perf_regression(789012) == "OK"
     assert fake_model.items == [
         {
             "commit_message": "Make rendering faster",
@@ -96,7 +96,7 @@ def test_worker_uses_diff_commit_metadata(monkeypatch) -> None:
         }
     ]
 
-    job = JobInfo(models.classify_performance_regression, 789012)
+    job = JobInfo(models.classify_perf_regression, 789012)
     stored = models.redis.get(job.result_key)
     assert stored is not None
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(stored))
@@ -121,8 +121,8 @@ def test_worker_marks_inaccessible_diff_unavailable(monkeypatch) -> None:
 
     monkeypatch.setattr(models, "PhabricatorPatch", FakePatch)
 
-    assert models.classify_performance_regression(789012) == "OK"
-    job = JobInfo(models.classify_performance_regression, 789012)
+    assert models.classify_perf_regression(789012) == "OK"
+    job = JobInfo(models.classify_perf_regression, 789012)
     stored = models.redis.get(job.result_key)
     assert stored is not None
     result = orjson.loads(stored)
@@ -163,8 +163,8 @@ def test_worker_cleans_and_combines_multiple_commit_messages(monkeypatch) -> Non
     monkeypatch.setattr(models, "PhabricatorPatch", FakePatch)
     monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: FakeModel())
 
-    assert models.classify_performance_regression(789012) == "OK"
-    job = JobInfo(models.classify_performance_regression, 789012)
+    assert models.classify_perf_regression(789012) == "OK"
+    job = JobInfo(models.classify_perf_regression, 789012)
     stored = models.redis.get(job.result_key)
     assert stored is not None
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(stored))
@@ -202,8 +202,8 @@ def test_worker_falls_back_to_revision_message(monkeypatch) -> None:
     monkeypatch.setattr(models, "PhabricatorPatch", FakePatch)
     monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: FakeModel())
 
-    assert models.classify_performance_regression(789012) == "OK"
-    job = JobInfo(models.classify_performance_regression, 789012)
+    assert models.classify_perf_regression(789012) == "OK"
+    job = JobInfo(models.classify_perf_regression, 789012)
     stored = models.redis.get(job.result_key)
     assert stored is not None
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(stored))
@@ -237,9 +237,9 @@ def test_worker_propagates_model_loading_failure(monkeypatch) -> None:
     monkeypatch.setattr(models.MODEL_CACHE, "get", raise_missing_model)
 
     with pytest.raises(FileNotFoundError, match="missing checkpoint"):
-        models.classify_performance_regression(789012)
+        models.classify_perf_regression(789012)
 
-    job = JobInfo(models.classify_performance_regression, 789012)
+    job = JobInfo(models.classify_perf_regression, 789012)
     assert models.redis.get(job.result_key) is None
 
 
