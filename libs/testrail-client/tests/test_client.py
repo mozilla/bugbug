@@ -110,6 +110,9 @@ async def test_endpoint_wrappers(monkeypatch):
     await client.get_templates()
     assert captured["url"].endswith("/get_templates/73")
 
+    await client.get_statuses()
+    assert captured["url"].endswith("/get_statuses")
+
     await client.add_suite("Suite")
     assert captured["url"].endswith("/add_suite/73")
     assert captured["json"] == {"name": "Suite"}
@@ -121,6 +124,22 @@ async def test_endpoint_wrappers(monkeypatch):
     await client.add_case(20, {"title": "Case"})
     assert captured["url"].endswith("/add_case/20")
     assert captured["json"] == {"title": "Case"}
+
+    await client.add_run({"name": "Run", "include_all": False, "case_ids": [101]})
+    assert captured["url"].endswith("/add_run/73")
+    assert captured["json"] == {
+        "name": "Run",
+        "include_all": False,
+        "case_ids": [101],
+    }
+
+    await client.add_results_for_cases(
+        301, [{"case_id": 101, "status_id": 1, "comment": "ok"}]
+    )
+    assert captured["url"].endswith("/add_results_for_cases/301")
+    assert captured["json"] == {
+        "results": [{"case_id": 101, "status_id": 1, "comment": "ok"}]
+    }
 
 
 def test_suite_url_default_base():
