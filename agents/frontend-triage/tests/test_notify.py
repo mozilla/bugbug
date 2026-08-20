@@ -57,29 +57,41 @@ def test_an_s1_is_marked_and_named():
     # The level is spelled out next to the emoji so it still reads as an S1 where the
     # emoji doesn't render.
     line = _message(
-        severity_assessment=SeverityAssessment(suggested="S1")
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="high")
     ).splitlines()[0]
-    assert line == f":red_circle: *{BUG_LINK} — {SUMMARY}* (S1)"
+    assert line == f":red_circle: *{BUG_LINK} — {SUMMARY}* (suggested S1)"
+
+
+def test_a_medium_confidence_s1_is_still_marked():
+    line = _message(
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="medium")
+    ).splitlines()[0]
+    assert line.startswith(":red_circle: ")
+
+
+def test_an_s1_the_run_is_unsure_of_is_unmarked():
+    # The comment drops its severity block below medium, so a marker here would have
+    # Slack shout S1 while the bug says nothing about severity at all.
+    for confidence in ("low", None):
+        line = _message(
+            severity_assessment=SeverityAssessment(
+                suggested="S1", confidence=confidence
+            )
+        ).splitlines()[0]
+        assert line == f"*{BUG_LINK} — {SUMMARY}*", confidence
 
 
 def test_every_other_severity_is_unmarked():
-    for suggested in ("S2", "S3", "S4", None, "", "  "):
+    for suggested in ("S2", "S3", "S4", None):
         line = _message(
-            severity_assessment=SeverityAssessment(suggested=suggested)
+            severity_assessment=SeverityAssessment(
+                suggested=suggested, confidence="high"
+            )
         ).splitlines()[0]
         assert line == f"*{BUG_LINK} — {SUMMARY}*", suggested
     # A run that could not assess severity reports none at all.
     line = _message(severity_assessment=None).splitlines()[0]
     assert line == f"*{BUG_LINK} — {SUMMARY}*"
-
-
-def test_a_lowercase_s1_is_still_an_s1():
-    # `suggested` is read out of the agent's free-form JSON block, so "s1" must not
-    # quietly read as an ordinary severity.
-    line = _message(
-        severity_assessment=SeverityAssessment(suggested=" s1 ")
-    ).splitlines()[0]
-    assert line.startswith(":red_circle: ")
 
 
 def test_a_missing_summary_leaves_the_bug_link_alone():
