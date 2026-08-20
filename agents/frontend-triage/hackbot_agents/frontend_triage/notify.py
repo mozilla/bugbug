@@ -53,22 +53,29 @@ def channel_for(product: str | None, component: str | None) -> str | None:
     return SLACK_CHANNELS.get(f"{product.strip()} :: {component.strip()}")
 
 
-def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
-    """Render the notification for an auto-applied run."""
+def _bug_link(result: FrontendTriageResult) -> str:
+    return _link(BUG_URL.format(bug_id=result.bug_id), f"Bug {result.bug_id}")
+
+
+def _summary(result: FrontendTriageResult) -> str:
+    return result.summary.strip() if result.summary else ""
+
+
+def _is_urgent(result: FrontendTriageResult) -> bool:
     assessment = result.severity_assessment
     suggested = (assessment.suggested or "") if assessment else ""
-    # The severity the run *judged*, which is not always the one it wrote to the bug:
-    # `rules/severity-assessment.md` holds back the field change when the severity
-    # confidence is not high. An S1 it only suspects is still worth flagging.
-    urgent = suggested.strip().upper() == URGENT_SEVERITY
+    return suggested.strip().upper() == URGENT_SEVERITY
 
-    headline = _link(BUG_URL.format(bug_id=result.bug_id), f"Bug {result.bug_id}")
-    if result.summary and result.summary.strip():
-        headline += f" — {result.summary.strip()}"
+
+def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
+    headline = _bug_link(result)
+    summary = _summary(result)
+    if summary:
+        headline += f" — {summary}"
     # The level is spelled out next to the emoji, so it still reads as an S1 for anyone
     # whose client does not render one.
     headline = f"*{headline}*"
-    if urgent:
+    if _is_urgent(result):
         headline = f":red_circle: {headline} ({URGENT_SEVERITY})"
 
     return "\n".join(
@@ -77,6 +84,68 @@ def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
             _link(RUN_URL.format(run_id=run_id), "frontend-triage run details"),
         ]
     )
+
+
+def _severity_field(result: FrontendTriageResult) -> str | None:
+    assessment = result.severity_assessment
+    suggested = (assessment.suggested or "").strip() if assessment else ""
+    if not suggested:
+        return None
+    value = suggested.upper()
+    # The assessment's own confidence, not the run's: `rules/severity-assessment.md`
+    # holds the field change back below `high`, so anything less is a suggestion the
+    # bug did not receive, and reading it as applied would be wrong.
+    confidence = (assessment.confidence or "").strip() if assessment else ""
+    if confidence and confidence.lower() != "high":
+        value += f" (suggested, {confidence.lower()} confidence)"
+    return f"*Severity*\n{value}"
+
+
+def _component_field(result: FrontendTriageResult) -> str | None:
+    """Where the bug lives, for the channels that own more than one component."""
+    if not result.product or not result.component:
+        return None
+    return f"*Component*\n{result.product.strip()} :: {result.component.strip()}"
+
+
+def build_blocks(result: FrontendTriageResult, *, run_id: str) -> list[dict]:
+    headline = f"*{_bug_link(result)}*"
+    summary = _summary(result)
+    if summary:
+        headline += f"\n{summary}"
+    if _is_urgent(result):
+        headline = f":red_circle: *{URGENT_SEVERITY}* {headline}"
+
+    blocks: list[dict] = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": headline}}
+    ]
+
+    fields = [
+        field
+        for field in (_severity_field(result), _component_field(result))
+        if field is not None
+    ]
+    if fields:
+        blocks.append(
+            {
+                "type": "section",
+                "fields": [{"type": "mrkdwn", "text": field} for field in fields],
+            }
+        )
+
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Triaged by frontend-triage · "
+                    + _link(RUN_URL.format(run_id=run_id), "run details"),
+                }
+            ],
+        }
+    )
+    return blocks
 
 
 def record_notification(
@@ -106,4 +175,9 @@ def record_notification(
         return None
 
     logger.info("Bug %s: reporting triage to %s", result.bug_id, channel)
-    return record_message(recorder, channel, build_message(result, run_id=run_id))
+    return record_message(
+        recorder,
+        channel,
+        build_message(result, run_id=run_id),
+        blocks=build_blocks(result, run_id=run_id),
+    )
