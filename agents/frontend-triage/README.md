@@ -133,9 +133,8 @@ Two caveats before acting on a plan:
 ## What it writes back to Bugzilla
 
 **Nothing, during a run.** `ENABLED_ACTION_TYPES` in `config.py` allows
-`bugzilla.add_comment` and `bugzilla.update_bug`, but those come from an
-in-process actions server that appends to `summary.json` and makes no network
-calls. The only Bugzilla access the agent has is through the broker sidecar,
+`bugzilla.add_comment` and nothing else, and that tool comes from an in-process
+actions server that appends to `summary.json` and makes no network calls. The only Bugzilla access the agent has is through the broker sidecar,
 which exposes five read tools and holds the API key.
 
 **Afterwards, though, a confident run posts itself.** When the run reports
@@ -153,10 +152,12 @@ hackbot-api applies whatever it finds in `summary.json`, dispatching it against 
 handler registry far wider than the tools this agent was given.
 
 - `add_comment_hook` — one comment, public, on the bug being triaged.
-- `update_bug_hook` — one field change, add-only, on the bug being triaged, and
-  only `keywords`/`severity` with values from `TRIAGE_SEVERITIES` /
-  `TRIAGE_KEYWORDS` in `config.py`. Widen those sets alongside the rule that needs
-  the new value.
+
+That is the whole list, because a comment is the only thing this agent can write.
+It has no tool that changes a bug's fields: `severity` was the one field a ruleset
+directed it to set, and that is now a suggestion at the end of the comment for a
+human to apply, so `bugzilla.update_bug` left `ENABLED_ACTION_TYPES` rather than
+staying on with no caller. `tests/test_config.py` guards that.
 
 A refusal reaches the agent as a tool error it can correct in the same run, and the
 action never lands in `summary.json`. The action _type_ needs no check:
@@ -183,9 +184,12 @@ reactions and tags are the feedback channel — the agent does not request needi
 
 A run that applies itself reports two lines to the channel of the team that owns
 the bug's component: the bug, linked, with the run's one-line summary, and a link
-to the run. An `S1` severity assessment adds a `:red_circle:` and names the level.
-Nothing else — the analysis is on the bug, the detail is in the run, and the
-channel already says which component this is.
+to the run. An `S1` the run is confident about adds a `:red_circle:` and names the
+level as `(suggested S1)` — suggested, because nothing was written to the field.
+Below `REPORTABLE_SEVERITY_CONFIDENCES` there is no marker, matching the comment,
+which omits its severity block on the same threshold. Nothing else — the analysis
+is on the bug, the detail is in the run, and the channel already says which
+component this is.
 
 The audience is the team whose bug was just written to by nobody, so only an
 auto-applied run notifies. A medium or low result wrote nothing to Bugzilla and

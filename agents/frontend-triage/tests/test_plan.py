@@ -11,6 +11,8 @@ from hackbot_agents.frontend_triage.agent import (
     may_apply_unattended,
     parse_confidence,
     parse_plan,
+    parse_severity,
+    parse_severity_assessment,
     render_scope,
 )
 from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE, ScopedComponent
@@ -22,10 +24,10 @@ def _block(body: str) -> str:
 
 def test_the_system_prompt_renders():
     # system.md goes through str.format, so a literal brace in it must be doubled or
-    # startup raises KeyError and the run never begins. The prompt now has to show
-    # JSON payloads like {"add": [...]}, which is where that would happen.
+    # startup raises KeyError and the run never begins. The structured-output block is
+    # where that happens.
     prompt = load_system_prompt(Path("rules"), "")
-    assert '{"add": ["…"]}' in prompt
+    assert '"severity_assessment": {' in prompt
     assert "{rules_dir}" not in prompt
     assert "{triaged_components}" not in prompt
     # The component list reaches the prompt as full routing keys, since a bare component
@@ -152,3 +154,61 @@ def test_an_unusable_confidence_does_not_apply_unattended():
     assert may_apply_unattended(plan)
     plan = parse_plan(_block('{"confidence": "highish", "actionable": true}'))
     assert not may_apply_unattended(plan)
+
+
+def test_severity_is_normalized():
+    for value in ("S4", "s4", " S4 ", "s4\n"):
+        assert parse_severity(value) == "S4", value
+
+
+def test_an_unusable_severity_is_none():
+    # Bugzilla's legacy word forms and the unset markers are not levels this agent
+    # deals in, so they fail closed rather than reaching a bug as a suggestion.
+    for value in ("critical", "normal", "S5", "--", "N/A", "", "   ", None, 4, ["S4"]):
+        assert parse_severity(value) is None, value
+
+
+def test_the_severity_assessment_is_normalized():
+    assessment = parse_severity_assessment(
+        {"suggested": " s2 ", "confidence": "High", "rationale": "no workaround"}
+    )
+    assert assessment.suggested == "S2"
+    # "High" would otherwise read as "not high" and silently drop both the comment
+    # block and the Slack marker.
+    assert assessment.confidence == "high"
+    assert assessment.rationale == "no workaround"
+
+
+def test_each_field_degrades_on_its_own():
+    # Discarding the rationale along with an unusable level would throw away the half a
+    # human reads, and a non-string rationale would otherwise raise after the whole
+    # expensive run and lose the entire plan.
+    unusable_level = parse_severity_assessment(
+        {"suggested": "critical", "confidence": "nope", "rationale": "cosmetic only"}
+    )
+    assert (unusable_level.suggested, unusable_level.confidence) == (None, None)
+    assert unusable_level.rationale == "cosmetic only"
+
+    unusable_rationale = parse_severity_assessment(
+        {"suggested": "S3", "rationale": {"a": 1}}
+    )
+    assert unusable_rationale.suggested == "S3"
+    assert unusable_rationale.rationale is None
+
+
+def test_an_unusable_severity_assessment_is_none():
+    for value in (None, [], "S3", 3):
+        assert parse_severity_assessment(value) is None, value
+
+
+def test_parse_plan_normalizes_the_severity_assessment():
+    plan = parse_plan(
+        _block(
+            '{"confidence": "high", "severity_assessment": '
+            '{"suggested": "s1", "confidence": "MEDIUM", "rationale": "data loss"}}'
+        )
+    )
+    assessment = plan["severity_assessment"]
+    assert assessment.suggested == "S1"
+    assert assessment.confidence == "medium"
+    assert assessment.rationale == "data loss"
