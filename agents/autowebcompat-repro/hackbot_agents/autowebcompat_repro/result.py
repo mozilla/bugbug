@@ -79,7 +79,7 @@ class ReproductionResult(BaseModel):
 
     failure_reason: (
         Literal["not_reproducible"]
-        | Literal["not_platform_related"]
+        | Literal["not_web_platform"]
         | Literal["not_firefox_specific"]
         | Literal["unsupported_android"]
         | Literal["unsupported_ios"]
