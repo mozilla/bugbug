@@ -19,8 +19,31 @@ now, which is what left that tool with no caller.
 
 from __future__ import annotations
 
+import re
+
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionHook, ActionsRecorder
+
+# A line the model writes to declare its severity. Anchored to the line start so an
+# ordinary mention -- quoting a reporter, or arguing why something is not S1 -- does
+# not count as a second declaration.
+_SEVERITY_DECLARATION = re.compile(r"^Severity assessment:", re.MULTILINE)
+
+
+def severity_block_hook(action: dict) -> None:
+    """Refuse a comment that declares its severity more than once.
+
+    The prompt asks for one block at the end. Nothing stops the model from also
+    writing the level into its analysis, and the reader would then have two
+    declarations that can disagree. Absence is fine and deliberate -- a run with low
+    severity confidence omits the block -- so this only fires on a second one.
+    """
+    text = (action.get("params") or {}).get("text")
+    if isinstance(text, str) and len(_SEVERITY_DECLARATION.findall(text)) > 1:
+        raise ToolError(
+            "your comment declares a severity more than once; keep the single "
+            "`Severity assessment:` block at the end and drop the other"
+        )
 
 
 def _check_no_comment_yet(recorder: ActionsRecorder) -> None:

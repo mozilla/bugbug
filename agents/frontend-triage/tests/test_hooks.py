@@ -8,7 +8,7 @@ hackbot_agents/frontend_triage/hooks.py.
 import pytest
 from agent_tools.registry import ToolError
 from hackbot_agents.frontend_triage.config import ENABLED_ACTION_TYPES
-from hackbot_agents.frontend_triage.hooks import add_comment_hook
+from hackbot_agents.frontend_triage.hooks import add_comment_hook, severity_block_hook
 from hackbot_runtime.actions import ActionsRecorder
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 
@@ -76,3 +76,21 @@ def test_a_refused_comment_does_not_use_up_the_allowance():
         _comment(rec, is_private=True)
     _comment(rec)
     assert len(rec.actions) == 1
+
+
+def test_a_comment_may_declare_its_severity_only_once():
+    plan = "Root cause is a stale selector in content-area.css."
+    block = "\n\n---\n\nSeverity assessment: S4\n\nRationale: cosmetic only."
+
+    # Absent is deliberate — a run with low severity confidence omits the block.
+    severity_block_hook({"params": {"text": plan}})
+    severity_block_hook({"params": {"text": plan + block}})
+
+    # An ordinary mention is not a declaration; the agent quotes reporters and argues
+    # about levels in its analysis, and only a line *starting* the declaration counts.
+    severity_block_hook(
+        {"params": {"text": "The reporter argues this is S1, but see below." + block}}
+    )
+
+    with pytest.raises(ToolError):
+        severity_block_hook({"params": {"text": plan + block + block}})

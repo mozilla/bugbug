@@ -53,7 +53,7 @@ from .config import (
     TRIAGE_SEVERITIES,
     ScopedComponent,
 )
-from .hooks import add_comment_hook
+from .hooks import add_comment_hook, severity_block_hook
 
 HERE = Path(__file__).resolve().parent
 
@@ -391,6 +391,7 @@ async def run_frontend_triage(
     actions_recorder.add_hook(
         "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
     )
+    actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
 
     actions_recorder.add_hook(
         "bugzilla.add_comment",
