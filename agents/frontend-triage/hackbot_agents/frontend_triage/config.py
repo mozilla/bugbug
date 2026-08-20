@@ -31,17 +31,15 @@ MOZILLA_VCS_TOOLS = [
 ]
 
 
-# Recordable action types the agent may take, by dotted id. This agent triages
-# and plans only: it records a comment with its findings/plan and, at high
-# confidence, may propose field updates (e.g. keyword/severity). It never
-# creates bugs or attaches files.
+# Recordable action types the agent may take, by dotted id. A comment is the only one:
+# `bugzilla.update_bug` was here for `severity`, which is now a suggestion in the comment
+# instead, leaving the tool with no caller.
 #
-# `bugzilla.update_bug` needs `editbugs` on the apply account. The apply step coalesces
-# a same-bug field change with the nearest comment into one PUT, so losing that
-# privilege would take the analysis comment down with the rejected field change.
+# Dropping it also drops the `editbugs` requirement on the apply account, which mattered:
+# the apply step coalesces a same-bug field change with the nearest comment into one PUT,
+# so a rejected field change used to take the analysis comment down with it.
 ENABLED_ACTION_TYPES = [
     "bugzilla.add_comment",
-    "bugzilla.update_bug",
 ]
 
 
@@ -125,32 +123,21 @@ TRIAGE_SCOPE = (
 # that `notify.py` keeps one flat mapping to look up.
 SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
 
-# What a `bugzilla.update_bug` from this agent may touch. Enforced at record time
-# by `hooks.update_bug_hook`, so an out-of-bounds change is refused while the agent
-# can still correct it, rather than recorded and held for a human later.
-
-TRIAGE_FIELDS = frozenset({"keywords", "severity"})
-
 # Bugzilla's `bug_severity` legal values are `--`, `blocker`, `S1`, `critical`,
 # `S2`, `major`, `normal`, `S3`, `minor`, `S4`, `trivial`, `N/A`, `enhancement`
 # (https://bugzilla.mozilla.org/rest/field/bug/bug_severity). Narrowed to the four
 # `rules/severity-assessment.md` actually defines: the word forms are legacy, kept
 # for old bugs, and `--`/`N/A` mean unset or not-applicable, which is a metadata
 # regression rather than a triage judgment.
+#
+# The agent no longer writes the field; `agent.parse_severity` validates the level it
+# suggests against this set.
 TRIAGE_SEVERITIES = frozenset({"S1", "S2", "S3", "S4"})
 
-# Bugzilla defines ~340 keywords (https://bugzilla.mozilla.org/rest/field/bug/keywords,
-# or https://bugzilla.mozilla.org/describekeywords.cgi for the annotated list), several
-# of which drive automation. These six are the ones a frontend triage pass can add
-# without side effects. No ruleset in `rules/` directs a keyword addition today, so
-# widen this set alongside the rule that needs it rather than ahead of one.
-TRIAGE_KEYWORDS = frozenset(
-    {
-        "access",
-        "dataloss",
-        "good-first-bug",
-        "papercut",
-        "perf",
-        "regression",
-    }
-)
+# Which `severity_assessment.confidence` values are worth reporting. Below this the agent
+# says nothing about severity at all, since a level it is unsure of still reads as a
+# judgment an engineer may act on.
+#
+# `notify.py` reads this for the S1 marker; `rules/severity-assessment.md` repeats the
+# threshold for the comment block, because the model cannot import it. Change both.
+REPORTABLE_SEVERITY_CONFIDENCES = frozenset({"high", "medium"})

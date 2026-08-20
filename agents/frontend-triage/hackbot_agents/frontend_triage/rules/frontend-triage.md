@@ -46,8 +46,9 @@ Core, DevTools-internals, or build-system bug — and say which area it looks li
    change, and the approach. Prefer a comprehensive fix at the right level over a
    spot fix.
 4. **Assess severity.** Apply the `severity-assessment` rules to judge the bug's
-   severity from its user impact. It belongs in your comment and structured
-   output.
+   severity from its user impact. It goes in the severity block at the end of your
+   comment and in the structured output — never on the bug's `severity` field,
+   which you cannot set.
 
 ## Comment
 
@@ -57,18 +58,20 @@ inline Markdown link to its Searchfox permalink (with a line anchor where you
 know the line) per the **Linking source files** section of the system prompt. Do
 not restate the whole bug. Do not claim the fix is verified — you did not run it.
 
-## Confidence and field changes
+Close with the severity block — a horizontal rule, `Suggested severity: <level>`,
+then the reasoning — unless your severity confidence is low or you could not assess
+it, in which case leave the block out entirely. Exact shape is in **Severity in the
+comment** in the system prompt.
 
-Your `confidence` decides whether your actions reach the bug unreviewed — see
-**Recording actions** in the system prompt before you pick a level.
+## Confidence
+
+Your `confidence` decides whether your comment reaches the bug unreviewed — see
+**Recording actions** in the system prompt before you pick a level. This is the
+run's confidence in the _localization_; the severity block has its own, separate
+confidence (see `severity-assessment`).
 
 - **High** (you found the specific code and the cause is clear): record the
-  plan comment. If a rule or convention clearly applies, you may also record a
-  `bugzilla_update_bug` for an obviously-correct field — e.g. adding a relevant
-  keyword, or a `severity` (per `severity-assessment`). Do not change
-  `status`/`resolution`. Record a keyword addition as
-  `{"keywords": {"add": ["…"]}}` — a bare list replaces every keyword already on
-  the bug.
+  plan comment.
 - **Medium** (plausible area, cause not pinned down): record the comment with
   your best hypothesis and the open questions that would confirm it.
 - **Low** (could not localize): record a comment stating what you checked and
