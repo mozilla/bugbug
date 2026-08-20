@@ -10,6 +10,7 @@ from hackbot_agents.frontend_triage.agent import (
     FrontendTriageResult,
     SeverityAssessment,
 )
+from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE
 from hackbot_agents.frontend_triage.notify import (
     build_message,
     channel_for,
@@ -56,29 +57,41 @@ def test_an_s1_is_marked_and_named():
     # The level is spelled out next to the emoji so it still reads as an S1 where the
     # emoji doesn't render.
     line = _message(
-        severity_assessment=SeverityAssessment(suggested="S1")
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="high")
     ).splitlines()[0]
-    assert line == f":red_circle: *{BUG_LINK} — {SUMMARY}* (S1)"
+    assert line == f":red_circle: *{BUG_LINK} — {SUMMARY}* (suggested S1)"
+
+
+def test_a_medium_confidence_s1_is_still_marked():
+    line = _message(
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="medium")
+    ).splitlines()[0]
+    assert line.startswith(":red_circle: ")
+
+
+def test_an_s1_the_run_is_unsure_of_is_unmarked():
+    # The comment drops its severity block below medium, so a marker here would have
+    # Slack shout S1 while the bug says nothing about severity at all.
+    for confidence in ("low", None):
+        line = _message(
+            severity_assessment=SeverityAssessment(
+                suggested="S1", confidence=confidence
+            )
+        ).splitlines()[0]
+        assert line == f"*{BUG_LINK} — {SUMMARY}*", confidence
 
 
 def test_every_other_severity_is_unmarked():
-    for suggested in ("S2", "S3", "S4", None, "", "  "):
+    for suggested in ("S2", "S3", "S4", None):
         line = _message(
-            severity_assessment=SeverityAssessment(suggested=suggested)
+            severity_assessment=SeverityAssessment(
+                suggested=suggested, confidence="high"
+            )
         ).splitlines()[0]
         assert line == f"*{BUG_LINK} — {SUMMARY}*", suggested
     # A run that could not assess severity reports none at all.
     line = _message(severity_assessment=None).splitlines()[0]
     assert line == f"*{BUG_LINK} — {SUMMARY}*"
-
-
-def test_a_lowercase_s1_is_still_an_s1():
-    # `suggested` is read out of the agent's free-form JSON block, so "s1" must not
-    # quietly read as an ordinary severity.
-    line = _message(
-        severity_assessment=SeverityAssessment(suggested=" s1 ")
-    ).splitlines()[0]
-    assert line.startswith(":red_circle: ")
 
 
 def test_a_missing_summary_leaves_the_bug_link_alone():
@@ -87,11 +100,34 @@ def test_a_missing_summary_leaves_the_bug_link_alone():
 
 
 def test_the_channel_belongs_to_the_component():
-    assert channel_for("Firefox", "New Tab Page") == "#hnt-dev-triage"
-    assert channel_for("Firefox for Android", "History") == "#android-core-dev"
-    assert channel_for("Firefox", "Site Permissions") == "#privacy-team-automation"
+    # Derived from the registry rather than one assert per component, so adding a
+    # component is one entry in config.py and no test edit. The invariants a loop
+    # cannot express are asserted concretely in the tests below.
+    for entry in TRIAGE_SCOPE:
+        assert channel_for(entry.product, entry.component) == entry.channel
+
+
+def test_whitespace_around_either_half_is_stripped():
     # Surrounding whitespace is the agent's, not Bugzilla's.
     assert channel_for(" Firefox ", " New Tab Page ") == "#hnt-dev-triage"
+
+
+def test_the_registry_names_each_component_once():
+    # A duplicate key collapses silently in the derived `SLACK_CHANNELS`, so the second
+    # entry's channel would win with nothing to show it had. That is the failure mode a
+    # registry has as it grows, and it is invisible in a diff that only adds a line.
+    keys = [entry.key for entry in TRIAGE_SCOPE]
+    assert len(keys) == len(set(keys))
+
+
+def test_every_channel_is_a_channel_name():
+    # Slack rejects an unknown channel at apply time, long after the Bugzilla comment
+    # and severity change have landed, and the run page is the only place it shows. A
+    # missing `#` or a stray capital is the whole cost of that, so catch it here.
+    for entry in TRIAGE_SCOPE:
+        assert entry.channel.startswith("#"), entry.key
+        assert entry.channel == entry.channel.strip().lower(), entry.key
+        assert " " not in entry.channel, entry.key
 
 
 def test_the_installer_and_the_updater_share_a_channel():
@@ -105,10 +141,16 @@ def test_the_installer_and_the_updater_share_a_channel():
 def test_an_unowned_component_has_no_channel():
     # Fails closed rather than falling back to a default: another team's channel is a
     # worse outcome than silence.
+    #
+    # `Address Bar` is a component this agent will triage if handed one -- scoping.md
+    # puts any user-facing Firefox defect in scope -- but it is not in `TRIAGE_SCOPE`,
+    # so no team is told. That is the case worth pinning: in scope and unrouted are
+    # different questions, and only the second one is this function's business.
     assert channel_for("Firefox", "Address Bar") is None
     assert channel_for("Core", "New Tab Page") is None
     # A component name is only owned within its own product: `History` routes to
-    # #android-core-dev under Firefox for Android and nowhere at all under Firefox.
+    # #android-core-dev under Firefox for Android and nowhere at all under Firefox --
+    # which has no `History` component in the first place, only `Bookmarks & History`.
     assert channel_for("Firefox", "History") is None
     assert channel_for("Firefox", None) is None
     assert channel_for(None, "New Tab Page") is None

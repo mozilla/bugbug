@@ -41,7 +41,7 @@ from hackbot_runtime.searchfox import (
     permalink_prefix,
     resolve_index_revision,
 )
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from searchfox import AsyncSearchfoxClient
 
 from .config import (
@@ -49,8 +49,11 @@ from .config import (
     ENABLED_ACTION_TYPES,
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
+    TRIAGE_SCOPE,
+    TRIAGE_SEVERITIES,
+    ScopedComponent,
 )
-from .hooks import add_comment_hook, update_bug_hook
+from .hooks import add_comment_hook, severity_block_hook
 
 HERE = Path(__file__).resolve().parent
 
@@ -140,6 +143,44 @@ SEARCHFOX_LINKS_PROMPT = (
 )
 
 
+def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
+    """Render `config.TRIAGE_SCOPE` as the prompt's component list, grouped by area.
+
+    Generated rather than written into the prompt so that the component list has one
+    home. The per-area guidance under `Source repository` stays hand-authored: it is
+    prose about a codebase, and only the enumeration is mechanical.
+
+    Takes the registry as an argument so a test can assert the grouping against a fixed
+    input rather than against whatever the real scope happens to be today.
+    """
+    by_area: dict[str, list[str]] = {}
+    for entry in scope:
+        by_area.setdefault(entry.area, []).append(entry.key)
+
+    lines = [f"- **{area}** — {', '.join(keys)}." for area, keys in by_area.items()]
+
+    return "\n".join(
+        lines
+        + [
+            "",
+            # Two failure modes to close off, in order of how much they cost. Reading the
+            # list as exhaustive gets an in-scope bug declared out of scope, which is the
+            # `ecea6ca6` mistake. Reading it as a vocabulary gets a component "tidied" to
+            # match, and since the component is also the routing key, `notify.py` then
+            # silently tells nobody.
+            "**This list is not the limit of what you triage.** It is where bugs "
+            "normally come from, and which team each one reports to. `scoping.md` is "
+            "what decides scope: any user-facing Firefox defect is in scope, including "
+            "in a component not named above — triage it normally rather than calling it "
+            "out of scope for being absent here.",
+            "",
+            "It is also **not** a vocabulary for the `product` and `component` fields "
+            "of your plan. Copy those from Bugzilla verbatim, even when they are not "
+            "listed above.",
+        ]
+    )
+
+
 def load_system_prompt(rules_dir: Path, extra: str) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
@@ -147,6 +188,7 @@ def load_system_prompt(rules_dir: Path, extra: str) -> str:
         rules_dir=str(rules_dir.resolve()),
         extra_instructions=extra or "(none)",
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
+        triaged_components=render_scope(),
     )
 
 
@@ -196,6 +238,35 @@ def parse_confidence(value: object) -> str | None:
     return normalized if normalized in CONFIDENCE_LEVELS else None
 
 
+def parse_severity(value: object) -> str | None:
+    """One of :data:`~.config.TRIAGE_SEVERITIES`, or None if ``value`` isn't one.
+
+    Same contract as :func:`parse_confidence`, for the same reason: the level comes out
+    of the agent's free-form JSON block, and it is the only severity signal reaching a
+    human now that the field is no longer written.
+    """
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().upper()
+    return normalized if normalized in TRIAGE_SEVERITIES else None
+
+
+def parse_severity_assessment(value: object) -> SeverityAssessment | None:
+    """A :class:`SeverityAssessment` with its level and confidence normalized.
+
+    Fields degrade independently: an unreadable level or confidence becomes None, which
+    drops the comment's severity block, rather than discarding the rationale with it.
+    """
+    if not isinstance(value, dict):
+        return None
+    rationale = value.get("rationale")
+    return SeverityAssessment(
+        suggested=parse_severity(value.get("suggested")),
+        confidence=parse_confidence(value.get("confidence")),
+        rationale=rationale if isinstance(rationale, str) else None,
+    )
+
+
 def may_apply_unattended(plan: dict) -> bool:
     """Whether this run's recorded actions may reach the bug without a human.
 
@@ -243,14 +314,6 @@ def parse_plan(text: str | None) -> dict:
         # run's result, and these two only route a notification.
         return value.strip() or None if isinstance(value, str) else None
 
-    def _as_model(model, value):
-        if not isinstance(value, dict):
-            return None
-        try:
-            return model.model_validate(value)
-        except ValidationError:
-            return None
-
     actionable = data.get("actionable")
     if not isinstance(actionable, bool):
         actionable = None
@@ -265,8 +328,8 @@ def parse_plan(text: str | None) -> dict:
         "actionable": actionable,
         "regressor_node": data.get("regressor_node"),
         "relevant_tests": _as_list(data.get("relevant_tests")),
-        "severity_assessment": _as_model(
-            SeverityAssessment, data.get("severity_assessment")
+        "severity_assessment": parse_severity_assessment(
+            data.get("severity_assessment")
         ),
     }
 
@@ -328,9 +391,7 @@ async def run_frontend_triage(
     actions_recorder.add_hook(
         "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
     )
-    actions_recorder.add_hook(
-        "bugzilla.update_bug", update_bug_hook(actions_recorder, bug)
-    )
+    actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
 
     actions_recorder.add_hook(
         "bugzilla.add_comment",
