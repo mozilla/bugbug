@@ -1,4 +1,4 @@
-"""Tests for the bugzilla action handlers (footers, mime, merge, errors)."""
+"""Tests for the bugzilla action handlers (comments, mime, merge, errors)."""
 
 import pytest
 from agent_tools.registry import ToolError
@@ -23,7 +23,6 @@ async def test_add_attachment_patch_forces_text_plain(tmp_path):
     params = rec.actions[0]["params"]
     assert params["content_type"] == "text/plain"
     assert params["is_patch"] is True
-    assert "suggested fix" in params["comment"]
     assert params["file_name"] == "fix.patch"
 
 

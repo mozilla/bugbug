@@ -1,6 +1,7 @@
 """Frontend triage tool -- a read-only Bugzilla triage + fix-planning agent.
 
-Orchestrates a Claude agent that triages Firefox desktop *frontend* bugs
+Orchestrates a Claude agent that triages user-facing Firefox bugs -- the desktop
+frontend, Firefox for Android, and the Windows installer and application updater --
 according to rulesets in the rules/ directory. The agent investigates the
 source repository READ-ONLY (no build, no source edits, no reproduction) and
 produces a root-cause analysis plus a proposed fix plan, which it records as a
@@ -40,7 +41,7 @@ from hackbot_runtime.searchfox import (
     permalink_prefix,
     resolve_index_revision,
 )
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from searchfox import AsyncSearchfoxClient
 
 from .config import (
@@ -48,7 +49,11 @@ from .config import (
     ENABLED_ACTION_TYPES,
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
+    TRIAGE_SCOPE,
+    TRIAGE_SEVERITIES,
+    ScopedComponent,
 )
+from .hooks import add_comment_hook, severity_block_hook
 
 HERE = Path(__file__).resolve().parent
 
@@ -84,6 +89,11 @@ class SeverityAssessment(BaseModel):
 
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
+    # Where the bug lives, as the agent read it off Bugzilla. Reported rather than
+    # derived because nothing else carries it out of the run: the inputs are just a
+    # bug id. Only `notify.py` uses it, to pick the channel that owns the component.
+    product: str | None = None
+    component: str | None = None
     # Structured plan (best-effort, parsed from the agent's final message).
     summary: str | None = None
     root_cause: str | None = None
@@ -98,6 +108,10 @@ class FrontendTriageResult(HackbotAgentResult):
     )
     # Triage judgments (best-effort, parsed from the agent's final message).
     severity_assessment: SeverityAssessment | None = None
+    # This run's verdict on whether its recorded actions may reach the bug without a
+    # human, computed by `may_apply_unattended`. hackbot-api reads it and still has
+    # the final say.
+    auto_apply: bool = False
     # The agent's full final message, always present as a fallback.
     result: str | None = None
 
@@ -129,6 +143,44 @@ SEARCHFOX_LINKS_PROMPT = (
 )
 
 
+def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
+    """Render `config.TRIAGE_SCOPE` as the prompt's component list, grouped by area.
+
+    Generated rather than written into the prompt so that the component list has one
+    home. The per-area guidance under `Source repository` stays hand-authored: it is
+    prose about a codebase, and only the enumeration is mechanical.
+
+    Takes the registry as an argument so a test can assert the grouping against a fixed
+    input rather than against whatever the real scope happens to be today.
+    """
+    by_area: dict[str, list[str]] = {}
+    for entry in scope:
+        by_area.setdefault(entry.area, []).append(entry.key)
+
+    lines = [f"- **{area}** — {', '.join(keys)}." for area, keys in by_area.items()]
+
+    return "\n".join(
+        lines
+        + [
+            "",
+            # Two failure modes to close off, in order of how much they cost. Reading the
+            # list as exhaustive gets an in-scope bug declared out of scope, which is the
+            # `ecea6ca6` mistake. Reading it as a vocabulary gets a component "tidied" to
+            # match, and since the component is also the routing key, `notify.py` then
+            # silently tells nobody.
+            "**This list is not the limit of what you triage.** It is where bugs "
+            "normally come from, and which team each one reports to. `scoping.md` is "
+            "what decides scope: any user-facing Firefox defect is in scope, including "
+            "in a component not named above — triage it normally rather than calling it "
+            "out of scope for being absent here.",
+            "",
+            "It is also **not** a vocabulary for the `product` and `component` fields "
+            "of your plan. Copy those from Bugzilla verbatim, even when they are not "
+            "listed above.",
+        ]
+    )
+
+
 def load_system_prompt(rules_dir: Path, extra: str) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
@@ -136,6 +188,7 @@ def load_system_prompt(rules_dir: Path, extra: str) -> str:
         rules_dir=str(rules_dir.resolve()),
         extra_instructions=extra or "(none)",
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
+        triaged_components=render_scope(),
     )
 
 
@@ -168,6 +221,71 @@ def make_investigator() -> AgentDefinition:
     )
 
 
+CONFIDENCE_LEVELS = ("high", "medium", "low")
+
+
+def parse_confidence(value: object) -> str | None:
+    """One of :data:`CONFIDENCE_LEVELS`, or None if ``value`` isn't one.
+
+    The value comes out of the agent's free-form JSON block and decides whether the
+    run's actions are posted, so casing and stray whitespace are tolerated rather
+    than letting `"High"` read as "not high". Anything else returns None, so callers
+    fail closed rather than inventing a level.
+    """
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized in CONFIDENCE_LEVELS else None
+
+
+def parse_severity(value: object) -> str | None:
+    """One of :data:`~.config.TRIAGE_SEVERITIES`, or None if ``value`` isn't one.
+
+    Same contract as :func:`parse_confidence`, for the same reason: the level comes out
+    of the agent's free-form JSON block, and it is the only severity signal reaching a
+    human now that the field is no longer written.
+    """
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().upper()
+    return normalized if normalized in TRIAGE_SEVERITIES else None
+
+
+def parse_severity_assessment(value: object) -> SeverityAssessment | None:
+    """A :class:`SeverityAssessment` with its level and confidence normalized.
+
+    Fields degrade independently: an unreadable level or confidence becomes None, which
+    drops the comment's severity block, rather than discarding the rationale with it.
+    """
+    if not isinstance(value, dict):
+        return None
+    rationale = value.get("rationale")
+    return SeverityAssessment(
+        suggested=parse_severity(value.get("suggested")),
+        confidence=parse_confidence(value.get("confidence")),
+        rationale=rationale if isinstance(rationale, str) else None,
+    )
+
+
+def may_apply_unattended(plan: dict) -> bool:
+    """Whether this run's recorded actions may reach the bug without a human.
+
+    Recorded as ``findings.auto_apply``. This lives in the agent rather than in
+    hackbot-api because it turns on the agent's self-reported rating, which arrives
+    in the final message *after* every action is already recorded.
+
+    Two conditions, both failing closed on a plan that didn't parse:
+
+    - ``confidence: high`` — the run localized the cause in specific code.
+    - ``actionable`` is not false. ``rules/scoping.md`` pairs an out-of-scope report
+      with ``confidence: low``, but nothing makes the agent pair them, so a
+      ``high`` + ``actionable: false`` run would otherwise post an out-of-scope note
+      on the strength of the confidence alone. The test is ``is not False`` so that
+      a missing ``actionable`` doesn't read as out of scope.
+    """
+    return plan.get("confidence") == "high" and plan.get("actionable") is not False
+
+
 def parse_plan(text: str | None) -> dict:
     """Extract the structured plan from the agent's final message, if present.
 
@@ -191,28 +309,27 @@ def parse_plan(text: str | None) -> dict:
             return [value]
         return value if isinstance(value, list) else None
 
-    def _as_model(model, value):
-        if not isinstance(value, dict):
-            return None
-        try:
-            return model.model_validate(value)
-        except ValidationError:
-            return None
+    def _as_str(value):
+        # A non-string would fail FrontendTriageResult's validation and lose the whole
+        # run's result, and these two only route a notification.
+        return value.strip() or None if isinstance(value, str) else None
 
     actionable = data.get("actionable")
     if not isinstance(actionable, bool):
         actionable = None
     return {
+        "product": _as_str(data.get("product")),
+        "component": _as_str(data.get("component")),
         "summary": data.get("summary"),
         "root_cause": data.get("root_cause"),
         "proposed_fix": data.get("proposed_fix"),
         "target_files": _as_list(data.get("target_files")),
-        "confidence": data.get("confidence"),
+        "confidence": parse_confidence(data.get("confidence")),
         "actionable": actionable,
         "regressor_node": data.get("regressor_node"),
         "relevant_tests": _as_list(data.get("relevant_tests")),
-        "severity_assessment": _as_model(
-            SeverityAssessment, data.get("severity_assessment")
+        "severity_assessment": parse_severity_assessment(
+            data.get("severity_assessment")
         ),
     }
 
@@ -267,6 +384,15 @@ async def run_frontend_triage(
             "[frontend_triage] no searchfox revision; linking tip-of-tree",
             file=sys.stderr,
         )
+    # Bound what the agent may record, at the moment it records it. These are the
+    # only check on what an unattended run writes to a bug — see hooks.py. Registered
+    # ahead of the hooks below so a refusal happens before the comment body is
+    # rewritten.
+    actions_recorder.add_hook(
+        "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
+    )
+    actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
+
     actions_recorder.add_hook(
         "bugzilla.add_comment",
         permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
@@ -344,5 +470,6 @@ async def run_frontend_triage(
         result=result_msg.result,
         num_turns=result_msg.num_turns,
         total_cost_usd=result_msg.total_cost_usd,
+        auto_apply=may_apply_unattended(plan),
         **plan,
     )

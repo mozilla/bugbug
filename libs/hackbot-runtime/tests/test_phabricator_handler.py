@@ -43,7 +43,7 @@ _DIFF_PAYLOAD = {
 
 # The agent-built artifact always carries both keys (see
 # changes.build_phabricator_diff), so handlers may rely on them.
-_LOCAL_COMMITS = {"node1": {"author": "Hackbot Agent", "commit": "node1"}}
+_LOCAL_COMMITS = {"node1": {"author": "Hackbot", "commit": "node1"}}
 
 
 def _ctx(diff=_DIFF_PAYLOAD, local_commits=None):
@@ -56,7 +56,7 @@ def _ctx(diff=_DIFF_PAYLOAD, local_commits=None):
         assert key == "changes/phabricator_diff.json"
         return json.dumps(submission).encode()
 
-    return ApplyContext(run_id="run-1", download_artifact=download)
+    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
 
 
 def _fake_conduit(responses):
@@ -123,6 +123,7 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     assert transactions["plan-changes"] is True
     assert "reviewers.add" not in transactions
     assert transactions["bugzilla.bug-id"] == "1"
+    assert transactions["summary"] == "s"
 
 
 async def test_submit_patch_sets_local_commits_property(monkeypatch):
@@ -141,7 +142,7 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
     # Only the git-derived fields exist in the artifact; summary + message are
     # filled in apply-side, mirroring moz-phab's set_diff_property.
     git_fields = {
-        "author": "Hackbot Agent",
+        "author": "Hackbot",
         "authorEmail": "hackbot@mozilla.tld",
         "time": 1,
         "commit": "node1",
@@ -166,7 +167,7 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
     assert prop_call[1]["name"] == "local:commits"
     stored = json.loads(prop_call[1]["data"])["node1"]
     # git-derived fields are preserved untouched
-    assert stored["author"] == "Hackbot Agent"
+    assert stored["author"] == "Hackbot"
     assert stored["tree"] == "tree1"
     assert stored["parents"] == ["base1"]
     # The stored title matches the visible revision title and reviewers are empty.
@@ -314,7 +315,7 @@ async def test_update_patch_preserves_previous_diff_commit_author(monkeypatch):
         _ctx(
             local_commits={
                 "new-node": {
-                    "author": "Hackbot Agent",
+                    "author": "Hackbot",
                     "authorEmail": "hackbot@mozilla.tld",
                     "commit": "new-node",
                 }
@@ -341,7 +342,7 @@ async def test_missing_artifact_fails(handler, params):
     async def download(key):
         raise KeyError(key)
 
-    ctx = ApplyContext(run_id="run-1", download_artifact=download)
+    ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
     result = await getattr(phabricator_handler, handler)().apply(params, ctx)
     assert result.status == "failed"
     assert "No Phabricator submission artifact" in result.error
@@ -369,7 +370,7 @@ async def test_add_comment_posts_comment_transaction(monkeypatch):
 
     result = await phabricator_handler.AddCommentHandler().apply(
         {"revision_id": 42, "text": "Answering your question."},
-        ApplyContext(run_id="run-1", download_artifact=None),
+        ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None),
     )
 
     assert result.status == "applied"
@@ -392,7 +393,7 @@ async def test_add_comment_conduit_error_fails(monkeypatch):
 
     result = await phabricator_handler.AddCommentHandler().apply(
         {"revision_id": 42, "text": "x"},
-        ApplyContext(run_id="run-1", download_artifact=None),
+        ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None),
     )
     assert result.status == "failed"
     assert "ERR-CONDUIT-CORE" in result.error

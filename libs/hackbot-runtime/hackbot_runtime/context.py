@@ -27,6 +27,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from hackbot_runtime import artifacts, changes
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
 from hackbot_runtime.source import ensure_source_repo
@@ -225,20 +226,9 @@ class HackbotContext(BaseSettings):
         patch_key: str = "changes/changes.patch",
         meta_key: str = "changes/changes.json",
         phabricator_diff_key: str = "changes/phabricator_diff.json",
+        try_push_key: str = "changes/try_push.json",
     ) -> str | None:
-        """Collect the agent's source-tree changes and publish them as artifacts.
-
-        Produces an mbox patch (applied with ``git am``) that preserves any
-        local commits and wraps the uncommitted remainder, plus a JSON summary.
-        Returns the patch key, or ``None`` when the agent never prepared a source
-        checkout or made no changes at all.
-
-        If the agent recorded a Phabricator patch action, also builds
-        and publishes the Phabricator submission payload here — while the
-        checkout the agent already has is still around — so the downstream
-        apply step never needs its own checkout (see
-        ``changes.build_phabricator_diff``).
-        """
+        """Collect the agent's source-tree changes and publish them as artifacts."""
         if self._source_base is None:
             return None
         change_set = changes.collect(
@@ -255,14 +245,18 @@ class HackbotContext(BaseSettings):
         )
         self.publish_json(meta_key, change_set.metadata)
 
-        wants_phabricator = any(
-            action["type"] in PATCH_ACTION_TYPES for action in self.actions.actions
-        )
-        if wants_phabricator:
+        recorded_types = {action["type"] for action in self.actions.actions}
+
+        if recorded_types & PATCH_ACTION_TYPES:
             diff_payload = changes.build_phabricator_diff(
                 self.repo_path, self._source_base, self._config.source.repo_url
             )
             if diff_payload is not None:
                 self.publish_json(phabricator_diff_key, diff_payload)
+
+        if recorded_types & TRY_ACTION_TYPES:
+            try_payload = changes.build_try_push(self.repo_path, self._source_base)
+            if try_payload is not None:
+                self.publish_json(try_push_key, try_payload)
 
         return patch_key

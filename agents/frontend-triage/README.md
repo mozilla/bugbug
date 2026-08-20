@@ -1,9 +1,11 @@
 # frontend-triage agent
 
-Triages a Firefox desktop frontend bug from Bugzilla and produces a **root-cause
+Triages a user-facing Firefox bug from Bugzilla and produces a **root-cause
 analysis plus a proposed fix plan**. It reads the source tree, navigates the
 codebase with Searchfox, and inspects regressor changesets on hg.mozilla.org. It
-does **not** build Firefox, edit source, reproduce the bug, or write to Bugzilla.
+does **not** build Firefox, edit source, or reproduce the bug. It writes to
+Bugzilla only after the run, and only when it rated itself confident — see [What
+it writes back to Bugzilla](#what-it-writes-back-to-bugzilla).
 
 It deliberately stops at a plan: visual and interaction bugs can't be verified by
 the crash-reproduction loop the [`bug-fix`](../bug-fix/) agent relies on, so a
@@ -11,14 +13,45 @@ human (or a downstream execution agent) takes it from there.
 
 ## What it triages
 
-Firefox desktop **frontend defects** — the kind documented with a screenshot or
-steps to reproduce rather than a stack trace: Tabbed Browser (incl. Split View
-and Tab Groups), New Tab Page, Address Bar, Menus, Toolbars and Customization,
-Sidebar, Theme.
+**Defects in user-facing Firefox** — the kind documented with a screenshot, steps
+to reproduce, or a log rather than a stack trace. `scoping.md` is what decides
+scope, and it is broad: any user-facing Firefox defect qualifies.
+
+What is _routed_ is narrower. `TRIAGE_SCOPE` in `config.py` lists the components
+bugs normally arrive from, one entry each, carrying the Slack channel and the area
+whose code layout `prompts/system.md` describes. A bug handed to the agent by hand
+in some other component — `Firefox :: Menus`, say — is triaged the same way and
+reports to nobody. The areas, which are also how the rendered scope list is
+grouped:
+
+- **Desktop frontend**, under `Firefox`. JS/JSM modules, CSS, XUL/HTML.
+- **Site permissions**, also desktop, but split across the doorhanger, the state,
+  and a C++ store outside `browser/`.
+- **IP Protection**, the built-in VPN. Panel UI in
+  `browser/components/ipprotection/`, the proxy and entitlement state machines in
+  `toolkit/components/ipprotection/`.
+- **Firefox for Android**. Kotlin under `mobile/android/fenix/` and
+  `mobile/android/android-components/`.
+- **Application updater** — `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
+- **Windows installer** — `Firefox :: Installer` (NSIS).
+
+Install and update bugs are the odd ones out: they arrive as a failure with an
+error code and an `update.log` or installer log, usually with no steps to
+reproduce and no screenshot. That is the normal shape of a bug in that area, so
+`frontend-triage.md` says so explicitly — otherwise the ruleset's papercut
+framing reads as a reason to skip them. `severity-assessment.md` starts them at
+S2 rather than the S3 a papercut would get, since a user who cannot update is
+left on an unpatched build with no in-product workaround.
+
+IP Protection has the same S2 floor, for the same reason: turning the VPN off is
+not a workaround for it not working. It carries one extra instruction, because the
+distinction does not survive a bug report — state merely _displayed_ wrong is a UI
+bug, while state actually wrong means traffic is unproxied and belongs above S2.
 
 Poor fits: crashes, hangs, assertions and sanitizer reports (those belong to
-[`bug-fix`](../bug-fix/)), anything with no frontend component, and bugs whose
-fix can only be judged by _seeing_ the rendered result.
+[`bug-fix`](../bug-fix/)) — note that "the installer failed" is not a crash
+report — anything outside user-facing Firefox, and bugs whose fix can only be
+judged by _seeing_ the rendered result.
 
 The `scoping.md` ruleset runs first and filters out non-defects, tracking/`meta`
 bugs and intermittent test failures with a short note instead of an invented fix
@@ -76,8 +109,11 @@ Each run writes to `~/hackbot/artifacts/<run_id>/`:
 
 - **`summary.json`** — `findings` holds the structured plan (`root_cause`,
   `proposed_fix`, `target_files`, `confidence`) plus the executor handoff fields
-  `actionable`, `regressor_node` and `relevant_tests`. `actions` holds the
-  **recorded** Bugzilla comment — written here for review, not posted.
+  `actionable`, `regressor_node` and `relevant_tests`, plus `auto_apply` — the
+  run's own verdict on whether it may be posted without review. `actions` holds
+  the **recorded** Bugzilla comment (and, at high confidence, possibly a field
+  change). Recording is not posting, but see below: an `auto_apply` run's actions
+  do reach the bug unattended.
 - **`logs/agent.log`** — the streamed reasoning and every tool call, and the only
   record of which model actually ran.
 - **No `changes/` directory.** Its absence confirms the run stayed read-only.
@@ -96,14 +132,37 @@ Two caveats before acting on a plan:
 ## What it writes back to Bugzilla
 
 **Nothing, during a run.** `ENABLED_ACTION_TYPES` in `config.py` allows
-`bugzilla.add_comment` and `bugzilla.update_bug`, but those come from an
-in-process actions server that appends to `summary.json` and makes no network
-calls. The only Bugzilla access the agent has is through the broker sidecar,
-which exposes five read tools and holds the API key. Applying a recorded action
-is a separate, human step from the Hackbot UI — unlike `bug-fix`, this agent
-does not set `auto_apply_actions`.
+`bugzilla.add_comment` and nothing else, and that tool comes from an in-process
+actions server that appends to `summary.json` and makes no network calls. The only Bugzilla access the agent has is through the broker sidecar,
+which exposes five read tools and holds the API key.
 
-Two hooks shape the comment as it is recorded:
+**Afterwards, though, a confident run posts itself.** When the run reports
+`confidence: high` and does not report `actionable: false`, it sets
+`findings.auto_apply`, and hackbot-api applies the recorded actions to the real
+bug with nobody in between. `may_apply_unattended()` in `agent.py` is that
+decision in full. Medium and low are held for a person to apply from the Hackbot
+UI, as before.
+
+Judgement and reach are bounded separately, because an action's params are model
+output no matter how sure the agent is — and the agent spends the run reading bug
+comments nobody controls. Two hooks in `hooks.py` refuse an action outright as it
+is recorded, and they are the only thing bounding what an unattended run writes:
+hackbot-api applies whatever it finds in `summary.json`, dispatching it against a
+handler registry far wider than the tools this agent was given.
+
+- `add_comment_hook` — one comment, public, on the bug being triaged.
+
+That is the whole list, because a comment is the only thing this agent can write.
+It has no tool that changes a bug's fields: `severity` was the one field a ruleset
+directed it to set, and that is now a suggestion at the end of the comment for a
+human to apply, so `bugzilla.update_bug` left `ENABLED_ACTION_TYPES` rather than
+staying on with no caller. `tests/test_config.py` guards that.
+
+A refusal reaches the agent as a tool error it can correct in the same run, and the
+action never lands in `summary.json`. The action _type_ needs no check:
+`ENABLED_ACTION_TYPES` decides which tools the actions server exposes at all.
+
+Two further hooks shape the comment text as it is recorded:
 
 - `permalink_hook` expands `{{searchfox.permalink}}/<path>#<line>` into
   `https://searchfox.org/firefox-main/rev/<sha>/…`, so every source reference
@@ -120,17 +179,66 @@ Two hooks shape the comment as it is recorded:
 Below both sits the runtime's shared footer inviting a 👍 or 👎 reaction. Those
 reactions and tags are the feedback channel — the agent does not request needinfo.
 
+## Slack notification
+
+A run that applies itself reports two lines to the channel of the team that owns
+the bug's component: the bug, linked, with the run's one-line summary, and a link
+to the run. An `S1` the run is confident about adds a `:red_circle:` and names the
+level as `(suggested S1)` — suggested, because nothing was written to the field.
+Below `REPORTABLE_SEVERITY_CONFIDENCES` there is no marker, matching the comment,
+which omits its severity block on the same threshold. Nothing else — the analysis
+is on the bug, the detail is in the run, and the channel already says which
+component this is.
+
+The audience is the team whose bug was just written to by nobody, so only an
+auto-applied run notifies. A medium or low result wrote nothing to Bugzilla and
+stays silent, even if someone applies it by hand later.
+
+Routing is the `channel` on each `TRIAGE_SCOPE` entry in `config.py`, looked up by
+`"<Product> :: <Component>"` through the derived `SLACK_CHANNELS` — so
+`ScopedComponent("Firefox", "New Tab Page", "Desktop frontend", "#hnt-dev-triage")`
+sends a New Tab Page run to `#hnt-dev-triage`.
+
+Four things about that which are not obvious from reading the registry:
+
+- **The key is the component, not the team**, so two components may share a channel, as
+  the installer and the updater do, without either knowing about the other.
+- **There is deliberately no default channel**, since posting one team's triage into
+  another team's channel is worse than silence.
+- **`TRIAGE_SCOPE` is narrower than what the agent will triage.** It is the routing
+  table, and it should stay in step with bugbot's `TRIAGED_COMPONENTS`, which decides
+  what arrives automatically. `scoping.md` puts _any_ user-facing Firefox defect in
+  scope, so a bug handed to the agent by hand in some other component is triaged
+  normally and reports to nobody. The system prompt says so explicitly, because a list
+  of components read as exhaustive is how an in-scope bug gets declared out of scope.
+- **Product and component come from the agent's `product`/`component` plan fields**,
+  because nothing else carries them out of a run whose only input is a bug id. A garbled
+  value matches no team and sends nothing, which is why the system prompt asks for them
+  verbatim even for components the scope list does not name.
+
+`notify.py` builds and records the message; the wording is code, not a model turn,
+so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is never
+given the tool. Like every other action it is recorded rather than sent, so it
+shows up in the Hackbot UI before it lands and is delivered at most once. Delivery
+needs `SLACK_BOT_TOKEN` on hackbot-api and the app in the channel — see
+`libs/hackbot-runtime/hackbot_runtime/actions/handlers/slack_handler.py`. A failed
+Slack post does not affect the Bugzilla writes, and it does not go the other way
+either: the applier runs each action independently, so a rejected `PUT` still
+notifies. The run page shows the failed action.
+
 ## Tuning
 
 `rules/` and `prompts/` both live under `hackbot_agents/frontend_triage/`.
 
 - **`rules/`** is the main behavior dial. `scoping.md` decides what gets skipped;
-  `frontend-triage.md` sets in-scope components, comment content, and the
-  confidence thresholds for recording an action. The agent globs the directory
-  and reads only what it judges relevant, so new `.md` files extend it — see
-  `rules/README.md` for how to author one.
+  `frontend-triage.md` sets comment content and the confidence thresholds for
+  recording an action. The agent globs the directory and reads only what it judges
+  relevant, so new `.md` files extend it — see `rules/README.md` for how to author
+  one. Neither file lists components; `TRIAGE_SCOPE` in `config.py` does.
 - **`prompts/system.md`** holds the standing instructions: output format, the
-  read-only mandate, and when to reach for Searchfox versus reading a file.
+  read-only mandate, when to reach for Searchfox versus reading a file, and the
+  per-area code layout. A component in a new area needs a **Source repository**
+  bullet here, and `tests/test_plan.py` fails until it has one.
 - **Cost** scales with tool use, not just turns — Searchfox results are
   token-heavy, so narrowing queries (`path_filter`, a modest `limit`) matters
   more than `MAX_TURNS` when batching.
@@ -142,5 +250,9 @@ Registered with `hackbot-api` as `FrontendTriageInputs` in
 `app/agents.py` (job `hackbot-agent-frontend-triage`). Local Compose runs don't
 need the API.
 
-There are no unit tests for this agent; CI covers the shared machinery it builds
-on via the `libs/agent-tools` and `libs/hackbot-runtime` suites.
+`tests/` covers what an unattended run's reach depends on: the record-time hooks
+(`test_hooks.py`), the plan parsing and `may_apply_unattended` (`test_plan.py`), and
+the Slack message and its routing (`test_notify.py`). Run them with
+`uv run --package hackbot-agent-frontend-triage pytest agents/frontend-triage/tests`.
+CI covers the shared machinery this builds on via the `libs/agent-tools` and
+`libs/hackbot-runtime` suites.
