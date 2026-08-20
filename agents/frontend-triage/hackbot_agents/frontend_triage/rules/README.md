@@ -12,5 +12,6 @@ frontend defects with a video or steps-to-reproduce but no crash.").
 Rules are free-form prose. Be explicit about:
 
 - **When** the rule applies (which products/components/keywords/states)
-- **What** field changes or comments the agent should make
+- **What** the comment should say. A comment is the only thing the agent can write
+  to a bug, so a rule that directs a field change directs something impossible.
 - **What confidence threshold** is needed before acting

@@ -41,7 +41,7 @@ from hackbot_runtime.searchfox import (
     permalink_prefix,
     resolve_index_revision,
 )
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from searchfox import AsyncSearchfoxClient
 
 from .config import (
@@ -50,9 +50,10 @@ from .config import (
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
     TRIAGE_SCOPE,
+    TRIAGE_SEVERITIES,
     ScopedComponent,
 )
-from .hooks import add_comment_hook, update_bug_hook
+from .hooks import add_comment_hook
 
 HERE = Path(__file__).resolve().parent
 
@@ -237,6 +238,35 @@ def parse_confidence(value: object) -> str | None:
     return normalized if normalized in CONFIDENCE_LEVELS else None
 
 
+def parse_severity(value: object) -> str | None:
+    """One of :data:`~.config.TRIAGE_SEVERITIES`, or None if ``value`` isn't one.
+
+    Same contract as :func:`parse_confidence`, for the same reason: the level comes out
+    of the agent's free-form JSON block, and it is the only severity signal reaching a
+    human now that the field is no longer written.
+    """
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().upper()
+    return normalized if normalized in TRIAGE_SEVERITIES else None
+
+
+def parse_severity_assessment(value: object) -> SeverityAssessment | None:
+    """A :class:`SeverityAssessment` with its level and confidence normalized.
+
+    Fields degrade independently: an unreadable level or confidence becomes None, which
+    drops the comment's severity block, rather than discarding the rationale with it.
+    """
+    if not isinstance(value, dict):
+        return None
+    rationale = value.get("rationale")
+    return SeverityAssessment(
+        suggested=parse_severity(value.get("suggested")),
+        confidence=parse_confidence(value.get("confidence")),
+        rationale=rationale if isinstance(rationale, str) else None,
+    )
+
+
 def may_apply_unattended(plan: dict) -> bool:
     """Whether this run's recorded actions may reach the bug without a human.
 
@@ -284,14 +314,6 @@ def parse_plan(text: str | None) -> dict:
         # run's result, and these two only route a notification.
         return value.strip() or None if isinstance(value, str) else None
 
-    def _as_model(model, value):
-        if not isinstance(value, dict):
-            return None
-        try:
-            return model.model_validate(value)
-        except ValidationError:
-            return None
-
     actionable = data.get("actionable")
     if not isinstance(actionable, bool):
         actionable = None
@@ -306,8 +328,8 @@ def parse_plan(text: str | None) -> dict:
         "actionable": actionable,
         "regressor_node": data.get("regressor_node"),
         "relevant_tests": _as_list(data.get("relevant_tests")),
-        "severity_assessment": _as_model(
-            SeverityAssessment, data.get("severity_assessment")
+        "severity_assessment": parse_severity_assessment(
+            data.get("severity_assessment")
         ),
     }
 
@@ -368,9 +390,6 @@ async def run_frontend_triage(
     # rewritten.
     actions_recorder.add_hook(
         "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
-    )
-    actions_recorder.add_hook(
-        "bugzilla.update_bug", update_bug_hook(actions_recorder, bug)
     )
 
     actions_recorder.add_hook(
