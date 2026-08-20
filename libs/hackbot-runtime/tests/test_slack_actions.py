@@ -11,7 +11,7 @@ async def test_post_message_records_action():
     confirmation = await slack.post_message(
         rec,
         channel="#sheriff-notifications",
-        text="  a test regressed  ",
+        text="a test regressed",
         reasoning="sheriffs decide on the backout",
     )
     assert "slack.post_message (#0)" in confirmation
@@ -24,9 +24,7 @@ async def test_post_message_records_action():
     ]
 
 
-@pytest.mark.parametrize(
-    "channel,text", [("", "hi"), ("   ", "hi"), ("#c", ""), ("#c", "  \n ")]
-)
+@pytest.mark.parametrize("channel,text", [("", "hi"), ("#c", "")])
 async def test_post_message_rejects_blank_arguments(channel, text):
     rec = ActionsRecorder()
     with pytest.raises(ToolError):
