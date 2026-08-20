@@ -724,7 +724,7 @@ async def run_autowebcompat_repro(
     if not test_plan_result.is_webcompat:
         result = repro_results.into_result()
         result.summary = "Test was identified as a non web-platform issue"
-        result.failure_reason = "not_platform_related"
+        result.failure_reason = "not_web_platform"
         return result
     elif test_plan_result.affects_platforms == ["ios"]:
         result = repro_results.into_result()
