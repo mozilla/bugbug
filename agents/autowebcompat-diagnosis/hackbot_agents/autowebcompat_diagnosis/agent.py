@@ -436,7 +436,10 @@ script that demonstrates it. Do not investigate why the difference happens.
    on this system), then run the same steps in Chrome with the Chrome DevTools
    MCP.
    - A genuine web-compat issue reproduces in Firefox but not in Chrome. If the
-     behavior is identical in both, set `failure_reason` to `non_compat`.
+     behavior is identical in both, your steps may be wrong; refine the steps
+     and re-check before concluding.
+   - If you confirmed that the reported broken behaviour reproduces in both
+     browsers, set `failure_reason` to `not_firefox_specific`.
    - Reproduce against the actual reported site. If you cannot reach it — it is
      behind a login wall, blocked, gated by a captcha, or down — report
      `reproduced` as false with the appropriate `failure_reason` and stop.
