@@ -7,7 +7,12 @@ from fastapi import FastAPI
 from app import __version__
 from app.config import settings
 from app.database.connection import close_db, init_db
-from app.routers import events_router, runs_router, webhooks_router
+from app.routers import (
+    events_router,
+    runs_router,
+    slack_router,
+    webhooks_router,
+)
 
 if settings.sentry_dsn:
     sentry_sdk.init(
@@ -42,6 +47,7 @@ app = FastAPI(
 app.include_router(runs_router)
 app.include_router(events_router)
 app.include_router(webhooks_router)
+app.include_router(slack_router)
 
 
 @app.get("/health")
