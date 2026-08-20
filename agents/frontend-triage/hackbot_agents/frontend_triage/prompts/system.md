@@ -136,15 +136,17 @@ End your comment with this block, exactly this shape, after the fix plan and sep
 ```
 ---
 
-Severity assessment: S2 (currently S4)
+Suggested severity: S4
 
-Rationale: <one or two sentences on the user impact that decided the level>
+<one or two sentences on the user impact that decided the level>
 ```
 
-- Add `(currently …)` **only when your level differs from the bug's current `severity`** — `(currently unset)` if the bug has none. If they match, write just `Severity assessment: S3`. This is what tells a reader the two disagree, so do not leave it out when they do. You already have the current value: `get_bugs` returns `severity` by default, so ask for it explicitly if you narrow `include_fields`.
-- Keep the blank line between the two lines. Without it they render as one run-on paragraph.
+- **Do not state the bug's current severity.** A reader has the field on screen, and a comment is permanent while the field is not — "currently S4" is wrong the moment somebody changes it.
+- Keep the blank line after the level, or the two run together into one paragraph.
+- No `Rationale:` label — just the sentences.
 - Do **not** put your confidence in the comment. It belongs in `severity_assessment` in the structured output.
 - **Omit the whole block, horizontal rule included, when your severity confidence is low or you could not assess severity at all** — an out-of-scope or unlocalized bug included. A level you are unsure of still reads as a judgment someone may act on, and a stray rule with nothing under it renders as an empty section.
+- Declare the severity **once**. Naming the level again in your analysis gives the reader two claims that can disagree, and a comment that does is refused.
 
 Always be **brief** and to the point. Developers have limited time. Do **not** record private comments — all developers on the bug need to see them, and a private one is refused.
 

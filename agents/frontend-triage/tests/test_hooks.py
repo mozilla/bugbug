@@ -80,7 +80,7 @@ def test_a_refused_comment_does_not_use_up_the_allowance():
 
 def test_a_comment_may_declare_its_severity_only_once():
     plan = "Root cause is a stale selector in content-area.css."
-    block = "\n\n---\n\nSeverity assessment: S4\n\nRationale: cosmetic only."
+    block = "\n\n---\n\nSuggested severity: S4\n\nCosmetic only, no functional impact."
 
     # Absent is deliberate — a run with low severity confidence omits the block.
     severity_block_hook({"params": {"text": plan}})

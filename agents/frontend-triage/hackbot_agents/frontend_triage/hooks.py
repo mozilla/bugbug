@@ -27,7 +27,7 @@ from hackbot_runtime.actions import ActionHook, ActionsRecorder
 # A line the model writes to declare its severity. Anchored to the line start so an
 # ordinary mention -- quoting a reporter, or arguing why something is not S1 -- does
 # not count as a second declaration.
-_SEVERITY_DECLARATION = re.compile(r"^Severity assessment:", re.MULTILINE)
+_SEVERITY_DECLARATION = re.compile(r"^Suggested severity:", re.MULTILINE)
 
 
 def severity_block_hook(action: dict) -> None:
@@ -42,7 +42,7 @@ def severity_block_hook(action: dict) -> None:
     if isinstance(text, str) and len(_SEVERITY_DECLARATION.findall(text)) > 1:
         raise ToolError(
             "your comment declares a severity more than once; keep the single "
-            "`Severity assessment:` block at the end and drop the other"
+            "`Suggested severity:` block at the end and drop the other"
         )
 
 

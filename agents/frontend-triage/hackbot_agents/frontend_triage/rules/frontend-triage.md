@@ -58,10 +58,10 @@ inline Markdown link to its Searchfox permalink (with a line anchor where you
 know the line) per the **Linking source files** section of the system prompt. Do
 not restate the whole bug. Do not claim the fix is verified — you did not run it.
 
-Close with the severity block — a horizontal rule, `Severity assessment: <level>`,
-then `Rationale:` — unless your severity confidence is low or you could not assess
-it, in which case leave the block out entirely. Exact shape and the `(currently …)`
-rule are in **Severity in the comment** in the system prompt.
+Close with the severity block — a horizontal rule, `Suggested severity: <level>`,
+then the reasoning — unless your severity confidence is low or you could not assess
+it, in which case leave the block out entirely. Exact shape is in **Severity in the
+comment** in the system prompt.
 
 ## Confidence
 

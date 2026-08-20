@@ -44,9 +44,9 @@ You cannot set the `severity` field. The comment is a suggestion for a human to 
 - Weigh: is it functional vs cosmetic? Is there a workaround? How frequently and how
   broadly is it hit (mainline path vs rare configuration)?
 - Do **not downgrade** an existing higher severity unless you have strong evidence the
-  impact is lower than currently recorded. The `(currently …)` parenthetical is what
-  asserts the recorded value is wrong, so that bar applies to writing it: when your level
-  is below the bug's, say what evidence puts it lower.
+  impact is lower than currently recorded. Suggesting a level below the bug's asserts
+  the recorded value is wrong, so that bar applies to it: say what evidence puts the
+  impact lower.
 
 ## Confidence
 
