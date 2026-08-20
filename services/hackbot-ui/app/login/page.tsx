@@ -1,49 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 
 import { signIn } from "@/lib/auth-client";
 
-const DEFAULT_PATH = "/";
-// Browsers may strip these characters and change how the URL is parsed.
-const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+type LoginPageProps = {
+  searchParams: Promise<{
+    callbackURL?: string | string[];
+    error?: string | string[];
+  }>;
+};
 
-function safeRedirectPath(raw: string | null): string {
-  if (
-    !raw ||
-    !raw.startsWith("/") ||
-    raw.startsWith("//") ||
-    raw.includes("\\") ||
-    CONTROL_CHARS.test(raw)
-  ) {
-    return DEFAULT_PATH;
-  }
-
-  const path = raw.split(/[?#]/)[0];
-  if (path === "/login" || path.startsWith("/login/")) {
-    return DEFAULT_PATH;
-  }
-
-  return raw;
-}
-
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  const params = use(searchParams);
+  const callbackURL =
+    typeof params.callbackURL === "string" ? params.callbackURL : "/";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onGoogle() {
     setError(null);
     setLoading(true);
-    const params = new URLSearchParams(window.location.search);
-    const next = safeRedirectPath(params.get("next"));
 
     // Keep the target across a denied sign-in so a retry still lands on it.
-    const errorParams = new URLSearchParams({ error: "denied", next });
+    const errorParams = new URLSearchParams({ error: "denied", callbackURL });
 
     try {
       await signIn.social({
         provider: "google",
-        callbackURL: next,
+        callbackURL,
         errorCallbackURL: `/login?${errorParams.toString()}`,
       });
     } catch (err) {
@@ -52,9 +37,7 @@ export default function LoginPage() {
     }
   }
 
-  const denied =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("error");
+  const denied = params.error === "denied";
 
   return (
     <div style={{ maxWidth: 420, margin: "64px auto" }}>
