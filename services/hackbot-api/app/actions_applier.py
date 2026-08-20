@@ -86,6 +86,36 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     return value
 
 
+def _actions_for_run(run: Run) -> list[dict]:
+    """Return the run's recorded actions, plus a needinfo clear when due.
+
+    A Bugzilla ``needinfo?`` run retracts the triggering flag only if the agent
+    recorded a response
+    """
+    recorded = list((run.summary or {}).get("actions", []))
+    inputs = run.inputs if isinstance(run.inputs, dict) else {}
+    flag_id = inputs.get("bugzilla_needinfo_flag_id")
+    bug_id = inputs.get("bug_id")
+
+    if (
+        run.status == RunStatus.succeeded.value
+        and run.agent == "bug-fix"
+        and recorded
+        and flag_id
+        and bug_id
+    ):
+        recorded.append(
+            {
+                "type": "bugzilla.update_bug",
+                "params": {
+                    "bug_id": bug_id,
+                    "changes": {"flags": [{"id": flag_id, "status": "X"}]},
+                },
+            }
+        )
+    return recorded
+
+
 async def ensure_action_rows(
     db: AsyncSession, run: Run
 ) -> list[tuple[RunAction, list[dict]]]:
@@ -95,7 +125,7 @@ async def ensure_action_rows(
     summary.json. Idempotent: existing rows are reused, so this can run on
     every completion and again on each manual apply.
     """
-    actions: list[dict] = (run.summary or {}).get("actions", [])
+    actions = _actions_for_run(run)
 
     result = await db.execute(select(RunAction).where(RunAction.run_id == run.run_id))
     existing = {row.idx: row for row in result.scalars()}

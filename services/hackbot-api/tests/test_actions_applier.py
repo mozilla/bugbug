@@ -10,6 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
+import pytest
 from app import actions_applier
 from app.actions_applier import (
     apply_all_pending,
@@ -75,6 +76,7 @@ class _FakeRun:
     agent: str = "bug-fix"
     run_id: uuid.UUID = field(default_factory=uuid.uuid4)
     summary: dict | None = None
+    inputs: dict | None = field(default_factory=dict)
 
 
 class _FakeDB:
@@ -111,6 +113,62 @@ def _patch_applier(monkeypatch, *, auto: bool | None):
     )
     monkeypatch.setattr(actions_applier, "AGENT_REGISTRY", registry)
     return calls
+
+
+def test_successful_needinfo_run_appends_exact_flag_clear_action():
+    agent_action = {
+        "type": "bugzilla.add_comment",
+        "params": {"bug_id": 5, "text": "done"},
+    }
+    run = _FakeRun(
+        status=RunStatus.succeeded.value,
+        summary={"actions": [agent_action]},
+        inputs={"bug_id": 5, "bugzilla_needinfo_flag_id": 42},
+    )
+
+    assert actions_applier._actions_for_run(run) == [
+        agent_action,
+        {
+            "type": "bugzilla.update_bug",
+            "params": {
+                "bug_id": 5,
+                "changes": {"flags": [{"id": 42, "status": "X"}]},
+            },
+        },
+    ]
+    # The API-owned action must not alter the agent-authored summary.
+    assert run.summary == {"actions": [agent_action]}
+
+
+def test_needinfo_run_without_response_does_not_append_clear_action():
+    run = _FakeRun(
+        status=RunStatus.succeeded.value,
+        summary={"actions": []},
+        inputs={"bug_id": 5, "bugzilla_needinfo_flag_id": 42},
+    )
+    assert actions_applier._actions_for_run(run) == []
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        pytest.param({"bug_id": 5}, id="no-needinfo-key"),
+        pytest.param({"bug_id": 5, "bugzilla_needinfo_flag_id": None}, id="null-flag"),
+        pytest.param(None, id="no-inputs"),
+    ],
+)
+def test_run_without_needinfo_flag_is_left_untouched(inputs):
+    """A plain bug-fix run must pass through unchanged, not error."""
+    agent_action = {
+        "type": "bugzilla.add_comment",
+        "params": {"bug_id": 5, "text": "done"},
+    }
+    run = _FakeRun(
+        status=RunStatus.succeeded.value,
+        summary={"actions": [agent_action]},
+        inputs=inputs,
+    )
+    assert actions_applier._actions_for_run(run) == [agent_action]
 
 
 async def test_non_succeeded_run_records_nothing(monkeypatch):
@@ -250,7 +308,7 @@ async def test_coalesces_update_and_comment_into_one_put(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"status": "RESOLVED"},
-            "comment": {"body": "done", "is_private": False},
+            "comment": {"body": "done", "is_private": False, "is_markdown": True},
         },
     ]
     assert update.status == "applied" and comment.status == "applied"
@@ -292,7 +350,7 @@ async def test_extra_comments_applied_separately(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"status": "RESOLVED"},
-            "comment": {"body": "near", "is_private": False},
+            "comment": {"body": "near", "is_private": False, "is_markdown": True},
         },
         {"bug_id": 5, "text": "far"},
     ]
@@ -407,6 +465,49 @@ async def test_backward_placeholder_resolves_in_coalesced_comment(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"a": 1},
-            "comment": {"body": "see http://x/D1", "is_private": False},
+            "comment": {
+                "body": "see http://x/D1",
+                "is_private": False,
+                "is_markdown": True,
+            },
         },
     ]
+
+
+async def test_comment_and_needinfo_clear_coalesce_into_one_update(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"needinfo_cleared": True}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda _type: handler)
+
+    comment = _row(
+        0,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "done"},
+    )
+    clear = _row(
+        1,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={
+            "bug_id": 5,
+            "changes": {"flags": [{"id": 42, "status": "X"}]},
+        },
+    )
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(comment, []), (clear, [])],
+    )
+
+    # One PUT carrying both the reply and the flag retraction.
+    assert handler.calls == [
+        {
+            "bug_id": 5,
+            "changes": {"flags": [{"id": 42, "status": "X"}]},
+            "comment": {"body": "done", "is_private": False, "is_markdown": True},
+        }
+    ]
+    assert comment.status == "applied"
+    assert clear.status == "applied"

@@ -10,7 +10,7 @@ class AgentInputs(BaseSettings):
     broker_url: str
     revision_id: int | None = None
     comment: str | None = None
-    bugzilla_needinfo: bool = False
+    bugzilla_needinfo_flag_id: int | None = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
@@ -37,10 +37,11 @@ class AgentInputs(BaseSettings):
     @model_validator(mode="after")
     def _validate_mode(self) -> "AgentInputs":
         """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
-        if self.bugzilla_needinfo:
+        if self.bugzilla_needinfo_flag_id is not None:
             if self.revision_id is not None or self.comment is not None:
                 raise ValueError(
-                    "bugzilla_needinfo cannot be combined with revision_id or comment"
+                    "bugzilla_needinfo_flag_id cannot be combined with "
+                    "revision_id or comment"
                 )
         elif self.revision_id is not None and not self.comment:
             raise ValueError(
@@ -72,7 +73,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         bug=inputs.bug_id,
         revision_id=inputs.revision_id,
         comment=inputs.comment,
-        bugzilla_needinfo=inputs.bugzilla_needinfo,
+        bugzilla_needinfo_flag_id=inputs.bugzilla_needinfo_flag_id,
         model=inputs.model,
         max_turns=inputs.max_turns,
         effort=inputs.effort,

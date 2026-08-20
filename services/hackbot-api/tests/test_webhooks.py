@@ -291,13 +291,26 @@ def test_triggering_transaction_phids():
 def _bugzilla_payload(
     *,
     bug_id: int = 2022889,
+    flag_id: int = 2187233,
     added: str = "? (hackbot@mozilla.tld)",
     removed: str = "",
+    requestee: str = BUGZILLA_BOT_LOGIN,
     actor: str = "gmierzwinski@mozilla.com",
     event_time: str = "2026-08-07T18:00:05",
 ) -> dict:
     return {
-        "bug": {"id": bug_id, "is_private": False},
+        "bug": {
+            "id": bug_id,
+            "is_private": False,
+            "flags": [
+                {
+                    "id": flag_id,
+                    "name": "needinfo",
+                    "requestee": {"login": requestee},
+                    "value": "?",
+                }
+            ],
+        },
         "event": {
             "action": "modify",
             "changes": [
@@ -327,22 +340,18 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
     )
     assert detected is not None
     assert detected.bug_id == 2022889
+    assert detected.flag_id == 2187233
     assert detected.dedupe_key
-
-
-def test_detect_bugzilla_needinfo_ignores_malformed_top_level():
-    assert detect_needinfo_request([], bot_login=BUGZILLA_BOT_LOGIN) is None
 
 
 @pytest.mark.parametrize(
     "mutate",
     [
         lambda payload: payload.pop("event"),
-        lambda payload: payload.update(event=[]),
         lambda payload: payload.pop("bug"),
-        lambda payload: payload.update(bug=[]),
         lambda payload: payload["event"].pop("changes"),
-        lambda payload: payload["event"].update(changes={}),
+        lambda payload: payload["bug"].pop("id"),
+        lambda payload: payload["bug"].pop("flags"),
     ],
 )
 def test_detect_bugzilla_needinfo_ignores_malformed_nested_fields(mutate):
@@ -355,6 +364,22 @@ def test_detect_bugzilla_needinfo_does_not_require_routing_key():
     payload = _bugzilla_payload()
     payload["event"]["routing_key"] = "bug.modify:summary,flag.needinfo"
     assert detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN) is not None
+
+
+@pytest.mark.parametrize(
+    "flag_update",
+    [
+        {"id": 0},
+        {"name": "review"},
+        {"value": "+"},
+        {"requestee": {"login": "someone@mozilla.com"}},
+        {"requestee": "hackbot@mozilla.tld"},
+    ],
+)
+def test_detect_bugzilla_needinfo_requires_matching_structured_flag(flag_update):
+    payload = _bugzilla_payload()
+    payload["bug"]["flags"][0].update(flag_update)
+    assert detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN) is None
 
 
 # --- route ---
@@ -546,6 +571,15 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
     assert "PHID-XACT-1" not in webhooks._seen_transactions
 
 
+def test_bugzilla_route_ignores_non_object_payload(client):
+    resp = _post_bugzilla(client, [])
+    assert resp.status_code == 202
+    assert resp.json() == {
+        "status": "ignored",
+        "reason": "payload is not a JSON object",
+    }
+
+
 def test_bugzilla_route_rejects_bad_secret(client):
     response = _post_bugzilla(client, _bugzilla_payload(), secret="wrong")
     assert response.status_code == 401
@@ -574,7 +608,7 @@ def test_bugzilla_route_triggers_run(client):
     assert fake_api.calls == [
         (
             "bug-fix",
-            {"bug_id": 2022889, "bugzilla_needinfo": True},
+            {"bug_id": 2022889, "bugzilla_needinfo_flag_id": 2187233},
         )
     ]
 
@@ -588,7 +622,7 @@ def test_bugzilla_route_dedupes_retry_but_not_later_event(client):
     duplicate = _post_bugzilla(client, payload)
     later = _post_bugzilla(
         client,
-        _bugzilla_payload(event_time="2026-08-07T19:00:05"),
+        _bugzilla_payload(flag_id=2187234, event_time="2026-08-07T19:00:05"),
     )
 
     assert first.json()["status"] == "triggered"

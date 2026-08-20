@@ -47,7 +47,7 @@ def test_bugzilla_needinfo_rejects_phabricator_context():
             broker_url="http://broker",
             revision_id=42,
             comment="@hackbot please fix",
-            bugzilla_needinfo=True,
+            bugzilla_needinfo_flag_id=123,
         )
 
 

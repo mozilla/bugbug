@@ -144,6 +144,9 @@ async def bugzilla_webhook(
 ) -> dict:
     """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
     payload = await request.json()
+    if not isinstance(payload, dict):
+        return {"status": "ignored", "reason": "payload is not a JSON object"}
+
     detected = detect_needinfo_request(
         payload,
         bot_login=settings.bugzilla_webhook.bot_login,
@@ -157,7 +160,7 @@ async def bugzilla_webhook(
         "bug-fix",
         {
             "bug_id": detected.bug_id,
-            "bugzilla_needinfo": True,
+            "bugzilla_needinfo_flag_id": detected.flag_id,
         },
     )
     # Do not consume an event until run creation succeeds; a transient failure

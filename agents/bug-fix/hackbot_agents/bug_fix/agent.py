@@ -61,11 +61,11 @@ def select_workflow(
     bug: int,
     revision_id: int | None,
     comment: str | None,
-    bugzilla_needinfo: bool,
+    bugzilla_needinfo_flag_id: int | None,
     rules_dir: Path,
 ) -> tuple[list[str], str]:
     """Select actions and prompt for exactly one of the three bug-fix modes."""
-    if bugzilla_needinfo:
+    if bugzilla_needinfo_flag_id is not None:
         return BUGZILLA_NEEDINFO_ACTIONS, render_prompt(
             "bugzilla-needinfo.md", bug_id=bug
         )
@@ -114,7 +114,7 @@ async def run_bug_fix(
     bug: int,
     comment: str | None = None,
     revision_id: int | None = None,
-    bugzilla_needinfo: bool = False,
+    bugzilla_needinfo_flag_id: int | None = None,
     rules_dir: Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
@@ -142,7 +142,7 @@ async def run_bug_fix(
         bug=bug,
         revision_id=revision_id,
         comment=comment,
-        bugzilla_needinfo=bugzilla_needinfo,
+        bugzilla_needinfo_flag_id=bugzilla_needinfo_flag_id,
         rules_dir=rules_dir,
     )
 

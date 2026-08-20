@@ -83,9 +83,9 @@ class BugFixInputs(BaseModel):
     # Both are omitted for a plain "fix this bug" run and for Bugzilla needinfo.
     revision_id: int | None = None
     comment: str | None = None
-    # Set only by a Bugzilla flag.needinfo webhook. It selects the dedicated
-    # follow-up mode, whose first step is fetching the bug and its comments.
-    bugzilla_needinfo: bool | None = None
+    # Set only by a Bugzilla flag.needinfo webhook. Its presence selects the
+    # follow-up mode and lets the API clear that exact flag after the response.
+    bugzilla_needinfo_flag_id: int | None = Field(default=None, gt=0)
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
@@ -93,10 +93,11 @@ class BugFixInputs(BaseModel):
     @model_validator(mode="after")
     def _validate_mode(self) -> "BugFixInputs":
         """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
-        if self.bugzilla_needinfo:
+        if self.bugzilla_needinfo_flag_id is not None:
             if self.revision_id is not None or self.comment is not None:
                 raise ValueError(
-                    "bugzilla_needinfo cannot be combined with revision_id or comment"
+                    "bugzilla_needinfo_flag_id cannot be combined with "
+                    "revision_id or comment"
                 )
         elif self.revision_id is not None:
             if not self.comment:

@@ -30,6 +30,26 @@ def test_model_to_env_skips_none_fields():
     assert "EFFORT" not in env
 
 
+def test_bugzilla_needinfo_flag_id_selects_follow_up_mode():
+    inputs = BugFixInputs(bug_id=1, bugzilla_needinfo_flag_id=2187233)
+    assert model_to_env(inputs)["BUGZILLA_NEEDINFO_FLAG_ID"] == "2187233"
+
+
+def test_bugzilla_needinfo_rejects_phabricator_context():
+    with pytest.raises(ValidationError, match="cannot be combined"):
+        BugFixInputs(
+            bug_id=1,
+            revision_id=42,
+            comment="@hackbot please fix",
+            bugzilla_needinfo_flag_id=2187233,
+        )
+
+
+def test_bugzilla_needinfo_flag_id_must_be_positive():
+    with pytest.raises(ValidationError, match="greater than 0"):
+        BugFixInputs(bug_id=1, bugzilla_needinfo_flag_id=0)
+
+
 def test_model_to_env_does_not_emit_deploy_constants():
     # The broker loopback URL is static Job config, not a per-run input.
     env = model_to_env(BugFixInputs(bug_id=1, model="x", max_turns=2, effort="high"))
