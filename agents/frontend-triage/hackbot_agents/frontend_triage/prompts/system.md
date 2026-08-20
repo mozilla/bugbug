@@ -137,13 +137,12 @@ End your comment with this block, exactly this shape, after the fix plan and sep
 ---
 
 Suggested severity: S4
-
 <one or two sentences on the user impact that decided the level>
 ```
 
 - **Do not state the bug's current severity.** A reader has the field on screen, and a comment is permanent while the field is not — "currently S4" is wrong the moment somebody changes it.
-- Keep the blank line after the level, or the two run together into one paragraph.
-- No `Rationale:` label — just the sentences.
+- The reasoning goes on the line directly below the level, with no blank line and no `Rationale:` label.
+- Keep the blank line _before_ the `---`. Without it the line above becomes a heading.
 - Do **not** put your confidence in the comment. It belongs in `severity_assessment` in the structured output.
 - **Omit the whole block, horizontal rule included, when your severity confidence is low or you could not assess severity at all** — an out-of-scope or unlocalized bug included. A level you are unsure of still reads as a judgment someone may act on, and a stray rule with nothing under it renders as an empty section.
 - Declare the severity **once**. Naming the level again in your analysis gives the reader two claims that can disagree, and a comment that does is refused.
