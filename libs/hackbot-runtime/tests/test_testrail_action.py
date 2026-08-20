@@ -95,7 +95,7 @@ async def test_submit_test_plan_tool_rejects_non_sequential_case_ids():
             generated_test_cases=cases,
         )
 
-    assert "invalid TestRail submission" in str(exc.value)
+    assert "test case ids must be sequential starting at 1" in str(exc.value)
     assert recorder.actions == []
 
 
