@@ -24,14 +24,20 @@ ACTION_TYPE = "slack.post_message"
 HACKBOT_UI_URL = "https://hackbot.moz.tools"
 
 
-def _params(channel: str, text: str) -> dict[str, str]:
-    channel = channel.strip()
-    text = text.strip()
+def _params(
+    channel: str, text: str | None, blocks: list[dict] | None = None
+) -> dict[str, str | list[dict]]:
     if not channel:
         raise ToolError("channel must not be blank")
-    if not text:
-        raise ToolError("text must not be blank")
-    return {"channel": channel, "text": text}
+    if not text and not blocks:
+        raise ToolError("either 'text' or 'blocks' must be provided")
+
+    params: dict[str, str | list[dict]] = {"channel": channel, "text": text}
+
+    if blocks:
+        params["blocks"] = blocks
+
+    return params
 
 
 @tool
@@ -72,6 +78,7 @@ def record_message(
     recorder: ActionsRecorder,
     channel: str,
     text: str,
+    blocks: list[dict] | None = None,
     *,
     ref: str | None = None,
 ) -> dict:
@@ -80,7 +87,7 @@ def record_message(
     For a run whose outcome is always worth reporting: the wording is code, not
     a model turn, and the message is recorded once the result exists.
     """
-    return recorder.record(ACTION_TYPE, _params(channel, text), ref=ref)
+    return recorder.record(ACTION_TYPE, _params(channel, text, blocks), ref=ref)
 
 
 TOOLS = tools_in(__name__)
