@@ -89,6 +89,7 @@ class ReproductionResult(BaseModel):
         | Literal["blocked_geo"]
         | Literal["login"]
         | Literal["down"]
+        | Literal["headless"]
         | Literal["other"]
         | None
     ) = Field(
@@ -107,6 +108,7 @@ class ReproductionResult(BaseModel):
           * blocked - When access to the site was blocked for some reason that couldn't be identified as a captcha or geoblocking
           * login - When reproducing the issue requires completing a login flow
           * down - When the site down or unavailable in a way that is unrelated to the issue report
+          * headless - When there is an evidence that the issue isn't reproducible due to the headless environment
           * other - When the issue could not be reproduced for some other reason (briefly state the reason in the summary)
 """
     )
