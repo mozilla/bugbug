@@ -95,7 +95,7 @@ class ReproductionResult(BaseModel):
         description="""If an issue was reproduced as a Firefox web-compat issue then `null`.
         Otherwise, one of the following categories describing the reason for the failure:
           * not_reproducible - When it was possible to run all the steps to reproduce, but no issue was found
-          * not_platform_related - When the issue is not related to the the web content itself. This covers reports that don't refer
+          * not_web_platform - When the issue is not related to the the web content itself. This covers reports that don't refer
           to site breakage (e.g. issues with the Firefox UI or product features such as reader mode)
           * not_firefox_specific - When report behavior reproduces in both Firefox and Chrome
           * unsupported_android - When the report is specific to Android and you're unable to reproduce despite best efforts
