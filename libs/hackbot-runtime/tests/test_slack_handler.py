@@ -52,6 +52,7 @@ async def test_posts_recorded_message_and_returns_the_timestamp(monkeypatch):
         {
             "channel": "#sheriff-notifications",
             "text": "a test regressed",
+            "blocks": None,
             "metadata": {
                 "event_type": "notification",
                 "source": {
