@@ -168,39 +168,30 @@ async def receive_settled_response(
 ) -> ResultMessage:
     """Drive ``client`` to a *settled* :class:`ResultMessage`.
 
-    ``client.receive_response()`` stops at the first ``ResultMessage`` it
-    sees, but the CLI can emit one while a task the agent started with
-    ``run_in_background`` (a background ``Bash`` command or subagent) is
-    still running, reporting the turn "done" even though the agent meant to
-    act on that task's result before finishing.
-    See https://github.com/anthropics/claude-agent-sdk-python/issues/1138
-
-    Per the SDK's own task-lifecycle contract, a still-running task's
-    completion resumes the conversation with a further turn on the same
-    connection — the fix is to keep listening, not to intervene. This drains
-    ``client.receive_messages()`` (which, unlike ``receive_response()``, does
-    not stop at a ``ResultMessage``) and only returns once a ``ResultMessage``
-    arrives with no *deferring* task started during this call still
-    unresolved — only ``local_agent``/``local_workflow`` tasks count (see
-    ``_DEFERRING_TASK_TYPES``); backgrounded shells and Monitor watches can
-    run forever by design and are not waited on. A task's terminal state can
-    arrive as either a ``TaskNotificationMessage`` or a ``TaskUpdatedMessage``
-    (never both, for some task types), so both clear it from the pending set.
+    ``client.receive_response()`` stops at the first ``ResultMessage``, but
+    the CLI can emit one while a task the agent backgrounded is still
+    running, reporting the turn "done" prematurely (see
+    anthropics/claude-agent-sdk-python#1138). This drains
+    ``client.receive_messages()`` instead (it doesn't stop at a
+    ``ResultMessage``) and only returns once one arrives with no *deferring*
+    task (``local_agent``/``local_workflow``, see ``_DEFERRING_TASK_TYPES``)
+    still open — backgrounded shells and Monitor watches run forever by
+    design and are never waited on. A task's terminal state can arrive as
+    either a ``TaskNotificationMessage`` or a ``TaskUpdatedMessage``, so both
+    clear it.
 
     Args:
         client: A connected client with a query already sent.
-        on_message: Called with every message as it streams in (e.g. to log
-            it), before this function's own bookkeeping. Optional.
-        timeout_s: Bounds the whole wait, so a task that never reports
-            completion surfaces as an ``UnsettledResponseError`` instead of
-            hanging the run indefinitely. Defaults to an hour to comfortably
-            cover a full Firefox build; pass a larger value for agents that
-            background longer-running work.
+        on_message: Called with each message as it streams in, before this
+            function's own bookkeeping. Optional.
+        timeout_s: Bounds the wait so a task that never settles raises
+            ``UnsettledResponseError`` instead of hanging. Defaults to an
+            hour (a full Firefox build); pass a larger value for
+            longer-running work.
 
     Raises:
-        UnsettledResponseError: ``timeout_s`` elapsed before the response
-            settled, or the connection ended before any ``ResultMessage`` was
-            seen at all.
+        UnsettledResponseError: timed out, or the connection ended before
+            any ``ResultMessage`` arrived.
     """
     pending: dict[str, str] = {}
     result_msg: ResultMessage | None = None
