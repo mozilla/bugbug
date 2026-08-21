@@ -32,9 +32,11 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from bugbug import bugzilla, get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
+    PERF_REGRESSION_LOG_PREFIX,
     classify_broken_site_report,
     classify_bug,
     classify_issue,
+    classify_perf_regression,
     get_config_specific_groups,
     schedule_tests,
     schedule_tests_from_patch,
@@ -108,6 +110,15 @@ class BugPrediction(Schema):
     extra_data = fields.Dict()
 
 
+class PerformanceRegressionPrediction(Schema):
+    revision_id = fields.Integer()
+    diff_id = fields.Integer()
+    prob = fields.List(fields.Float())
+    predicted_class = fields.Integer(data_key="class")
+    risk_score = fields.Float()
+    extra_data = fields.Dict()
+
+
 class NotAvailableYet(Schema):
     ready = fields.Boolean(metadata={"enum": [False]})
 
@@ -130,6 +141,10 @@ class Schedules(Schema):
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
+spec.components.schema(
+    PerformanceRegressionPrediction.__name__,
+    schema=PerformanceRegressionPrediction,
+)
 spec.components.schema(NotAvailableYet.__name__, schema=NotAvailableYet)
 spec.components.schema(ModelName.__name__, schema=ModelName)
 spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
@@ -518,6 +533,77 @@ def model_prediction(model_name, bug_id):
             schedule_job(job_info, job_id=job_id, timeout=timeout)
         status_code = 202
         data = {"ready": False}
+
+    return compress_response(data, status_code)
+
+
+@application.route("/perfregressionpredictor/predict/phabricator/<int:diff_id>")
+@cross_origin()
+def perf_regression_prediction(diff_id: int):
+    """
+    ---
+    get:
+      description: Predict performance-regression risk for a public Phabricator diff
+      summary: Predict performance-regression risk
+      parameters:
+      - name: diff_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          example: 789012
+      responses:
+        200:
+          description: A performance-regression risk prediction
+          content:
+            application/json:
+              schema: PerformanceRegressionPrediction
+        202:
+          description: The prediction is being processed
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    LOGGER.info(
+        "%s Received prediction request for diff_id=%d",
+        PERF_REGRESSION_LOG_PREFIX,
+        diff_id,
+    )
+
+    job = JobInfo(classify_perf_regression, diff_id)
+    data = get_result(job)
+    status_code = 200
+
+    if not data:
+        if not is_pending(job):
+            LOGGER.info(
+                "%s Queueing prediction job for diff_id=%d",
+                PERF_REGRESSION_LOG_PREFIX,
+                diff_id,
+            )
+            schedule_job(job)
+        else:
+            LOGGER.info(
+                "%s Prediction job is pending for diff_id=%d",
+                PERF_REGRESSION_LOG_PREFIX,
+                diff_id,
+            )
+        status_code = 202
+        data = {"ready": False}
+    else:
+        LOGGER.info(
+            "%s Returning cached prediction for diff_id=%d",
+            PERF_REGRESSION_LOG_PREFIX,
+            diff_id,
+        )
 
     return compress_response(data, status_code)
 

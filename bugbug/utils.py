@@ -303,6 +303,25 @@ def download_model(model_name: str) -> str:
     return path
 
 
+def download_model_from_url(model_name: str, url: str) -> str:
+    """Download a model from a URL instead of the Taskcluster index.
+
+    Like download_model(), this unpacks to a `{model_name}model` directory.
+    """
+    path = f"{model_name}model"
+    archive = f"{path}.tar.zst"
+
+    logger.info("Downloading %s...", url)
+    # Save it under our own name; the URL can end in anything.
+    updated = download_check_etag(url, archive)
+    if updated:
+        extract_tar_zst(archive)
+        os.remove(archive)
+
+    assert os.path.exists(path), "Decompressed directory exists"
+    return path
+
+
 def zstd_compress(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)

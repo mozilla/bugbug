@@ -71,6 +71,10 @@ nlp = [
     "spacy==3.8.15",
 ]
 nn = []
+perf-regression-predictor = [
+    "torch==2.13.0",
+    "transformers==5.15.0",
+]
 
 [dependency-groups]
 test = [
@@ -116,6 +120,7 @@ bugbug-fixed-comments = "scripts.inline_comments_data_collection:main"
 bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
 bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
 bugbug-validate-review-context = "bugbug.tools.code_review.review_context_schema:main"
+bugbug-predict-perf-regression = "scripts.perf_regression_predictor:main"
 
 [tool.hatch.version]
 path = "VERSION"
@@ -139,6 +144,14 @@ exclude = [
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 extend-exclude = ["data"]
