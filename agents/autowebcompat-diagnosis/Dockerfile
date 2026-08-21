@@ -47,6 +47,8 @@ RUN apt-get update \
         libcups2t64 libdbus-1-3 libgbm1 libxcomposite1 libxdamage1 libxfixes3 \
         libxrandr2 libxkbcommon0 libasound2t64 libpango-1.0-0 libcairo2 \
         fonts-liberation \
+        # Codecs and audio/video related dependencies
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the DevTools MCP servers and Puppeteer from the pinned

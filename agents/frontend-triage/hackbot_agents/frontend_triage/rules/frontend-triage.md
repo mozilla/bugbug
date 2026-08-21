@@ -7,6 +7,15 @@ the area whose code layout **Source repository** describes. Any user-facing Fire
 defect is in scope, though, whether or not its component is on that list; see
 `scoping.md`.
 
+Typical components:
+
+- Desktop frontend, all under `Firefox`: `Tabbed Browser`,
+  `Tabbed Browser: Split View`, `New Tab Page`, `Address Bar`, `Menus`,
+  `Toolbars and Customization`, `Sidebar`, `Theme`.
+- Android: `Firefox for Android :: History`.
+- Install and update: `Firefox :: Installer`, `Toolkit :: Application Update`.
+- Messaging System: `Firefox :: Messaging System`.
+
 Desktop and Android bugs here are usually UI/UX papercuts, documented with a
 **video or screenshot** and steps to reproduce.
 
@@ -34,9 +43,12 @@ Core, DevTools-internals, or build-system bug — and say which area it looks li
    `devtools/` (JS/JSM, CSS, XUL/HTML); Android under `mobile/android/` (Kotlin,
    Fragment/Store/Middleware/View); the updater under `toolkit/mozapps/update/`
    (`.sys.mjs`, IDL, C++); the installer under `browser/installer/windows/nsis/`
-   (NSIS `.nsi`/`.nsh`). Find the module, the markup or layout, and any relevant pref
-   (often `modules/libpref/init/all.js`, or `app.update.*` for the updater) that
-   governs the behaviour. Use the `investigator` subagent for deep searches.
+   (NSIS `.nsi`/`.nsh`); the Messaging System under `browser/components/asrouter/`,
+   `browser/components/aboutwelcome/`, `toolkit/components/messaging-system/`
+   (JS/JSM, CSS, XUL/HTML, JSON, JSON Schema). Find the module, the markup or layout,
+   and any relevant pref (often `modules/libpref/init/all.js`, or `app.update.*`
+   for the updater) that governs the behaviour. Use the `investigator` subagent for
+   deep searches.
 2. **Confirm the area is still live.** Check the referenced code/strings still
    exist and aren't already changed by a recent commit. If the bug looks already
    fixed (e.g. cannot reproduce on a newer version per comments, or the code path

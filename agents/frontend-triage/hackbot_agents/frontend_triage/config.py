@@ -96,6 +96,7 @@ TRIAGE_SCOPE = (
         "IP Protection",
         "#team-eng-ip-protection-triage",
     ),
+    ScopedComponent("Firefox", "Messaging System", "Messaging System", "#omc-triage"),
     ScopedComponent(
         "Firefox for Android", "History", "Firefox for Android", "#android-core-dev"
     ),

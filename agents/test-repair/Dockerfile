@@ -41,6 +41,8 @@ RUN apt-get update \
         libcairo2 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 \
         libatspi2.0-0t64 \
         zip unzip bzip2 \
+        # Codecs and audio/video related dependencies
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
