@@ -79,13 +79,32 @@ class RunDoc(BaseModel):
 class BugFixInputs(BaseModel):
     bug_id: int
     # When following up on an existing Phabricator revision (e.g. triggered by a
-    # webhook), the revision to update and the comment that mentioned Hackbot, to
-    # act on. Both optional: omitted for a plain "fix this bug" run.
+    # webhook), the revision to update and the comment that mentioned Hackbot.
+    # Both are omitted for a plain "fix this bug" run and for Bugzilla needinfo.
     revision_id: int | None = None
     comment: str | None = None
+    # Set only by a Bugzilla flag.needinfo webhook. Its presence selects the
+    # follow-up mode and lets the API clear that exact flag after the response.
+    bugzilla_needinfo_flag_id: int | None = Field(default=None, gt=0)
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_mode(self) -> "BugFixInputs":
+        """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
+        if self.bugzilla_needinfo_flag_id is not None:
+            if self.revision_id is not None or self.comment is not None:
+                raise ValueError(
+                    "bugzilla_needinfo_flag_id cannot be combined with "
+                    "revision_id or comment"
+                )
+        elif self.revision_id is not None:
+            if not self.comment:
+                raise ValueError("comment is required when revision_id is set")
+        elif self.comment is not None:
+            raise ValueError("comment requires revision_id")
+        return self
 
 
 class AutowebcompatReproInputs(BaseModel):

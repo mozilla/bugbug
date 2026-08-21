@@ -27,6 +27,7 @@ from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_to
 from hackbot_runtime.claude import Reporter
 
 from .config import (
+    BUGZILLA_NEEDINFO_ACTIONS,
     BUGZILLA_READ_TOOLS,
     FIREFOX_TOOLS,
     PHABRICATOR_FOLLOW_UP_ACTIONS,
@@ -53,6 +54,45 @@ def render_prompt(name: str, **fields: object) -> str:
     break out of its ``{comment}`` placeholder.
     """
     return (PROMPTS / name).read_text().format(**fields)
+
+
+def select_workflow(
+    *,
+    bug: int,
+    revision_id: int | None,
+    comment: str | None,
+    bugzilla_needinfo_flag_id: int | None,
+    rules_dir: Path,
+) -> tuple[list[str], str]:
+    """Select actions and prompt for exactly one of the three bug-fix modes."""
+    if bugzilla_needinfo_flag_id is not None:
+        return BUGZILLA_NEEDINFO_ACTIONS, render_prompt(
+            "bugzilla-needinfo.md", bug_id=bug
+        )
+    if revision_id:
+        return PHABRICATOR_FOLLOW_UP_ACTIONS, render_prompt(
+            "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
+        )
+    return TRIAGE_AND_FIX_ACTIONS, render_prompt(
+        "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
+    )
+
+
+def _record_needinfo_clear(
+    recorder: ActionsRecorder, *, bug_id: int, flag_id: int | None
+) -> None:
+    """Record the clear after responding to a Bugzilla needinfo webhook."""
+    if flag_id is None or not recorder.actions:
+        return
+
+    recorder.record(
+        "bugzilla.update_bug",
+        {
+            "bug_id": bug_id,
+            "changes": {"flags": [{"id": flag_id, "status": "X"}]},
+        },
+        reasoning="Clear the needinfo flag that triggered this response.",
+    )
 
 
 def make_investigator() -> AgentDefinition:
@@ -91,6 +131,7 @@ async def run_bug_fix(
     bug: int,
     comment: str | None = None,
     revision_id: int | None = None,
+    bugzilla_needinfo_flag_id: int | None = None,
     rules_dir: Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
@@ -114,16 +155,13 @@ async def run_bug_fix(
     # hackbot.toml; here we only wrap its tools as an MCP server.
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
-    if revision_id:
-        action_types = PHABRICATOR_FOLLOW_UP_ACTIONS
-        user_prompt = render_prompt(
-            "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
-        )
-    else:
-        action_types = TRIAGE_AND_FIX_ACTIONS
-        user_prompt = render_prompt(
-            "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
-        )
+    action_types, user_prompt = select_workflow(
+        bug=bug,
+        revision_id=revision_id,
+        comment=comment,
+        bugzilla_needinfo_flag_id=bugzilla_needinfo_flag_id,
+        rules_dir=rules_dir,
+    )
 
     # Action-recording MCP server (in-process). Standalone/script runs pass
     # actions_recorder=None and get a local recorder that copies attachments
@@ -181,6 +219,12 @@ async def run_bug_fix(
         raise AgentError(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
         )
+
+    _record_needinfo_clear(
+        actions_recorder,
+        bug_id=bug,
+        flag_id=bugzilla_needinfo_flag_id,
+    )
 
     return BugFixResult(
         bug_id=bug,
