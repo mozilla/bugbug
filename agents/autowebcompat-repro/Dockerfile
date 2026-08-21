@@ -34,6 +34,7 @@ FROM base AS agent
 # for Testing via the Chrome-for-Testing JSON API (see browser.py).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        sudo \
         # Node.js, to run the Firefox and Chrome DevTools MCP servers.
         nodejs npm \
         # Shared by both browsers.
@@ -47,6 +48,9 @@ RUN apt-get update \
         fonts-liberation \
         # Codecs and audio/video related dependencies
         ffmpeg \
+        # Window manager and display backend
+        fluxbox \
+        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the DevTools MCP servers and Puppeteer from the pinned
@@ -63,7 +67,14 @@ COPY agents/autowebcompat-repro/hackbot.toml /app/hackbot.toml
 
 RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
-    && chown agent:agent /workspace /app/repro
+    && chown agent:agent /workspace /app/repro \
+    && usermod -a -G sudo agent \
+    && echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+ENV SCREEN_WIDTH=1280
+ENV SCREEN_HEIGHT=1024
+ENV SCREEN_DEPTH=24
+ENV DISPLAY=:99.0
 
 USER agent
 
