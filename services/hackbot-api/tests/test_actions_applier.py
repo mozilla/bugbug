@@ -10,7 +10,6 @@ import uuid
 from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 
-import pytest
 from app import actions_applier
 from app.actions_applier import (
     apply_all_pending,
@@ -215,62 +214,6 @@ def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
     registry = {} if auto is None else {"bug-fix": _spec(auto=auto, consent=consent)}
     monkeypatch.setattr(actions_applier, "AGENT_REGISTRY", registry)
     return calls
-
-
-def test_successful_needinfo_run_appends_exact_flag_clear_action():
-    agent_action = {
-        "type": "bugzilla.add_comment",
-        "params": {"bug_id": 5, "text": "done"},
-    }
-    run = _FakeRun(
-        status=RunStatus.succeeded.value,
-        summary={"actions": [agent_action]},
-        inputs={"bug_id": 5, "bugzilla_needinfo_flag_id": 42},
-    )
-
-    assert actions_applier._actions_for_run(run) == [
-        agent_action,
-        {
-            "type": "bugzilla.update_bug",
-            "params": {
-                "bug_id": 5,
-                "changes": {"flags": [{"id": 42, "status": "X"}]},
-            },
-        },
-    ]
-    # The API-owned action must not alter the agent-authored summary.
-    assert run.summary == {"actions": [agent_action]}
-
-
-def test_needinfo_run_without_response_does_not_append_clear_action():
-    run = _FakeRun(
-        status=RunStatus.succeeded.value,
-        summary={"actions": []},
-        inputs={"bug_id": 5, "bugzilla_needinfo_flag_id": 42},
-    )
-    assert actions_applier._actions_for_run(run) == []
-
-
-@pytest.mark.parametrize(
-    "inputs",
-    [
-        pytest.param({"bug_id": 5}, id="no-needinfo-key"),
-        pytest.param({"bug_id": 5, "bugzilla_needinfo_flag_id": None}, id="null-flag"),
-        pytest.param(None, id="no-inputs"),
-    ],
-)
-def test_run_without_needinfo_flag_is_left_untouched(inputs):
-    """A plain bug-fix run must pass through unchanged, not error."""
-    agent_action = {
-        "type": "bugzilla.add_comment",
-        "params": {"bug_id": 5, "text": "done"},
-    }
-    run = _FakeRun(
-        status=RunStatus.succeeded.value,
-        summary={"actions": [agent_action]},
-        inputs=inputs,
-    )
-    assert actions_applier._actions_for_run(run) == [agent_action]
 
 
 async def test_non_succeeded_run_records_nothing(monkeypatch):

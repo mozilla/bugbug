@@ -78,6 +78,23 @@ def select_workflow(
     )
 
 
+def _record_needinfo_clear(
+    recorder: ActionsRecorder, *, bug_id: int, flag_id: int | None
+) -> None:
+    """Record the clear after responding to a Bugzilla needinfo webhook."""
+    if flag_id is None or not recorder.actions:
+        return
+
+    recorder.record(
+        "bugzilla.update_bug",
+        {
+            "bug_id": bug_id,
+            "changes": {"flags": [{"id": flag_id, "status": "X"}]},
+        },
+        reasoning="Clear the needinfo flag that triggered this response.",
+    )
+
+
 def make_investigator() -> AgentDefinition:
     """Create a single generic investigator subagent definition."""
     return AgentDefinition(
@@ -202,6 +219,12 @@ async def run_bug_fix(
         raise AgentError(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
         )
+
+    _record_needinfo_clear(
+        actions_recorder,
+        bug_id=bug,
+        flag_id=bugzilla_needinfo_flag_id,
+    )
 
     return BugFixResult(
         bug_id=bug,
