@@ -34,7 +34,23 @@ from claude_agent_sdk import (
 
 
 class UnsettledResponseError(RuntimeError):
-    """Used for when ``receive_settled_response`` gave up before the agent's turn settled."""
+    """``receive_settled_response`` gave up before the agent's turn settled.
+
+    ``pending`` is the ``task_id -> description`` map of deferring tasks
+    still open when this was raised (empty if none were ever pending — the
+    connection just ended with no result at all). Stored as an attribute
+    for callers that want to inspect it programmatically, e.g. to name the
+    stuck task(s) rather than just log the message.
+    """
+
+    def __init__(self, reason: str, pending: dict[str, str]):
+        self.reason = reason
+        self.pending = pending
+
+    def __str__(self) -> str:
+        if not self.pending:
+            return self.reason
+        return f"{self.reason} ({len(self.pending)} task(s) still pending)"
 
 
 # Task types whose completion the CLI itself resumes the turn for — mirrors
@@ -189,9 +205,6 @@ async def receive_settled_response(
     pending: dict[str, str] = {}
     result_msg: ResultMessage | None = None
 
-    def _pending_suffix() -> str:
-        return f" ({len(pending)} task(s) still pending)" if pending else ""
-
     try:
         async with asyncio.timeout(timeout_s):
             async for msg in client.receive_messages():
@@ -210,10 +223,10 @@ async def receive_settled_response(
                         return result_msg
     except TimeoutError as exc:
         raise UnsettledResponseError(
-            f"timed out after {timeout_s:.0f}s waiting for the response to "
-            f"settle{_pending_suffix()}"
+            f"timed out after {timeout_s:.0f}s waiting for the response to settle",
+            pending,
         ) from exc
 
     raise UnsettledResponseError(
-        f"connection ended before a settled ResultMessage arrived{_pending_suffix()}"
+        "connection ended before a settled ResultMessage arrived", pending
     )
