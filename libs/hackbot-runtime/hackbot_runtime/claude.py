@@ -10,19 +10,31 @@ Requires the ``claude-sdk`` optional extra of hackbot-runtime.
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from claude_agent_sdk import (
+    TERMINAL_TASK_STATUSES,
     AssistantMessage,
+    ClaudeSDKClient,
+    Message,
     ResultMessage,
     SystemMessage,
+    TaskNotificationMessage,
+    TaskStartedMessage,
+    TaskUpdatedMessage,
     TextBlock,
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
 )
+
+
+class UnsettledResponseError(RuntimeError):
+    """Used for when ``receive_settled_response`` gave up before the agent's turn settled."""
 
 
 def _truncate(s: str, n: int = 500) -> str:
@@ -123,3 +135,75 @@ class Reporter:
             self._emit(line, always=True)
             if msg.is_error:
                 self._emit(f"[done] ERROR: {msg.result}", always=True)
+
+
+async def receive_settled_response(
+    client: ClaudeSDKClient,
+    on_message: Callable[["Message"], None] | None = None,
+    *,
+    timeout_s: float = 3600,
+) -> ResultMessage:
+    """Drive ``client`` to a *settled* :class:`ResultMessage`.
+
+    ``client.receive_response()`` stops at the first ``ResultMessage`` it
+    sees, but the CLI can emit one while a task the agent started with
+    ``run_in_background`` (a background ``Bash`` command or subagent) is
+    still running, reporting the turn "done" even though the agent meant to
+    act on that task's result before finishing.
+    See https://github.com/anthropics/claude-agent-sdk-python/issues/1138
+
+    Per the SDK's own task-lifecycle contract, a still-running task's
+    completion resumes the conversation with a further turn on the same
+    connection — the fix is to keep listening, not to intervene. This drains
+    ``client.receive_messages()`` (which, unlike ``receive_response()``, does
+    not stop at a ``ResultMessage``) and only returns once a ``ResultMessage``
+    arrives with no task started during this call still unresolved. A task's
+    terminal state can arrive as either a ``TaskNotificationMessage`` or a
+    ``TaskUpdatedMessage`` (never both, for some task types), so both clear it
+    from the pending set.
+
+    Args:
+        client: A connected client with a query already sent.
+        on_message: Called with every message as it streams in (e.g. to log
+            it), before this function's own bookkeeping. Optional.
+        timeout_s: Bounds the whole wait, so a task that never reports
+            completion surfaces as an ``UnsettledResponseError`` instead of
+            hanging the run indefinitely. Defaults to an hour to comfortably
+            cover a full Firefox build; pass a larger value for agents that
+            background longer-running work.
+
+    Raises:
+        UnsettledResponseError: ``timeout_s`` elapsed before the response
+            settled, or the connection ended before any ``ResultMessage`` was
+            seen at all.
+    """
+    pending: dict[str, str] = {}
+    result_msg: ResultMessage | None = None
+
+    def _pending_suffix() -> str:
+        return f" ({len(pending)} task(s) still pending)" if pending else ""
+
+    try:
+        async with asyncio.timeout(timeout_s):
+            async for msg in client.receive_messages():
+                if on_message is not None:
+                    on_message(msg)
+
+                if isinstance(msg, TaskStartedMessage):
+                    pending[msg.task_id] = msg.description
+                elif isinstance(msg, (TaskNotificationMessage, TaskUpdatedMessage)):
+                    if msg.status in TERMINAL_TASK_STATUSES:
+                        pending.pop(msg.task_id, None)
+                elif isinstance(msg, ResultMessage):
+                    result_msg = msg
+                    if not pending:
+                        return result_msg
+    except TimeoutError as exc:
+        raise UnsettledResponseError(
+            f"timed out after {timeout_s:.0f}s waiting for the response to "
+            f"settle{_pending_suffix()}"
+        ) from exc
+
+    raise UnsettledResponseError(
+        f"connection ended before a settled ResultMessage arrived{_pending_suffix()}"
+    )
