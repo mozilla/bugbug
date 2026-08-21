@@ -64,7 +64,11 @@ Core, DevTools-internals, or build-system bug — and say which area it looks li
 
 ## Comment
 
-Record a single brief comment (a few sentences) with: the suspected root cause,
+When the `duplicate_hunter` named a candidate, the comment opens with
+`**Possible duplicate:** <linked bug id>` on its own line, above everything else —
+see **Checking for a duplicate** in the system prompt. Nothing when it found none.
+
+Then a single brief comment (a few sentences) with: the suspected root cause,
 the target file(s), and the proposed approach. Cite concrete paths, each as an
 inline Markdown link to its Searchfox permalink (with a line anchor where you
 know the line) per the **Linking source files** section of the system prompt. Do

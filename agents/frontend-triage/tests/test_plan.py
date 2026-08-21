@@ -9,7 +9,9 @@ from pathlib import Path
 from hackbot_agents.frontend_triage.agent import (
     load_system_prompt,
     may_apply_unattended,
+    parse_bug_id,
     parse_confidence,
+    parse_duplicate_assessment,
     parse_plan,
     parse_severity,
     parse_severity_assessment,
@@ -212,3 +214,63 @@ def test_parse_plan_normalizes_the_severity_assessment():
     assert assessment.suggested == "S1"
     assert assessment.confidence == "medium"
     assert assessment.rationale == "data loss"
+
+
+def test_a_bug_id_is_normalized():
+    # It comes out of free-form JSON, so the string form means the same thing.
+    for value in (1998432, "1998432", " 1998432 "):
+        assert parse_bug_id(value) == 1998432
+
+
+def test_an_unusable_bug_id_is_none():
+    # `True` is an int subclass in Python and would otherwise coerce to bug 1.
+    for value in (0, -5, True, False, None, "bug 1998432", "", "1.5", [1998432]):
+        assert parse_bug_id(value) is None, value
+
+
+def test_the_duplicate_assessment_is_normalized():
+    assessment = parse_duplicate_assessment(
+        {"duplicate_of": "1998432", "confidence": "High", "rationale": "same selector"}
+    )
+    assert assessment.duplicate_of == 1998432
+    assert assessment.confidence == "high"
+    assert assessment.rationale == "same selector"
+
+
+def test_a_found_nothing_verdict_is_kept_rather_than_dropped():
+    # `duplicate_of: null` is the answer we are measuring: it says the hunt ran and
+    # found nothing, which has to stay distinguishable from never having run.
+    assessment = parse_duplicate_assessment(
+        {"duplicate_of": None, "confidence": "high", "rationale": "nothing similar"}
+    )
+    assert assessment is not None
+    assert assessment.duplicate_of is None
+    assert assessment.rationale == "nothing similar"
+
+
+def test_an_unusable_duplicate_assessment_is_none():
+    for value in (None, [], "1998432", 3):
+        assert parse_duplicate_assessment(value) is None, value
+
+
+def test_parse_plan_normalizes_the_duplicate_assessment():
+    plan = parse_plan(
+        _block(
+            '{"confidence": "high", "duplicate_assessment": '
+            '{"duplicate_of": "1998432", "confidence": "MEDIUM", "rationale": "same"}}'
+        )
+    )
+    assessment = plan["duplicate_assessment"]
+    assert assessment.duplicate_of == 1998432
+    assert assessment.confidence == "medium"
+
+
+def test_a_duplicate_verdict_does_not_change_what_reaches_a_bug():
+    # The load-bearing never-gate assertion. Finding a duplicate must not suppress the
+    # triage, so it must not move `may_apply_unattended` in either direction.
+    base = {"confidence": "high", "actionable": True}
+    found = {**base, "duplicate_assessment": {"duplicate_of": 1998432}}
+    none_found = {**base, "duplicate_assessment": {"duplicate_of": None}}
+    assert may_apply_unattended(base)
+    assert may_apply_unattended(found)
+    assert may_apply_unattended(none_found)
