@@ -180,10 +180,7 @@ async def run_bug_fix(
                     timeout_s=background_task_timeout_s,
                 )
             except UnsettledResponseError as exc:
-                raise AgentError(
-                    f"bug {bug}: agent run did not settle "
-                    f"(a build/test it started may still have been running): {exc}"
-                ) from exc
+                raise AgentError(f"bug {bug}: agent run did not settle: {exc}") from exc
 
     if result_msg.is_error:
         raise AgentError(
