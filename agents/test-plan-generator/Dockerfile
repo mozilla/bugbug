@@ -35,6 +35,8 @@ RUN apt-get update \
         ca-certificates \
         libgtk-3-0 libdbus-glib-1-2 libx11-xcb1 libxtst6 libxt6 \
         libasound2 libpci3 \
+        # Codecs and audio/video related dependencies
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
