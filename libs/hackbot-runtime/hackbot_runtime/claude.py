@@ -37,6 +37,13 @@ class UnsettledResponseError(RuntimeError):
     """Used for when ``receive_settled_response`` gave up before the agent's turn settled."""
 
 
+# Task types whose completion the CLI itself resumes the turn for — mirrors
+# claude_agent_sdk._internal.query.DEFERRING_TASK_TYPES (not public API, so
+# duplicated here rather than imported).
+# https://github.com/anthropics/claude-agent-sdk-python/blob/bc0c9af676d9a63ac20a98cf1b7ba4794382c3cc/src/claude_agent_sdk/_internal/query.py#L38-L52
+_DEFERRING_TASK_TYPES = frozenset({"local_agent", "local_workflow"})
+
+
 def _truncate(s: str, n: int = 500) -> str:
     return s if len(s) <= n else s[:n] + f"... [{len(s) - n} more chars]"
 
@@ -157,10 +164,12 @@ async def receive_settled_response(
     connection — the fix is to keep listening, not to intervene. This drains
     ``client.receive_messages()`` (which, unlike ``receive_response()``, does
     not stop at a ``ResultMessage``) and only returns once a ``ResultMessage``
-    arrives with no task started during this call still unresolved. A task's
-    terminal state can arrive as either a ``TaskNotificationMessage`` or a
-    ``TaskUpdatedMessage`` (never both, for some task types), so both clear it
-    from the pending set.
+    arrives with no *deferring* task started during this call still
+    unresolved — only ``local_agent``/``local_workflow`` tasks count (see
+    ``_DEFERRING_TASK_TYPES``); backgrounded shells and Monitor watches can
+    run forever by design and are not waited on. A task's terminal state can
+    arrive as either a ``TaskNotificationMessage`` or a ``TaskUpdatedMessage``
+    (never both, for some task types), so both clear it from the pending set.
 
     Args:
         client: A connected client with a query already sent.
@@ -190,7 +199,8 @@ async def receive_settled_response(
                     on_message(msg)
 
                 if isinstance(msg, TaskStartedMessage):
-                    pending[msg.task_id] = msg.description
+                    if msg.task_type in _DEFERRING_TASK_TYPES:
+                        pending[msg.task_id] = msg.description
                 elif isinstance(msg, (TaskNotificationMessage, TaskUpdatedMessage)):
                     if msg.status in TERMINAL_TASK_STATUSES:
                         pending.pop(msg.task_id, None)

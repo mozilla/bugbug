@@ -82,7 +82,7 @@ def _result(is_error: bool = False, num_turns: int = 1) -> ResultMessage:
     )
 
 
-def _task_started(task_id: str) -> TaskStartedMessage:
+def _task_started(task_id: str, task_type: str = "local_agent") -> TaskStartedMessage:
     return TaskStartedMessage(
         subtype="task_started",
         data={},
@@ -90,6 +90,7 @@ def _task_started(task_id: str) -> TaskStartedMessage:
         description="do a thing",
         uuid="u1",
         session_id="s1",
+        task_type=task_type,
     )
 
 
@@ -153,6 +154,20 @@ async def test_receive_settled_response_task_updated_also_clears_pending():
     got = await receive_settled_response(client)
 
     assert got is final_result
+
+
+async def test_receive_settled_response_ignores_non_deferring_task_types():
+    # A backgrounded shell (task_type="local_bash") can run indefinitely by
+    # design — the CLI itself never holds the result frame back for one, so
+    # neither should we. Settling immediately (rather than waiting on "t1")
+    # is the correct behavior here, not a race we need to rescue.
+    started = _task_started("t1", task_type="local_bash")
+    result = _result()
+    client = _FakeClient([started, result])
+
+    got = await receive_settled_response(client)
+
+    assert got is result
 
 
 async def test_receive_settled_response_raises_on_timeout_when_task_never_settles():
