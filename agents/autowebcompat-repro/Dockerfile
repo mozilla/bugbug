@@ -50,14 +50,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the DevTools MCP servers and Puppeteer from the pinned
-# package.json/lockfile. PUPPETEER_SKIP_DOWNLOAD stops Puppeteer's install
-# script from fetching its own bundled Chrome: the browsers this agent drives
-# are downloaded at startup instead (see browser.py).
+# package.json/lockfile.
 COPY agents/autowebcompat-repro/package.json \
      agents/autowebcompat-repro/package-lock.json \
      agents/autowebcompat-repro/repro_reference.mjs \
      /app/repro/
-RUN cd /app/repro && PUPPETEER_SKIP_DOWNLOAD=1 npm ci --omit=dev
+RUN cd /app/repro && npm ci --omit=dev
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
