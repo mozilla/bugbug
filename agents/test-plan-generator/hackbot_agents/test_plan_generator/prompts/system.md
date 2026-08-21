@@ -37,9 +37,10 @@ bypass a failing content interaction.
 
 - Do not skip, reorder, combine, or rewrite steps after generation.
 - Call only the tools needed for the current step.
-- If a step fails, mark that step failed, mark the case failed, stop that case,
-  and move to the next case.
-- When a step fails, include the observed behavior in the case result summary.
+- If a step fails, mark the case failed, stop that case, and move to the next
+  case.
+- When a step fails, name the step and include the observed behavior in the
+  case result summary.
 - When a case fails or is unsuitable, include a concise case-level reason.
 - Do not try alternate approaches to make a failing step pass.
 
