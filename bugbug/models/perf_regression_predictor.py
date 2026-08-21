@@ -186,6 +186,13 @@ class PerfRegressionPredictorModel(Model):
 
     training_supported = False
 
+    # Trained outside bugbug, so it is not in the Taskcluster index.
+    # When retraining, upload to a new versioned path instead of overwriting.
+    artifact_url = (
+        "https://storage.googleapis.com/models-dump-public/"
+        "perf-regression-predictor-v1.tar.zst"
+    )
+
     def __init__(self, tokenizer: Any = None, transformer_model: Any = None) -> None:
         super().__init__()
         self.tokenizer = tokenizer

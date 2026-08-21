@@ -99,19 +99,30 @@ the diff metadata.
 
 ## Model artifact
 
-Production follows the existing Bugbug model-artifact convention. The
-checkpoint directory must be named `perfregressionpredictormodel` and
-published as:
+This checkpoint is trained outside Bugbug, so no `bugbug-train` workflow is
+registered for it and no train task publishes an artifact for it to the
+Taskcluster index. Instead the model class declares where its archive is
+published:
 
-```text
-public/perfregressionpredictormodel.tar.zst
+```python
+class PerfRegressionPredictorModel(Model):
+    training_supported = False
+    artifact_url = "https://storage.googleapis.com/.../perf-regression-predictor-v1.tar.zst"
 ```
 
-under the indexed Taskcluster namespace
-`project.bugbug.train_perfregressionpredictor.<version>`. For this first
-iteration, the archive can be created and published by a one-off Taskcluster
-task; no `bugbug-train` workflow is registered for this model. The standard
-background-worker image then downloads it alongside the other model artifacts.
+`download_models()` fetches that URL for any model declaring an `artifact_url`
+and falls back to the Taskcluster index for the rest, so the background worker
+downloads this model alongside the others with no special casing.
+
+The archive must be a `.tar.zst` holding a single directory named
+`perfregressionpredictormodel`, which is what the rest of the service expects
+on disk. When the model is retrained, publish it under a new versioned path
+and update `artifact_url`, rather than overwriting the existing object: that
+keeps a change of the deployed model a reviewable diff.
+
+Once training moves into Bugbug, the model can implement `train()`, set
+`training_supported = True` and drop `artifact_url`, at which point it is
+published by a normal `bugbug-train` task like every other model.
 
 For local Docker development before the artifact is published, mount the local
 checkpoint at `/code/perfregressionpredictormodel` in the background
