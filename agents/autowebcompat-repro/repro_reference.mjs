@@ -8,7 +8,6 @@
 // Then run mozregression like:
 //   mach mozregression --command="node <script.js>"
 
-
 // REFERENCE — use this structure, but replace this comment.
 //
 // This script checks whether one browser behaves as expected. Implement `probe`
