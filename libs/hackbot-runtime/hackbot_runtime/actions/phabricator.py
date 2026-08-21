@@ -32,8 +32,8 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
 )
 
 
-def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
+def _confirm(action: dict) -> str:
+    return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
 def _validate_summary(summary: str | None) -> None:
@@ -100,13 +100,13 @@ async def submit_patch(
     bug comment).
     """
     _validate_summary(summary)
-    recorder.record(
+    action = recorder.record(
         "phabricator.submit_patch",
         {"bug_id": bug_id, "title": title, "summary": summary},
         reasoning=reasoning,
         ref=ref,
     )
-    return _confirm(recorder, "phabricator.submit_patch")
+    return _confirm(action)
 
 
 @tool
@@ -141,12 +141,12 @@ async def update_patch(
     Only the diff changes: the revision keeps its title, summary, and bug
     association exactly as they are.
     """
-    recorder.record(
+    action = recorder.record(
         "phabricator.update_patch",
         {"revision_id": revision_id},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "phabricator.update_patch")
+    return _confirm(action)
 
 
 @tool
@@ -167,12 +167,12 @@ async def add_comment(
     changes, use ``submit_patch`` instead. Recorded into the run summary for
     human review; nothing is posted to Phabricator during the run.
     """
-    recorder.record(
+    action = recorder.record(
         "phabricator.add_comment",
         {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "phabricator.add_comment")
+    return _confirm(action)
 
 
 TOOLS = tools_in(__name__)

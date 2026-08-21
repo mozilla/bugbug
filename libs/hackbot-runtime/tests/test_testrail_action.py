@@ -26,7 +26,10 @@ async def test_submit_test_plan_tool_records_deferred_action():
         recorder, feature="Feature", generated_test_cases=_cases()
     )
 
-    assert message == "Recorded testrail.submit_test_plan (#0)."
+    assert message == (
+        f"Recorded testrail.submit_test_plan "
+        f"(ID: {recorder.list_actions()[0]['action_id']})."
+    )
     assert recorder.actions[0]["type"] == ACTION_TYPE
     assert recorder.actions[0]["params"] == {
         "feature": "Feature",
