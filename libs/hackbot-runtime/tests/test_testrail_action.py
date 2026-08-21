@@ -11,7 +11,6 @@ def _cases():
         {
             "id": 1,
             "title": "The PDF opens",
-            "context": "content",
             "preconditions": "A PDF is available.",
             "steps": [
                 {"action": "Open the PDF", "expectation": "The PDF is displayed."}
@@ -31,7 +30,16 @@ async def test_submit_test_plan_tool_records_deferred_action():
     assert recorder.actions[0]["type"] == ACTION_TYPE
     assert recorder.actions[0]["params"] == {
         "feature": "Feature",
-        "generated_test_cases": _cases(),
+        "generated_test_cases": [
+            {
+                "id": 1,
+                "title": "The PDF opens",
+                "preconditions": "A PDF is available.",
+                "steps": [
+                    {"action": "Open the PDF", "expectation": "The PDF is displayed."}
+                ],
+            }
+        ],
     }
 
 
@@ -42,7 +50,13 @@ async def test_submit_test_plan_tool_rejects_invalid_input():
         await testrail.submit_test_plan(
             recorder,
             feature=" ",
-            generated_test_cases=[{"id": 1, "title": "Case", "steps": []}],
+            generated_test_cases=[
+                {
+                    "id": 1,
+                    "title": "Case",
+                    "steps": [],
+                }
+            ],
         )
 
     assert "invalid TestRail submission" in str(exc.value)
@@ -63,6 +77,53 @@ async def test_submit_test_plan_tool_rejects_cases_without_expectation():
                     "steps": [{"action": "Open the PDF", "expectation": None}],
                 }
             ],
+        )
+
+    assert "invalid TestRail submission" in str(exc.value)
+    assert recorder.actions == []
+
+
+async def test_submit_test_plan_tool_rejects_non_sequential_case_ids():
+    recorder = ActionsRecorder()
+    cases = _cases()
+    cases[0]["id"] = 2
+
+    with pytest.raises(ToolError) as exc:
+        await testrail.submit_test_plan(
+            recorder,
+            feature="Feature",
+            generated_test_cases=cases,
+        )
+
+    assert "test case ids must be sequential starting at 1" in str(exc.value)
+    assert recorder.actions == []
+
+
+async def test_submit_test_plan_tool_rejects_a_second_submission():
+    recorder = ActionsRecorder()
+    await testrail.submit_test_plan(
+        recorder, feature="Feature", generated_test_cases=_cases()
+    )
+
+    with pytest.raises(ToolError) as exc:
+        await testrail.submit_test_plan(
+            recorder, feature="Other feature", generated_test_cases=_cases()
+        )
+
+    assert "already recorded" in str(exc.value)
+    assert [action["params"]["feature"] for action in recorder.actions] == ["Feature"]
+
+
+async def test_submit_test_plan_tool_rejects_more_than_thirty_cases():
+    recorder = ActionsRecorder()
+    case = _cases()[0]
+    cases = [{**case, "id": index} for index in range(1, 32)]
+
+    with pytest.raises(ToolError) as exc:
+        await testrail.submit_test_plan(
+            recorder,
+            feature="Feature",
+            generated_test_cases=cases,
         )
 
     assert "invalid TestRail submission" in str(exc.value)
