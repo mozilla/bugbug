@@ -27,6 +27,8 @@ function commentPreview(a: RunAction): string | null {
 
 const POLL_MS = 4000;
 
+const BUGZILLA_URL = "https://bugzilla.mozilla.org/show_bug.cgi?id=";
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -161,6 +163,8 @@ export function RunDetail({ runId }: { runId: string }) {
   }
 
   const log = extractLog(run);
+  const bugId =
+    typeof run.inputs.bug_id === "number" ? run.inputs.bug_id : null;
   const findings = run.summary?.findings ?? {};
   const hasFindings = Object.keys(findings).length > 0;
   // The QA agent gets its own purpose-built view; its plan lives on the
@@ -220,6 +224,20 @@ export function RunDetail({ runId }: { runId: string }) {
           <dd>{run.run_id}</dd>
           <dt>Agent</dt>
           <dd>{run.agent}</dd>
+          {bugId !== null && (
+            <>
+              <dt>Bug</dt>
+              <dd>
+                <a
+                  href={`${BUGZILLA_URL}${bugId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Bug {bugId}
+                </a>
+              </dd>
+            </>
+          )}
           <dt>Inputs</dt>
           <dd>{JSON.stringify(run.inputs)}</dd>
           <dt>Created</dt>
