@@ -31,6 +31,14 @@ MOZILLA_VCS_TOOLS = [
 ]
 
 
+# Per-area source-tree guidance (in-process MCP server "areas"). Only reached when the
+# agent localizes outside the area its component maps to; the usual case is already in
+# the prompt.
+AREA_TOOLS = [
+    "mcp__areas__load_area_guidance",
+]
+
+
 # Recordable action types the agent may take, by dotted id. A comment is the only one:
 # `bugzilla.update_bug` was here for `severity`, which is now a suggestion in the comment
 # instead, leaving the tool with no caller.
@@ -48,18 +56,116 @@ class ScopedComponent(NamedTuple):
 
     product: str
     component: str
-    # Which `Source repository` bullet in prompts/system.md describes this component's
-    # code. `tests/test_plan.py` asserts every area named here has one, so a new area
-    # cannot be added without the guidance that makes it triageable.
+    # Which `rules/areas/` file describes this component's code. `tests/test_plan.py`
+    # asserts every area named here has one, so a new area cannot be added without the
+    # guidance that makes it triageable.
     area: str
     # Required, because an entry without one would be a component getting unattended
     # triage with nobody told -- which is what `channel_for` failing closed produces,
     # and not something to be able to express by accident.
     channel: str
+    # Areas sent alongside `area`, for components that routinely turn out to be
+    # somewhere else: a "stop sharing" report arrives under Sharing but is WebRTC,
+    # which site permissions owns. Both ship from the start rather than the agent
+    # having to notice mid-run.
+    related_areas: tuple[str, ...] = ()
 
     @property
     def key(self) -> str:
         return f"{self.product} :: {self.component}"
+
+
+class Area(NamedTuple):
+    """One `rules/areas/` guidance file, and the trees whose code it describes."""
+
+    name: str
+    slug: str
+    # Where this area's code lives, for the prompt's index. Descriptive, so it may be
+    # broad and overlap another area.
+    trees: tuple[str, ...]
+    # Paths this area **exclusively** owns, for `area_for_path` and so for
+    # `hooks.area_guidance_hook`. Deliberately narrower than `trees`: enforcement needs
+    # "no other area could mean this file", and `browser/` fails that badly enough to
+    # refuse comments the guidance asked for -- `rules/areas/ip-protection.md` sends
+    # the agent to `browser/app/profile/firefox.js` for prefs. Empty for the desktop
+    # frontend, the general case, which owns nothing exclusively.
+    owns: tuple[str, ...] = ()
+
+
+# Every area, in the order they are listed to the model. `slug` is the filename under
+# `rules/areas/`.
+AREAS = (
+    # No `owns`: everything below sits inside these trees.
+    Area("Desktop frontend", "desktop-frontend", ("browser/", "toolkit/", "devtools/")),
+    Area(
+        "Site permissions",
+        "site-permissions",
+        (
+            "browser/modules/SitePermissions.sys.mjs",
+            "browser/modules/PermissionUI.sys.mjs",
+            "browser/actors/WebRTCParent.sys.mjs",
+            "extensions/permissions/",
+        ),
+        owns=(
+            "browser/modules/SitePermissions.sys.mjs",
+            "browser/modules/PermissionUI.sys.mjs",
+            "browser/actors/WebRTCParent.sys.mjs",
+            "extensions/permissions/",
+        ),
+    ),
+    Area(
+        "Sharing",
+        "sharing",
+        ("browser/components/sharing/", "widget/ (the per-OS half)"),
+        # Not `widget/`: that is the whole platform widget layer, and a bug in any
+        # other area citing a file there has nothing to do with sharing a URL out.
+        owns=(
+            "browser/components/sharing/",
+            "widget/nsIMacSharingService.idl",
+            "widget/cocoa/nsMacSharingService.mm",
+        ),
+    ),
+    Area(
+        "IP Protection",
+        "ip-protection",
+        ("browser/components/ipprotection/", "toolkit/components/ipprotection/"),
+        owns=("browser/components/ipprotection/", "toolkit/components/ipprotection/"),
+    ),
+    Area(
+        "Messaging System",
+        "messaging-system",
+        (
+            "browser/components/asrouter/",
+            "browser/components/aboutwelcome/",
+            "toolkit/components/messaging-system/",
+        ),
+        owns=(
+            "browser/components/asrouter/",
+            "browser/components/aboutwelcome/",
+            "toolkit/components/messaging-system/",
+        ),
+    ),
+    Area(
+        "Firefox for Android",
+        "firefox-for-android",
+        ("mobile/android/",),
+        owns=("mobile/android/",),
+    ),
+    Area(
+        "Application updater",
+        "application-updater",
+        ("toolkit/mozapps/update/",),
+        owns=("toolkit/mozapps/update/",),
+    ),
+    Area(
+        "Windows installer",
+        "windows-installer",
+        ("browser/installer/",),
+        owns=("browser/installer/",),
+    ),
+)
+
+AREAS_BY_NAME = {a.name: a for a in AREAS}
 
 
 # The components that are sent here for triage, and the channel that owns each. The
@@ -89,7 +195,13 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox", "Site Permissions", "Site permissions", "#privacy-team-automation"
     ),
-    ScopedComponent("Firefox", "Sharing", "Sharing", "#content-sharing-automation"),
+    ScopedComponent(
+        "Firefox",
+        "Sharing",
+        "Sharing",
+        "#content-sharing-automation",
+        related_areas=("Site permissions",),
+    ),
     ScopedComponent(
         "Firefox",
         "IP Protection",
@@ -123,6 +235,43 @@ TRIAGE_SCOPE = (
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
 # that `notify.py` keeps one flat mapping to look up.
 SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
+
+_SCOPE_BY_KEY = {c.key: c for c in TRIAGE_SCOPE}
+
+
+def areas_for(product: str | None, component: str | None) -> tuple[Area, ...]:
+    """The areas whose guidance belongs in the prompt for a bug in this component.
+
+    **Every** area for a component we do not triage, or one the caller could not
+    determine. `rules/scoping.md` puts an unlisted component in scope, so guessing one
+    area would leave those runs with less than they have today; failing open costs only
+    the prompt size it already had.
+    """
+    entry = _SCOPE_BY_KEY.get(
+        f"{(product or '').strip()} :: {(component or '').strip()}"
+    )
+    if entry is None:
+        return AREAS
+    return tuple(AREAS_BY_NAME[name] for name in (entry.area, *entry.related_areas))
+
+
+def area_for_path(path: str) -> Area | None:
+    """The area that exclusively owns ``path``, or None if none does.
+
+    None is the common and correct answer -- it covers both a file outside the triaged
+    areas (`gfx/`) and ordinary desktop chrome. Read it as "no guidance is specific to
+    this file", never as "guidance is missing".
+
+    Longest match wins, so `browser/installer/...` is the installer even though the
+    desktop frontend describes `browser/`.
+    """
+    best: tuple[int, Area] | None = None
+    for area in AREAS:
+        for owned in area.owns:
+            if path.startswith(owned) and (best is None or len(owned) > best[0]):
+                best = (len(owned), area)
+    return best[1] if best else None
+
 
 # Bugzilla's `bug_severity` legal values are `--`, `blocker`, `S1`, `critical`,
 # `S2`, `major`, `normal`, `S3`, `minor`, `S4`, `trivial`, `N/A`, `enhancement`

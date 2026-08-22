@@ -4,9 +4,11 @@
 with nobody in between, so it is covered as closely as the hooks are.
 """
 
+import re
 from pathlib import Path
 
 from hackbot_agents.frontend_triage.agent import (
+    AREAS_DIR,
     load_system_prompt,
     may_apply_unattended,
     parse_bug_id,
@@ -17,7 +19,13 @@ from hackbot_agents.frontend_triage.agent import (
     parse_severity_assessment,
     render_scope,
 )
-from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE, ScopedComponent
+from hackbot_agents.frontend_triage.config import (
+    AREAS,
+    TRIAGE_SCOPE,
+    ScopedComponent,
+    area_for_path,
+    areas_for,
+)
 
 
 def _block(body: str) -> str:
@@ -28,7 +36,7 @@ def test_the_system_prompt_renders():
     # system.md goes through str.format, so a literal brace in it must be doubled or
     # startup raises KeyError and the run never begins. The structured-output block is
     # where that happens.
-    prompt = load_system_prompt(Path("rules"), "")
+    prompt = load_system_prompt(Path("rules"), "", areas_for("Firefox", "New Tab Page"))
     assert '"severity_assessment": {' in prompt
     assert "{rules_dir}" not in prompt
     assert "{triaged_components}" not in prompt
@@ -64,16 +72,61 @@ def test_the_scope_says_it_is_neither_a_limit_nor_a_vocabulary():
     assert "verbatim" in rendered
 
 
-def test_every_area_has_prompt_guidance():
+def test_every_area_has_a_guidance_file():
     # The registry is what makes a component triaged; this is what makes it triageable.
-    # `Source repository` carries the per-area code layout, and an area with no bullet
-    # there means the agent is pointed at a component with no idea where its code lives
-    # -- which is how a bug gets read as out of scope and skipped. So a new area costs
-    # two files, visibly, rather than one file plus a prompt nobody remembered.
-    prompt = load_system_prompt(Path("rules"), "")
-    source_section = prompt.split("# Source repository", 1)[1]
-    for area in {entry.area for entry in TRIAGE_SCOPE}:
-        assert f"**{area}**" in source_section, area
+    # An area whose file is missing points the agent at a component with no idea where
+    # its code lives -- which is how a bug gets read as out of scope and skipped. So a
+    # new area costs two files, visibly, rather than one file plus a prompt nobody
+    # remembered.
+    for area in AREAS:
+        assert (AREAS_DIR / f"{area.slug}.md").is_file(), area.name
+
+
+def test_every_registry_area_resolves():
+    # `area` and `related_areas` are strings, so a typo in either is only caught here.
+    # `areas_for` would raise KeyError mid-run, after the bug was already fetched.
+    names = {a.name for a in AREAS}
+    for entry in TRIAGE_SCOPE:
+        assert entry.area in names, entry.key
+        for related in entry.related_areas:
+            assert related in names, f"{entry.key} -> {related}"
+
+
+def test_an_unknown_component_gets_every_area():
+    # `rules/scoping.md` puts an unlisted component in scope, so guessing one area for
+    # it would leave the run with less than it has today. Failing open costs the old
+    # prompt size and nothing else.
+    assert areas_for("Firefox", "Graphics") == AREAS
+    assert areas_for(None, None) == AREAS
+
+
+def test_only_the_matching_area_reaches_the_prompt():
+    # The point of the split. Everything else stays reachable via the index and
+    # `load_area_guidance`, but its text is not paid for on every run.
+    prompt = load_system_prompt(Path("rules"), "", areas_for("Firefox", "New Tab Page"))
+    assert "NSIS" not in prompt
+    assert "IPProtectionPanel.sys.mjs" not in prompt
+    # ...while the index still names every area, so a mislocalized bug is recognisable.
+    for area in AREAS:
+        assert f"**{area.name}**" in prompt, area.name
+
+
+def test_an_owned_subtree_resolves_even_though_a_broader_area_describes_it():
+    # The desktop frontend's index entry covers `browser/`, but the installer and IP
+    # Protection sit inside it and own their own subtrees. Ownership has to follow the
+    # specific claim, or the hook never fires for the areas whose guidance matters most.
+    assert area_for_path("browser/installer/windows/nsis/stub.nsi").name == (
+        "Windows installer"
+    )
+    assert area_for_path(
+        "browser/components/ipprotection/IPProtection.sys.mjs"
+    ).name == ("IP Protection")
+
+
+def test_a_path_in_no_area_belongs_to_no_area():
+    # Load-bearing for `area_guidance_hook`: None means "no guidance exists", not
+    # "guidance is missing", and must not be treated as something the agent can fetch.
+    assert area_for_path("gfx/thebes/gfxPlatform.cpp") is None
 
 
 def test_confidence_is_normalized():
@@ -274,3 +327,40 @@ def test_a_duplicate_verdict_does_not_change_what_reaches_a_bug():
     assert may_apply_unattended(base)
     assert may_apply_unattended(found)
     assert may_apply_unattended(none_found)
+
+
+# Paths written as `some/dir/File.ext` in an area's guidance prose.
+_GUIDANCE_PATH = re.compile(r"`([a-z][a-z0-9_./-]*/[A-Za-z0-9_./-]+)`")
+
+
+def test_guidance_never_names_a_path_its_own_component_cannot_cite():
+    # The invariant that keeps `area_guidance_hook` honest, and the one that caught
+    # `browser/` being listed as owned: an area told the agent where the prefs and
+    # strings were, and citing them then had the comment refused. Every path a
+    # component's own guidance names has to survive the hook for that component --
+    # including across `related_areas`, which is what makes Sharing's reference to
+    # WebRTCParent legal.
+    for entry in TRIAGE_SCOPE:
+        areas = areas_for(entry.product, entry.component)
+        loaded = {a.name for a in areas}
+        for area in areas:
+            text = (AREAS_DIR / f"{area.slug}.md").read_text()
+            for match in _GUIDANCE_PATH.finditer(text):
+                owner = area_for_path(match.group(1))
+                assert owner is None or owner.name in loaded, (
+                    f"{entry.key}: guidance names {match.group(1)}, "
+                    f"owned by {owner.name if owner else None}"
+                )
+
+
+def test_ordinary_desktop_chrome_is_owned_by_nobody():
+    # `browser/` and `toolkit/` describe the desktop frontend usefully in the index but
+    # contain almost every other area, so treating them as owned refuses comments for
+    # the ordinary reason that a Firefox bug touches a Firefox file.
+    for path in (
+        "browser/base/content/browser.js",
+        "browser/app/profile/firefox.js",
+        "toolkit/content/widgets/panel-list.js",
+        "widget/cocoa/nsCocoaWindow.mm",
+    ):
+        assert area_for_path(path) is None, path
