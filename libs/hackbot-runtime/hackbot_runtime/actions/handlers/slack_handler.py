@@ -58,6 +58,7 @@ class PostMessageHandler:
             response = _client().chat_postMessage(
                 channel=channel,
                 text=params["text"],
+                blocks=params.get("blocks"),
                 metadata=metadata,
             )
         except Exception as exc:
