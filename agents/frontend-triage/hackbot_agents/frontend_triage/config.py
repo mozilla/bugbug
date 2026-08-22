@@ -116,16 +116,11 @@ AREAS = (
     Area(
         "Sharing",
         "sharing",
-        (
-            "browser/modules/SharingUtils.sys.mjs",
-            "browser/components/contentsharing/",
-            "widget/ (the per-OS half)",
-        ),
+        ("browser/components/sharing/", "widget/ (the per-OS half)"),
         # Not `widget/`: that is the whole platform widget layer, and a bug in any
         # other area citing a file there has nothing to do with sharing a URL out.
         owns=(
-            "browser/modules/SharingUtils.sys.mjs",
-            "browser/components/contentsharing/",
+            "browser/components/sharing/",
             "widget/nsIMacSharingService.idl",
             "widget/cocoa/nsMacSharingService.mm",
         ),
