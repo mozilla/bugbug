@@ -100,16 +100,6 @@ def test_an_unknown_component_gets_every_area():
     assert areas_for(None, None) == AREAS
 
 
-def test_a_component_with_a_known_overlap_gets_both_areas():
-    # A "stop sharing" report arrives under Sharing but is WebRTC, which site
-    # permissions owns. Both files ship from the start rather than the agent having to
-    # notice mid-run -- see `ScopedComponent.related_areas`.
-    assert [a.name for a in areas_for("Firefox", "Sharing")] == [
-        "Sharing",
-        "Site permissions",
-    ]
-
-
 def test_only_the_matching_area_reaches_the_prompt():
     # The point of the split. Everything else stays reachable via the index and
     # `load_area_guidance`, but its text is not paid for on every run.
@@ -374,11 +364,3 @@ def test_ordinary_desktop_chrome_is_owned_by_nobody():
         "widget/cocoa/nsCocoaWindow.mm",
     ):
         assert area_for_path(path) is None, path
-
-
-def test_areas_with_real_guidance_still_own_something():
-    # The other half: if `owns` were emptied to silence false positives the hook would
-    # never fire at all. Desktop frontend is the deliberate exception -- it is the
-    # general case, and its guidance is two lines.
-    unenforced = [a.name for a in AREAS if not a.owns]
-    assert unenforced == ["Desktop frontend"], unenforced

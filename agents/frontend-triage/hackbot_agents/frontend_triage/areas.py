@@ -1,12 +1,8 @@
 """The ``load_area_guidance`` tool -- read a `rules/areas/` file mid-run.
 
-The prompt carries the guidance for the area the bug's component maps to. This is how
-the agent gets a *different* one when its investigation says the code lives elsewhere,
-and it records what was loaded so `hooks.area_guidance_hook` can tell whether a comment
-is citing a tree the agent was told nothing about.
-
-A plain ``Read`` of the file would work equally well for the agent and not at all for
-the hook, which needs the load to be observable.
+How the agent gets an area other than the one its component mapped to. A plain ``Read``
+would serve the agent equally well and `hooks.area_guidance_hook` not at all, which
+needs the load to be observable.
 """
 
 from __future__ import annotations
@@ -25,8 +21,8 @@ from .config import AREAS, AREAS_BY_NAME
 class AreaGuidanceContext:
     """Where the area files live, and which ones this run has loaded.
 
-    ``loaded`` is shared with the hook rather than copied: it starts as the areas that
-    were injected into the prompt, and each successful call adds to it.
+    ``loaded`` is shared with the hook rather than copied, and starts as whatever the
+    prompt was built with.
     """
 
     areas_dir: Path

@@ -64,11 +64,10 @@ class ScopedComponent(NamedTuple):
     # triage with nobody told -- which is what `channel_for` failing closed produces,
     # and not something to be able to express by accident.
     channel: str
-    # Areas whose guidance goes in the prompt alongside `area`, for components that
-    # routinely turn out to be somewhere else. Sharing is the known one: a "stop
-    # sharing" report arrives here but is WebRTC, which site permissions owns. Listing
-    # the pair means both files are present from the start, rather than the agent
-    # having to notice mid-run and fetch the second one.
+    # Areas sent alongside `area`, for components that routinely turn out to be
+    # somewhere else: a "stop sharing" report arrives under Sharing but is WebRTC,
+    # which site permissions owns. Both ship from the start rather than the agent
+    # having to notice mid-run.
     related_areas: tuple[str, ...] = ()
 
     @property
@@ -81,24 +80,20 @@ class Area(NamedTuple):
 
     name: str
     slug: str
-    # Where this area's code lives, for the prompt's index. Descriptive, and allowed to
-    # be broad and to overlap another area: `browser/` names the desktop frontend
-    # usefully even though most other areas sit inside it.
+    # Where this area's code lives, for the prompt's index. Descriptive, so it may be
+    # broad and overlap another area.
     trees: tuple[str, ...]
     # Paths this area **exclusively** owns, for `area_for_path` and so for
-    # `hooks.area_guidance_hook`. Narrower than `trees` on purpose -- enforcement needs
+    # `hooks.area_guidance_hook`. Deliberately narrower than `trees`: enforcement needs
     # "no other area could mean this file", and `browser/` fails that badly enough to
-    # refuse comments the guidance itself asked for: `rules/areas/ip-protection.md`
-    # sends the agent to `browser/app/profile/firefox.js` for prefs.
-    #
-    # Empty for the desktop frontend, which is the general case and owns nothing
-    # exclusively. It costs the least to leave unenforced -- its guidance is two lines,
-    # against the installer's NSIS or Android's Kotlin.
+    # refuse comments the guidance asked for -- `rules/areas/ip-protection.md` sends
+    # the agent to `browser/app/profile/firefox.js` for prefs. Empty for the desktop
+    # frontend, the general case, which owns nothing exclusively.
     owns: tuple[str, ...] = ()
 
 
 # Every area, in the order they are listed to the model. `slug` is the filename under
-# `rules/areas/`; `trees` drives both that index and `hooks.area_guidance_hook`.
+# `rules/areas/`.
 AREAS = (
     # No `owns`: everything below sits inside these trees.
     Area("Desktop frontend", "desktop-frontend", ("browser/", "toolkit/", "devtools/")),
@@ -252,11 +247,10 @@ _SCOPE_BY_KEY = {c.key: c for c in TRIAGE_SCOPE}
 def areas_for(product: str | None, component: str | None) -> tuple[Area, ...]:
     """The areas whose guidance belongs in the prompt for a bug in this component.
 
-    **Every** area when the component is not one we triage, or when the caller could
-    not determine it. `rules/scoping.md` is explicit that a defect in an unlisted
-    component is still in scope, and a run that guessed one area for such a bug would
-    have less to work with than it does today. Failing open costs the current prompt
-    size and nothing else, so it is the only safe default.
+    **Every** area for a component we do not triage, or one the caller could not
+    determine. `rules/scoping.md` puts an unlisted component in scope, so guessing one
+    area would leave those runs with less than they have today; failing open costs only
+    the prompt size it already had.
     """
     entry = _SCOPE_BY_KEY.get(
         f"{(product or '').strip()} :: {(component or '').strip()}"
@@ -269,10 +263,9 @@ def areas_for(product: str | None, component: str | None) -> tuple[Area, ...]:
 def area_for_path(path: str) -> Area | None:
     """The area that exclusively owns ``path``, or None if none does.
 
-    None is the common and correct answer, not a failure. It covers a file outside the
-    triaged areas (`gfx/`) and any ordinary desktop chrome file (`browser/base/...`),
-    which no area owns exclusively -- see `Area.owns`. Callers must read it as "no
-    guidance is specific to this file", never as "guidance is missing".
+    None is the common and correct answer -- it covers both a file outside the triaged
+    areas (`gfx/`) and ordinary desktop chrome. Read it as "no guidance is specific to
+    this file", never as "guidance is missing".
 
     Longest match wins, so `browser/installer/...` is the installer even though the
     desktop frontend describes `browser/`.
