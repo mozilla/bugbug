@@ -81,15 +81,26 @@ class Area(NamedTuple):
 
     name: str
     slug: str
-    # Path prefixes this area owns. Longest match wins in `area_for_path`, so a nested
-    # area resolves ahead of the tree containing it -- `browser/installer/` is the
-    # Windows installer, not the desktop frontend's `browser/`.
+    # Where this area's code lives, for the prompt's index. Descriptive, and allowed to
+    # be broad and to overlap another area: `browser/` names the desktop frontend
+    # usefully even though most other areas sit inside it.
     trees: tuple[str, ...]
+    # Paths this area **exclusively** owns, for `area_for_path` and so for
+    # `hooks.area_guidance_hook`. Narrower than `trees` on purpose -- enforcement needs
+    # "no other area could mean this file", and `browser/` fails that badly enough to
+    # refuse comments the guidance itself asked for: `rules/areas/ip-protection.md`
+    # sends the agent to `browser/app/profile/firefox.js` for prefs.
+    #
+    # Empty for the desktop frontend, which is the general case and owns nothing
+    # exclusively. It costs the least to leave unenforced -- its guidance is two lines,
+    # against the installer's NSIS or Android's Kotlin.
+    owns: tuple[str, ...] = ()
 
 
 # Every area, in the order they are listed to the model. `slug` is the filename under
 # `rules/areas/`; `trees` drives both that index and `hooks.area_guidance_hook`.
 AREAS = (
+    # No `owns`: everything below sits inside these trees.
     Area("Desktop frontend", "desktop-frontend", ("browser/", "toolkit/", "devtools/")),
     Area(
         "Site permissions",
@@ -98,7 +109,12 @@ AREAS = (
             "browser/modules/SitePermissions.sys.mjs",
             "browser/modules/PermissionUI.sys.mjs",
             "browser/actors/WebRTCParent.sys.mjs",
-            "browser/components/preferences/dialogs/",
+            "extensions/permissions/",
+        ),
+        owns=(
+            "browser/modules/SitePermissions.sys.mjs",
+            "browser/modules/PermissionUI.sys.mjs",
+            "browser/actors/WebRTCParent.sys.mjs",
             "extensions/permissions/",
         ),
     ),
@@ -108,13 +124,22 @@ AREAS = (
         (
             "browser/modules/SharingUtils.sys.mjs",
             "browser/components/contentsharing/",
-            "widget/",
+            "widget/ (the per-OS half)",
+        ),
+        # Not `widget/`: that is the whole platform widget layer, and a bug in any
+        # other area citing a file there has nothing to do with sharing a URL out.
+        owns=(
+            "browser/modules/SharingUtils.sys.mjs",
+            "browser/components/contentsharing/",
+            "widget/nsIMacSharingService.idl",
+            "widget/cocoa/nsMacSharingService.mm",
         ),
     ),
     Area(
         "IP Protection",
         "ip-protection",
         ("browser/components/ipprotection/", "toolkit/components/ipprotection/"),
+        owns=("browser/components/ipprotection/", "toolkit/components/ipprotection/"),
     ),
     Area(
         "Messaging System",
@@ -124,10 +149,30 @@ AREAS = (
             "browser/components/aboutwelcome/",
             "toolkit/components/messaging-system/",
         ),
+        owns=(
+            "browser/components/asrouter/",
+            "browser/components/aboutwelcome/",
+            "toolkit/components/messaging-system/",
+        ),
     ),
-    Area("Firefox for Android", "firefox-for-android", ("mobile/android/",)),
-    Area("Application updater", "application-updater", ("toolkit/mozapps/update/",)),
-    Area("Windows installer", "windows-installer", ("browser/installer/",)),
+    Area(
+        "Firefox for Android",
+        "firefox-for-android",
+        ("mobile/android/",),
+        owns=("mobile/android/",),
+    ),
+    Area(
+        "Application updater",
+        "application-updater",
+        ("toolkit/mozapps/update/",),
+        owns=("toolkit/mozapps/update/",),
+    ),
+    Area(
+        "Windows installer",
+        "windows-installer",
+        ("browser/installer/",),
+        owns=("browser/installer/",),
+    ),
 )
 
 AREAS_BY_NAME = {a.name: a for a in AREAS}
@@ -222,18 +267,21 @@ def areas_for(product: str | None, component: str | None) -> tuple[Area, ...]:
 
 
 def area_for_path(path: str) -> Area | None:
-    """The area owning ``path``, or None if no area does.
+    """The area that exclusively owns ``path``, or None if none does.
 
-    None is the ordinary answer for a file outside the triaged areas -- `gfx/`, say --
-    and it means "no guidance exists for this", not "guidance is missing". Longest
-    prefix wins so `browser/installer/...` resolves to the installer rather than to the
-    desktop frontend's `browser/`.
+    None is the common and correct answer, not a failure. It covers a file outside the
+    triaged areas (`gfx/`) and any ordinary desktop chrome file (`browser/base/...`),
+    which no area owns exclusively -- see `Area.owns`. Callers must read it as "no
+    guidance is specific to this file", never as "guidance is missing".
+
+    Longest match wins, so `browser/installer/...` is the installer even though the
+    desktop frontend describes `browser/`.
     """
     best: tuple[int, Area] | None = None
     for area in AREAS:
-        for tree in area.trees:
-            if path.startswith(tree) and (best is None or len(tree) > best[0]):
-                best = (len(tree), area)
+        for owned in area.owns:
+            if path.startswith(owned) and (best is None or len(owned) > best[0]):
+                best = (len(owned), area)
     return best[1] if best else None
 
 
