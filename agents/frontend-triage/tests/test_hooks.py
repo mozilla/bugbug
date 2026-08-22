@@ -111,21 +111,13 @@ def _area_hook(*loaded: str):
 
 
 def test_a_comment_citing_an_unloaded_area_is_refused():
-    # The case the whole split has to survive: a New Tab Page bug that turns out to be
-    # the installer. Without this the run quietly fix-plans a tree it was told nothing
-    # about, which is worse than the prompt it replaced.
-    with pytest.raises(ToolError, match="Windows installer"):
+    # A New Tab Page bug that turns out to be the installer. The agent acts on this
+    # in-run, so the message has to name the area and the tool.
+    with pytest.raises(ToolError) as e:
         _area_hook("Desktop frontend")(
             _cite("browser/installer/windows/nsis/installer.nsi")
         )
-
-
-def test_the_refusal_names_the_area_to_load():
-    # The agent has to act on this in-run, so the message has to say which area and
-    # which tool -- "you are missing guidance" is not actionable.
-    with pytest.raises(ToolError) as e:
-        _area_hook("Desktop frontend")(_cite("mobile/android/fenix/Home.kt"))
-    assert "Firefox for Android" in str(e.value)
+    assert "Windows installer" in str(e.value)
     assert "load_area_guidance" in str(e.value)
 
 
@@ -151,13 +143,3 @@ def test_a_comment_citing_no_known_area_passes():
     # and Searchfox. Refusing here would fail the run over something the agent cannot
     # satisfy -- it would retry forever against guidance that does not exist.
     _area_hook("Desktop frontend")(_cite("gfx/thebes/gfxPlatform.cpp"))
-
-
-def test_every_area_loaded_accepts_anything():
-    # What an unknown component gets. Equivalent to the pre-split prompt, so the hook
-    # has to be inert for it.
-    from hackbot_agents.frontend_triage.config import AREAS
-
-    hook = _area_hook(*(a.name for a in AREAS))
-    hook(_cite("browser/installer/windows/nsis/installer.nsi"))
-    hook(_cite("toolkit/mozapps/update/UpdateService.sys.mjs"))

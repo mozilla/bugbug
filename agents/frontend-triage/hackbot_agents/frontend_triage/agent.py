@@ -168,8 +168,8 @@ def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
     """Render `config.TRIAGE_SCOPE` as the prompt's component list, grouped by area.
 
     Generated rather than written into the prompt so that the component list has one
-    home. The per-area guidance under `Source repository` stays hand-authored: it is
-    prose about a codebase, and only the enumeration is mechanical.
+    home. The `rules/areas/` guidance stays hand-authored: it is prose about a
+    codebase, and only the enumeration is mechanical.
 
     Takes the registry as an argument so a test can assert the grouping against a fixed
     input rather than against whatever the real scope happens to be today.
@@ -207,16 +207,12 @@ async def fetch_product_component(
 ) -> tuple[str | None, str | None]:
     """The bug's product and component, read through the Bugzilla broker.
 
-    Needed before the agent starts, because the system prompt is built once and the
-    area guidance goes into it -- see `areas_for`. The agent's own first step fetches
-    the bug too, but that is several turns after the prompt is frozen.
+    The agent fetches the bug itself at step 1, but the prompt is built and frozen
+    before that, and the area guidance goes into it. Via the broker because the agent
+    container binds no Bugzilla credentials (see `compose.yml`).
 
-    Goes through the broker's MCP endpoint because that is the only Bugzilla path this
-    process has: the agent container binds no credentials (see `compose.yml`).
-
-    Returns ``(None, None)`` on any failure, which `areas_for` turns into every area --
-    today's prompt. Never raises: the guidance is an optimization, and a broken lookup
-    must not take down a run that would otherwise work.
+    Never raises. ``(None, None)`` makes `areas_for` send every area, which is the
+    prompt this replaced -- a broken lookup must not take down a workable run.
     """
     url = (
         bugzilla_mcp_server.get("url")
@@ -251,9 +247,8 @@ async def fetch_product_component(
 def render_area_index() -> str:
     """One line per area: its name and the trees it covers.
 
-    Always in the prompt, even when only one area's guidance is. It is what lets the
-    agent recognise that the code it just localized into belongs to an area it does not
-    have, which is the trigger for `load_area_guidance`.
+    Always in the prompt, even when one area's guidance is, so the agent can recognise
+    that it has localized into an area it does not have.
     """
     return "\n".join(f"- **{a.name}** — {', '.join(a.trees)}" for a in AREAS)
 
@@ -261,10 +256,9 @@ def render_area_index() -> str:
 def read_area_guidance(areas: Sequence[Area]) -> str:
     """The `rules/areas/` files for ``areas``, concatenated for the prompt.
 
-    Headings are demoted two levels on the way in. The files are `# <area>` because
-    `load_area_guidance` serves them whole, but pasted verbatim that H1 would sit
-    between `# Source repository` and `# Linking source files` and read as a new
-    top-level section rather than as part of the one it belongs to.
+    Headings drop two levels on the way in. The files are `# <area>` because
+    `load_area_guidance` serves them whole, but that H1 pasted between
+    `# Source repository` and `# Linking source files` reads as a new section.
     """
     bodies = []
     for area in areas:

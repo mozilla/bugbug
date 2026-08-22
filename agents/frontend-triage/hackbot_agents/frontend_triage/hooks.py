@@ -62,19 +62,14 @@ def cited_paths(text: str) -> list[str]:
 def area_guidance_hook(loaded_areas: set[str]) -> ActionHook:
     """Refuse a comment citing code from an area whose guidance was never loaded.
 
-    The prompt carries one area's guidance, chosen from the bug's component before the
-    run starts. When the investigation lands somewhere else -- a New Tab Page bug that
-    turns out to be the installer -- the agent has to call `load_area_guidance` for it,
-    and nothing but this hook makes that reliable. Without it the run would quietly
-    fix-plan a tree it was told nothing about, which is worse than what it does today
-    with every area in the prompt.
+    The prompt carries the area the bug's component maps to. When the investigation
+    lands somewhere else, nothing but this makes the agent go and read that area.
 
     ``loaded_areas`` is shared with the ``areas`` MCP server, which adds to it as the
-    agent loads files; it starts as whatever was injected.
+    agent loads files, so the retry after a refusal succeeds.
 
-    A path in **no** area passes. `gfx/` has no guidance to load, and that case works
-    today -- the agent localizes from the tree and Searchfox. Blocking on it would fail
-    a run over something the agent cannot possibly satisfy.
+    A path in no area passes: `gfx/` has nothing to load, so refusing it would fail the
+    run over something the agent cannot satisfy.
     """
 
     def hook(action: dict) -> None:
