@@ -228,10 +228,16 @@ async def fetch_product_component(
                 await session.initialize()
                 res = await session.call_tool(
                     "get_bugs",
-                    {"ids": [bug], "include_fields": "product,component"},
+                    # `id` is not optional: `get_bugs` diffs requested against
+                    # returned ids to report inaccessible bugs, so leaving it out
+                    # of `include_fields` makes the tool itself raise KeyError.
+                    {"ids": [bug], "include_fields": "id,product,component"},
                 )
-                payload = json.loads(res.content[0].text)
-                bugs = payload.get("bugs") or []
+                if res.isError:
+                    raise RuntimeError(
+                        "".join(getattr(c, "text", "") for c in res.content)
+                    )
+                bugs = json.loads(res.content[0].text).get("bugs") or []
                 if not bugs:
                     return None, None
                 return bugs[0].get("product"), bugs[0].get("component")
