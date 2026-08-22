@@ -61,7 +61,9 @@ def detect_needinfo_request(
     ]
     if not matching_flags:
         return None
-    flag_id = matching_flags[0].get("id")
+    # BMO returns flags ordered by ID, so a newly requested needinfo is the
+    # last matching flag in the webhook's current bug snapshot.
+    flag_id = matching_flags[-1].get("id")
     if not flag_id:
         return None
 
