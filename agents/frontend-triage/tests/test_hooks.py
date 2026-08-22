@@ -8,7 +8,11 @@ hackbot_agents/frontend_triage/hooks.py.
 import pytest
 from agent_tools.registry import ToolError
 from hackbot_agents.frontend_triage.config import ENABLED_ACTION_TYPES
-from hackbot_agents.frontend_triage.hooks import add_comment_hook, severity_block_hook
+from hackbot_agents.frontend_triage.hooks import (
+    add_comment_hook,
+    area_guidance_hook,
+    severity_block_hook,
+)
 from hackbot_runtime.actions import ActionsRecorder
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 
@@ -94,3 +98,66 @@ def test_a_comment_may_declare_its_severity_only_once():
 
     with pytest.raises(ToolError):
         severity_block_hook({"params": {"text": plan + block + block}})
+
+
+def _cite(path: str) -> str:
+    """A comment citing ``path`` the way the prompt asks for it."""
+    return f"The fault is in [{path}]({{{{searchfox.permalink}}}}/{path})."
+
+
+def _area_hook(*loaded: str):
+    hook = area_guidance_hook(set(loaded))
+    return lambda text: hook({"params": {"bug_id": BUG, "text": text}})
+
+
+def test_a_comment_citing_an_unloaded_area_is_refused():
+    # The case the whole split has to survive: a New Tab Page bug that turns out to be
+    # the installer. Without this the run quietly fix-plans a tree it was told nothing
+    # about, which is worse than the prompt it replaced.
+    with pytest.raises(ToolError, match="Windows installer"):
+        _area_hook("Desktop frontend")(
+            _cite("browser/installer/windows/nsis/installer.nsi")
+        )
+
+
+def test_the_refusal_names_the_area_to_load():
+    # The agent has to act on this in-run, so the message has to say which area and
+    # which tool -- "you are missing guidance" is not actionable.
+    with pytest.raises(ToolError) as e:
+        _area_hook("Desktop frontend")(_cite("mobile/android/fenix/Home.kt"))
+    assert "Firefox for Android" in str(e.value)
+    assert "load_area_guidance" in str(e.value)
+
+
+def test_a_comment_citing_a_loaded_area_passes():
+    _area_hook("Desktop frontend")(_cite("browser/components/tabbrowser/tabgroup.js"))
+
+
+def test_an_area_loaded_mid_run_passes():
+    # `load_area_guidance` adds to the same set the hook reads, so the retry after a
+    # refusal succeeds. If this ever decoupled, the agent would be stuck in a loop it
+    # cannot exit and the run would burn its turns.
+    loaded = {"Desktop frontend"}
+    hook = area_guidance_hook(loaded)
+    body = _cite("browser/installer/windows/nsis/installer.nsi")
+    with pytest.raises(ToolError):
+        hook({"params": {"bug_id": BUG, "text": body}})
+    loaded.add("Windows installer")
+    hook({"params": {"bug_id": BUG, "text": body}})
+
+
+def test_a_comment_citing_no_known_area_passes():
+    # A Graphics bug has no file to load, and it triages fine today off the source tree
+    # and Searchfox. Refusing here would fail the run over something the agent cannot
+    # satisfy -- it would retry forever against guidance that does not exist.
+    _area_hook("Desktop frontend")(_cite("gfx/thebes/gfxPlatform.cpp"))
+
+
+def test_every_area_loaded_accepts_anything():
+    # What an unknown component gets. Equivalent to the pre-split prompt, so the hook
+    # has to be inert for it.
+    from hackbot_agents.frontend_triage.config import AREAS
+
+    hook = _area_hook(*(a.name for a in AREAS))
+    hook(_cite("browser/installer/windows/nsis/installer.nsi"))
+    hook(_cite("toolkit/mozapps/update/UpdateService.sys.mjs"))

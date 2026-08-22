@@ -7,6 +7,7 @@ with nobody in between, so it is covered as closely as the hooks are.
 from pathlib import Path
 
 from hackbot_agents.frontend_triage.agent import (
+    AREAS_DIR,
     load_system_prompt,
     may_apply_unattended,
     parse_bug_id,
@@ -17,7 +18,13 @@ from hackbot_agents.frontend_triage.agent import (
     parse_severity_assessment,
     render_scope,
 )
-from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE, ScopedComponent
+from hackbot_agents.frontend_triage.config import (
+    AREAS,
+    TRIAGE_SCOPE,
+    ScopedComponent,
+    area_for_path,
+    areas_for,
+)
 
 
 def _block(body: str) -> str:
@@ -28,7 +35,7 @@ def test_the_system_prompt_renders():
     # system.md goes through str.format, so a literal brace in it must be doubled or
     # startup raises KeyError and the run never begins. The structured-output block is
     # where that happens.
-    prompt = load_system_prompt(Path("rules"), "")
+    prompt = load_system_prompt(Path("rules"), "", areas_for("Firefox", "New Tab Page"))
     assert '"severity_assessment": {' in prompt
     assert "{rules_dir}" not in prompt
     assert "{triaged_components}" not in prompt
@@ -64,16 +71,71 @@ def test_the_scope_says_it_is_neither_a_limit_nor_a_vocabulary():
     assert "verbatim" in rendered
 
 
-def test_every_area_has_prompt_guidance():
+def test_every_area_has_a_guidance_file():
     # The registry is what makes a component triaged; this is what makes it triageable.
-    # `Source repository` carries the per-area code layout, and an area with no bullet
-    # there means the agent is pointed at a component with no idea where its code lives
-    # -- which is how a bug gets read as out of scope and skipped. So a new area costs
-    # two files, visibly, rather than one file plus a prompt nobody remembered.
-    prompt = load_system_prompt(Path("rules"), "")
-    source_section = prompt.split("# Source repository", 1)[1]
-    for area in {entry.area for entry in TRIAGE_SCOPE}:
-        assert f"**{area}**" in source_section, area
+    # An area whose file is missing points the agent at a component with no idea where
+    # its code lives -- which is how a bug gets read as out of scope and skipped. So a
+    # new area costs two files, visibly, rather than one file plus a prompt nobody
+    # remembered.
+    for area in AREAS:
+        assert (AREAS_DIR / f"{area.slug}.md").is_file(), area.name
+
+
+def test_every_registry_area_resolves():
+    # `area` and `related_areas` are strings, so a typo in either is only caught here.
+    # `areas_for` would raise KeyError mid-run, after the bug was already fetched.
+    names = {a.name for a in AREAS}
+    for entry in TRIAGE_SCOPE:
+        assert entry.area in names, entry.key
+        for related in entry.related_areas:
+            assert related in names, f"{entry.key} -> {related}"
+
+
+def test_an_unknown_component_gets_every_area():
+    # `rules/scoping.md` puts an unlisted component in scope, so guessing one area for
+    # it would leave the run with less than it has today. Failing open costs the old
+    # prompt size and nothing else.
+    assert areas_for("Firefox", "Graphics") == AREAS
+    assert areas_for(None, None) == AREAS
+
+
+def test_a_component_with_a_known_overlap_gets_both_areas():
+    # A "stop sharing" report arrives under Sharing but is WebRTC, which site
+    # permissions owns. Both files ship from the start rather than the agent having to
+    # notice mid-run -- see `ScopedComponent.related_areas`.
+    assert [a.name for a in areas_for("Firefox", "Sharing")] == [
+        "Sharing",
+        "Site permissions",
+    ]
+
+
+def test_only_the_matching_area_reaches_the_prompt():
+    # The point of the split. Everything else stays reachable via the index and
+    # `load_area_guidance`, but its text is not paid for on every run.
+    prompt = load_system_prompt(Path("rules"), "", areas_for("Firefox", "New Tab Page"))
+    assert "NSIS" not in prompt
+    assert "IPProtectionPanel.sys.mjs" not in prompt
+    # ...while the index still names every area, so a mislocalized bug is recognisable.
+    for area in AREAS:
+        assert f"**{area.name}**" in prompt, area.name
+
+
+def test_a_nested_area_wins_over_the_tree_containing_it():
+    # `browser/` is the desktop frontend and `browser/installer/` is not, so a plain
+    # prefix scan in registry order would file every installer bug under the wrong area
+    # and the guidance hook would never fire.
+    assert area_for_path("browser/installer/windows/nsis/stub.nsi").name == (
+        "Windows installer"
+    )
+    assert area_for_path("browser/components/tabbrowser/tabgroup.js").name == (
+        "Desktop frontend"
+    )
+
+
+def test_a_path_in_no_area_belongs_to_no_area():
+    # Load-bearing for `area_guidance_hook`: None means "no guidance exists", not
+    # "guidance is missing", and must not be treated as something the agent can fetch.
+    assert area_for_path("gfx/thebes/gfxPlatform.cpp") is None
 
 
 def test_confidence_is_normalized():

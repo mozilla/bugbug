@@ -31,6 +31,14 @@ MOZILLA_VCS_TOOLS = [
 ]
 
 
+# Per-area source-tree guidance (in-process MCP server "areas"). Only reached when the
+# agent localizes outside the area its component maps to; the usual case is already in
+# the prompt.
+AREA_TOOLS = [
+    "mcp__areas__load_area_guidance",
+]
+
+
 # Recordable action types the agent may take, by dotted id. A comment is the only one:
 # `bugzilla.update_bug` was here for `severity`, which is now a suggestion in the comment
 # instead, leaving the tool with no caller.
@@ -48,18 +56,81 @@ class ScopedComponent(NamedTuple):
 
     product: str
     component: str
-    # Which `Source repository` bullet in prompts/system.md describes this component's
-    # code. `tests/test_plan.py` asserts every area named here has one, so a new area
-    # cannot be added without the guidance that makes it triageable.
+    # Which `rules/areas/` file describes this component's code. `tests/test_plan.py`
+    # asserts every area named here has one, so a new area cannot be added without the
+    # guidance that makes it triageable.
     area: str
     # Required, because an entry without one would be a component getting unattended
     # triage with nobody told -- which is what `channel_for` failing closed produces,
     # and not something to be able to express by accident.
     channel: str
+    # Areas whose guidance goes in the prompt alongside `area`, for components that
+    # routinely turn out to be somewhere else. Sharing is the known one: a "stop
+    # sharing" report arrives here but is WebRTC, which site permissions owns. Listing
+    # the pair means both files are present from the start, rather than the agent
+    # having to notice mid-run and fetch the second one.
+    related_areas: tuple[str, ...] = ()
 
     @property
     def key(self) -> str:
         return f"{self.product} :: {self.component}"
+
+
+class Area(NamedTuple):
+    """One `rules/areas/` guidance file, and the trees whose code it describes."""
+
+    name: str
+    slug: str
+    # Path prefixes this area owns. Longest match wins in `area_for_path`, so a nested
+    # area resolves ahead of the tree containing it -- `browser/installer/` is the
+    # Windows installer, not the desktop frontend's `browser/`.
+    trees: tuple[str, ...]
+
+
+# Every area, in the order they are listed to the model. `slug` is the filename under
+# `rules/areas/`; `trees` drives both that index and `hooks.area_guidance_hook`.
+AREAS = (
+    Area("Desktop frontend", "desktop-frontend", ("browser/", "toolkit/", "devtools/")),
+    Area(
+        "Site permissions",
+        "site-permissions",
+        (
+            "browser/modules/SitePermissions.sys.mjs",
+            "browser/modules/PermissionUI.sys.mjs",
+            "browser/actors/WebRTCParent.sys.mjs",
+            "browser/components/preferences/dialogs/",
+            "extensions/permissions/",
+        ),
+    ),
+    Area(
+        "Sharing",
+        "sharing",
+        (
+            "browser/modules/SharingUtils.sys.mjs",
+            "browser/components/contentsharing/",
+            "widget/",
+        ),
+    ),
+    Area(
+        "IP Protection",
+        "ip-protection",
+        ("browser/components/ipprotection/", "toolkit/components/ipprotection/"),
+    ),
+    Area(
+        "Messaging System",
+        "messaging-system",
+        (
+            "browser/components/asrouter/",
+            "browser/components/aboutwelcome/",
+            "toolkit/components/messaging-system/",
+        ),
+    ),
+    Area("Firefox for Android", "firefox-for-android", ("mobile/android/",)),
+    Area("Application updater", "application-updater", ("toolkit/mozapps/update/",)),
+    Area("Windows installer", "windows-installer", ("browser/installer/",)),
+)
+
+AREAS_BY_NAME = {a.name: a for a in AREAS}
 
 
 # The components that are sent here for triage, and the channel that owns each. The
@@ -89,7 +160,13 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox", "Site Permissions", "Site permissions", "#privacy-team-automation"
     ),
-    ScopedComponent("Firefox", "Sharing", "Sharing", "#content-sharing-automation"),
+    ScopedComponent(
+        "Firefox",
+        "Sharing",
+        "Sharing",
+        "#content-sharing-automation",
+        related_areas=("Site permissions",),
+    ),
     ScopedComponent(
         "Firefox",
         "IP Protection",
@@ -123,6 +200,42 @@ TRIAGE_SCOPE = (
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
 # that `notify.py` keeps one flat mapping to look up.
 SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
+
+_SCOPE_BY_KEY = {c.key: c for c in TRIAGE_SCOPE}
+
+
+def areas_for(product: str | None, component: str | None) -> tuple[Area, ...]:
+    """The areas whose guidance belongs in the prompt for a bug in this component.
+
+    **Every** area when the component is not one we triage, or when the caller could
+    not determine it. `rules/scoping.md` is explicit that a defect in an unlisted
+    component is still in scope, and a run that guessed one area for such a bug would
+    have less to work with than it does today. Failing open costs the current prompt
+    size and nothing else, so it is the only safe default.
+    """
+    entry = _SCOPE_BY_KEY.get(
+        f"{(product or '').strip()} :: {(component or '').strip()}"
+    )
+    if entry is None:
+        return AREAS
+    return tuple(AREAS_BY_NAME[name] for name in (entry.area, *entry.related_areas))
+
+
+def area_for_path(path: str) -> Area | None:
+    """The area owning ``path``, or None if no area does.
+
+    None is the ordinary answer for a file outside the triaged areas -- `gfx/`, say --
+    and it means "no guidance exists for this", not "guidance is missing". Longest
+    prefix wins so `browser/installer/...` resolves to the installer rather than to the
+    desktop frontend's `browser/`.
+    """
+    best: tuple[int, Area] | None = None
+    for area in AREAS:
+        for tree in area.trees:
+            if path.startswith(tree) and (best is None or len(tree) > best[0]):
+                best = (len(tree), area)
+    return best[1] if best else None
+
 
 # Bugzilla's `bug_severity` legal values are `--`, `blocker`, `S1`, `critical`,
 # `S2`, `major`, `normal`, `S3`, `minor`, `S4`, `trivial`, `N/A`, `enhancement`
