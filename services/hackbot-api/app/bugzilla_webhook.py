@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 
 
@@ -14,17 +12,6 @@ class BugzillaNeedinfoEvent:
     bug_id: int
     flag_id: int
     dedupe_key: str
-
-
-def _dedupe_key(bug_id: int, flag_id: int, event: dict) -> str:
-    """Return a stable identity for retries of one Bugzilla modification."""
-    encoded = json.dumps(
-        {"bug_id": bug_id, "flag_id": flag_id, "event": event},
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-    ).encode()
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def detect_needinfo_request(
@@ -81,5 +68,5 @@ def detect_needinfo_request(
     return BugzillaNeedinfoEvent(
         bug_id=bug_id,
         flag_id=flag_id,
-        dedupe_key=_dedupe_key(bug_id, flag_id, event),
+        dedupe_key=f"ni{flag_id}",
     )

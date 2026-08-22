@@ -498,7 +498,7 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
     assert detected is not None
     assert detected.bug_id == 2022889
     assert detected.flag_id == 2187233
-    assert detected.dedupe_key
+    assert detected.dedupe_key == "ni2187233"
 
 
 @pytest.mark.parametrize(
