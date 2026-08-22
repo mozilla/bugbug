@@ -48,10 +48,9 @@ async def require_phabricator_signature(
 
 def verify_bugzilla_webhook_secret(secret: str | None) -> bool:
     """Constant-time-check BMO's configured shared-secret header."""
-    expected = settings.bugzilla_webhook.secret
-    if not expected or not secret:
+    if not secret:
         return False
-    return hmac.compare_digest(secret, expected)
+    return hmac.compare_digest(secret, settings.bugzilla_webhook.secret)
 
 
 async def require_bugzilla_webhook_secret(
