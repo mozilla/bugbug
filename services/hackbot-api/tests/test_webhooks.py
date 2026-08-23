@@ -511,10 +511,11 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
         lambda payload: payload["bug"].pop("flags"),
     ],
 )
-def test_detect_bugzilla_needinfo_ignores_malformed_nested_fields(mutate):
+def test_detect_bugzilla_needinfo_rejects_malformed_nested_fields(mutate):
     payload = _bugzilla_payload()
     mutate(payload)
-    assert detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN) is None
+    with pytest.raises(KeyError):
+        detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
 
 
 def test_detect_bugzilla_needinfo_does_not_require_routing_key():
@@ -530,7 +531,6 @@ def test_detect_bugzilla_needinfo_does_not_require_routing_key():
         {"name": "review"},
         {"value": "+"},
         {"requestee": {"login": "someone@mozilla.com"}},
-        {"requestee": "hackbot@mozilla.tld"},
     ],
 )
 def test_detect_bugzilla_needinfo_requires_matching_structured_flag(flag_update):

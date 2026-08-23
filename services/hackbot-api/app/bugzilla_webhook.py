@@ -27,43 +27,41 @@ def detect_needinfo_request(
     if not bot_login:
         return None
 
-    event = payload.get("event") or {}
-    bug = payload.get("bug") or {}
+    event = payload["event"]
+    bug = payload["bug"]
 
-    if event.get("action") != "modify" or event.get("target") != "bug":
+    if event["action"] != "modify" or event["target"] != "bug":
         return None
-    if bug.get("is_private") is not False:
+    if bug["is_private"] is not False:
         return None
 
     # Ignore Hackbot's own flag changes, so answering cannot retrigger a run.
-    actor_login = (event.get("user") or {}).get("login")
-    if not actor_login or actor_login == bot_login:
+    actor_login = event["user"]["login"]
+    if actor_login == bot_login:
         return None
 
     expected_added = f"? ({bot_login})"
     if not any(
-        change.get("field") == "flag.needinfo" and change.get("added") == expected_added
-        for change in event.get("changes") or ()
+        change["field"] == "flag.needinfo" and change["added"] == expected_added
+        for change in event["changes"]
     ):
         return None
 
-    bug_id = bug.get("id")
-    if not bug_id:
-        return None
+    bug_id = bug["id"]
 
     matching_flags = [
         flag
-        for flag in bug.get("flags") or ()
-        if flag.get("name") == "needinfo"
-        and flag.get("value") == "?"
-        and isinstance(flag.get("requestee"), dict)
-        and flag["requestee"].get("login") == bot_login
+        for flag in bug["flags"]
+        if flag["name"] == "needinfo"
+        and flag["value"] == "?"
+        and "requestee" in flag
+        and flag["requestee"]["login"] == bot_login
     ]
     if not matching_flags:
         return None
     # BMO returns flags ordered by ID, so a newly requested needinfo is the
     # last matching flag in the webhook's current bug snapshot.
-    flag_id = matching_flags[-1].get("id")
+    flag_id = matching_flags[-1]["id"]
     if not flag_id:
         return None
 
