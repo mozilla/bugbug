@@ -1,4 +1,4 @@
-"""Detection and deduplication helpers for Bugzilla needinfo webhooks."""
+"""Detection helpers for Bugzilla needinfo webhooks."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ class BugzillaNeedinfoEvent:
 
     bug_id: int
     flag_id: int
-    dedupe_key: str
 
 
 def detect_needinfo_request(
@@ -68,5 +67,4 @@ def detect_needinfo_request(
     return BugzillaNeedinfoEvent(
         bug_id=bug_id,
         flag_id=flag_id,
-        dedupe_key=f"ni{flag_id}",
     )

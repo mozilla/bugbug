@@ -56,9 +56,8 @@ _seen_transactions: TTLCache = TTLCache(
     maxsize=4096, ttl=settings.webhook.dedupe_ttl_seconds
 )
 
-# Best-effort dedupe of retried BMO deliveries. The key hashes the bug id and
-# complete event, including its timestamp and changes, so a later needinfo on
-# the same bug remains a separate run.
+# Best-effort dedupe of retried BMO deliveries, keyed by the globally unique
+# needinfo flag ID. A later needinfo on the same bug receives a new flag ID.
 _seen_bugzilla_events: TTLCache = TTLCache(
     maxsize=4096, ttl=settings.bugzilla_webhook.dedupe_ttl_seconds
 )
@@ -153,7 +152,8 @@ async def bugzilla_webhook(
     )
     if detected is None:
         return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
-    if detected.dedupe_key in _seen_bugzilla_events:
+    dedupe_key = f"ni{detected.flag_id}"
+    if dedupe_key in _seen_bugzilla_events:
         return {"status": "ignored", "reason": "duplicate delivery"}
 
     run_id = await api_client.trigger_run(
@@ -165,7 +165,7 @@ async def bugzilla_webhook(
     )
     # Do not consume an event until run creation succeeds; a transient failure
     # must remain retryable by Bugzilla.
-    _seen_bugzilla_events[detected.dedupe_key] = True
+    _seen_bugzilla_events[dedupe_key] = True
     log.info(
         "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request",
         run_id,

@@ -498,7 +498,6 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
     assert detected is not None
     assert detected.bug_id == 2022889
     assert detected.flag_id == 2187233
-    assert detected.dedupe_key == "ni2187233"
 
 
 @pytest.mark.parametrize(
@@ -801,4 +800,4 @@ def test_bugzilla_route_does_not_dedupe_failed_dispatch(client):
     with pytest.raises(RuntimeError, match="run creation failed"):
         _post_bugzilla(client, payload)
 
-    assert detected.dedupe_key not in webhooks._seen_bugzilla_events
+    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
