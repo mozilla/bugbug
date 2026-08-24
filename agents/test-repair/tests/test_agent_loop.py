@@ -3,6 +3,7 @@ import json
 import subprocess
 from types import SimpleNamespace
 
+import pytest
 from hackbot_agents.test_repair import agent
 from hackbot_agents.test_repair.config import BUILD_TOOL, SKIP_FIREFOX_BUILD
 from hackbot_agents.test_repair.prompts import MAX_TESTS_PER_GROUP
@@ -11,6 +12,7 @@ from hackbot_agents.test_repair.resolve import (
     FailingGroup,
     Investigation,
 )
+from hackbot_runtime import AgentError
 
 
 def _result_msg(is_error=False):
@@ -56,8 +58,6 @@ def _git_repo(path):
 
 def _investigation(
     head,
-    base,
-    complete=True,
     platform="linux1804-64/opt",
     groups=None,
     group_based=True,
@@ -72,8 +72,7 @@ def _investigation(
         failing_groups=groups
         if groups is not None
         else [FailingGroup("dom/base/test/mochitest.ini", ["dom/base/test/a.js"])],
-        last_green_revision="greenhg",
-        commit_range=CommitRange(head=head, base=base, span=2, complete=complete),
+        commit_range=CommitRange(head=head, span=2),
         label=label,
         group_based=group_based,
         known_intermittent_bugs=known_intermittent_bugs or [],
@@ -92,7 +91,6 @@ def _run(
     tmp_path,
     verdicts,
     monkeypatch,
-    complete=True,
     results=None,
     platform="linux1804-64/opt",
     groups=None,
@@ -110,6 +108,11 @@ def _run(
 
     async def fake_session(reporter, options, prompt):
         calls.append(prompt)
+        # A compliant run fetches the log into scratch_out/logs; the agent loop
+        # fails the run when nothing is there (bug 6665).
+        job = scratch_out / "logs" / "job_1"
+        job.mkdir(parents=True, exist_ok=True)
+        (job / "live_backing_log.log").write_text("TEST-UNEXPECTED-FAIL | a.js")
         if options_out is not None:
             options_out.append(options)
         verdict = verdicts.pop(0)
@@ -146,14 +149,11 @@ def _run(
             fx_ctx=_fx_ctx(tmp_path),
             investigation=_investigation(
                 head,
-                base if complete else None,
-                complete,
                 platform,
                 groups,
                 group_based,
                 known_intermittent_bugs=known_intermittent_bugs,
             ),
-            task_logs={},
             scratch_out=scratch_out,
             skip_firefox_build=skip_firefox_build,
             verbose=False,
@@ -183,7 +183,6 @@ def test_unsure_culprit_runs_fix_stage(tmp_path, monkeypatch):
     # A patch is developer advice; the sheriff still backs the regression out.
     assert result.recommendation == "backout"
     assert result.proposed_patch is True
-    assert result.last_green_revision == "greenhg"
     assert result.num_turns == 6
 
 
@@ -340,21 +339,12 @@ def test_failed_fix_stage_still_publishes_analysis(tmp_path, monkeypatch):
     assert result.analysis == "the reasoning"
 
 
-def test_complete_range_prompt_gives_a_base_anchored_range(tmp_path, monkeypatch):
-    _result, calls, head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "culprit is one of them" in calls[0]
-    # The agent enumerates the range itself rather than being handed every sha.
-    assert "git log --oneline" in calls[0]
-    assert f"..{head}" in calls[0]
-
-
-def test_incomplete_range_prompt_does_not_assert_the_culprit(tmp_path, monkeypatch):
-    _result, calls, _head = _run(
-        tmp_path, [{"culprit_commit": None}], monkeypatch, complete=False
-    )
+def test_range_prompt_does_not_assert_the_culprit(tmp_path, monkeypatch):
+    # The range is always depth-bounded rather than anchored on a green run, so the
+    # prompt must not claim the culprit is inside it.
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
     assert "may predate" in calls[0]
-    assert "culprit is one of them" not in calls[0]
-    # Without a last-green base the range falls back to the clone depth.
+    assert "git log --oneline" in calls[0]
     assert "HEAD~2..HEAD" in calls[0]
 
 
@@ -365,7 +355,6 @@ def test_assemble_defaults_on_empty_verdict(tmp_path):
         out,
         verdict={},
         source_repo=tmp_path,
-        last_green_revision=None,
         total_turns=1,
         total_cost=0.0,
         publish_file=None,
@@ -388,7 +377,6 @@ def test_assemble_tolerates_malformed_verdict_fields(tmp_path):
             "culprit_bug": "n/a",
         },
         source_repo=tmp_path,
-        last_green_revision=None,
         total_turns=1,
         total_cost=0.0,
         publish_file=None,
@@ -407,7 +395,6 @@ def test_assemble_reports_intermittent_classification(tmp_path):
         out,
         verdict={"classification": "intermittent", "intermittent_bug": 42},
         source_repo=tmp_path,
-        last_green_revision=None,
         total_turns=1,
         total_cost=0.0,
         publish_file=None,
@@ -475,10 +462,8 @@ def test_resolve_culprit_normalizes_against_the_checkout(tmp_path):
     assert agent._resolve_culprit(repo, "  ") is None
 
 
-def test_range_expr_prefers_the_last_green_base():
-    anchored = CommitRange(head="h" * 40, base="b" * 40, span=5, complete=True)
-    assert agent._range_expr(anchored) == f"{'b' * 40}..{'h' * 40}"
-    assert agent._range_expr(CommitRange("h" * 40, None, 5, False)) == "HEAD~5..HEAD"
+def test_range_expr_is_relative_to_the_checkout():
+    assert agent._range_expr(CommitRange("h" * 40, 5)) == "HEAD~5..HEAD"
 
 
 def test_both_stages_name_the_checkout_path(tmp_path, monkeypatch):
@@ -667,7 +652,7 @@ def test_non_linux_failure_still_runs_the_test_but_discounts_a_pass(
 def _mozconfig_for(tmp_path, platform):
     tmp_path.mkdir(parents=True, exist_ok=True)
     fx = _fx_ctx(tmp_path)
-    agent._write_mozconfig(fx, _investigation("h", None, platform=platform))
+    agent._write_mozconfig(fx, _investigation("h", platform=platform))
     return fx.mozconfig.read_text()
 
 
@@ -702,12 +687,12 @@ def test_verify_step_states_the_container_limits(tmp_path, monkeypatch):
     assert "could not verify" in calls[1]
 
 
-def test_last_green_is_labelled_as_an_hg_revision(tmp_path, monkeypatch):
+def test_the_hg_revision_is_labelled_as_one(tmp_path, monkeypatch):
     # Every other revision in the prompt is a git hash; an unlabelled hg node
     # makes the agent run git commands against it and get exit 128.
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "hg revision greenhg" in calls[0]
-    assert "not a git object" in calls[0]
+    assert "hg revision" in _flat(calls[0])
+    assert "never to git" in _flat(calls[0])
 
 
 def test_mozconfig_overwrites_a_foreign_one(tmp_path):
@@ -719,8 +704,113 @@ def test_mozconfig_overwrites_a_foreign_one(tmp_path):
         "ac_add_options --enable-release\n"
         "mk_add_options MOZ_OBJDIR=/workspace/firefox/objdir-build-repair\n"
     )
-    agent._write_mozconfig(fx, _investigation("h", None, platform="linux1804-64/opt"))
+    agent._write_mozconfig(fx, _investigation("h", platform="linux1804-64/opt"))
     written = fx.mozconfig.read_text()
     assert "objdir-build-repair" not in written
     assert "--enable-release" not in written
     assert str(fx.objdir) in written
+
+
+def test_analysis_prompt_offers_treeherder_cli(tmp_path, monkeypatch):
+    _result, calls, _head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+        ],
+        monkeypatch,
+    )
+    prompt = _flat(calls[0])
+    # The command has to be runnable as printed: repo and revision, not placeholders.
+    assert "treeherder-cli hgrev --repo autoland" in prompt
+    assert "--suspects" in prompt
+    assert "--similar-history" in prompt
+    # The two ways to waste a run: unbounded output and a blocking flag.
+    assert "Always pass `--filter`" in prompt
+    assert "Never pass `--watch`" in prompt
+
+
+def test_a_reported_blocker_fails_the_run(tmp_path, monkeypatch):
+    # The agent could not get the log, so there is nothing to analyse. Failing the
+    # run is what reaches the API as an error and skips the Slack notification;
+    # a verdict here would be a fix invented from the diff alone (bug 6665).
+    repo = tmp_path / "src"
+    repo.mkdir()
+    _git_repo(repo)
+    scratch_out = tmp_path / "out"
+    scratch_out.mkdir()
+
+    async def fake_session(reporter, options, prompt):
+        (scratch_out / "error.txt").write_text(
+            "treeherder-cli --fetch-logs returned no jobs for "
+            "test-linux1804-64/opt-mochitest-1"
+        )
+        return _result_msg()
+
+    monkeypatch.setattr(agent, "_run_session", fake_session)
+    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {"type": "sdk"})
+
+    with pytest.raises(AgentError) as excinfo:
+        asyncio.run(
+            agent.run_test_repair(
+                bugzilla_mcp_server=None,
+                source_repo=repo,
+                fx_ctx=_fx_ctx(tmp_path),
+                investigation=_investigation("headsha"),
+                scratch_out=scratch_out,
+                verbose=False,
+                log=None,
+            )
+        )
+    assert "returned no jobs" in str(excinfo.value)
+
+
+def test_no_blocker_file_means_the_run_continues(tmp_path, monkeypatch):
+    result, calls, _head = _run(
+        tmp_path,
+        [
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
+        ],
+        monkeypatch,
+    )
+    assert len(calls) == 2
+    assert result.recommendation == "backout"
+
+
+def test_a_verdict_without_a_retrieved_log_fails_the_run(tmp_path, monkeypatch):
+    # The prompt asks the agent to report a blocker itself, but a run against a
+    # push whose job treeherder-cli could not reach produced a full verdict
+    # instead. The log check is what makes it a guarantee: no log, no verdict,
+    # and the error reaches the API and the UI (bug 6665).
+    repo = tmp_path / "src"
+    repo.mkdir()
+    _git_repo(repo)
+    scratch_out = tmp_path / "out"
+    scratch_out.mkdir()
+
+    async def fake_session(reporter, options, prompt):
+        # a confident verdict, but nothing was ever fetched into scratch_out/logs
+        (scratch_out / "verdict.json").write_text(
+            json.dumps({"recommendation": "backout", "culprit_commit": "HEAD"})
+        )
+        (scratch_out / "summary.md").write_text("the verdict")
+        (scratch_out / "analysis.md").write_text("the reasoning")
+        return _result_msg()
+
+    monkeypatch.setattr(agent, "_run_session", fake_session)
+    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {"type": "sdk"})
+
+    with pytest.raises(AgentError) as excinfo:
+        asyncio.run(
+            agent.run_test_repair(
+                bugzilla_mcp_server=None,
+                source_repo=repo,
+                fx_ctx=_fx_ctx(tmp_path),
+                investigation=_investigation("headsha"),
+                scratch_out=scratch_out,
+                verbose=False,
+                log=None,
+            )
+        )
+    assert "no failure log was retrieved" in str(excinfo.value)
