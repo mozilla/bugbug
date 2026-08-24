@@ -126,7 +126,7 @@ class ActionsRecorder:
         ]
 
     def remove_action(self, action_id: str) -> dict:
-        """Remove and return an action."""
+        """Remove the action with the given ID and return a copy of it."""
         action = self._actions.get(action_id)
         if action is None:
             raise ToolError(f"No recorded action with ID {action_id!r}.")
