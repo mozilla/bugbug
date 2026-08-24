@@ -18,7 +18,10 @@ export function middleware(req: NextRequest) {
 
   // Remember the requested URL so the login page can send the user back here
   const loginUrl = new URL("/login", req.url);
-  loginUrl.searchParams.set("callbackURL", req.nextUrl.toString());
+  loginUrl.searchParams.set(
+    "callbackURL",
+    `${req.nextUrl.pathname}${req.nextUrl.search}`
+  );
   return NextResponse.redirect(loginUrl);
 }
 
