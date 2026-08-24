@@ -28,6 +28,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 FROM base AS agent
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
 COPY agents/build-repair/hackbot.toml /app/hackbot.toml

@@ -1,5 +1,5 @@
 from hackbot_agents.test_repair.agent import TestRepairResult
-from hackbot_agents.test_repair.notify import build_message
+from hackbot_agents.test_repair.notify import build_message, sheriff_action_required
 from hackbot_agents.test_repair.resolve import (
     CommitRange,
     FailingGroup,
@@ -52,6 +52,36 @@ def _message(result=None, investigation=None, **kwargs):
         task_id=TASK_ID,
         run_id="1218e630-78c8",
         **kwargs,
+    )
+
+
+def test_a_known_intermittent_is_not_worth_a_notification():
+    assert not sheriff_action_required(
+        _result(
+            classification="intermittent",
+            recommendation="do_not_backout",
+            culprit_commit=None,
+        )
+    )
+
+
+def test_an_unconfirmed_intermittent_still_asks_for_a_retrigger():
+    assert sheriff_action_required(
+        _result(
+            classification="intermittent",
+            recommendation="rerun",
+            culprit_commit=None,
+        )
+    )
+
+
+def test_every_regression_verdict_is_notified():
+    assert sheriff_action_required(_result())
+    assert sheriff_action_required(_result(recommendation="rerun"))
+    # No culprit survived, so there is nothing to back out -- but a regression the
+    # agent could not pin down is still a sheriff's problem.
+    assert sheriff_action_required(
+        _result(recommendation="do_not_backout", culprit_commit=None)
     )
 
 

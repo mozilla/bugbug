@@ -1,13 +1,8 @@
-"""TestRail-domain recordable actions.
-
-The test plan generator records this action deterministically after its
-structured result has been validated. The external TestRail mutation still
-happens only in the apply side handler.
-"""
+"""TestRail recordable actions."""
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import (
@@ -31,12 +26,26 @@ class TestRailStepInput(BaseModel):
     )
 
 
+class TestRailCaseResultInput(BaseModel):
+    status: Literal["passed", "failed", "unsuitable"]
+    summary: str
+    failure_reason: str | None = Field(
+        default=None,
+        description="Required when status is failed or unsuitable.",
+    )
+
+    @model_validator(mode="after")
+    def failure_reason_required_for_non_passing_cases(
+        self,
+    ) -> "TestRailCaseResultInput":
+        if self.status in {"failed", "unsuitable"} and not self.failure_reason:
+            raise ValueError("failed or unsuitable cases must include failure_reason")
+        return self
+
+
 class TestRailCaseInput(BaseModel):
     id: int
     title: str = Field(description="TestRail test case title.")
-    context: str | None = Field(
-        default=None, description="Optional context for where this case applies."
-    )
     preconditions: str | None = Field(
         default=None, description="Optional setup required before running this case."
     )
@@ -46,6 +55,11 @@ class TestRailCaseInput(BaseModel):
             "Ordered steps a QA engineer should follow. Each step has an action "
             "and an optional expectation."
         ),
+    )
+    result: TestRailCaseResultInput = Field(
+        description=(
+            "Execution result for this generated test case after the agent ran it."
+        )
     )
 
     @field_validator("title")
@@ -75,7 +89,13 @@ class TestRailCaseInput(BaseModel):
 class SubmitTestPlanInput(BaseModel):
     feature: str = Field(description="Feature covered by the generated test cases.")
     generated_test_cases: list[TestRailCaseInput] = Field(
-        min_length=1, description="Generated test cases to upload to TestRail."
+        min_length=1,
+        max_length=30,
+        description="Generated test cases to upload to TestRail.",
+    )
+    summary: str | None = Field(
+        default=None,
+        description="Optional summary of the generated test-plan execution.",
     )
 
     @field_validator("feature")
@@ -86,15 +106,32 @@ class SubmitTestPlanInput(BaseModel):
             raise ValueError("feature must not be blank")
         return value
 
+    @model_validator(mode="after")
+    def case_ids_must_be_sequential(self) -> "SubmitTestPlanInput":
+        case_ids = [case.id for case in self.generated_test_cases]
+        expected_ids = list(range(1, len(self.generated_test_cases) + 1))
+        if case_ids != expected_ids:
+            raise ToolError("test case ids must be sequential starting at 1")
+        return self
+
 
 def _confirm(action: dict) -> str:
     return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
-def _validated_params(feature: str, generated_test_cases: list[Any]) -> dict[str, Any]:
+def _validated_params(
+    feature: str,
+    generated_test_cases: list[Any],
+    *,
+    summary: str | None = None,
+) -> dict[str, Any]:
     try:
         validated = SubmitTestPlanInput.model_validate(
-            {"feature": feature, "generated_test_cases": generated_test_cases}
+            {
+                "feature": feature,
+                "generated_test_cases": generated_test_cases,
+                "summary": summary,
+            }
         )
     except ValidationError as exc:
         raise ToolError(
@@ -118,30 +155,38 @@ async def submit_test_plan(
     ],
     generated_test_cases: Annotated[
         list[TestRailCaseInput],
-        Field(description="Generated test cases to upload together to TestRail."),
+        # Bounds are repeated from SubmitTestPlanInput: this copy is the agent's
+        # schema, that one is the enforcement.
+        Field(
+            min_length=1,
+            max_length=30,
+            description="Generated test cases to upload together to TestRail.",
+        ),
     ],
+    summary: Annotated[
+        str | None,
+        Field(description="Short overview of how the run went as a whole."),
+    ] = None,
 ) -> str:
     """Record a generated test plan for deferred TestRail submission.
 
-    This records one reviewed action. The apply step creates a new TestRail
-    suite, creates a section in it, and uploads all supplied test cases.
-    Nothing is sent to TestRail during the agent run.
+    Call this at most once per run: the apply step creates a new TestRail suite
+    for every recorded action, so a second call would duplicate the whole plan.
+    The apply step creates the suite, creates a section in it, and uploads all
+    supplied test cases. Nothing is sent to TestRail during the agent run.
     """
-    params = _validated_params(feature, generated_test_cases)
+    if any(action["type"] == ACTION_TYPE for action in recorder.actions):
+        raise ToolError(
+            "a test plan is already recorded for this run; do not call "
+            "submit_test_plan again"
+        )
+    params = _validated_params(
+        feature,
+        generated_test_cases,
+        summary=summary,
+    )
     action = recorder.record(ACTION_TYPE, params)
     return _confirm(action)
-
-
-def record_test_plan(
-    recorder: ActionsRecorder,
-    test_plan: dict[str, Any],
-) -> dict:
-    """Record validated generated cases for deferred TestRail submission."""
-    params = _validated_params(
-        str(test_plan.get("feature") or ""),
-        list(test_plan.get("generated_test_cases") or []),
-    )
-    return recorder.record(ACTION_TYPE, params)
 
 
 TOOLS = tools_in(__name__)

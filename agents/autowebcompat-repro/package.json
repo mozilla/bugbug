@@ -6,6 +6,6 @@
   "dependencies": {
     "@mozilla/firefox-devtools-mcp-moz": "0.9.12",
     "chrome-devtools-mcp": "1.5.0",
-    "puppeteer": "25.4.0"
+    "puppeteer-core": "25.4.0"
   }
 }

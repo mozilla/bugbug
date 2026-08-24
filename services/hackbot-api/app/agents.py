@@ -94,7 +94,11 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     ),
     "frontend-triage": AgentSpec(
         name="frontend-triage",
-        description="Triage a Firefox desktop frontend bug (read-only) and produce a root-cause analysis and proposed fix plan.",
+        description=(
+            "Triage a user-facing Firefox bug (read-only): desktop frontend, "
+            "Firefox for Android, the Windows installer, or the application "
+            "updater. Produce a root-cause analysis and proposed fix plan."
+        ),
         job_name="hackbot-agent-frontend-triage",
         input_schema=FrontendTriageInputs,
         # Triage results reach a real bug unattended, so only the ones the agent

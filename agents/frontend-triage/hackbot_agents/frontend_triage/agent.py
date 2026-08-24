@@ -41,7 +41,7 @@ from hackbot_runtime.searchfox import (
     permalink_prefix,
     resolve_index_revision,
 )
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from searchfox import AsyncSearchfoxClient
 
 from .config import (
@@ -49,8 +49,11 @@ from .config import (
     ENABLED_ACTION_TYPES,
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
+    TRIAGE_SCOPE,
+    TRIAGE_SEVERITIES,
+    ScopedComponent,
 )
-from .hooks import add_comment_hook, update_bug_hook
+from .hooks import add_comment_hook, severity_block_hook
 
 HERE = Path(__file__).resolve().parent
 
@@ -84,6 +87,14 @@ class SeverityAssessment(BaseModel):
     rationale: str | None = None
 
 
+class DuplicateAssessment(BaseModel):
+    """Duplicate judgment (see duplicate-detection rules)."""
+
+    duplicate_of: int | None = None  # the bug this one appears to duplicate
+    confidence: str | None = None  # high | medium | low
+    rationale: str | None = None
+
+
 class FrontendTriageResult(HackbotAgentResult):
     bug_id: int
     # Where the bug lives, as the agent read it off Bugzilla. Reported rather than
@@ -105,6 +116,9 @@ class FrontendTriageResult(HackbotAgentResult):
     )
     # Triage judgments (best-effort, parsed from the agent's final message).
     severity_assessment: SeverityAssessment | None = None
+    # None when the hunt did not run; a populated object with `duplicate_of: null`
+    # means it ran and found nothing, which is the answer we are measuring.
+    duplicate_assessment: DuplicateAssessment | None = None
     # This run's verdict on whether its recorded actions may reach the bug without a
     # human, computed by `may_apply_unattended`. hackbot-api reads it and still has
     # the final say.
@@ -140,6 +154,44 @@ SEARCHFOX_LINKS_PROMPT = (
 )
 
 
+def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
+    """Render `config.TRIAGE_SCOPE` as the prompt's component list, grouped by area.
+
+    Generated rather than written into the prompt so that the component list has one
+    home. The per-area guidance under `Source repository` stays hand-authored: it is
+    prose about a codebase, and only the enumeration is mechanical.
+
+    Takes the registry as an argument so a test can assert the grouping against a fixed
+    input rather than against whatever the real scope happens to be today.
+    """
+    by_area: dict[str, list[str]] = {}
+    for entry in scope:
+        by_area.setdefault(entry.area, []).append(entry.key)
+
+    lines = [f"- **{area}** — {', '.join(keys)}." for area, keys in by_area.items()]
+
+    return "\n".join(
+        lines
+        + [
+            "",
+            # Two failure modes to close off, in order of how much they cost. Reading the
+            # list as exhaustive gets an in-scope bug declared out of scope, which is the
+            # `ecea6ca6` mistake. Reading it as a vocabulary gets a component "tidied" to
+            # match, and since the component is also the routing key, `notify.py` then
+            # silently tells nobody.
+            "**This list is not the limit of what you triage.** It is where bugs "
+            "normally come from, and which team each one reports to. `scoping.md` is "
+            "what decides scope: any user-facing Firefox defect is in scope, including "
+            "in a component not named above — triage it normally rather than calling it "
+            "out of scope for being absent here.",
+            "",
+            "It is also **not** a vocabulary for the `product` and `component` fields "
+            "of your plan. Copy those from Bugzilla verbatim, even when they are not "
+            "listed above.",
+        ]
+    )
+
+
 def load_system_prompt(rules_dir: Path, extra: str) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
@@ -147,6 +199,7 @@ def load_system_prompt(rules_dir: Path, extra: str) -> str:
         rules_dir=str(rules_dir.resolve()),
         extra_instructions=extra or "(none)",
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
+        triaged_components=render_scope(),
     )
 
 
@@ -179,6 +232,76 @@ def make_investigator() -> AgentDefinition:
     )
 
 
+_DUPLICATE_HUNTER_PROMPT = """You decide one thing: is this bug already filed?
+
+You are given a bug id, its product and component, and the discriminating signal the
+triage agent pulled from it. Work only from what you can read on Bugzilla.
+
+# Approach
+
+1. **Search once**, scoped to the same product and component, using the best single term
+   from the discriminating signal. Pass narrow fields:
+   `include_fields=id,summary,status,resolution,dupe_of`. Ask for at most 20. Request
+   `dupe_of` explicitly -- it is not in the default field set. Leave `description` out
+   here: you need it for one candidate, not twenty.
+2. **Widen at most three times** if nothing plausible comes back: drop the term, try your
+   second-best signal, keep the product and component scope. Then stop.
+3. **Verify only your single best candidate.** Ask for `description` in `include_fields`
+   -- it is the original report, the same text as comment 0, and it comes back from
+   `get_bugs` in one call. Never fetch comment threads: the rest of a thread is discussion,
+   not what the bug is about, and it is many times the size. Do not verify runners-up.
+
+# What counts as a duplicate
+
+The same concrete defect, not the same area. Same component and a similar-sounding summary
+is not a match. Ask whether fixing one would fix the other; if not, it is not a duplicate.
+
+- The subject bug is itself `RESOLVED DUPLICATE` -> report its `dupe_of` target.
+- Two candidates both match -> pick the older (lower id).
+- A candidate is the subject bug itself -> that is not a duplicate. Report `NEW`.
+- You could not read the bug, or the search failed -> report `NEW` and say why.
+
+Prefer `NEW`. A wrong duplicate sends a human to the wrong bug; a missed one costs nothing
+but a search.
+
+# Output
+
+One or two sentences saying what you found and why it does or does not match, then a final
+line that is exactly one of:
+
+```
+VERDICT: <bug_id>
+VERDICT: NEW
+```
+
+Nothing after that line. The triage agent reads it to decide what to put on the bug."""
+
+
+def make_duplicate_hunter() -> AgentDefinition:
+    """Create the duplicate-detection subagent.
+
+    Purpose-named rather than another `investigator` spawn: that one carries 18 tool
+    schemas and inherits the run's model and effort, which measured ~7x the cost for
+    the same work. Keep the tool list and `effort` as they are. Read-only Bugzilla
+    tools mean it cannot record anything or recurse.
+    """
+    return AgentDefinition(
+        description=(
+            "Decides whether a bug duplicates one already filed in the same "
+            "component. Give it the bug id, its product and component, and the "
+            "discriminating signal. Returns a VERDICT line."
+        ),
+        prompt=_DUPLICATE_HUNTER_PROMPT,
+        tools=[
+            "mcp__bugzilla__search_bugs",
+            "mcp__bugzilla__get_bugs",
+        ],
+        model="inherit",
+        effort="low",
+        maxTurns=6,
+    )
+
+
 CONFIDENCE_LEVELS = ("high", "medium", "low")
 
 
@@ -194,6 +317,68 @@ def parse_confidence(value: object) -> str | None:
         return None
     normalized = value.strip().lower()
     return normalized if normalized in CONFIDENCE_LEVELS else None
+
+
+def parse_severity(value: object) -> str | None:
+    """One of :data:`~.config.TRIAGE_SEVERITIES`, or None if ``value`` isn't one.
+
+    Same contract as :func:`parse_confidence`, for the same reason: the level comes out
+    of the agent's free-form JSON block, and it is the only severity signal reaching a
+    human now that the field is no longer written.
+    """
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().upper()
+    return normalized if normalized in TRIAGE_SEVERITIES else None
+
+
+def parse_bug_id(value: object) -> int | None:
+    """A positive Bugzilla bug id, or None.
+
+    Accepts the string form too -- the id comes out of the agent's free-form JSON block,
+    and a model that wrote `"1998432"` means the same thing as `1998432`. `bool` is
+    rejected explicitly because it is an `int` subclass in Python.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip()) or None
+    return None
+
+
+def parse_severity_assessment(value: object) -> SeverityAssessment | None:
+    """A :class:`SeverityAssessment` with its level and confidence normalized.
+
+    Fields degrade independently: an unreadable level or confidence becomes None, which
+    drops the comment's severity block, rather than discarding the rationale with it.
+    """
+    if not isinstance(value, dict):
+        return None
+    rationale = value.get("rationale")
+    return SeverityAssessment(
+        suggested=parse_severity(value.get("suggested")),
+        confidence=parse_confidence(value.get("confidence")),
+        rationale=rationale if isinstance(rationale, str) else None,
+    )
+
+
+def parse_duplicate_assessment(value: object) -> DuplicateAssessment | None:
+    """A :class:`DuplicateAssessment` with its bug id and confidence normalized.
+
+    Same contract as :func:`parse_severity_assessment`, with one addition: `duplicate_of`
+    is coerced to an int here rather than left to pydantic. A non-int would otherwise
+    raise out of the run *after* the agent had finished, discarding the whole plan.
+    """
+    if not isinstance(value, dict):
+        return None
+    rationale = value.get("rationale")
+    return DuplicateAssessment(
+        duplicate_of=parse_bug_id(value.get("duplicate_of")),
+        confidence=parse_confidence(value.get("confidence")),
+        rationale=rationale if isinstance(rationale, str) else None,
+    )
 
 
 def may_apply_unattended(plan: dict) -> bool:
@@ -243,14 +428,6 @@ def parse_plan(text: str | None) -> dict:
         # run's result, and these two only route a notification.
         return value.strip() or None if isinstance(value, str) else None
 
-    def _as_model(model, value):
-        if not isinstance(value, dict):
-            return None
-        try:
-            return model.model_validate(value)
-        except ValidationError:
-            return None
-
     actionable = data.get("actionable")
     if not isinstance(actionable, bool):
         actionable = None
@@ -265,8 +442,11 @@ def parse_plan(text: str | None) -> dict:
         "actionable": actionable,
         "regressor_node": data.get("regressor_node"),
         "relevant_tests": _as_list(data.get("relevant_tests")),
-        "severity_assessment": _as_model(
-            SeverityAssessment, data.get("severity_assessment")
+        "severity_assessment": parse_severity_assessment(
+            data.get("severity_assessment")
+        ),
+        "duplicate_assessment": parse_duplicate_assessment(
+            data.get("duplicate_assessment")
         ),
     }
 
@@ -328,9 +508,7 @@ async def run_frontend_triage(
     actions_recorder.add_hook(
         "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
     )
-    actions_recorder.add_hook(
-        "bugzilla.update_bug", update_bug_hook(actions_recorder, bug)
-    )
+    actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
 
     actions_recorder.add_hook(
         "bugzilla.add_comment",
@@ -348,7 +526,10 @@ async def run_frontend_triage(
             "mozilla_vcs": vcs_server,
             ACTIONS_SERVER_NAME: actions_server,
         },
-        agents={"investigator": make_investigator()},
+        agents={
+            "investigator": make_investigator(),
+            "duplicate_hunter": make_duplicate_hunter(),
+        },
         cwd=str(source_repo.resolve()),
         add_dirs=[str(rules_dir.resolve())],
         permission_mode="bypassPermissions",
