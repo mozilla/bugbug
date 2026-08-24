@@ -76,7 +76,7 @@ class _FakeRun:
     agent: str = "bug-fix"
     run_id: uuid.UUID = field(default_factory=uuid.uuid4)
     summary: dict | None = None
-    inputs: dict | None = field(default_factory=dict)
+    inputs: dict = field(default_factory=dict)
 
 
 def _spec(*, auto=True, consent=False):
