@@ -276,19 +276,22 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
         run.error = error
     run.finalized_at = datetime.now(timezone.utc)
 
+    run_id = run.run_id
+    agent = run.agent
     await db.commit()
-    _capture_unsubmitted_patch_warning(run, new_status, summary, artifacts)
-    await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
+    _capture_unsubmitted_patch_warning(run_id, agent, new_status, summary, artifacts)
+    await pubsub.publish_run_completed(str(run_id), agent, new_status.value)
 
 
 def _capture_unsubmitted_patch_warning(
-    run: Run,
+    run_id: uuid.UUID,
+    agent: str,
     run_status: RunStatus,
     summary: RunSummary | None,
     artifacts: list[ArtifactRef],
 ) -> None:
     """Warn when a patch-submitting agent leaves source changes undelivered."""
-    spec = AGENT_REGISTRY.get(run.agent)
+    spec = AGENT_REGISTRY.get(agent)
     if (
         run_status != RunStatus.succeeded
         or summary is None
@@ -307,11 +310,11 @@ def _capture_unsubmitted_patch_warning(
     log.warning(
         "%s (run_id=%s, agent=%s)",
         _UNSUBMITTED_PATCH_WARNING,
-        run.run_id,
-        run.agent,
+        run_id,
+        agent,
     )
     with sentry_sdk.new_scope() as scope:
-        scope.set_context("run", {"run_id": str(run.run_id)})
+        scope.set_context("run", {"run_id": str(run_id)})
         sentry_sdk.capture_message(
             _UNSUBMITTED_PATCH_WARNING,
             level="warning",

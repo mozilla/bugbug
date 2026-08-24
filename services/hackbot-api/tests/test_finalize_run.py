@@ -130,7 +130,8 @@ def test_unsubmitted_patch_warning(
     )
 
     runs_module._capture_unsubmitted_patch_warning(
-        _FakeRun(agent=agent),
+        uuid.uuid4(),
+        agent,
         run_status,
         RunSummary(status="ok", actions=[{"type": action} for action in actions]),
         [ArtifactRef(name=artifact, size=10) for artifact in artifacts],
