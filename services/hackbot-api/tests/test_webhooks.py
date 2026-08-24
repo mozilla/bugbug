@@ -498,6 +498,8 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
     assert detected is not None
     assert detected.bug_id == 2022889
     assert detected.flag_id == 2187233
+    assert "gmierzwinski@mozilla.com" in detected.comment
+    assert "2026-08-07T18:00:05" in detected.comment
 
 
 @pytest.mark.parametrize(
@@ -761,10 +763,20 @@ def test_bugzilla_route_triggers_run(client):
 
     assert response.status_code == 202
     assert response.json() == {"status": "triggered", "run_id": "run-abc"}
+    expected_comment = (
+        "Check whether Bugzilla user gmierzwinski@mozilla.com posted a comment "
+        "at exactly 2026-08-07T18:00:05. If one exists, treat it as the "
+        "developer's request. A needinfo may be requested without a comment, "
+        "so use the surrounding bug context if none exists."
+    )
     assert fake_api.calls == [
         (
             "bug-fix",
-            {"bug_id": 2022889, "bugzilla_needinfo_flag_id": 2187233},
+            {
+                "bug_id": 2022889,
+                "bugzilla_needinfo_flag_id": 2187233,
+                "comment": expected_comment,
+            },
         )
     ]
 

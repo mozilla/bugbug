@@ -94,10 +94,13 @@ class BugFixInputs(BaseModel):
     def _validate_mode(self) -> "BugFixInputs":
         """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
         if self.bugzilla_needinfo_flag_id is not None:
-            if self.revision_id is not None or self.comment is not None:
+            if self.revision_id is not None:
                 raise ValueError(
-                    "bugzilla_needinfo_flag_id cannot be combined with "
-                    "revision_id or comment"
+                    "bugzilla_needinfo_flag_id cannot be combined with revision_id"
+                )
+            if not self.comment:
+                raise ValueError(
+                    "comment is required when bugzilla_needinfo_flag_id is set"
                 )
         elif self.revision_id is not None:
             if not self.comment:

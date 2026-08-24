@@ -11,6 +11,7 @@ class BugzillaNeedinfoEvent:
 
     bug_id: int
     flag_id: int
+    comment: str
 
 
 def detect_needinfo_request(
@@ -64,7 +65,10 @@ def detect_needinfo_request(
     if not flag_id:
         return None
 
-    return BugzillaNeedinfoEvent(
-        bug_id=bug_id,
-        flag_id=flag_id,
+    comment = (
+        f"Check whether Bugzilla user {actor_login} posted a comment at exactly "
+        f"{event['time']}. If one exists, treat it as the developer's request. "
+        "A needinfo may be requested without a comment, so use the surrounding "
+        "bug context if none exists."
     )
+    return BugzillaNeedinfoEvent(bug_id=bug_id, flag_id=flag_id, comment=comment)

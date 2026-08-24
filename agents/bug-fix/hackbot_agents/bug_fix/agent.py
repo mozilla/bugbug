@@ -67,7 +67,7 @@ def select_workflow(
     """Select actions and prompt for exactly one of the three bug-fix modes."""
     if bugzilla_needinfo_flag_id is not None:
         return BUGZILLA_NEEDINFO_ACTIONS, render_prompt(
-            "bugzilla-needinfo.md", bug_id=bug
+            "bugzilla-needinfo.md", bug_id=bug, comment=comment
         )
     if revision_id:
         return PHABRICATOR_FOLLOW_UP_ACTIONS, render_prompt(

@@ -161,6 +161,7 @@ async def bugzilla_webhook(
         {
             "bug_id": detected.bug_id,
             "bugzilla_needinfo_flag_id": detected.flag_id,
+            "comment": detected.comment,
         },
     )
     # Do not consume an event until run creation succeeds; a transient failure

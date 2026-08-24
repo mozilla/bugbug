@@ -31,8 +31,22 @@ def test_model_to_env_skips_none_fields():
 
 
 def test_bugzilla_needinfo_flag_id_selects_follow_up_mode():
-    inputs = BugFixInputs(bug_id=1, bugzilla_needinfo_flag_id=2187233)
-    assert model_to_env(inputs)["BUGZILLA_NEEDINFO_FLAG_ID"] == "2187233"
+    inputs = BugFixInputs(
+        bug_id=1,
+        bugzilla_needinfo_flag_id=2187233,
+        comment=(
+            "Check whether Bugzilla user user@example.com posted a comment at "
+            "exactly 2026-08-21T16:36:29."
+        ),
+    )
+    env = model_to_env(inputs)
+    assert env["BUGZILLA_NEEDINFO_FLAG_ID"] == "2187233"
+    assert env["COMMENT"] == inputs.comment
+
+
+def test_bugzilla_needinfo_requires_comment_context():
+    with pytest.raises(ValidationError, match="comment"):
+        BugFixInputs(bug_id=1, bugzilla_needinfo_flag_id=2187233)
 
 
 def test_bugzilla_needinfo_rejects_phabricator_context():
@@ -47,7 +61,11 @@ def test_bugzilla_needinfo_rejects_phabricator_context():
 
 def test_bugzilla_needinfo_flag_id_must_be_positive():
     with pytest.raises(ValidationError, match="greater than 0"):
-        BugFixInputs(bug_id=1, bugzilla_needinfo_flag_id=0)
+        BugFixInputs(
+            bug_id=1,
+            bugzilla_needinfo_flag_id=0,
+            comment="Needinfo trigger context",
+        )
 
 
 def test_model_to_env_does_not_emit_deploy_constants():
