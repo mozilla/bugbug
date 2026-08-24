@@ -14,7 +14,7 @@ async def _create(monkeypatch, payload: dict, agent: str = "bug-fix"):
     async def fake_policy(run_id, timeout_seconds):
         return {"url": "https://upload.example/", "fields": {"key": "v"}}
 
-    async def fake_trigger(job_name, env, timeout_seconds):
+    async def fake_trigger(job_name, env, timeout_seconds, broker_env=None):
         triggered["job_name"] = job_name
         triggered["env"] = env
         return "projects/p/locations/l/jobs/j/executions/e"
