@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import pytest
 from app import gcs, jobs, pubsub
 from app.jobs import ExecutionStatus
+from app.routers import runs as runs_module
 from app.routers.runs import finalize_run
 from app.schemas import ArtifactRef, RunStatus, RunSummary
 
@@ -93,6 +94,49 @@ async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
     assert run.finalized_at is not None
     assert run.artifacts == [{"name": "summary.json", "size": 10, "content_type": None}]
     assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+
+
+@pytest.mark.parametrize(
+    ("agent", "run_status", "actions", "artifacts", "should_warn"),
+    [
+        ("bug-fix", RunStatus.succeeded, [], ["changes/changes.patch"], True),
+        (
+            "bug-fix",
+            RunStatus.succeeded,
+            ["phabricator.submit_patch"],
+            ["changes/changes.patch"],
+            False,
+        ),
+        (
+            "bug-fix",
+            RunStatus.succeeded,
+            ["phabricator.update_patch"],
+            ["changes/changes.patch"],
+            False,
+        ),
+        ("bug-fix", RunStatus.succeeded, [], [], False),
+        ("bug-fix", RunStatus.failed, [], ["changes/changes.patch"], False),
+        ("build-repair", RunStatus.succeeded, [], ["changes/changes.patch"], False),
+    ],
+)
+def test_unsubmitted_patch_warning(
+    monkeypatch, agent, run_status, actions, artifacts, should_warn
+):
+    captured = []
+    monkeypatch.setattr(
+        runs_module.sentry_sdk,
+        "capture_message",
+        lambda message, *, level: captured.append((message, level)),
+    )
+
+    runs_module._capture_unsubmitted_patch_warning(
+        _FakeRun(agent=agent),
+        run_status,
+        RunSummary(status="ok", actions=[{"type": action} for action in actions]),
+        [ArtifactRef(name=artifact, size=10) for artifact in artifacts],
+    )
+
+    assert bool(captured) is should_warn
 
 
 async def test_finalizes_as_failed_when_summary_missing(monkeypatch):

@@ -4,7 +4,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
+import sentry_sdk
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,7 @@ from app.database.models import Run, RunAction
 from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
+    ArtifactRef,
     RunActionDoc,
     RunDoc,
     RunRef,
@@ -29,6 +32,11 @@ from app.schemas import (
 log = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
+
+_PATCH_ARTIFACT = "changes/changes.patch"
+_UNSUBMITTED_PATCH_WARNING = (
+    "Agent run produced code changes without submitting a patch"
+)
 
 
 def _normalize_identity(email: str | None) -> str | None:
@@ -269,7 +277,45 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     run.finalized_at = datetime.now(timezone.utc)
 
     await db.commit()
+    _capture_unsubmitted_patch_warning(run, new_status, summary, artifacts)
     await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
+
+
+def _capture_unsubmitted_patch_warning(
+    run: Run,
+    run_status: RunStatus,
+    summary: RunSummary | None,
+    artifacts: list[ArtifactRef],
+) -> None:
+    """Warn when a patch-submitting agent leaves source changes undelivered."""
+    spec = AGENT_REGISTRY.get(run.agent)
+    if (
+        run_status != RunStatus.succeeded
+        or summary is None
+        or spec is None
+        or not spec.warn_on_unsubmitted_patch
+    ):
+        return
+
+    artifact_names = {artifact.name for artifact in artifacts}
+    action_types = {action.get("type") for action in summary.actions}
+    if _PATCH_ARTIFACT not in artifact_names or not action_types.isdisjoint(
+        PATCH_ACTION_TYPES
+    ):
+        return
+
+    log.warning(
+        "%s (run_id=%s, agent=%s)",
+        _UNSUBMITTED_PATCH_WARNING,
+        run.run_id,
+        run.agent,
+    )
+    with sentry_sdk.new_scope() as scope:
+        scope.set_context("run", {"run_id": str(run.run_id)})
+        sentry_sdk.capture_message(
+            _UNSUBMITTED_PATCH_WARNING,
+            level="warning",
+        )
 
 
 def _terminal_status(
