@@ -16,7 +16,9 @@ export function middleware(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Remember the requested URL so the login page can send the user back here
   const loginUrl = new URL("/login", req.url);
+  loginUrl.searchParams.set("callbackURL", req.nextUrl.toString());
   return NextResponse.redirect(loginUrl);
 }
 
