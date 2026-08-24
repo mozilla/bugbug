@@ -63,7 +63,7 @@ Stage 2:
 
 - A patch in Hackbot format
 
-## Slack notification
+## Notifications
 
 A run whose verdict a sheriff has to act on records a `slack.post_message` action
 carrying it -- the recommendation, the classification and confidence, the failing job
@@ -71,12 +71,17 @@ carrying it -- the recommendation, the classification and confidence, the failin
 ruled out, and whether a patch is attached. A known intermittent -- `intermittent`
 classified `do_not_backout` -- is not posted: it asks nothing of a sheriff and is the
 majority verdict, so it would be noise. An intermittent recommending `rerun` is still
-posted, since the retrigger is the sheriff's to run. The hackbot team gets every
-verdict either way, by email from the pulse listener.
+posted, since the retrigger is the sheriff's to run.
 
-The message is posted by the apply step, not from the run, so it is visible in the
-hackbot UI before it lands and is delivered at most once. `test-repair` opts into
-auto-apply, so a succeeded run posts without waiting for a human.
+Every verdict also records an `email.send` action carrying the full analysis and the
+proposed patch, for the hackbot team to track what the agent decided -- unfiltered, and
+never addressed to the developer the agent happens to blame. Treeherder is re-read just
+before it is recorded, so a failure a sheriff dealt with while the run worked says so in
+the subject.
+
+Both are delivered by the apply step, not from the run, so they are visible in the
+hackbot UI before they land and are delivered at most once. `test-repair` opts into
+auto-apply, so a succeeded run reports without waiting for a human.
 
 ## Test the agent
 
