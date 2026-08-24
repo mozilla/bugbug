@@ -2,7 +2,7 @@ from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import BuildRepairResult, run_build_repair
-from .resolve import resolve_git_commits
+from .resolve import resolve_push
 
 
 class AgentInputs(BaseSettings):
@@ -32,7 +32,8 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
     # The first is the failure commit the tree is checked out at; the rest let
     # the agent blame the culprit.
     task_id = next(iter(inputs.failure_tasks.values()))
-    git_commits = resolve_git_commits(task_id, inputs.git_commit)
+    push = resolve_push(task_id, inputs.git_commit)
+    git_commits = push.git_commits
 
     # Pin the checkout to the failure commit and fetch deep enough to include the
     # whole push, so the agent can `git show` every commit in it.
@@ -47,6 +48,8 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
         fx_ctx=ctx.firefox,
         bug_id=inputs.bug_id,
         git_commits=git_commits,
+        project=push.project,
+        hg_revision=push.hg_revision,
         failure_tasks=inputs.failure_tasks,
         run_try_push=inputs.run_try_push,
         model=inputs.model,
