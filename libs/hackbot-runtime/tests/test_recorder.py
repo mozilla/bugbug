@@ -47,14 +47,15 @@ def test_attachment_uploaded_when_uploader_set(tmp_path):
     artifacts = tmp_path / "artifacts"
     rec = ActionsRecorder(uploader=uploader, artifacts_dir=artifacts)
 
-    rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src})
+    recorded = rec.record(
+        "bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src}
+    )
+    key = f"attachments/{recorded['action_id']}/file"
 
     # Uploaded under the stable key; NOT copied locally.
-    assert uploader.uploaded == [("attachments/0/file", src)]
+    assert uploader.uploaded == [(key, src)]
     assert not artifacts.exists()
-    assert rec.actions[0]["attachments"] == [
-        {"name": "file", "uploaded_key": "attachments/0/file"}
-    ]
+    assert rec.actions[0]["attachments"] == [{"name": "file", "uploaded_key": key}]
 
 
 def test_attachment_copied_when_no_uploader(tmp_path):
@@ -63,22 +64,27 @@ def test_attachment_copied_when_no_uploader(tmp_path):
     artifacts = tmp_path / "artifacts"
     rec = ActionsRecorder(artifacts_dir=artifacts)
 
-    rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src})
+    recorded = rec.record(
+        "bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src}
+    )
+    key = f"attachments/{recorded['action_id']}/file"
 
-    copied = artifacts / "attachments/0/file"
+    copied = artifacts / key
     assert copied.read_text() == "diff-content"
-    assert rec.actions[0]["attachments"] == [
-        {"name": "file", "uploaded_key": "attachments/0/file"}
-    ]
+    assert rec.actions[0]["attachments"] == [{"name": "file", "uploaded_key": key}]
 
 
-def test_attachment_key_uses_action_index(tmp_path):
+def test_attachment_key_uses_action_id(tmp_path):
     src = tmp_path / "f.txt"
     src.write_text("x")
     rec = ActionsRecorder(artifacts_dir=tmp_path / "a")
     rec.record("bugzilla.update_bug", {"bug_id": 1})
-    rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src})
-    assert rec.actions[1]["attachments"][0]["uploaded_key"] == "attachments/1/file"
+    recorded = rec.record(
+        "bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src}
+    )
+    assert rec.actions[1]["attachments"][0]["uploaded_key"] == (
+        f"attachments/{recorded['action_id']}/file"
+    )
 
 
 def test_ref_included_when_given():
@@ -149,7 +155,10 @@ def test_hook_sees_ref_but_runs_before_attachments_are_published(tmp_path):
     # Publishing happens only once the hooks have accepted the action.
     assert "attachments" not in captured[0]
     assert recorded["attachments"] == [
-        {"name": "file", "uploaded_key": "attachments/0/file"}
+        {
+            "name": "file",
+            "uploaded_key": f"attachments/{recorded['action_id']}/file",
+        }
     ]
 
 
@@ -295,11 +304,11 @@ def test_removed_action_id_and_attachment_key_are_not_reused(tmp_path):
     assert rec.list_actions()[0]["action_id"] == kept_id
 
     assert rec.actions[0]["attachments"] == [
-        {"name": "file", "uploaded_key": "attachments/1/file"}
+        {"name": "file", "uploaded_key": f"attachments/{kept_id}/file"}
     ]
-    assert (tmp_path / "artifacts" / "attachments" / "0" / "file").read_text() == (
-        "first"
-    )
-    assert (tmp_path / "artifacts" / "attachments" / "1" / "file").read_text() == (
-        "second"
-    )
+    assert (
+        tmp_path / "artifacts" / "attachments" / removed_id / "file"
+    ).read_text() == "first"
+    assert (
+        tmp_path / "artifacts" / "attachments" / kept_id / "file"
+    ).read_text() == "second"

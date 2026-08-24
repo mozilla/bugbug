@@ -42,7 +42,6 @@ class ActionsRecorder:
         hooks: Mapping[str, Sequence[ActionHook]] = {},
     ) -> None:
         self._actions: dict[str, dict] = {}
-        self._next_action_sequence = 0
         self._uploader = uploader
         self._artifacts_dir = artifacts_dir
         self._hooks = {
@@ -73,12 +72,11 @@ class ActionsRecorder:
         ``phabricator.create_revision``). ``params`` is action-specific data
         the apply step will need. ``attachments`` maps a logical name to a
         local file path; each file is preserved under the stable key
-        ``attachments/<action_sequence>/<name>``: uploaded via the runtime
+        ``attachments/<action_id>/<name>``: uploaded via the runtime
         uploader when one is configured, otherwise copied into the local
         artifacts directory (so it is retrievable from compose/direct runs).
-        The sequence is never reused, even after action removal. The recorded
-        action references it by that key; the original local path is not
-        persisted (it disappears with the container).
+        The recorded action references it by that key; the original local path
+        is not persisted (it disappears with the container).
 
         ``ref`` optionally labels this action so a *later* action in the same
         run can reference its apply-time result (e.g. a Bugzilla comment's
@@ -94,8 +92,6 @@ class ActionsRecorder:
         recording leaves nothing behind: the action the hooks see carries no
         ``attachments`` key yet.
         """
-        sequence = self._next_action_sequence
-        self._next_action_sequence += 1
         action_id = f"action-{uuid.uuid4().hex}"
         action: dict = {
             "type": action_type,
@@ -114,7 +110,7 @@ class ActionsRecorder:
                 key = publish_file(
                     self._uploader,
                     self._artifacts_dir,
-                    f"attachments/{sequence}/{name}",
+                    f"attachments/{action_id}/{name}",
                     path,
                 )
                 recorded_attachments.append({"name": name, "uploaded_key": key})
