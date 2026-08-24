@@ -153,6 +153,11 @@ class HackbotContext(BaseSettings):
             )
         return self._repo_path
 
+    @property
+    def source_base(self) -> str | None:
+        """The commit the agent started editing from, or None if not recorded."""
+        return self._source_base
+
     @cached_property
     def firefox(self) -> "FirefoxContext":
         """Firefox build paths derived from the prepared source checkout.
