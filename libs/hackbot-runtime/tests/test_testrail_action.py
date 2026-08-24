@@ -15,6 +15,10 @@ def _cases():
             "steps": [
                 {"action": "Open the PDF", "expectation": "The PDF is displayed."}
             ],
+            "result": {
+                "status": "passed",
+                "summary": "Worked.",
+            },
         }
     ]
 
@@ -38,8 +42,14 @@ async def test_submit_test_plan_tool_records_deferred_action():
                 "steps": [
                     {"action": "Open the PDF", "expectation": "The PDF is displayed."}
                 ],
+                "result": {
+                    "status": "passed",
+                    "summary": "Worked.",
+                    "failure_reason": None,
+                },
             }
         ],
+        "summary": None,
     }
 
 
@@ -55,6 +65,7 @@ async def test_submit_test_plan_tool_rejects_invalid_input():
                     "id": 1,
                     "title": "Case",
                     "steps": [],
+                    "result": {"status": "passed", "summary": "Worked."},
                 }
             ],
         )
@@ -75,6 +86,7 @@ async def test_submit_test_plan_tool_rejects_cases_without_expectation():
                     "id": 1,
                     "title": "Case",
                     "steps": [{"action": "Open the PDF", "expectation": None}],
+                    "result": {"status": "passed", "summary": "Worked."},
                 }
             ],
         )
@@ -144,6 +156,7 @@ async def test_submit_test_plan_tool_preserves_blank_expectations():
                     {"action": "Open the PDF", "expectation": ""},
                     {"action": "Select text", "expectation": "Text is selected."},
                 ],
+                "result": {"status": "passed", "summary": "Worked."},
             }
         ],
     )
@@ -152,6 +165,56 @@ async def test_submit_test_plan_tool_preserves_blank_expectations():
         {"action": "Open the PDF", "expectation": ""},
         {"action": "Select text", "expectation": "Text is selected."},
     ]
+
+
+async def test_submit_test_plan_tool_records_execution_results():
+    recorder = ActionsRecorder()
+
+    await testrail.submit_test_plan(
+        recorder,
+        feature="Feature",
+        generated_test_cases=_cases(),
+        summary="All executable cases passed.",
+    )
+
+    assert recorder.actions[0]["params"]["generated_test_cases"][0]["result"] == {
+        "status": "passed",
+        "summary": "Worked.",
+        "failure_reason": None,
+    }
+    assert recorder.actions[0]["params"]["summary"] == "All executable cases passed."
+
+
+async def test_submit_test_plan_tool_rejects_missing_case_result():
+    recorder = ActionsRecorder()
+    cases = _cases()
+    del cases[0]["result"]
+
+    with pytest.raises(ToolError) as exc:
+        await testrail.submit_test_plan(
+            recorder,
+            feature="Feature",
+            generated_test_cases=cases,
+        )
+
+    assert "invalid TestRail submission" in str(exc.value)
+    assert recorder.actions == []
+
+
+async def test_submit_test_plan_tool_rejects_not_run_results():
+    recorder = ActionsRecorder()
+    cases = _cases()
+    cases[0]["result"] = {"status": "not_run", "summary": "Not run."}
+
+    with pytest.raises(ToolError) as exc:
+        await testrail.submit_test_plan(
+            recorder,
+            feature="Feature",
+            generated_test_cases=cases,
+        )
+
+    assert "invalid TestRail submission" in str(exc.value)
+    assert recorder.actions == []
 
 
 def test_submit_test_plan_handler_is_registered():
