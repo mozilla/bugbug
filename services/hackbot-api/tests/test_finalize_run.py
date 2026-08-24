@@ -119,14 +119,9 @@ async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
     ],
 )
 def test_unsubmitted_patch_warning(
-    monkeypatch, agent, run_status, actions, artifacts, should_warn
+    caplog, agent, run_status, actions, artifacts, should_warn
 ):
-    captured = []
-    monkeypatch.setattr(
-        runs_module.sentry_sdk,
-        "capture_message",
-        lambda message, *, level: captured.append((message, level)),
-    )
+    caplog.set_level("ERROR", logger=runs_module.__name__)
 
     runs_module._capture_unsubmitted_patch_warning(
         uuid.uuid4(),
@@ -136,7 +131,9 @@ def test_unsubmitted_patch_warning(
         [ArtifactRef(name=artifact, size=10) for artifact in artifacts],
     )
 
-    assert bool(captured) is should_warn
+    assert (
+        "Agent run produced code changes without submitting a patch" in caplog.text
+    ) is should_warn
 
 
 async def test_finalizes_as_failed_when_summary_missing(monkeypatch):

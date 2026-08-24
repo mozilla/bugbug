@@ -4,7 +4,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-import sentry_sdk
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BeforeValidator
@@ -34,9 +33,6 @@ log = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
 _PATCH_ARTIFACT = "changes/changes.patch"
-_UNSUBMITTED_PATCH_WARNING = (
-    "Agent run produced code changes without submitting a patch"
-)
 
 
 def _normalize_identity(email: str | None) -> str | None:
@@ -301,18 +297,12 @@ def _capture_unsubmitted_patch_warning(
     ):
         return
 
-    log.warning(
-        "%s (run_id=%s, agent=%s)",
-        _UNSUBMITTED_PATCH_WARNING,
+    log.error(
+        "Agent run produced code changes without submitting a patch "
+        "(run_id=%s, agent=%s)",
         run_id,
         agent,
     )
-    with sentry_sdk.new_scope() as scope:
-        scope.set_context("run", {"run_id": str(run_id)})
-        sentry_sdk.capture_message(
-            _UNSUBMITTED_PATCH_WARNING,
-            level="warning",
-        )
 
 
 def _terminal_status(
