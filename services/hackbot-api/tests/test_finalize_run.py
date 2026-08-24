@@ -116,7 +116,6 @@ async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
         ),
         ("bug-fix", RunStatus.succeeded, [], [], False),
         ("bug-fix", RunStatus.failed, [], ["changes/changes.patch"], False),
-        ("build-repair", RunStatus.succeeded, [], ["changes/changes.patch"], False),
     ],
 )
 def test_unsubmitted_patch_warning(

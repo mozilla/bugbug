@@ -290,14 +290,8 @@ def _capture_unsubmitted_patch_warning(
     summary: RunSummary | None,
     artifacts: list[ArtifactRef],
 ) -> None:
-    """Warn when a patch-submitting agent leaves source changes undelivered."""
-    spec = AGENT_REGISTRY.get(agent)
-    if (
-        run_status != RunStatus.succeeded
-        or summary is None
-        or spec is None
-        or not spec.warn_on_unsubmitted_patch
-    ):
+    """Warn when an agent leaves source changes undelivered."""
+    if run_status != RunStatus.succeeded or summary is None:
         return
 
     artifact_names = {artifact.name for artifact in artifacts}
