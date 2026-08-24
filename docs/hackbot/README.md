@@ -48,18 +48,19 @@ what it proposed.
 
 ## Where to read next
 
-| If you want to…                                            | Read                               |
-| ---------------------------------------------------------- | ---------------------------------- |
-| Understand the components and why they're split that way   | [architecture.md](architecture.md) |
-| Write or modify an agent                                   | [agents.md](agents.md)             |
-| Know what the runtime hands your agent                     | [runtime.md](runtime.md)           |
-| Find a tool your agent can call, or add one                | [tools.md](tools.md)               |
-| Understand how agents change the world (record-then-apply) | [actions.md](actions.md)           |
-| Work on the control-plane service                          | [api.md](api.md)                   |
-| Know how runs get started                                  | [triggers.md](triggers.md)         |
-| Reason about credentials and trust boundaries              | [security.md](security.md)         |
-| Deploy, configure, or run things locally                   | [deployment.md](deployment.md)     |
-| Look at traces of a run                                    | [tracing.md](tracing.md)           |
+| If you want to…                                            | Read                                   |
+| ---------------------------------------------------------- | -------------------------------------- |
+| Understand the components and why they're split that way   | [architecture.md](architecture.md)     |
+| Write or modify an agent                                   | [agents.md](agents.md)                 |
+| Know what the runtime hands your agent                     | [runtime.md](runtime.md)               |
+| Find a tool your agent can call, or add one                | [tools.md](tools.md)                   |
+| Understand how agents change the world (record-then-apply) | [actions.md](actions.md)               |
+| Work on the control-plane service                          | [api.md](api.md)                       |
+| Know how runs get started                                  | [triggers.md](triggers.md)             |
+| Reason about credentials and trust boundaries              | [security.md](security.md)             |
+| Follow the proposed private-Bugzilla access design         | [bugzilla-proxy.md](bugzilla-proxy.md) |
+| Deploy, configure, or run things locally                   | [deployment.md](deployment.md)         |
+| Look at traces of a run                                    | [tracing.md](tracing.md)               |
 
 ## Code map
 
