@@ -89,7 +89,6 @@ def test_sample_messages_route_to_test_repair_not_build():
     # The captured samples are all test tasks. They now reach the test-repair path
     # (they were ignored outright when the listener only handled builds), and none of
     # them triggers the build-repair agent.
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.treeherder, "failing_groups", return_value=[]) as groups,
@@ -98,23 +97,20 @@ def test_sample_messages_route_to_test_repair_not_build():
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
         for body in _sample_bodies():
-            assert consumer.process(body, executor) is None
+            assert consumer.process(body) is None
     # At least the autoland samples were routed to the test-repair path.
     assert groups.called
     trigger.assert_not_called()
-    executor.submit.assert_not_called()
 
 
 def test_missing_label_is_skipped_not_crashed():
-    executor = MagicMock()
     body = {"status": {"taskId": "XYZ"}, "task": {"tags": {"project": "autoland"}}}
     with patch.object(consumer.client, "trigger_run") as trigger:
-        assert consumer.process(body, executor) is None
+        assert consumer.process(body) is None
     trigger.assert_not_called()
 
 
-def test_build_failure_triggers_run_and_submits_poll():
-    executor = MagicMock()
+def test_build_failure_triggers_run():
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
@@ -122,26 +118,16 @@ def test_build_failure_triggers_run_and_submits_poll():
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
-        run_id = consumer.process(_build_msg(), executor)
+        run_id = consumer.process(_build_msg())
 
     assert run_id == "run-1"
     trigger.assert_called_once()
     inputs = trigger.call_args.args[0]
     assert inputs["failure_tasks"] == {"build-linux64/opt": "ABC"}
     assert "git_commits" not in inputs
-    executor.submit.assert_called_once()
-    fn, ctx = executor.submit.call_args.args
-    assert fn is consumer.worker.poll_and_notify
-    assert ctx.run_id == "run-1"
-    assert ctx.git_commit == "deadbeef"
-    assert ctx.hg_revision == "hgrev"
-    assert ctx.task_id == "ABC"
-    assert ctx.repo == "autoland"
-    assert ctx.developer_email == "dev@mozilla.com"
 
 
 def test_only_failure_tasks_sent_to_agent():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
@@ -149,7 +135,7 @@ def test_only_failure_tasks_sent_to_agent():
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
-        consumer.process(_build_msg(), executor)
+        consumer.process(_build_msg())
 
     # The agent resolves the push (and its authors) itself; the listener
     # only hands it the failing tasks.
@@ -159,7 +145,6 @@ def test_only_failure_tasks_sent_to_agent():
 
 
 def test_same_revision_triggers_once():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
@@ -167,14 +152,13 @@ def test_same_revision_triggers_once():
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
-        consumer.process(_build_msg(task_id="T1"), executor)
-        consumer.process(_build_msg(task_id="T2"), executor)
+        consumer.process(_build_msg(task_id="T1"))
+        consumer.process(_build_msg(task_id="T2"))
 
     trigger.assert_called_once()
 
 
 def test_inherited_failure_is_skipped_before_mapping():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
@@ -182,15 +166,13 @@ def test_inherited_failure_is_skipped_before_mapping():
         patch.object(consumer.lando, "hg_to_git") as hg_to_git,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
-        assert consumer.process(_build_msg(), executor) is None
+        assert consumer.process(_build_msg()) is None
 
     hg_to_git.assert_not_called()
     trigger.assert_not_called()
-    executor.submit.assert_not_called()
 
 
 def test_multiple_builds_same_revision_trigger_once():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
@@ -198,14 +180,13 @@ def test_multiple_builds_same_revision_trigger_once():
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1") as trigger,
     ):
-        consumer.process(_build_msg(task_id="T1", label="build-linux64/opt"), executor)
-        consumer.process(_build_msg(task_id="T2", label="build-macosx64/opt"), executor)
+        consumer.process(_build_msg(task_id="T1", label="build-linux64/opt"))
+        consumer.process(_build_msg(task_id="T2", label="build-macosx64/opt"))
 
     trigger.assert_called_once()
 
 
 def test_inherited_label_does_not_suppress_new_label_on_same_revision():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
@@ -216,16 +197,12 @@ def test_inherited_label_does_not_suppress_new_label_on_same_revision():
     ):
         # Inherited failure on the first label must not mark the revision seen.
         assert (
-            consumer.process(
-                _build_msg(task_id="T1", label="build-linux64/opt"), executor
-            )
+            consumer.process(_build_msg(task_id="T1", label="build-linux64/opt"))
             is None
         )
         # A genuine regression on another label of the same push still runs.
         assert (
-            consumer.process(
-                _build_msg(task_id="T2", label="build-macosx64/opt"), executor
-            )
+            consumer.process(_build_msg(task_id="T2", label="build-macosx64/opt"))
             == "run-1"
         )
 
@@ -233,19 +210,17 @@ def test_inherited_label_does_not_suppress_new_label_on_same_revision():
 
 
 def test_unwatched_project_skipped_before_api_call():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task") as get_task,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
-        assert consumer.process(_build_msg(project="try"), executor) is None
+        assert consumer.process(_build_msg(project="try")) is None
 
     get_task.assert_not_called()
     trigger.assert_not_called()
 
 
 def test_backfilled_task_skipped_before_push_checks(fresh_push):
-    executor = MagicMock()
     backfill = _task_def(parent="ACTION-CALLBACK")
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=backfill),
@@ -253,16 +228,14 @@ def test_backfilled_task_skipped_before_push_checks(fresh_push):
         patch.object(consumer.regression, "is_new_build_failure") as is_new,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
-        assert consumer.process(_build_msg(), executor) is None
+        assert consumer.process(_build_msg()) is None
 
     fresh_push.assert_not_called()
     is_new.assert_not_called()
     trigger.assert_not_called()
-    executor.submit.assert_not_called()
 
 
 def test_stale_push_skipped_before_regression_check(fresh_push):
-    executor = MagicMock()
     fresh_push.return_value = True
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
@@ -270,7 +243,7 @@ def test_stale_push_skipped_before_regression_check(fresh_push):
         patch.object(consumer.regression, "is_new_build_failure") as is_new,
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
-        assert consumer.process(_build_msg(), executor) is None
+        assert consumer.process(_build_msg()) is None
 
     fresh_push.assert_called_once_with(
         "autoland", "hgrev", consumer.settings.max_push_age_hours * 3600
@@ -278,11 +251,9 @@ def test_stale_push_skipped_before_regression_check(fresh_push):
     # The regression check can block for an hour, so it must come after.
     is_new.assert_not_called()
     trigger.assert_not_called()
-    executor.submit.assert_not_called()
 
 
 def test_stale_push_is_not_marked_seen():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.regression, "is_stale_push", side_effect=[True, False]),
@@ -291,14 +262,13 @@ def test_stale_push_is_not_marked_seen():
         patch.object(consumer.regression, "is_new_build_failure", return_value=True),
         patch.object(consumer.client, "trigger_run", return_value="run-1"),
     ):
-        assert consumer.process(_build_msg(task_id="T1"), executor) is None
+        assert consumer.process(_build_msg(task_id="T1")) is None
         # A stale verdict is not a claim on the revision, so a later message for
         # it (e.g. once the push date becomes readable) is still handled.
-        assert consumer.process(_build_msg(task_id="T2"), executor) == "run-1"
+        assert consumer.process(_build_msg(task_id="T2")) == "run-1"
 
 
 def test_unmappable_revision_skipped():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.treeherder, "recheck_skip_reason", return_value=None),
@@ -306,14 +276,12 @@ def test_unmappable_revision_skipped():
         patch.object(consumer.lando, "hg_to_git", return_value=None),
         patch.object(consumer.client, "trigger_run") as trigger,
     ):
-        assert consumer.process(_build_msg(), executor) is None
+        assert consumer.process(_build_msg()) is None
 
     trigger.assert_not_called()
-    executor.submit.assert_not_called()
 
 
 def test_trigger_failure_releases_revision_for_retry():
-    executor = MagicMock()
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
         patch.object(consumer.lando, "hg_to_git", return_value="deadbeef"),
@@ -323,9 +291,9 @@ def test_trigger_failure_releases_revision_for_retry():
             consumer.client, "trigger_run", side_effect=[RuntimeError("boom"), "run-2"]
         ) as trigger,
     ):
-        assert consumer.process(_build_msg(task_id="T1"), executor) is None
+        assert consumer.process(_build_msg(task_id="T1")) is None
         # Same revision can be retried because the failed claim was released.
-        assert consumer.process(_build_msg(task_id="T2"), executor) == "run-2"
+        assert consumer.process(_build_msg(task_id="T2")) == "run-2"
 
     assert trigger.call_count == 2
 
@@ -361,7 +329,6 @@ def env(monkeypatch):
         is_new_task_failure=MagicMock(return_value=True),
         hg_to_git=MagicMock(return_value="gitH"),
         trigger_run=MagicMock(return_value="tr-1"),
-        executor=MagicMock(),
     )
     monkeypatch.setattr(consumer.taskcluster, "get_task", mocks.get_task)
     monkeypatch.setattr(consumer.treeherder, "failing_groups", mocks.failing_groups)
@@ -387,7 +354,7 @@ def env(monkeypatch):
 
 
 def test_test_failure_triggers_rca_run(env):
-    run_id = consumer.process(_test_msg(), env.executor)
+    run_id = consumer.process(_test_msg())
 
     assert run_id == "tr-1"
     env.trigger_run.assert_called_once()
@@ -400,16 +367,12 @@ def test_test_failure_triggers_rca_run(env):
     }
     assert "test_id" not in inputs
     assert "candidate_commits" not in inputs
-    fn, ctx = env.executor.submit.call_args.args
-    assert fn is consumer.worker.poll_and_notify
-    assert ctx.agent == "test-repair"
-    assert ctx.test_groups == [_GROUP]
 
 
 def test_treeherder_intermittent_skipped_before_any_walk(env):
     # Treeherder's own verdict rules the failure out before any mozci work.
     env.await_skip_reason.return_value = "intermittent"
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.failing_groups.assert_not_called()
     env.new_test_failures.assert_not_called()
     env.trigger_run.assert_not_called()
@@ -418,36 +381,36 @@ def test_treeherder_intermittent_skipped_before_any_walk(env):
 def test_unclassified_failure_is_investigated(env):
     # "not classified" / "new failure" leave the decision to the mozci walk.
     env.await_skip_reason.return_value = None
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     env.new_test_failures.assert_called_once()
 
 
 def test_inherited_test_group_skipped(env):
     env.new_test_failures.side_effect = lambda *_: set()
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
 
 
 def test_one_run_per_push(env):
     # The agent reads the push's other failures itself, so the first task worth
     # investigating is enough; later failing tasks of the same push are skipped.
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) is None
     env.trigger_run.assert_called_once()
 
 
 def test_later_task_of_a_claimed_push_stops_before_treeherder(env):
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     env.job_for_task.reset_mock()
     env.failing_groups.reset_mock()
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B")) is None
     env.job_for_task.assert_not_called()
     env.failing_groups.assert_not_called()
 
 
 def test_no_failing_groups_skips(env):
     env.failing_groups.return_value = []
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
 
 
@@ -457,18 +420,16 @@ def test_task_without_group_results_still_triggers_run(env):
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable(
         "no group results for task ERR"
     )
-    assert consumer.process(_test_msg(task_id="ERR"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="ERR")) == "tr-1"
     env.trigger_run.assert_called_once()
-    # With no groups resolved there is nothing to filter or to name.
+    # With no groups resolved there is nothing to filter.
     env.new_test_failures.assert_not_called()
-    _, ctx = env.executor.submit.call_args.args
-    assert ctx.test_groups == []
 
 
 def test_unreadable_group_results_triggers_once_per_push(env):
     env.failing_groups.side_effect = RuntimeError("treeherder down")
-    consumer.process(_test_msg(task_id="A"), env.executor)
-    consumer.process(_test_msg(task_id="B"), env.executor)
+    consumer.process(_test_msg(task_id="A"))
+    consumer.process(_test_msg(task_id="B"))
     env.trigger_run.assert_called_once()
 
 
@@ -477,8 +438,8 @@ def test_rejected_task_does_not_suppress_a_real_regression_on_the_push(env):
     # inherited leaves the push open for the next failing task -- which may be the
     # genuine regression.
     env.new_test_failures.side_effect = [set(), {_GROUP}]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) is None
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
     env.trigger_run.assert_called_once()
 
 
@@ -486,31 +447,21 @@ def test_intermittent_task_does_not_suppress_the_next_task(env):
     # Same for a task Treeherder has already classified: it must not claim a push
     # it will not investigate.
     env.await_skip_reason.side_effect = ["intermittent", None]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) is None
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
     env.trigger_run.assert_called_once()
-
-
-def test_missing_git_mapping_still_triggers_run(env):
-    # Unlike a build failure, the run is still useful (the agent works from the
-    # task id), so a revision Lando has not mirrored yet must not drop it.
-    env.hg_to_git.return_value = None
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
-    env.trigger_run.assert_called_once()
-    _, ctx = env.executor.submit.call_args.args
-    assert ctx.git_commit == ""
 
 
 def test_unwatched_project_test_skipped(env):
-    assert consumer.process(_test_msg(project="try"), env.executor) is None
+    assert consumer.process(_test_msg(project="try")) is None
     env.get_task.assert_not_called()
     env.failing_groups.assert_not_called()
 
 
 def test_test_repair_trigger_failure_releases_group_for_retry(env):
     env.trigger_run.side_effect = [RuntimeError("boom"), "tr-2"]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-2"
+    assert consumer.process(_test_msg(task_id="A")) is None
+    assert consumer.process(_test_msg(task_id="B")) == "tr-2"
     assert env.trigger_run.call_count == 2
 
 
@@ -518,21 +469,17 @@ def test_multiple_failing_groups_trigger_one_run_per_task(env):
     groups = ["dom/base/test/mochitest.ini", "layout/test/mochitest.ini"]
     env.failing_groups.return_value = groups
 
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     # The whole task gets a single run; the agent investigates every failing group.
     env.trigger_run.assert_called_once()
     assert env.trigger_run.call_args.args[0]["failure_tasks"] == {
         "test-linux1804-64/opt-mochitest-browser-chrome-1": "TT"
     }
-    assert env.executor.submit.call_count == 1
-    # Every failing group is named, not an arbitrary one of them.
-    _, ctx = env.executor.submit.call_args.args
-    assert ctx.test_groups == groups
 
 
 def test_missing_hg_revision_skips_test_task(env):
     env.get_task.return_value = _task_def(revision=None)
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     # Bail before doing the (network-heavy) group resolution.
     env.failing_groups.assert_not_called()
     env.trigger_run.assert_not_called()
@@ -545,10 +492,8 @@ def test_every_failing_group_reaches_the_mozci_walk(env):
         "b/mochitest.ini"
     }
 
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     assert env.new_test_failures.call_args.args[3] == groups
-    _, ctx = env.executor.submit.call_args.args
-    assert ctx.test_groups == ["b/mochitest.ini"]
 
 
 def test_queue_name_includes_non_production_environment():
@@ -567,7 +512,7 @@ def test_classification_landing_during_the_check_cancels_the_run(env):
     # The regression check takes minutes, which is about how long Treeherder needs
     # to classify an intermittent; a verdict that arrives meanwhile must win.
     env.recheck_skip_reason.return_value = "intermittent"
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
 
 
@@ -579,18 +524,15 @@ def test_recheck_happens_after_the_regression_check(env):
     )[1]
     env.recheck_skip_reason.side_effect = lambda p, t: order.append("recheck")
 
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     assert order == ["walk", "recheck"]
 
 
 def test_backfill_in_a_new_task_group_is_deduped(env):
     # Backfills and retriggers are dispatched by action tasks, which start their own
     # Taskcluster task group. The same push+group must still be investigated once.
-    assert consumer.process(_test_msg(task_id="A", group_id="G1"), env.executor)
-    assert (
-        consumer.process(_test_msg(task_id="B", group_id="ACTION-GROUP"), env.executor)
-        is None
-    )
+    assert consumer.process(_test_msg(task_id="A", group_id="G1"))
+    assert consumer.process(_test_msg(task_id="B", group_id="ACTION-GROUP")) is None
     env.trigger_run.assert_called_once()
 
 
@@ -598,9 +540,9 @@ def test_different_pushes_are_not_deduped(env):
     # Dedupe is per push: a different manifest newly failing on a later push is a
     # separate regression and must be investigated again.
     _consecutive_pushes(env, "rev-one", "rev-two")
-    consumer.process(_test_msg(task_id="A"), env.executor)
+    consumer.process(_test_msg(task_id="A"))
     env.failing_groups.return_value = ["other/test/mochitest.ini"]
-    consumer.process(_test_msg(task_id="B"), env.executor)
+    consumer.process(_test_msg(task_id="B"))
     assert env.trigger_run.call_count == 2
 
 
@@ -611,7 +553,7 @@ def test_verdict_is_awaited_before_resolving_groups(env):
     env.await_skip_reason.side_effect = lambda p, t, j: order.append("await")
     env.failing_groups.side_effect = lambda *_: (order.append("groups"), [_GROUP])[1]
 
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     assert order == ["await", "groups"]
 
 
@@ -619,7 +561,7 @@ def test_the_verdict_is_awaited_once_on_every_path(env):
     # A task with no group results used to run its own second wait; the up-front one
     # covers it, and waiting twice would double the delay before a real repair.
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     env.await_skip_reason.assert_called_once()
 
 
@@ -627,14 +569,14 @@ def test_group_less_intermittent_is_dropped_by_the_up_front_gate(env):
     # The only filter such a failure gets, since it has no manifest to compare.
     env.await_skip_reason.return_value = "intermittent"
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
 
 
 def test_the_job_is_passed_to_the_verdict_wait(env):
     # The wait needs the ingested job: it is the verdict as of ingestion, and without
     # it the wait cannot tell "not classified yet" from "never ingested".
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     assert env.await_skip_reason.call_args.args[2] is env.job_for_task.return_value
 
 
@@ -642,7 +584,7 @@ def test_backfilled_test_task_is_skipped(env):
     # Same rule as the build path: a backfill or retrigger re-runs work the push
     # already scheduled, so it is not a new failure to investigate.
     env.get_task.return_value = _task_def(parent="ACTION-CALLBACK")
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.failing_groups.assert_not_called()
     env.trigger_run.assert_not_called()
 
@@ -651,7 +593,7 @@ def test_stale_push_skips_a_test_failure(env, fresh_push):
     # A test failure surfacing days after its push is not worth repairing either,
     # and the check must precede the ancestor walk, which can block for an hour.
     fresh_push.return_value = True
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     fresh_push.assert_called_once_with(
         "autoland", "hgrev", consumer.settings.max_push_age_hours * 3600
     )
@@ -666,8 +608,8 @@ def test_group_less_task_claims_the_push_for_every_path(env):
         consumer.treeherder.GroupResultsUnavailable("none"),
         [_GROUP],
     ]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) is None
     env.trigger_run.assert_called_once()
 
 
@@ -677,8 +619,8 @@ def test_manifest_failure_claims_the_push_against_a_group_less_task(env):
         [_GROUP],
         consumer.treeherder.GroupResultsUnavailable("none"),
     ]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) is None
     env.trigger_run.assert_called_once()
 
 
@@ -692,13 +634,13 @@ def test_a_rejected_task_is_logged_with_a_treeherder_link(env, caplog):
     # The reason to log links at all: every verdict must be checkable in the UI.
     env.await_skip_reason.return_value = "intermittent"
     with caplog.at_level(logging.INFO, logger="app.consumer"):
-        assert consumer.process(_test_msg(), env.executor) is None
+        assert consumer.process(_test_msg()) is None
     assert _LINK in caplog.text
 
 
 def test_a_triggered_run_is_logged_with_a_treeherder_link(env, caplog):
     with caplog.at_level(logging.INFO, logger="app.consumer"):
-        assert consumer.process(_test_msg(), env.executor) == "tr-1"
+        assert consumer.process(_test_msg()) == "tr-1"
     assert _LINK in caplog.text
 
 
@@ -707,7 +649,7 @@ def test_an_action_scheduled_task_is_logged_with_a_treeherder_link(env, caplog):
     # the ordering change exists to cover.
     env.get_task.return_value = _task_def(parent="ACTION-CALLBACK")
     with caplog.at_level(logging.INFO, logger="app.consumer"):
-        assert consumer.process(_test_msg(), env.executor) is None
+        assert consumer.process(_test_msg()) is None
     assert _LINK in caplog.text
 
 
@@ -717,9 +659,9 @@ def test_runs_stop_at_the_daily_limit(env, monkeypatch):
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
     _distinct_groups(env)
 
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
-    assert consumer.process(_test_msg(task_id="C"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
+    assert consumer.process(_test_msg(task_id="C")) is None
     assert env.trigger_run.call_count == 2
 
 
@@ -730,9 +672,9 @@ def test_the_limit_is_a_rolling_window(env, monkeypatch):
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
     _distinct_groups(env)
 
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     consumer._test_run_times[0] -= consumer._RATE_WINDOW_SECONDS + 1
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
 
 
 def test_a_spent_budget_stops_before_any_treeherder_work(env, monkeypatch):
@@ -740,10 +682,10 @@ def test_a_spent_budget_stops_before_any_treeherder_work(env, monkeypatch):
     revisions = iter(["rev-1", "rev-2"])
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
 
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     env.job_for_task.reset_mock()
     env.failing_groups.reset_mock()
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B")) is None
     env.job_for_task.assert_not_called()
     env.failing_groups.assert_not_called()
 
@@ -755,8 +697,8 @@ def test_a_failed_trigger_gives_its_slot_back(env, monkeypatch):
     revisions = iter(["rev-1", "rev-2"])
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
 
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-2"
+    assert consumer.process(_test_msg(task_id="A")) is None
+    assert consumer.process(_test_msg(task_id="B")) == "tr-2"
 
 
 def test_a_budget_blocked_task_does_not_claim_its_push(env, monkeypatch):
@@ -767,10 +709,10 @@ def test_a_budget_blocked_task_does_not_claim_its_push(env, monkeypatch):
     env.get_task.side_effect = lambda task_id: _task_def(next(revisions))
     env.failing_groups.side_effect = [[_GROUP], ["other/mochitest.ini"]] * 2
 
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) is None
     monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 2)
-    assert consumer.process(_test_msg(task_id="B2"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B2")) == "tr-1"
 
 
 def test_the_limit_does_not_apply_to_build_repair(env, monkeypatch):
@@ -782,14 +724,14 @@ def test_the_limit_does_not_apply_to_build_repair(env, monkeypatch):
         patch.object(consumer.lando, "hg_to_git", return_value="gitH"),
         patch.object(consumer.client, "trigger_run", return_value="br-1") as trigger,
     ):
-        assert consumer.process(_build_msg(), env.executor) == "br-1"
+        assert consumer.process(_build_msg()) == "br-1"
     trigger.assert_called_once()
 
 
 def test_exhausting_the_budget_is_logged_once(env, monkeypatch, caplog):
     monkeypatch.setattr(consumer.settings, "max_test_repairs_per_day", 1)
     with caplog.at_level(logging.WARNING, logger="app.consumer"):
-        assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+        assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     assert (
         sum(
             "budget of 1 runs per 24h is now spent" in r.message for r in caplog.records
@@ -817,7 +759,7 @@ def test_losing_the_claim_race_gives_the_slot_back(env, monkeypatch):
         return set(groups)
 
     env.new_test_failures.side_effect = claim_meanwhile
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="A")) is None
     env.trigger_run.assert_not_called()
     assert len(consumer._test_run_times) == 0
 
@@ -830,7 +772,7 @@ def test_source_test_tasks_are_not_routed_to_test_repair(env):
     body["task"]["tags"]["label"] = "source-test-node-newtab-unit-tests"
     body["task"]["tags"].pop("test-suite", None)
 
-    assert consumer.process(body, env.executor) is None
+    assert consumer.process(body) is None
     env.get_task.assert_not_called()
     env.trigger_run.assert_not_called()
 
@@ -839,7 +781,7 @@ def test_group_less_task_inherited_from_an_ancestor_is_skipped(env):
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
     env.is_new_task_failure.return_value = False
 
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
     assert env.is_new_task_failure.call_args.args[:3] == (
         "autoland",
@@ -852,7 +794,7 @@ def test_group_less_task_new_at_this_push_still_triggers(env):
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
     env.is_new_task_failure.return_value = True
 
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     env.trigger_run.assert_called_once()
 
 
@@ -861,7 +803,7 @@ def test_an_unreadable_group_lookup_does_not_wait_on_an_ancestor(env):
     # the same broken API, so that failure still runs the agent outright.
     env.failing_groups.side_effect = RuntimeError("treeherder down")
 
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     env.is_new_task_failure.assert_not_called()
 
 
@@ -874,7 +816,7 @@ def test_group_less_suites_are_investigated_as_a_whole_task(env):
     body = _test_msg()
     body["task"]["tags"]["label"] = "test-macosx1500-aarch64/debug-gtest-1proc"
 
-    assert consumer.process(body, env.executor) == "tr-1"
+    assert consumer.process(body) == "tr-1"
     env.is_new_task_failure.assert_called_once()
 
 
@@ -882,7 +824,7 @@ def test_manifest_suites_are_still_investigated(env):
     # The guard must not swallow a suite that does report manifests.
     body = _test_msg()
     body["task"]["tags"]["label"] = "test-linux2404-64/debug-mochitest-browser-chrome-7"
-    assert consumer.process(body, env.executor) == "tr-1"
+    assert consumer.process(body) == "tr-1"
 
 
 def test_a_walk_is_abandoned_once_the_push_is_claimed(env):
@@ -896,7 +838,7 @@ def test_a_walk_is_abandoned_once_the_push_is_claimed(env):
         raise consumer.regression.WalkAborted("group at rev")
 
     env.new_test_failures.side_effect = walk
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     assert aborted["stopped"] is True
     env.trigger_run.assert_not_called()
 
@@ -906,7 +848,7 @@ def test_an_abandoned_walk_does_not_look_inherited(env, caplog):
     # about the failure rather than "we stopped asking".
     env.new_test_failures.side_effect = consumer.regression.WalkAborted("group at rev")
     with caplog.at_level(logging.INFO, logger="app.consumer"):
-        assert consumer.process(_test_msg(), env.executor) is None
+        assert consumer.process(_test_msg()) is None
     assert "abandoning the check" in caplog.text
     assert "inherited" not in caplog.text
     assert "No new, non-intermittent groups" not in caplog.text
@@ -915,7 +857,7 @@ def test_an_abandoned_walk_does_not_look_inherited(env, caplog):
 def test_the_group_less_walk_is_also_abandoned(env):
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
     env.is_new_task_failure.side_effect = consumer.regression.WalkAborted("task at rev")
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
 
 
@@ -925,7 +867,7 @@ def _known_intermittent(*bug_ids):
 
 def test_a_known_intermittent_bug_skips_before_waiting_for_a_verdict(env):
     env.intermittent_match.return_value = _known_intermittent(2016093)
-    assert consumer.process(_test_msg(), env.executor) is None
+    assert consumer.process(_test_msg()) is None
     env.await_skip_reason.assert_not_called()
     env.failing_groups.assert_not_called()
     env.trigger_run.assert_not_called()
@@ -934,13 +876,13 @@ def test_a_known_intermittent_bug_skips_before_waiting_for_a_verdict(env):
 def test_the_skipped_bug_is_logged(env, caplog):
     env.intermittent_match.return_value = _known_intermittent(2016093)
     with caplog.at_level(logging.INFO, logger="app.consumer"):
-        assert consumer.process(_test_msg(), env.executor) is None
+        assert consumer.process(_test_msg()) is None
     assert "2016093" in caplog.text
     assert _LINK in caplog.text
 
 
 def test_the_ingested_job_is_what_the_gate_reads(env):
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
     assert env.intermittent_match.call_args.args == (
         "autoland",
         env.job_for_task.return_value,
@@ -952,13 +894,13 @@ def test_a_known_intermittent_does_not_claim_its_push(env):
         _known_intermittent(2016093),
         consumer.treeherder.IntermittentMatch(),
     ]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) is None
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
 
 
 def test_no_intermittent_match_still_runs(env):
     env.intermittent_match.return_value = consumer.treeherder.IntermittentMatch()
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
 
 
 def _consecutive_pushes(env, *revisions):
@@ -969,25 +911,25 @@ def _consecutive_pushes(env, *revisions):
 
 def test_the_same_manifest_on_later_pushes_is_deduped(env):
     _consecutive_pushes(env, "rev-one", "rev-two", "rev-three")
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="C"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) is None
+    assert consumer.process(_test_msg(task_id="C")) is None
     env.trigger_run.assert_called_once()
 
 
 def test_a_new_manifest_on_a_later_push_still_runs(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     env.failing_groups.return_value = ["layout/style/test/mochitest.toml"]
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
     assert env.trigger_run.call_count == 2
 
 
 def test_one_unseen_manifest_is_enough_to_run(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     env.failing_groups.return_value = [_GROUP, "layout/style/test/mochitest.toml"]
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
 
 
 def test_manifest_dedupe_is_per_project():
@@ -999,38 +941,38 @@ def test_manifest_dedupe_is_per_project():
 def test_a_skipped_task_does_not_claim_its_manifests(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
     env.await_skip_reason.side_effect = ["intermittent", None]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) is None
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
 
 
 def test_a_failed_trigger_releases_the_manifests(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
     env.trigger_run.side_effect = [RuntimeError("boom"), "tr-2"]
-    assert consumer.process(_test_msg(task_id="A"), env.executor) is None
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-2"
+    assert consumer.process(_test_msg(task_id="A")) is None
+    assert consumer.process(_test_msg(task_id="B")) == "tr-2"
 
 
 def test_a_group_less_task_is_not_suppressed_by_the_manifest_cache(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
-    assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B")) == "tr-1"
 
 
 def test_the_deduped_task_is_logged_with_a_treeherder_link(env, caplog):
     _consecutive_pushes(env, "rev-one", "hgrev")
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     with caplog.at_level(logging.INFO, logger="app.consumer"):
-        assert consumer.process(_test_msg(task_id="TT"), env.executor) is None
+        assert consumer.process(_test_msg(task_id="TT")) is None
     assert "already investigated on a recent push" in caplog.text
     assert _LINK in caplog.text
 
 
 def test_a_manifest_dedupe_costs_no_recheck(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
-    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     env.recheck_skip_reason.reset_mock()
-    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="B")) is None
     env.recheck_skip_reason.assert_not_called()
 
 
@@ -1043,19 +985,19 @@ def _distinct_groups(env):
 
 def test_test_verify_tasks_are_skipped(env):
     label = "test-linux2404-64/opt-test-verify"
-    assert consumer.process(_test_msg(label=label), env.executor) is None
+    assert consumer.process(_test_msg(label=label)) is None
     env.job_for_task.assert_not_called()
     env.trigger_run.assert_not_called()
 
 
 def test_a_chunked_test_verify_task_is_skipped(env):
     label = "test-linux64/opt-test-verify-wpt-1"
-    assert consumer.process(_test_msg(label=label), env.executor) is None
+    assert consumer.process(_test_msg(label=label)) is None
     env.trigger_run.assert_not_called()
 
 
 def test_an_ordinary_task_is_not_mistaken_for_test_verify(env):
-    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    assert consumer.process(_test_msg()) == "tr-1"
 
 
 def _build_env(monkeypatch, reason=None, introduced=True):
@@ -1068,12 +1010,12 @@ def _build_env(monkeypatch, reason=None, introduced=True):
         consumer.treeherder, "recheck_skip_reason", MagicMock(return_value=reason)
     )
     monkeypatch.setattr(consumer.client, "trigger_run", trigger)
-    return SimpleNamespace(trigger=trigger, walk=walk, executor=MagicMock())
+    return SimpleNamespace(trigger=trigger, walk=walk)
 
 
 def test_an_infra_build_failure_is_skipped(monkeypatch):
     env = _build_env(monkeypatch, reason="infra")
-    assert consumer.process(_build_msg(), env.executor) is None
+    assert consumer.process(_build_msg()) is None
     env.trigger.assert_not_called()
 
 
@@ -1081,10 +1023,10 @@ def test_a_classified_build_failure_is_read_after_the_walk(monkeypatch):
     # Before the walk it would cost the ingest and classification waits the test
     # path pays; after it, Treeherder has had minutes and it is one request.
     env = _build_env(monkeypatch, reason="intermittent")
-    assert consumer.process(_build_msg(), env.executor) is None
+    assert consumer.process(_build_msg()) is None
     env.walk.assert_called_once()
 
 
 def test_an_unclassified_build_failure_still_runs(monkeypatch):
-    env = _build_env(monkeypatch)
-    assert consumer.process(_build_msg(), env.executor) == "run-1"
+    _build_env(monkeypatch)
+    assert consumer.process(_build_msg()) == "run-1"
