@@ -1,6 +1,7 @@
 # Actions: record now, apply later
 
-An agent never mutates Bugzilla, Phabricator, TestRail or Slack while it runs. It calls a
+An agent never mutates Bugzilla, Phabricator, TestRail or Slack, and never sends mail,
+while it runs. It calls a
 tool that **records what it intends to do**; hackbot-api performs it after the run has
 finished and is known good.
 
@@ -45,14 +46,20 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                     |
 | `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases        |
 | `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                         |
+| `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`          |
 
-All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
+All but `testrail.submit_test_plan` and `email.send` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. `phabricator.submit_patch`
 is the only model-facing tool that exposes **`ref`** (see cross-references below).
 
 `testrail` and `slack` also provide `record_test_plan` / `record_message` helpers that agent
 code calls directly rather than the model choosing to — for an action the agent always takes
-once it has a result, not one the model decides on.
+once it has a result, not one the model decides on. `email.send` is _only_ that: it has no
+model-facing tool, since who receives mail is the agent code's decision. Its recipient
+policy is apply-side — `NOTIFICATION_TEAM_EMAIL` is copied on every email and used as
+`Reply-To`, and `NOTIFICATION_OVERRIDE_EMAIL` redirects everything to one address so a
+development deployment cannot mail real developers. Sending needs `SENDGRID_API_KEY` and
+`NOTIFICATION_SENDER` on hackbot-api.
 
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.

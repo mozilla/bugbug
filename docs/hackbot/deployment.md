@@ -78,6 +78,13 @@ Two things those files do not tell you:
   `WEAVE_PROJECT`); and local-only fallbacks (`ANTHROPIC_API_KEY`, `WANDB_API_KEY`,
   `ARTIFACTS_DIR`). Only the first varies per run.
 
+Action handlers run inside `hackbot-api` and read their own credentials straight from its
+env, so they are not in its `Settings`: `SLACK_BOT_TOKEN` for `slack.post_message`, and
+`SENDGRID_API_KEY` + `NOTIFICATION_SENDER` for `email.send` (plus the optional
+`NOTIFICATION_TEAM_EMAIL` and `NOTIFICATION_OVERRIDE_EMAIL` -- see
+[actions.md](actions.md)). A handler whose credentials are missing fails its action rather
+than the run.
+
 The listener also honours `DRY_RUN=true`, which logs intended calls without POSTing them.
 
 ## Running locally
@@ -98,6 +105,9 @@ policy configured, `summary.json`, logs, attachments and the source patch are wr
 agent's changes with `git am changes/changes.patch`.
 
 Add a new agent's `compose.yml` to the root `docker-compose.yml` `include:` list.
+
+Recorded actions are applied by hackbot-api against Cloud SQL, so a local run leaves
+them in `summary.json` unapplied.
 
 **The services:**
 
