@@ -10,6 +10,7 @@ from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
     FrontendTriageInputs,
+    SentryTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
 )
@@ -125,5 +126,11 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-plan-generator",
         input_schema=TestPlanGeneratorInputs,
+    ),
+    "sentry-triage": AgentSpec(
+        name="sentry-triage",
+        description="Investigate a Sentry alert and summarize the contributing cause(s)",
+        job_name="hackbot-agent-sentry-triage",
+        input_schema=SentryTriageInputs,
     ),
 }
