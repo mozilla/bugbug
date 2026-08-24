@@ -44,9 +44,10 @@ async def remove_action(
         str,
         Field(description="ID of the action to remove."),
     ],
-) -> dict:
-    """Remove and return a recorded action."""
-    return recorder.remove_action(action_id)
+) -> str:
+    """Remove the recorded action with the given ID."""
+    recorder.remove_action(action_id)
+    return f"Removed recorded action {action_id}."
 
 
 TOOLS = tools_in(__name__)

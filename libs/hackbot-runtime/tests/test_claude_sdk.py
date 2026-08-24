@@ -1,7 +1,5 @@
 """Tests for the actions MCP server (built via agent-tools' adapter)."""
 
-import json
-
 import mcp.server.lowlevel.server as low
 from hackbot_runtime.actions import ActionsRecorder
 from hackbot_runtime.actions.claude_sdk import (
@@ -145,13 +143,7 @@ async def test_recorded_actions_tools_list_and_remove_complete_action():
     removed_result = await _call(
         srv, "recorded_actions_remove_action", {"action_id": action_id}
     )
-    removed = json.loads(removed_result.content[0].text)
-    assert removed == {
-        "type": "bugzilla.update_bug",
-        "params": {"bug_id": 7, "changes": {"severity": "S2"}},
-        "reasoning": "rule X",
-        "action_id": action_id,
-    }
+    assert removed_result.content[0].text == f"Removed recorded action {action_id}."
     assert recorder.actions == []
 
 
