@@ -1,18 +1,12 @@
 """Slack interaction payload handling: parsing a verified delivery into a click.
 
-Slack posts every interaction with the app's messages to one URL, so this turns a
-delivery into either a :class:`ButtonClick` or None, and the route in
-``app/routers/slack.py`` decides what to do with it. Kept separate from the route
-for the same reason as ``app/phabricator_webhook.py``: payload shapes are worth
-testing without a client.
+Turns a delivery into either a :class:`ButtonClick` or None, leaving the route in
+``app/routers/slack.py`` to decide what to do with it.
 
-Two things about the delivery are easy to get wrong. It is not JSON: the body is
-``application/x-www-form-urlencoded`` with the JSON in a single ``payload`` field,
-which is why this takes raw bytes (already needed for signature verification) and
-parses them itself rather than reading a model off the request. And a body that
-cannot be understood returns None rather than raising: it will not parse on a
-retry either, and a non-2xx makes Slack both retry it and show the person who
-clicked an error for something they cannot fix.
+Takes raw bytes, because the body is form-encoded rather than JSON and those bytes
+are already needed for signature verification. Returns None rather than raising on
+anything it cannot understand, because the route answers such a delivery 200. Both
+are explained in ``docs/hackbot/api.md``.
 """
 
 from __future__ import annotations
@@ -31,10 +25,12 @@ log = logging.getLogger(__name__)
 # records a button that needs them.
 BLOCK_ACTIONS = "block_actions"
 
-# The `v` an encoded button `value` must carry, matching
-# `hackbot_runtime.actions.slack.VALUE_VERSION` at the time this was written. A
-# click on a button posted before a shape change reports a version this does not
-# know, and is dropped rather than read with the wrong meaning.
+# The `v` a button's `value` must carry: an envelope around the button's args,
+# `{"v": 1, "args": {...}}`, so a click on a button posted before a shape change
+# reports a version this does not know and is dropped rather than read with the
+# wrong meaning. Buttons outlive deploys, since a message stays clickable for as
+# long as it is in the channel's history. Whatever draws the first button writes
+# this envelope.
 SUPPORTED_VALUE_VERSION = 1
 
 
@@ -42,12 +38,11 @@ SUPPORTED_VALUE_VERSION = 1
 class ButtonClick:
     """A click on one button of a message this app posted.
 
-    ``kind`` is the button's Slack ``action_id``, which is the kind the recording
-    side gave it (see ``hackbot_runtime.actions.slack.BUTTON_KINDS``), and ``args``
-    is what that side put on the button. Everything else identifies the click:
-    who, where, on which message, and the two single-use handles Slack provides
-    for replying (``response_url``, valid ~30 minutes) and for opening a modal
-    (``trigger_id``, valid ~3 seconds).
+    ``kind`` is the button's Slack ``action_id``, the name the side that drew the
+    button gave it, and ``args`` is what that side put on the button. Everything
+    else identifies the click: who, where, on which message, and the two
+    single-use handles Slack provides for replying (``response_url``, valid ~30
+    minutes) and for opening a modal (``trigger_id``, valid ~3 seconds).
     """
 
     kind: str

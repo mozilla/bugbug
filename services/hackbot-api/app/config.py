@@ -39,8 +39,8 @@ class SlackSettings(BaseModel):
     Populated from SLACK_* env vars as part of the single settings parse.
     """
 
-    # Slack's app-level signing secret (Basic Information -> App Credentials),
-    # used to verify the HMAC on every interaction delivery.
+    # Slack's app-level signing secret, verifying the HMAC on every interaction
+    # delivery. Required (no default), for the reason WEBHOOK_SECRET is.
     signing_secret: str
 
 

@@ -27,14 +27,44 @@ the download to that run's prefix and prevents probing unrelated objects.
 
 ### Inbound webhooks — their own authentication
 
-| POST | `/webhooks/phabricator` | `@hackbot` mention on a revision triggers a bug-fix run |
-| POST | `/webhooks/bugzilla` | `needinfo?` on the bot account triggers a bug-fix run |
+| Method | Path                           | Does                                                    |
+| ------ | ------------------------------ | ------------------------------------------------------- |
+| POST   | `/webhooks/phabricator`        | `@hackbot` mention on a revision triggers a bug-fix run |
+| POST   | `/webhooks/bugzilla`           | `needinfo?` on the bot account triggers a bug-fix run   |
+| POST   | `/webhooks/slack/interactions` | A click on an interactive element of a hackbot message  |
 
-Neither uses the API key, so both sit on their own router without that dependency.
-Phabricator is authenticated by its own HMAC signature over the raw body; Bugzilla by a
-shared secret in `X-Bugzilla-Webhook-Secret`. Both answer `202` with
+None of them uses the API key, so each sits on its own router without that dependency:
+these senders cannot send an `X-API-Key`. Phabricator and Slack are authenticated by their
+own HMAC signature over the raw body; Bugzilla by a shared secret in
+`X-Bugzilla-Webhook-Secret`. Phabricator and Bugzilla answer `202` with
 `{"status": "ignored", ...}` for a well-authenticated delivery that doesn't qualify, so BMO
-and Phabricator don't retry it. See [triggers.md](triggers.md).
+and Phabricator don't retry it. Both are covered in [triggers.md](triggers.md).
+
+**Slack interactions** all arrive on this one route: Slack posts every click on every
+interactive element to the single Request URL configured for Interactivity, so the receiver
+demultiplexes on the element's `action_id`. The path names the feature because Slack
+configures one Request URL **per feature** — Event Subscriptions and Slash Commands are
+separate URLs with their own payload shapes, and they would get their own routes beside this
+one rather than sharing it. Three things about the delivery shape the route:
+
+- The body is **not JSON**. It is `application/x-www-form-urlencoded` with the JSON in a
+  single `payload` field, parsed from the same raw bytes the signature covers.
+- **Slack expects a response within 3 seconds** and shows the person who clicked an error if
+  it does not arrive, so real work belongs off the request: publish an event and answer the
+  message afterwards through the delivery's `response_url` or `chat.update`.
+- **A delivery this cannot act on is answered `200` and logged**, not `4xx`/`5xx`. Slack
+  retries a non-2xx, and a payload that cannot be parsed will not parse on retry either,
+  so refusing it only shows a failure nobody can fix.
+
+Nothing posts an interactive element yet, so nothing reaches this route in practice: it
+authenticates a delivery, parses it, and records that it happened. Acting on a click, and
+the authorization that has to come first, lands with the first button. A click that starts
+a run will then appear in [triggers.md](triggers.md).
+
+Turning it on is Slack-app config, not a deploy: **Interactivity & Shortcuts → Request URL**
+= `https://<hackbot-api-host>/webhooks/slack/interactions`, and `SLACK_SIGNING_SECRET` from **Basic
+Information → App Credentials**. Interactivity needs no new OAuth scopes, so no workspace
+reinstall. Until the secret is set the endpoint rejects every delivery with a `401`.
 
 ## Creating a run
 
@@ -126,8 +156,10 @@ idempotent — see [actions.md](actions.md).
 Commands and the full config reference are in [deployment.md](deployment.md). Two things
 specific to this service:
 
-- **`WEBHOOK_SECRET` has no default**, so a missing one fails at startup rather than
-  silently accepting or rejecting deliveries.
+- **`WEBHOOK_SECRET` and `SLACK_SIGNING_SECRET` have no defaults**, so a missing one fails
+  at startup rather than silently accepting or rejecting deliveries. Both are HMAC keys for
+  an inbound receiver: an empty one would mean either accepting every delivery
+  unauthenticated or rejecting every real one, and neither is a state worth booting into.
 - **Signing GCS URLs needs an impersonating credential** —
   `gcloud auth application-default login --impersonate-service-account=<sa>`. See
   [security.md](security.md) for why, and what the deployed service needs instead.

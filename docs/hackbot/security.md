@@ -70,13 +70,22 @@ delegating `sign_bytes` to the IAM `signBlob` API. This is why its service accou
 
 ## Authenticating callers of hackbot-api
 
-Three distinct schemes, one per class of caller:
+Four distinct schemes, one per class of caller:
 
 | Caller                      | Scheme                                                                                 |
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | UI, pulse listener, scripts | `X-API-Key`, compared in constant time                                                 |
 | Phabricator                 | HMAC-SHA256 over the raw body, constant-time compared                                  |
+| Slack                       | HMAC-SHA256 over `v0:{timestamp}:{raw body}`, plus a 5-minute timestamp window         |
 | Eventarc / Pub/Sub push     | Google-signed OIDC bearer token, verified for audience **and** issuing service account |
+
+The two HMAC schemes are not interchangeable. Slack signs a base string that **includes the
+delivery's timestamp**, and that timestamp is checked against the clock, so a captured
+delivery cannot be replayed later: refreshing the timestamp invalidates the signature, and
+keeping it puts the delivery outside the window. The Phabricator signature covers the body
+alone and has no such window, which is why the Slack receiver has its own verifier rather
+than reusing the existing one. Both fail closed on an unconfigured secret, so a deployment
+missing the key rejects every delivery instead of accepting them all.
 
 The push-token check is not redundant with platform IAM. The service allows unauthenticated
 invocations — that is how API-key callers reach it at all — so IAM on the subscription does
@@ -94,6 +103,19 @@ authority. See [triggers.md](triggers.md).
 A webhook signature proves the delivery came from Phabricator; it says nothing about _who_
 commented. So the comment author must additionally be a member of the `bmo-editbugs-team`
 project. [triggers.md](triggers.md) covers that check and the other guards on the path.
+
+## Authorizing Slack clicks
+
+The same split applies, and the second half is not built yet. A valid signature proves the
+delivery came from the Slack app; it says nothing about _who_ clicked, and a Slack user id
+is not an identity this platform trusts. Resolving one to a `@mozilla.com` address (through
+`users.info`, which needs the `users:read` and `users:read.email` scopes) and checking the
+click's workspace is what a click would need before it could cause anything.
+
+Until then the receiver is deliberately inert: it verifies, parses and logs, and no click
+path reaches an effect. That ordering is the point — the authorization lands in the same
+change as the first button, so no interactive element ever exists ahead of the check that
+guards it. See [api.md](api.md).
 
 ## Recorded actions as a review gate
 

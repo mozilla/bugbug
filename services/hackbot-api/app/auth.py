@@ -65,15 +65,10 @@ def verify_slack_signature(
 ) -> bool:
     """Constant-time-check Slack's `X-Slack-Signature` over the raw request body.
 
-    Slack signs `v0:{timestamp}:{body}` with the app's signing secret and sends the
-    digest as `v0=<hex>` in the header. `slack_sdk`'s verifier does that comparison
-    and additionally rejects a timestamp more than five minutes from now, which is
-    what stops a captured delivery from being replayed later. The Phabricator
-    signature has no such window, so this cannot simply reuse it.
-
-    Returns False if the secret is unconfigured or either header is missing or
-    garbled, so a service without `SLACK_SIGNING_SECRET` rejects every delivery
-    instead of accepting them all.
+    Delegates to `slack_sdk`'s verifier, which compares the HMAC and also rejects a
+    timestamp more than five minutes off. Returns False on an unconfigured secret or
+    a missing or garbled header, so it fails closed. `docs/hackbot/security.md` has
+    the scheme and why it is not the Phabricator one.
     """
     secret = settings.slack.signing_secret
     if not secret or not timestamp or not signature:
