@@ -12,10 +12,7 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from app.auth import (
-    verify_bugzilla_webhook_secret,
-    verify_phabricator_signature,
-)
+from app.auth import verify_phabricator_signature
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.main import app
@@ -65,22 +62,6 @@ def test_signature_missing_header(monkeypatch):
 def test_signature_unconfigured_secret(monkeypatch):
     monkeypatch.setattr(settings.webhook, "secret", "")
     assert verify_phabricator_signature(b"body", _sign(b"body")) is False
-
-
-def test_bugzilla_secret_valid(monkeypatch):
-    monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
-    assert verify_bugzilla_webhook_secret(BUGZILLA_SECRET) is True
-
-
-def test_bugzilla_secret_invalid_or_missing(monkeypatch):
-    monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
-    assert verify_bugzilla_webhook_secret("wrong") is False
-    assert verify_bugzilla_webhook_secret(None) is False
-
-
-def test_bugzilla_secret_unconfigured(monkeypatch):
-    monkeypatch.setattr(settings.bugzilla_webhook, "secret", "")
-    assert verify_bugzilla_webhook_secret(BUGZILLA_SECRET) is False
 
 
 # --- mention detection / loop prevention ---

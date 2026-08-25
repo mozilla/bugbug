@@ -46,18 +46,13 @@ async def require_phabricator_signature(
         )
 
 
-def verify_bugzilla_webhook_secret(secret: str | None) -> bool:
-    """Constant-time-check BMO's configured shared-secret header."""
-    if not secret:
-        return False
-    return hmac.compare_digest(secret, settings.bugzilla_webhook.secret)
-
-
 def require_bugzilla_webhook_secret(
     x_bugzilla_webhook_secret: str = Header(),
 ) -> None:
     """Reject requests without the dedicated Bugzilla webhook secret."""
-    if not hmac.compare_digest(x_bugzilla_webhook_secret, settings.bugzilla_webhook.secret):
+    if not hmac.compare_digest(
+        x_bugzilla_webhook_secret, settings.bugzilla_webhook.secret
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Bugzilla webhook secret",
