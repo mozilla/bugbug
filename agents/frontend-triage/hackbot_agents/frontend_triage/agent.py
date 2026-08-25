@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from agent_tools import mozilla_vcs, searchfox
@@ -41,21 +42,30 @@ from hackbot_runtime.searchfox import (
     permalink_prefix,
     resolve_index_revision,
 )
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 from pydantic import BaseModel
 from searchfox import AsyncSearchfoxClient
 
+from . import areas as area_tools
+from .areas import AreaGuidanceContext
 from .config import (
+    AREA_TOOLS,
+    AREAS,
     BUGZILLA_READ_TOOLS,
     ENABLED_ACTION_TYPES,
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
     TRIAGE_SCOPE,
     TRIAGE_SEVERITIES,
+    Area,
     ScopedComponent,
+    areas_for,
 )
-from .hooks import add_comment_hook, severity_block_hook
+from .hooks import add_comment_hook, area_guidance_hook, severity_block_hook
 
 HERE = Path(__file__).resolve().parent
+AREAS_DIR = HERE / "rules" / "areas"
 
 # The agent is asked to end its final message with a fenced ```json block
 # carrying the structured plan. We parse the last such block so the result is
@@ -158,8 +168,8 @@ def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
     """Render `config.TRIAGE_SCOPE` as the prompt's component list, grouped by area.
 
     Generated rather than written into the prompt so that the component list has one
-    home. The per-area guidance under `Source repository` stays hand-authored: it is
-    prose about a codebase, and only the enumeration is mechanical.
+    home. The `rules/areas/` guidance stays hand-authored: it is prose about a
+    codebase, and only the enumeration is mechanical.
 
     Takes the registry as an argument so a test can assert the grouping against a fixed
     input rather than against whatever the real scope happens to be today.
@@ -192,7 +202,78 @@ def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
     )
 
 
-def load_system_prompt(rules_dir: Path, extra: str) -> str:
+async def fetch_product_component(
+    bugzilla_mcp_server: McpServerConfig, bug: int
+) -> tuple[str | None, str | None]:
+    """The bug's product and component, read through the Bugzilla broker.
+
+    The agent fetches the bug itself at step 1, but the prompt is built and frozen
+    before that, and the area guidance goes into it. Via the broker because the agent
+    container binds no Bugzilla credentials (see `compose.yml`).
+
+    Never raises. ``(None, None)`` makes `areas_for` send every area, which is the
+    prompt this replaced -- a broken lookup must not take down a workable run.
+    """
+    url = (
+        bugzilla_mcp_server.get("url")
+        if isinstance(bugzilla_mcp_server, dict)
+        else None
+    )
+    if not url:
+        return None, None
+
+    try:
+        async with streamablehttp_client(url) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                res = await session.call_tool(
+                    "get_bugs",
+                    # `id` is not optional: `get_bugs` diffs requested against
+                    # returned ids to report inaccessible bugs, so leaving it out
+                    # of `include_fields` makes the tool itself raise KeyError.
+                    {"ids": [bug], "include_fields": "id,product,component"},
+                )
+                if res.isError:
+                    raise RuntimeError(
+                        "".join(getattr(c, "text", "") for c in res.content)
+                    )
+                bugs = json.loads(res.content[0].text).get("bugs") or []
+                if not bugs:
+                    return None, None
+                return bugs[0].get("product"), bugs[0].get("component")
+    except Exception as e:  # - see docstring; every failure fails open
+        print(
+            f"[frontend_triage] component lookup failed ({type(e).__name__}: {e}); "
+            f"sending every area's guidance",
+            file=sys.stderr,
+        )
+        return None, None
+
+
+def render_area_index() -> str:
+    """One line per area: its name and the trees it covers.
+
+    Always in the prompt, even when one area's guidance is, so the agent can recognise
+    that it has localized into an area it does not have.
+    """
+    return "\n".join(f"- **{a.name}** — {', '.join(a.trees)}" for a in AREAS)
+
+
+def read_area_guidance(areas: Sequence[Area]) -> str:
+    """The `rules/areas/` files for ``areas``, concatenated for the prompt.
+
+    Headings drop two levels on the way in. The files are `# <area>` because
+    `load_area_guidance` serves them whole, but that H1 pasted between
+    `# Source repository` and `# Linking source files` reads as a new section.
+    """
+    bodies = []
+    for area in areas:
+        text = (AREAS_DIR / f"{area.slug}.md").read_text().strip()
+        bodies.append(re.sub(r"^(#{1,4}) ", r"##\1 ", text, flags=re.MULTILINE))
+    return "\n\n".join(bodies)
+
+
+def load_system_prompt(rules_dir: Path, extra: str, areas: Sequence[Area]) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
     return tmpl.format(
@@ -200,6 +281,8 @@ def load_system_prompt(rules_dir: Path, extra: str) -> str:
         extra_instructions=extra or "(none)",
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
         triaged_components=render_scope(),
+        area_index=render_area_index(),
+        area_guidance=read_area_guidance(areas),
     )
 
 
@@ -510,13 +593,36 @@ async def run_frontend_triage(
     )
     actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
 
+    # Which areas' guidance goes in the prompt. Falls back to every area when the bug's
+    # component is unknown or the lookup failed, which is what the prompt carried before
+    # this was split up -- see `areas_for`.
+    product, component = await fetch_product_component(bugzilla_mcp_server, bug)
+    areas = areas_for(product, component)
+    loaded_areas = {area.name for area in areas}
+    print(
+        f"[frontend_triage] {product} :: {component} -> "
+        f"{', '.join(sorted(loaded_areas))}",
+        file=sys.stderr,
+    )
+
+    # Registered before `permalink_hook`, which rewrites the placeholders this reads.
+    actions_recorder.add_hook("bugzilla.add_comment", area_guidance_hook(loaded_areas))
+
     actions_recorder.add_hook(
         "bugzilla.add_comment",
         permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
     )
     actions_recorder.add_hook("bugzilla.add_comment", feedback_tags_hook)
 
-    system_prompt = load_system_prompt(rules_dir, instructions)
+    # Shares `loaded_areas` with the hook above, so an area the agent pulls mid-run
+    # stops the hook refusing a comment that cites it.
+    areas_server = build_sdk_server(
+        "areas",
+        AreaGuidanceContext(areas_dir=AREAS_DIR, loaded=loaded_areas),
+        area_tools.TOOLS,
+    )
+
+    system_prompt = load_system_prompt(rules_dir, instructions, areas)
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -524,6 +630,7 @@ async def run_frontend_triage(
             "bugzilla": bugzilla_mcp_server,
             "searchfox": searchfox_server,
             "mozilla_vcs": vcs_server,
+            "areas": areas_server,
             ACTIONS_SERVER_NAME: actions_server,
         },
         agents={
@@ -544,6 +651,7 @@ async def run_frontend_triage(
             *BUGZILLA_READ_TOOLS,
             *SEARCHFOX_TOOLS,
             *MOZILLA_VCS_TOOLS,
+            *AREA_TOOLS,
             *enabled_action_tools,
         ],
         model=model,
