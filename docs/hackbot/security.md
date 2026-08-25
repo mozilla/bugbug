@@ -84,8 +84,9 @@ delivery's timestamp**, and that timestamp is checked against the clock, so a ca
 delivery cannot be replayed later: refreshing the timestamp invalidates the signature, and
 keeping it puts the delivery outside the window. The Phabricator signature covers the body
 alone and has no such window, which is why the Slack receiver has its own verifier rather
-than reusing the existing one. Both fail closed on an unconfigured secret, so a deployment
-missing the key rejects every delivery instead of accepting them all.
+than reusing the existing one. Neither can run without its key: the Phabricator secret is
+required, and the Slack one is required **and** validated non-blank, so a deployment without
+a usable key fails to start rather than quietly rejecting every delivery it receives.
 
 The push-token check is not redundant with platform IAM. The service allows unauthenticated
 invocations — that is how API-key callers reach it at all — so IAM on the subscription does

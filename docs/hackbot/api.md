@@ -61,10 +61,24 @@ authenticates a delivery, parses it, and records that it happened. Acting on a c
 the authorization that has to come first, lands with the first button. A click that starts
 a run will then appear in [triggers.md](triggers.md).
 
+What the endpoint answers:
+
+| Delivery                                           | Status |
+| -------------------------------------------------- | ------ |
+| Signature verifies                                 | `200`  |
+| A signature header is absent (a malformed request) | `422`  |
+| Both headers present, signature or freshness fails | `401`  |
+| Signed, but the payload cannot be understood       | `200`  |
+
+The two signature headers are declared required, so an absent one is a validation failure
+rather than an authentication one. Slack always sends both, so a delivery missing them is
+not a Slack delivery.
+
 Turning it on is Slack-app config, not a deploy: **Interactivity & Shortcuts → Request URL**
-= `https://<hackbot-api-host>/webhooks/slack/interactions`, and `SLACK_SIGNING_SECRET` from **Basic
-Information → App Credentials**. Interactivity needs no new OAuth scopes, so no workspace
-reinstall. Until the secret is set the endpoint rejects every delivery with a `401`.
+= `https://<hackbot-api-host>/webhooks/slack/interactions`, and `SLACK_SIGNING_SECRET` from
+**Basic Information → App Credentials**. Interactivity needs no new OAuth scopes, so no
+workspace reinstall. The secret is not optional: without a usable one the service does not
+start at all (see below).
 
 ## Creating a run
 
@@ -160,6 +174,9 @@ specific to this service:
   at startup rather than silently accepting or rejecting deliveries. Both are HMAC keys for
   an inbound receiver: an empty one would mean either accepting every delivery
   unauthenticated or rejecting every real one, and neither is a state worth booting into.
+  `SLACK_SIGNING_SECRET` is validated **non-blank** rather than merely present, so `=""`
+  fails at startup too, and every consumer downstream can take a usable key for granted
+  instead of carrying an unconfigured case.
 - **Signing GCS URLs needs an impersonating credential** —
   `gcloud auth application-default login --impersonate-service-account=<sa>`. See
   [security.md](security.md) for why, and what the deployed service needs instead.

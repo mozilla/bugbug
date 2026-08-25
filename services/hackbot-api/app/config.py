@@ -1,6 +1,13 @@
+from typing import Annotated
+
 from phabricator_client import PhabricatorSettings
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 from pydantic_settings import BaseSettings
+
+# An HMAC key that must actually be a key. Required alone only rejects a *missing*
+# value, and an empty or whitespace one would start a service that rejects every
+# delivery it receives -- worse than not starting, because nothing says so.
+HmacSecret = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class WebhookSettings(BaseModel):
@@ -40,8 +47,8 @@ class SlackSettings(BaseModel):
     """
 
     # Slack's app-level signing secret, verifying the HMAC on every interaction
-    # delivery. Required (no default), for the reason WEBHOOK_SECRET is.
-    signing_secret: str
+    # delivery.
+    signing_secret: HmacSecret
 
 
 class Settings(BaseSettings):

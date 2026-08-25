@@ -60,39 +60,19 @@ def require_bugzilla_webhook_secret(
         )
 
 
-def verify_slack_signature(
-    raw_body: bytes, timestamp: str | None, signature: str | None
-) -> bool:
-    """Constant-time-check Slack's `X-Slack-Signature` over the raw request body.
-
-    Delegates to `slack_sdk`'s verifier, which compares the HMAC and also rejects a
-    timestamp more than five minutes off. Returns False on an unconfigured secret or
-    a missing or garbled header, so it fails closed. `docs/hackbot/security.md` has
-    the scheme and why it is not the Phabricator one.
-    """
-    secret = settings.slack.signing_secret
-    if not secret or not timestamp or not signature:
-        return False
-    try:
-        return SignatureVerifier(secret).is_valid(raw_body, timestamp, signature)
-    except ValueError:
-        # A non-numeric timestamp header reaches an `int()` inside the verifier.
-        return False
-
-
 async def require_slack_signature(
     request: Request,
-    x_slack_request_timestamp: str | None = Header(default=None),
-    x_slack_signature: str | None = Header(default=None),
+    x_slack_request_timestamp: str = Header(),
+    x_slack_signature: str = Header(),
 ) -> None:
-    """Reject the request unless Slack's delivery signature is valid.
-
-    Same shape as `require_phabricator_signature`: the raw body is read here (and
-    cached by Starlette, so the route can read it again) because the signature
-    covers the bytes as sent, which a parse-and-reserialise would not reproduce.
-    """
+    verifier = SignatureVerifier(settings.slack.signing_secret)
     raw = await request.body()
-    if not verify_slack_signature(raw, x_slack_request_timestamp, x_slack_signature):
+    try:
+        valid = verifier.is_valid(raw, x_slack_request_timestamp, x_slack_signature)
+    except ValueError:
+        valid = False
+
+    if not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing Slack signature",
