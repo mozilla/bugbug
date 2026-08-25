@@ -54,13 +54,13 @@ def verify_bugzilla_webhook_secret(secret: str | None) -> bool:
 
 
 async def require_bugzilla_webhook_secret(
-    x_bugzilla_webhook_secret: str | None = Header(default=None),
+    x_bugzilla_webhook_secret: str = Header(),
 ) -> None:
     """Reject requests without the dedicated Bugzilla webhook secret."""
-    if not verify_bugzilla_webhook_secret(x_bugzilla_webhook_secret):
+    if not hmac.compare_digest(x_bugzilla_webhook_secret, settings.bugzilla_webhook.secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing Bugzilla webhook secret",
+            detail="Invalid Bugzilla webhook secret",
         )
 
 
