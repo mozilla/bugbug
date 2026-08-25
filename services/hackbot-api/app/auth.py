@@ -53,7 +53,7 @@ def verify_bugzilla_webhook_secret(secret: str | None) -> bool:
     return hmac.compare_digest(secret, settings.bugzilla_webhook.secret)
 
 
-async def require_bugzilla_webhook_secret(
+def require_bugzilla_webhook_secret(
     x_bugzilla_webhook_secret: str = Header(),
 ) -> None:
     """Reject requests without the dedicated Bugzilla webhook secret."""
