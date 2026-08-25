@@ -276,7 +276,7 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     agent = run.agent
     await db.commit()
     _capture_unsubmitted_patch_warning(run_id, agent, new_status, summary, artifacts)
-    await pubsub.publish_run_completed(str(run_id), agent, new_status.value)
+    await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
 
 
 def _capture_unsubmitted_patch_warning(
