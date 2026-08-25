@@ -117,7 +117,7 @@ async def ensure_action_rows(
     summary.json. Idempotent: existing rows are reused, so this can run on
     every completion and again on each manual apply.
     """
-    actions = list((run.summary or {}).get("actions", []))
+    actions: list[dict] = (run.summary or {}).get("actions", [])
 
     result = await db.execute(select(RunAction).where(RunAction.run_id == run.run_id))
     existing = {row.idx: row for row in result.scalars()}

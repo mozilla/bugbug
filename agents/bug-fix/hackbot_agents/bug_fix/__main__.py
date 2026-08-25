@@ -58,7 +58,7 @@ class AgentInputs(BaseSettings):
 async def main(ctx: HackbotContext) -> BugFixResult:
     inputs = AgentInputs()
 
-    if inputs.revision_id is not None:
+    if inputs.revision_id:
         await checkout_revision(ctx, inputs.revision_id, inputs.broker_url)
     else:
         await ctx.prepare_repo()
