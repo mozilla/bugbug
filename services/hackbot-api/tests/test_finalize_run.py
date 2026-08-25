@@ -97,43 +97,32 @@ async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
 
 
 @pytest.mark.parametrize(
-    ("agent", "run_status", "actions", "artifacts", "should_warn"),
+    ("actions", "artifacts", "expected"),
     [
-        ("bug-fix", RunStatus.succeeded, [], ["changes/changes.patch"], True),
+        ([], ["changes/changes.patch"], True),
         (
-            "bug-fix",
-            RunStatus.succeeded,
             ["phabricator.submit_patch"],
             ["changes/changes.patch"],
             False,
         ),
         (
-            "bug-fix",
-            RunStatus.succeeded,
             ["phabricator.update_patch"],
             ["changes/changes.patch"],
             False,
         ),
-        ("bug-fix", RunStatus.succeeded, [], [], False),
-        ("bug-fix", RunStatus.failed, [], ["changes/changes.patch"], False),
+        ([], [], False),
+        (None, ["changes/changes.patch"], True),
     ],
 )
-def test_unsubmitted_patch_warning(
-    caplog, agent, run_status, actions, artifacts, should_warn
-):
-    caplog.set_level("ERROR", logger=runs_module.__name__)
-
-    runs_module._capture_unsubmitted_patch_warning(
-        uuid.uuid4(),
-        agent,
-        run_status,
-        RunSummary(status="ok", actions=[{"type": action} for action in actions]),
-        [ArtifactRef(name=artifact, size=10) for artifact in artifacts],
+def test_has_unsubmitted_patch(actions, artifacts, expected):
+    summary = (
+        None
+        if actions is None
+        else RunSummary(status="ok", actions=[{"type": action} for action in actions])
     )
+    artifact_refs = [ArtifactRef(name=artifact, size=10) for artifact in artifacts]
 
-    assert (
-        "Agent run produced code changes without submitting a patch" in caplog.text
-    ) is should_warn
+    assert runs_module._has_unsubmitted_patch(summary, artifact_refs) is expected
 
 
 async def test_finalizes_as_failed_when_summary_missing(monkeypatch):

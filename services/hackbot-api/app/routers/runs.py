@@ -275,34 +275,26 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     run_id = run.run_id
     agent = run.agent
     await db.commit()
-    _capture_unsubmitted_patch_warning(run_id, agent, new_status, summary, artifacts)
+    if _has_unsubmitted_patch(summary, artifacts):
+        log.error(
+            "Agent run produced code changes without submitting a patch "
+            "(run_id=%s, agent=%s)",
+            run_id,
+            agent,
+        )
     await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
 
 
-def _capture_unsubmitted_patch_warning(
-    run_id: uuid.UUID,
-    agent: str,
-    run_status: RunStatus,
+def _has_unsubmitted_patch(
     summary: RunSummary | None,
     artifacts: list[ArtifactRef],
-) -> None:
-    """Warn when an agent leaves source changes undelivered."""
-    if run_status != RunStatus.succeeded or summary is None:
-        return
-
-    artifact_names = {artifact.name for artifact in artifacts}
-    action_types = {action.get("type") for action in summary.actions}
-    if _PATCH_ARTIFACT not in artifact_names or not action_types.isdisjoint(
-        PATCH_ACTION_TYPES
-    ):
-        return
-
-    log.error(
-        "Agent run produced code changes without submitting a patch "
-        "(run_id=%s, agent=%s)",
-        run_id,
-        agent,
+) -> bool:
+    """Whether a run produced source changes without a patch action."""
+    has_patch_artifact = any(artifact.name == _PATCH_ARTIFACT for artifact in artifacts)
+    has_patch_action = summary is not None and any(
+        action["type"] in PATCH_ACTION_TYPES for action in summary.actions
     )
+    return has_patch_artifact and not has_patch_action
 
 
 def _terminal_status(
