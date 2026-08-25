@@ -52,6 +52,17 @@ def _plan():
     }
 
 
+# Trimmed GET get_statuses: matched on the lowercase ``name``, not ``label``.
+_STATUSES = [
+    {"id": 1, "name": "passed", "label": "Passed"},
+    {"id": 2, "name": "blocked", "label": "Blocked"},
+    {"id": 3, "name": "untested", "label": "Untested"},
+    {"id": 4, "name": "retest", "label": "Retest"},
+    {"id": 5, "name": "failed", "label": "Failed"},
+    {"id": 6, "name": "custom_status1", "label": "Needs Triage"},
+]
+
+
 class _FakeClient:
     def __init__(self, responses=None):
         self.calls = []
@@ -60,10 +71,13 @@ class _FakeClient:
             or [
                 [{"id": 6, "name": "Functional"}],
                 [{"id": 2, "name": "Test Case (Steps)"}],
+                _STATUSES,
                 {"id": 10},
                 {"id": 20},
                 {"id": 101},
                 {"id": 102},
+                {"id": 301},
+                {"results": [{"id": 401}, {"id": 402}]},
             ]
         )
 
@@ -81,6 +95,10 @@ class _FakeClient:
         self.calls.append(("get_templates",))
         return self._next()
 
+    async def get_statuses(self):
+        self.calls.append(("get_statuses",))
+        return self._next()
+
     async def add_suite(self, name):
         self.calls.append(("add_suite", name))
         return self._next()
@@ -91,6 +109,14 @@ class _FakeClient:
 
     async def add_case(self, section_id, payload):
         self.calls.append(("add_case", section_id, payload))
+        return self._next()
+
+    async def add_run(self, payload):
+        self.calls.append(("add_run", payload))
+        return self._next()
+
+    async def add_results_for_cases(self, run_id, results):
+        self.calls.append(("add_results_for_cases", run_id, results))
         return self._next()
 
     def suite_url(self, suite_id):
@@ -109,14 +135,16 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         "url": "https://testrail.example/index.php?/suites/view/10",
         "section_id": 20,
         "case_ids": [101, 102],
+        "run_id": 301,
     }
 
     assert client.calls[0] == ("get_case_types",)
     assert client.calls[1] == ("get_templates",)
-    assert client.calls[2] == ("add_suite", "[Hackbot] - PDF Improvements")
-    assert client.calls[3] == ("add_section", 10, "Test Cases")
+    assert client.calls[2] == ("get_statuses",)
+    assert client.calls[3] == ("add_suite", "[Hackbot] - PDF Improvements")
+    assert client.calls[4] == ("add_section", 10, "Test Cases")
 
-    first_case = client.calls[4]
+    first_case = client.calls[5]
     assert first_case[0:2] == ("add_case", 20)
     assert first_case[2] == {
         "title": "The PDF opens",
@@ -133,6 +161,63 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         ],
     }
 
+    add_run_call = client.calls[7]
+    assert add_run_call[0] == "add_run"
+    assert add_run_call[1]["include_all"] is False
+    assert add_run_call[1]["case_ids"] == [101, 102]
+    assert add_run_call[1]["suite_id"] == 10
+    assert add_run_call[1]["name"].startswith("[Hackbot] Run Results - ")
+    assert add_run_call[1]["description"] == "One passed and one was unsuitable."
+
+    assert client.calls[8] == (
+        "add_results_for_cases",
+        301,
+        [
+            {
+                "case_id": 101,
+                "status_id": 1,
+                "comment": "The PDF behaved as expected.",
+            },
+            {
+                "case_id": 102,
+                "status_id": 2,
+                "comment": (
+                    "The toolbar could not be inspected.\n\n"
+                    "Failure reason:\nNo available tool can inspect it."
+                ),
+            },
+        ],
+    )
+
+
+async def test_submit_test_plan_requires_execution_results(monkeypatch):
+    client = _FakeClient()
+    monkeypatch.setattr(testrail_handler, "_client", lambda: client)
+    plan = _plan()
+    del plan["generated_test_cases"][0]["result"]
+
+    result = await testrail_handler.SubmitTestPlanHandler().apply(plan, _ctx())
+
+    assert result.status == "failed"
+    assert result.error == "TestRail submission requires execution results"
+    assert client.calls == []
+
+
+async def test_submit_test_plan_requires_all_cases_to_be_executed(monkeypatch):
+    client = _FakeClient()
+    monkeypatch.setattr(testrail_handler, "_client", lambda: client)
+    plan = _plan()
+    plan["generated_test_cases"][1]["result"]["status"] = "not_run"
+
+    result = await testrail_handler.SubmitTestPlanHandler().apply(plan, _ctx())
+
+    assert result.status == "failed"
+    assert (
+        result.error
+        == "TestRail submission requires all cases to have executed results"
+    )
+    assert client.calls == []
+
 
 def test_separated_steps_maps_expectations_from_step_objects():
     assert testrail_handler._separated_steps(
@@ -148,6 +233,29 @@ def test_separated_steps_maps_expectations_from_step_objects():
         {"content": "Select text", "expected": ""},
         {"content": "Copy text", "expected": "Text is copied."},
     ]
+
+
+async def test_submit_test_plan_fails_when_the_run_cannot_be_created(monkeypatch):
+    # The whole submission fails even though the suite and cases were created, so
+    # a retry duplicates the suite. Accepted for now; see the de-duplication work.
+    client = _FakeClient(
+        responses=[
+            [{"id": 6, "name": "Functional"}],
+            [{"id": 2, "name": "Test Case (Steps)"}],
+            _STATUSES,
+            {"id": 10},
+            {"id": 20},
+            {"id": 101},
+            {"id": 102},
+            RuntimeError("TestRail rejected the run"),
+        ]
+    )
+    monkeypatch.setattr(testrail_handler, "_client", lambda: client)
+
+    result = await testrail_handler.SubmitTestPlanHandler().apply(_plan(), _ctx())
+
+    assert result.status == "failed"
+    assert result.error == "TestRail rejected the run"
 
 
 async def test_submit_test_plan_reports_api_failure(monkeypatch):
