@@ -58,6 +58,16 @@ The `scoping.md` ruleset runs first and filters out non-defects, tracking/`meta`
 bugs and intermittent test failures with a short note instead of an invented fix
 plan.
 
+Before any of that, a bug that already has a fix is stopped in Python.
+`preflight.py` reads the bug's attachments in one `get_bugs` call and ends the run
+if a non-obsolete Phabricator revision is attached — no checkout, no model turn, no
+comment. The developer who posted the patch is on it, and a fix plan arriving
+afterwards is noise in their review queue. `scoping.md` has always said so, but it
+is prose: on bug 2066504 the agent named the revision and investigated anyway,
+which is what this gate exists to prevent. A raw `is_patch` attachment deliberately
+does **not** count — that flag is set by whoever attaches the file, so a reporter's
+speculative diff would suppress triage on a bug nobody is working.
+
 ## Running it locally
 
 Needs Docker running, an Anthropic API key with billing enabled, and a Bugzilla
@@ -82,11 +92,12 @@ minutes and a large download. Later runs reuse the volume.
 
 Three bugs that exercise the classes this agent handles:
 
-| Bug       | Class       | Notes                                           |
-| --------- | ----------- | ----------------------------------------------- |
-| `2014702` | Behavioral  | New Tab weather widget vanishing                |
-| `2014629` | Pure visual | Split View group-line CSS gap                   |
-| `2004297` | Regression  | Print Preview shift; traces the named regressor |
+| Bug       | Class         | Notes                                                        |
+| --------- | ------------- | ------------------------------------------------------------ |
+| `2014702` | Behavioral    | New Tab weather widget vanishing                             |
+| `2014629` | Pure visual   | Split View group-line CSS gap                                |
+| `2004297` | Regression    | Print Preview shift; traces the named regressor              |
+| `2066504` | Already fixed | Phabricator revision attached; stops before the model starts |
 
 ## Inputs
 
@@ -118,6 +129,8 @@ Each run writes to `~/hackbot/artifacts/<run_id>/`:
 - **`logs/agent.log`** — the streamed reasoning and every tool call, and the only
   record of which model actually ran.
 - **No `changes/` directory.** Its absence confirms the run stayed read-only.
+- **A skipped run** (see above) is `status: "ok"` with `num_turns: 0`, an empty
+  `actions`, the reason in `result`, and no `logs/agent.log` — nothing ran.
 
 Two caveats before acting on a plan:
 
@@ -157,7 +170,7 @@ That is the whole list, because a comment is the only thing this agent can write
 It has no tool that changes a bug's fields: `severity` was the one field a ruleset
 directed it to set, and that is now a suggestion at the end of the comment for a
 human to apply, so `bugzilla.update_bug` left `ENABLED_ACTION_TYPES` rather than
-staying on with no caller. `tests/test_config.py` guards that.
+staying on with no caller.
 
 A refusal reaches the agent as a tool error it can correct in the same run, and the
 action never lands in `summary.json`. The action _type_ needs no check:
@@ -252,8 +265,8 @@ Registered with `hackbot-api` as `FrontendTriageInputs` in
 need the API.
 
 `tests/` covers what an unattended run's reach depends on: the record-time hooks
-(`test_hooks.py`), the plan parsing and `may_apply_unattended` (`test_plan.py`), and
-the Slack message and its routing (`test_notify.py`). Run them with
+(`test_hooks.py`), the plan parsing and `may_apply_unattended` (`test_plan.py`), the
+Slack message and its routing (`test_notify.py`), and the pre-flight gate (`test_preflight.py`). Run them with
 `uv run --package hackbot-agent-frontend-triage pytest agents/frontend-triage/tests`.
 CI covers the shared machinery this builds on via the `libs/agent-tools` and
 `libs/hackbot-runtime` suites.
