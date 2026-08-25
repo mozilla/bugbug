@@ -25,12 +25,16 @@ is attribution, not authentication.
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.
 
-### Inbound webhooks — HMAC signature
+### Inbound webhooks — their own authentication
 
 | POST | `/webhooks/phabricator` | `@hackbot` mention on a revision triggers a bug-fix run |
+| POST | `/webhooks/bugzilla` | `needinfo?` on the bot account triggers a bug-fix run |
 
-Authenticated by Phabricator's own HMAC signature over the raw body, so it sits on its own
-router without the API-key dependency. See [triggers.md](triggers.md).
+Neither uses the API key, so both sit on their own router without that dependency.
+Phabricator is authenticated by its own HMAC signature over the raw body; Bugzilla by a
+shared secret in `X-Bugzilla-Webhook-Secret`. Both answer `202` with
+`{"status": "ignored", ...}` for a well-authenticated delivery that doesn't qualify, so BMO
+and Phabricator don't retry it. See [triggers.md](triggers.md).
 
 ## Creating a run
 

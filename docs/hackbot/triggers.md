@@ -5,8 +5,9 @@ start an execution directly, which is what keeps run state complete regardless o
 
 ```
 hackbot-ui ─────────────┐
-pulse-listener ─────────┼──> POST /agents/{agent}/runs ──> Cloud Run Job execution
-Phabricator webhook ────┘
+pulse-listener ─────────┤
+Phabricator webhook ────┼──> POST /agents/{agent}/runs ──> Cloud Run Job execution
+Bugzilla webhook ───────┘
 ```
 
 ## hackbot-ui — humans
@@ -102,3 +103,56 @@ is a matter of repointing a URL.
 
 The follow-up run then uses `checkout_revision` to prepare its tree at the revision's base
 commit with the revision's diff applied — see [runtime.md](runtime.md).
+
+## Bugzilla webhook — `needinfo?` requests
+
+A `needinfo?` request directed at Hackbot's Bugzilla account triggers a `bug-fix` follow-up
+run on that bug. Same shape as the Phabricator trigger — a developer asks Hackbot for
+something in the place they already work — but on the Bugzilla side, and answering a
+question rather than revising a patch.
+
+The delivery is authenticated by a **shared secret** BMO sends verbatim in
+`X-Bugzilla-Webhook-Secret`, compared in constant time
+([auth.py](../../services/hackbot-api/app/auth.py)). Unlike Phabricator's payload, BMO's
+carries the full bug and the change set, so the receiver needs no callback to detect a
+qualifying request — see
+[bugzilla_webhook.py](../../services/hackbot-api/app/bugzilla_webhook.py).
+
+A request qualifies only when the modification is `modify` on a `bug`, the bug is public,
+and the change set contains `flag.needinfo` added as `? (<bot login>)` with a matching
+`needinfo?` flag in the bug's current flags. The **routing key is deliberately not
+checked**, because one update may change several fields at once.
+
+Guards, each closing a specific failure mode:
+
+- **Loop prevention** — the bot's own flag changes are ignored, so answering a needinfo
+  cannot retrigger a run.
+- **Private bugs are never processed** — the check is `is_private is not False`, so a
+  missing or non-boolean value fails closed.
+- **Dedupe** — retried deliveries are deduped by the **needinfo flag id**, which is globally
+  unique, so a later needinfo on the same bug gets a new id and still triggers. As on the
+  Phabricator side, the key is claimed **only after a successful trigger**, keeping a
+  transient failure retryable by BMO.
+- **Latest flag wins** — BMO orders flags by id, so the last matching one is the newly
+  requested one.
+
+Authorization is Bugzilla's own: anyone who can set a needinfo on the bot can ask it for
+something. There is no separate group check like the Phabricator trigger's
+`bmo-editbugs-team`, because a private bug is already excluded and the flag itself is the
+request.
+
+The receiver passes the requester's login and the change timestamp to the agent as context
+for locating the accompanying comment — a needinfo may be filed without one, in which case
+the agent falls back to the surrounding bug context. That text is **passed through as data**;
+the prompt tells the agent to treat bug content as data, not as instructions.
+
+Unlike the Phabricator follow-up, this run prepares an ordinary source checkout — there is
+no revision to apply — so it can create a **new** Phabricator revision but cannot update an
+existing one. The needinfo flag is cleared automatically as a recorded
+`bugzilla.update_bug` action once the run produces at least one other action, coalesced with
+the reply comment into a single Bugzilla transaction (see [actions.md](actions.md)). A run
+that records nothing leaves the flag standing.
+
+Configuration is three env vars — `BUGZILLA_WEBHOOK_SECRET` (required, no default),
+`BUGZILLA_WEBHOOK_BOT_LOGIN` and `BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS`; see
+[deployment.md](deployment.md).
