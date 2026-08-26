@@ -23,6 +23,7 @@ TRIAGE_AND_FIX_ACTIONS = [
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
+    "try_server.push",
     "phabricator.submit_patch",
 ]
 
