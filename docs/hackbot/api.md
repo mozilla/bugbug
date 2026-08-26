@@ -52,9 +52,12 @@ one rather than sharing it. Three things about the delivery shape the route:
 - **Slack expects a response within 3 seconds** and shows the person who clicked an error if
   it does not arrive, so real work belongs off the request: publish an event and answer the
   message afterwards through the delivery's `response_url` or `chat.update`.
-- **A delivery this cannot act on is answered `200` and logged**, not `4xx`/`5xx`. Slack
-  retries a non-2xx, and a payload that cannot be parsed will not parse on retry either,
-  so refusing it only shows a failure nobody can fix.
+- **A delivery this cannot read fails with a `5xx`**, deliberately, and that includes an
+  interaction type the app does not handle. Someone pressed something and it did nothing,
+  so Slack shows them an error, which beats a silent `200` that lets them believe it
+  worked. It also puts the reason in Sentry, where a Slack payload change is a page rather
+  than a log line nobody greps. Slack does not retry an interaction (retries are an Events
+  API feature), so the failure costs no retry storm.
 
 Nothing posts an interactive element yet, so nothing reaches this route in practice: it
 authenticates a delivery, parses it, and records that it happened. Acting on a click, and
@@ -65,10 +68,16 @@ What the endpoint answers:
 
 | Delivery                                           | Status |
 | -------------------------------------------------- | ------ |
-| Signature verifies                                 | `200`  |
+| A click this app can read                          | `200`  |
 | A signature header is absent (a malformed request) | `422`  |
 | Both headers present, signature or freshness fails | `401`  |
-| Signed, but the payload cannot be understood       | `200`  |
+| Signed, but not a click this app can read          | `500`  |
+
+The payload is validated by a pydantic model over
+[Slack's `block_actions` payload](https://docs.slack.dev/reference/interaction-payloads/block_actions-payload),
+declaring only the fields the receiver reads and ignoring the rest of the delivery. That is
+what produces the last row: a missing or misshapen field, or an interaction type other than
+`block_actions`, is a `ValidationError` naming the field.
 
 The two signature headers are declared required, so an absent one is a validation failure
 rather than an authentication one. Slack always sends both, so a delivery missing them is
