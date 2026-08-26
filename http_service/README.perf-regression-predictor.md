@@ -29,8 +29,9 @@ endpoints may need service-specific credentials:
 
 - `BUGBUG_BUGZILLA_TOKEN`: needed by Bugzilla bug classification endpoints.
 - `BUGBUG_GITHUB_TOKEN`: needed by GitHub issue classification endpoints.
-- `PHABRICATOR_API_KEY`: needed by Phabricator-backed endpoints.
-- `PHABRICATOR_URL`: optional; defaults to Mozilla production Phabricator.
+- `BUGBUG_REPO_DIR`: local Mercurial clone used by push-based endpoints (test
+  selection and the perf regression predictor); defaults to a temporary
+  `bugbug-hg` directory.
 - `BUGBUG_ALLOW_MISSING_MODELS=1`: useful for local development when you only
   need one model and do not have every model artifact locally.
 
@@ -44,8 +45,6 @@ If you need local secrets, create `.env` in this directory
 ```dotenv
 BUGBUG_BUGZILLA_TOKEN=
 BUGBUG_GITHUB_TOKEN=
-PHABRICATOR_API_KEY=
-PHABRICATOR_URL=https://phabricator.services.mozilla.com
 BUGBUG_ALLOW_MISSING_MODELS=1
 ```
 
@@ -131,22 +130,15 @@ docker compose down
 ## Perf Regression Predictor Setup
 
 The Perf Regression Predictor uses the same HTTP service and background
-worker, but it needs two extra local-development pieces while the model artifact
-is unpublished:
+worker. While the model artifact is unpublished, the only extra
+local-development piece it needs is a local Hugging Face checkpoint mounted at
+the standard model directory.
 
-- a local Hugging Face checkpoint mounted at the standard model directory;
-- a Phabricator Conduit token so the worker can fetch diff metadata and raw
-  diffs.
-
-### Create The Secret File
-
-Create `.env` in this directory (`http_service/.env` from the repository root)
-with your Conduit token:
-
-```dotenv
-CONDUIT_API_TOKEN=api-replace-with-your-token
-PHABRICATOR_URL=https://phabricator.services.mozilla.com
-```
+The worker resolves each push `(branch, rev)` against its own local Mercurial
+clone (`BUGBUG_REPO_DIR`, defaulting to a temporary `bugbug-hg` directory),
+pulling the revision from `https://hg.mozilla.org/{branch}/` — the same
+mechanism the `/push/.../schedules` test-selection endpoint uses. No Phabricator
+credentials are required.
 
 ### Create The Compose Override
 
@@ -161,8 +153,6 @@ services:
         CHECK_MODELS: "0"
     environment:
       BUGBUG_ALLOW_MISSING_MODELS: "1"
-      PHABRICATOR_API_KEY: ${CONDUIT_API_TOKEN}
-      PHABRICATOR_URL: "${PHABRICATOR_URL:-https://phabricator.services.mozilla.com}"
     volumes:
       - /absolute/path/to/predictor_model:/code/perfregressionpredictormodel:ro
 ```
@@ -195,17 +185,17 @@ docker compose exec bugbug-http-service-bg-worker \
   && echo "Model is mounted"
 ```
 
-Request a prediction with an immutable Phabricator diff ID:
+Request a prediction for a push, identified by its branch and revision:
 
 ```sh
 curl --compressed -sS \
   -w '\nHTTP status: %{http_code}\n' \
   -H "X-Api-Key: local-test" \
-  http://localhost:8000/perfregressionpredictor/predict/phabricator/DIFF_ID
+  http://localhost:8000/perfregressionpredictor/predict/push/autoland/REV
 ```
 
 The first request normally returns HTTP 202. Repeat the same request until it
 returns HTTP 200.
 
-For direct inference without Docker, Redis, Phabricator, or the HTTP API, see
+For direct inference without Docker, Redis, or the HTTP API, see
 the [Perf Regression Predictor CLI documentation](../docs/models/perf-regression-predictor.md#local-inference-with-the-cli).

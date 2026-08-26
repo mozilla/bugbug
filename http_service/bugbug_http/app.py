@@ -110,12 +110,18 @@ class BugPrediction(Schema):
     extra_data = fields.Dict()
 
 
-class PerformanceRegressionPrediction(Schema):
-    revision_id = fields.Integer()
-    diff_id = fields.Integer()
+class PerformanceRegressionCommitPrediction(Schema):
+    node = fields.String()
     prob = fields.List(fields.Float())
     predicted_class = fields.Integer(data_key="class")
     risk_score = fields.Float()
+
+
+class PerformanceRegressionPrediction(Schema):
+    branch = fields.String()
+    rev = fields.String()
+    risk_score = fields.Float()
+    commits = fields.List(fields.Nested(PerformanceRegressionCommitPrediction))
     extra_data = fields.Dict()
 
 
@@ -141,6 +147,10 @@ class Schedules(Schema):
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
+spec.components.schema(
+    PerformanceRegressionCommitPrediction.__name__,
+    schema=PerformanceRegressionCommitPrediction,
+)
 spec.components.schema(
     PerformanceRegressionPrediction.__name__,
     schema=PerformanceRegressionPrediction,
@@ -537,21 +547,26 @@ def model_prediction(model_name, bug_id):
     return compress_response(data, status_code)
 
 
-@application.route("/perfregressionpredictor/predict/phabricator/<int:diff_id>")
+@application.route("/perfregressionpredictor/predict/push/<path:branch>/<rev>")
 @cross_origin()
-def perf_regression_prediction(diff_id: int):
+def perf_regression_prediction(branch: str, rev: str):
     """
     ---
     get:
-      description: Predict performance-regression risk for a public Phabricator diff
+      description: Predict performance-regression risk for a push
       summary: Predict performance-regression risk
       parameters:
-      - name: diff_id
+      - name: branch
         in: path
         required: true
         schema:
-          type: integer
-          example: 789012
+          BranchName
+      - name: rev
+        in: path
+        required: true
+        schema:
+          type: str
+          example: 76383a875678
       responses:
         200:
           description: A performance-regression risk prediction
@@ -572,37 +587,45 @@ def perf_regression_prediction(diff_id: int):
     if not request.headers.get(API_TOKEN):
         return jsonify(UnauthorizedError().dump({})), 401
 
+    # Support the string 'autoland' for convenience.
+    if branch == "autoland":
+        branch = "integration/autoland"
+
     LOGGER.info(
-        "%s Received prediction request for diff_id=%d",
+        "%s Received prediction request for %s @ %s",
         PERF_REGRESSION_LOG_PREFIX,
-        diff_id,
+        branch,
+        rev,
     )
 
-    job = JobInfo(classify_perf_regression, diff_id)
+    job = JobInfo(classify_perf_regression, branch, rev)
     data = get_result(job)
     status_code = 200
 
     if not data:
         if not is_pending(job):
             LOGGER.info(
-                "%s Queueing prediction job for diff_id=%d",
+                "%s Queueing prediction job for %s @ %s",
                 PERF_REGRESSION_LOG_PREFIX,
-                diff_id,
+                branch,
+                rev,
             )
             schedule_job(job)
         else:
             LOGGER.info(
-                "%s Prediction job is pending for diff_id=%d",
+                "%s Prediction job is pending for %s @ %s",
                 PERF_REGRESSION_LOG_PREFIX,
-                diff_id,
+                branch,
+                rev,
             )
         status_code = 202
         data = {"ready": False}
     else:
         LOGGER.info(
-            "%s Returning cached prediction for diff_id=%d",
+            "%s Returning cached prediction for %s @ %s",
             PERF_REGRESSION_LOG_PREFIX,
-            diff_id,
+            branch,
+            rev,
         )
 
     return compress_response(data, status_code)

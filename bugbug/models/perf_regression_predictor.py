@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
+from email import policy
+from email.parser import Parser
 from pathlib import Path
 from typing import Any
 
@@ -62,24 +63,52 @@ def clean_commit_message(
     return "\n".join(cleaned_lines).strip("\n")
 
 
-def combine_commit_messages(commit_messages: Sequence[str]) -> str:
-    """Clean and combine commit messages uploaded for one Phabricator diff.
+def extract_commit_message_from_patch(patch: str) -> str | None:
+    """Extract a message from Git format-patch or Mercurial export content.
 
-    Phabricator exposes local commit metadata as a list. Most Mozilla diffs have
-    one entry, but cleaning each message separately also gives deterministic
-    preprocessing for the uncommon multi-commit case.
+    A Mercurial ``hg export`` (or Git ``format-patch``) bundles the commit
+    message together with the diff, so we need to peel the message off before
+    feeding the diff to the structuring logic.
     """
-    return "\n\n".join(
-        cleaned_message
-        for commit_message in commit_messages
-        if (cleaned_message := clean_commit_message(commit_message).strip())
-    )
+    if patch.startswith("# HG changeset patch"):
+        message_lines: list[str] = []
+        metadata_finished = False
+        for line in patch.splitlines()[1:]:
+            if not metadata_finished and (line.startswith("#") or not line.strip()):
+                continue
+            metadata_finished = True
+            if line.startswith(("diff -r ", "diff --git ")):
+                break
+            message_lines.append(line)
+        message = "\n".join(message_lines).strip()
+        return message or None
+
+    if re.search(r"^Subject:", patch, flags=re.MULTILINE):
+        email_message = Parser(policy=policy.default).parsestr(patch)
+        subject = str(email_message.get("Subject", "")).strip()
+        body = email_message.get_payload()
+        if not isinstance(body, str):
+            body = ""
+        body = re.split(r"^---\s*$|^diff --git ", body, maxsplit=1, flags=re.MULTILINE)[
+            0
+        ].strip()
+        message = "\n\n".join(part for part in (subject, body) if part)
+        return message or None
+
+    return None
 
 
 def diff_to_structured_text(diff_string: str) -> str:
-    """Convert a Git or Mercurial diff to the model's structured format."""
+    """Convert a Git or Mercurial diff to the model's structured format.
+
+    The input may be a bare diff or a full ``hg export`` / ``git format-patch``
+    payload that still carries the commit-message header; any preamble before
+    the first ``diff`` header is ignored.
+    """
     lines = diff_string.strip().splitlines()
     output: list[str] = []
+
+    started = False
 
     current_file: str | None = None
     current_block_type: str | None = None
@@ -118,6 +147,12 @@ def diff_to_structured_text(diff_string: str) -> str:
         pending_rename = False
 
     for line in lines:
+        if not started:
+            if line.startswith(("diff -r", "diff --git")):
+                started = True
+            else:
+                continue
+
         if line.startswith("diff -r"):
             flush_file()
             parts = line.split()

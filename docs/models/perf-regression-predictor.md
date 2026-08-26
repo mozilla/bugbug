@@ -1,19 +1,22 @@
 # Perf Regression Predictor
 
 The Perf Regression Predictor is an inference-only binary transformer
-model. It predicts whether a public Phabricator diff is likely to
-introduce a performance regression.
+model. It predicts whether a commit is likely to introduce a performance
+regression.
 
-The input is the commit message from the diff's `commits` attachment plus the
-raw diff. If a diff has multiple uploaded local commits, each message is cleaned
-independently and the messages are separated by blank lines. If Phabricator did
-not retain commit metadata, the revision title and summary are used as a
-fallback. Before inference, leading bracketed tags, parenthesized tags, and
-prefixes such as `Bug 123456` or `Bug #123456` are removed from the first
-non-empty line of each commit message.
+The HTTP service resolves a push `(branch, rev)` server-side against its own
+local Mercurial clone (the same clone `schedule_tests` uses), loads the full
+stack of commits with `automationrelevance`, and scores every commit in the
+push separately. The per-commit input is that commit's message plus its diff,
+both taken from an `hg export` of the commit. Before inference, leading
+bracketed tags, parenthesized tags, and prefixes such as `Bug 123456` or
+`Bug #123456` are removed from the first non-empty line of the commit message.
 The diff is converted to the structured representation used to train the
 checkpoint. The combined text is truncated to the checkpoint's context window
 (512 tokens for the current CodeBERT checkpoint).
+
+Each commit gets its own `risk_score`; the push-level `risk_score` is the
+maximum across the commits in the stack.
 
 The `risk_score` is the uncalibrated softmax probability for positive class
 `1`. It must not be interpreted as a calibrated probability for operational
@@ -22,7 +25,7 @@ decision-making.
 ## Local inference with the CLI
 
 The CLI runs preprocessing and model inference directly. It does not start the
-HTTP service, Redis, an RQ worker, or fetch data from Phabricator.
+HTTP service, Redis, an RQ worker, or resolve pushes from a Mercurial clone.
 
 From the Bugbug repository root, run the included sample patch against a local
 Hugging Face checkpoint:
@@ -61,41 +64,47 @@ The endpoint uses the service's existing Redis/RQ worker and API-key presence
 check:
 
 ```text
-GET /perfregressionpredictor/predict/phabricator/{diff_id}
+GET /perfregressionpredictor/predict/push/{branch}/{rev}
 X-Api-Key: ...
 ```
 
-The first request normally returns `202 {"ready": false}`. Poll the same URL
-until it returns `200`. The worker requires `PHABRICATOR_API_KEY`; a custom
-Phabricator host can be set with `PHABRICATOR_URL`.
+`branch` is an hg.mozilla.org repository path such as `integration/autoland` or
+`try` (the alias `autoland` is accepted for `integration/autoland`), and `rev`
+is a changeset in that push. The first request normally returns
+`202 {"ready": false}`. Poll the same URL until it returns `200`. The worker
+resolves the push from its own local hg clone, so no Phabricator credentials are
+needed; if the push cannot be found the result is `{"available": false}`.
 
 See [HTTP service local development](../../http_service/README.perf-regression-predictor.md)
-for the complete Docker Compose setup, including the local model mount and
-secret file.
+for the complete Docker Compose setup, including the local model mount.
 
 Example result:
 
 ```json
 {
-  "revision_id": 123456,
-  "diff_id": 789012,
-  "prob": [0.25, 0.75],
-  "class": 1,
+  "branch": "integration/autoland",
+  "rev": "76383a875678",
   "risk_score": 0.75,
+  "commits": [
+    {
+      "node": "76383a875678",
+      "prob": [0.25, 0.75],
+      "class": 1,
+      "risk_score": 0.75
+    }
+  ],
   "extra_data": {
     "model_name": "Perf Regression Predictor",
     "model_version": null,
     "max_length": 512,
     "calibrated": false,
-    "commit_message_source": "diff_metadata",
-    "commit_message_count": 1
+    "commit_count": 1
   }
 }
 ```
 
-Only public revisions are processed, and the worker verifies that the diff
-belongs to a public revision. The `revision_id` in the response is derived from
-the diff metadata.
+The push-level `risk_score` is the maximum of the per-commit `risk_score`
+values in `commits`.
 
 ## Model artifact
 

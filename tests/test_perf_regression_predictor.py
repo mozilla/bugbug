@@ -6,10 +6,7 @@
 from bugbug.models.perf_regression_predictor import (
     build_model_input,
     clean_commit_message,
-    combine_commit_messages,
     diff_to_structured_text,
-)
-from scripts.perf_regression_predictor import (
     extract_commit_message_from_patch,
 )
 
@@ -59,28 +56,6 @@ def test_clean_commit_message_removes_bug_number_prefixes() -> None:
         assert clean_commit_message(message) == expected
 
 
-def test_combine_commit_messages_cleans_each_subject() -> None:
-    assert combine_commit_messages(
-        [
-            "Bug 123456 - Improve rendering\n\nFirst body.",
-            "[PATCH] Bug 789012 - Avoid repeated work\n\nSecond body.",
-        ]
-    ) == ("Improve rendering\n\nFirst body.\n\nAvoid repeated work\n\nSecond body.")
-
-
-def test_combine_commit_messages_drops_empty_messages() -> None:
-    assert (
-        combine_commit_messages(
-            [
-                "",
-                "   ",
-                "Bug 123456 - Improve rendering",
-            ]
-        )
-        == "Improve rendering"
-    )
-
-
 def test_diff_to_structured_text() -> None:
     assert (
         diff_to_structured_text(RAW_DIFF)
@@ -100,6 +75,43 @@ def test_diff_to_structured_text() -> None:
 def test_diff_to_structured_text_mercurial_diff() -> None:
     assert (
         diff_to_structured_text(HG_DIFF)
+        == """\
+<FILE>
+  widget.py
+  <REMOVED>
+      old_value = 1
+  </REMOVED>
+  <ADDED>
+      new_value = 2
+  </ADDED>
+</FILE>"""
+    )
+
+
+def test_diff_to_structured_text_full_hg_export() -> None:
+    # A full `hg export --git` payload carries the changeset header and commit
+    # message before the diff; the preamble must be ignored, including message
+    # lines that happen to start with "+" or "-".
+    export = """\
+# HG changeset patch
+# User Developer <developer@example.com>
+# Date 1600000000 0
+# Node ID abcdef123456
+# Parent  123456abcdef
+Bug 123456 - Improve rendering
+
+Body mentions -old_value and +new_value.
+
+diff --git a/widget.py b/widget.py
+--- a/widget.py
++++ b/widget.py
+@@ -1 +1 @@
+-old_value = 1
++new_value = 2
+ context
+"""
+    assert (
+        diff_to_structured_text(export)
         == """\
 <FILE>
   widget.py

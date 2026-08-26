@@ -22,8 +22,7 @@ from bugbug.models import get_model_class, testselect
 from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
-from bugbug.models.perf_regression_predictor import combine_commit_messages
-from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
+from bugbug.models.perf_regression_predictor import extract_commit_message_from_patch
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -238,87 +237,108 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
     return "OK"
 
 
-def classify_perf_regression(diff_id: int) -> str:
-    """Predict performance-regression risk for one immutable Phabricator diff."""
+def classify_perf_regression(branch: str, rev: str) -> str:
+    """Predict performance-regression risk for a push.
+
+    Mirrors :func:`schedule_tests`: the push is resolved server-side against
+    the service's own local hg clone. Every commit in the push is scored
+    separately and the top-level ``risk_score`` is the maximum across commits.
+    """
+    from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
 
-    job = JobInfo(classify_perf_regression, diff_id)
+    job = JobInfo(classify_perf_regression, branch, rev)
     LOGGER.info(
-        "%s Processing prediction for diff_id=%d",
+        "%s Processing prediction for %s @ %s",
         PERF_REGRESSION_LOG_PREFIX,
-        diff_id,
+        branch,
+        rev,
     )
-    patch = PhabricatorPatch(diff_id=diff_id)
 
-    if not patch.is_accessible() or not patch.is_public():
+    # Pull the revision to the local repository.
+    LOGGER.info(
+        "%s Pulling commits from the remote repository...",
+        PERF_REGRESSION_LOG_PREFIX,
+    )
+    repository.pull(REPO_DIR, branch, rev, update=False)
+
+    # Load the full stack of patches leading to that revision.
+    LOGGER.info(
+        "%s Loading commits to analyze using automationrelevance...",
+        PERF_REGRESSION_LOG_PREFIX,
+    )
+    try:
+        revs = get_hgmo_stack(branch, rev)
+    except requests.exceptions.RequestException:
         LOGGER.warning(
-            "%s Prediction unavailable for diff_id=%d",
+            "%s Push not found for %s @ %s!",
             PERF_REGRESSION_LOG_PREFIX,
-            diff_id,
+            branch,
+            rev,
         )
         setkey(job.result_key, orjson.dumps({"available": False}))
         return "OK"
 
-    commit_messages = patch.commit_messages
-    if commit_messages:
-        if len(commit_messages) > 1:
-            LOGGER.warning(
-                "%s Diff %d has %d uploaded commit messages; combining them "
-                "for inference",
-                PERF_REGRESSION_LOG_PREFIX,
-                diff_id,
-                len(commit_messages),
-            )
-        commit_message = combine_commit_messages(commit_messages)
-        commit_message_source = "diff_metadata"
-    else:
+    if not revs:
         LOGGER.warning(
-            "%s Diff %d has no uploaded commit message metadata; using revision "
-            "title and summary fallback",
+            "%s No commits to analyze for %s @ %s",
             PERF_REGRESSION_LOG_PREFIX,
-            diff_id,
+            branch,
+            rev,
         )
-        commit_message = "\n\n".join(
-            part for part in (patch.patch_title, patch.patch_description) if part
-        )
-        commit_message_source = "revision_title_and_summary_fallback"
+        setkey(job.result_key, orjson.dumps({"available": False}))
+        return "OK"
 
-    LOGGER.info(
-        "%s Using commit message source %s for diff_id=%d with commit_message_count=%d",
-        PERF_REGRESSION_LOG_PREFIX,
-        commit_message_source,
-        diff_id,
-        len(commit_messages),
-    )
+    # Export each commit as its own patch (commit message + diff) from the
+    # local clone.
+    patches = repository.get_commit_patches(REPO_DIR, revs)
 
     model = MODEL_CACHE.get(PERF_REGRESSION_PREDICTOR)
 
-    probabilities = model.classify(
-        [{"commit_message": commit_message, "diff": patch.raw_diff}],
-        probabilities=True,
-    )[0]
-    predicted_class = int(probabilities.argmax())
+    # Score each commit separately. The service runs inference on CPU,
+    # so we classify one at a time to keep memory flat.
+    commits = []
+    for rev_node, patch in zip(revs, patches):
+        patch_text = patch.decode("utf-8", "replace")
+        commit_probabilities = model.classify(
+            [
+                {
+                    "commit_message": extract_commit_message_from_patch(patch_text)
+                    or "",
+                    "diff": patch_text,
+                }
+            ],
+            probabilities=True,
+        )[0]
+        commits.append(
+            {
+                "node": rev_node.decode("ascii"),
+                "prob": commit_probabilities.tolist(),
+                "class": int(commit_probabilities.argmax()),
+                "risk_score": float(commit_probabilities[1]),
+            }
+        )
+
+    risk_score = max(commit["risk_score"] for commit in commits)
+
     data = {
-        "revision_id": patch.revision_id,
-        "diff_id": diff_id,
-        "prob": probabilities.tolist(),
-        "class": predicted_class,
-        "risk_score": float(probabilities[1]),
+        "branch": branch,
+        "rev": rev,
+        "risk_score": risk_score,
+        "commits": commits,
         "extra_data": {
             **model.get_extra_data(),
-            "commit_message_source": commit_message_source,
-            "commit_message_count": len(commit_messages),
+            "commit_count": len(commits),
         },
     }
     setkey(job.result_key, orjson.dumps(data), compress=True)
     LOGGER.info(
-        "%s Finished prediction for diff_id=%d, "
-        "revision_id=%d, class=%d, risk_score=%f",
+        "%s Finished prediction for %s @ %s, commit_count=%d, risk_score=%f",
         PERF_REGRESSION_LOG_PREFIX,
-        diff_id,
-        patch.revision_id,
-        predicted_class,
-        float(probabilities[1]),
+        branch,
+        rev,
+        len(commits),
+        risk_score,
     )
     return "OK"
 

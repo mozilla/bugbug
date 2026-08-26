@@ -9,45 +9,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
-from email import policy
-from email.parser import Parser
 from pathlib import Path
 
 from bugbug.models.perf_regression_predictor import (
     PerfRegressionPredictorModel,
+    extract_commit_message_from_patch,
 )
-
-
-def extract_commit_message_from_patch(patch: str) -> str | None:
-    """Extract a message from Git format-patch or Mercurial export content."""
-    if patch.startswith("# HG changeset patch"):
-        message_lines: list[str] = []
-        metadata_finished = False
-        for line in patch.splitlines()[1:]:
-            if not metadata_finished and (line.startswith("#") or not line.strip()):
-                continue
-            metadata_finished = True
-            if line.startswith(("diff -r ", "diff --git ")):
-                break
-            message_lines.append(line)
-        message = "\n".join(message_lines).strip()
-        return message or None
-
-    if re.search(r"^Subject:", patch, flags=re.MULTILINE):
-        email_message = Parser(policy=policy.default).parsestr(patch)
-        subject = str(email_message.get("Subject", "")).strip()
-        body = email_message.get_payload()
-        if not isinstance(body, str):
-            body = ""
-        body = re.split(r"^---\s*$|^diff --git ", body, maxsplit=1, flags=re.MULTILINE)[
-            0
-        ].strip()
-        message = "\n\n".join(part for part in (subject, body) if part)
-        return message or None
-
-    return None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
