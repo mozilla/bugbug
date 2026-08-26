@@ -272,15 +272,14 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
         run.error = error
     run.finalized_at = datetime.now(timezone.utc)
 
-    run_id = run.run_id
-    agent = run.agent
     await db.commit()
+
     if _has_unsubmitted_patch(summary, artifacts):
         log.error(
             "Agent run produced code changes without submitting a patch "
             "(run_id=%s, agent=%s)",
-            run_id,
-            agent,
+            run.run_id,
+            run.agent,
         )
     await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
 
