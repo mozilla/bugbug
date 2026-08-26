@@ -24,6 +24,8 @@ import re
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionHook, ActionsRecorder
 
+from .config import area_for_path
+
 # A line the model writes to declare its severity. Anchored to the line start so an
 # ordinary mention -- quoting a reporter, or arguing why something is not S1 -- does
 # not count as a second declaration.
@@ -44,6 +46,54 @@ def severity_block_hook(action: dict) -> None:
             "your comment declares a severity more than once; keep the single "
             "`Suggested severity:` block at the end and drop the other"
         )
+
+
+# Source paths reach the comment as the Searchfox placeholder plus a repo-relative
+# path (see `SEARCHFOX_LINKS_PROMPT`), which is why this hook has to run before
+# `permalink_hook` rewrites them into URLs.
+_CITED_PATH = re.compile(r"\{\{\s*searchfox\.permalink\s*\}\}/?(?P<path>[^)\s#]+)")
+
+
+def cited_paths(text: str) -> list[str]:
+    """Every repo-relative source path the comment links to."""
+    return [m.group("path") for m in _CITED_PATH.finditer(text)]
+
+
+def area_guidance_hook(loaded_areas: set[str]) -> ActionHook:
+    """Refuse a comment citing code from an area whose guidance was never loaded.
+
+    The prompt carries the area the bug's component maps to. When the investigation
+    lands somewhere else, nothing but this makes the agent go and read that area.
+
+    ``loaded_areas`` is shared with the ``areas`` MCP server, which adds to it as the
+    agent loads files, so the retry after a refusal succeeds.
+
+    A path in no area passes: `gfx/` has nothing to load, so refusing it would fail the
+    run over something the agent cannot satisfy.
+    """
+
+    def hook(action: dict) -> None:
+        text = (action.get("params") or {}).get("text")
+        if not isinstance(text, str):
+            return
+
+        missing: dict[str, str] = {}
+        for path in cited_paths(text):
+            area = area_for_path(path)
+            if area is not None and area.name not in loaded_areas:
+                missing.setdefault(area.name, path)
+
+        if missing:
+            named = ", ".join(
+                f"{area} (e.g. {path})" for area, path in sorted(missing.items())
+            )
+            raise ToolError(
+                f"your comment cites code in {named}, whose guidance you have not "
+                f"read. Call `load_area_guidance` for each, then revise the comment "
+                f"against what it says -- your localization may be wrong."
+            )
+
+    return hook
 
 
 def _check_no_comment_yet(recorder: ActionsRecorder) -> None:

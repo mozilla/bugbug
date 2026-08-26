@@ -1,4 +1,5 @@
 import { isPlainObject } from "@/lib/findings-format";
+import type { RunAction } from "@/lib/types";
 
 type TestCaseStatus = "passed" | "failed" | "unsuitable";
 
@@ -7,6 +8,7 @@ interface GeneratedTestCase {
   title: string;
   preconditions: string | null;
   steps: TestStep[];
+  result: TestCaseResult | null;
 }
 
 interface TestStep {
@@ -24,7 +26,6 @@ interface TestCaseResult {
 export interface TestPlan {
   feature: string;
   generatedTestCases: GeneratedTestCase[];
-  results: TestCaseResult[];
   summary: string;
 }
 
@@ -52,12 +53,44 @@ function isTestStep(value: TestStep | null): value is TestStep {
   return value !== null;
 }
 
+function parseCaseResult(value: unknown, id: number): TestCaseResult | null {
+  if (!isPlainObject(value) || !isStatus(value.status)) {
+    return null;
+  }
+  return {
+    id,
+    status: value.status,
+    summary: typeof value.summary === "string" ? value.summary : "",
+    failureReason:
+      typeof value.failure_reason === "string" ? value.failure_reason : null,
+  };
+}
+
 export function parseTestPlan(
-  findings: Record<string, unknown>
+  findings: Record<string, unknown>,
+  actions: RunAction[] | null = null
 ): TestPlan | null {
-  const result = findings.result;
+  const testRailAction = actions?.find(
+    (action) =>
+      action.type === "testrail.submit_test_plan" &&
+      isPlainObject(action.params) &&
+      Array.isArray(action.params.generated_test_cases)
+  );
+  const result = testRailAction?.params ?? findings.result;
   if (!isPlainObject(result) || !Array.isArray(result.generated_test_cases)) {
     return null;
+  }
+
+  const legacyResultsById = new Map<number, TestCaseResult>();
+  if (Array.isArray(result.results)) {
+    for (const value of result.results) {
+      if (isPlainObject(value) && typeof value.id === "number") {
+        const parsed = parseCaseResult(value, value.id);
+        if (parsed) {
+          legacyResultsById.set(value.id, parsed);
+        }
+      }
+    }
   }
 
   const generatedTestCases: GeneratedTestCase[] = [];
@@ -80,45 +113,24 @@ export function parseTestPlan(
       preconditions:
         typeof value.preconditions === "string" ? value.preconditions : null,
       steps,
+      result:
+        parseCaseResult(value.result, value.id) ??
+        legacyResultsById.get(value.id) ??
+        null,
     });
-  }
-
-  const results: TestCaseResult[] = [];
-  if (Array.isArray(result.results)) {
-    for (const value of result.results) {
-      if (
-        isPlainObject(value) &&
-        typeof value.id === "number" &&
-        isStatus(value.status)
-      ) {
-        results.push({
-          id: value.id,
-          status: value.status,
-          summary: typeof value.summary === "string" ? value.summary : "",
-          failureReason:
-            typeof value.failure_reason === "string"
-              ? value.failure_reason
-              : null,
-        });
-      }
-    }
   }
 
   return {
     feature: typeof result.feature === "string" ? result.feature : "",
     generatedTestCases,
-    results,
     summary: typeof result.summary === "string" ? result.summary : "",
   };
 }
 
 export function TestPlanView({ testPlan }: { testPlan: TestPlan }) {
-  const resultsById = new Map(
-    testPlan.results.map((result) => [result.id, result])
-  );
-
   return (
-    <div className="test-plan">
+    <div className="panel test-plan">
+      <h2>Test plan</h2>
       {testPlan.feature && (
         <section className="test-plan-section">
           <h3 className="test-plan-label">Feature name</h3>
@@ -128,7 +140,7 @@ export function TestPlanView({ testPlan }: { testPlan: TestPlan }) {
       <h3 className="test-plan-label">Test cases</h3>
       <ol className="test-case-list">
         {testPlan.generatedTestCases.map((testCase) => {
-          const result = resultsById.get(testCase.id);
+          const result = testCase.result;
           const failureReason =
             result && result.status !== "passed"
               ? result.failureReason || result.summary

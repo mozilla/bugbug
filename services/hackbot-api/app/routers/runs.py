@@ -243,8 +243,8 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     try:
         exec_status = await jobs.get_execution_status(run.execution_name)
     except Exception:
-        log.exception("Failed to fetch execution status for run %s", run.run_id)
-        return
+        log.warning("Failed to fetch execution status for run %s", run.run_id)
+        raise
 
     if exec_status in (ExecutionStatus.pending, ExecutionStatus.running):
         if (

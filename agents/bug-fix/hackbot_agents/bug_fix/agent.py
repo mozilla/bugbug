@@ -19,12 +19,15 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
     McpServerConfig,
-    ResultMessage,
 )
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
-from hackbot_runtime.claude import Reporter
+from hackbot_runtime.claude import (
+    Reporter,
+    UnsettledResponseError,
+    receive_settled_response,
+)
 
 from .config import (
     BUGZILLA_NEEDINFO_ACTIONS,
@@ -139,6 +142,7 @@ async def run_bug_fix(
     verbose: bool = False,
     log: Path | None = None,
     actions_recorder: ActionsRecorder | None = None,
+    background_task_timeout_s: float = 3 * 60 * 60,
 ) -> BugFixResult:
     """Triage and fix a single Bugzilla bug with a claude-agent-sdk agent.
 
@@ -203,18 +207,19 @@ async def run_bug_fix(
         setting_sources=[],
     )
 
-    result_msg: ResultMessage | None = None
     with Reporter(verbose=verbose, log_path=log) as reporter:
         reporter.header(f"bug {bug}")
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
-            async for msg in client.receive_response():
-                reporter.message(msg)
-                if isinstance(msg, ResultMessage):
-                    result_msg = msg
+            try:
+                result_msg = await receive_settled_response(
+                    client,
+                    on_message=reporter.message,
+                    timeout_s=background_task_timeout_s,
+                )
+            except UnsettledResponseError as exc:
+                raise AgentError(f"bug {bug}: agent run did not settle: {exc}") from exc
 
-    if result_msg is None:
-        raise AgentError(f"bug {bug}: agent produced no result message")
     if result_msg.is_error:
         raise AgentError(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"

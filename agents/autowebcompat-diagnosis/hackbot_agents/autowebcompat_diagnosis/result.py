@@ -94,26 +94,29 @@ class ReproScriptResult(BaseModel):
     )
 
     failure_reason: (
-        Literal["not_reproducable"]
-        | Literal["non_compat"]
+        Literal["not_reproducible"]
+        | Literal["not_firefox_specific"]
         | Literal["blocked"]
         | Literal["blocked_captcha"]
         | Literal["blocked_geo"]
         | Literal["login"]
         | Literal["down"]
+        | Literal["headless"]
         | Literal["other"]
         | None
     ) = Field(
         description="""Null if the issue reproduced. Otherwise the category
         describing why it did not:
-          * not_reproducable - all the steps ran, but the reported issue did not occur
-          * non_compat - the behavior is identical in Firefox and Chrome, so this
-          is not a Firefox web-compat issue
+          * not_reproducible - all the steps ran, but the reported issue did not occur
+          * not_firefox_specific - the reported behavior reproduces in both Firefox
+          and Chrome
           * blocked_captcha - the site required solving a captcha
           * blocked_geo - the site blocked access based on location
           * blocked - access was blocked for a reason that isn't a captcha or geoblocking
           * login - reproducing requires completing a login flow
           * down - the site is down or unavailable, unrelated to the report
+          * headless - there is evidence the issue isn't reproducible due to the
+          headless environment
           * other - some other reason (give details in the summary)
 """,
     )

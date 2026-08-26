@@ -34,6 +34,7 @@ grouped:
   `mobile/android/android-components/`.
 - **Application updater** — `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
 - **Windows installer** — `Firefox :: Installer` (NSIS).
+- **Messaging System**: `Firefox :: Messaging System` (incl. about:welcome, feature callouts, Spotlight modal dialogs, Infobars).
 
 Install and update bugs are the odd ones out: they arrive as a failure with an
 error code and an `update.log` or installer log, usually with no steps to

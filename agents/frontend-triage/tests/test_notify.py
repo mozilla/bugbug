@@ -110,6 +110,7 @@ def test_the_channel_belongs_to_the_component():
 def test_whitespace_around_either_half_is_stripped():
     # Surrounding whitespace is the agent's, not Bugzilla's.
     assert channel_for(" Firefox ", " New Tab Page ") == "#hnt-dev-triage"
+    assert channel_for("Firefox", "Messaging System") == "#omc-triage"
 
 
 def test_the_registry_names_each_component_once():
