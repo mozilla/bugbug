@@ -32,6 +32,7 @@ PHABRICATOR_FOLLOW_UP_ACTIONS = [
     "bugzilla.update_bug",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
+    "try_server.push",
     "phabricator.update_patch",
     "phabricator.add_comment",
 ]

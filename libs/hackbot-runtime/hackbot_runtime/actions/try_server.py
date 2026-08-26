@@ -124,9 +124,9 @@ async def push(
     This records the push for review rather than performing it, so you will not
     see the results.
 
-    Always set ``ref`` so ``submit_patch`` in the same run can reference the new
-    CI push's Treeherder URL as ``{{actions.<ref>.url}}`` in its ``summary``.
-    Record this push before ``submit_patch``.
+    Always set ``ref`` so a later action in the same run can link the new CI
+    push's Treeherder URL as ``{{actions.<ref>.url}}``. Record this push before
+    the action containing the link.
     """
     cleaned_tasks = [task.strip() for task in (tasks or []) if task and task.strip()]
     if cleaned_tasks and auto:
