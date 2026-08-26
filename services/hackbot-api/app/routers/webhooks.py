@@ -58,6 +58,7 @@ _seen_transactions: TTLCache = TTLCache(
 
 # Best-effort dedupe of retried BMO deliveries, keyed by the globally unique
 # needinfo flag ID. A later needinfo on the same bug receives a new flag ID.
+# TODO: Replace with DB-level deduplication (#6716).
 _seen_bugzilla_events: TTLCache = TTLCache(
     maxsize=4096, ttl=settings.bugzilla_webhook.dedupe_ttl_seconds
 )
