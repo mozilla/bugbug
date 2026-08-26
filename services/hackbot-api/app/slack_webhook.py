@@ -37,6 +37,12 @@ class Message(BaseModel):
     ts: str
 
 
+class ActionValue(BaseModel):
+    type: Literal["start_agent_run"]
+    agent_name: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class Action(BaseModel):
     """The element that was clicked."""
 
@@ -44,10 +50,10 @@ class Action(BaseModel):
     # `Json` decodes the value the drawing side put on the button and checks it is
     # an object, so a button carrying something else fails here rather than at the
     # first use of it.
-    value: Json[dict[str, Any]]
+    value: Json[ActionValue]
 
 
-class ButtonClick(BaseModel):
+class BlockActionsEvent(BaseModel):
     """A click on one button of a message this app posted.
 
     Clicks on message elements are the only interaction this app handles. Slack sends
@@ -59,12 +65,8 @@ class ButtonClick(BaseModel):
 
     type: Literal["block_actions"]
     user: User
-    channel: Channel
-    message: Message
-    # A click reports exactly one action even in a block of several buttons, so an
-    # empty list is a payload shape this does not know.
-    actions: list[Action] = Field(min_length=1)
-    # Slack's two single-use handles: for replying (valid ~30 minutes) and for
-    # opening a modal (~3 seconds).
-    response_url: str
+    channel: Channel | None = None
+    message: Message | None = None
+    actions: list[Action] = Field(default_factory=list)
+    response_url: str | None = None
     trigger_id: str
