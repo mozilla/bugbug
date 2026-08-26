@@ -68,8 +68,10 @@ RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix
 
-# /usr/local/bin, not ~/.cargo/bin: `mach bootstrap` installs rustup into the latter
-# at runtime, and it lives in the agent's HOME.
+# Not ~/.cargo/bin, where `mach bootstrap` installs the Rust toolchain at runtime:
+# that directory is rustup-managed and inside the agent's HOME, so a root-owned copy
+# made at build time does not belong in it. /usr/local/bin is on PATH for every user
+# and nothing at runtime writes to it.
 COPY --from=treeherder-cli /out/bin/treeherder-cli /usr/local/bin/treeherder-cli
 
 # `mach bootstrap` installs the toolchain here at runtime; put it on PATH so the
