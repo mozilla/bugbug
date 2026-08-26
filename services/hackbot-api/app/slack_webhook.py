@@ -1,23 +1,8 @@
-"""Slack interaction payload handling: parsing a verified delivery into a click.
+"""Slack interaction payload handling.
 
-Takes raw bytes, because the body is form-encoded rather than JSON and those bytes
-are already needed for signature verification. Everything after that is pydantic's:
-it parses the JSON, checks the interaction is one this app handles, and validates the
-fields the receiver reads.
-
-The models mirror Slack's payload rather than flattening it, so each one can be read
-against the reference side by side, and only the fields the receiver actually uses
+The models mirror Slack's payload, so each one can be read against the reference
+side by side, and only the fields the receiver actually uses
 are declared. Everything else a delivery carries is ignored.
-
-**Anything it cannot read raises**, and the 500 is deliberate. A signature-verified
-delivery this cannot parse means Slack changed its payload shape or the signing
-secret leaked, and someone did press a button that then did nothing. Slack shows
-that person an error, which is the honest outcome: the alternative is a silent 200
-that lets them believe the click worked. The `ValidationError` names the field that
-was wrong, so Sentry gets the reason rather than a stack trace to decipher.
-
-Slack does not retry an interaction (retries are an Events API feature), so the 500
-costs no retry storm either.
 
 https://docs.slack.dev/reference/interaction-payloads/block_actions-payload
 """
@@ -26,7 +11,6 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Literal
-from urllib.parse import parse_qs
 
 from pydantic import BaseModel, Field, Json
 
@@ -84,19 +68,3 @@ class ButtonClick(BaseModel):
     # opening a modal (~3 seconds).
     response_url: str
     trigger_id: str
-
-
-def parse_interaction(raw_body: bytes) -> ButtonClick:
-    """The click a raw interaction delivery carries.
-
-    ``.decode`` raises on bytes that are not UTF-8, and ``model_validate_json``
-    raises on a payload that is not JSON, is not an object, or is not a readable
-    click. None of them can be answered, so none of them return.
-    """
-    form = parse_qs(raw_body.decode("utf-8"))
-
-    encoded = form.get("payload")
-    if not encoded:
-        raise ValueError("Slack interaction: body has no payload field")
-
-    return ButtonClick.model_validate_json(encoded[0])

@@ -10,7 +10,7 @@ import logging
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.auth import require_slack_signature
-from app.slack_webhook import parse_interaction
+from app.slack_webhook import ButtonClick
 
 log = logging.getLogger(__name__)
 
@@ -27,9 +27,8 @@ router = APIRouter(prefix="/webhooks/slack")
     dependencies=[Depends(require_slack_signature)],
 )
 async def slack_interactions(request: Request) -> Response:
-    # Already read (and cached) by the signature dependency: the signature covers
-    # the bytes as sent, and the form body is parsed from those same bytes.
-    click = parse_interaction(await request.body())
+    form = await request.form()
+    click = ButtonClick.model_validate_json(form["payload"])
 
     action = click.actions[0]
     log.info(

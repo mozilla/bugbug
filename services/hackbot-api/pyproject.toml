@@ -19,6 +19,7 @@ dependencies = [
     "sentry-sdk>=2.51.0",
     "cachetools>=5.3.0",
     "slack-sdk>=3.27.0",
+    "python-multipart>=0.0.9",
     "httpx>=0.26.0",
     "hackbot-runtime",
     "phabricator-client",
