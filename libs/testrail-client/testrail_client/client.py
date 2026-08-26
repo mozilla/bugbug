@@ -48,6 +48,9 @@ class TestRailClient:
     async def get_templates(self) -> dict[str, Any] | list[Any]:
         return await self.request("GET", f"get_templates/{self.settings.project_id}")
 
+    async def get_statuses(self) -> dict[str, Any] | list[Any]:
+        return await self.request("GET", "get_statuses")
+
     async def add_suite(self, name: str) -> dict[str, Any] | list[Any]:
         return await self.request(
             "POST",
@@ -66,3 +69,19 @@ class TestRailClient:
         self, section_id: int, payload: dict[str, Any]
     ) -> dict[str, Any] | list[Any]:
         return await self.request("POST", f"add_case/{section_id}", payload)
+
+    async def add_run(self, payload: dict[str, Any]) -> dict[str, Any] | list[Any]:
+        return await self.request(
+            "POST",
+            f"add_run/{self.settings.project_id}",
+            payload,
+        )
+
+    async def add_results_for_cases(
+        self, run_id: int, results: list[dict[str, Any]]
+    ) -> dict[str, Any] | list[Any]:
+        return await self.request(
+            "POST",
+            f"add_results_for_cases/{run_id}",
+            {"results": results},
+        )

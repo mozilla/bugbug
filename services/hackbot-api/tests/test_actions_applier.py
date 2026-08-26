@@ -1,13 +1,13 @@
 """Tests for the action applier.
 
 Covers the {{actions.<ref>.<field>}} placeholder resolver, the succeeded-run
-gate + per-agent auto-apply opt-in in `on_run_completed`, and the manual
-`apply_all_pending` path — see app/actions_applier.py.
+gate + per-agent auto-apply opt-in and per-run consent in `on_run_completed`, and
+the manual `apply_all_pending` path — see app/actions_applier.py.
 """
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 
 from app import actions_applier
@@ -16,6 +16,7 @@ from app.actions_applier import (
     on_run_completed,
     resolve_placeholders,
 )
+from app.agents import AGENT_REGISTRY
 from app.schemas import RunStatus
 
 
@@ -75,6 +76,110 @@ class _FakeRun:
     agent: str = "bug-fix"
     run_id: uuid.UUID = field(default_factory=uuid.uuid4)
     summary: dict | None = None
+    inputs: dict = field(default_factory=dict)
+
+
+def _spec(*, auto=True, consent=False):
+    """A real `AgentSpec` built with `replace` off a registry entry.
+
+    Every field then takes its production default, so a field added later can't read
+    as absent. A hand-rolled namespace would instead raise `AttributeError` inside
+    `_auto_apply_blocker`.
+    """
+    return replace(
+        AGENT_REGISTRY["bug-fix"],
+        auto_apply_actions=auto,
+        auto_apply_requires_consent=consent,
+    )
+
+
+def _auto_applies(spec, run):
+    return actions_applier._auto_apply_blocker(spec, run) is None
+
+
+def _run_with_findings(**findings):
+    return _FakeRun(
+        status=RunStatus.succeeded.value,
+        inputs={"bug_id": 2014702},
+        summary={"findings": findings, "actions": []},
+    )
+
+
+def test_auto_apply_off_never_applies():
+    # `auto_apply_actions` is checked first, so what a run reports about itself makes
+    # no difference when the agent hasn't opted in at all.
+    spec = _spec(auto=False, consent=True)
+    assert not _auto_applies(spec, _run_with_findings(auto_apply=True))
+
+
+def test_unknown_agent_never_applies():
+    assert not _auto_applies(None, _run_with_findings(auto_apply=True))
+
+
+def test_an_agent_that_needs_no_consent_applies_unconditionally():
+    # Agents that opt in without asking for a per-run verdict keep applying whatever
+    # findings say. `bug-fix` and `test-repair` predate this change.
+    spec = _spec()
+    assert _auto_applies(spec, _FakeRun(status=RunStatus.succeeded.value))
+    assert _auto_applies(spec, _run_with_findings(auto_apply=False))
+
+
+# --- the run's own verdict ----------------------------------------------- #
+#
+# The agent decides `findings.auto_apply`, because `confidence` lands in its final
+# message after every action is already recorded. What it may record at all is
+# bounded on the agent side too, as it records — see `hooks.py` in frontend-triage.
+# These tests cover only how the service honors the verdict.
+
+
+def test_a_vouched_for_run_applies():
+    spec = _spec(consent=True)
+    assert _auto_applies(spec, _run_with_findings(auto_apply=True))
+
+
+def test_a_run_that_did_not_vouch_for_itself_is_held():
+    # The check is `is not True`, so anything short of a literal boolean true is held.
+    # A run that reports no verdict has not given one.
+    spec = _spec(consent=True)
+    for findings in (
+        {"auto_apply": False},
+        {"auto_apply": None},
+        {"auto_apply": "true"},  # a string is not consent
+        {"auto_apply": 1},
+        {},  # never reported
+    ):
+        assert not _auto_applies(spec, _run_with_findings(**findings)), findings
+
+
+def test_a_run_with_no_findings_at_all_is_held():
+    spec = _spec(consent=True)
+    for summary in (None, {}, {"findings": None}, {"findings": {}}):
+        run = _FakeRun(status=RunStatus.succeeded.value, summary=summary)
+        assert not _auto_applies(spec, run), summary
+
+
+def test_the_real_frontend_triage_spec_asks_for_consent():
+    # Asserts the live registry entry rather than a paraphrase of it. Without
+    # `auto_apply_requires_consent` the agent's verdict is ignored and a medium- or
+    # low-confidence run posts the same as a high one.
+    spec = AGENT_REGISTRY["frontend-triage"]
+    assert spec.auto_apply_actions is True
+    assert spec.auto_apply_requires_consent is True
+
+
+def test_which_agents_auto_apply_without_asking_for_consent():
+    # `bug-fix` and `test-repair` auto-apply whatever they record, and the apply step
+    # dispatches against the runtime's *global* handler registry — creating bugs,
+    # attaching files, submitting Phabricator patches. Both predate this change, and
+    # bounding them is a decision about those agents, so this records the gap rather
+    # than closing it. Failing here means a new agent opted in without bounding what
+    # it records.
+    unbounded = {
+        name
+        for name, spec in AGENT_REGISTRY.items()
+        if spec.auto_apply_actions and not spec.auto_apply_requires_consent
+    }
+    assert unbounded == {"bug-fix", "test-repair"}
 
 
 class _FakeDB:
@@ -90,7 +195,7 @@ class _FakeDB:
         )
 
 
-def _patch_applier(monkeypatch, *, auto: bool | None):
+def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
     """Stub ensure/apply and the registry; record what got called.
 
     `auto=None` means the agent isn't in the registry at all.
@@ -106,9 +211,7 @@ def _patch_applier(monkeypatch, *, auto: bool | None):
 
     monkeypatch.setattr(actions_applier, "ensure_action_rows", fake_ensure)
     monkeypatch.setattr(actions_applier, "_apply_pending_rows", fake_apply)
-    registry = (
-        {} if auto is None else {"bug-fix": SimpleNamespace(auto_apply_actions=auto)}
-    )
+    registry = {} if auto is None else {"bug-fix": _spec(auto=auto, consent=consent)}
     monkeypatch.setattr(actions_applier, "AGENT_REGISTRY", registry)
     return calls
 
@@ -140,6 +243,27 @@ async def test_succeeded_unknown_agent_does_not_apply(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=None)
     await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value))
     assert calls == {"ensured": True, "applied": False}
+
+
+async def test_succeeded_vouched_for_run_applies(monkeypatch):
+    calls = _patch_applier(monkeypatch, auto=True, consent=True)
+    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=True))
+    assert calls == {"ensured": True, "applied": True}
+
+
+async def test_succeeded_unvouched_run_records_but_does_not_apply(monkeypatch):
+    calls = _patch_applier(monkeypatch, auto=True, consent=True)
+    # Recorded for the UI (and manual apply), but nothing reaches Bugzilla.
+    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=False))
+    assert calls == {"ensured": True, "applied": False}
+
+
+async def test_other_agents_do_not_auto_apply():
+    # Opting an agent in is a deliberate edit, so spell out who is in today:
+    # bug-fix and test-repair auto-apply unconditionally, frontend-triage only when
+    # the run vouched for itself, and everyone else stays human-gated.
+    auto_apply = {n for n, s in AGENT_REGISTRY.items() if s.auto_apply_actions}
+    assert auto_apply == {"bug-fix", "frontend-triage", "test-repair"}
 
 
 async def test_apply_all_pending_always_applies(monkeypatch):
@@ -208,6 +332,47 @@ async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
     assert len(handler.calls) == 2
     assert failed.status == "applied" and failed.error is None
     assert pending.status == "applied"
+
+
+async def test_try_result_resolves_in_phabricator_summary(monkeypatch):
+    treeherder_url = "https://treeherder.mozilla.org/jobs?repo=try&landoCommitID=7"
+    try_handler = _RecordingHandler(
+        SimpleNamespace(
+            status="applied", result={"job_id": 7, "url": treeherder_url}, error=None
+        )
+    )
+    patch_handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"revision_id": 2}, error=None)
+    )
+    handlers = {
+        "try_server.push": try_handler,
+        "phabricator.submit_patch": patch_handler,
+    }
+    monkeypatch.setattr(actions_applier, "get_handler", handlers.__getitem__)
+
+    try_push = _row(
+        0,
+        "pending",
+        action_type="try_server.push",
+        params={"auto": True},
+        ref="try",
+    )
+    patch = _row(
+        1,
+        "pending",
+        action_type="phabricator.submit_patch",
+        params={"bug_id": 1, "title": "Fix", "summary": "Try: {{actions.try.url}}"},
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(try_push, []), (patch, [])],
+    )
+
+    assert patch_handler.calls == [
+        {"bug_id": 1, "title": "Fix", "summary": f"Try: {treeherder_url}"}
+    ]
 
 
 # --- coalescing same-bug Bugzilla mutations into one PUT ---------------- #

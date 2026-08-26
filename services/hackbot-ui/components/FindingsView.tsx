@@ -10,7 +10,6 @@ import {
   titleize,
 } from "@/lib/findings-format";
 import { Markdown } from "./Markdown";
-import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
 type ViewMode = "friendly" | "raw";
 
@@ -211,14 +210,9 @@ function FriendlyFindings({ findings }: { findings: Record<string, unknown> }) {
 
 export function FindingsView({
   findings,
-  agent,
 }: {
   findings: Record<string, unknown>;
-  agent: string;
 }) {
-  const testPlan =
-    agent === "test-plan-generator" ? parseTestPlan(findings) : null;
-
   // Default to the friendly, readable view; raw JSON is opt-in.
   const [mode, setMode] = useState<ViewMode>("friendly");
   return (
@@ -247,11 +241,7 @@ export function FindingsView({
         </div>
       </div>
       {mode === "friendly" ? (
-        testPlan ? (
-          <TestPlanView testPlan={testPlan} />
-        ) : (
-          <FriendlyFindings findings={findings} />
-        )
+        <FriendlyFindings findings={findings} />
       ) : (
         <pre className="log">{JSON.stringify(findings, null, 2)}</pre>
       )}

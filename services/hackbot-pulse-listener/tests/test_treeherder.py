@@ -108,18 +108,16 @@ def test_not_ingested_returns_none(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _clear_group_cache():
-    for cache in (
+    caches = (
         treeherder._group_cache,
         treeherder._jobs_cache,
         treeherder._push_id_cache,
-    ):
+        treeherder._bug_suggestions_cache,
+    )
+    for cache in caches:
         cache.clear()
     yield
-    for cache in (
-        treeherder._group_cache,
-        treeherder._jobs_cache,
-        treeherder._push_id_cache,
-    ):
+    for cache in caches:
         cache.clear()
 
 
@@ -365,6 +363,151 @@ def test_await_skip_reason_gives_up_and_investigates(monkeypatch):
     assert treeherder.await_skip_reason("autoland", "T1", _job(6)) is None
 
 
+def _bug(bug_id, resolution="", keywords="intermittent-failure,intermittent-testcase"):
+    return {
+        "id": bug_id,
+        "status": "NEW",
+        "resolution": resolution,
+        "keywords": keywords,
+    }
+
+
+def _suggestion(search, new_in_rev, open_recent=(), all_others=()):
+    return {
+        "search": search,
+        "failure_new_in_rev": new_in_rev,
+        "bugs": {"open_recent": list(open_recent), "all_others": list(all_others)},
+    }
+
+
+_FAIL_LINE = "TEST-UNEXPECTED-FAIL | test_dataChannel.html | Test timed out."
+
+
+@pytest.fixture
+def suggestions(monkeypatch):
+    """Stub the bug_suggestions fetch; call it with the entries to return."""
+
+    def use(*entries):
+        monkeypatch.setattr(
+            treeherder, "bug_suggestions", lambda project, job_id: list(entries)
+        )
+
+    return use
+
+
+def _failing_job():
+    return {"id": 42, "task_id": "TT", "failure_classification_id": 1}
+
+
+def test_known_intermittent_needs_both_signals(suggestions):
+    suggestions(_suggestion(_FAIL_LINE, False, open_recent=[_bug(2016093)]))
+    match = treeherder.intermittent_match("autoland", _failing_job())
+    assert match.known is True
+    assert match.bug_ids == [2016093]
+
+
+def test_a_new_failure_with_an_intermittent_bug_still_runs(suggestions):
+    # Genuine regressions also match open intermittent bugs, so the bug alone
+    # must never be enough to skip.
+    suggestions(_suggestion(_FAIL_LINE, True, open_recent=[_bug(1828735)]))
+    match = treeherder.intermittent_match("autoland", _failing_job())
+    assert match.known is False
+    assert match.bug_ids == [1828735]
+
+
+def test_an_old_failure_without_a_bug_still_runs(suggestions):
+    suggestions(_suggestion(_FAIL_LINE, False))
+    assert treeherder.intermittent_match("autoland", _failing_job()).known is False
+
+
+def test_one_unknown_line_keeps_the_whole_job(suggestions):
+    suggestions(
+        _suggestion(_FAIL_LINE, False, open_recent=[_bug(2016093)]),
+        _suggestion("TEST-UNEXPECTED-FAIL | browser_startup.js | Got 1", True),
+    )
+    assert treeherder.intermittent_match("autoland", _failing_job()).known is False
+
+
+def test_harness_noise_does_not_decide(suggestions):
+    # Harness noise matches junk bugs on nearly every job.
+    suggestions(
+        _suggestion("[taskcluster:error] exit status 1", False, [_bug(2034259)]),
+        _suggestion(_FAIL_LINE, True),
+    )
+    match = treeherder.intermittent_match("autoland", _failing_job())
+    assert match.known is False
+    assert match.bug_ids == []
+
+
+def test_resolved_bugs_are_not_evidence(suggestions):
+    suggestions(
+        _suggestion(_FAIL_LINE, False, all_others=[_bug(1798750, "INCOMPLETE")])
+    )
+    match = treeherder.intermittent_match("autoland", _failing_job())
+    assert match.known is False
+    assert match.bug_ids == []
+
+
+def test_a_bug_without_the_keyword_is_not_evidence(suggestions):
+    suggestions(_suggestion(_FAIL_LINE, False, [_bug(2055984, keywords="regression")]))
+    assert treeherder.intermittent_match("autoland", _failing_job()).known is False
+
+
+def test_no_suggestions_fails_open(suggestions):
+    suggestions()
+    assert treeherder.intermittent_match("autoland", _failing_job()).known is False
+
+
+def test_a_suggestions_error_fails_open(monkeypatch):
+    def boom(project, job_id):
+        raise RuntimeError("treeherder down")
+
+    monkeypatch.setattr(treeherder, "bug_suggestions", boom)
+    assert treeherder.intermittent_match("autoland", _failing_job()).known is False
+
+
+def test_a_job_without_an_id_fails_open(monkeypatch):
+    monkeypatch.setattr(
+        treeherder,
+        "bug_suggestions",
+        lambda *_: pytest.fail("nothing to look up without a job id"),
+    )
+    assert treeherder.intermittent_match("autoland", None).known is False
+    assert treeherder.intermittent_match("autoland", {"task_id": "TT"}).known is False
+
+
+def test_a_missing_new_in_rev_flag_is_treated_as_new(suggestions):
+    entry = _suggestion(_FAIL_LINE, False, [_bug(2016093)])
+    del entry["failure_new_in_rev"]
+    suggestions(entry)
+    assert treeherder.intermittent_match("autoland", _failing_job()).known is False
+
+
+def test_bug_ids_are_deduped_across_lines(suggestions):
+    suggestions(
+        _suggestion(_FAIL_LINE, False, [_bug(2016093)]),
+        _suggestion(_FAIL_LINE + " (retry)", False, [_bug(2016093)]),
+    )
+    assert treeherder.intermittent_match("autoland", _failing_job()).bug_ids == [
+        2016093
+    ]
+
+
+def test_bug_suggestions_are_fetched_once_per_job(monkeypatch):
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return _response([_suggestion(_FAIL_LINE, False)])
+
+    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
+    assert treeherder.bug_suggestions("autoland", 42) == treeherder.bug_suggestions(
+        "autoland", 42
+    )
+    assert len(calls) == 1
+    assert calls[0].endswith("/project/autoland/jobs/42/bug_suggestions/")
+
+
 def test_push_url_points_at_the_push():
     assert treeherder.push_url("autoland", "abc123") == (
         "https://treeherder.mozilla.org/#/jobs?repo=autoland&revision=abc123"
@@ -383,3 +526,59 @@ def test_job_url_without_a_revision_still_selects_the_task():
     assert treeherder.job_url("autoland", None, "TT") == (
         "https://treeherder.mozilla.org/#/jobs?repo=autoland&selectedTaskRun=TT"
     )
+
+
+def _status_response(code, payload=None):
+    request = httpx.Request("GET", "https://treeherder.example/api")
+    return httpx.Response(code, json=payload or {}, request=request)
+
+
+@pytest.fixture(autouse=True)
+def no_retry_sleep(monkeypatch):
+    monkeypatch.setattr(treeherder._fetch.retry, "sleep", lambda s: None)
+
+
+def test_a_transient_status_is_retried_then_succeeds(monkeypatch):
+    responses = [_status_response(502), _status_response(200, {"ok": True})]
+    monkeypatch.setattr(treeherder.httpx, "get", lambda *a, **k: responses.pop(0))
+    assert treeherder._get("autoland/push/") == {"ok": True}
+    assert not responses
+
+
+def test_a_transient_status_raises_once_the_retries_are_spent(monkeypatch):
+    calls = []
+
+    def fake_get(*a, **k):
+        calls.append(1)
+        return _status_response(502)
+
+    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
+    with pytest.raises(httpx.HTTPStatusError):
+        treeherder._get("autoland/push/")
+    assert len(calls) == treeherder._ATTEMPTS
+
+
+def test_a_network_error_is_retried(monkeypatch):
+    outcomes = [httpx.ConnectError("boom"), _status_response(200, {"ok": True})]
+
+    def fake_get(*a, **k):
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
+    assert treeherder._get("autoland/push/") == {"ok": True}
+
+
+def test_a_real_error_is_not_retried(monkeypatch):
+    calls = []
+
+    def fake_get(*a, **k):
+        calls.append(1)
+        return _status_response(404)
+
+    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
+    with pytest.raises(httpx.HTTPStatusError):
+        treeherder._get("autoland/push/")
+    assert len(calls) == 1
