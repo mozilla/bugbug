@@ -334,6 +334,47 @@ async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
     assert pending.status == "applied"
 
 
+async def test_try_result_resolves_in_phabricator_summary(monkeypatch):
+    treeherder_url = "https://treeherder.mozilla.org/jobs?repo=try&landoCommitID=7"
+    try_handler = _RecordingHandler(
+        SimpleNamespace(
+            status="applied", result={"job_id": 7, "url": treeherder_url}, error=None
+        )
+    )
+    patch_handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"revision_id": 2}, error=None)
+    )
+    handlers = {
+        "try_server.push": try_handler,
+        "phabricator.submit_patch": patch_handler,
+    }
+    monkeypatch.setattr(actions_applier, "get_handler", handlers.__getitem__)
+
+    try_push = _row(
+        0,
+        "pending",
+        action_type="try_server.push",
+        params={"auto": True},
+        ref="try",
+    )
+    patch = _row(
+        1,
+        "pending",
+        action_type="phabricator.submit_patch",
+        params={"bug_id": 1, "title": "Fix", "summary": "Try: {{actions.try.url}}"},
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(try_push, []), (patch, [])],
+    )
+
+    assert patch_handler.calls == [
+        {"bug_id": 1, "title": "Fix", "summary": f"Try: {treeherder_url}"}
+    ]
+
+
 # --- coalescing same-bug Bugzilla mutations into one PUT ---------------- #
 
 
