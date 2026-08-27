@@ -70,13 +70,21 @@ delegating `sign_bytes` to the IAM `signBlob` API. This is why its service accou
 
 ## Authenticating callers of hackbot-api
 
-Three distinct schemes, one per class of caller:
+Four distinct schemes, one per class of caller:
 
 | Caller                      | Scheme                                                                                 |
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | UI, pulse listener, scripts | `X-API-Key`, compared in constant time                                                 |
 | Phabricator                 | HMAC-SHA256 over the raw body, constant-time compared                                  |
+| Slack                       | HMAC-SHA256 over `v0:{timestamp}:{raw body}`, plus a 5-minute timestamp window         |
 | Eventarc / Pub/Sub push     | Google-signed OIDC bearer token, verified for audience **and** issuing service account |
+
+The two HMAC schemes are not interchangeable: Slack's base string includes the delivery's
+timestamp and that timestamp is checked against the clock, so a captured delivery cannot be
+replayed. Phabricator's covers the body alone, which is why the Slack receiver has its own
+verifier ([auth.py](../../services/hackbot-api/app/auth.py)). Neither key is optional, and
+the Slack one must also be non-blank, so a deployment without a usable key fails to start
+rather than quietly rejecting every delivery.
 
 The push-token check is not redundant with platform IAM. The service allows unauthenticated
 invocations — that is how API-key callers reach it at all — so IAM on the subscription does
@@ -94,6 +102,15 @@ authority. See [triggers.md](triggers.md).
 A webhook signature proves the delivery came from Phabricator; it says nothing about _who_
 commented. So the comment author must additionally be a member of the `bmo-editbugs-team`
 project. [triggers.md](triggers.md) covers that check and the other guards on the path.
+
+## Authorizing Slack clicks
+
+The same split applies, and the second half is not built yet: a valid signature proves the
+delivery came from the Slack app, not _who_ clicked, and a Slack user id is not an identity
+this platform trusts. Resolving one to a `@mozilla.com` address (`users.info`, needing the
+`users:read` and `users:read.email` scopes) and checking the workspace is what a click needs
+before it can cause anything. Until then the receiver is inert by design, so no interactive
+element exists ahead of the check that guards it.
 
 ## Recorded actions as a review gate
 
