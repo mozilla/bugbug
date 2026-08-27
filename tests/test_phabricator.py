@@ -5,6 +5,7 @@
 
 from datetime import timedelta
 from unittest.mock import MagicMock
+from unittest.mock import patch as mock_patch
 
 import pytest
 
@@ -530,3 +531,138 @@ async def test_github_repo_unmapped_callsign(monkeypatch) -> None:
 async def test_github_repo_no_repository_phid() -> None:
     patch = _FakePatchWithRepo(None)
     assert await patch.github_repo_ref() is None
+
+
+def _inline_transaction(content: str = "", **inline_fields) -> dict:
+    fields = {
+        "diff": {"id": 1351682},
+        "path": "browser/components/tabbrowser/docs/gbrowser.md",
+        "line": 13,
+        "length": 1,
+        "replyToCommentPHID": None,
+        "isDone": True,
+    }
+    fields.update(inline_fields)
+    return {
+        "id": 11098175,
+        "type": "inline",
+        "authorPHID": "PHID-USER-testauthor",
+        "comments": [
+            {
+                "id": 1710710,
+                "dateCreated": 1787105886,
+                "dateModified": 1787133683,
+                "removed": False,
+                "content": {"raw": content},
+            }
+        ],
+        "fields": fields,
+    }
+
+
+def _to_md(comments: list) -> str:
+    """Render a revision whose comment timeline is the only thing that varies."""
+    revision_metadata = {
+        "id": 319190,
+        "phid": "PHID-DREV-test",
+        "fields": {
+            "title": "A revision",
+            "authorPHID": "PHID-USER-testauthor",
+            "status": {"name": "Needs Review"},
+            "uri": "https://phabricator.services.mozilla.com/D319190",
+            "bugzilla.bug-id": "123456",
+            "summary": "",
+            "testPlan": "",
+            "stackGraph": {},
+        },
+    }
+    diff_metadata = {
+        "id": 1351682,
+        "dateCreated": 1787105886,
+        "dateModified": 1787105886,
+        "baseRevision": "abc123",
+        "authorPHID": "PHID-USER-testauthor",
+    }
+    users_info = {
+        "PHID-USER-testauthor": {
+            "email": "author@mozilla.com",
+            "real_name": "Test Author",
+            "is_trusted": True,
+            "is_trusted_bot": False,
+        }
+    }
+
+    with (
+        mock_patch.object(
+            phab_platform.PhabricatorPatch, "_revision_metadata", revision_metadata
+        ),
+        mock_patch.object(
+            phab_platform.PhabricatorPatch, "_diff_metadata", diff_metadata
+        ),
+        mock_patch.object(
+            phab_platform.PhabricatorPatch, "get_comments", return_value=comments
+        ),
+        mock_patch.object(phab_platform.PhabricatorPatch, "raw_diff", "diff content"),
+        mock_patch(
+            "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
+            return_value=users_info,
+        ),
+    ):
+        return phab_platform.PhabricatorPatch(diff_id=1351682).to_md()
+
+
+def test_to_md_renders_suggestion_only_inline_comment() -> None:
+    markdown = _to_md(
+        [
+            phab_platform.PhabricatorInlineComment(
+                _inline_transaction(
+                    hasSuggestion=True, suggestionText="the replacement"
+                )
+            )
+        ]
+    )
+
+    assert "gbrowser.md` at Line 13" in markdown
+    assert "```suggestion\nthe replacement\n```" in markdown
+
+
+def test_to_md_keeps_inline_comment_with_neither_text_nor_suggestion() -> None:
+    # The file and line alone tell a reader a review comment was left there.
+    markdown = _to_md([phab_platform.PhabricatorInlineComment(_inline_transaction())])
+
+    assert "gbrowser.md` at Line 13" in markdown
+
+
+def test_to_md_drops_removed_inline_and_empty_general_comments() -> None:
+    removed_inline = _inline_transaction(hasSuggestion=True, suggestionText="gone")
+    removed_inline["comments"][0]["removed"] = True
+    empty_general = _inline_transaction()
+    empty_general["type"] = "comment"
+    empty_general["fields"] = {}
+
+    markdown = _to_md(
+        [
+            phab_platform.PhabricatorInlineComment(removed_inline),
+            phab_platform.PhabricatorGeneralComment(empty_general),
+        ]
+    )
+
+    assert "*No comments*" in markdown
+    assert "gone" not in markdown
+
+
+def test_sanitizing_untrusted_inline_comment_drops_its_suggestion() -> None:
+    comment = phab_platform.PhabricatorInlineComment(
+        _inline_transaction("some text", hasSuggestion=True, suggestionText="payload")
+    )
+    users_info = {
+        comment.author_phid: {"is_trusted": False, "is_trusted_bot": False},
+    }
+
+    sanitized, filtered_count = phab_platform._sanitize_comments([comment], users_info)
+
+    assert filtered_count == 1
+    assert sanitized[0].content == phab_platform.UNTRUSTED_CONTENT_REDACTED
+    assert sanitized[0].suggestion_text is None
+    # The sanitizer works on a copy, so the original keeps its suggestion.
+    assert comment.suggestion_text == "payload"
