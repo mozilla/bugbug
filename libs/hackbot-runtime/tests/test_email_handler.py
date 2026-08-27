@@ -132,12 +132,12 @@ async def test_without_sendgrid_configured_nothing_is_sent(monkeypatch):
 
 
 async def test_a_sendgrid_error_is_not_a_delivered_email(monkeypatch):
+    # Raised, not caught: the applier stamps the action failed with this message.
     import sendgrid
 
     def _boom(api_key):
         raise RuntimeError("sendgrid is down")
 
     monkeypatch.setattr(sendgrid, "SendGridAPIClient", _boom)
-    result = await email_handler.SendEmailHandler().apply(_params(), _ctx())
-    assert result.status == "failed"
-    assert "sendgrid is down" in result.error
+    with pytest.raises(RuntimeError, match="sendgrid is down"):
+        await email_handler.SendEmailHandler().apply(_params(), _ctx())

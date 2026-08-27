@@ -103,12 +103,7 @@ class SendEmailHandler:
                 )
             )
 
-        try:
-            response = sendgrid.SendGridAPIClient(api_key=api_key).send(message=message)
-        except Exception as exc:
-            log.exception("Failed to email run %s to %s", ctx.run_id, recipients)
-            return ActionResult.failed(str(exc))
-
+        response = sendgrid.SendGridAPIClient(api_key=api_key).send(message=message)
         return ActionResult.ok(
             {"recipients": recipients, "status_code": response.status_code}
         )
