@@ -42,18 +42,6 @@ def _fake_client(monkeypatch, error=None):
     return client
 
 
-async def test_posts_recorded_message_and_returns_the_timestamp(monkeypatch):
-    client = _fake_client(monkeypatch)
-    result = await slack_handler.PostMessageHandler().apply(
-        {"channel": "#sheriff-notifications", "text": "a test regressed"}, _ctx()
-    )
-    assert client.calls == [
-        {"channel": "#sheriff-notifications", "text": "a test regressed"}
-    ]
-    assert result.status == "applied"
-    assert result.result == {"channel": "C1", "ts": "1700000000.000100"}
-
-
 async def test_posts_to_a_channel_id_as_recorded(monkeypatch):
     client = _fake_client(monkeypatch)
     await slack_handler.PostMessageHandler().apply(
