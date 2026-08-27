@@ -79,14 +79,12 @@ Four distinct schemes, one per class of caller:
 | Slack                       | HMAC-SHA256 over `v0:{timestamp}:{raw body}`, plus a 5-minute timestamp window         |
 | Eventarc / Pub/Sub push     | Google-signed OIDC bearer token, verified for audience **and** issuing service account |
 
-The two HMAC schemes are not interchangeable. Slack signs a base string that **includes the
-delivery's timestamp**, and that timestamp is checked against the clock, so a captured
-delivery cannot be replayed later: refreshing the timestamp invalidates the signature, and
-keeping it puts the delivery outside the window. The Phabricator signature covers the body
-alone and has no such window, which is why the Slack receiver has its own verifier rather
-than reusing the existing one. Neither can run without its key: the Phabricator secret is
-required, and the Slack one is required **and** validated non-blank, so a deployment without
-a usable key fails to start rather than quietly rejecting every delivery it receives.
+The two HMAC schemes are not interchangeable: Slack's base string includes the delivery's
+timestamp and that timestamp is checked against the clock, so a captured delivery cannot be
+replayed. Phabricator's covers the body alone, which is why the Slack receiver has its own
+verifier ([auth.py](../../services/hackbot-api/app/auth.py)). Neither key is optional, and
+the Slack one must also be non-blank, so a deployment without a usable key fails to start
+rather than quietly rejecting every delivery.
 
 The push-token check is not redundant with platform IAM. The service allows unauthenticated
 invocations — that is how API-key callers reach it at all — so IAM on the subscription does
@@ -107,16 +105,12 @@ project. [triggers.md](triggers.md) covers that check and the other guards on th
 
 ## Authorizing Slack clicks
 
-The same split applies, and the second half is not built yet. A valid signature proves the
-delivery came from the Slack app; it says nothing about _who_ clicked, and a Slack user id
-is not an identity this platform trusts. Resolving one to a `@mozilla.com` address (through
-`users.info`, which needs the `users:read` and `users:read.email` scopes) and checking the
-click's workspace is what a click would need before it could cause anything.
-
-Until then the receiver is deliberately inert: it verifies, parses and logs, and no click
-path reaches an effect. That ordering is the point — the authorization lands in the same
-change as the first button, so no interactive element ever exists ahead of the check that
-guards it. See [api.md](api.md).
+The same split applies, and the second half is not built yet: a valid signature proves the
+delivery came from the Slack app, not _who_ clicked, and a Slack user id is not an identity
+this platform trusts. Resolving one to a `@mozilla.com` address (`users.info`, needing the
+`users:read` and `users:read.email` scopes) and checking the workspace is what a click needs
+before it can cause anything. Until then the receiver is inert by design, so no interactive
+element exists ahead of the check that guards it.
 
 ## Recorded actions as a review gate
 

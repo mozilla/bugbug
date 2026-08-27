@@ -40,54 +40,29 @@ own HMAC signature over the raw body; Bugzilla by a shared secret in
 `{"status": "ignored", ...}` for a well-authenticated delivery that doesn't qualify, so BMO
 and Phabricator don't retry it. Both are covered in [triggers.md](triggers.md).
 
-**Slack interactions** all arrive on this one route: Slack posts every click on every
-interactive element to the single Request URL configured for Interactivity, so the receiver
-demultiplexes on the element's `action_id`. The path names the feature because Slack
-configures one Request URL **per feature** — Event Subscriptions and Slash Commands are
-separate URLs with their own payload shapes, and they would get their own routes beside this
-one rather than sharing it. Three things about the delivery shape the route:
+**Slack interactions.** Slack posts every click to the one Request URL configured for
+Interactivity, so the receiver demultiplexes on the element's `action_id`. The path names
+the feature because Slack configures a URL per feature: Event Subscriptions and Slash
+Commands would get their own routes beside this one.
 
-- The body is **not JSON**. It is `application/x-www-form-urlencoded` with the JSON in a
-  single `payload` field, parsed from the same raw bytes the signature covers.
-- **Slack expects a response within 3 seconds** and shows the person who clicked an error if
-  it does not arrive, so real work belongs off the request: publish an event and answer the
-  message afterwards through the delivery's `response_url` or `chat.update`.
-- **A delivery this cannot read fails with a `5xx`**, deliberately, and that includes an
-  interaction type the app does not handle. Someone pressed something and it did nothing,
-  so Slack shows them an error, which beats a silent `200` that lets them believe it
-  worked. It also puts the reason in Sentry, where a Slack payload change is a page rather
-  than a log line nobody greps. Slack does not retry an interaction (retries are an Events
-  API feature), so the failure costs no retry storm.
+Two things about the delivery drive the design in
+[routers/slack.py](../../services/hackbot-api/app/routers/slack.py): the body is
+form-encoded rather than JSON, with the payload in one field, and Slack expects a response
+within **3 seconds**, so real work belongs off the request. Nothing posts a button yet, so
+the route only verifies, parses and logs; the payload model and why an unreadable delivery
+fails loudly are in
+[slack_webhook.py](../../services/hackbot-api/app/slack_webhook.py).
 
-Nothing posts an interactive element yet, so nothing reaches this route in practice: it
-authenticates a delivery, parses it, and records that it happened. Acting on a click, and
-the authorization that has to come first, lands with the first button. A click that starts
-a run will then appear in [triggers.md](triggers.md).
+| Delivery                                  | Status |
+| ----------------------------------------- | ------ |
+| A click this app can read                 | `200`  |
+| A signature header is absent              | `422`  |
+| Signature or freshness fails              | `401`  |
+| Signed, but not a click this app can read | `500`  |
 
-What the endpoint answers:
-
-| Delivery                                           | Status |
-| -------------------------------------------------- | ------ |
-| A click this app can read                          | `200`  |
-| A signature header is absent (a malformed request) | `422`  |
-| Both headers present, signature or freshness fails | `401`  |
-| Signed, but not a click this app can read          | `500`  |
-
-The payload is validated by a pydantic model over
-[Slack's `block_actions` payload](https://docs.slack.dev/reference/interaction-payloads/block_actions-payload),
-declaring only the fields the receiver reads and ignoring the rest of the delivery. That is
-what produces the last row: a missing or misshapen field, or an interaction type other than
-`block_actions`, is a `ValidationError` naming the field.
-
-The two signature headers are declared required, so an absent one is a validation failure
-rather than an authentication one. Slack always sends both, so a delivery missing them is
-not a Slack delivery.
-
-Turning it on is Slack-app config, not a deploy: **Interactivity & Shortcuts → Request URL**
-= `https://<hackbot-api-host>/webhooks/slack/interactions`, and `SLACK_SIGNING_SECRET` from
-**Basic Information → App Credentials**. Interactivity needs no new OAuth scopes, so no
-workspace reinstall. The secret is not optional: without a usable one the service does not
-start at all (see below).
+To turn it on: **Interactivity & Shortcuts → Request URL** =
+`https://<hackbot-api-host>/webhooks/slack/interactions`, plus `SLACK_SIGNING_SECRET` from
+**Basic Information → App Credentials**. No new OAuth scopes, so no workspace reinstall.
 
 ## Creating a run
 
@@ -179,13 +154,10 @@ idempotent — see [actions.md](actions.md).
 Commands and the full config reference are in [deployment.md](deployment.md). Two things
 specific to this service:
 
-- **`WEBHOOK_SECRET` and `SLACK_SIGNING_SECRET` have no defaults**, so a missing one fails
-  at startup rather than silently accepting or rejecting deliveries. Both are HMAC keys for
-  an inbound receiver: an empty one would mean either accepting every delivery
-  unauthenticated or rejecting every real one, and neither is a state worth booting into.
-  `SLACK_SIGNING_SECRET` is validated **non-blank** rather than merely present, so `=""`
-  fails at startup too, and every consumer downstream can take a usable key for granted
-  instead of carrying an unconfigured case.
+- **The inbound HMAC keys have no defaults**, so a missing one fails at startup rather than
+  silently accepting or rejecting deliveries. `SLACK_SIGNING_SECRET` is validated non-blank
+  rather than merely present, so `=""` fails too and nothing downstream carries an
+  unconfigured case.
 - **Signing GCS URLs needs an impersonating credential** —
   `gcloud auth application-default login --impersonate-service-account=<sa>`. See
   [security.md](security.md) for why, and what the deployed service needs instead.
