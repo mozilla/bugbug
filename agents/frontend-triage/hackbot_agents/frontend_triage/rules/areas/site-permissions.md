@@ -1,7 +1,0 @@
-# Site permissions
-
-desktop JS, but split across the prompt, the state, and the store, so start by working out which of the three the bug is in. `browser/modules/SitePermissions.sys.mjs` holds the permission state the rest of the frontend reads and writes, including the defaults, the scopes (`SCOPE_PERSISTENT`, `SCOPE_SESSION`, `SCOPE_TEMPORARY`), and the `ALLOW`/`BLOCK`/`PROMPT` states. `browser/modules/PermissionUI.sys.mjs` builds the doorhanger prompts, one subclass per permission type. `browser/actors/WebRTCParent.sys.mjs` handles camera, microphone, and screen sharing, which do **not** go through the generic prompt path and carry their own sharing indicator. The management UI is `browser/components/preferences/dialogs/permissions.js` and `sitePermissions.js`. The backing store is `nsIPermissionManager`, implemented in C++ at `extensions/permissions/PermissionManager.cpp` — that is outside the frontend directories, so "the permission did not stick", "it came back after a restart", and wrong-expiry bugs are localized there and are **not** out of scope for being non-JS.
-
-## Tests
-
-the prompts are covered by browser-chrome under `browser/base/content/test/permissions/`, `SitePermissions.sys.mjs` itself by `browser/modules/test/browser/`, and the store by xpcshell under `extensions/permissions/test/`. Name the one that matches the layer you localized to, not whichever you found first.
