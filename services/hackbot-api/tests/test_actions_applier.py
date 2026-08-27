@@ -415,7 +415,7 @@ async def test_coalesces_update_and_comment_into_one_put(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"status": "RESOLVED"},
-            "comment": {"body": "done", "is_private": False},
+            "comment": {"body": "done", "is_private": False, "is_markdown": True},
         },
     ]
     assert update.status == "applied" and comment.status == "applied"
@@ -457,7 +457,7 @@ async def test_extra_comments_applied_separately(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"status": "RESOLVED"},
-            "comment": {"body": "near", "is_private": False},
+            "comment": {"body": "near", "is_private": False, "is_markdown": True},
         },
         {"bug_id": 5, "text": "far"},
     ]
@@ -572,6 +572,49 @@ async def test_backward_placeholder_resolves_in_coalesced_comment(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"a": 1},
-            "comment": {"body": "see http://x/D1", "is_private": False},
+            "comment": {
+                "body": "see http://x/D1",
+                "is_private": False,
+                "is_markdown": True,
+            },
         },
     ]
+
+
+async def test_comment_and_needinfo_clear_coalesce_into_one_update(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"needinfo_cleared": True}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda _type: handler)
+
+    comment = _row(
+        0,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "done"},
+    )
+    clear = _row(
+        1,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={
+            "bug_id": 5,
+            "changes": {"flags": [{"id": 42, "status": "X"}]},
+        },
+    )
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(comment, []), (clear, [])],
+    )
+
+    # One PUT carrying both the reply and the flag retraction.
+    assert handler.calls == [
+        {
+            "bug_id": 5,
+            "changes": {"flags": [{"id": 42, "status": "X"}]},
+            "comment": {"body": "done", "is_private": False, "is_markdown": True},
+        }
+    ]
+    assert comment.status == "applied"
+    assert clear.status == "applied"

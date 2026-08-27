@@ -22,6 +22,17 @@ class WebhookSettings(BaseModel):
     dedupe_ttl_seconds: int = 6 * 60 * 60
 
 
+class BugzillaWebhookSettings(BaseModel):
+    """Inbound Bugzilla ``needinfo?`` webhook configuration."""
+
+    # BMO sends this value verbatim in X-Bugzilla-Webhook-Secret.
+    secret: str
+    # The Bugzilla account to which the needinfo request must be directed.
+    bot_login: str = "hackbot@mozilla.tld"
+    # Best-effort in-memory dedupe of retried bug-modification deliveries.
+    dedupe_ttl_seconds: int = 6 * 60 * 60
+
+
 class Settings(BaseSettings):
     # GCP
     gcp_project: str = ""
@@ -50,6 +61,11 @@ class Settings(BaseSettings):
     # Required via its `secret` field, so WEBHOOK_SECRET must be set at startup.
     webhook: WebhookSettings
 
+    # Bugzilla uses a separate shared-secret header and bot identity. These map
+    # from BUGZILLA_WEBHOOK_SECRET, BUGZILLA_WEBHOOK_BOT_LOGIN, and
+    # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
+    bugzilla_webhook: BugzillaWebhookSettings
+
     # The webhook receiver triggers runs over the public API (rather than calling
     # the DB/jobs internals directly), so splitting it into its own service later
     # is just a matter of repointing this at the remote API. While co-located,
@@ -74,8 +90,8 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",
-        # Populate the nested `phabricator` / `webhook` models from
-        # PHABRICATOR_<FIELD> / WEBHOOK_<FIELD> env vars in this single parse.
+        # Populate the nested `phabricator` / webhook models from their prefixed
+        # env vars in this single parse.
         # max_split=1 splits only on the first underscore, so PHABRICATOR_API_KEY
         # -> phabricator.api_key (not phabricator.api.key) and flat fields still
         # bind to their own exact env var names.

@@ -64,7 +64,8 @@ fastest:
 Two things those files do not tell you:
 
 - **Nested models bind from prefixed vars**, splitting on the first underscore only:
-  `PHABRICATOR_API_KEY` → `phabricator.api_key`, `WEBHOOK_SECRET` → `webhook.secret`.
+  `PHABRICATOR_API_KEY` → `phabricator.api_key`, `WEBHOOK_SECRET` → `webhook.secret`,
+  `BUGZILLA_WEBHOOK_SECRET` → `bugzilla_webhook.secret`.
 - **An agent container's env arrives from three places.** Per-execution overrides from the
   API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
