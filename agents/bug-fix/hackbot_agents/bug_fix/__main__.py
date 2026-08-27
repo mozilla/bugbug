@@ -10,6 +10,7 @@ class AgentInputs(BaseSettings):
     broker_url: str
     revision_id: int | None = None
     comment: str | None = None
+    bugzilla_needinfo_flag_id: int | None = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
@@ -34,13 +35,22 @@ class AgentInputs(BaseSettings):
         return self.broker_endpoint("/phabricator/mcp")
 
     @model_validator(mode="after")
-    def _follow_up_with_comment(self) -> "AgentInputs":
-        # A follow-up (revision_id set) must have a comment to post on the
-        # revision.
-        if self.revision_id is not None and not self.comment:
+    def _validate_mode(self) -> "AgentInputs":
+        """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
+        if self.bugzilla_needinfo_flag_id is not None:
+            if self.revision_id is not None:
+                raise ValueError(
+                    "bugzilla_needinfo_flag_id cannot be combined with revision_id"
+                )
+            if not self.comment:
+                raise ValueError(
+                    "comment (COMMENT) is required when "
+                    "bugzilla_needinfo_flag_id is set"
+                )
+        elif self.revision_id is not None and not self.comment:
             raise ValueError(
-                "comment (COMMENT) is required when revision_id is set, to post "
-                "on the revision"
+                "comment (COMMENT) is required when revision_id is set, to "
+                "respond on the revision"
             )
         return self
 
@@ -67,6 +77,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         bug=inputs.bug_id,
         revision_id=inputs.revision_id,
         comment=inputs.comment,
+        bugzilla_needinfo_flag_id=inputs.bugzilla_needinfo_flag_id,
         model=inputs.model,
         max_turns=inputs.max_turns,
         effort=inputs.effort,

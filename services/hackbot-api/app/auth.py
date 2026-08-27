@@ -46,6 +46,19 @@ async def require_phabricator_signature(
         )
 
 
+def require_bugzilla_webhook_secret(
+    x_bugzilla_webhook_secret: str = Header(),
+) -> None:
+    """Reject requests without the dedicated Bugzilla webhook secret."""
+    if not hmac.compare_digest(
+        x_bugzilla_webhook_secret, settings.bugzilla_webhook.secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Bugzilla webhook secret",
+        )
+
+
 async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     if not settings.external_api_key:
         raise HTTPException(
