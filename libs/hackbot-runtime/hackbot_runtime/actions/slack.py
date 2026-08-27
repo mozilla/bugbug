@@ -77,7 +77,7 @@ async def post_message(
 def record_message(
     recorder: ActionsRecorder,
     channel: str,
-    text: str,
+    text: str | None = None,
     blocks: list[dict] | None = None,
     *,
     ref: str | None = None,
