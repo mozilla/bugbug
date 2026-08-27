@@ -15,8 +15,6 @@ from hackbot_runtime.changes import (
     _synthetic_commit,
     build_phabricator_diff,
     build_try_push,
-    collect,
-    pending_patch,
 )
 
 
@@ -210,32 +208,3 @@ def test_build_try_push_rejects_abbreviated_base(tmp_path):
     # Lando needs a full published hash; a short one would fail server-side with
     # a far less obvious error.
     assert build_try_push(tmp_path, base[:12]) is None
-
-
-# --- pending_patch ----------------------------------------------------- #
-
-
-def test_pending_patch_covers_committed_and_uncommitted_and_new_files(tmp_path):
-    base = _init_repo(tmp_path)
-    _commit_change(tmp_path, "line1\nline2 committed\nline3\n")
-    (tmp_path / "file.txt").write_text("line1\nline2 working\nline3\n")
-    (tmp_path / "new.txt").write_text("brand new\n")
-
-    patch = pending_patch(tmp_path, base)
-    assert "line2 working" in patch
-    assert "brand new" in patch
-
-
-def test_pending_patch_is_empty_for_an_untouched_tree(tmp_path):
-    base = _init_repo(tmp_path)
-    assert pending_patch(tmp_path, base) == ""
-
-
-def test_pending_patch_leaves_a_later_collect_intact(tmp_path):
-    base = _init_repo(tmp_path)
-    (tmp_path / "file.txt").write_text("line1\nline2 working\nline3\n")
-
-    pending_patch(tmp_path, base)
-    change_set = collect(tmp_path, base, "https://example.com/repo")
-    assert change_set is not None
-    assert b"line2 working" in change_set.patch

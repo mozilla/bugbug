@@ -73,17 +73,6 @@ def base_commit(repo: Path) -> str:
     return _git(repo, "rev-parse", "HEAD").strip()
 
 
-def pending_patch(repo: Path, base: str) -> str:
-    """The agent's changes since ``base`` as a plain diff, new files included.
-
-    A read-only view of what :func:`collect` will publish, for code that needs the
-    diff before the run ends (a notification quoting it). ``add --intent-to-add``
-    only touches the index, so the working tree and any later collect are unaffected.
-    """
-    _git(repo, "add", "--all", "--intent-to-add")
-    return _git(repo, "diff", base)
-
-
 def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 

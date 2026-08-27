@@ -2,7 +2,7 @@ import logging
 import tempfile
 from pathlib import Path
 
-from hackbot_runtime import HackbotContext, changes, run_async
+from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.actions.email import record_email
 from hackbot_runtime.actions.slack import record_message
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -111,9 +111,7 @@ def _record_verdict_email(
     Unlike the Slack message this is not filtered: the team tracks what the agent
     decided, including the intermittents no sheriff has to act on.
     """
-    patch = (
-        changes.pending_patch(ctx.repo_path, ctx.source_base) if ctx.source_base else ""
-    )
+    patch = ctx.source_patch
     subject, body = build_email(
         result,
         investigation,

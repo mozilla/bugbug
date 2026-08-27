@@ -84,6 +84,9 @@ class HackbotContext(BaseSettings):
     # prepared exactly once and a conflicting re-prepare is caught.
     _repo_path: Path | None = PrivateAttr(default=None)
     _prepared_ref: str | None = PrivateAttr(default=None)
+    # The collected changes, memoized so an agent reading the patch before the run
+    # ends and publish_changes() afterwards share one collect().
+    _change_set: changes.ChangeSet | None = PrivateAttr(default=None)
 
     @classmethod
     def from_config(cls, config_path: Path) -> "HackbotContext":
@@ -153,11 +156,6 @@ class HackbotContext(BaseSettings):
             )
         return self._repo_path
 
-    @property
-    def source_base(self) -> str | None:
-        """The commit the agent started editing from, or None if not recorded."""
-        return self._source_base
-
     @cached_property
     def firefox(self) -> "FirefoxContext":
         """Firefox build paths derived from the prepared source checkout.
@@ -226,6 +224,31 @@ class HackbotContext(BaseSettings):
             self.uploader, self.run_artifacts_dir, key, payload
         )
 
+    def _collect_changes(self) -> changes.ChangeSet | None:
+        """The agent's source changes, collected once and reused.
+
+        Collecting commits whatever the agent left uncommitted, so only the first
+        call observes that; a second would report ``wrapped_uncommitted`` false and
+        publish metadata contradicting what happened. A run that changed nothing
+        has nothing to cache and re-collects, which is two git calls and no commit.
+        """
+        if self._change_set is None and self._source_base is not None:
+            self._change_set = changes.collect(
+                self.repo_path, self._source_base, self._config.source.repo_url
+            )
+        return self._change_set
+
+    @property
+    def source_patch(self) -> str:
+        """The agent's changes as a patch, empty when it changed nothing.
+
+        The same patch :meth:`publish_changes` publishes under
+        ``changes/changes.patch``, so an agent can quote it in a notification it
+        records before the run ends without collecting the tree twice.
+        """
+        change_set = self._collect_changes()
+        return change_set.patch.decode(errors="replace") if change_set else ""
+
     def publish_changes(
         self,
         patch_key: str = "changes/changes.patch",
@@ -234,11 +257,7 @@ class HackbotContext(BaseSettings):
         try_push_key: str = "changes/try_push.json",
     ) -> str | None:
         """Collect the agent's source-tree changes and publish them as artifacts."""
-        if self._source_base is None:
-            return None
-        change_set = changes.collect(
-            self.repo_path, self._source_base, self._config.source.repo_url
-        )
+        change_set = self._collect_changes()
         if change_set is None:
             return None
         artifacts.publish_bytes(

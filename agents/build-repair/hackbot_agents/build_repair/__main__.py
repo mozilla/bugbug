@@ -1,6 +1,6 @@
 import logging
 
-from hackbot_runtime import HackbotContext, changes, run_async
+from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.actions.email import record_email
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -77,9 +77,7 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
 def _record_analysis_email(
     ctx: HackbotContext, result: BuildRepairResult, push: PushInfo, task_id: str
 ) -> None:
-    patch = (
-        changes.pending_patch(ctx.repo_path, ctx.source_base) if ctx.source_base else ""
-    )
+    patch = ctx.source_patch
     if NOTIFY_ONLY_WITH_PATCH and not patch:
         logger.info("Run produced no patch; not emailing the failure analysis")
         return
