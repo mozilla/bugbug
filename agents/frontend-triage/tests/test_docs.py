@@ -144,6 +144,36 @@ def test_a_component_whose_trees_hold_no_docs_gets_none():
     assert docs_for(entry, known) == ()
 
 
+def test_doc_trees_replaces_the_search_rather_than_widening_it():
+    # The invariant behind Data Sanitization's entry, and the one a future reader is most
+    # likely to "fix" into a union. Its docs are registered by the anti-tracking
+    # `moz.build`, while its own `browser/base/content/sanitize*` files sit under
+    # `browser/base/moz.build`'s tabbrowser tree -- so a union hands the prompt an
+    # unrelated component's documentation alongside the right article, and a comment
+    # citing that is worse than one citing nothing.
+    known = (
+        DocRef(
+            tree="toolkit/components/antitracking/docs",
+            path="toolkit/components/antitracking/anti-tracking/",
+        ),
+        DocRef(
+            tree="browser/base/content/docs/tabbrowser", path="browser/base/tabbrowser/"
+        ),
+    )
+    entry = ScopedComponent(
+        "Toolkit",
+        "Data Sanitization",
+        "#chan",
+        trees=("browser/base/content/sanitizeDialog.js",),
+        doc_trees=("toolkit/components/antitracking/docs/",),
+    )
+    assert docs_for(entry, known) == (known[0],)
+
+    # And without the override the same entry gets the wrong one, which is what the
+    # override exists for. Asserting it keeps the test honest about the alternative.
+    assert docs_for(entry._replace(doc_trees=()), known) == (known[1],)
+
+
 def test_a_gitconfig_that_adds_line_numbers_does_not_break_parsing(tmp_path):
     # `grep.lineNumber = true` is an ordinary convenience setting, and it changes
     # `git grep` output to `path:lineno:content`. Splitting on the first colon then hands
@@ -225,7 +255,7 @@ _REPO = os.environ.get("SOURCE_REPO")
     reason="needs a mozilla-central checkout; set SOURCE_REPO",
 )
 def test_the_derivation_agrees_with_a_real_checkout():
-    # Two spot checks against the real tree, both of which I confirmed load. The point is
+    # Three spot checks against the real tree, all of which I confirmed load. The point is
     # that the rule is right, not that any particular component has docs -- a component
     # legitimately has none, and a stale checkout legitimately has neither.
     known = registrations(Path(_REPO))
@@ -245,8 +275,21 @@ def test_the_derivation_agrees_with_a_real_checkout():
             ScopedComponent(
                 "Firefox", "Installer", "#c", trees=("browser/installer/",)
             ),
+            # The `doc_trees` case, and the reason the field exists: this article is
+            # registered by `toolkit/components/antitracking/moz.build`, so it resolves
+            # only because the entry names that directory rather than its own code.
+            ScopedComponent(
+                "Toolkit",
+                "Data Sanitization",
+                "#c",
+                trees=("toolkit/components/cleardata/",),
+                doc_trees=("toolkit/components/antitracking/docs/",),
+            ),
         )
         for d in docs_for(entry, known)
     }
     assert f"{SOURCE_DOCS_BASE_URL}toolkit/ipprotection/" in urls
     assert f"{SOURCE_DOCS_BASE_URL}browser/installer/windows/installer/" in urls
+    assert (
+        f"{SOURCE_DOCS_BASE_URL}toolkit/components/antitracking/anti-tracking/" in urls
+    )

@@ -27,6 +27,7 @@ and the channel each reports to:
 | --------------------------------- | -------------------------------- |
 | `Firefox :: New Tab Page`         | `#hnt-dev-triage`                |
 | `Firefox :: Site Permissions`     | `#privacy-team-automation`       |
+| `Toolkit :: Data Sanitization`    | `#privacy-team-automation`       |
 | `Firefox :: Sharing`              | `#content-sharing-automation`    |
 | `Firefox :: IP Protection`        | `#team-eng-ip-protection-triage` |
 | `Firefox :: Messaging System`     | `#omc-triage`                    |
@@ -36,9 +37,12 @@ and the channel each reports to:
 | `Toolkit :: Application Update`   | `#installer-updater-bug-triage`  |
 | `Firefox :: Installer`            | `#installer-updater-bug-triage`  |
 
-Where a component's code is documented is **not** listed anywhere here. mozilla-central
-already records it in `SPHINX_TREES` declarations, so `docs.py` runs one `git grep` over
-the checkout and matches those declarations against each entry's `trees`. That is what
+No doc path or URL is listed anywhere here. mozilla-central already records where a
+component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
+`git grep` over the checkout and matches those declarations against each entry's `trees`.
+`Toolkit :: Data Sanitization` is the one entry that also says which directory to search,
+via `doc_trees`, because its article is registered by another component's `moz.build`; the
+registration there is still read from the tree. That is what
 replaced the `rules/areas/` directory: eight hand-written files restating structure that
 `toolkit/mozapps/update/docs/`, `browser/installer/windows/docs/`,
 `extensions/permissions/docs/`, `toolkit/components/ipprotection/docs/` and the rest
@@ -220,13 +224,14 @@ stays silent, even if someone applies it by hand later.
 
 Routing is the `channel` on each `TRIAGE_SCOPE` entry in `config.py`, looked up by
 `"<Product> :: <Component>"` through the derived `SLACK_CHANNELS` — so
-`ScopedComponent("Firefox", "New Tab Page", "Desktop frontend", "#hnt-dev-triage")`
+`ScopedComponent("Firefox", "New Tab Page", "#hnt-dev-triage", trees=(...))`
 sends a New Tab Page run to `#hnt-dev-triage`.
 
 Four things about that which are not obvious from reading the registry:
 
 - **The key is the component, not the team**, so two components may share a channel, as
-  the installer and the updater do, without either knowing about the other.
+  the installer and the updater do and as site permissions and data sanitization do,
+  without either knowing about the other.
 - **There is deliberately no default channel**, since posting one team's triage into
   another team's channel is worse than silence.
 - **`TRIAGE_SCOPE` is narrower than what the agent will triage.** It is the routing
@@ -269,7 +274,7 @@ notifies. The run page shows the failed action.
 
 ## Adding a triage component
 
-One `ScopedComponent` entry in `config.py`, and nothing else:
+One `ScopedComponent` entry in `config.py`, and a row in the table above:
 
 ```python
 ScopedComponent(
@@ -284,6 +289,13 @@ ScopedComponent(
 
 - **`trees`** is descriptive and may overlap another component. It drives the prompt's
   index and the docs lookup, so it is what makes the component triageable.
+- **`doc_trees`** is for the one case where a component's docs are not under its code,
+  and it **replaces** `trees` for the docs lookup rather than adding to it. Only
+  `Toolkit :: Data Sanitization` needs it: its article is registered by
+  `toolkit/components/antitracking/moz.build`, and its own
+  `browser/base/content/sanitize*` files otherwise resolve to `browser/base/`'s
+  tabbrowser and sslerrorreport trees. Leave it empty unless `docs_for` returns a
+  sibling component's documentation, which is the symptom it treats.
 - **`owns`** is the narrower claim that "no other component could mean this file", and it
   is what `component_guidance_hook` refuses comments on. Leave it empty rather than
   widening it to a tree that contains other components: `browser/` as an `owns` value
@@ -307,7 +319,10 @@ need the API.
 
 `tests/` covers what an unattended run's reach depends on: the record-time hooks
 (`test_hooks.py`), the plan parsing and `may_apply_unattended` (`test_plan.py`), the
-Slack message and its routing (`test_notify.py`), and the pre-flight gate (`test_preflight.py`). Run them with
+Slack message and its routing (`test_notify.py`), the docs derivation
+(`test_docs.py`, whose real-checkout test needs `SOURCE_REPO`), the
+`load_component_guidance` tool (`test_guidance.py`), and the pre-flight gate
+(`test_preflight.py`). Run them with
 `uv run --package hackbot-agent-frontend-triage pytest agents/frontend-triage/tests`.
 CI covers the shared machinery this builds on via the `libs/agent-tools` and
 `libs/hackbot-runtime` suites.
