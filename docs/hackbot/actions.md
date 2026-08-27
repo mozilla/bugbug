@@ -1,9 +1,8 @@
 # Actions: record now, apply later
 
-An agent never mutates Bugzilla, Phabricator, TestRail or Slack, and never sends mail,
-while it runs. It calls a
-tool that **records what it intends to do**; hackbot-api performs it after the run has
-finished and is known good.
+An agent never mutates Bugzilla, Phabricator, TestRail or Slack, and never sends mail, while
+it runs. It calls a tool that **records what it intends to do**; hackbot-api performs it
+after the run has finished and is known good.
 
 Why the indirection:
 
@@ -55,11 +54,7 @@ is the only model-facing tool that exposes **`ref`** (see cross-references below
 `testrail` and `slack` also provide `record_test_plan` / `record_message` helpers that agent
 code calls directly rather than the model choosing to — for an action the agent always takes
 once it has a result, not one the model decides on. `email.send` is _only_ that: it has no
-model-facing tool, since who receives mail is the agent code's decision. Its recipient
-policy is apply-side — `NOTIFICATION_TEAM_EMAIL` is copied on every email and used as
-`Reply-To`, and `NOTIFICATION_OVERRIDE_EMAIL` redirects everything to one address so a
-development deployment cannot mail real developers. Sending needs `SENDGRID_API_KEY` and
-`NOTIFICATION_SENDER` on hackbot-api.
+model-facing tool at all, since who receives mail is the agent code's decision.
 
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.
