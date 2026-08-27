@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import pytest
 from app import gcs, jobs, pubsub
 from app.jobs import ExecutionStatus
+from app.routers import runs as runs_module
 from app.routers.runs import finalize_run
 from app.schemas import ArtifactRef, RunStatus, RunSummary
 
@@ -93,6 +94,35 @@ async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
     assert run.finalized_at is not None
     assert run.artifacts == [{"name": "summary.json", "size": 10, "content_type": None}]
     assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+
+
+@pytest.mark.parametrize(
+    ("actions", "artifacts", "expected"),
+    [
+        ([], ["changes/changes.patch"], True),
+        (
+            ["phabricator.submit_patch"],
+            ["changes/changes.patch"],
+            False,
+        ),
+        (
+            ["phabricator.update_patch"],
+            ["changes/changes.patch"],
+            False,
+        ),
+        ([], [], False),
+        (None, ["changes/changes.patch"], True),
+    ],
+)
+def test_has_unsubmitted_patch(actions, artifacts, expected):
+    summary = (
+        None
+        if actions is None
+        else RunSummary(status="ok", actions=[{"type": action} for action in actions])
+    )
+    artifact_refs = [ArtifactRef(name=artifact, size=10) for artifact in artifacts]
+
+    assert runs_module._has_unsubmitted_patch(summary, artifact_refs) is expected
 
 
 async def test_finalizes_as_failed_when_summary_missing(monkeypatch):

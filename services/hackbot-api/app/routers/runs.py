@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,7 @@ from app.database.models import Run, RunAction
 from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
+    ArtifactRef,
     RunActionDoc,
     RunDoc,
     RunRef,
@@ -29,6 +31,8 @@ from app.schemas import (
 log = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
+
+_PATCH_ARTIFACT = "changes/changes.patch"
 
 
 def _normalize_identity(email: str | None) -> str | None:
@@ -269,7 +273,27 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     run.finalized_at = datetime.now(timezone.utc)
 
     await db.commit()
+
+    if _has_unsubmitted_patch(summary, artifacts):
+        log.error(
+            "Agent run produced code changes without submitting a patch "
+            "(run_id=%s, agent=%s)",
+            run.run_id,
+            run.agent,
+        )
     await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
+
+
+def _has_unsubmitted_patch(
+    summary: RunSummary | None,
+    artifacts: list[ArtifactRef],
+) -> bool:
+    """Whether a run produced source changes without a patch action."""
+    has_patch_artifact = any(artifact.name == _PATCH_ARTIFACT for artifact in artifacts)
+    has_patch_action = summary is not None and any(
+        action["type"] in PATCH_ACTION_TYPES for action in summary.actions
+    )
+    return has_patch_artifact and not has_patch_action
 
 
 def _terminal_status(

@@ -7,3 +7,5 @@ import os
 # `setdefault` leaves any real env value intact.
 os.environ.setdefault("PHABRICATOR_API_KEY", "api-" + "a" * 28)
 os.environ.setdefault("WEBHOOK_SECRET", "test-webhook-secret")
+os.environ.setdefault("BUGZILLA_WEBHOOK_SECRET", "test-bugzilla-webhook-secret")
+os.environ.setdefault("BUGZILLA_WEBHOOK_BOT_LOGIN", "hackbot@mozilla.tld")
