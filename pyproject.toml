@@ -68,7 +68,7 @@ dependencies = [
 
 [project.optional-dependencies]
 nlp = [
-    "spacy==3.8.15",
+    "spacy==3.8.16",
 ]
 nn = []
 
@@ -86,7 +86,7 @@ test = [
     "responses==0.26.2",
 ]
 spawn-pipeline = [
-    "json-e==4.8.2",
+    "json-e==4.8.4",
     "pyyaml==6.0.3",
     "requests==2.34.2",
     "taskcluster==102.0.1",
