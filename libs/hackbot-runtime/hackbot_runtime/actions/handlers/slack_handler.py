@@ -39,11 +39,12 @@ class PostMessageHandler:
         channel = params["channel"]
         metadata = {
             "event_type": "notification",
-            "source": {
-                "ref_id": ctx.run_id,
-                "ref_url": f"{HACKBOT_UI_URL}/runs/{ctx.run_id}",
-            },
             "event_payload": {
+                "notification_type": "info",
+                "source": {
+                    "ref_id": ctx.run_id,
+                    "ref_url": f"{HACKBOT_UI_URL}/runs/{ctx.run_id}",
+                },
                 "context": {
                     "agent": ctx.agent,
                     "run_id": ctx.run_id,

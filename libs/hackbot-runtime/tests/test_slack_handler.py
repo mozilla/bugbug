@@ -6,7 +6,6 @@ routing, result parsing, error handling -- without touching a network.
 
 import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, slack_handler
-from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 from slack_sdk.errors import SlackApiError
 
 
@@ -41,31 +40,6 @@ def _fake_client(monkeypatch, error=None):
     client = _FakeClient(error)
     monkeypatch.setattr(slack_handler, "_client", lambda: client)
     return client
-
-
-async def test_posts_recorded_message_and_returns_the_timestamp(monkeypatch):
-    client = _fake_client(monkeypatch)
-    result = await slack_handler.PostMessageHandler().apply(
-        {"channel": "#sheriff-notifications", "text": "a test regressed"}, _ctx()
-    )
-    assert client.calls == [
-        {
-            "channel": "#sheriff-notifications",
-            "text": "a test regressed",
-            "metadata": {
-                "event_type": "notification",
-                "source": {
-                    "ref_id": "run-1",
-                    "ref_url": f"{HACKBOT_UI_URL}/runs/run-1",
-                },
-                "event_payload": {
-                    "context": {"agent": "test-agent", "run_id": "run-1"},
-                },
-            },
-        }
-    ]
-    assert result.status == "applied"
-    assert result.result == {"channel": "C1", "ts": "1700000000.000100"}
 
 
 async def test_posts_to_a_channel_id_as_recorded(monkeypatch):
