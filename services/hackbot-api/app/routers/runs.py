@@ -281,7 +281,12 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
             run.run_id,
             run.agent,
         )
-    await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
+    await pubsub.publish_run_completed(
+        str(run.run_id),
+        run.agent,
+        run.status,
+        run.inputs["require_review"],
+    )
 
 
 def _has_unsubmitted_patch(

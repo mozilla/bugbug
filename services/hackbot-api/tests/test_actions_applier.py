@@ -93,8 +93,8 @@ def _spec(*, auto=True, consent=False):
     )
 
 
-def _auto_applies(spec, run):
-    return actions_applier._auto_apply_blocker(spec, run) is None
+def _auto_applies(spec, run, require_review=False):
+    return actions_applier._auto_apply_blocker(spec, run, require_review) is None
 
 
 def _run_with_findings(**findings):
@@ -122,6 +122,22 @@ def test_an_agent_that_needs_no_consent_applies_unconditionally():
     spec = _spec()
     assert _auto_applies(spec, _FakeRun(status=RunStatus.succeeded.value))
     assert _auto_applies(spec, _run_with_findings(auto_apply=False))
+
+
+def test_review_request_holds_actions_even_when_agent_auto_applies():
+    run = _run_with_findings(auto_apply=True)
+    assert not _auto_applies(_spec(), run, True)
+
+
+def test_only_an_explicit_request_holds_actions():
+    run = _run_with_findings(auto_apply=True)
+    assert _auto_applies(_spec(), run, None)
+    assert _auto_applies(_spec(), run, "sometimes")
+
+
+def test_agent_policy_still_gates_a_run_with_no_flag():
+    run = _run_with_findings(auto_apply=True)
+    assert not _auto_applies(_spec(auto=False), run, None)
 
 
 # --- the run's own verdict ----------------------------------------------- #
@@ -219,14 +235,14 @@ def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
 async def test_non_succeeded_run_records_nothing(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True)
     for status in (RunStatus.failed.value, RunStatus.timed_out.value):
-        await on_run_completed(_FakeDB(), _FakeRun(status=status))
+        await on_run_completed(_FakeDB(), _FakeRun(status=status), False)
     assert calls == {"ensured": False, "applied": False}
 
 
 async def test_succeeded_opted_in_agent_records_and_applies(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True)
     db = _FakeDB()
-    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value))
+    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value), False)
     assert calls == {"ensured": True, "applied": True}
     assert db.commits >= 1
 
@@ -234,27 +250,27 @@ async def test_succeeded_opted_in_agent_records_and_applies(monkeypatch):
 async def test_succeeded_non_opted_agent_records_but_does_not_apply(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=False)
     db = _FakeDB()
-    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value))
+    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value), False)
     assert calls == {"ensured": True, "applied": False}
     assert db.commits >= 1
 
 
 async def test_succeeded_unknown_agent_does_not_apply(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=None)
-    await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value))
+    await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value), False)
     assert calls == {"ensured": True, "applied": False}
 
 
 async def test_succeeded_vouched_for_run_applies(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True, consent=True)
-    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=True))
+    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=True), False)
     assert calls == {"ensured": True, "applied": True}
 
 
 async def test_succeeded_unvouched_run_records_but_does_not_apply(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True, consent=True)
     # Recorded for the UI (and manual apply), but nothing reaches Bugzilla.
-    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=False))
+    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=False), False)
     assert calls == {"ensured": True, "applied": False}
 
 

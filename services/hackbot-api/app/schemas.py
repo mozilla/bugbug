@@ -14,6 +14,12 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class AgentInputs(BaseModel):
+    """Run-level inputs shared by every agent."""
+
+    require_review: bool = False
+
+
 class ArtifactRef(BaseModel):
     name: str
     size: int
@@ -76,7 +82,7 @@ class RunDoc(BaseModel):
 # --- Per-agent input schemas ---
 
 
-class BugFixInputs(BaseModel):
+class BugFixInputs(AgentInputs):
     bug_id: int
     # When following up on an existing Phabricator revision (e.g. triggered by a
     # webhook), the revision to update and the comment that mentioned Hackbot.
@@ -110,7 +116,7 @@ class BugFixInputs(BaseModel):
         return self
 
 
-class AutowebcompatReproInputs(BaseModel):
+class AutowebcompatReproInputs(AgentInputs):
     bug_data: str | None = None
     bug_id: int | None = None
     model: str | None = None
@@ -124,7 +130,7 @@ class AutowebcompatReproInputs(BaseModel):
         return self
 
 
-class AutowebcompatDiagnosisInputs(BaseModel):
+class AutowebcompatDiagnosisInputs(AgentInputs):
     bug_data: str | None = None
     bug_id: int | None = None
     model: str | None = None
@@ -138,7 +144,7 @@ class AutowebcompatDiagnosisInputs(BaseModel):
         return self
 
 
-class BuildRepairInputs(BaseModel):
+class BuildRepairInputs(AgentInputs):
     # Failing Taskcluster build tasks {task_name: task_id}; the agent resolves the
     # push commits from them. git_commit / bug_id are optional overrides.
     failure_tasks: dict[str, str]
@@ -149,7 +155,7 @@ class BuildRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
-class TestRepairInputs(BaseModel):
+class TestRepairInputs(AgentInputs):
     # Failing Taskcluster test tasks {task_name: task_id}. The agent resolves the
     # push, the last-green revision and the candidate commit range itself from the
     # task id (the listener only filters which failures are worth investigating).
@@ -158,14 +164,14 @@ class TestRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
-class FrontendTriageInputs(BaseModel):
+class FrontendTriageInputs(AgentInputs):
     bug_id: int
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
 
 
-class TestPlanGeneratorInputs(BaseModel):
+class TestPlanGeneratorInputs(AgentInputs):
     feature_name: str
     feature_description: str
     test_scope: str
