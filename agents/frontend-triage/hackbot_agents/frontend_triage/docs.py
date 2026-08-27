@@ -1,8 +1,11 @@
 """Which Firefox Source Docs cover a triaged component, worked out from the checkout.
 
-Nothing here is written down in `config.py`. mozilla-central already records the mapping
-in `SPHINX_TREES` declarations, and restating it would be one more list to keep in step
-with a tree we do not control -- the thing this module exists to stop.
+No doc path or URL is written down in `config.py`. mozilla-central already records the
+mapping in `SPHINX_TREES` declarations, and restating it would be one more list to keep
+in step with a tree we do not control -- the thing this module exists to stop. The one
+thing an entry may say for itself is `doc_trees`, which names the directory to search
+when a component's docs are not under its code; the registration there is still read
+from the tree.
 """
 
 from __future__ import annotations
@@ -169,6 +172,13 @@ def registrations(repo: Path) -> tuple[DocRef, ...]:
 def docs_for(entry: ScopedComponent, known: tuple[DocRef, ...]) -> tuple[DocRef, ...]:
     """The registrations whose source directory sits under one of ``entry.trees``.
 
+    An entry that sets `doc_trees` is searched under that instead, because its docs are
+    not under its code. The override **replaces** `trees` rather than adding to it, and
+    that is the point rather than an economy: Data Sanitization's
+    `browser/base/content/sanitize*` files resolve to `browser/base/moz.build`'s
+    tabbrowser and sslerrorreport trees, so a union would keep both of those alongside
+    the article it is reaching for.
+
     A `trees` entry may name a file rather than a directory
     (`browser/modules/SitePermissions.sys.mjs`), and the trailing slash is what says
     which. That is a convention `test_plan.py` enforces rather than a guess: sniffing for
@@ -182,7 +192,7 @@ def docs_for(entry: ScopedComponent, known: tuple[DocRef, ...]) -> tuple[DocRef,
     claim about where its code is.
     """
     prefixes = []
-    for tree in entry.trees:
+    for tree in entry.doc_trees or entry.trees:
         if not tree.endswith("/"):
             tree = str(Path(tree).parent)
         prefixes.append(tree.rstrip("/") + "/")

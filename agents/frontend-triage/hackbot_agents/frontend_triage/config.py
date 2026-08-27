@@ -60,9 +60,21 @@ class ScopedComponent(NamedTuple):
     # triage with nobody told -- which is what `channel_for` failing closed produces,
     # and not something to be able to express by accident.
     channel: str
-    # Where this component's code lives, for the prompt's index and for `docs.docs_for`.
-    # Descriptive, so it may be broad and overlap another component.
+    # Where this component's code lives, for the prompt's index and, unless `doc_trees`
+    # below overrides it, for `docs.docs_for`. Descriptive, so it may be broad and
+    # overlap another component.
     trees: tuple[str, ...]
+    # Where this component's documentation is registered, when that is not under `trees`.
+    # Overrides `trees` for `docs.docs_for` and for nothing else: the prompt's index still
+    # renders `trees`, because a docs directory is not where the code is.
+    #
+    # Data Sanitization is the only entry that needs it, and it needs it twice over. The
+    # article is registered by `toolkit/components/antitracking/moz.build`, which is
+    # `Core :: Privacy: Anti-Tracking` and not a tree this component may claim; and its own
+    # `browser/base/content/sanitize*` files resolve to `browser/base/moz.build`'s
+    # tabbrowser and sslerrorreport trees, so leaving the lookup on `trees` gave it two
+    # unrelated components' documentation and none of its own.
+    doc_trees: tuple[str, ...] = ()
     # Paths whose bugs belong to this component, for `owners_for_path` and so for
     # `hooks.component_guidance_hook`. Deliberately narrower than `trees`: a tree like
     # `browser/` would refuse comments the guidance itself asked for -- IP Protection
@@ -76,7 +88,7 @@ class ScopedComponent(NamedTuple):
     owns: tuple[str, ...] = ()
     # Triage guidance that no source doc carries: which of two similar things this bug is
     # about, what a symptom in one layer usually means about another, whether the area is
-    # tested. Everything structural belongs in the docs `trees` resolves to, not here --
+    # tested. Everything structural belongs in the docs the trees resolve to, not here --
     # if a sentence restates a doc page, delete it rather than paraphrase it.
     notes: str = ""
     # Components sent alongside this one, for bugs that routinely turn out to be somewhere
@@ -157,6 +169,77 @@ TRIAGE_SCOPE = (
             'not stick", "it came back after a restart" and wrong-expiry bugs localize '
             "there and are **not** out of scope for being non-JS."
         ),
+    ),
+    # Site Permissions and Data Sanitization are triaged by the same team, so they share a
+    # channel, the way the installer and the updater do below.
+    ScopedComponent(
+        "Toolkit",
+        "Data Sanitization",
+        "#privacy-team-automation",
+        trees=(
+            "toolkit/components/cleardata/",
+            "toolkit/components/forgetaboutsite/",
+            "toolkit/components/clearsitedata/",
+            "browser/modules/Sanitizer.sys.mjs",
+            "browser/base/content/sanitizeDialog.js",
+            "browser/base/content/sanitize_v2.xhtml",
+        ),
+        # The one entry in the registry whose documentation is not under its code: the
+        # article is `toolkit/components/antitracking/docs/data-sanitization/`, registered
+        # by the anti-tracking `moz.build`. See `doc_trees` on `ScopedComponent`.
+        doc_trees=("toolkit/components/antitracking/docs/",),
+        # The paths `moz.build` gives `BUG_COMPONENT = ("Toolkit", "Data Sanitization")`,
+        # plus the test directory. Both parents are shared, so neither is claimed:
+        # `browser/base/content/` holds `browser.js` and `browser/modules/` holds site
+        # permissions' two modules.
+        owns=(
+            "toolkit/components/cleardata/",
+            "toolkit/components/forgetaboutsite/",
+            "toolkit/components/clearsitedata/",
+            "browser/modules/Sanitizer.sys.mjs",
+            "browser/base/content/sanitizeDialog.js",
+            "browser/base/content/sanitize_v2.xhtml",
+            "browser/base/content/test/sanitize/",
+        ),
+        notes=(
+            "**Four pref families, and the doc above names a retired one.** Its table "
+            "says `privacy.clearOnShutdown.*`; the live shutdown branch is "
+            "`Sanitizer.sys.mjs`'s `PREF_SHUTDOWN_BRANCH`, which is "
+            "`privacy.clearOnShutdown_v2.`, and the pre-v2 names survive only for "
+            "`maybeMigratePrefs` and its "
+            "`privacy.sanitize.<context>.hasMigratedToNewPrefs3` flag. The four live "
+            "branches are `privacy.clearOnShutdown_v2.`, `privacy.cpd.`, "
+            "`privacy.clearHistory.` and `privacy.clearSiteData.`, all declared in "
+            "`browser/app/profile/firefox.js` and chosen by which entry point the user "
+            "came through. So establish the entry point before reading a pref, and do "
+            "not take a pref name from the doc.\n\n"
+            "**Two of the five clearing entry points are not this component.** The "
+            '"Manage Data" list and the identity panel\'s clear button run '
+            "through `browser/modules/SiteDataManager.sys.mjs`, "
+            "`browser/components/preferences/dialogs/siteDataSettings.js` and "
+            "`browser/base/content/browser-siteIdentity.js`, which `moz.build` gives to "
+            "`Firefox :: Settings UI`, and they reach the service without touching "
+            "`Sanitizer.sys.mjs` at all. The doc lists all five together, which is what "
+            "makes this worth saying: a bug about the site list or the button is not "
+            "localized in the sanitizer.\n\n"
+            "**A shutdown hang can be a data-clearing bug.** Clearing runs mostly on the "
+            "main thread while the browser is shutting down, so a large profile can "
+            "outlast the shutdown watchdog and the parent process is killed. A "
+            "shutdownhang from a reporter who has clear-on-shutdown enabled localizes "
+            "here rather than in the crash reporter.\n\n"
+            "**Coverage is good, so an empty `relevant_tests` is almost always wrong "
+            "here** -- the opposite of Installer. 23 files in "
+            "`browser/base/content/test/sanitize/`, 39 under "
+            "`toolkit/components/cleardata/tests/` across xpcshell, browser and "
+            "marionette, and `browser/modules/test/unit/test_Sanitizer_interrupted_v2.js` "
+            "for the interrupted-shutdown path. The one exception is "
+            "`toolkit/components/clearsitedata/`, whose C++ header handler has no tests "
+            "directory of its own because it is covered by web-platform-tests under "
+            "`testing/web-platform/tests/`; say that rather than reporting no coverage."
+        ),
+        # Cookie permissions decide who is exempt from clear-on-shutdown and who is always
+        # cleared, and site permissions owns `extensions/permissions/` where they live.
+        related=("Firefox :: Site Permissions",),
     ),
     ScopedComponent(
         "Firefox",

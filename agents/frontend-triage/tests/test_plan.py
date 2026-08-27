@@ -418,7 +418,7 @@ def test_a_directory_is_spelled_with_a_trailing_slash_and_a_file_without():
     # a trailing slash turns an exact-match claim into a prefix claim that matches
     # nothing, so the component silently stops owning the file it named.
     for entry in TRIAGE_SCOPE:
-        for value in (*entry.trees, *entry.owns):
+        for value in (*entry.trees, *entry.doc_trees, *entry.owns):
             basename = value.rstrip("/").rsplit("/", 1)[-1]
             assert basename, f"{entry.key}: {value!r} has no final segment"
             if "." in basename:
