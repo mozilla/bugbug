@@ -191,6 +191,46 @@ async def test_update_bug_handler_comment_only(monkeypatch):
     ]
 
 
+async def test_update_bug_handler_passes_flag_changes_through(monkeypatch):
+    """A `flags` change is an ordinary field change — e.g. clearing a needinfo.
+
+    The handler has no needinfo-specific branch: callers put Bugzilla's own
+    payload in `changes`, and any extra bookkeeping key a caller attaches is
+    ignored rather than forwarded to Bugzilla.
+    """
+    calls = []
+    monkeypatch.setattr(
+        bugzilla_handler,
+        "_request",
+        lambda method, path, body: (
+            calls.append((method, path, body)) or {"bugs": [{"id": 7}]}
+        ),
+    )
+    result = await bugzilla_handler.UpdateBugHandler().apply(
+        {
+            "bug_id": 7,
+            "changes": {
+                "whiteboard": "done",
+                "flags": [{"id": 42, "status": "X"}],
+            },
+            "caller_bookkeeping": True,
+        },
+        _ctx(),
+    )
+
+    assert result.status == "applied"
+    assert calls == [
+        (
+            "PUT",
+            "bug/7",
+            {
+                "whiteboard": "done",
+                "flags": [{"id": 42, "status": "X"}],
+            },
+        ),
+    ]
+
+
 def test_plan_coalesced_groups_update_plus_comment():
     actions = [
         ("bugzilla.update_bug", {"bug_id": 5, "changes": {"status": "RESOLVED"}}),
@@ -247,4 +287,28 @@ def test_merge_resolved_changes_only():
     assert bugzilla_handler.merge_resolved(entries) == {
         "bug_id": 5,
         "changes": {"a": 1},
+    }
+
+
+def test_merge_resolved_coalesces_flag_change_and_drops_caller_markers():
+    """A needinfo clear merges as an ordinary `flags` change.
+
+    Callers may tag an action with their own bookkeeping keys; only Bugzilla's
+    own fields are merged, so such keys never reach the request body.
+    """
+    entries = [
+        ("bugzilla.add_comment", {"bug_id": 5, "text": "done"}),
+        (
+            "bugzilla.update_bug",
+            {
+                "bug_id": 5,
+                "changes": {"flags": [{"id": 42, "status": "X"}]},
+                "caller_bookkeeping": True,
+            },
+        ),
+    ]
+    assert bugzilla_handler.merge_resolved(entries) == {
+        "bug_id": 5,
+        "changes": {"flags": [{"id": 42, "status": "X"}]},
+        "comment": {"body": "done", "is_private": False, "is_markdown": True},
     }

@@ -33,7 +33,6 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
-from hackbot_agents.build_repair.logs import download_failure_logs
 from hackbot_agents.build_repair.try_push import TRY_TOOLS
 from hackbot_runtime import AgentError, HackbotAgentResult
 from hackbot_runtime.claude import Reporter
@@ -56,8 +55,11 @@ from .prompts import (
     FIX_TEMPLATE,
     PUSH_COMMIT_LINE,
     PUSH_CONTEXT,
+    TREEHERDER_STEP,
+    TREEHERDER_STEP_NO_PUSH,
     TRY_PUSH_INSTRUCTIONS,
 )
+from .resolve import task_push
 
 TARGET_SOFTWARE = "Mozilla Firefox"
 
@@ -143,6 +145,8 @@ async def run_build_repair(
     fx_ctx: FirefoxContext,
     bug_id: int | None = None,
     git_commits: list[str],
+    project: str | None = None,
+    hg_revision: str | None = None,
     failure_tasks: dict[str, str],
     run_try_push: bool = False,
     model: str | None = None,
@@ -163,17 +167,8 @@ async def run_build_repair(
     print(f"[build_repair] repairing {label} at {failure_commit}", file=sys.stderr)
 
     scratch_dir = Path(tempfile.mkdtemp(prefix=f"build-repair-{bug_id or 'nobug'}-"))
-    scratch_in = scratch_dir / "in"
     scratch_out = scratch_dir / "out"
-    scratch_in.mkdir(parents=True, exist_ok=True)
     scratch_out.mkdir(parents=True, exist_ok=True)
-
-    task_logs = await download_failure_logs(failure_tasks, scratch_in)
-    failure_logs = "\n".join(
-        f"- {name}: sanitized errors at {tl.sanitized} (start here); "
-        f"full log at {tl.full}"
-        for name, tl in task_logs.items()
-    )
 
     firefox_tools = [*firefox.TOOLS, *TRY_TOOLS] if run_try_push else firefox.TOOLS
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox_tools)
@@ -189,12 +184,30 @@ async def run_build_repair(
     ]
 
     task_name = next(iter(failure_tasks), "")
+    if not (project and hg_revision) and failure_tasks:
+        # The eval harness drives the agent from git commits alone, but the logs
+        # only come from Treeherder, so the push has to be resolved either way.
+        try:
+            project, hg_revision = task_push(next(iter(failure_tasks.values())))
+        except Exception:
+            print("[build_repair] could not resolve the push", file=sys.stderr)
+    treeherder_step = (
+        TREEHERDER_STEP.format(
+            project=project,
+            hg_revision=hg_revision,
+            task_name=task_name,
+            scratch_out=scratch_out,
+        )
+        if project and hg_revision
+        else TREEHERDER_STEP_NO_PUSH.format(scratch_out=scratch_out)
+    )
     analysis_prompt = ANALYSIS_TEMPLATE.format(
         target_software=TARGET_SOFTWARE,
         git_commit=failure_commit,
+        source_repo=source_repo,
         push_context=_push_context(git_commits),
+        treeherder_step=treeherder_step,
         blame_step=_blame_step(git_commits, scratch_out),
-        failure_logs=failure_logs,
         scratch_out=scratch_out,
         bug_context=BUG_CONTEXT.format(bug_id=bug_id) if bug_id is not None else "",
         bug_step=BUG_ANALYSIS_STEP.format(bug_id=bug_id) if bug_id is not None else "",
@@ -202,6 +215,7 @@ async def run_build_repair(
     )
     fix_prompt = FIX_TEMPLATE.format(
         target_software=TARGET_SOFTWARE,
+        source_repo=source_repo,
         scratch_out=scratch_out,
         try_push=(
             TRY_PUSH_INSTRUCTIONS.format(task_name=task_name) if run_try_push else ""
@@ -231,6 +245,7 @@ async def run_build_repair(
             reporter, analysis_opts, analysis_prompt, captured, tracked
         )
         _check(result_msg, label, "analysis")
+        _check_blocked(scratch_out)
         total_cost += result_msg.total_cost_usd or 0.0
         total_turns += result_msg.num_turns or 0
 
@@ -314,6 +329,26 @@ async def _run_session(
             elif isinstance(msg, ResultMessage):
                 result_msg = msg
     return result_msg
+
+
+def _check_blocked(scratch_out: Path) -> None:
+    """Fail the run unless the agent actually retrieved a failure log.
+
+    Analysing a failure whose log never arrived produces a confident verdict
+    invented from the diff alone (bug 6665), so a missing log is an error rather
+    than a verdict, and the error reaches the API and the UI. The agent is asked to
+    report the blocker itself in error.txt; the log check is what makes it a
+    guarantee rather than an instruction.
+    """
+    blocker = scratch_out / "error.txt"
+    if blocker.exists():
+        raise AgentError(blocker.read_text().strip() or "agent reported it was blocked")
+    logs = scratch_out / "logs"
+    if not any(logs.glob("**/*live_backing_log*")):
+        raise AgentError(
+            "no failure log was retrieved: treeherder-cli left nothing under "
+            f"{logs}, so any verdict would be guesswork"
+        )
 
 
 def _check(result_msg: ResultMessage | None, label: str, stage: str) -> None:

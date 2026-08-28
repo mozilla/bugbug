@@ -262,6 +262,8 @@ def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[lis
             # Mark that this comment's content has been redacted so downstream
             # code doesn't need to rely on string comparisons.
             comment_copy.content_redacted = True
+            if isinstance(comment_copy, PhabricatorInlineComment):
+                comment_copy.suggestion_text = None
 
         sanitized_comments.append(comment_copy)
 
@@ -277,9 +279,15 @@ class PhabricatorComment:
         self.date_modified: int = comment["dateModified"]
         self.content: str = comment["content"]["raw"]
         self.author_phid: str = transaction["authorPHID"]
+        self.removed: bool = comment.get("removed", False)
         # Whether this comment's content has been redacted due to trust rules.
         # Set by the sanitizer; used by renderers (e.g., to_md()).
         self.content_redacted: bool = False
+
+    @property
+    def is_renderable(self) -> bool:
+        """Whether the comment carries anything worth showing to a reader."""
+        return not self.removed and bool(self.content.strip())
 
 
 class PhabricatorGeneralComment(PhabricatorComment):
@@ -299,10 +307,26 @@ class PhabricatorInlineComment(PhabricatorComment):
         self.line_length = inline_fields["length"]
         self.is_reply = inline_fields["replyToCommentPHID"] is not None
         self.is_done = inline_fields["isDone"]
+        self.suggestion_text: str | None = (
+            inline_fields.get("suggestionText")
+            if inline_fields.get("hasSuggestion")
+            else None
+        )
 
-        # Unfortunately, we do not have this information for a limitation
-        # in Phabricator's API.
-        self.on_removed_code = None
+        # `isNewFile` says which side of the changeset `start_line` indexes
+        # into. Older Phabricator versions omit it, leaving the side unknown.
+        is_new_file = inline_fields.get("isNewFile")
+        self.on_removed_code = None if is_new_file is None else not is_new_file
+
+    @property
+    def is_renderable(self) -> bool:
+        """Whether the comment carries anything worth showing to a reader.
+
+        An inline comment always does: it points at a file and a line even
+        when the reviewer left the text empty and put everything into a
+        suggestion.
+        """
+        return not self.removed
 
     @property
     def end_line(self) -> int:
@@ -740,7 +764,7 @@ class PhabricatorPatch(Patch):
 
     @cached_property
     def _all_comments(self) -> list:
-        return [c for c in self.get_comments() if c.content.strip()]
+        return [c for c in self.get_comments() if c.is_renderable]
 
     @cached_property
     def _users_info(self) -> dict[str, dict]:
@@ -938,8 +962,21 @@ class PhabricatorPatch(Patch):
                 )
 
             md_lines.append("")
-            md_lines.append(final_comment_content)
-            md_lines.append("")
+            if final_comment_content:
+                md_lines.append(final_comment_content)
+                md_lines.append("")
+
+            if (
+                isinstance(comment, PhabricatorInlineComment)
+                and comment.suggestion_text
+            ):
+                md_lines.append("Suggested replacement:")
+                md_lines.append("")
+                md_lines.append("```suggestion")
+                md_lines.append(comment.suggestion_text)
+                md_lines.append("```")
+                md_lines.append("")
+
             md_lines.append("---")
             md_lines.append("")
 

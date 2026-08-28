@@ -23,6 +23,7 @@ TRIAGE_AND_FIX_ACTIONS = [
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
+    "try_server.push",
     "phabricator.submit_patch",
 ]
 
@@ -31,8 +32,17 @@ PHABRICATOR_FOLLOW_UP_ACTIONS = [
     "bugzilla.update_bug",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
+    "try_server.push",
     "phabricator.update_patch",
     "phabricator.add_comment",
+]
+
+# Action types available after a Bugzilla needinfo request.
+BUGZILLA_NEEDINFO_ACTIONS = [
+    "bugzilla.update_bug",
+    "bugzilla.add_comment",
+    "bugzilla.add_attachment",
+    "phabricator.submit_patch",
 ]
 
 # Firefox build/test tools.

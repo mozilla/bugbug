@@ -1,8 +1,11 @@
+import sys
+
 from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import FrontendTriageResult, run_frontend_triage
 from .notify import record_notification
+from .preflight import attached_fix, fetch_bug
 
 TRIAGE_TASK = (
     "Triage this user-facing Firefox bug. Investigate the source tree "
@@ -33,15 +36,34 @@ class AgentInputs(BaseSettings):
 
 async def main(ctx: HackbotContext) -> FrontendTriageResult:
     inputs = AgentInputs()
+    bugzilla_mcp_server = {"type": "http", "url": inputs.bugzilla_mcp_url}
+
+    # Ahead of `prepare_repo`: a bug already being worked on should cost neither
+    # the mozilla-central checkout nor a model turn.
+    bug_fields = await fetch_bug(bugzilla_mcp_server, inputs.bug_id)
+    reason = attached_fix(bug_fields)
+    if reason:
+        print(
+            f"[frontend_triage] skipping bug {inputs.bug_id}: {reason}",
+            file=sys.stderr,
+        )
+        # Returned, not raised: `_finish` turns an exception into
+        # `status: "error"`, and this run did what it should have.
+        return FrontendTriageResult(
+            bug_id=inputs.bug_id,
+            num_turns=0,
+            total_cost_usd=0.0,
+            product=bug_fields.get("product"),
+            component=bug_fields.get("component"),
+            actionable=False,
+            result=f"Skipped bug {inputs.bug_id}: {reason}. No triage was run.",
+        )
 
     await ctx.prepare_repo()
 
     result = await run_frontend_triage(
         task=TRIAGE_TASK,
-        bugzilla_mcp_server={
-            "type": "http",
-            "url": inputs.bugzilla_mcp_url,
-        },
+        bugzilla_mcp_server=bugzilla_mcp_server,
         source_repo=ctx.repo_path,
         bug=inputs.bug_id,
         model=inputs.model,

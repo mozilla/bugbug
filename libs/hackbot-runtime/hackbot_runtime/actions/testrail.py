@@ -49,13 +49,16 @@ class TestRailCaseInput(BaseModel):
     preconditions: str | None = Field(
         default=None, description="Optional setup required before running this case."
     )
-    steps: list[TestRailStepInput] = Field(
-        min_length=1,
-        description=(
-            "Ordered steps a QA engineer should follow. Each step has an action "
-            "and an optional expectation."
+    steps: Annotated[
+        list[TestRailStepInput],
+        Field(
+            min_length=1,
+            description=(
+                "Ordered steps a QA engineer should follow. Each step has an action "
+                "and an optional expectation."
+            ),
         ),
-    )
+    ]
     result: TestRailCaseResultInput = Field(
         description=(
             "Execution result for this generated test case after the agent ran it."
@@ -88,11 +91,14 @@ class TestRailCaseInput(BaseModel):
 
 class SubmitTestPlanInput(BaseModel):
     feature: str = Field(description="Feature covered by the generated test cases.")
-    generated_test_cases: list[TestRailCaseInput] = Field(
-        min_length=1,
-        max_length=30,
-        description="Generated test cases to upload to TestRail.",
-    )
+    generated_test_cases: Annotated[
+        list[TestRailCaseInput],
+        Field(
+            min_length=1,
+            max_length=30,
+            description="Generated test cases to upload to TestRail.",
+        ),
+    ]
     summary: str | None = Field(
         default=None,
         description="Optional summary of the generated test-plan execution.",

@@ -5,6 +5,7 @@ import logging
 from fastapi import Header, HTTPException, Request, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
+from slack_sdk.signature import SignatureVerifier
 
 from app.config import settings
 
@@ -43,6 +44,38 @@ async def require_phabricator_signature(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing webhook signature",
+        )
+
+
+def require_bugzilla_webhook_secret(
+    x_bugzilla_webhook_secret: str = Header(),
+) -> None:
+    """Reject requests without the dedicated Bugzilla webhook secret."""
+    if not hmac.compare_digest(
+        x_bugzilla_webhook_secret, settings.bugzilla_webhook.secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Bugzilla webhook secret",
+        )
+
+
+async def require_slack_signature(
+    request: Request,
+    x_slack_request_timestamp: str = Header(),
+    x_slack_signature: str = Header(),
+) -> None:
+    verifier = SignatureVerifier(settings.slack.signing_secret)
+    raw = await request.body()
+    try:
+        valid = verifier.is_valid(raw, x_slack_request_timestamp, x_slack_signature)
+    except ValueError:
+        valid = False
+
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Slack signature",
         )
 
 

@@ -20,9 +20,7 @@ from dataclasses import dataclass, field
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
 from mozci import data
-from mozci.errors import ParentPushNotFound
-from mozci.push import Push
-from mozci.task import Status, is_no_groups_suite
+from mozci.task import is_no_groups_suite
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +40,11 @@ _TIMEOUT = 30
 _TREEHERDER = "https://treeherder.mozilla.org/api/project"
 _FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
 _INTERMITTENT_KEYWORD = "intermittent-failure"
-# The walk stops at the first decisive ancestor, so the depth is only paid in full
-# when the task ran on none of them -- a coalesced or low-frequency config, which is
-# exactly the case worth reaching. Measured at ~3s per ancestor, so a full-depth walk
-# is a few minutes.
-LAST_GREEN_MAX_DEPTH = 100
-# Matches the walk: having failed to find green within that many pushes, the blind
-# window handed over instead covers the same span rather than a narrower one.
-FALLBACK_RANGE_PUSHES = LAST_GREEN_MAX_DEPTH
-# Bounds the shallow clone depth. Must stay above what those pushes can hold
-# (~1.9 commits/push on autoland) or the cap discards the base found above.
+# How far back the candidate window reaches. The agent narrows it itself with
+# `treeherder-cli --lookback N --suspects`, which reports the push a failure actually
+# started in -- including when that predates the push under investigation.
+RANGE_PUSHES = 100
+# Bounds the shallow clone depth, and so the commits the agent can reach.
 MAX_RANGE_COMMITS = 500
 
 
@@ -65,14 +58,10 @@ class FailingGroup:
 
 @dataclass(frozen=True)
 class CommitRange:
-    """The git commit range to search for the culprit."""
+    """The commits to search for the culprit: ``span`` back from ``head``."""
 
     head: str
-    # Exclusive; None when unknown or outside the cap.
-    base: str | None
     span: int
-    # Whether the culprit is provably inside the range.
-    complete: bool
 
 
 @dataclass
@@ -85,7 +74,6 @@ class Investigation:
     # Taskcluster ``test-platform`` tag, e.g. "linux1804-64-qr/debug".
     platform: str
     failing_groups: list[FailingGroup]
-    last_green_revision: str | None
     commit_range: CommitRange
     # Carries the test variant and chunk, unlike ``platform``.
     label: str = ""
@@ -199,100 +187,6 @@ def _known_intermittent_bugs(project: str, task_id: str) -> list[int]:
     return bugs
 
 
-def _same_platform(task, platform: str) -> bool:
-    return task.platform == platform or platform in (task.label or "")
-
-
-def _test_status(push: Push, group: str, tests: list[str], platform: str) -> str | None:
-    """'passed'/'failed'/None for ``tests`` of ``group`` on ``platform``.
-
-    Restricted to the failing tests and platform, since ``GroupSummary`` aggregates
-    across both. None means non-decisive.
-    """
-    summary = push.group_summaries.get(group)
-    if summary is None:
-        return None
-    wanted = set(tests)
-    statuses = set()
-    for task in summary.tasks:
-        if not _same_platform(task, platform):
-            continue
-        for result in task.results:
-            if result.group != group:
-                continue
-            if result.ok:
-                statuses.add("passed")
-                continue
-            failed = {test for test, _type in task.failure_types.get(group, [])}
-            statuses.add("failed" if not wanted or wanted & failed else "passed")
-    if "failed" in statuses:
-        return "failed"
-    return "passed" if statuses else None
-
-
-def _label_status(push: Push, label: str) -> str | None:
-    """'passed'/'failed'/None for a whole task label, for suites without manifests."""
-    summary = push.label_summaries.get(label)
-    if summary is None:
-        return None
-    if summary.status == Status.PASS:
-        return "passed"
-    if summary.status == Status.FAIL:
-        return "failed"
-    # INTERMITTENT: it both passed and failed here, so it cannot anchor a green.
-    return None
-
-
-def _walk_ancestors(
-    branch: str, rev: str, status_of, max_depth: int = LAST_GREEN_MAX_DEPTH
-) -> str | None:
-    """Most recent ancestor revision that ``status_of`` reports as 'passed'.
-
-    Best effort: None when no green ancestor is found within ``max_depth``, the
-    failure was already there upstream, or mozci errors.
-    """
-    try:
-        ancestor = Push(rev, branch=branch)
-        for _ in range(max_depth):
-            try:
-                ancestor = ancestor.parent
-            except ParentPushNotFound:
-                break
-            status = status_of(ancestor)
-            if status == "passed":
-                return ancestor.rev
-            if status == "failed":
-                return None
-    except Exception:
-        logger.exception("Could not determine last-green at %s", rev)
-    return None
-
-
-def _last_green(
-    branch: str,
-    rev: str,
-    failing: FailingGroup,
-    platform: str,
-    max_depth: int = LAST_GREEN_MAX_DEPTH,
-) -> str | None:
-    """Most recent ancestor revision where the failing tests were green."""
-    return _walk_ancestors(
-        branch,
-        rev,
-        lambda push: _test_status(push, failing.group, failing.tests, platform),
-        max_depth,
-    )
-
-
-def _last_green_label(
-    branch: str, rev: str, label: str, max_depth: int = LAST_GREEN_MAX_DEPTH
-) -> str | None:
-    """Most recent ancestor revision where the whole failing task was green."""
-    return _walk_ancestors(
-        branch, rev, lambda push: _label_status(push, label), max_depth
-    )
-
-
 def _count_commits(pushes: dict) -> int:
     """Total changesets across the pushlog pushes."""
     return sum(len(p.get("changesets") or []) for p in pushes.values())
@@ -307,27 +201,22 @@ def _pushlog(pushlog_url: str, query: str) -> dict:
         return {}
 
 
-def _fallback_pushes(pushlog_url: str, head_rev: str) -> dict:
-    """The head push plus the ``FALLBACK_RANGE_PUSHES`` pushes before it."""
+def _range_pushes(pushlog_url: str, head_rev: str) -> dict:
+    """The head push plus the ``RANGE_PUSHES`` pushes before it."""
     head = _pushlog(pushlog_url, f"changeset={head_rev}")
     if not head:
         return {}
     head_id = max(int(push_id) for push_id in head)
     # startID is exclusive, endID inclusive.
-    start_id = max(head_id - FALLBACK_RANGE_PUSHES, 0)
+    start_id = max(head_id - RANGE_PUSHES, 0)
     return _pushlog(pushlog_url, f"startID={start_id}&endID={head_id}") or head
 
 
-def _resolve_range(
-    project: str,
-    head_rev: str,
-    last_green_rev: str | None,
-    max_commits: int,
-) -> CommitRange | None:
-    """Resolve ``(last_green_rev, head_rev]`` into git endpoints and a commit count.
+def _resolve_range(project: str, head_rev: str, max_commits: int) -> CommitRange | None:
+    """The window of commits to search, as a git head plus a depth.
 
-    None when the head cannot be mapped. ``base`` is dropped, and the range marked
-    incomplete, when it is unknown or outside ``max_commits``.
+    Deliberately open-ended: pinning the base needs a last-green lookup, and the
+    agent gets a better one on demand from ``treeherder-cli --suspects``.
     """
     head_git = _hg_to_git(head_rev)
     if not head_git:
@@ -335,33 +224,9 @@ def _resolve_range(
         return None
 
     path = _REPO_PATHS.get(project, project)
-    pushlog_url = f"{_HG_BASE}/{path}/json-pushes"
-    if last_green_rev:
-        pushes = _pushlog(
-            pushlog_url, f"fromchange={last_green_rev}&tochange={head_rev}"
-        )
-    else:
-        pushes = _fallback_pushes(pushlog_url, head_rev)
-
+    pushes = _range_pushes(f"{_HG_BASE}/{path}/json-pushes", head_rev)
     span = max(_count_commits(pushes), 1)
-    if not last_green_rev or not pushes:
-        return CommitRange(head_git, None, min(span, max_commits), False)
-
-    if span > max_commits:
-        logger.warning(
-            "Range %s..%s has %d commits; capping the clone to the newest %d",
-            last_green_rev,
-            head_rev,
-            span,
-            max_commits,
-        )
-        return CommitRange(head_git, None, max_commits, False)
-
-    base_git = _hg_to_git(last_green_rev)
-    if not base_git:
-        logger.warning("Could not resolve a git hash for last-green %s", last_green_rev)
-        return CommitRange(head_git, None, span, False)
-    return CommitRange(head_git, base_git, span, True)
+    return CommitRange(head_git, min(span, max_commits))
 
 
 def resolve_investigation(
@@ -389,13 +254,6 @@ def resolve_investigation(
     )
 
     platform = tags.get("test-platform") or ""
-    if groups:
-        last_green = _last_green(project, hg_revision, groups[0], platform)
-    elif not group_based and label:
-        last_green = _last_green_label(project, hg_revision, label)
-    else:
-        last_green = None
-    logger.info("Last-green revision: %s", last_green or "not found")
 
     intermittent_bugs = _known_intermittent_bugs(project, task_id)
     logger.info(
@@ -403,15 +261,13 @@ def resolve_investigation(
         ", ".join(str(bug) for bug in intermittent_bugs) or "none matched",
     )
 
-    commit_range = _resolve_range(project, hg_revision, last_green, max_commits)
+    commit_range = _resolve_range(project, hg_revision, max_commits)
     if commit_range is None:
         raise ValueError(f"could not resolve a git commit for task {task_id}")
     logger.info(
-        "Range %s..%s spans %d commit(s), complete: %s",
-        commit_range.base or "(unknown)",
-        commit_range.head,
+        "Searching the %d commit(s) before %s",
         commit_range.span,
-        commit_range.complete,
+        commit_range.head,
     )
 
     return Investigation(
@@ -420,7 +276,6 @@ def resolve_investigation(
         harness=_harness(tags),
         platform=platform,
         failing_groups=groups,
-        last_green_revision=last_green,
         commit_range=commit_range,
         label=label,
         group_based=group_based,

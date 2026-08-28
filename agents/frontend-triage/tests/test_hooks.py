@@ -8,7 +8,11 @@ hackbot_agents/frontend_triage/hooks.py.
 import pytest
 from agent_tools.registry import ToolError
 from hackbot_agents.frontend_triage.config import ENABLED_ACTION_TYPES
-from hackbot_agents.frontend_triage.hooks import add_comment_hook, severity_block_hook
+from hackbot_agents.frontend_triage.hooks import (
+    add_comment_hook,
+    component_guidance_hook,
+    severity_block_hook,
+)
 from hackbot_runtime.actions import ActionsRecorder
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 
@@ -94,3 +98,50 @@ def test_a_comment_may_declare_its_severity_only_once():
 
     with pytest.raises(ToolError):
         severity_block_hook({"params": {"text": plan + block + block}})
+
+
+def _cite(path: str) -> str:
+    """A comment citing ``path`` the way the prompt asks for it."""
+    return f"The fault is in [{path}]({{{{searchfox.permalink}}}}/{path})."
+
+
+def _guidance_hook(*loaded: str):
+    hook = component_guidance_hook(set(loaded))
+    return lambda text: hook({"params": {"bug_id": BUG, "text": text}})
+
+
+def test_a_comment_citing_an_unloaded_component_is_refused():
+    # A New Tab Page bug that turns out to be the installer. The agent acts on this
+    # in-run, so the message has to name the component and the tool.
+    with pytest.raises(ToolError) as e:
+        _guidance_hook("Firefox :: New Tab Page")(
+            _cite("browser/installer/windows/nsis/installer.nsi")
+        )
+    assert "Firefox :: Installer" in str(e.value)
+    assert "load_component_guidance" in str(e.value)
+
+
+def test_a_comment_citing_a_loaded_component_passes():
+    _guidance_hook("Firefox :: New Tab Page")(
+        _cite("browser/extensions/newtab/content-src/components/Card/Card.jsx")
+    )
+
+
+def test_a_component_loaded_mid_run_passes():
+    # `load_component_guidance` adds to the same set the hook reads, so the retry after
+    # a refusal succeeds. If this ever decoupled, the agent would be stuck in a loop it
+    # cannot exit and the run would burn its turns.
+    loaded = {"Firefox :: New Tab Page"}
+    hook = component_guidance_hook(loaded)
+    body = _cite("browser/installer/windows/nsis/installer.nsi")
+    with pytest.raises(ToolError):
+        hook({"params": {"bug_id": BUG, "text": body}})
+    loaded.add("Firefox :: Installer")
+    hook({"params": {"bug_id": BUG, "text": body}})
+
+
+def test_a_comment_citing_no_owned_path_passes():
+    # A Graphics bug has no file to load, and it triages fine today off the source tree
+    # and Searchfox. Refusing here would fail the run over something the agent cannot
+    # satisfy -- it would retry forever against guidance that does not exist.
+    _guidance_hook("Firefox :: New Tab Page")(_cite("gfx/thebes/gfxPlatform.cpp"))

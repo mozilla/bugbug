@@ -113,13 +113,10 @@ def _jobs_line(investigation: Investigation, task_id: str) -> str:
 
 
 def _push_line(investigation: Investigation) -> str:
-    line = (
+    return (
         f"Push: {investigation.project} {_hg_link(investigation.hg_revision)}"
         f" / {_commit_link(investigation.failure_commit)}"
     )
-    if investigation.last_green_revision:
-        line += f", last green {_hg_link(investigation.last_green_revision)}"
-    return line
 
 
 def _culprit_line(result: TestRepairResult, culprit_author: str | None) -> str:

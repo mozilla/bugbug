@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from agent_tools import mozilla_vcs, searchfox
@@ -41,19 +42,26 @@ from hackbot_runtime.searchfox import (
     permalink_prefix,
     resolve_index_revision,
 )
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 from pydantic import BaseModel
 from searchfox import AsyncSearchfoxClient
 
+from . import guidance as guidance_tools
 from .config import (
     BUGZILLA_READ_TOOLS,
     ENABLED_ACTION_TYPES,
+    GUIDANCE_TOOLS,
     MOZILLA_VCS_TOOLS,
     SEARCHFOX_TOOLS,
     TRIAGE_SCOPE,
     TRIAGE_SEVERITIES,
     ScopedComponent,
+    guidance_for,
 )
-from .hooks import add_comment_hook, severity_block_hook
+from .docs import DocRef, docs_for, registrations
+from .guidance import GuidanceContext
+from .hooks import add_comment_hook, component_guidance_hook, severity_block_hook
 
 HERE = Path(__file__).resolve().parent
 
@@ -155,20 +163,19 @@ SEARCHFOX_LINKS_PROMPT = (
 
 
 def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
-    """Render `config.TRIAGE_SCOPE` as the prompt's component list, grouped by area.
+    """Render `config.TRIAGE_SCOPE` as the prompt's component list.
 
     Generated rather than written into the prompt so that the component list has one
-    home. The per-area guidance under `Source repository` stays hand-authored: it is
-    prose about a codebase, and only the enumeration is mechanical.
+    home. Flat, in registry order, one line each.
 
-    Takes the registry as an argument so a test can assert the grouping against a fixed
+    The channel is deliberately not rendered. Routing is `notify.py`'s decision and the
+    agent is never given `slack.post_message`, so naming channels here would only invite
+    it to reason about something it has no say in.
+
+    Takes the registry as an argument so a test can assert the rendering against a fixed
     input rather than against whatever the real scope happens to be today.
     """
-    by_area: dict[str, list[str]] = {}
-    for entry in scope:
-        by_area.setdefault(entry.area, []).append(entry.key)
-
-    lines = [f"- **{area}** — {', '.join(keys)}." for area, keys in by_area.items()]
+    lines = [f"- **{entry.key}**" for entry in scope]
 
     return "\n".join(
         lines
@@ -192,7 +199,104 @@ def render_scope(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
     )
 
 
-def load_system_prompt(rules_dir: Path, extra: str) -> str:
+async def fetch_product_component(
+    bugzilla_mcp_server: McpServerConfig, bug: int
+) -> tuple[str | None, str | None]:
+    """The bug's product and component, read through the Bugzilla broker.
+
+    The agent fetches the bug itself at step 1, but the prompt is built and frozen
+    before that, and the guidance goes into it. Via the broker because the agent
+    container binds no Bugzilla credentials (see `compose.yml`).
+
+    Never raises. ``(None, None)`` makes `guidance_for` send every component, which is
+    the prompt this replaced -- a broken lookup must not take down a workable run.
+    """
+    url = (
+        bugzilla_mcp_server.get("url")
+        if isinstance(bugzilla_mcp_server, dict)
+        else None
+    )
+    if not url:
+        return None, None
+
+    try:
+        async with streamablehttp_client(url) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                res = await session.call_tool(
+                    "get_bugs",
+                    # `id` is not optional: `get_bugs` diffs requested against
+                    # returned ids to report inaccessible bugs, so leaving it out
+                    # of `include_fields` makes the tool itself raise KeyError.
+                    {"ids": [bug], "include_fields": "id,product,component"},
+                )
+                if res.isError:
+                    raise RuntimeError(
+                        "".join(getattr(c, "text", "") for c in res.content)
+                    )
+                bugs = json.loads(res.content[0].text).get("bugs") or []
+                if not bugs:
+                    return None, None
+                return bugs[0].get("product"), bugs[0].get("component")
+    except Exception as e:  # - see docstring; every failure fails open
+        print(
+            f"[frontend_triage] component lookup failed ({type(e).__name__}: {e}); "
+            f"sending every component's guidance",
+            file=sys.stderr,
+        )
+        return None, None
+
+
+def render_component_index() -> str:
+    """One line per triaged component: its name and the trees its code lives in.
+
+    Always in the prompt, even when only one component's guidance is, so the agent can
+    recognise that it has localized into a component whose guidance it does not have.
+    """
+    return "\n".join(f"- **{c.key}** — {', '.join(c.trees)}" for c in TRIAGE_SCOPE)
+
+
+def render_guidance(
+    components: Sequence[ScopedComponent], known_docs: tuple[DocRef, ...]
+) -> str:
+    """The triage notes and source-docs pointers for ``components``, for the prompt.
+
+    The docs are the substance here and the notes are the remainder: whatever the
+    published documentation says about a component's structure is not repeated in
+    `config.py`, so this sends the agent to read the real thing and gives it the URL to
+    cite. `notes` carries only what no doc covers.
+
+    A component with no notes and no docs still gets a heading, so its absence reads as
+    "there is nothing specific to say" rather than as a rendering bug.
+    """
+    blocks = []
+    for entry in components:
+        lines = [f"### {entry.key}", "", f"Code lives in {', '.join(entry.trees)}."]
+
+        found = docs_for(entry, known_docs)
+        if found:
+            lines += [
+                "",
+                "In-tree documentation, which is more reliable than reconstructing the "
+                "structure from the source. Read the path, cite the URL:",
+                "",
+            ]
+            lines += [f"- `{d.tree}/` — {d.url}" for d in found]
+
+        if entry.notes:
+            lines += ["", entry.notes]
+
+        blocks.append("\n".join(lines))
+
+    return "\n\n".join(blocks)
+
+
+def load_system_prompt(
+    rules_dir: Path,
+    extra: str,
+    components: Sequence[ScopedComponent],
+    known_docs: tuple[DocRef, ...],
+) -> str:
     tmpl = (HERE / "prompts" / "system.md").read_text()
 
     return tmpl.format(
@@ -200,6 +304,8 @@ def load_system_prompt(rules_dir: Path, extra: str) -> str:
         extra_instructions=extra or "(none)",
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
         triaged_components=render_scope(),
+        component_index=render_component_index(),
+        guidance=render_guidance(components, known_docs),
     )
 
 
@@ -510,13 +616,42 @@ async def run_frontend_triage(
     )
     actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
 
+    # Whose guidance goes in the prompt. Falls back to every component when the bug's
+    # component is unknown or the lookup failed, which is what the prompt carried before
+    # this was split up -- see `guidance_for`.
+    product, component = await fetch_product_component(bugzilla_mcp_server, bug)
+    components = guidance_for(product, component)
+    loaded = {entry.key for entry in components}
+    print(
+        f"[frontend_triage] {product} :: {component} -> {', '.join(sorted(loaded))}",
+        file=sys.stderr,
+    )
+
+    # Every `SPHINX_TREES` declaration in the checkout, resolved once. Which docs cover a
+    # component is derived from this rather than written into `config.py`, so it costs one
+    # `git grep` per run instead of a list to keep in step with mozilla-central.
+    known_docs = registrations(source_repo.resolve())
+
+    # Registered before `permalink_hook`, which rewrites the placeholders this reads.
+    actions_recorder.add_hook("bugzilla.add_comment", component_guidance_hook(loaded))
+
     actions_recorder.add_hook(
         "bugzilla.add_comment",
         permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
     )
     actions_recorder.add_hook("bugzilla.add_comment", feedback_tags_hook)
 
-    system_prompt = load_system_prompt(rules_dir, instructions)
+    # Shares `loaded` with the hook above, so a component the agent pulls mid-run stops
+    # the hook refusing a comment that cites it.
+    guidance_server = build_sdk_server(
+        "guidance",
+        GuidanceContext(
+            repo=source_repo.resolve(), loaded=loaded, known_docs=known_docs
+        ),
+        guidance_tools.TOOLS,
+    )
+
+    system_prompt = load_system_prompt(rules_dir, instructions, components, known_docs)
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -524,6 +659,7 @@ async def run_frontend_triage(
             "bugzilla": bugzilla_mcp_server,
             "searchfox": searchfox_server,
             "mozilla_vcs": vcs_server,
+            "guidance": guidance_server,
             ACTIONS_SERVER_NAME: actions_server,
         },
         agents={
@@ -544,6 +680,7 @@ async def run_frontend_triage(
             *BUGZILLA_READ_TOOLS,
             *SEARCHFOX_TOOLS,
             *MOZILLA_VCS_TOOLS,
+            *GUIDANCE_TOOLS,
             *enabled_action_tools,
         ],
         model=model,

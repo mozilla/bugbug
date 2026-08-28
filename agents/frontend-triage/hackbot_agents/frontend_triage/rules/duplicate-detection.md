@@ -1,12 +1,9 @@
 # Duplicate detection
 
-These rules apply to **every** bug: the `duplicate_hunter` subagent runs before
-localization and asks one question — is this already filed?
-
-The verdict is a **suggestion only**. Naming a duplicate never stops the triage: the fix
-plan is written either way, `actionable` stays `true`, and confidence is unaffected. A
-human decides whether the bugs are really the same and marks them. The agent cannot mark
-one — it has no tool that changes a Bugzilla field.
+These rules apply to **every** bug. They are the judgment behind the verdict the
+`duplicate_hunter` returns — what makes two reports the same defect, and when to keep
+quiet. Spawning it, reporting the verdict and recording it are all in the system prompt,
+and are not repeated here.
 
 ## What counts as the same defect
 
@@ -39,14 +36,7 @@ does:
 - **IP Protection.** Whether the proxy state is _displayed_ wrong or _actually_ wrong.
   Those are different defects with different severities and should not be merged.
 
-## Reporting
+## The bar for naming one
 
-- **Candidate found** — the triage comment opens with `**Possible duplicate:** <link>` and
-  nothing else about it. No hedging, no explanation; the reader opens the bug and judges.
-- **Nothing found** — say nothing. The comment opens with the analysis as usual. Absence is
-  not reported.
-- **Uncertain** — prefer reporting nothing. A wrong duplicate sends someone to the wrong
-  bug and costs more trust than a missed one costs time.
-
-Record the same verdict in the `duplicate_assessment` structured output either way, so a
-run that found nothing is distinguishable from one that never looked.
+Prefer reporting nothing when uncertain. A wrong duplicate sends someone to the wrong bug
+and costs more trust than a missed one costs time.

@@ -17,24 +17,38 @@ human (or a downstream execution agent) takes it from there.
 to reproduce, or a log rather than a stack trace. `scoping.md` is what decides
 scope, and it is broad: any user-facing Firefox defect qualifies.
 
-What is _routed_ is narrower. `TRIAGE_SCOPE` in `config.py` lists the components
-bugs normally arrive from, one entry each, carrying the Slack channel and the area
-whose code layout `prompts/system.md` describes. A bug handed to the agent by hand
-in some other component — `Firefox :: Menus`, say — is triaged the same way and
-reports to nobody. The areas, which are also how the rendered scope list is
-grouped:
+What is _routed_ is narrower. `TRIAGE_SCOPE` in `config.py` lists the components bugs
+normally arrive from, one entry each, carrying the Slack channel and the trees the
+component's code lives in. A bug handed to the agent by hand in some other component
+(`Firefox :: Menus`, say) is triaged the same way and reports to nobody. The components,
+and the channel each reports to:
 
-- **Desktop frontend**, under `Firefox`. JS/JSM modules, CSS, XUL/HTML.
-- **Site permissions**, also desktop, but split across the doorhanger, the state,
-  and a C++ store outside `browser/`.
-- **IP Protection**, the built-in VPN. Panel UI in
-  `browser/components/ipprotection/`, the proxy and entitlement state machines in
-  `toolkit/components/ipprotection/`.
-- **Firefox for Android**. Kotlin under `mobile/android/fenix/` and
-  `mobile/android/android-components/`.
-- **Application updater** — `Toolkit :: Application Update` (`.sys.mjs`, IDL, C++).
-- **Windows installer** — `Firefox :: Installer` (NSIS).
-- **Messaging System**: `Firefox :: Messaging System` (incl. about:welcome, feature callouts, Spotlight modal dialogs, Infobars).
+| Component                         | Reports to                       |
+| --------------------------------- | -------------------------------- |
+| `Firefox :: New Tab Page`         | `#hnt-dev-triage`                |
+| `Firefox :: Site Permissions`     | `#privacy-team-automation`       |
+| `Toolkit :: Data Sanitization`    | `#privacy-team-automation`       |
+| `Firefox :: Sharing`              | `#content-sharing-automation`    |
+| `Firefox :: IP Protection`        | `#team-eng-ip-protection-triage` |
+| `Firefox :: Messaging System`     | `#omc-triage`                    |
+| `Firefox for Android :: History`  | `#android-core-dev`              |
+| `Firefox for Android :: Toolbar`  | `#android-core-dev`              |
+| `Firefox for Android :: Homepage` | `#android-core-dev`              |
+| `Toolkit :: Application Update`   | `#installer-updater-bug-triage`  |
+| `Firefox :: Installer`            | `#installer-updater-bug-triage`  |
+
+No doc path or URL is listed anywhere here. mozilla-central already records where a
+component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
+`git grep` over the checkout and matches those declarations against each entry's `trees`.
+`Toolkit :: Data Sanitization` is the one entry that also says which directory to search,
+via `doc_trees`, because its article is registered by another component's `moz.build`; the
+registration there is still read from the tree. That is what
+replaced the `rules/areas/` directory: eight hand-written files restating structure that
+`toolkit/mozapps/update/docs/`, `browser/installer/windows/docs/`,
+`extensions/permissions/docs/`, `toolkit/components/ipprotection/docs/` and the rest
+already document, and that drifted from them. What the docs cannot carry survives as a
+`notes` string on each entry: which of two similar things a bug is about, what a symptom
+in one layer means about another, and whether the area is tested at all.
 
 Install and update bugs are the odd ones out: they arrive as a failure with an
 error code and an `update.log` or installer log, usually with no steps to
@@ -57,6 +71,16 @@ judged by _seeing_ the rendered result.
 The `scoping.md` ruleset runs first and filters out non-defects, tracking/`meta`
 bugs and intermittent test failures with a short note instead of an invented fix
 plan.
+
+Before any of that, a bug that already has a fix is stopped in Python.
+`preflight.py` reads the bug's attachments in one `get_bugs` call and ends the run
+if a non-obsolete Phabricator revision is attached — no checkout, no model turn, no
+comment. The developer who posted the patch is on it, and a fix plan arriving
+afterwards is noise in their review queue. `scoping.md` has always said so, but it
+is prose: on bug 2066504 the agent named the revision and investigated anyway,
+which is what this gate exists to prevent. A raw `is_patch` attachment deliberately
+does **not** count — that flag is set by whoever attaches the file, so a reporter's
+speculative diff would suppress triage on a bug nobody is working.
 
 ## Running it locally
 
@@ -82,11 +106,12 @@ minutes and a large download. Later runs reuse the volume.
 
 Three bugs that exercise the classes this agent handles:
 
-| Bug       | Class       | Notes                                           |
-| --------- | ----------- | ----------------------------------------------- |
-| `2014702` | Behavioral  | New Tab weather widget vanishing                |
-| `2014629` | Pure visual | Split View group-line CSS gap                   |
-| `2004297` | Regression  | Print Preview shift; traces the named regressor |
+| Bug       | Class         | Notes                                                        |
+| --------- | ------------- | ------------------------------------------------------------ |
+| `2014702` | Behavioral    | New Tab weather widget vanishing                             |
+| `2014629` | Pure visual   | Split View group-line CSS gap                                |
+| `2004297` | Regression    | Print Preview shift; traces the named regressor              |
+| `2066504` | Already fixed | Phabricator revision attached; stops before the model starts |
 
 ## Inputs
 
@@ -118,6 +143,8 @@ Each run writes to `~/hackbot/artifacts/<run_id>/`:
 - **`logs/agent.log`** — the streamed reasoning and every tool call, and the only
   record of which model actually ran.
 - **No `changes/` directory.** Its absence confirms the run stayed read-only.
+- **A skipped run** (see above) is `status: "ok"` with `num_turns: 0`, an empty
+  `actions`, the reason in `result`, and no `logs/agent.log` — nothing ran.
 
 Two caveats before acting on a plan:
 
@@ -157,7 +184,7 @@ That is the whole list, because a comment is the only thing this agent can write
 It has no tool that changes a bug's fields: `severity` was the one field a ruleset
 directed it to set, and that is now a suggestion at the end of the comment for a
 human to apply, so `bugzilla.update_bug` left `ENABLED_ACTION_TYPES` rather than
-staying on with no caller. `tests/test_config.py` guards that.
+staying on with no caller.
 
 A refusal reaches the agent as a tool error it can correct in the same run, and the
 action never lands in `summary.json`. The action _type_ needs no check:
@@ -197,13 +224,14 @@ stays silent, even if someone applies it by hand later.
 
 Routing is the `channel` on each `TRIAGE_SCOPE` entry in `config.py`, looked up by
 `"<Product> :: <Component>"` through the derived `SLACK_CHANNELS` — so
-`ScopedComponent("Firefox", "New Tab Page", "Desktop frontend", "#hnt-dev-triage")`
+`ScopedComponent("Firefox", "New Tab Page", "#hnt-dev-triage", trees=(...))`
 sends a New Tab Page run to `#hnt-dev-triage`.
 
 Four things about that which are not obvious from reading the registry:
 
 - **The key is the component, not the team**, so two components may share a channel, as
-  the installer and the updater do, without either knowing about the other.
+  the installer and the updater do and as site permissions and data sanitization do,
+  without either knowing about the other.
 - **There is deliberately no default channel**, since posting one team's triage into
   another team's channel is worse than silence.
 - **`TRIAGE_SCOPE` is narrower than what the agent will triage.** It is the routing
@@ -237,12 +265,50 @@ notifies. The run page shows the failed action.
   relevant, so new `.md` files extend it — see `rules/README.md` for how to author
   one. Neither file lists components; `TRIAGE_SCOPE` in `config.py` does.
 - **`prompts/system.md`** holds the standing instructions: output format, the
-  read-only mandate, when to reach for Searchfox versus reading a file, and the
-  per-area code layout. A component in a new area needs a **Source repository**
-  bullet here, and `tests/test_plan.py` fails until it has one.
+  read-only mandate, when to reach for Searchfox versus reading a file, and how to use
+  the in-tree documentation. It names no component: the component index and the
+  per-component guidance are rendered into it from `TRIAGE_SCOPE`.
 - **Cost** scales with tool use, not just turns — Searchfox results are
   token-heavy, so narrowing queries (`path_filter`, a modest `limit`) matters
   more than `MAX_TURNS` when batching.
+
+## Adding a triage component
+
+One `ScopedComponent` entry in `config.py`, and a row in the table above:
+
+```python
+ScopedComponent(
+    "Firefox",
+    "Sidebar",
+    "#some-team-triage",
+    trees=("browser/components/sidebar/",),
+    owns=("browser/components/sidebar/",),
+    notes="...",
+)
+```
+
+- **`trees`** is descriptive and may overlap another component. It drives the prompt's
+  index and the docs lookup, so it is what makes the component triageable.
+- **`doc_trees`** is for the one case where a component's docs are not under its code,
+  and it **replaces** `trees` for the docs lookup rather than adding to it. Only
+  `Toolkit :: Data Sanitization` needs it: its article is registered by
+  `toolkit/components/antitracking/moz.build`, and its own
+  `browser/base/content/sanitize*` files otherwise resolve to `browser/base/`'s
+  tabbrowser and sslerrorreport trees. Leave it empty unless `docs_for` returns a
+  sibling component's documentation, which is the symptom it treats.
+- **`owns`** is the narrower claim that "no other component could mean this file", and it
+  is what `component_guidance_hook` refuses comments on. Leave it empty rather than
+  widening it to a tree that contains other components: `browser/` as an `owns` value
+  refuses ordinary desktop chrome. Longest match wins, so a nested `owns` is how two
+  components divide one tree.
+- **`notes`** is only for what the source docs do not say. If a sentence restates a doc
+  page, delete it rather than paraphrase it; the whole point is that the docs are the
+  copy that stays current.
+- **`related`** ships another component's guidance alongside this one, for bugs that
+  routinely turn out to be somewhere else.
+
+`tests/test_plan.py` fails if the entry has no `trees`, if a `related` key does not
+resolve, or if its `notes` name a path the citation hook would then refuse.
 
 ## Registration
 
@@ -252,8 +318,11 @@ Registered with `hackbot-api` as `FrontendTriageInputs` in
 need the API.
 
 `tests/` covers what an unattended run's reach depends on: the record-time hooks
-(`test_hooks.py`), the plan parsing and `may_apply_unattended` (`test_plan.py`), and
-the Slack message and its routing (`test_notify.py`). Run them with
+(`test_hooks.py`), the plan parsing and `may_apply_unattended` (`test_plan.py`), the
+Slack message and its routing (`test_notify.py`), the docs derivation
+(`test_docs.py`, whose real-checkout test needs `SOURCE_REPO`), the
+`load_component_guidance` tool (`test_guidance.py`), and the pre-flight gate
+(`test_preflight.py`). Run them with
 `uv run --package hackbot-agent-frontend-triage pytest agents/frontend-triage/tests`.
 CI covers the shared machinery this builds on via the `libs/agent-tools` and
 `libs/hackbot-runtime` suites.

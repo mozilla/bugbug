@@ -25,12 +25,44 @@ is attribution, not authentication.
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.
 
-### Inbound webhooks — HMAC signature
+### Inbound webhooks — their own authentication
 
-| POST | `/webhooks/phabricator` | `@hackbot` mention on a revision triggers a bug-fix run |
+| Method | Path                           | Does                                                    |
+| ------ | ------------------------------ | ------------------------------------------------------- |
+| POST   | `/webhooks/phabricator`        | `@hackbot` mention on a revision triggers a bug-fix run |
+| POST   | `/webhooks/bugzilla`           | `needinfo?` on the bot account triggers a bug-fix run   |
+| POST   | `/webhooks/slack/interactions` | A click on an interactive element of a hackbot message  |
 
-Authenticated by Phabricator's own HMAC signature over the raw body, so it sits on its own
-router without the API-key dependency. See [triggers.md](triggers.md).
+None of them uses the API key, so each sits on its own router without that dependency:
+these senders cannot send an `X-API-Key`. Phabricator and Slack are authenticated by their
+own HMAC signature over the raw body; Bugzilla by a shared secret in
+`X-Bugzilla-Webhook-Secret`. Phabricator and Bugzilla answer `202` with
+`{"status": "ignored", ...}` for a well-authenticated delivery that doesn't qualify, so BMO
+and Phabricator don't retry it. Both are covered in [triggers.md](triggers.md).
+
+**Slack interactions.** Slack posts every click to the one Request URL configured for
+Interactivity, so the receiver demultiplexes on the element's `action_id`. The path names
+the feature because Slack configures a URL per feature: Event Subscriptions and Slash
+Commands would get their own routes beside this one.
+
+Two things about the delivery drive the design in
+[routers/slack.py](../../services/hackbot-api/app/routers/slack.py): the body is
+form-encoded rather than JSON, with the payload in one field, and Slack expects a response
+within **3 seconds**, so real work belongs off the request. Nothing posts a button yet, so
+the route only verifies, parses and logs; the payload model and why an unreadable delivery
+fails loudly are in
+[slack_webhook.py](../../services/hackbot-api/app/slack_webhook.py).
+
+| Delivery                                  | Status |
+| ----------------------------------------- | ------ |
+| A click this app can read                 | `200`  |
+| A signature header is absent              | `422`  |
+| Signature or freshness fails              | `401`  |
+| Signed, but not a click this app can read | `500`  |
+
+To turn it on: **Interactivity & Shortcuts → Request URL** =
+`https://<hackbot-api-host>/webhooks/slack/interactions`, plus `SLACK_SIGNING_SECRET` from
+**Basic Information → App Credentials**. No new OAuth scopes, so no workspace reinstall.
 
 ## Creating a run
 
@@ -122,8 +154,10 @@ idempotent — see [actions.md](actions.md).
 Commands and the full config reference are in [deployment.md](deployment.md). Two things
 specific to this service:
 
-- **`WEBHOOK_SECRET` has no default**, so a missing one fails at startup rather than
-  silently accepting or rejecting deliveries.
+- **The inbound HMAC keys have no defaults**, so a missing one fails at startup rather than
+  silently accepting or rejecting deliveries. `SLACK_SIGNING_SECRET` is validated non-blank
+  rather than merely present, so `=""` fails too and nothing downstream carries an
+  unconfigured case.
 - **Signing GCS URLs needs an impersonating credential** —
   `gcloud auth application-default login --impersonate-service-account=<sa>`. See
   [security.md](security.md) for why, and what the deployed service needs instead.

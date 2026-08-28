@@ -334,6 +334,47 @@ async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
     assert pending.status == "applied"
 
 
+async def test_try_result_resolves_in_phabricator_summary(monkeypatch):
+    treeherder_url = "https://treeherder.mozilla.org/jobs?repo=try&landoCommitID=7"
+    try_handler = _RecordingHandler(
+        SimpleNamespace(
+            status="applied", result={"job_id": 7, "url": treeherder_url}, error=None
+        )
+    )
+    patch_handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"revision_id": 2}, error=None)
+    )
+    handlers = {
+        "try_server.push": try_handler,
+        "phabricator.submit_patch": patch_handler,
+    }
+    monkeypatch.setattr(actions_applier, "get_handler", handlers.__getitem__)
+
+    try_push = _row(
+        0,
+        "pending",
+        action_type="try_server.push",
+        params={"auto": True},
+        ref="try",
+    )
+    patch = _row(
+        1,
+        "pending",
+        action_type="phabricator.submit_patch",
+        params={"bug_id": 1, "title": "Fix", "summary": "Try: {{actions.try.url}}"},
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(try_push, []), (patch, [])],
+    )
+
+    assert patch_handler.calls == [
+        {"bug_id": 1, "title": "Fix", "summary": f"Try: {treeherder_url}"}
+    ]
+
+
 # --- coalescing same-bug Bugzilla mutations into one PUT ---------------- #
 
 
@@ -374,7 +415,7 @@ async def test_coalesces_update_and_comment_into_one_put(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"status": "RESOLVED"},
-            "comment": {"body": "done", "is_private": False},
+            "comment": {"body": "done", "is_private": False, "is_markdown": True},
         },
     ]
     assert update.status == "applied" and comment.status == "applied"
@@ -416,7 +457,7 @@ async def test_extra_comments_applied_separately(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"status": "RESOLVED"},
-            "comment": {"body": "near", "is_private": False},
+            "comment": {"body": "near", "is_private": False, "is_markdown": True},
         },
         {"bug_id": 5, "text": "far"},
     ]
@@ -531,6 +572,49 @@ async def test_backward_placeholder_resolves_in_coalesced_comment(monkeypatch):
         {
             "bug_id": 5,
             "changes": {"a": 1},
-            "comment": {"body": "see http://x/D1", "is_private": False},
+            "comment": {
+                "body": "see http://x/D1",
+                "is_private": False,
+                "is_markdown": True,
+            },
         },
     ]
+
+
+async def test_comment_and_needinfo_clear_coalesce_into_one_update(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"needinfo_cleared": True}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda _type: handler)
+
+    comment = _row(
+        0,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "done"},
+    )
+    clear = _row(
+        1,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={
+            "bug_id": 5,
+            "changes": {"flags": [{"id": 42, "status": "X"}]},
+        },
+    )
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(comment, []), (clear, [])],
+    )
+
+    # One PUT carrying both the reply and the flag retraction.
+    assert handler.calls == [
+        {
+            "bug_id": 5,
+            "changes": {"flags": [{"id": 42, "status": "X"}]},
+            "comment": {"body": "done", "is_private": False, "is_markdown": True},
+        }
+    ]
+    assert comment.status == "applied"
+    assert clear.status == "applied"
