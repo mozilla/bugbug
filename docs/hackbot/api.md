@@ -22,17 +22,11 @@ component that knows the agent catalog, and the only writer of run state.
 user's email, stored as `requested_by` — the caller is a trusted service (the UI), so this
 is attribution, not authentication.
 
-The body also accepts `require_review: true|false`, declared once on the shared
-`AgentInputs` base that every agent's input schema inherits — so it validates with the
-agent's own inputs and appears in each published `/agents` schema. When true, recorded
-external actions always stay pending for a human. When false (the default), the run is
-only _eligible_ for automatic application: the agent must still opt in through
-`AgentSpec.auto_apply_actions`, and any agent-specific consent check still applies. The
-flag is persisted with the run's other inputs (JSONB, so no migration) and read back by
-`finalize_run` onto the completion event, which is how the choice survives into the later
-completion request. `model_to_env` withholds it from the container env, so it never
-reaches the agent or its prompt. Retriggers replay the run's inputs, so a run that asked
-for review is retried under review.
+Every agent input schema includes `require_review`, which defaults to `false`. When set,
+the run's actions stay pending for manual approval; otherwise, the agent's existing
+auto-apply policy decides. The value is stored with the run inputs so it remains available
+at completion, but it is not forwarded to the agent environment or prompt. Retriggers
+preserve the value because they reuse the original inputs.
 
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.

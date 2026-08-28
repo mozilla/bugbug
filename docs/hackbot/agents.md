@@ -80,8 +80,8 @@ Two additions in [services/hackbot-api/](../../services/hackbot-api/):
    validates against, and what becomes the run's env overrides.
 2. **[app/agents.py](../../services/hackbot-api/app/agents.py)** — one `AGENT_REGISTRY` entry: `name`, `description`, `job_name`
    (the Cloud Run Job), `input_schema`, and optionally `auto_apply_actions=True`.
-   That flag makes the agent eligible for automatic application; an individual
-   run created in `review` mode still holds its actions for a human.
+   That flag only makes the agent eligible for automatic application;
+   `require_review=true` on a run still holds its actions for manual approval.
 
 Env vars are derived from the schema (`bug_id` → `BUG_ID`, lists and dicts JSON-encoded),
 so there is no per-agent mapping code to write. `build_env` exists as an escape hatch for
