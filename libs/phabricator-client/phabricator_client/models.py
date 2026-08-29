@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -15,4 +17,6 @@ class PhabricatorDiff(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     id: int
-    base_commit: str | None = Field(default=None, alias="sourceControlBaseRevision")
+    base_commit: Annotated[
+        str | None, Field(default=None, alias="sourceControlBaseRevision")
+    ]

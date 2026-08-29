@@ -35,7 +35,10 @@ def get_code_review_tool():
 
 @mcp.prompt()
 async def patch_review(
-    patch_url: str = Field(description="URL to the Phabricator patch to review."),
+    patch_url: Annotated[
+        str,
+        Field(description="URL to the Phabricator patch to review."),
+    ],
 ) -> str:
     """Review a code patch from Phabricator."""
     parsed_url = urlparse(patch_url)
