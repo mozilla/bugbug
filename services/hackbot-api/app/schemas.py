@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -23,8 +23,8 @@ class ArtifactRef(BaseModel):
 class RunSummary(BaseModel):
     status: str
     error: str | None = None
-    findings: dict[str, Any] = Field(default_factory=dict)
-    actions: list[dict[str, Any]] = Field(default_factory=list)
+    findings: Annotated[dict[str, Any], Field(default_factory=dict)]
+    actions: Annotated[list[dict[str, Any]], Field(default_factory=list)]
 
 
 class RunActionDoc(BaseModel):
@@ -69,7 +69,7 @@ class RunDoc(BaseModel):
     execution_name: str | None = None
     results_prefix: str
     summary: RunSummary | None = None
-    artifacts: list[ArtifactRef] = Field(default_factory=list)
+    artifacts: Annotated[list[ArtifactRef], Field(default_factory=list)]
     error: str | None = None
 
 
@@ -85,7 +85,7 @@ class BugFixInputs(BaseModel):
     comment: str | None = None
     # Set only by a Bugzilla flag.needinfo webhook. Its presence selects the
     # follow-up mode and lets the API clear that exact flag after the response.
-    bugzilla_needinfo_flag_id: int | None = Field(default=None, gt=0)
+    bugzilla_needinfo_flag_id: Annotated[int | None, Field(default=None, gt=0)]
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None

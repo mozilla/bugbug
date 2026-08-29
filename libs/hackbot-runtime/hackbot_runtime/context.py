@@ -19,7 +19,7 @@ import tempfile
 import uuid
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -60,7 +60,7 @@ class HackbotContext(BaseSettings):
     uploaded.
     """
 
-    run_id: str = Field(default_factory=_default_run_id)
+    run_id: Annotated[str, Field(default_factory=_default_run_id)]
     results_prefix: str = ""
     results_policy_url: str | None = None
     results_policy_fields: dict[str, str] = {}
