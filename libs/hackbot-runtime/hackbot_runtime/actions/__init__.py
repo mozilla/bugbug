@@ -8,9 +8,9 @@ claude-sdk adapter is ``hackbot_runtime.actions.claude_sdk.actions_server_for``.
 """
 
 from hackbot_runtime.actions import (
+    action_records,
     bugzilla,
     phabricator,
-    recorded_actions,
     slack,
     testrail,
     try_server,
@@ -23,9 +23,9 @@ __all__ = [
     "ACTIONS_SERVER_NAME",
     "ActionHook",
     "ActionsRecorder",
+    "action_records",
     "bugzilla",
     "phabricator",
-    "recorded_actions",
     "slack",
     "testrail",
     "try_server",

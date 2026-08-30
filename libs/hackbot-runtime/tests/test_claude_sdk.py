@@ -9,8 +9,8 @@ from hackbot_runtime.actions.claude_sdk import (
 from mcp.types import CallToolRequest, CallToolRequestParams, ListToolsRequest
 
 _ALL = [
-    "recorded_actions.list_actions",
-    "recorded_actions.remove_action",
+    "action_records.list_actions",
+    "action_records.remove_action",
     "bugzilla.update_bug",
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
@@ -55,8 +55,8 @@ async def test_lists_expected_tools_without_recorder():
     srv = _server(ActionsRecorder())
     tools = await _list(srv)
     assert {t.name for t in tools} == {
-        "recorded_actions_list_actions",
-        "recorded_actions_remove_action",
+        "action_records_list_actions",
+        "action_records_remove_action",
         "bugzilla_update_bug",
         "bugzilla_add_comment",
         "bugzilla_add_attachment",
@@ -124,7 +124,7 @@ async def test_actions_server_exposes_selected_testrail_tool():
     assert {t.name for t in tools} == {"testrail_submit_test_plan"}
 
 
-async def test_recorded_actions_tools_list_and_remove_complete_action():
+async def test_action_records_tools_list_and_remove_complete_action():
     recorder = ActionsRecorder()
     action_id = recorder.record(
         "bugzilla.update_bug",
@@ -133,7 +133,7 @@ async def test_recorded_actions_tools_list_and_remove_complete_action():
     )["action_id"]
     srv = _server(recorder)
 
-    listed_result = await _call(srv, "recorded_actions_list_actions", {})
+    listed_result = await _call(srv, "action_records_list_actions", {})
     assert listed_result.content[0].text.splitlines() == [
         "| ID | Action | Reasoning |",
         "| --- | --- | --- |",
@@ -141,17 +141,17 @@ async def test_recorded_actions_tools_list_and_remove_complete_action():
     ]
 
     removed_result = await _call(
-        srv, "recorded_actions_remove_action", {"action_id": action_id}
+        srv, "action_records_remove_action", {"action_id": action_id}
     )
     assert removed_result.content[0].text == f"Removed recorded action {action_id}."
     assert recorder.actions == []
 
 
-async def test_recorded_actions_remove_unknown_id_surfaces_is_error():
+async def test_action_records_remove_unknown_id_surfaces_is_error():
     srv = _server(ActionsRecorder())
 
     result = await _call(
-        srv, "recorded_actions_remove_action", {"action_id": "action-404"}
+        srv, "action_records_remove_action", {"action_id": "action-404"}
     )
 
     assert result.isError is True
@@ -161,13 +161,13 @@ async def test_recorded_actions_remove_unknown_id_surfaces_is_error():
 def test_actions_to_tool_names_maps_exactly_the_selected_tools():
     assert actions_to_tool_names(
         [
-            "recorded_actions.list_actions",
-            "recorded_actions.remove_action",
+            "action_records.list_actions",
+            "action_records.remove_action",
             "bugzilla.update_bug",
         ]
     ) == [
-        "mcp__actions__recorded_actions_list_actions",
-        "mcp__actions__recorded_actions_remove_action",
+        "mcp__actions__action_records_list_actions",
+        "mcp__actions__action_records_remove_action",
         "mcp__actions__bugzilla_update_bug",
     ]
 
