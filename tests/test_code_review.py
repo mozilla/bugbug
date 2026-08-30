@@ -10,7 +10,7 @@ import httpx
 import pytest
 from unidiff import PatchSet
 
-from bugbug.tools.code_review import data_types, langchain_tools, review_context
+from bugbug.tools.code_review import data_types, langchain_tools, review_context, utils
 from bugbug.tools.code_review.data_types import (
     ExternalContent,
     GeneratedReviewComment,
@@ -44,7 +44,8 @@ from bugbug.tools.code_review.review_context_schema import (
 from bugbug.tools.code_review.review_context_schema import (
     main as validate_review_context_main,
 )
-from bugbug.tools.code_review.utils import find_comment_scope
+from bugbug.tools.code_review.utils import find_comment_location
+from bugbug.tools.core.exceptions import CommentNotLocatedError
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
     get_file_after_stack,
@@ -282,59 +283,113 @@ def test_patch_stack_linear_despite_unrelated_diamond():
 
 
 # ---------------------------------------------------------------------------
-# find_comment_scope
+# find_comment_location
 # ---------------------------------------------------------------------------
 
 
-def test_find_comment_scope():
-    test_data = {
-        (233024, 964198): {
-            "browser/components/newtab/test/browser/browser.toml": {
-                79: {
-                    "line_start": 78,
-                    "line_end": 79,
-                    "has_added_lines": False,
-                }
-            },
-            "browser/components/asrouter/tests/browser/browser.toml": {
-                63: {
-                    "line_start": 60,
-                    "line_end": 74,
-                    "has_added_lines": True,
-                },
-            },
-        },
-        (240754, 995999): {
-            "dom/canvas/WebGLShaderValidator.cpp": {
-                39: {
-                    "line_start": 37,
-                    "line_end": 42,
-                    "has_added_lines": True,
-                },
-                46: {
-                    "line_start": 37,
-                    "line_end": 42,
-                    "has_added_lines": True,
-                },
-            }
-        },
+def _patched_file(raw_diff):
+    return PatchSet.from_string(raw_diff)[0]
+
+
+def test_find_comment_location_matches_added_line():
+    file = _patched_file(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    )
+    location = find_comment_location(file, "B")
+    assert location == {
+        "line_start": 2,
+        "line_end": 2,
+        "hunk_start_line": 1,
+        "hunk_end_line": 2,
+        "has_added_lines": True,
     }
 
-    for (revision_id, diff_id), patch_files in test_data.items():
-        with open(os.path.join(FIXTURES_DIR, f"D{revision_id}-{diff_id}.diff")) as f:
-            raw_diff = f.read()
 
-        patch_set = PatchSet.from_string(raw_diff)
+def test_find_comment_location_matches_multi_line_snippet():
+    file = _patched_file(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,5 @@\n a\n+x\n+y\n+z\n b\n"
+    )
+    location = find_comment_location(file, "x\ny\nz")
+    assert location["line_start"] == 2
+    assert location["line_end"] == 4
+    assert location["has_added_lines"] is True
 
-        for file_name, target_hunks in patch_files.items():
-            patched_file = next(
-                patched_file
-                for patched_file in patch_set
-                if patched_file.path == file_name
-            )
 
-            for line_number, expected_scope in target_hunks.items():
-                assert find_comment_scope(patched_file, line_number) == expected_scope
+def test_find_comment_location_strips_diff_marker_and_whitespace():
+    file = _patched_file(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,2 @@\n a\n-b\n+B\n"
+    )
+    # A leading '+' and extra whitespace shouldn't prevent a match.
+    location = find_comment_location(file, "  + B  \n")
+    assert location["line_start"] == 2
+    assert location["has_added_lines"] is True
+
+
+def test_find_comment_location_matches_removed_line():
+    file = _patched_file(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,2 @@\n a\n-b\n c\n"
+    )
+    location = find_comment_location(file, "b")
+    assert location["line_start"] == 2
+    assert location["has_added_lines"] is False
+
+
+def test_find_comment_location_not_found_raises():
+    file = _patched_file(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    )
+    with pytest.raises(CommentNotLocatedError):
+        find_comment_location(file, "this text does not appear anywhere")
+
+
+def test_find_comment_location_empty_snippet_raises():
+    file = _patched_file(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    )
+    with pytest.raises(CommentNotLocatedError):
+        find_comment_location(file, "   \n  ")
+
+
+def test_find_comment_location_real_patch_mixed_hunk():
+    # D240754-995999.diff: a hunk with both added and removed lines. Match on
+    # the real, verbatim added-line text rather than a hardcoded line number.
+    with open(
+        os.path.join(FIXTURES_DIR, "D240754-995999.diff"), encoding="utf-8"
+    ) as f:
+        raw_diff = f.read()
+
+    patch_set = PatchSet.from_string(raw_diff)
+    patched_file = next(
+        patched_file
+        for patched_file in patch_set
+        if patched_file.path == "dom/canvas/WebGLShaderValidator.cpp"
+    )
+
+    location = find_comment_location(patched_file, "if (kIsMacOS) {")
+    assert location["has_added_lines"] is True
+    assert location["hunk_start_line"] == 37
+    assert location["hunk_end_line"] == 42
+
+
+def test_convert_generated_comments_logs_error_when_unlocated(caplog):
+    patch_set = PatchSet.from_string(
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    )
+    comment = GeneratedReviewComment(
+        file="b/f.txt",
+        existing_code="this text does not appear anywhere",
+        comment="bad",
+        explanation="x",
+        order=1,
+    )
+    with caplog.at_level(logging.ERROR, logger=utils.logger.name):
+        result = list(utils.convert_generated_comments_to_inline([comment], patch_set))
+
+    assert result == []
+    assert any(
+        record.levelno == logging.ERROR and "Dropping comment" in record.message
+        for record in caplog.records
+    )
 
 
 def _mock_client_returning(text: str) -> MagicMock:
@@ -1289,7 +1344,7 @@ def test_assess_patch_scope_returns_at_most_one_comment():
     comments = [
         GeneratedReviewComment(
             file="b/f.txt",
-            code_line=1,
+            existing_code="a",
             comment=f"Split this patch {i}",
             explanation="bundles unrelated changes",
             order=1,
@@ -1319,14 +1374,14 @@ def test_run_appends_scope_suggestion_last():
 
     regular = GeneratedReviewComment(
         file="b/f.txt",
-        code_line=1,
+        existing_code="a",
         comment="Fix the bug",
         explanation="off-by-one",
         order=1,
     )
     scope = GeneratedReviewComment(
         file="b/f.txt",
-        code_line=2,
+        existing_code="b",
         comment="Split this patch into smaller pieces",
         explanation="bundles unrelated changes",
         order=1,

@@ -49,9 +49,11 @@ from bugbug.tools.code_review.protocols import (
 )
 from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
+    find_line_text,
     format_patch_set,
 )
 from bugbug.tools.core.exceptions import (
+    CommentNotLocatedError,
     LargeDiffError,
     RecursionLimitError,
 )
@@ -364,12 +366,31 @@ class CodeReviewTool(GenerativeModelTool):
             for example in comment_examples:
                 example["comment"]["explanation"] = "THE JUSTIFICATION GOES HERE"
 
-        def format_comment(comment):
+        def format_comment(example):
             # TODO: change the schema that we expect the model to return so we
             # can remove this function.
+            comment = example["comment"]
+            filename = comment["filename"]
+            raw_hunk = example.get("hunk") or example.get("raw_hunk")
+            existing_code = None
+            if raw_hunk:
+                try:
+                    wrapped = TEMPLATE_PATCH_FROM_HUNK.format(
+                        filename=filename, raw_hunk=raw_hunk
+                    )
+                    patched_file = PatchSet.from_string(wrapped)[0]
+                    existing_code = find_line_text(patched_file, comment["start_line"])
+                except (CommentNotLocatedError, IndexError):
+                    logger.warning(
+                        "Could not recover existing_code for example comment on %s:%s",
+                        filename,
+                        comment["start_line"],
+                    )
+            if existing_code is None:
+                return None
             return {
-                "file": comment["filename"],
-                "code_line": comment["start_line"],
+                "file": filename,
+                "existing_code": existing_code,
                 "comment": comment["content"],
             }
 
@@ -381,10 +402,14 @@ class CodeReviewTool(GenerativeModelTool):
             return format_patch_set(patch_set)
 
         if not self.show_patch_example:
-            return json.dumps(
-                [format_comment(example["comment"]) for example in comment_examples],
-                indent=2,
-            )
+            formatted_comments = [
+                comment
+                for comment in (
+                    format_comment(example) for example in comment_examples
+                )
+                if comment is not None
+            ]
+            return json.dumps(formatted_comments, indent=2)
 
         return "\n\n".join(
             TEMPLATE_COMMENT_EXAMPLE.format(
@@ -393,7 +418,11 @@ class CodeReviewTool(GenerativeModelTool):
                     example["raw_hunk"], example["comment"]["filename"]
                 ),
                 comments=json.dumps(
-                    [format_comment(example["comment"])],
+                    [
+                        comment
+                        for comment in [format_comment(example)]
+                        if comment is not None
+                    ],
                     indent=2,
                 ),
             )
