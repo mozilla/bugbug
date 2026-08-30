@@ -219,6 +219,10 @@ class ChromeMaskResult(BaseModel):
     )
 
 
+class SummaryResult(BaseModel):
+    summary: str = Field(description=("The output text resulting from summarizing the input text"))
+
+
 def build_result_server(collector: ResultCollector) -> McpServerConfig:
     """Build an in-process MCP server exposing the ``submit_result`` tool.
 
