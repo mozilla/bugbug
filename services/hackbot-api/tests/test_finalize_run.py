@@ -23,6 +23,7 @@ class _FakeRun:
     agent: str = "bug-fix"
     status: str = RunStatus.pending.value
     execution_name: str | None = "projects/p/locations/l/jobs/j/executions/e"
+    inputs: dict = field(default_factory=lambda: {"require_review": False})
     artifacts: list = field(default_factory=list)
     summary: dict | None = None
     error: str | None = None
@@ -41,8 +42,8 @@ class _FakeDB:
 def _no_publish(monkeypatch):
     published = []
 
-    async def fake_publish(run_id, agent, status):
-        published.append((run_id, agent, status))
+    async def fake_publish(run_id, agent, status, require_review):
+        published.append((run_id, agent, status, require_review))
 
     monkeypatch.setattr(pubsub, "publish_run_completed", fake_publish)
     return published
@@ -93,7 +94,9 @@ async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
     assert run.status == RunStatus.succeeded.value
     assert run.finalized_at is not None
     assert run.artifacts == [{"name": "summary.json", "size": 10, "content_type": None}]
-    assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+    assert _no_publish == [
+        (str(run.run_id), run.agent, RunStatus.succeeded.value, False)
+    ]
 
 
 @pytest.mark.parametrize(

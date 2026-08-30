@@ -145,6 +145,22 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* Keep checkboxes inline with their labels. */
+input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+.checkbox-field label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
 .field {
   margin-bottom: 16px;
 }

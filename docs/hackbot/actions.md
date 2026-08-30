@@ -89,8 +89,9 @@ Triggered by the `run.completed` event, on a subscription filtered to **succeede
 1. **Record rows.** Every entry in `summary.json`'s `actions` is upserted as a
    `run_actions` row (`pending`), keyed `(run_id, idx)`. This happens for _all_ succeeded
    runs, whether or not the agent auto-applies, so the UI can always show and apply them.
-2. **Apply, if opted in.** With `auto_apply_actions=True` on the agent's registry entry,
-   pending rows are applied immediately. Otherwise they wait for a human to click apply.
+2. **Apply, if opted in.** `require_review=true` always leaves a run's actions pending
+   for manual approval. Otherwise, actions are applied only when the agent opts in with
+   `auto_apply_actions=True` and any agent-specific consent check passes.
 3. **Dispatch.** Each row's `type` selects a handler from the registry. The handler gets
    the params and an `ApplyContext` — which can `download_artifact(key)` without knowing
    GCS is behind it, keeping the runtime library free of a storage dependency.

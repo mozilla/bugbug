@@ -86,7 +86,11 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     return value
 
 
-def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
+def _auto_apply_blocker(
+    spec: AgentSpec | None,
+    run: Run,
+    require_review: bool | None,
+) -> str | None:
     """Why `run`'s recorded actions need a human, or None if they may be applied.
 
     This holds no policy about what an agent may record. That is bounded on the agent
@@ -96,6 +100,10 @@ def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
     sure it was; it reports that as `findings.auto_apply`. This function honors both
     and fails closed.
     """
+    # Only an explicit review request overrides the agent's policy.
+    if require_review is True:
+        return "this run was requested with review required"
+
     if spec is None or not spec.auto_apply_actions:
         return "auto-apply is off for this agent"
 
@@ -246,7 +254,11 @@ async def _apply_pending_rows(
                     results_by_ref[member.ref] = outcome.result
 
 
-async def on_run_completed(db: AsyncSession, run: Run) -> None:
+async def on_run_completed(
+    db: AsyncSession,
+    run: Run,
+    require_review: bool | None,
+) -> None:
     """Record a completed run's actions, and auto-apply them if the agent qualifies.
 
     Called from the `apply-run-actions` push route. Actions are always recorded (so the
@@ -266,7 +278,7 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
     await db.commit()
 
     spec = AGENT_REGISTRY.get(run.agent)
-    blocker = _auto_apply_blocker(spec, run)
+    blocker = _auto_apply_blocker(spec, run, require_review)
     if blocker is None:
         await _apply_pending_rows(db, run, rows)
         return

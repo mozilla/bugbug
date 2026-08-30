@@ -22,6 +22,12 @@ component that knows the agent catalog, and the only writer of run state.
 user's email, stored as `requested_by` — the caller is a trusted service (the UI), so this
 is attribution, not authentication.
 
+Every agent input schema includes `require_review`, which defaults to `false`. When set,
+the run's actions stay pending for manual approval; otherwise, the agent's existing
+auto-apply policy decides. The value is stored with the run inputs so it remains available
+at completion, but it is not forwarded to the agent environment or prompt. Retriggers
+preserve the value because they reuse the original inputs.
+
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.
 
