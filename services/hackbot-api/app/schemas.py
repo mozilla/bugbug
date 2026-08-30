@@ -172,3 +172,10 @@ class TestPlanGeneratorInputs(BaseModel):
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
+
+
+class SentryTriageInputs(BaseModel):
+    sentry_alert_url: str
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None

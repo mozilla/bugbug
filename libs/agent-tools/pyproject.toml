@@ -18,6 +18,7 @@ firefox = ["grizzly-framework", "prefpicker"]
 claude-sdk = ["claude-agent-sdk>=0.2.30"]
 searchfox = ["searchfox>=0.20.3"]
 vcs = ["httpx"]
+sentry = ["httpx"]
 
 [build-system]
 requires = ["hatchling"]
