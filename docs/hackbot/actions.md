@@ -34,17 +34,17 @@ record in its `config.py` and passes them to `actions_server_for`, which builds 
 carrying only those. `bug-fix`, for instance, allows `phabricator.submit_patch` on a fresh
 triage run but swaps it for `phabricator.update_patch` on a follow-up.
 
-| Action type                 | Records the intent to…                     | Params                             |
-| --------------------------- | ------------------------------------------ | ---------------------------------- |
-| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                |
-| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`     |
-| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment    |
-| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields               |
-| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`       |
-| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                      |
-| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`              |
-| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases |
-| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                  |
+| Action type                 | Records the intent to…                     | Params                                    |
+| --------------------------- | ------------------------------------------ | ----------------------------------------- |
+| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                       |
+| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`            |
+| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment           |
+| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields                      |
+| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan` |
+| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                             |
+| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                     |
+| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases        |
+| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                         |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. `phabricator.submit_patch`

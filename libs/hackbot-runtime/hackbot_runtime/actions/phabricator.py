@@ -44,8 +44,8 @@ def _validate_summary(summary: str | None) -> None:
     if match:
         raise ToolError(
             f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
-            "a line is interpreted as a Test Plan field. Call submit_patch again "
-            "with that fixed."
+            "a line belongs in the Test Plan field. Move the verification details "
+            "to the test_plan argument and call submit_patch again."
         )
 
 
@@ -65,9 +65,19 @@ async def submit_patch(
     reasoning: Annotated[
         str, Field(description="Why you are submitting this patch (for audit log).")
     ],
+    test_plan: Annotated[
+        str | None,
+        Field(default=None, description="Revision test plan."),
+    ] = None,
     summary: Annotated[
         str | None,
-        Field(default=None, description="Revision summary/description."),
+        Field(
+            default=None,
+            description=(
+                "Revision summary/description. Keep test and verification details "
+                "in test_plan instead."
+            ),
+        ),
     ] = None,
     ref: Annotated[
         str | None,
@@ -102,7 +112,12 @@ async def submit_patch(
     _validate_summary(summary)
     recorder.record(
         "phabricator.submit_patch",
-        {"bug_id": bug_id, "title": title, "summary": summary},
+        {
+            "bug_id": bug_id,
+            "title": title,
+            "summary": summary,
+            "test_plan": test_plan,
+        },
         reasoning=reasoning,
         ref=ref,
     )
