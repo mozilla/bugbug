@@ -375,6 +375,52 @@ async def test_only_the_target_is_left_uncommitted(
     assert ctx.rebased_base is True
 
 
+async def test_try_push_from_a_stacked_checkout_carries_the_whole_stack(
+    monkeypatch, tmp_path
+):
+    # End to end over the seam that the two bases exist for: after a stacked
+    # checkout, a try push has to start from the commit that was actually
+    # fetched (Lando resolves it in its own clone) and carry the ancestors in
+    # its patch series, because Lando has no other way to get them.
+    from hackbot_runtime import changes as changes_module
+
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", "from D42"),
+            43: _diff("from D42", "from D43"),
+        },
+    )
+
+    class _Ctx(_FakeCtx):
+        def __init__(self, repo):
+            super().__init__(repo)
+            self.published = _git(repo, "rev-parse", "HEAD").strip()
+
+        def record_source_base(self) -> None:
+            super().record_source_base()
+            self.source_base = _git(self._repo, "rev-parse", "HEAD").strip()
+
+    ctx = _Ctx(repo)
+    await revision.checkout_revision(ctx, 43, BROKER)
+
+    # The two bases really did diverge: the seeded ancestors commit is not the
+    # commit that was fetched.
+    assert ctx.source_base != ctx.published
+
+    payload = changes_module.build_try_push(repo, ctx.published)
+
+    assert payload["base_commit"] == ctx.published
+    # Two commits: the ancestors hackbot seeded, plus the agent's own work
+    # (D43, wrapped by build_try_push because it was left uncommitted).
+    assert len(payload["patches"]) == 2
+
+
 async def test_revision_at_the_bottom_of_someone_elses_stack(monkeypatch, tmp_path):
     # D42 has no parents but D43 is stacked on top of it. "Nothing below the
     # target" is what decides the simple path, so this takes it: D42's own base,

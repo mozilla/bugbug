@@ -80,6 +80,12 @@ class HackbotContext(BaseSettings):
     # prepared. Stays None for agents that never touch source, which is how
     # publish_changes() knows there are no changes to collect.
     _source_base: str | None = PrivateAttr(default=None)
+    # The commit the checkout was *fetched* at, which unlike `_source_base` is
+    # always a published commit the remote can resolve. The two differ once a
+    # caller seeds the checkout with local commits (see `record_source_base`),
+    # and consumers that hand a base to another service — Lando, for a try push
+    # — need this one rather than a sha that only exists in this container.
+    _published_base: str | None = PrivateAttr(default=None)
     # The prepared checkout path + the ref it was prepared at, so the source is
     # prepared exactly once and a conflicting re-prepare is caught.
     _repo_path: Path | None = PrivateAttr(default=None)
@@ -137,7 +143,7 @@ class HackbotContext(BaseSettings):
         # diff the final tree against it. Best-effort: a failure here must not
         # break the agent's access to source — it only disables change capture.
         try:
-            self._source_base = changes.base_commit(path)
+            self._source_base = self._published_base = changes.base_commit(path)
         except Exception:
             log.warning("Could not record source base commit at %s", path)
         self._repo_path = path
@@ -152,6 +158,10 @@ class HackbotContext(BaseSettings):
         unlanded ancestors of a stacked Phabricator revision, see
         ``revision.checkout_revision`` — calls this afterwards so
         :meth:`publish_changes` collects only what the agent itself did.
+
+        Deliberately leaves the *published* base where it was: those seeded
+        commits exist only in this container, so anything that hands a base to
+        another service still has a commit the remote can resolve.
         """
         self._source_base = changes.base_commit(self.repo_path)
 
@@ -266,7 +276,11 @@ class HackbotContext(BaseSettings):
                 self.publish_json(phabricator_diff_key, diff_payload)
 
         if recorded_types & TRY_ACTION_TYPES:
-            try_payload = changes.build_try_push(self.repo_path, self._source_base)
+            # From the *published* base, not `_source_base`: Lando has to
+            # resolve the base commit in its own clone, and it pushes the patch
+            # series onto it — so the series has to carry any locally-seeded
+            # commits (a stacked revision's ancestors) rather than assume them.
+            try_payload = changes.build_try_push(self.repo_path, self._published_base)
             if try_payload is not None:
                 self.publish_json(try_push_key, try_payload)
 
