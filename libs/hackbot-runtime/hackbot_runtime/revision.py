@@ -227,6 +227,7 @@ def _patch(repo, revision_id: int, *, skip_dependencies: bool) -> None:
     """
     from mozphab.args import parse_args
     from mozphab.commands import patch as patch_command
+    from mozphab.exceptions import CommandError, Error, NotFoundError
 
     argv = [
         "patch",
@@ -241,13 +242,29 @@ def _patch(repo, revision_id: int, *, skip_dependencies: bool) -> None:
 
     args = parse_args(argv)
     repo.set_args(args)
-    log.info(
-        "Applying D%s with moz-phab (%s)",
-        revision_id,
-        "on its own" if skip_dependencies else "with the revisions below it",
-    )
-    with _decline_descendants(patch_command):
-        patch_command.patch(repo, args)
+    scope = "on its own" if skip_dependencies else "with the revisions below it"
+    log.info("Applying D%s with moz-phab (%s)", revision_id, scope)
+    try:
+        with _decline_descendants(patch_command):
+            patch_command.patch(repo, args)
+    except (CommandError, Error, NotFoundError) as exc:
+        # moz-phab reports a failed `git apply` as "command 'git' failed to
+        # complete successfully", which names neither the revision nor the
+        # reason. Say both: by far the likeliest reason is a stack whose parent
+        # was updated without its children being rebased, and no amount of
+        # retrying fixes that — the author has to rebase.
+        what = (
+            f"D{revision_id} onto the revisions below it"
+            if skip_dependencies
+            else f"D{revision_id} or a revision below it"
+        )
+        raise RuntimeError(
+            f"moz-phab could not apply {what}: {exc}. Each revision's latest "
+            "diff is applied in order with a plain `git apply`, so a revision "
+            "written against an older version of the one below it will not "
+            "apply; see the git output above. That stack has to be rebased "
+            "before hackbot can reproduce it."
+        ) from exc
 
 
 def _proxy_api_url(broker_url: str) -> str:

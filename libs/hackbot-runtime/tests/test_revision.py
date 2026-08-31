@@ -476,20 +476,55 @@ def test_an_unexpected_moz_phab_question_fails_instead_of_hanging():
     assert patch_command.prompt is original
 
 
-async def test_a_diff_that_does_not_apply_fails_the_run(monkeypatch, tmp_path):
-    from mozphab.exceptions import CommandError
+async def test_a_stale_stack_fails_and_says_which_revision(monkeypatch, tmp_path):
+    # A stack goes stale when a parent is updated and its children are not
+    # rebased onto the new diff: D43's diff still expects D42's *old* content.
+    # moz-phab applies each revision's latest diff with a plain `git apply`, so
+    # there is no 3-way merge to fall back on and the context simply does not
+    # match. That is the same wall a developer hits running `moz-phab patch`,
+    # and the fix is the author rebasing — so the run has to fail, but it should
+    # say why.
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", "from D42 v2"),
+            # Written against "from D42 v1", which is no longer what D42 produces.
+            43: _diff("from D42 v1", "from D43"),
+        },
+    )
 
+    with pytest.raises(RuntimeError) as failure:
+        await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
+
+    # The message has to carry the diagnosis on its own: moz-phab only says
+    # "command 'git' failed to complete successfully", and this text is what a
+    # human reads off the failed run.
+    # The revisions below D43 applied cleanly on their own, so it is D43 that
+    # does not fit onto them — and the message has to say so, because moz-phab
+    # only offers "command 'git' failed to complete successfully".
+    message = str(failure.value)
+    assert "could not apply D43 onto the revisions below it" in message
+    assert "rebased" in message
+
+
+async def test_a_diff_that_does_not_apply_fails_the_run(monkeypatch, tmp_path):
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph({42: _revision(42)}, {42: []})
     _fake_conduit(
         monkeypatch, revisions, raw_diffs={42: _diff("not what is there", "whatever")}
     )
 
-    # moz-phab's own failure surfaces rather than being swallowed, so the run
-    # fails instead of handing the agent a tree that is not the revision.
-    with pytest.raises(CommandError, match="git"):
+    # The failure surfaces rather than being swallowed, so the run fails instead
+    # of handing the agent a tree that is not the revision.
+    with pytest.raises(RuntimeError, match="could not apply D42"):
         await revision.checkout_revision(_FakeCtx(repo), 42, BROKER)
 
+    # `git apply` is all-or-nothing, so the checkout is untouched.
     assert (repo / "file.txt").read_text() == "base\n"
 
 
