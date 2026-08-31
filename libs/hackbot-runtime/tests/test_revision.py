@@ -333,6 +333,31 @@ async def test_unstacked_revision_is_applied_uncommitted(monkeypatch, tmp_path):
     assert "file.txt" in _git(repo, "status", "--porcelain")
 
 
+async def test_revision_at_the_bottom_of_someone_elses_stack(monkeypatch, tmp_path):
+    # D42 has no parents but D43 is stacked on top of it. "Nothing below the
+    # target" is what decides the simple path, so this takes it: D42's own base,
+    # one apply, and D43 left well alone.
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", "from D42"),
+            43: _diff("from D42", "from D43"),
+        },
+    )
+    ctx = _FakeCtx(repo)
+
+    await revision.checkout_revision(ctx, 42, BROKER)
+
+    assert ctx.prepared_ref == BASE
+    assert (repo / "file.txt").read_text() == "from D42\n"
+    assert _git(repo, "log", "--format=%s").splitlines() == ["base commit"]
+
+
 async def test_stacked_revision_gets_its_ancestors_committed_first(
     monkeypatch, tmp_path
 ):
