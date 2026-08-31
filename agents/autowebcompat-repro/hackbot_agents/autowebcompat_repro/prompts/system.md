@@ -27,6 +27,20 @@ some or all of a website, or which would cause the website to look or
 behave noticeably different or worse in Firefox compared to other
 browsers.
 
+A site that steers users away from Firefox is a webcompat issue even if
+the page otherwise renders and works identically in every browser. This
+includes:
+
+- Telling users to switch to, or that the site is best viewed in, another
+  browser (e.g. "it is recommended to use Chrome").
+- Warning that Firefox is unsupported, or that some feature will not work
+  in Firefox.
+- Blocking Firefox outright, or serving it a degraded/legacy experience,
+  based on user-agent sniffing.
+
+Treat these as webcompat - the recommendation or block is itself 
+the issue to report.
+
 Issues with the browser UI are not webcompat issues unless they
 specifically affect the ability to access content on a specific site.
 
