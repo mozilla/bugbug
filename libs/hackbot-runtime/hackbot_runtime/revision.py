@@ -174,8 +174,6 @@ def _full_commit(conduit, ref: str) -> str:
     moz-phab records an abbreviated hash for a repo the size of firefox, and git
     can only fetch a full object id.
     """
-    # `select_full_commit` checks this too; the point of checking here is to
-    # skip the Conduit round trip when there is nothing to expand.
     if is_full_commit(ref):
         return ref
     return select_full_commit(
