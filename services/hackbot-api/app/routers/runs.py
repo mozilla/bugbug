@@ -243,7 +243,13 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     if run.finalized_at is not None:
         return
 
-    assert run.execution_name is not None
+    if run.execution_name is None:
+        run.status = RunStatus.failed.value
+        run.error = "Run was never associated with an execution"
+        run.finalized_at = datetime.now(timezone.utc)
+        await db.commit()
+        return
+
     try:
         exec_status = await jobs.get_execution_status(run.execution_name)
     except Exception:
@@ -302,9 +308,14 @@ def _terminal_status(
     if exec_status == ExecutionStatus.cancelled:
         return RunStatus.timed_out, "Execution was cancelled or timed out"
     if summary is None:
+        if exec_status == ExecutionStatus.gone:
+            return RunStatus.failed, (
+                "Execution record was deleted and no summary.json was written, "
+                "so the run's outcome cannot be recovered"
+            )
         return RunStatus.failed, "Execution finished without writing summary.json"
     if summary.status != "ok":
         return RunStatus.failed, summary.error
-    if exec_status != ExecutionStatus.succeeded:
+    if exec_status not in (ExecutionStatus.succeeded, ExecutionStatus.gone):
         return RunStatus.failed, "Execution exited non-zero despite summary status=ok"
     return RunStatus.succeeded, None

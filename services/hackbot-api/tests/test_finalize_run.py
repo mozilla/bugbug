@@ -169,3 +169,75 @@ async def test_second_call_is_noop_after_finalizing(monkeypatch):
     await finalize_run(db, run)
 
     assert len(calls) == 1
+
+
+async def test_recovers_status_from_summary_when_execution_is_gone(
+    monkeypatch, _no_publish
+):
+    """A deleted execution is missing evidence, not a reason to retry forever.
+
+    Cloud Run garbage-collects old executions, after which GetExecution 404s
+    permanently. Treating that as retryable is what turned lost completions
+    into a poison-message loop (see STUCK-PENDING-RUNS.md). The run's real
+    outcome still exists in summary.json, so finalize from that.
+    """
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.gone))
+    monkeypatch.setattr(gcs, "read_summary", _async(RunSummary(status="ok")))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.succeeded.value
+    assert run.finalized_at is not None
+    assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+
+
+async def test_gone_execution_reports_summary_error(monkeypatch):
+    """The summary decides the outcome, including when the outcome is failure."""
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.gone))
+    monkeypatch.setattr(
+        gcs, "read_summary", _async(RunSummary(status="error", error="agent blew up"))
+    )
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.failed.value
+    assert run.error == "agent blew up"
+
+
+async def test_gone_execution_without_summary_fails(monkeypatch):
+    """Only when no evidence survives at all is the outcome unrecoverable."""
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.gone))
+    monkeypatch.setattr(gcs, "read_summary", _async(None))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.failed.value
+    assert "cannot be recovered" in run.error
+    assert run.finalized_at is not None
+
+
+async def test_run_without_execution_name_is_failed_not_asserted(monkeypatch):
+    """A run that can never be correlated must still reach a terminal state."""
+    run = _FakeRun(execution_name=None)
+    db = _FakeDB()
+
+    async def fail(*_a, **_k):
+        raise AssertionError("should not check status without an execution name")
+
+    monkeypatch.setattr(jobs, "get_execution_status", fail)
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.failed.value
+    assert run.error == "Run was never associated with an execution"
+    assert run.finalized_at is not None
+    assert db.commits == 1
