@@ -187,7 +187,7 @@ def test_default_allow_list_holds_only_reads():
     # Conduit key, so widening it should be a conscious edit.
     assert phabricator_proxy.READ_ONLY_METHODS == {
         "differential.revision.search",
-        "differential.diff.search",
+        "differential.querydiffs",
         "differential.getrawdiff",
         "diffusion.querycommits",
     }

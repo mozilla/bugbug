@@ -191,7 +191,7 @@ def _local_commits_property(repo: Path, node: str, base: str) -> dict:
 
 
 @contextlib.contextmanager
-def ambient_git_identity() -> Iterator[None]:
+def _ambient_git_identity() -> Iterator[None]:
     """Give moz-phab an ambient git identity for its `git config --list` check.
 
     moz-phab's git client reads ``user.email`` from the *ambient* git config
@@ -257,7 +257,7 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
 
     try:
         node = _synthetic_commit(repo, base)
-        with ambient_git_identity():
+        with _ambient_git_identity():
             mozphab_repo = Git(str(repo))
             # `set_args` needs a fully-populated argparse.Namespace matching what
             # moz-phab's own CLI would build (several unrelated code paths read

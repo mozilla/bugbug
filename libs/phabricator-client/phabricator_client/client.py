@@ -134,6 +134,21 @@ class PhabricatorClient:
         data = result.get("data") or []
         return data[0] if data else None
 
+    async def search_revisions(self, revision_phids: list[str]) -> list[dict]:
+        """Return the Differential revisions for ``revision_phids``, in one call.
+
+        The bulk counterpart of :meth:`search_revision`, for callers holding a
+        set of PHIDs — e.g. the revisions in a stack. PHIDs Conduit does not
+        return (an unreadable revision, say) are simply absent from the result,
+        so callers must not assume the order or length matches the input.
+        """
+        if not revision_phids:
+            return []
+        result = await self.conduit_request(
+            "differential.revision.search", constraints={"phids": revision_phids}
+        )
+        return result.get("data") or []
+
     async def search_revision_by_id(
         self, revision_id: int, *, attachments: dict[str, bool] | None = None
     ) -> dict | None:

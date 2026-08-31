@@ -1,32 +1,20 @@
 """Tests for checking the source tree out at a Phabricator revision.
 
-Only the Conduit HTTP call is faked. moz-phab's real stack walk, argument
-handling and patch application run, against a real git repository, so what is
-under test is what actually runs in production.
+Only the Conduit HTTP call is faked. The stack walk, the patch application and
+the commit boundaries are the real ones, run against a real git repository.
 """
 
-import os
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
 from hackbot_runtime import revision
-
-pytest.importorskip("mozphab", reason="needs the hackbot-runtime[phabricator] extra")
-
-from mozphab.conduit import conduit  # noqa: E402
-from mozphab.simplecache import cache  # noqa: E402
+from phabricator_client import UnresolvedCommitError
+from phabricator_client import client as client_module
 
 BROKER = "http://127.0.0.1:8765"
 BASE = "1" * 40
-
-
-@pytest.fixture(autouse=True)
-def _clear_mozphab_cache():
-    # moz-phab memoises revisions and diffs process-wide.
-    cache.reset()
-    yield
-    cache.reset()
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -58,13 +46,7 @@ def _revision(rev_id: int, *, status: str = "needs-review"):
     return {
         "id": rev_id,
         "phid": f"PHID-DREV-{rev_id}",
-        "fields": {
-            "title": f"Revision {rev_id}",
-            "summary": "",
-            "diffPHID": f"PHID-DIFF-{rev_id}",
-            "status": {"value": status},
-            "stackGraph": {},
-        },
+        "fields": {"status": {"value": status}, "stackGraph": {}},
     }
 
 
@@ -87,19 +69,14 @@ def _fake_conduit(
     querycommits: dict | None = None,
     raw_diffs: dict[int, str] | None = None,
 ):
-    """Serve moz-phab's Conduit calls from in-memory fixtures.
+    """Serve Conduit over a stubbed httpx, recording what was asked for.
 
-    Only `conduit.call` is replaced, so `get_revisions`/`get_diffs`, their
-    caching, request shaping and result ordering all still run for real.
-
-    Returns a dict recording how the client was configured at call time.
+    Everything above the HTTP call — PhabricatorClient, the stack walk, the
+    ordering — is the real code path.
     """
-    seen: dict = {"methods": []}
+    seen: dict = {"methods": [], "urls": []}
 
-    def _call(method, params, api_token=None):
-        seen["methods"].append(method)
-        seen.setdefault("api_url", conduit.repo.api_url)
-        seen.setdefault("token", os.environ.get(revision._TOKEN_ENV))
+    def _result(method: str, params: dict):
         if method == "differential.revision.search":
             constraints = params["constraints"]
             if "ids" in constraints:
@@ -111,21 +88,15 @@ def _fake_conduit(
             else:
                 wanted = set(constraints["phids"])
             return {"data": [r for r in revisions.values() if r["phid"] in wanted]}
-        if method == "differential.diff.search":
+        if method == "differential.querydiffs":
+            (rev_id,) = params["revisionIDs"]
+            if rev_id not in revisions:
+                return {}
             return {
-                "data": [
-                    {
-                        "id": rev["id"] * 10,
-                        "phid": rev["fields"]["diffPHID"],
-                        "fields": {
-                            "refs": [{"type": "base", "identifier": base}],
-                            "dateCreated": 0,
-                        },
-                        "attachments": {"commits": {"commits": []}},
-                    }
-                    for rev in revisions.values()
-                    if rev["fields"]["diffPHID"] in params["constraints"]["phids"]
-                ]
+                str(rev_id * 10): {
+                    "id": rev_id * 10,
+                    "sourceControlBaseRevision": base,
+                }
             }
         if method == "differential.getrawdiff":
             diff_id = params["diffID"]
@@ -136,70 +107,111 @@ def _fake_conduit(
             return querycommits
         raise AssertionError(f"unexpected Conduit method {method}")
 
-    monkeypatch.setattr(conduit, "call", _call)
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._payload
+
+    class _FakeAsyncClient:
+        def __init__(self, timeout=None):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, data=None):
+            method = url.rsplit("/", 1)[-1]
+            seen["methods"].append(method)
+            seen["urls"].append(url)
+            params = json.loads(data["params"])
+            seen.setdefault("token", params["__conduit__"]["token"])
+            return _FakeResponse({"result": _result(method, params)})
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
     return seen
 
 
-# --- Finding the base --------------------------------------------------- #
+# --- Resolving the stack ------------------------------------------------- #
 
 
-async def _base_of(monkeypatch, revisions, target, **kwargs):
+async def _stack_of(monkeypatch, revisions, target, **kwargs):
     seen = _fake_conduit(monkeypatch, revisions, **kwargs)
-    revision._load_mozphab()
-    return revision._resolve_base(target, BROKER), seen
+    client = revision.PhabricatorClient(
+        revision.PhabricatorSettings(
+            url=f"{BROKER}/phabricator", api_key=revision._PROXY_API_TOKEN
+        )
+    )
+    return await revision._resolve_stack(client, target), seen
 
 
-async def test_base_of_an_unstacked_revision_is_its_own(monkeypatch):
+async def test_an_unstacked_revision_has_no_ancestors(monkeypatch):
     revisions = _with_stack_graph({42: _revision(42)}, {42: []})
 
-    base, _ = await _base_of(monkeypatch, revisions, 42)
+    stack, _ = await _stack_of(monkeypatch, revisions, 42)
 
-    assert base == revision.StackBase(commit=BASE, parent_id=None)
+    assert stack.base_commit == BASE
+    assert stack.ancestors == []
+    assert stack.target.revision_id == 42
 
 
-async def test_base_of_a_stacked_revision_comes_from_the_bottom(monkeypatch):
-    # D44 sits on D43 sits on D42. D44's own recorded base is D43's local
-    # commit, which never landed, so the base has to come from D42.
+async def test_a_stacked_revision_collects_its_ancestors_oldest_first(monkeypatch):
     revisions = _with_stack_graph(
         {42: _revision(42), 43: _revision(43), 44: _revision(44)},
         {42: [], 43: [42], 44: [43]},
     )
 
-    base, _ = await _base_of(monkeypatch, revisions, 44)
+    stack, _ = await _stack_of(monkeypatch, revisions, 44)
 
-    assert base.commit == BASE
-    # The direct parent, so moz-phab can lay down everything below the target.
-    assert base.parent_id == 43
+    assert [p.revision_id for p in stack.ancestors] == [42, 43]
+    assert stack.target.revision_id == 44
+    # The base comes from the bottom of the stack, not the target: D44's own
+    # base would be D43's unlanded local commit.
+    assert stack.base_commit == BASE
 
 
-async def test_abandoned_ancestors_are_not_the_bottom(monkeypatch):
+async def test_abandoned_ancestors_are_dropped(monkeypatch):
     revisions = _with_stack_graph(
-        {42: _revision(42, status="abandoned"), 43: _revision(43), 44: _revision(44)},
+        {42: _revision(42), 43: _revision(43, status="abandoned"), 44: _revision(44)},
         {42: [], 43: [42], 44: [43]},
     )
 
-    base, _ = await _base_of(monkeypatch, revisions, 44)
+    stack, _ = await _stack_of(monkeypatch, revisions, 44)
 
-    # D42 is abandoned, so moz-phab will not apply it and D43 is the bottom.
-    assert base.parent_id == 43
+    assert [p.revision_id for p in stack.ancestors] == [42]
 
 
-async def test_base_lookup_rejects_a_non_linear_stack(monkeypatch):
+async def test_a_non_linear_stack_is_rejected(monkeypatch):
     revisions = _with_stack_graph(
         {42: _revision(42), 43: _revision(43), 44: _revision(44)},
         {42: [], 43: [], 44: [42, 43]},
     )
 
-    with pytest.raises(RuntimeError, match="more than one parent"):
-        await _base_of(monkeypatch, revisions, 44)
+    with pytest.raises(RuntimeError, match="non-linear"):
+        await _stack_of(monkeypatch, revisions, 44)
 
 
-async def test_base_lookup_expands_an_abbreviated_commit(monkeypatch):
+def test_a_cycle_in_the_stack_graph_does_not_hang():
+    # Conduit misbehaving rather than anything real, but a walk that loops
+    # forever would be a much worse failure than a short one.
+    graph = {"A": ["B"], "B": ["C"], "C": ["A"]}
+
+    assert revision._ancestor_phids(graph, "A") == ["B", "C"]
+
+
+async def test_an_abbreviated_base_is_expanded(monkeypatch):
     # git can only fetch a full object id, and moz-phab records a short hash.
     short = BASE[:12]
     revisions = _with_stack_graph({42: _revision(42)}, {42: []})
 
-    base, _ = await _base_of(
+    stack, _ = await _stack_of(
         monkeypatch,
         revisions,
         42,
@@ -210,17 +222,15 @@ async def test_base_lookup_expands_an_abbreviated_commit(monkeypatch):
         },
     )
 
-    assert base.commit == BASE
+    assert stack.base_commit == BASE
 
 
-async def test_base_lookup_reports_an_unresolvable_commit(monkeypatch):
-    from phabricator_client import UnresolvedCommitError
-
+async def test_an_unresolvable_base_is_reported(monkeypatch):
     short = "69706d7a081e"
     revisions = _with_stack_graph({42: _revision(42)}, {42: []})
 
     with pytest.raises(UnresolvedCommitError, match=short):
-        await _base_of(
+        await _stack_of(
             monkeypatch,
             revisions,
             42,
@@ -229,33 +239,31 @@ async def test_base_lookup_reports_an_unresolvable_commit(monkeypatch):
         )
 
 
-async def test_base_lookup_raises_when_the_revision_is_missing(monkeypatch):
+async def test_a_missing_revision_is_reported(monkeypatch):
     with pytest.raises(RuntimeError, match="D42 not found"):
-        await _base_of(monkeypatch, {}, 42)
+        await _stack_of(monkeypatch, {}, 42)
 
 
-async def test_base_lookup_talks_to_the_proxy_with_a_placeholder_token(monkeypatch):
+async def test_conduit_goes_through_the_brokers_proxy(monkeypatch):
     revisions = _with_stack_graph({42: _revision(42)}, {42: []})
 
-    _, seen = await _base_of(monkeypatch, revisions, 42)
+    _, seen = await _stack_of(monkeypatch, revisions, 42)
 
-    # Calls go to the broker's proxy mount carrying the placeholder token it
-    # swaps out — the agent never holds a real Conduit key.
-    assert seen["api_url"] == f"{BROKER}/phabricator/api/"
+    assert all(url.startswith(f"{BROKER}/phabricator/api/") for url in seen["urls"])
+    # A placeholder the proxy throws away: the agent holds no real key.
     assert seen["token"] == revision._PROXY_API_TOKEN
-    # And nothing is left configured for the rest of the run.
-    assert conduit.repo is None
-    assert revision._TOKEN_ENV not in os.environ
 
 
-async def test_base_lookup_uses_only_allow_listed_conduit_methods(monkeypatch):
+async def test_only_allow_listed_conduit_methods_are_used(monkeypatch):
     # The broker refuses anything outside its allow list, so a new Conduit call
     # here has to be a deliberate change on both sides.
+    from phabricator_proxy import READ_ONLY_METHODS
+
     revisions = _with_stack_graph(
         {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
     )
 
-    _, seen = await _base_of(
+    _, seen = await _stack_of(
         monkeypatch,
         revisions,
         43,
@@ -266,30 +274,17 @@ async def test_base_lookup_uses_only_allow_listed_conduit_methods(monkeypatch):
         },
     )
 
-    assert set(seen["methods"]) <= {
-        "differential.revision.search",
-        "differential.diff.search",
-        "differential.getrawdiff",
-        "diffusion.querycommits",
-    }
+    assert set(seen["methods"]) <= set(READ_ONLY_METHODS)
 
 
-# --- Applying the revisions with moz-phab -------------------------------- #
+# --- Applying the stack --------------------------------------------------- #
 
 
 def _repo_at_base(tmp_path: Path) -> Path:
-    """A real git repo standing in for the prepared checkout.
-
-    Carries a committed `.arcconfig` like firefox does: moz-phab's Repository
-    refuses to start without one, and it has to be committed because
-    `moz-phab patch` refuses to run on a dirty worktree.
-    """
+    """A real git repo standing in for the prepared checkout."""
     repo = tmp_path / "firefox"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
-    (repo / ".arcconfig").write_text(
-        '{"phabricator.uri": "https://phabricator.services.mozilla.com/"}\n'
-    )
     (repo / "file.txt").write_text("base\n")
     _git(repo, "add", "-A")
     _git(
@@ -318,21 +313,6 @@ def _diff(old: str, new: str) -> str:
     )
 
 
-async def test_unstacked_revision_is_applied_uncommitted(monkeypatch, tmp_path):
-    repo = _repo_at_base(tmp_path)
-    revisions = _with_stack_graph({42: _revision(42)}, {42: []})
-    _fake_conduit(monkeypatch, revisions, raw_diffs={42: _diff("base", "from D42")})
-    ctx = _FakeCtx(repo)
-
-    await revision.checkout_revision(ctx, 42, BROKER)
-
-    assert ctx.prepared_ref == BASE
-    assert (repo / "file.txt").read_text() == "from D42\n"
-    # Nothing below it, so no extra commit and the agent's diff starts here.
-    assert _git(repo, "log", "--format=%s").splitlines() == ["base commit"]
-    assert "file.txt" in _git(repo, "status", "--porcelain")
-
-
 @pytest.mark.parametrize(
     "graph, target, committed_head",
     [
@@ -347,9 +327,7 @@ async def test_only_the_target_is_left_uncommitted(
 ):
     # The invariant the submit path depends on, and it must not vary with the
     # depth of the stack: everything below the target is committed, and exactly
-    # the target's own change is left in the working tree. Whatever hackbot
-    # submits afterwards is then this revision plus the agent's edits, never the
-    # revisions underneath it.
+    # the target's own change is left in the working tree.
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph({r: _revision(r) for r in graph}, graph)
     contents = {42: "from D42", 43: "from D43", 44: "from D44"}
@@ -366,89 +344,16 @@ async def test_only_the_target_is_left_uncommitted(
 
     await revision.checkout_revision(ctx, target, BROKER)
 
+    assert ctx.prepared_ref == BASE
     # HEAD holds the revisions below the target, and nothing of the target.
     assert _git(repo, "show", "HEAD:file.txt") == committed_head
     # The target's change is present, and uncommitted.
     assert (repo / "file.txt").read_text() == f"{contents[target]}\n"
     assert _git(repo, "diff", "HEAD", "--name-only").split() == ["file.txt"]
-    # The base publish_changes() diffs against is HEAD, in every case.
     assert ctx.rebased_base is True
 
 
-async def test_try_push_from_a_stacked_checkout_carries_the_whole_stack(
-    monkeypatch, tmp_path
-):
-    # End to end over the seam that the two bases exist for: after a stacked
-    # checkout, a try push has to start from the commit that was actually
-    # fetched (Lando resolves it in its own clone) and carry the ancestors in
-    # its patch series, because Lando has no other way to get them.
-    from hackbot_runtime import changes as changes_module
-
-    repo = _repo_at_base(tmp_path)
-    revisions = _with_stack_graph(
-        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
-    )
-    _fake_conduit(
-        monkeypatch,
-        revisions,
-        raw_diffs={
-            42: _diff("base", "from D42"),
-            43: _diff("from D42", "from D43"),
-        },
-    )
-
-    class _Ctx(_FakeCtx):
-        def __init__(self, repo):
-            super().__init__(repo)
-            self.published = _git(repo, "rev-parse", "HEAD").strip()
-
-        def record_source_base(self) -> None:
-            super().record_source_base()
-            self.source_base = _git(self._repo, "rev-parse", "HEAD").strip()
-
-    ctx = _Ctx(repo)
-    await revision.checkout_revision(ctx, 43, BROKER)
-
-    # The two bases really did diverge: the seeded ancestors commit is not the
-    # commit that was fetched.
-    assert ctx.source_base != ctx.published
-
-    payload = changes_module.build_try_push(repo, ctx.published)
-
-    assert payload["base_commit"] == ctx.published
-    # Two commits: the ancestors hackbot seeded, plus the agent's own work
-    # (D43, wrapped by build_try_push because it was left uncommitted).
-    assert len(payload["patches"]) == 2
-
-
-async def test_revision_at_the_bottom_of_someone_elses_stack(monkeypatch, tmp_path):
-    # D42 has no parents but D43 is stacked on top of it. "Nothing below the
-    # target" is what decides the simple path, so this takes it: D42's own base,
-    # one apply, and D43 left well alone.
-    repo = _repo_at_base(tmp_path)
-    revisions = _with_stack_graph(
-        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
-    )
-    _fake_conduit(
-        monkeypatch,
-        revisions,
-        raw_diffs={
-            42: _diff("base", "from D42"),
-            43: _diff("from D42", "from D43"),
-        },
-    )
-    ctx = _FakeCtx(repo)
-
-    await revision.checkout_revision(ctx, 42, BROKER)
-
-    assert ctx.prepared_ref == BASE
-    assert (repo / "file.txt").read_text() == "from D42\n"
-    assert _git(repo, "log", "--format=%s").splitlines() == ["base commit"]
-
-
-async def test_stacked_revision_gets_its_ancestors_committed_first(
-    monkeypatch, tmp_path
-):
+async def test_ancestors_land_in_one_commit_named_for_the_target(monkeypatch, tmp_path):
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph(
         {42: _revision(42), 43: _revision(43), 44: _revision(44)},
@@ -463,34 +368,20 @@ async def test_stacked_revision_gets_its_ancestors_committed_first(
             44: _diff("from D43", "from D44"),
         },
     )
-    ctx = _FakeCtx(repo)
 
-    await revision.checkout_revision(ctx, 44, BROKER)
+    await revision.checkout_revision(_FakeCtx(repo), 44, BROKER)
 
-    # The whole stack was replayed in order onto the landed base.
-    assert (repo / "file.txt").read_text() == "from D44\n"
-    # D42 and D43 became the base the agent starts from...
     assert _git(repo, "log", "--format=%s").splitlines() == [
         "Revisions below D44",
         "base commit",
     ]
-    # ...and only D44 is left in the working tree, so the diff hackbot submits
-    # covers D44 plus the agent's edits, not the whole stack.
-    assert "file.txt" in _git(repo, "status", "--porcelain")
-    assert ctx.rebased_base is True
 
 
 async def test_descendants_of_the_target_are_not_applied(monkeypatch, tmp_path):
-    # D44 has a child D45. Patching D43 to lay down the base would offer to
-    # patch the full stack, which would drag D45 in; hackbot declines.
+    # D44 has a child D45. Only what is *below* the target is replayed.
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph(
-        {
-            42: _revision(42),
-            43: _revision(43),
-            44: _revision(44),
-            45: _revision(45),
-        },
+        {42: _revision(42), 43: _revision(43), 44: _revision(44), 45: _revision(45)},
         {42: [], 43: [42], 44: [43], 45: [44]},
     )
     _fake_conduit(
@@ -509,27 +400,32 @@ async def test_descendants_of_the_target_are_not_applied(monkeypatch, tmp_path):
     assert (repo / "file.txt").read_text() == "from D44\n"
 
 
-def test_an_unexpected_moz_phab_question_fails_instead_of_hanging():
-    # Nothing is attached to stdin in a container, so a question hackbot has no
-    # answer for must raise rather than block forever.
-    from mozphab.commands import patch as patch_command
+async def test_a_revision_at_the_bottom_of_someone_elses_stack(monkeypatch, tmp_path):
+    # No parents but a child: "nothing below the target" is what matters, so
+    # this takes the simple path and D43 is left alone.
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", "from D42"),
+            43: _diff("from D42", "from D43"),
+        },
+    )
 
-    original = patch_command.prompt
-    with revision._decline_descendants(patch_command):
-        assert patch_command.prompt("Would you like to patch the full stack?.") == "No"
-        with pytest.raises(RuntimeError, match="cannot give"):
-            patch_command.prompt("Something new?", ["Yes", "No"])
-    assert patch_command.prompt is original
+    await revision.checkout_revision(_FakeCtx(repo), 42, BROKER)
+
+    assert (repo / "file.txt").read_text() == "from D42\n"
+    assert _git(repo, "log", "--format=%s").splitlines() == ["base commit"]
 
 
 async def test_a_stale_stack_fails_and_says_which_revision(monkeypatch, tmp_path):
     # A stack goes stale when a parent is updated and its children are not
-    # rebased onto the new diff: D43's diff still expects D42's *old* content.
-    # moz-phab applies each revision's latest diff with a plain `git apply`, so
-    # there is no 3-way merge to fall back on and the context simply does not
-    # match. That is the same wall a developer hits running `moz-phab patch`,
-    # and the fix is the author rebasing — so the run has to fail, but it should
-    # say why.
+    # rebased: D43's diff still expects D42's *old* content. Each revision's
+    # latest diff is applied in order, so the context simply does not match.
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph(
         {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
@@ -539,7 +435,6 @@ async def test_a_stale_stack_fails_and_says_which_revision(monkeypatch, tmp_path
         revisions,
         raw_diffs={
             42: _diff("base", "from D42 v2"),
-            # Written against "from D42 v1", which is no longer what D42 produces.
             43: _diff("from D42 v1", "from D43"),
         },
     )
@@ -547,54 +442,59 @@ async def test_a_stale_stack_fails_and_says_which_revision(monkeypatch, tmp_path
     with pytest.raises(RuntimeError) as failure:
         await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
 
-    # The message has to carry the diagnosis on its own: moz-phab only says
-    # "command 'git' failed to complete successfully", and this text is what a
-    # human reads off the failed run.
-    # The revisions below D43 applied cleanly on their own, so it is D43 that
-    # does not fit onto them — and the message has to say so, because moz-phab
-    # only offers "command 'git' failed to complete successfully".
     message = str(failure.value)
-    assert "could not apply D43 onto the revisions below it" in message
+    assert "D43" in message
+    assert "patch does not apply" in message
     assert "rebased" in message
 
 
-async def test_a_diff_that_does_not_apply_fails_the_run(monkeypatch, tmp_path):
+async def test_a_failed_apply_leaves_the_checkout_untouched(monkeypatch, tmp_path):
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph({42: _revision(42)}, {42: []})
     _fake_conduit(
         monkeypatch, revisions, raw_diffs={42: _diff("not what is there", "whatever")}
     )
 
-    # The failure surfaces rather than being swallowed, so the run fails instead
-    # of handing the agent a tree that is not the revision.
-    with pytest.raises(RuntimeError, match="could not apply D42"):
+    with pytest.raises(RuntimeError, match="D42"):
         await revision.checkout_revision(_FakeCtx(repo), 42, BROKER)
 
-    # `git apply` is all-or-nothing, so the checkout is untouched.
+    # `git apply` is all-or-nothing.
     assert (repo / "file.txt").read_text() == "base\n"
 
 
-async def test_apply_leaves_the_checkouts_arcconfig_alone(monkeypatch, tmp_path):
-    # The URL override happens in memory: rewriting `.arcconfig` would dirty
-    # the worktree, which `moz-phab patch` refuses to work on.
+async def test_try_push_from_a_stacked_checkout_carries_the_whole_stack(
+    monkeypatch, tmp_path
+):
+    # After a stacked checkout the recorded source base is a local commit, so a
+    # try push has to start from the commit that was actually fetched and carry
+    # the ancestors in its patch series (Lando has no other way to get them).
+    from hackbot_runtime import changes as changes_module
+
     repo = _repo_at_base(tmp_path)
-    before = (repo / ".arcconfig").read_text()
-    revisions = _with_stack_graph({42: _revision(42)}, {42: []})
-    _fake_conduit(monkeypatch, revisions, raw_diffs={42: _diff("base", "from D42")})
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", "from D42"),
+            43: _diff("from D42", "from D43"),
+        },
+    )
+    published = _git(repo, "rev-parse", "HEAD").strip()
 
-    await revision.checkout_revision(_FakeCtx(repo), 42, BROKER)
+    await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
 
-    assert (repo / ".arcconfig").read_text() == before
-
-
-def test_proxied_conduit_restores_a_pre_existing_token(monkeypatch):
-    monkeypatch.setenv(revision._TOKEN_ENV, "api-someone-elses")
-    with revision._conduit_via_proxy(conduit, revision._ProxyRepo("http://x/api/")):
-        assert os.environ[revision._TOKEN_ENV] == revision._PROXY_API_TOKEN
-    assert os.environ[revision._TOKEN_ENV] == "api-someone-elses"
+    assert _git(repo, "rev-parse", "HEAD").strip() != published
+    payload = changes_module.build_try_push(repo, published)
+    assert payload["base_commit"] == published
+    # The seeded ancestors commit plus the agent's work.
+    assert len(payload["patches"]) == 2
 
 
-def test_revision_holds_no_conduit_client_of_its_own():
-    # Guard against reintroducing an in-agent Conduit client, which would need
-    # a key: everything goes through the broker's proxy, which owns the key.
-    assert not hasattr(revision, "PhabricatorClient")
+def test_revision_needs_no_mozphab():
+    # The checkout path talks to Conduit directly; moz-phab is only still a
+    # dependency for building the diff that gets submitted back.
+    source = Path(revision.__file__).read_text()
+    assert "mozphab" not in source

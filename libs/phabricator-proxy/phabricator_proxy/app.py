@@ -33,10 +33,10 @@ log = logging.getLogger(__name__)
 # upstream is refused by default instead of silently exposed with the key.
 READ_ONLY_METHODS = frozenset(
     {
-        # The stack graph and each revision's current diff PHID.
+        # A revision's metadata and the stack graph it sits in.
         "differential.revision.search",
-        # Diff metadata, including the base commit each diff was built on.
-        "differential.diff.search",
+        # A revision's diffs, and the base commit each was built on.
+        "differential.querydiffs",
         # The patch text itself.
         "differential.getrawdiff",
         # Expanding an abbreviated base commit to a full, fetchable hash.

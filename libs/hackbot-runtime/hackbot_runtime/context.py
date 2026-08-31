@@ -158,10 +158,6 @@ class HackbotContext(BaseSettings):
         unlanded ancestors of a stacked Phabricator revision, see
         ``revision.checkout_revision`` — calls this afterwards so
         :meth:`publish_changes` collects only what the agent itself did.
-
-        Deliberately leaves the *published* base where it was: those seeded
-        commits exist only in this container, so anything that hands a base to
-        another service still has a commit the remote can resolve.
         """
         self._source_base = changes.base_commit(self.repo_path)
 

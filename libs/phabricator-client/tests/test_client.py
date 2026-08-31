@@ -161,6 +161,23 @@ async def test_search_revision_by_id_missing(monkeypatch):
     assert await _client().search_revision_by_id(42) is None
 
 
+async def test_search_revisions_fetches_many_in_one_call(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": [{"id": 1}, {"id": 2}]}})
+
+    revisions = await _client().search_revisions(["PHID-A", "PHID-B"])
+
+    assert [r["id"] for r in revisions] == [1, 2]
+    assert captured["params"]["constraints"] == {"phids": ["PHID-A", "PHID-B"]}
+    assert captured["url"].endswith("/api/differential.revision.search")
+
+
+async def test_search_revisions_skips_the_call_when_nothing_to_look_up(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": []}})
+
+    assert await _client().search_revisions([]) == []
+    assert captured == {}
+
+
 async def test_search_users_maps_phids_to_names(monkeypatch):
     captured = _capture_post(
         monkeypatch,
