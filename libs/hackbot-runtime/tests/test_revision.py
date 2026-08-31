@@ -333,6 +333,48 @@ async def test_unstacked_revision_is_applied_uncommitted(monkeypatch, tmp_path):
     assert "file.txt" in _git(repo, "status", "--porcelain")
 
 
+@pytest.mark.parametrize(
+    "graph, target, committed_head",
+    [
+        ({42: []}, 42, "base\n"),
+        ({42: [], 43: [42]}, 43, "from D42\n"),
+        ({42: [], 43: [42], 44: [43]}, 44, "from D43\n"),
+    ],
+    ids=["unstacked", "one-ancestor", "two-ancestors"],
+)
+async def test_only_the_target_is_left_uncommitted(
+    monkeypatch, tmp_path, graph, target, committed_head
+):
+    # The invariant the submit path depends on, and it must not vary with the
+    # depth of the stack: everything below the target is committed, and exactly
+    # the target's own change is left in the working tree. Whatever hackbot
+    # submits afterwards is then this revision plus the agent's edits, never the
+    # revisions underneath it.
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph({r: _revision(r) for r in graph}, graph)
+    contents = {42: "from D42", 43: "from D43", 44: "from D44"}
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", contents[42]),
+            43: _diff(contents[42], contents[43]),
+            44: _diff(contents[43], contents[44]),
+        },
+    )
+    ctx = _FakeCtx(repo)
+
+    await revision.checkout_revision(ctx, target, BROKER)
+
+    # HEAD holds the revisions below the target, and nothing of the target.
+    assert _git(repo, "show", "HEAD:file.txt") == committed_head
+    # The target's change is present, and uncommitted.
+    assert (repo / "file.txt").read_text() == f"{contents[target]}\n"
+    assert _git(repo, "diff", "HEAD", "--name-only").split() == ["file.txt"]
+    # The base publish_changes() diffs against is HEAD, in every case.
+    assert ctx.rebased_base is True
+
+
 async def test_revision_at_the_bottom_of_someone_elses_stack(monkeypatch, tmp_path):
     # D42 has no parents but D43 is stacked on top of it. "Nothing below the
     # target" is what decides the simple path, so this takes it: D42's own base,
