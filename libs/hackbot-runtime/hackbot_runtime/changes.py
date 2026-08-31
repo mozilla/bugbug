@@ -191,7 +191,7 @@ def _local_commits_property(repo: Path, node: str, base: str) -> dict:
 
 
 @contextlib.contextmanager
-def _ambient_git_identity() -> Iterator[None]:
+def ambient_git_identity() -> Iterator[None]:
     """Give moz-phab an ambient git identity for its `git config --list` check.
 
     moz-phab's git client reads ``user.email`` from the *ambient* git config
@@ -199,8 +199,8 @@ def _ambient_git_identity() -> Iterator[None]:
     containers and CI often have no global identity, so point
     ``GIT_CONFIG_GLOBAL`` at a throwaway config carrying a hackbot identity for
     the duration of the call (moz-phab copies ``os.environ`` when it builds its
-    git client). The identity is cosmetic — only the diff is used, never a
-    commit moz-phab would author.
+    git client). The identity is cosmetic: moz-phab is only ever asked to build
+    a diff or apply a patch here, never to author a commit.
     """
     with tempfile.NamedTemporaryFile("w", suffix=".gitconfig") as gc:
         gc.write(f"[user]\n\temail = {_WIP_EMAIL}\n\tname = {_WIP_NAME}\n")
@@ -257,7 +257,7 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
 
     try:
         node = _synthetic_commit(repo, base)
-        with _ambient_git_identity():
+        with ambient_git_identity():
             mozphab_repo = Git(str(repo))
             # `set_args` needs a fully-populated argparse.Namespace matching what
             # moz-phab's own CLI would build (several unrelated code paths read

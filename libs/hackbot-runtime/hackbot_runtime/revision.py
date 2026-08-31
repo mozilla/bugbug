@@ -6,18 +6,21 @@ stacked on other unlanded revisions, its "actual code" is the whole stack below
 it: the base commit the revision records is then its parent's *local* commit,
 which never landed and cannot be fetched from the git mirror.
 
-So the checkout is built from the bottom up: check out the last landed commit
-underneath the stack, replay every unlanded ancestor onto it and commit them
-(they are this revision's base, not the agent's work), then apply the revision's
-own diff on top, uncommitted. What the agent submits afterwards is therefore
-just this revision's content plus the agent's follow-up edits.
+The work splits in two:
 
-The agent holds no credentials, so it does not talk to Conduit itself: it drives
-moz-phab's Conduit client against the broker sidecar's read-only proxy (``POST
-{broker_url}/api/<method>``), and the broker substitutes the real Phabricator
-key. moz-phab is used as a library, and only for the Conduit and stack-graph
-parts — hackbot drives git itself so it decides exactly which patches become
-commits and which stay in the working tree.
+* hackbot finds the landed commit underneath the *bottom* of the stack and
+  shallow-checks the source out there (:func:`_resolve_base`); then
+* ``moz-phab patch`` applies the revisions on top, the same way it would on a
+  developer's machine (:func:`_apply_revisions`).
+
+The revisions below the target are applied first and committed — they are this
+revision's base, not the agent's work — and the target's own diff is then
+applied and left uncommitted. So the diff hackbot submits afterwards covers just
+this revision plus the agent's follow-up edits.
+
+The agent holds no credentials, so moz-phab never reaches Phabricator directly:
+it is pointed at the broker sidecar's read-only Conduit proxy (``POST
+{broker_url}/phabricator/api/<method>``), which substitutes the real key.
 """
 
 from __future__ import annotations
@@ -26,10 +29,9 @@ import asyncio
 import contextlib
 import logging
 import os
-import subprocess
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from phabricator_client import is_full_commit, select_full_commit
 
@@ -54,39 +56,16 @@ _TOKEN_ENV = "MOZPHAB_PHABRICATOR_API_TOKEN"
 _PROXY_API_TOKEN = "api-hackbot-broker-proxy"
 
 
-class Patch(NamedTuple):
-    """One revision's diff, as raw unified-diff text."""
+class StackBase(NamedTuple):
+    """Where to start the checkout, and what sits between there and the target.
 
-    revision_id: int
-    raw_diff: str
-
-
-class _MozPhab(NamedTuple):
-    """The moz-phab pieces the checkout borrows.
-
-    moz-phab is a CLI, not a published library, so what we lean on is named
-    here in one place: its Conduit client, its stack-graph walk, and how it
-    reads a diff's base commit. The version is pinned exactly by the
-    ``[phabricator]`` extra for the same reason.
+    ``commit`` is a full, fetchable hash: the landed commit underneath the whole
+    stack. ``parent_id`` is the target's direct parent revision, or ``None``
+    when the target is not stacked on anything unlanded.
     """
 
-    conduit: Any
-    ancestors_of: Callable[[dict, str], list[str]]
-    base_ref: Callable[[dict], str | None]
-    non_linear_error: type[Exception]
-
-
-class Stack(NamedTuple):
-    """Everything needed to reproduce a revision's tree, oldest first.
-
-    ``base_commit`` is a full, fetchable hash: the landed commit underneath the
-    whole stack. ``ancestors`` are the unlanded revisions between that commit
-    and ``target`` (empty for an unstacked revision).
-    """
-
-    base_commit: str
-    ancestors: list[Patch]
-    target: Patch
+    commit: str
+    parent_id: int | None
 
 
 async def checkout_revision(
@@ -96,166 +75,245 @@ async def checkout_revision(
 ) -> None:
     """Prepare the source so it matches ``D<revision_id>`` before the agent runs.
 
-    Raises :class:`RuntimeError` if the stack can't be resolved or a diff does
-    not apply cleanly — so the run fails visibly rather than editing the wrong
-    tree.
+    Raises :class:`RuntimeError` if the stack cannot be resolved, and lets
+    moz-phab's own errors through if a diff does not apply — so the run fails
+    visibly rather than editing the wrong tree.
     """
-    # Imported here, on the main thread, rather than inside the worker below:
-    # importing moz-phab installs a SIGINT handler, and `signal.signal` raises
-    # anywhere but the main thread.
-    mozphab = _load_mozphab()
-    stack = await asyncio.to_thread(_resolve_stack, mozphab, revision_id, broker_url)
+    _load_mozphab()
+    base = await asyncio.to_thread(_resolve_base, revision_id, broker_url)
 
     # Prepare the checkout explicitly at the stack's base commit. Must run
     # before anything else touches the source (prepare_repo raises otherwise).
-    repo = await ctx.prepare_repo(ref=stack.base_commit)
-
+    repo = await ctx.prepare_repo(ref=base.commit)
     log.info(
         "Checking out D%s (base %s) before running the agent",
         revision_id,
-        stack.base_commit,
+        base.commit,
     )
-    if stack.ancestors:
-        stacked_on = ", ".join(f"D{patch.revision_id}" for patch in stack.ancestors)
-        log.info("D%s is stacked on %s; replaying them first", revision_id, stacked_on)
-        for patch in stack.ancestors:
-            _apply(repo, patch)
-        # Committing the ancestors takes them out of the agent's changes: the
-        # run's recorded base moves to this commit, so the diff hackbot submits
-        # back covers only D<revision_id> and the agent's own edits.
-        changes.commit_all(repo, f"Stack below D{revision_id}: {stacked_on}")
-        ctx.record_source_base()
 
-    _apply(repo, stack.target)
+    await asyncio.to_thread(_apply_revisions, repo, revision_id, base, broker_url)
+
+    # Any revisions below the target are commits now, so re-record the base:
+    # they are what the agent starts from, not changes it made.
+    ctx.record_source_base()
 
 
-def _apply(repo: Path, patch: Patch) -> None:
-    """Apply one revision's diff to ``repo``'s working tree."""
-    result = subprocess.run(
-        ["git", "-C", str(repo), "apply"],
-        input=patch.raw_diff.encode(),
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Could not apply diff for D{patch.revision_id}: "
-            f"{result.stderr.decode().strip()}"
-        )
+def _load_mozphab() -> None:
+    """Import moz-phab up front, on the main thread.
 
-
-def _load_mozphab() -> _MozPhab:
-    """Import the moz-phab pieces used here. Call this on the main thread."""
+    Importing it installs a SIGINT handler, and ``signal.signal`` raises
+    anywhere but the main thread — so the import must not be left to the worker
+    threads that do the actual work. Later imports are cache hits.
+    """
     try:
-        from mozphab.commands.patch import (
-            _get_ancestors_from_stack_graph,
-            get_base_ref,
-        )
-        from mozphab.conduit import conduit
-        from mozphab.exceptions import NonLinearException
+        import mozphab.commands.patch  # noqa: F401
+        from mozphab import environment
     except ImportError as exc:  # pragma: no cover - depends on install extras
         raise RuntimeError(
             "Checking out a Phabricator revision needs moz-phab; install the "
             "hackbot-runtime[phabricator] extra."
         ) from exc
-    return _MozPhab(
-        conduit=conduit,
-        ancestors_of=_get_ancestors_from_stack_graph,
-        base_ref=get_base_ref,
-        non_linear_error=NonLinearException,
-    )
+
+    # There is no terminal in an agent container, and the spinner would only
+    # scribble over the run log.
+    environment.SHOW_SPINNER = False
 
 
-def _resolve_stack(mozphab: _MozPhab, revision_id: int, broker_url: str) -> Stack:
-    """Fetch the patches reproducing ``D<revision_id>``, bottom of the stack up.
+def _resolve_base(revision_id: int, broker_url: str) -> StackBase:
+    """Find the landed commit underneath ``D<revision_id>``'s stack.
+
+    Uses moz-phab's own stack-graph walk and abandoned filtering, so the bottom
+    revision found here is the one ``moz-phab patch`` will also start from.
 
     Synchronous (moz-phab's Conduit client is), so callers run it in a thread.
     """
-    conduit = mozphab.conduit
+    from mozphab.commands.patch import (
+        _fetch_and_filter_related,
+        _get_ancestors_from_stack_graph,
+        get_base_ref,
+    )
+    from mozphab.conduit import conduit
+    from mozphab.exceptions import NonLinearException
 
-    with _proxied_conduit(conduit, broker_url):
+    with _conduit_via_proxy(conduit, _ProxyRepo(_proxy_api_url(broker_url))):
         revisions = conduit.get_revisions(ids=[revision_id])
         if not revisions:
             raise RuntimeError(f"D{revision_id} not found")
         target = revisions[0]
 
         try:
-            # Returned direct-parent first; we replay oldest first.
-            ancestor_phids = mozphab.ancestors_of(
+            # Direct parent first, root of the stack last.
+            ancestor_phids = _get_ancestors_from_stack_graph(
                 target["fields"]["stackGraph"], target["phid"]
             )
-        except mozphab.non_linear_error as exc:
+        except NonLinearException as exc:
             raise RuntimeError(
                 f"D{revision_id} has more than one parent; hackbot cannot "
                 "reconstruct a non-linear stack."
             ) from exc
 
-        ordered = [*_live_ancestors(conduit, ancestor_phids), target]
-        diffs = conduit.get_diffs(phids=[rev["fields"]["diffPHID"] for rev in ordered])
+        # Abandoned and inaccessible ancestors drop out here for the same reason
+        # moz-phab drops them: it will not apply them either, so the bottom of
+        # the stack is whatever survives the filter.
+        ancestors, _, related = _fetch_and_filter_related(ancestor_phids, [], False)
+        bottom = related[ancestors[-1]] if ancestors else target
+        parent_id = related[ancestors[0]]["id"] if ancestors else None
 
-        bottom = ordered[0]
-        base = mozphab.base_ref(diffs[bottom["fields"]["diffPHID"]])
-        if not base:
+        diff_phid = bottom["fields"]["diffPHID"]
+        ref = get_base_ref(conduit.get_diffs(phids=[diff_phid])[diff_phid])
+        if not ref:
             raise RuntimeError(
                 f"D{bottom['id']} records no base commit; nothing to apply onto."
             )
-        base = _resolve_base_commit(conduit, base)
-
-        patches = [
-            Patch(
-                revision_id=rev["id"],
-                raw_diff=conduit.call(
-                    "differential.getrawdiff",
-                    {"diffID": diffs[rev["fields"]["diffPHID"]]["id"]},
-                ),
-            )
-            for rev in ordered
-        ]
-
-    return Stack(base_commit=base, ancestors=patches[:-1], target=patches[-1])
+        return StackBase(commit=_full_commit(conduit, ref), parent_id=parent_id)
 
 
-def _live_ancestors(conduit, ancestor_phids: list[str]) -> list[dict]:
-    """The ancestor revisions worth replaying, oldest first.
-
-    Abandoned ancestors are dropped, as are ones Conduit did not return at all
-    (e.g. restricted access) — matching what ``moz-phab patch`` does. If one in
-    the middle of the stack is dropped, the remaining diffs will not apply and
-    :func:`_apply` reports which revision failed.
-    """
-    if not ancestor_phids:
-        return []
-    by_phid = {rev["phid"]: rev for rev in conduit.get_revisions(phids=ancestor_phids)}
-    return [
-        by_phid[phid]
-        for phid in reversed(ancestor_phids)
-        if phid in by_phid and by_phid[phid]["fields"]["status"]["value"] != "abandoned"
-    ]
-
-
-def _resolve_base_commit(conduit, ref: str) -> str:
-    """Expand the recorded base commit to a full hash git can fetch.
+def _full_commit(conduit, ref: str) -> str:
+    """Expand a recorded base commit to a full hash git can fetch.
 
     moz-phab records an abbreviated hash for a repo the size of firefox, and git
     can only fetch a full object id.
     """
     if is_full_commit(ref):
         return ref
-    result = conduit.call("diffusion.querycommits", {"names": [ref]})
-    return select_full_commit(ref, result)
+    return select_full_commit(
+        ref, conduit.call("diffusion.querycommits", {"names": [ref]})
+    )
+
+
+def _apply_revisions(
+    repo_path: Path,
+    revision_id: int,
+    base: StackBase,
+    broker_url: str,
+) -> None:
+    """Let ``moz-phab patch`` apply the stack onto the prepared checkout.
+
+    Two passes when the target is stacked: the revisions below it are applied
+    and committed together, then the target itself is applied and left in the
+    working tree. One pass otherwise.
+
+    Synchronous, so callers run it in a thread.
+    """
+    from mozphab.conduit import conduit
+    from mozphab.git import Git
+
+    # moz-phab reads `user.email` from the *ambient* git config and refuses to
+    # run without one, and it copies the environment whenever it builds a git
+    # client — so this has to wrap the repo construction as well as the calls.
+    with changes.ambient_git_identity():
+        repo = Git(str(repo_path))
+        _point_at_proxy(repo, broker_url)
+        _skip_conduit_probes(repo)
+
+        with _conduit_via_proxy(conduit, repo):
+            if base.parent_id is not None:
+                _patch(repo, base.parent_id, skip_dependencies=False)
+                changes.commit_all(repo_path, f"Revisions below D{revision_id}")
+            _patch(repo, revision_id, skip_dependencies=True)
+
+
+def _patch(repo, revision_id: int, *, skip_dependencies: bool) -> None:
+    """Run one ``moz-phab patch`` against the working tree.
+
+    ``--apply-to here`` keeps the checkout hackbot already made; it also skips
+    moz-phab's ``check_node``, a bare ``git cat-file`` that would not find the
+    base commit in a shallow clone and never fetches it.
+
+    ``--no-commit`` keeps moz-phab out of the business of creating commits,
+    which matters for more than tidiness: its commit mode refuses any diff
+    without the ``local:commits`` property, which a revision uploaded through
+    the Phabricator web UI does not have. hackbot commits the ancestors itself.
+    """
+    from mozphab.args import parse_args
+    from mozphab.commands import patch as patch_command
+
+    argv = [
+        "patch",
+        f"D{revision_id}",
+        "--apply-to",
+        "here",
+        "--no-commit",
+        "--no-branch",
+    ]
+    if skip_dependencies:
+        argv.append("--skip-dependencies")
+
+    args = parse_args(argv)
+    repo.set_args(args)
+    log.info(
+        "Applying D%s with moz-phab (%s)",
+        revision_id,
+        "on its own" if skip_dependencies else "with the revisions below it",
+    )
+    with _decline_descendants(patch_command):
+        patch_command.patch(repo, args)
+
+
+def _proxy_api_url(broker_url: str) -> str:
+    """The broker's Conduit API root."""
+    return f"{broker_url.rstrip('/')}{_PROXY_PATH}"
+
+
+def _point_at_proxy(repo, broker_url: str) -> None:
+    """Redirect a moz-phab repository's Conduit URL to the broker's proxy.
+
+    ``Repository.__init__`` takes the URL from the checkout's ``.arcconfig``,
+    which for firefox names the real Phabricator, and derives the API URL as
+    ``urljoin(phab_url, "api/")`` — that replaces the last path segment, so it
+    could only ever yield ``<host>/api/``. Overwriting both afterwards is what
+    lets the broker mount the proxy under ``/phabricator``, and it leaves the
+    checkout's own ``.arcconfig`` alone: editing that would make the worktree
+    dirty, which ``moz-phab patch`` refuses to work on.
+    """
+    repo.api_url = _proxy_api_url(broker_url)
+    repo.phab_url = repo.api_url.removesuffix("api/").rstrip("/")
+
+
+def _skip_conduit_probes(repo) -> None:
+    """Pre-fill the two moz-phab caches whose misses would call Conduit.
+
+    ``moz-phab patch`` opens by pinging Conduit and by asking Phabricator which
+    VCS the repository uses (to decide whether git-cinnabar is needed). Neither
+    answer is worth having here: an unreachable proxy shows up on the next call
+    anyway, and firefox is git on both sides. Writing moz-phab's own cache files
+    keeps two more methods off the proxy's allow list, and keeps the VCS lookup
+    from depending on a ``repository.callsign`` in the checkout's ``.arcconfig``.
+    """
+    dot_path = Path(repo.dot_path)
+    (dot_path / ".moz-phab_conduit-configured").touch()
+    (dot_path / ".moz-phab_vcs_cache").write_text("git")
+
+
+@contextlib.contextmanager
+def _decline_descendants(patch_command) -> Iterator[None]:
+    """Answer the one question ``moz-phab patch`` can ask in this configuration.
+
+    Patching the parent to lay down the revisions below the target offers to
+    patch the *full* stack, descendants included — which would apply revisions
+    the agent was not called on. ``--yes`` answers that question "yes", so it is
+    answered here instead. Anything else moz-phab asks is unexpected and would
+    otherwise block forever on a stdin nobody is attached to, so it raises.
+    """
+
+    def answer(question: str, options: list[str] | None = None) -> str:
+        if "full stack" in question:
+            return "No"
+        raise RuntimeError(f"moz-phab asked for input hackbot cannot give: {question}")
+
+    previous = patch_command.prompt
+    patch_command.prompt = answer
+    try:
+        yield
+    finally:
+        patch_command.prompt = previous
 
 
 class _ProxyRepo:
     """The slice of moz-phab's ``Repository`` that its Conduit client reads.
 
-    Only ``api_url`` is actually used to make a call. Handing over a real
-    ``mozphab.git.Git`` instead would drag in an ``.arcconfig`` lookup (the
-    checked-out firefox one names the real Phabricator) and moz-phab's
-    https-only check, neither of which suits a loopback sidecar.
-
-    Setting ``api_url`` outright is also what lets the broker mount the proxy
-    wherever it likes: moz-phab would otherwise derive it as
-    ``urljoin(phab_url, "api/")``, which replaces the last path segment and so
-    only ever yields ``<host>/api/``.
+    Used for the base lookup, which happens before there is a checkout to build
+    a real ``mozphab.git.Git`` from. Only ``api_url`` is needed to make a call.
     """
 
     def __init__(self, api_url: str) -> None:
@@ -264,18 +322,17 @@ class _ProxyRepo:
 
 
 @contextlib.contextmanager
-def _proxied_conduit(conduit, broker_url: str) -> Iterator[None]:
-    """Point moz-phab's Conduit client at the broker's read-only proxy.
+def _conduit_via_proxy(conduit, repo) -> Iterator[None]:
+    """Point moz-phab's Conduit client at the broker's proxy for the duration.
 
-    moz-phab normally takes its API URL from the repository's ``.arcconfig`` and
-    its token from ``~/.arcrc``. Neither is right here, so it gets a repository
-    stand-in carrying the broker's API URL plus a placeholder token through the
-    environment variable it already honours. Both are restored on exit rather
-    than left set for the rest of the run.
+    moz-phab normally takes its API URL from the repository and its token from
+    ``~/.arcrc``. Here ``repo`` carries the proxy's URL, and the placeholder
+    token goes through the environment variable moz-phab already honours. Both
+    are restored on exit rather than left set for the rest of the run.
     """
     previous_repo = getattr(conduit, "repo", None)
     previous_token = os.environ.get(_TOKEN_ENV)
-    conduit.set_repo(_ProxyRepo(f"{broker_url.rstrip('/')}{_PROXY_PATH}"))
+    conduit.set_repo(repo)
     os.environ[_TOKEN_ENV] = _PROXY_API_TOKEN
     try:
         yield
