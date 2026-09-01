@@ -1,6 +1,13 @@
+from typing import Annotated
+
 from phabricator_client import PhabricatorSettings
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 from pydantic_settings import BaseSettings
+
+# An HMAC key that must actually be a key. Required alone only rejects a *missing*
+# value, and an empty or whitespace one would start a service that rejects every
+# delivery it receives -- worse than not starting, because nothing says so.
+HmacSecret = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class WebhookSettings(BaseModel):
@@ -31,6 +38,17 @@ class BugzillaWebhookSettings(BaseModel):
     bot_login: str = "hackbot@mozilla.tld"
     # Best-effort in-memory dedupe of retried bug-modification deliveries.
     dedupe_ttl_seconds: int = 6 * 60 * 60
+
+
+class SlackSettings(BaseModel):
+    """Inbound Slack interactivity config (clicks on the app's own messages).
+
+    Populated from SLACK_* env vars as part of the single settings parse.
+    """
+
+    # Slack's app-level signing secret, verifying the HMAC on every interaction
+    # delivery.
+    signing_secret: HmacSecret
 
 
 class Settings(BaseSettings):
@@ -65,6 +83,8 @@ class Settings(BaseSettings):
     # from BUGZILLA_WEBHOOK_SECRET, BUGZILLA_WEBHOOK_BOT_LOGIN, and
     # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
+
+    slack: SlackSettings
 
     # The webhook receiver triggers runs over the public API (rather than calling
     # the DB/jobs internals directly), so splitting it into its own service later

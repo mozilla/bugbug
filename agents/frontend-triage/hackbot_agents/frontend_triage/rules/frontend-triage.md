@@ -2,10 +2,10 @@
 
 These rules apply to **defects in user-facing Firefox** — the desktop frontend,
 Firefox for Android, and the Windows installer and application updater. **Components in
-scope** in the system prompt lists the components bugs normally arrive from, grouped by
-the area whose code layout **Source repository** describes. Any user-facing Firefox
-defect is in scope, though, whether or not its component is on that list; see
-`scoping.md`.
+scope** in the system prompt lists the components bugs normally arrive from, and
+**Source repository** carries the guidance for the one this bug was filed in. Any
+user-facing Firefox defect is in scope, though, whether or not its component is on that
+list; see `scoping.md`.
 
 Typical components:
 
@@ -38,14 +38,10 @@ Core, DevTools-internals, or build-system bug — and say which area it looks li
 ## What to produce
 
 1. **Localize the cause in the source.** Where to look and what language to expect
-   depend on the component — see **Source repository** in the system prompt for the
-   per-area layout. In short: desktop frontend under `browser/`, `toolkit/`, and
-   `devtools/` (JS/JSM, CSS, XUL/HTML); Android under `mobile/android/` (Kotlin,
-   Fragment/Store/Middleware/View); the updater under `toolkit/mozapps/update/`
-   (`.sys.mjs`, IDL, C++); the installer under `browser/installer/windows/nsis/`
-   (NSIS `.nsi`/`.nsh`); the Messaging System under `browser/components/asrouter/`,
-   `browser/components/aboutwelcome/`, `toolkit/components/messaging-system/`
-   (JS/JSM, CSS, XUL/HTML, JSON, JSON Schema). Find the module, the markup or layout,
+   depend on the component — see **Source repository** in the system prompt, which names
+   the trees and links the in-tree documentation for each one. Read that documentation
+   rather than working the structure out from the source; it is written by the people who
+   own the code, and it is the copy that stays current. Find the module, the markup or layout,
    and any relevant pref (often `modules/libpref/init/all.js`, or `app.update.*`
    for the updater) that governs the behaviour. Use the `investigator` subagent for
    deep searches.

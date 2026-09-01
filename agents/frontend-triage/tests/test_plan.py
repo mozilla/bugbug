@@ -8,7 +8,6 @@ import re
 from pathlib import Path
 
 from hackbot_agents.frontend_triage.agent import (
-    AREAS_DIR,
     load_system_prompt,
     may_apply_unattended,
     parse_bug_id,
@@ -20,11 +19,10 @@ from hackbot_agents.frontend_triage.agent import (
     render_scope,
 )
 from hackbot_agents.frontend_triage.config import (
-    AREAS,
     TRIAGE_SCOPE,
     ScopedComponent,
-    area_for_path,
-    areas_for,
+    guidance_for,
+    owners_for_path,
 )
 
 
@@ -36,7 +34,9 @@ def test_the_system_prompt_renders():
     # system.md goes through str.format, so a literal brace in it must be doubled or
     # startup raises KeyError and the run never begins. The structured-output block is
     # where that happens.
-    prompt = load_system_prompt(Path("rules"), "", areas_for("Firefox", "New Tab Page"))
+    prompt = load_system_prompt(
+        Path("rules"), "", guidance_for("Firefox", "New Tab Page"), ()
+    )
     assert '"severity_assessment": {' in prompt
     assert "{rules_dir}" not in prompt
     assert "{triaged_components}" not in prompt
@@ -46,19 +46,22 @@ def test_the_system_prompt_renders():
     assert "Toolkit :: Application Update" in prompt
 
 
-def test_the_scope_is_grouped_by_area_in_registry_order():
+def test_the_scope_lists_every_component_in_registry_order():
     # Asserted against a fixed registry rather than the real one, so this keeps testing
-    # the grouping when TRIAGE_SCOPE changes.
+    # the rendering when TRIAGE_SCOPE changes.
     scope = (
-        ScopedComponent("Firefox", "New Tab Page", "Desktop", "#one"),
-        ScopedComponent("Toolkit", "Application Update", "Updater", "#two"),
-        ScopedComponent("Firefox", "Theme", "Desktop", "#one"),
+        ScopedComponent("Firefox", "New Tab Page", "#one", trees=("browser/",)),
+        ScopedComponent("Toolkit", "Application Update", "#two", trees=("toolkit/",)),
+        ScopedComponent("Firefox", "Theme", "#one", trees=("browser/",)),
     )
     rendered = render_scope(scope)
     assert rendered.startswith(
-        "- **Desktop** — Firefox :: New Tab Page, Firefox :: Theme.\n"
-        "- **Updater** — Toolkit :: Application Update.\n"
+        "- **Firefox :: New Tab Page**\n"
+        "- **Toolkit :: Application Update**\n"
+        "- **Firefox :: Theme**\n"
     )
+    # Routing is notify.py's decision, and the agent has no tool to act on it.
+    assert "#one" not in rendered
 
 
 def test_the_scope_says_it_is_neither_a_limit_nor_a_vocabulary():
@@ -72,61 +75,68 @@ def test_the_scope_says_it_is_neither_a_limit_nor_a_vocabulary():
     assert "verbatim" in rendered
 
 
-def test_every_area_has_a_guidance_file():
-    # The registry is what makes a component triaged; this is what makes it triageable.
-    # An area whose file is missing points the agent at a component with no idea where
-    # its code lives -- which is how a bug gets read as out of scope and skipped. So a
-    # new area costs two files, visibly, rather than one file plus a prompt nobody
-    # remembered.
-    for area in AREAS:
-        assert (AREAS_DIR / f"{area.slug}.md").is_file(), area.name
-
-
-def test_every_registry_area_resolves():
-    # `area` and `related_areas` are strings, so a typo in either is only caught here.
-    # `areas_for` would raise KeyError mid-run, after the bug was already fetched.
-    names = {a.name for a in AREAS}
+def test_every_component_declares_a_tree():
+    # `trees` is what `docs.docs_for` keys off and what the prompt's index renders, so a
+    # component without one is routed but not triageable: the agent gets its name and no
+    # idea where its code is, which is how a bug gets read as out of scope and skipped.
     for entry in TRIAGE_SCOPE:
-        assert entry.area in names, entry.key
-        for related in entry.related_areas:
-            assert related in names, f"{entry.key} -> {related}"
+        assert entry.trees, entry.key
 
 
-def test_an_unknown_component_gets_every_area():
-    # `rules/scoping.md` puts an unlisted component in scope, so guessing one area for
-    # it would leave the run with less than it has today. Failing open costs the old
-    # prompt size and nothing else.
-    assert areas_for("Firefox", "Graphics") == AREAS
-    assert areas_for(None, None) == AREAS
+def test_every_related_component_resolves():
+    # `related` holds routing keys as strings, so a typo is only caught here.
+    # `guidance_for` would raise KeyError mid-run, after the bug was already fetched.
+    keys = {c.key for c in TRIAGE_SCOPE}
+    for entry in TRIAGE_SCOPE:
+        for related in entry.related:
+            assert related in keys, f"{entry.key} -> {related}"
 
 
-def test_only_the_matching_area_reaches_the_prompt():
+def test_an_unknown_component_gets_every_component():
+    # `rules/scoping.md` puts an unlisted component in scope, so guessing one component
+    # for it would leave the run with less than it has today. Failing open costs the
+    # notes, which are a few kilobytes now, and nothing else.
+    assert guidance_for("Firefox", "Graphics") == TRIAGE_SCOPE
+    assert guidance_for(None, None) == TRIAGE_SCOPE
+
+
+def test_only_the_matching_component_reaches_the_prompt():
     # The point of the split. Everything else stays reachable via the index and
-    # `load_area_guidance`, but its text is not paid for on every run.
-    prompt = load_system_prompt(Path("rules"), "", areas_for("Firefox", "New Tab Page"))
-    assert "NSIS" not in prompt
-    assert "IPProtectionPanel.sys.mjs" not in prompt
-    # ...while the index still names every area, so a mislocalized bug is recognisable.
-    for area in AREAS:
-        assert f"**{area.name}**" in prompt, area.name
-
-
-def test_an_owned_subtree_resolves_even_though_a_broader_area_describes_it():
-    # The desktop frontend's index entry covers `browser/`, but the installer and IP
-    # Protection sit inside it and own their own subtrees. Ownership has to follow the
-    # specific claim, or the hook never fires for the areas whose guidance matters most.
-    assert area_for_path("browser/installer/windows/nsis/stub.nsi").name == (
-        "Windows installer"
+    # `load_component_guidance`, but its notes are not paid for on every run.
+    prompt = load_system_prompt(
+        Path("rules"), "", guidance_for("Firefox", "New Tab Page"), ()
     )
-    assert area_for_path(
-        "browser/components/ipprotection/IPProtection.sys.mjs"
-    ).name == ("IP Protection")
+    assert "stub and the full installer" not in prompt
+    assert "State lives in the service" not in prompt
+    # ...while the index still names every component, so a mislocalized bug is
+    # recognisable as one.
+    for entry in TRIAGE_SCOPE:
+        assert f"**{entry.key}**" in prompt, entry.key
 
 
-def test_a_path_in_no_area_belongs_to_no_area():
-    # Load-bearing for `area_guidance_hook`: None means "no guidance exists", not
+def test_a_nested_owner_wins_over_the_component_that_contains_it():
+    # Ownership follows the most specific claim, or the hook never fires for the
+    # components whose guidance matters most. The Fenix pair is the case this change
+    # introduced: the homepage owns `…/fenix/home/`, and the toolbar owns
+    # `…/fenix/home/toolbar/` inside it, because a bug in one really does localize into
+    # the other.
+    fenix = "mobile/android/fenix/app/src/main/java/org/mozilla/fenix"
+    assert [o.component for o in owners_for_path(f"{fenix}/home/HomeFragment.kt")] == [
+        "Homepage"
+    ]
+    assert [
+        o.component
+        for o in owners_for_path(f"{fenix}/home/toolbar/HomeToolbarComposable.kt")
+    ] == ["Toolbar"]
+    assert [
+        o.component for o in owners_for_path("browser/installer/windows/nsis/stub.nsi")
+    ] == ["Installer"]
+
+
+def test_a_path_no_component_owns_belongs_to_no_component():
+    # Load-bearing for `component_guidance_hook`: None means "no guidance exists", not
     # "guidance is missing", and must not be treated as something the agent can fetch.
-    assert area_for_path("gfx/thebes/gfxPlatform.cpp") is None
+    assert owners_for_path("gfx/thebes/gfxPlatform.cpp") == ()
 
 
 def test_confidence_is_normalized():
@@ -329,38 +339,123 @@ def test_a_duplicate_verdict_does_not_change_what_reaches_a_bug():
     assert may_apply_unattended(none_found)
 
 
-# Paths written as `some/dir/File.ext` in an area's guidance prose.
+# Paths written as `some/dir/File.ext` in a component's `notes` prose.
 _GUIDANCE_PATH = re.compile(r"`([a-z][a-z0-9_./-]*/[A-Za-z0-9_./-]+)`")
 
 
 def test_guidance_never_names_a_path_its_own_component_cannot_cite():
-    # The invariant that keeps `area_guidance_hook` honest, and the one that caught
-    # `browser/` being listed as owned: an area told the agent where the prefs and
+    # The invariant that keeps `component_guidance_hook` honest, and the one that caught
+    # `browser/` being listed as owned: guidance told the agent where the prefs and
     # strings were, and citing them then had the comment refused. Every path a
     # component's own guidance names has to survive the hook for that component --
-    # including across `related_areas`, which is what makes Sharing's reference to
+    # including across `related`, which is what makes Sharing's reference to
     # WebRTCParent legal.
+    #
+    # `trees` is checked alongside `notes` because the prompt now renders it, so it is
+    # guidance the agent will act on just as much as the prose is.
     for entry in TRIAGE_SCOPE:
-        areas = areas_for(entry.product, entry.component)
-        loaded = {a.name for a in areas}
-        for area in areas:
-            text = (AREAS_DIR / f"{area.slug}.md").read_text()
-            for match in _GUIDANCE_PATH.finditer(text):
-                owner = area_for_path(match.group(1))
-                assert owner is None or owner.name in loaded, (
-                    f"{entry.key}: guidance names {match.group(1)}, "
-                    f"owned by {owner.name if owner else None}"
+        loaded = {c.key for c in guidance_for(entry.product, entry.component)}
+        for other in guidance_for(entry.product, entry.component):
+            named = [m.group(1) for m in _GUIDANCE_PATH.finditer(other.notes)]
+            named += list(other.trees)
+            for path in named:
+                # Mirrors `component_guidance_hook`, which passes when *any* owner is
+                # loaded. Checking a single owner instead would fail on the trees the
+                # three Android components share, for a citation the hook allows.
+                owners = owners_for_path(path)
+                assert not owners or any(o.key in loaded for o in owners), (
+                    f"{entry.key}: guidance names {path}, "
+                    f"owned by {' or '.join(o.key for o in owners)}"
                 )
 
 
+def test_the_bulk_of_a_split_tree_still_has_an_owner():
+    # Regression guard for the areas-to-components change. One area used to own all of
+    # `mobile/android/`, and replacing it with three components owning narrow packages
+    # left most of Fenix unowned -- so `component_guidance_hook` stopped firing there and
+    # a desktop bug could cite arbitrary Fenix code without loading Fenix guidance.
+    fenix = "mobile/android/fenix/app/src/main/java/org/mozilla/fenix"
+    assert owners_for_path(f"{fenix}/search/SearchFragment.kt")
+    assert owners_for_path(
+        "mobile/android/android-components/components/feature/addons/Addons.kt"
+    )
+
+
+def test_a_shared_tree_is_owned_by_every_component_that_claims_it():
+    # Three components share `mobile/android/`, so ownership there is genuinely plural.
+    # The hook passes when any owner is loaded; collapsing this to one would refuse a
+    # Toolbar bug for citing a file its own team owns.
+    owners = owners_for_path("mobile/android/fenix/app/src/main/AndroidManifest.xml")
+    assert {o.component for o in owners} == {"History", "Toolbar", "Homepage"}
+
+
+def test_a_narrow_owner_still_beats_the_tree_it_sits_in():
+    # Plural ownership must not blunt the specific claim: `…/home/toolbar/` is the
+    # toolbar's alone even though three components own `mobile/android/` above it.
+    fenix = "mobile/android/fenix/app/src/main/java/org/mozilla/fenix"
+    assert [o.component for o in owners_for_path(f"{fenix}/home/toolbar/X.kt")] == [
+        "Toolbar"
+    ]
+    assert [o.component for o in owners_for_path(f"{fenix}/home/HomeFragment.kt")] == [
+        "Homepage"
+    ]
+
+
+def test_a_file_owner_does_not_own_paths_that_merely_start_with_it():
+    # `owns` entries that name a file are matched by prefix, so without a boundary check
+    # `SitePermissions.sys.mjs` also claimed `SitePermissions.sys.mjs.bak`. No such path
+    # is in the tree today; this keeps it that way.
+    assert owners_for_path("browser/modules/SitePermissions.sys.mjs")
+    assert owners_for_path("browser/modules/SitePermissions.sys.mjs.bak") == ()
+
+
+def test_a_directory_is_spelled_with_a_trailing_slash_and_a_file_without():
+    # `docs.docs_for` and `owners_for_path` both decide file-versus-directory from the
+    # trailing slash. That is only safe if the convention actually holds, and sniffing for
+    # a dot instead is what let `widget/foo.bar/` inherit a sibling's documentation.
+    #
+    # Both directions matter, and the second is the dangerous one: a file written *with*
+    # a trailing slash turns an exact-match claim into a prefix claim that matches
+    # nothing, so the component silently stops owning the file it named.
+    for entry in TRIAGE_SCOPE:
+        for value in (*entry.trees, *entry.doc_trees, *entry.owns):
+            basename = value.rstrip("/").rsplit("/", 1)[-1]
+            assert basename, f"{entry.key}: {value!r} has no final segment"
+            if "." in basename:
+                assert not value.endswith("/"), (
+                    f"{entry.key}: {value} names a file but ends in a slash"
+                )
+            else:
+                assert value.endswith("/"), (
+                    f"{entry.key}: {value} names a directory but has no trailing slash"
+                )
+
+
+def test_a_tie_can_only_mean_two_components_claimed_the_same_path():
+    # What makes a plural `owners_for_path` result co-ownership rather than ambiguity:
+    # every component in it declared the same entry, so either team's guidance covers the
+    # file. Probing each declared claim as a path exercises `_owns` rather than asserting
+    # string arithmetic, so this fails if `_owns` ever grows a matching mode -- globbing,
+    # case folding -- under which unrelated claims can tie on length.
+    for entry in TRIAGE_SCOPE:
+        for claim in entry.owns:
+            owners = owners_for_path(claim)
+            assert entry in owners, f"{entry.key} does not own its own claim {claim}"
+            if len(owners) > 1:
+                for other in owners:
+                    assert claim in other.owns, (
+                        f"{other.key} ties on {claim} without claiming it"
+                    )
+
+
 def test_ordinary_desktop_chrome_is_owned_by_nobody():
-    # `browser/` and `toolkit/` describe the desktop frontend usefully in the index but
-    # contain almost every other area, so treating them as owned refuses comments for
-    # the ordinary reason that a Firefox bug touches a Firefox file.
+    # `browser/` and `toolkit/` contain almost every triaged component, so treating
+    # either as owned would refuse comments for the ordinary reason that a Firefox bug
+    # touches a Firefox file.
     for path in (
         "browser/base/content/browser.js",
         "browser/app/profile/firefox.js",
         "toolkit/content/widgets/panel-list.js",
         "widget/cocoa/nsCocoaWindow.mm",
     ):
-        assert area_for_path(path) is None, path
+        assert owners_for_path(path) == (), path

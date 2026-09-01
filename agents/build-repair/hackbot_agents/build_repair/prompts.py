@@ -7,14 +7,15 @@
 
 ANALYSIS_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing and fixing a build failure.
 
-Investigate why the {target_software} build broke at commit {git_commit}. The source tree
-is already checked out at that commit (your working directory).
+Investigate why the {target_software} build broke at commit {git_commit}. The source
+tree is at {source_repo} (your working directory), checked out at that commit. Stay
+in it: write scratch files by absolute path rather than `cd`-ing elsewhere. If a
+command reports "not a git repository" you have moved -- run `git -C {source_repo}`
+rather than hunting for the tree.
 {push_context}{bug_context}
 Analyze the following:
 1. The git diff of commit {git_commit} (use `git show {git_commit}`).
-{bug_step}{logs_num}. The Taskcluster build failure logs. Each failing task has a sanitized log (only the ERROR -/FATAL - lines) and the full log. Start from the sanitized log -- it usually pinpoints the failing file and line. The full log can be tens of thousands of lines, so grep it for that file/line rather than reading it sequentially:
-{failure_logs}
-
+{bug_step}{logs_num}.{treeherder_step}
 Create these documents:
 1. {scratch_out}/analysis.md -- the developer's reference, readable in under a
    minute. Under 40 lines, in exactly these sections, each a short paragraph or a
@@ -44,6 +45,65 @@ determine which single commit introduced the build failure.
 
 PUSH_COMMIT_LINE = "- {commit}"
 
+TREEHERDER_STEP = r"""\
+   The build failure logs, via `treeherder-cli`. This push is {project} revision
+   {hg_revision}, and the failing task is '{task_name}'. Start with the error lines:
+   `treeherder-cli {hg_revision} --repo {project} --filter '{task_name}'
+   --include-intermittent --fetch-logs --pattern '\b(?:ERROR|FATAL) -'
+   --cache-dir {scratch_out}/logs | head -100`
+   Anchor short patterns on a word boundary: bare `ERROR -` also matches inside
+   `-DHAVE_STRERROR -D...` and buries the real errors in compiler command lines.
+   Each hit prints as `live_backing_log:<line>` and the full logs stay under
+   {scratch_out}/logs, where those line numbers apply, so read a window around one
+   to get the whole diagnostic:
+   `sed -n '165280,165320p' {scratch_out}/logs/job_<id>/live_backing_log.log | cut -c1-200`
+   An `ERROR -` line is usually only the first line of a compiler error -- the
+   offending source and the `^` caret follow it. Never read or cat a whole log;
+   they run to six figures of lines.
+   Clip the width as well as the line count: log lines run to thousands of
+   characters, so append `| cut -c1-200` to any grep or sed over a log -- 40 wpt
+   lines alone came to 38 KB without it.
+   Two things can stop that command finding the job, and both are recoverable:
+   - Treeherder sometimes returns a malformed response ("error decoding response
+     body"). Retry the same command once; it usually succeeds.
+   - "N passing jobs ... no failures found" almost always means
+     `--include-intermittent` was missing: a failure a sheriff has already
+     classified is hidden without it, and that covers most of them. Check the flag
+     is there and re-run.
+   Once the retry has also failed there is nothing to analyse. Write what you ran
+   and what it reported to {scratch_out}/error.txt and stop: do not write the other
+   documents, guess a cause, or propose a fix from the diff alone. Do not fetch the
+   artifact from Taskcluster yourself either: after a retry or rerun the latest
+   artifact can be a passing run's log, so a wrong log is worse than none. The run
+   is meant to fail here.
+
+   The same command answers CI questions about the push. `--compare <revision>`
+   says whether the failure is new here or was already failing earlier;
+   `--lookback 50 --suspects` finds the push window a failure started in;
+   `--similar-history <job id>` gives a job's recent pass rate, which separates a
+   real bustage from infrastructure flakiness.
+
+   Every revision you pass has to be a real hg revision that treeherder-cli
+   printed. It rejects anything else with "No push found for revision" -- both the
+   git shas of the push commits above and placeholders like `parent`. To compare
+   against a neighbouring push, get its revision from `--context 3` first, which
+   lists the pushes either side of this one, then pass that to `--compare`.
+
+   `--help` lists the rest. The default markdown output is the compact one -- only
+   add `--json` when you will parse it. To see more of a log widen `--pattern`.
+   Always pass `--filter` and pipe through `head`: unfiltered, one push can print
+   hundreds of megabytes straight into your context. Never pass `--watch` or
+   `--stream-failures` -- they block until CI finishes.
+"""
+
+
+TREEHERDER_STEP_NO_PUSH = """\
+   This push could not be resolved on Treeherder, so the failure logs cannot be
+   reached. Write that to {scratch_out}/error.txt and stop: do not write the other
+   documents or propose a fix from the diff alone.
+"""
+
+
 BLAME_STEP = """4. {scratch_out}/blame.json naming the commit that introduced the failure, as JSON:
    {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Use one of the
    push commits listed above when there are several, otherwise the checked-out
@@ -66,7 +126,17 @@ Read your earlier analysis and implement the fix directly in the source tree:
 1. {scratch_out}/analysis.md -- your analysis of what caused the failure
 2. {scratch_out}/planning.md -- your fixing plan
 
-Edit the source files in the working directory to repair the build. A mozconfig
+Edit the source files in {source_repo} (your working directory) to repair the build.
+Editing: use Edit on a file that already exists -- Write refuses until the file has
+been read, which costs a turn. To see how a commit handled comparable files, run
+`git show <sha> -- <dir>` rather than guessing a sibling's name.
+
+Working in this tree: review your own edits with `git diff --stat` and `git diff --
+<path>`, never `git status` -- after a build the objdir adds millions of untracked
+files and the output runs to tens of MB. Logs already fetched sit under
+{scratch_out}/logs; when you grep or sed one, cap the width as well as the line
+count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB.
+ A mozconfig
 that mirrors the failing CI configuration (release milestone, warnings-as-errors)
 is already set up. Verify the fix compiles with the build_firefox tool, passing
 the directory of the file you changed as `target` (e.g. 'docshell/base') for a

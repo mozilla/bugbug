@@ -42,15 +42,12 @@ from .config import (
     FIX_MODEL,
     SKIP_FIREFOX_BUILD,
 )
-from .logs import TaskLogs
 from .prompts import (
     ANALYSIS_TEMPLATE,
-    CANDIDATE_INTRO_COMPLETE,
-    CANDIDATE_INTRO_PARTIAL,
+    CANDIDATE_INTRO,
     ENVIRONMENT_NOTE,
     FIX_TEMPLATE,
     KNOWN_INTERMITTENTS_LINE,
-    LAST_GREEN_LINE,
     MAX_CANDIDATE_COMMITS,
     MAX_TESTS_PER_GROUP,
     VERIFY_LOCAL,
@@ -71,7 +68,6 @@ class TestRepairResult(HackbotAgentResult):
     candidate_commits: list[str] = []
     culprit_bug: int | None = None
     confidence: float = 0.0
-    last_green_revision: str | None = None
     intermittent_bug: int | None = None
     proposed_patch: bool = False
     summary: str = ""
@@ -113,6 +109,26 @@ async def _run_session(
             if isinstance(msg, ResultMessage):
                 result_msg = msg
     return result_msg
+
+
+def _check_blocked(scratch_out: Path) -> None:
+    """Fail the run unless the agent actually retrieved a failure log.
+
+    Analysing a failure whose log never arrived produces a confident verdict
+    invented from the diff alone (bug 6665), so a missing log is an error rather
+    than a verdict, and the error reaches the API and the UI. The agent is asked to
+    report the blocker itself in error.txt; the log check is what makes it a
+    guarantee rather than an instruction.
+    """
+    blocker = scratch_out / "error.txt"
+    if blocker.exists():
+        raise AgentError(blocker.read_text().strip() or "agent reported it was blocked")
+    logs = scratch_out / "logs"
+    if not any(logs.glob("**/*live_backing_log*")):
+        raise AgentError(
+            "no failure log was retrieved: treeherder-cli left nothing under "
+            f"{logs}, so any verdict would be guesswork"
+        )
 
 
 def _check(result_msg: ResultMessage | None, stage: str) -> None:
@@ -247,7 +263,6 @@ def _assemble_result(
     *,
     verdict: dict,
     source_repo: Path,
-    last_green_revision: str | None,
     total_turns: int,
     total_cost: float,
     publish_file: Callable[[str, Path, str | None], str] | None,
@@ -267,7 +282,6 @@ def _assemble_result(
         culprit_bug=_as_int(verdict.get("culprit_bug")),
         intermittent_bug=_as_int(verdict.get("intermittent_bug")),
         confidence=_as_float(verdict.get("confidence")),
-        last_green_revision=last_green_revision,
         proposed_patch=bool(verdict.get("proposed_patch")),
         summary=_read_doc(scratch_out, "summary", publish_file),
         analysis=_read_doc(scratch_out, "analysis", publish_file),
@@ -277,9 +291,7 @@ def _assemble_result(
 
 
 def _range_expr(commit_range: CommitRange) -> str:
-    """A git revision range for ``git log``, falling back to the clone depth."""
-    if commit_range.base:
-        return f"{commit_range.base}..{commit_range.head}"
+    """The range for `git log`, relative to the checked-out head."""
     return f"HEAD~{commit_range.span}..HEAD"
 
 
@@ -308,7 +320,6 @@ async def run_test_repair(
     source_repo: Path,
     fx_ctx: FirefoxContext,
     investigation: Investigation,
-    task_logs: dict[str, TaskLogs],
     scratch_out: Path,
     skip_firefox_build: bool = SKIP_FIREFOX_BUILD,
     model: str | None = None,
@@ -334,16 +345,6 @@ async def run_test_repair(
         mcp_servers["bugzilla"] = bugzilla_mcp_server
         allowed_tools += BUGZILLA_READ_TOOLS
 
-    failure_logs = "\n".join(
-        f"- {name}: sanitized failures at {tl.sanitized} (start here); "
-        f"full log at {tl.full}"
-        for name, tl in task_logs.items()
-    )
-    last_green_line = (
-        LAST_GREEN_LINE.format(last_green_revision=investigation.last_green_revision)
-        if investigation.last_green_revision
-        else ""
-    )
     known_intermittents_line = (
         KNOWN_INTERMITTENTS_LINE.format(
             bugs=", ".join(str(bug) for bug in investigation.known_intermittent_bugs)
@@ -352,22 +353,21 @@ async def run_test_repair(
         else ""
     )
     range_expr = _range_expr(commit_range)
-    intro = (
-        CANDIDATE_INTRO_COMPLETE if commit_range.complete else CANDIDATE_INTRO_PARTIAL
-    )
     analysis_prompt = ANALYSIS_TEMPLATE.format(
         failing_tests=_failing_tests(investigation),
         harness=investigation.harness,
         platform=investigation.platform or "unknown",
         label=investigation.label or "unknown",
+        project=investigation.project,
+        hg_revision=investigation.hg_revision,
         source_repo=source_repo,
         failure_commit=failure_commit,
-        candidate_intro=intro.format(commit_range=range_expr, span=commit_range.span),
+        candidate_intro=CANDIDATE_INTRO.format(
+            commit_range=range_expr, span=commit_range.span
+        ),
         commit_range=range_expr,
         max_candidates=MAX_CANDIDATE_COMMITS,
-        last_green_line=last_green_line,
         known_intermittents_line=known_intermittents_line,
-        failure_logs=failure_logs,
         scratch_out=scratch_out,
     )
 
@@ -393,6 +393,7 @@ async def run_test_repair(
         )
         result_msg = await _run_session(reporter, analysis_opts, analysis_prompt)
         _check(result_msg, "analysis")
+        _check_blocked(scratch_out)
         total_cost += result_msg.total_cost_usd or 0.0
         total_turns += result_msg.num_turns or 0
 
@@ -444,7 +445,6 @@ async def run_test_repair(
         scratch_out,
         verdict=verdict,
         source_repo=source_repo,
-        last_green_revision=investigation.last_green_revision,
         total_turns=total_turns,
         total_cost=total_cost,
         publish_file=publish_file,

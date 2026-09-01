@@ -54,29 +54,39 @@ def channel_for(product: str | None, component: str | None) -> str | None:
     return SLACK_CHANNELS.get(f"{product.strip()} :: {component.strip()}")
 
 
-def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
-    """Render the notification for an auto-applied run."""
-    assessment = result.severity_assessment
+def _bug_link(result: FrontendTriageResult) -> str:
+    return _link(BUG_URL.format(bug_id=result.bug_id), f"Bug {result.bug_id}")
+
+
+def _summary(result: FrontendTriageResult) -> str:
+    return result.summary.strip() if result.summary else ""
+
+
+def _is_urgent(result: FrontendTriageResult) -> bool:
     # Gated on the severity's own confidence, not the run's -- the two are independent,
     # and a run that localized the cause precisely can still be unsure how bad the bug
     # is. The comment drops its severity block on the same threshold, so without this
     # Slack could shout S1 while the bug says nothing about severity at all.
     #
     # Both values arrive normalized from `parse_plan`.
-    urgent = bool(
+    assessment = result.severity_assessment
+    return bool(
         assessment
         and assessment.suggested == URGENT_SEVERITY
         and assessment.confidence in REPORTABLE_SEVERITY_CONFIDENCES
     )
 
-    headline = _link(BUG_URL.format(bug_id=result.bug_id), f"Bug {result.bug_id}")
-    if result.summary and result.summary.strip():
-        headline += f" — {result.summary.strip()}"
+
+def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
+    headline = _bug_link(result)
+    summary = _summary(result)
+    if summary:
+        headline += f" — {summary}"
     # The level is spelled out next to the emoji, so it still reads as an S1 for anyone
     # whose client does not render one. "suggested", because a bare "(S1)" would read as
     # the bug having been marked S1, and nothing was written to the field.
     headline = f"*{headline}*"
-    if urgent:
+    if _is_urgent(result):
         headline = f":red_circle: {headline} (suggested {URGENT_SEVERITY})"
 
     return "\n".join(
@@ -85,6 +95,72 @@ def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
             _link(RUN_URL.format(run_id=run_id), "frontend-triage run details"),
         ]
     )
+
+
+def _severity_field(result: FrontendTriageResult) -> str | None:
+    """The level this run suggests, when it is sure enough to suggest one.
+
+    Never a level the bug received: this agent only comments (`ENABLED_ACTION_TYPES`),
+    and `rules/severity-assessment.md` tells it as much, so the label says suggested
+    rather than leaving a reader to assume the field was set. Below the reportable
+    threshold there is no field at all, on the same gate as the comment's severity
+    block and the headline's marker.
+    """
+    assessment = result.severity_assessment
+    if not assessment or assessment.confidence not in REPORTABLE_SEVERITY_CONFIDENCES:
+        return None
+    if not assessment.suggested:
+        return None
+    return f"*Suggested severity*\n{assessment.suggested}"
+
+
+def _component_field(result: FrontendTriageResult) -> str | None:
+    """Where the bug lives, for the channels that own more than one component."""
+    if not result.product or not result.component:
+        return None
+    return f"*Component*\n{result.product.strip()} :: {result.component.strip()}"
+
+
+def build_blocks(result: FrontendTriageResult, *, run_id: str) -> list[dict]:
+    headline = f"*{_bug_link(result)}*"
+    summary = _summary(result)
+    if summary:
+        headline += f"\n{summary}"
+    if _is_urgent(result):
+        # Worded as the text version words it: nothing was written to the severity
+        # field, so a bare "S1" would read as the bug having been marked one.
+        headline = f":red_circle: *suggested {URGENT_SEVERITY}* {headline}"
+
+    blocks: list[dict] = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": headline}}
+    ]
+
+    fields = [
+        field
+        for field in (_severity_field(result), _component_field(result))
+        if field is not None
+    ]
+    if fields:
+        blocks.append(
+            {
+                "type": "section",
+                "fields": [{"type": "mrkdwn", "text": field} for field in fields],
+            }
+        )
+
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Triaged by frontend-triage · "
+                    + _link(RUN_URL.format(run_id=run_id), "run details"),
+                }
+            ],
+        }
+    )
+    return blocks
 
 
 def record_notification(
@@ -114,4 +190,9 @@ def record_notification(
         return None
 
     logger.info("Bug %s: reporting triage to %s", result.bug_id, channel)
-    return record_message(recorder, channel, build_message(result, run_id=run_id))
+    return record_message(
+        recorder,
+        channel,
+        build_message(result, run_id=run_id),
+        blocks=build_blocks(result, run_id=run_id),
+    )

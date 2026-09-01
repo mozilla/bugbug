@@ -24,7 +24,7 @@ import re
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionHook, ActionsRecorder
 
-from .config import area_for_path
+from .config import owners_for_path
 
 # A line the model writes to declare its severity. Anchored to the line start so an
 # ordinary mention -- quoting a reporter, or arguing why something is not S1 -- does
@@ -59,17 +59,19 @@ def cited_paths(text: str) -> list[str]:
     return [m.group("path") for m in _CITED_PATH.finditer(text)]
 
 
-def area_guidance_hook(loaded_areas: set[str]) -> ActionHook:
-    """Refuse a comment citing code from an area whose guidance was never loaded.
+def component_guidance_hook(loaded: set[str]) -> ActionHook:
+    """Refuse a comment citing code owned by a component whose guidance was never loaded.
 
-    The prompt carries the area the bug's component maps to. When the investigation
-    lands somewhere else, nothing but this makes the agent go and read that area.
+    The prompt carries the guidance for the component the bug was filed in. When the
+    investigation lands somewhere else, nothing but this makes the agent go and read the
+    guidance for where it landed.
 
-    ``loaded_areas`` is shared with the ``areas`` MCP server, which adds to it as the
-    agent loads files, so the retry after a refusal succeeds.
+    ``loaded`` is shared with the ``guidance`` MCP server, which adds to it as the agent
+    loads components, so the retry after a refusal succeeds.
 
-    A path in no area passes: `gfx/` has nothing to load, so refusing it would fail the
-    run over something the agent cannot satisfy.
+    A path no component owns passes: `gfx/` has nothing to load, and neither does ordinary
+    desktop chrome, so refusing either would fail the run over something the agent cannot
+    satisfy.
     """
 
     def hook(action: dict) -> None:
@@ -79,18 +81,23 @@ def area_guidance_hook(loaded_areas: set[str]) -> ActionHook:
 
         missing: dict[str, str] = {}
         for path in cited_paths(text):
-            area = area_for_path(path)
-            if area is not None and area.name not in loaded_areas:
-                missing.setdefault(area.name, path)
+            owners = owners_for_path(path)
+            # Any owner will do. Three Android components share `mobile/android/`, and
+            # refusing a Toolbar comment for citing a file its own team owns is noise.
+            if owners and not any(o.key in loaded for o in owners):
+                # Keyed by the first owner, which is the one to name in the message.
+                # Co-owners are alternatives, not a list to work through, so offering a
+                # joined string would have the agent pass it back as one component name.
+                missing.setdefault(owners[0].key, path)
 
         if missing:
             named = ", ".join(
-                f"{area} (e.g. {path})" for area, path in sorted(missing.items())
+                f"{key} (e.g. {path})" for key, path in sorted(missing.items())
             )
             raise ToolError(
-                f"your comment cites code in {named}, whose guidance you have not "
-                f"read. Call `load_area_guidance` for each, then revise the comment "
-                f"against what it says -- your localization may be wrong."
+                f"your comment cites code owned by {named}, whose guidance you have not "
+                f"read. Call `load_component_guidance` for each one named, then revise "
+                f"the comment against what it says -- your localization may be wrong."
             )
 
     return hook
