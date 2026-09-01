@@ -3,11 +3,12 @@
 On run completion the recorded actions from `summary["actions"]` are always
 upserted as `run_actions` rows (one per entry) so they're visible and
 manageable in the UI. Whether they're then applied *automatically* is decided by
-`_auto_apply_blocker` (see `app/agents.py`); either way they
-can be applied on demand (manual apply-all from the UI). Application runs each pending
-row through the handler registry in `hackbot_runtime.actions.handlers` and is
-idempotent per action — an already-`applied` row is never re-applied, so Pub/Sub
-retries and repeated manual applies are safe.
+the agent's run-level policy and per-action overrides (see `app/agents.py`);
+either way they can be applied on demand (manual apply-all from the UI).
+Application runs each pending row through the handler registry in
+`hackbot_runtime.actions.handlers` and is idempotent per action — an
+already-`applied` row is never re-applied, so Pub/Sub retries and repeated
+manual applies are safe.
 """
 
 from __future__ import annotations
@@ -106,6 +107,17 @@ def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
         return "the agent did not mark this result safe to apply unattended"
 
     return None
+
+
+def _should_auto_apply(
+    spec: AgentSpec, action_type: str, *, run_level_auto_apply: bool
+) -> bool:
+    """Apply per-action overrides, falling back to the run-level decision."""
+    if action_type in spec.never_apply_actions:
+        return False
+    if action_type in spec.always_apply_actions:
+        return True
+    return run_level_auto_apply
 
 
 async def ensure_action_rows(
@@ -247,11 +259,11 @@ async def _apply_pending_rows(
 
 
 async def on_run_completed(db: AsyncSession, run: Run) -> None:
-    """Record a completed run's actions, and auto-apply them if the agent qualifies.
+    """Record a completed run's actions and auto-apply each eligible action.
 
     Called from the `apply-run-actions` push route. Actions are always recorded (so the
-    UI can show/manually apply them); they're applied automatically only when
-    `_auto_apply_blocker` finds nothing in the way.
+    UI can show/manually apply them); agent defaults and per-action overrides decide
+    which ones are applied automatically.
     """
     # Defense-in-depth: only a succeeded run's actions are recorded/applied. A
     # failed/timed-out run may have recorded actions before erroring, but acting
@@ -266,18 +278,28 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
     await db.commit()
 
     spec = AGENT_REGISTRY.get(run.agent)
-    blocker = _auto_apply_blocker(spec, run)
-    if blocker is None:
-        await _apply_pending_rows(db, run, rows)
-        return
 
-    log.info(
-        "Recorded %d action(s) for run %s; holding for review: %s (agent %s)",
-        len(rows),
-        run.run_id,
-        blocker,
-        run.agent,
-    )
+    run_level_auto_apply = _auto_apply_blocker(spec, run) is None
+    to_apply: list[tuple[RunAction, list[dict]]] = []
+    for row_with_attachments in rows:
+        row, _ = row_with_attachments
+        if _should_auto_apply(
+            spec, row.type, run_level_auto_apply=run_level_auto_apply
+        ):
+            to_apply.append(row_with_attachments)
+
+    if to_apply:
+        await _apply_pending_rows(db, run, to_apply)
+
+    held_count = len(rows) - len(to_apply)
+    if held_count:
+        log.info(
+            "Recorded %d action(s) for run %s; holding %d for review (agent %s)",
+            len(rows),
+            run.run_id,
+            held_count,
+            run.agent,
+        )
 
 
 async def apply_all_pending(db: AsyncSession, run: Run) -> None:

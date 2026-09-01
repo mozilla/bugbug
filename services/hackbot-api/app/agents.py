@@ -34,6 +34,9 @@ class AgentSpec:
     # was; this is where that verdict is honored. Fails closed, so a run that reports
     # no verdict never qualifies.
     auto_apply_requires_consent: bool = False
+    # Per-action overrides for the agent-level auto-apply policy.
+    always_apply_actions: frozenset[str] = frozenset()
+    never_apply_actions: frozenset[str] = frozenset()
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
