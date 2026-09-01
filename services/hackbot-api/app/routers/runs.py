@@ -243,13 +243,6 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     if run.finalized_at is not None:
         return
 
-    if run.execution_name is None:
-        run.status = RunStatus.failed.value
-        run.error = "Run was never associated with an execution"
-        run.finalized_at = datetime.now(timezone.utc)
-        await db.commit()
-        return
-
     try:
         exec_status = await jobs.get_execution_status(run.execution_name)
     except Exception:
@@ -305,6 +298,9 @@ def _has_unsubmitted_patch(
 def _terminal_status(
     exec_status: ExecutionStatus, summary: RunSummary | None
 ) -> tuple[RunStatus, str | None]:
+    if exec_status == ExecutionStatus.unknown:
+        return RunStatus.failed, "Run was never associated with an execution"
+
     if exec_status == ExecutionStatus.cancelled:
         return RunStatus.timed_out, "Execution was cancelled or timed out"
     if summary is None:

@@ -18,6 +18,7 @@ class ExecutionStatus(str, Enum):
     failed = "failed"
     cancelled = "cancelled"
     gone = "gone"
+    unknown = "unknown"
 
 
 @lru_cache(maxsize=1)
@@ -85,5 +86,8 @@ def _execution_status_sync(execution_name: str) -> ExecutionStatus:
     return ExecutionStatus.pending
 
 
-async def get_execution_status(execution_name: str) -> ExecutionStatus:
+async def get_execution_status(execution_name: str | None) -> ExecutionStatus:
+    if execution_name is None:
+        return ExecutionStatus.unknown
+
     return await asyncio.to_thread(_execution_status_sync, execution_name)
