@@ -36,21 +36,7 @@ async def finalize_stale_runs(
     dry_run: bool = False,
     db: AsyncSession = Depends(get_db),
 ) -> StaleRunSweep:
-    """Finalize runs whose completion event never arrived or never landed.
-
-    The completion path is otherwise entirely event-driven: a run leaves
-    `pending` only if one Cloud Run completion event reaches
-    `/internal/events/agent-run-finished`, so a single lost or poisoned message
-    strands it forever (see STUCK-PENDING-RUNS.md). This sweep makes durable
-    state converge without events, by re-running the same `finalize_run` the
-    event path uses, against every run past `min_age_minutes` that never
-    finalized.
-
-    Meant for Cloud Scheduler on a short interval. Safe to run concurrently
-    with the event path: `finalize_run` is idempotent via `finalized_at`.
-    Runs whose execution is genuinely still going are left alone and picked up
-    by a later sweep.
-    """
+    """Finalize runs whose completion event never arrived or never landed."""
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=min_age_minutes)
     result = await db.execute(
         select(Run)
