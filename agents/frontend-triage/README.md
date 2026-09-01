@@ -26,8 +26,10 @@ and the channel each reports to:
 | Component                         | Reports to                       |
 | --------------------------------- | -------------------------------- |
 | `Firefox :: New Tab Page`         | `#hnt-dev-triage`                |
+| `Firefox :: Sidebar`              | `#p10y-bots`                     |
 | `Firefox :: Site Permissions`     | `#privacy-team-automation`       |
 | `Toolkit :: Data Sanitization`    | `#privacy-team-automation`       |
+| `Firefox :: Settings UI`          | `#fx-recomp-bots`                |
 | `Firefox :: Sharing`              | `#content-sharing-automation`    |
 | `Firefox :: IP Protection`        | `#team-eng-ip-protection-triage` |
 | `Firefox :: Messaging System`     | `#omc-triage`                    |
