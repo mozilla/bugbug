@@ -119,9 +119,10 @@ class PerfRegressionPredictorModel(Model):
     artifact_url = "https://storage.googleapis.com/.../perf-regression-predictor-v1.tar.zst"
 ```
 
-`download_models()` fetches that URL for any model declaring an `artifact_url`
-and falls back to the Taskcluster index for the rest, so the background worker
-downloads this model alongside the others with no special casing.
+`utils.download_model()` fetches that URL for any model declaring an
+`artifact_url` and falls back to the Taskcluster index for the rest, so every
+caller (including the http service's `download_models()`) downloads this model
+alongside the others with no special casing.
 
 The archive must be a `.tar.zst` holding a single directory named
 `perfregressionpredictormodel`, which is what the rest of the service expects

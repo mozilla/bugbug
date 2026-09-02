@@ -45,7 +45,6 @@ MODELS_NAMES = [
     "worksforme",
     "fenixcomponent",
 ]
-MODELS_TO_DOWNLOAD = [*MODELS_NAMES, PERF_REGRESSION_PREDICTOR]
 PERF_REGRESSION_LOG_PREFIX = "[perf-regression-predictor]"
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
@@ -348,6 +347,9 @@ def classify_perf_regression(branch: str, rev: str) -> str:
 PUSH_CLASSIFIERS = {
     PERF_REGRESSION_PREDICTOR: classify_perf_regression,
 }
+
+# Every model served by an endpoint must be downloaded at startup.
+MODELS_TO_DOWNLOAD = [*MODELS_NAMES, *PUSH_CLASSIFIERS]
 
 
 @lru_cache(maxsize=None)
