@@ -38,10 +38,10 @@ _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 
 
 def _collect_refs(value: Any) -> set[str]:
-    """Every ref named by `{{actions.<ref>.<field>}}` placeholders in `value`.
+    """Collect refs from placeholders nested anywhere in action parameters.
 
-    Recurses through dicts/lists the same way :func:`resolve_placeholders`
-    does, so one action can depend on multiple referenced actions.
+    Searches strings, dictionary values, and list items so every referenced
+    action can be ordered before its consumer.
     """
     if isinstance(value, str):
         return {match.group(1) for match in _PLACEHOLDER_RE.finditer(value)}
@@ -226,9 +226,7 @@ async def _apply_pending_rows(
     Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
     earlier in this pass, so a later (even manual) apply can still reference an
-    earlier action's result. When the reference graph is acyclic, actions
-    defining refs apply before actions that name them, and recorded (idx) order
-    is kept among actions whose references are already satisfied.
+    earlier action's result.
     """
     results_by_ref: dict[str, dict] = {
         row.ref: row.result
@@ -249,9 +247,8 @@ async def _apply_pending_rows(
         )
         if all(pending[i][0].ref is None for i in group)
     ]
-    # Each coalesced group applies as one unit, sitting where its last member
-    # is (rows are in idx order, so that's its max idx); every other row is a
-    # unit of its own. Units hold indices into `pending`.
+    # A coalesced group becomes one unit at the position of its last row.
+    # Every ungrouped row becomes its own unit. Units store `pending` indices.
     anchor_of = {i: max(group) for group in groups for i in group}
     group_at = {max(group): group for group in groups}
     units: list[list[int]] = []
