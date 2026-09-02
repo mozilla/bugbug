@@ -472,37 +472,10 @@ class PhabricatorPatch(Patch):
     def _diff_metadata(self) -> dict:
         phabricator = get_phabricator_client()
         diffs = phabricator.search_diffs(diff_id=self.diff_id)
-        if len(diffs) != 1:
-            raise PhabricatorRevisionNotFoundException(f"Diff {self.diff_id} not found")
+        assert len(diffs) == 1
         diff = diffs[0]
 
         return diff
-
-    @cached_property
-    def diff_commits(self) -> list[dict]:
-        """Return local commit metadata uploaded with this immutable diff."""
-        phabricator = get_phabricator_client()
-        diffs = phabricator.search_diffs(
-            diff_id=self.diff_id,
-            attachments={"commits": True},
-        )
-        if len(diffs) != 1:
-            raise PhabricatorRevisionNotFoundException(f"Diff {self.diff_id} not found")
-        return diffs[0].get("attachments", {}).get("commits", {}).get("commits", [])
-
-    @property
-    def diff_revision_phid(self) -> str:
-        """Return the revision PHID associated with this diff."""
-        return self._diff_metadata["revisionPHID"]
-
-    @property
-    def commit_messages(self) -> list[str]:
-        """Return non-empty commit messages uploaded with this diff."""
-        return [
-            message
-            for commit in self.diff_commits
-            if isinstance((message := commit.get("message")), str) and message.strip()
-        ]
 
     async def get_base_revision(self) -> Optional[str]:
         try:
