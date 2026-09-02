@@ -47,14 +47,14 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                         |
 | `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`          |
 
-All but `testrail.submit_test_plan` and `email.send` take a **`reasoning`** argument — a free-text audit trail
+All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. `phabricator.submit_patch`
 is the only model-facing tool that exposes **`ref`** (see cross-references below).
 
 `testrail` and `slack` also provide `record_test_plan` / `record_message` helpers that agent
 code calls directly rather than the model choosing to — for an action the agent always takes
-once it has a result, not one the model decides on. `email.send` is _only_ that: it has no
-model-facing tool at all, since who receives mail is the agent code's decision.
+once it has a result, not one the model decides on. `email` provides `record_email`
+alongside its tool for the same reason.
 
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.

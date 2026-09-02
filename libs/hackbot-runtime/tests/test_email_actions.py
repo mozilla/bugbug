@@ -74,3 +74,41 @@ def test_patch_block_truncates_and_says_so():
 
 def test_patch_block_keeps_a_short_patch_whole():
     assert email.patch_block("+one\n+two") == "```diff\n+one\n+two\n```"
+
+
+async def test_send_records_the_action():
+    rec = ActionsRecorder()
+    confirmation = await email.send(
+        rec,
+        to=[" dev@mozilla.com ", "dev@mozilla.com"],
+        subject="  build failure  ",
+        body_markdown="  # Analysis  ",
+        reasoning="the pusher has to back this out",
+    )
+    assert "email.send (#0)" in confirmation
+    assert rec.actions == [
+        {
+            "type": "email.send",
+            "params": {
+                "to": ["dev@mozilla.com"],
+                "subject": "build failure",
+                "body_markdown": "# Analysis",
+                "attach_artifacts": [],
+            },
+            "reasoning": "the pusher has to back this out",
+        }
+    ]
+
+
+@pytest.mark.parametrize("subject,body", [("", "b"), ("s", "  ")])
+async def test_send_rejects_blank_arguments(subject, body):
+    rec = ActionsRecorder()
+    with pytest.raises(ToolError):
+        await email.send(
+            rec, to=["a@b.c"], subject=subject, body_markdown=body, reasoning="why"
+        )
+    assert rec.actions == []
+
+
+def test_tools_are_exposed_under_the_email_namespace():
+    assert [t.dotted for t in email.TOOLS] == ["email.send"]

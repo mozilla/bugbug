@@ -1,9 +1,8 @@
 """Email-domain recordable action.
 
-Deterministic code records the report a finished run owes its recipients through
-:func:`record_email`; the apply side delivers it with SendGrid (see
-``handlers/email_handler.py``). There is no model-facing ``@tool`` here: who
-receives mail is the agent code's decision, not a model turn.
+An agent -- or the deterministic code around it, via :func:`record_email` --
+records a report it wants delivered by email; the apply side sends it with
+SendGrid (see ``handlers/email_handler.py``).
 
 Recording rather than sending gives a notification the same properties as every
 other action -- visible in the UI before it lands, delivered at most once, and
@@ -17,8 +16,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from typing import Annotated
 
-from agent_tools.registry import ToolError
+from agent_tools.registry import ToolError, tool, tools_in
+from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
@@ -29,22 +30,12 @@ ACTION_TYPE = "email.send"
 MAX_PATCH_LINES = 400
 
 
-def record_email(
-    recorder: ActionsRecorder,
-    *,
-    to: Iterable[str] = (),
+def _params(
+    to: Iterable[str],
     subject: str,
     body_markdown: str,
     attach_artifacts: Iterable[str] = (),
-    ref: str | None = None,
 ) -> dict:
-    """Record an intended email.
-
-    ``to`` may be empty for a report that concerns no individual; the handler
-    still addresses the team. ``attach_artifacts`` names run artifact keys (e.g.
-    ``changes/changes.patch``) to attach, downloaded at apply time so the body
-    stays small and a missing artifact cannot fail the send.
-    """
     subject = subject.strip()
     body_markdown = body_markdown.strip()
     if not subject:
@@ -58,14 +49,81 @@ def record_email(
         if address and address not in recipients:
             recipients.append(address)
 
+    return {
+        "to": recipients,
+        "subject": subject,
+        "body_markdown": body_markdown,
+        "attach_artifacts": [key for key in attach_artifacts if key],
+    }
+
+
+@tool
+async def send(
+    recorder: ActionsRecorder,
+    to: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Who the report concerns, as email addresses. May be empty for a "
+                "report that concerns no individual; the team address is added "
+                "when the mail is sent, so never list it here."
+            )
+        ),
+    ],
+    subject: Annotated[
+        str,
+        Field(
+            description=(
+                "Subject line. Lead with the verdict, so it reads in an inbox "
+                "listing without opening the mail."
+            )
+        ),
+    ],
+    body_markdown: Annotated[
+        str,
+        Field(
+            description=(
+                "Body in Markdown: headings, lists, tables and fenced code all "
+                "render. Link every identifier a recipient would otherwise have "
+                "to look up."
+            )
+        ),
+    ],
+    reasoning: Annotated[
+        str,
+        Field(description="Why these recipients need to hear about it (audit log)."),
+    ],
+) -> str:
+    """Record an intended email.
+
+    Recorded into the run summary for human review -- does not send any mail.
+    """
+    recorder.record(
+        ACTION_TYPE, _params(to, subject, body_markdown), reasoning=reasoning
+    )
+    return f"Recorded {ACTION_TYPE} (#{len(recorder.actions) - 1})."
+
+
+def record_email(
+    recorder: ActionsRecorder,
+    *,
+    to: Iterable[str] = (),
+    subject: str,
+    body_markdown: str,
+    attach_artifacts: Iterable[str] = (),
+    ref: str | None = None,
+) -> dict:
+    """Record a report the agent was never asked to decide on.
+
+    For a run whose outcome is always worth reporting: the wording is code, not a
+    model turn. ``to`` may be empty for a report that concerns no individual; the
+    handler still addresses the team. ``attach_artifacts`` names run artifact keys
+    (e.g. ``changes/changes.patch``) to attach, downloaded at apply time so the
+    body stays small and a missing artifact cannot fail the send.
+    """
     return recorder.record(
         ACTION_TYPE,
-        {
-            "to": recipients,
-            "subject": subject,
-            "body_markdown": body_markdown,
-            "attach_artifacts": [key for key in attach_artifacts if key],
-        },
+        _params(to, subject, body_markdown, attach_artifacts),
         ref=ref,
     )
 
@@ -101,3 +159,6 @@ def patch_block(patch: str, max_lines: int = MAX_PATCH_LINES) -> str:
             "see the attached changes.patch for the full diff._"
         )
     return "\n".join(block)
+
+
+TOOLS = tools_in(__name__)
