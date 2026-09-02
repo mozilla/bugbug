@@ -101,12 +101,14 @@ for an ancestor still running before failing open. What differs is the unit comp
   configuration keeps a manifest already broken on another platform from masking a
   genuine new failure here. Only the manifests that come back new are kept, and the task
   is skipped if none do.
-- _Test with no manifests:_ a suite that reports no groups (gtest, talos, jittest, ...)
-  or a task-level failure (crash, timeout, harness error) has nothing finer to compare,
-  so the whole task is compared by label as on the build path — except that a chunked
-  label is reported as new rather than compared, since the chunk covers different tests
-  on each push. These cannot be reproduced by re-running a manifest, but the agent can
-  still identify the culprit commit.
+- _Test with no manifests:_ a suite that reports no groups (gtest, talos, jittest, ...),
+  a task-level failure (crash, timeout, harness error), or a job that failed while every
+  manifest passed — a debug assertion count, a leak check; in a dry run all 23 of these
+  were real regressions — has nothing finer to compare, so the whole task is compared by
+  label as on the build path — except that a chunked label is reported as new rather
+  than compared, since the chunk covers different tests on each push. These cannot be
+  reproduced by re-running a manifest, but the agent can still identify the culprit
+  commit.
 
 ## Run locally
 

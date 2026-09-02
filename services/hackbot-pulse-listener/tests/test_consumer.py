@@ -451,8 +451,28 @@ def test_later_task_of_a_claimed_push_stops_before_treeherder(env):
     env.failing_groups.assert_not_called()
 
 
-def test_no_failing_groups_skips(env):
+def test_no_failing_groups_and_no_failing_tests_skips(env):
     env.failing_groups.return_value = []
+    env.failing_tests.return_value = None
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.trigger_run.assert_not_called()
+    env.is_new_task_failure.assert_not_called()
+
+
+def test_failing_tests_without_a_failing_group_are_compared_as_a_whole_task(env):
+    # A debug assertion-count failure: the test passes, the job fails, and Treeherder
+    # records every manifest as green. That is a regression, not "nothing failed".
+    env.failing_groups.return_value = []
+    env.failing_tests.return_value = ["toolkit/content/tests/chrome/test_findbar.xhtml"]
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.is_new_task_failure.assert_called_once()
+    env.new_test_failures.assert_not_called()
+
+
+def test_failing_tests_without_a_failing_group_still_honour_the_ancestor_walk(env):
+    env.failing_groups.return_value = []
+    env.failing_tests.return_value = ["toolkit/content/tests/chrome/test_findbar.xhtml"]
+    env.is_new_task_failure.return_value = False
     assert consumer.process(_test_msg(), env.executor) is None
     env.trigger_run.assert_not_called()
 

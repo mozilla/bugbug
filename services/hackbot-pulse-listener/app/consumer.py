@@ -373,6 +373,26 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return _trigger_test_repair([], *trigger)
 
+    if not groups and not whole_task:
+        if not tests:
+            logger.info(
+                "Task %s reported no failing test groups; skipping -- %s",
+                task_id,
+                job_link,
+            )
+            return None
+        # The tests passed but the job did not -- a debug assertion count, a leak
+        # check -- so Treeherder records every manifest as green and there is no
+        # group to compare. In a dry run every such task was a genuine regression.
+        logger.info(
+            "Task %s failed %s test(s) but reports no failing group; comparing the "
+            "task as a whole -- %s",
+            task_id,
+            len(tests),
+            job_link,
+        )
+        whole_task = True
+
     try:
         if whole_task:
             if not regression.is_new_task_failure(
@@ -387,13 +407,6 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
                 return None
             fresh: list[str] = []
         else:
-            if not groups:
-                logger.info(
-                    "Task %s reported no failing test groups; skipping -- %s",
-                    task_id,
-                    job_link,
-                )
-                return None
             fresh = _fresh_groups(
                 groups, project, hg_revision, config, claimed_elsewhere
             )
