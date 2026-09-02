@@ -111,13 +111,11 @@ def _record_verdict_email(
     Unlike the Slack message this is not filtered: the team tracks what the agent
     decided, including the intermittents no sheriff has to act on.
     """
-    patch = ctx.source_patch
     subject, body = build_email(
         result,
         investigation,
         task_id=task_id,
         run_id=ctx.run_id,
-        patch=patch,
         culprit_author=culprit_author,
         already_actioned=sheriff_classification(investigation.project, task_id),
     )
@@ -125,7 +123,7 @@ def _record_verdict_email(
         ctx.actions,
         subject=subject,
         body_markdown=body,
-        attach_artifacts=["changes/changes.patch"] if patch else [],
+        attach_patch=ctx.source_changed,
     )
 
 

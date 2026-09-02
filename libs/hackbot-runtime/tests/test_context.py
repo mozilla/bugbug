@@ -245,35 +245,30 @@ def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeyp
     assert not written.exists()
 
 
-def test_source_patch_is_the_patch_publish_changes_publishes(tmp_path, monkeypatch):
-    hb = _hb_with_source(tmp_path, monkeypatch)
-    assert hb.source_patch == "x"
-
-
-def test_source_patch_is_empty_for_an_agent_that_touched_no_source(tmp_path):
+def test_source_changed_is_false_for_an_agent_that_touched_no_source(tmp_path):
     hb = _hb(tmp_path, HackbotConfig())
-    assert hb.source_patch == ""
+    assert hb.source_changed is False
 
 
-def test_source_patch_is_empty_when_the_agent_changed_nothing(tmp_path, monkeypatch):
+def test_source_changed_asks_git_without_disturbing_the_tree(tmp_path, monkeypatch):
+    # Read-only, unlike collect(): a notification gating on this must not commit
+    # the working tree out from under the agent.
     hb = _hb_with_source(tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        "hackbot_runtime.context.changes.collect", lambda repo, base, repo_url: None
-    )
-    assert hb.source_patch == ""
-
-
-def test_the_tree_is_collected_once_however_often_it_is_read(tmp_path, monkeypatch):
-    # collect() commits what the agent left uncommitted, so a second pass would
-    # record wrapped_uncommitted=False and publish metadata that contradicts it.
-    hb = _hb_with_source(tmp_path, monkeypatch)
-    calls = []
+    collected = []
     monkeypatch.setattr(
         "hackbot_runtime.context.changes.collect",
-        lambda repo, base, repo_url: (
-            calls.append(base) or ChangeSet(patch=b"x", metadata={"base": base})
-        ),
+        lambda repo, base, repo_url: collected.append(base),
     )
-    assert hb.source_patch == hb.source_patch == "x"
-    hb.publish_changes()
-    assert calls == ["basecommit"]
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.has_changes", lambda repo, base: True
+    )
+    assert hb.source_changed is True
+    assert collected == []
+
+
+def test_source_changed_is_false_when_the_agent_changed_nothing(tmp_path, monkeypatch):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.has_changes", lambda repo, base: False
+    )
+    assert hb.source_changed is False

@@ -19,7 +19,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from hackbot_runtime.actions.email import demote_headings, patch_block
+from hackbot_runtime.actions.email import PATCH_PLACEHOLDER, demote_headings
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 
 from .agent import BuildRepairResult
@@ -92,7 +92,7 @@ def build_email(
     *,
     task_id: str,
     run_id: str,
-    patch: str = "",
+    has_patch: bool = False,
     blamed_author: str | None = None,
 ) -> tuple[str, str]:
     """The subject and markdown body of the build-failure email."""
@@ -159,6 +159,8 @@ def build_email(
             "",
             f"- Local build verified: {result.local_build_verified}",
         ]
-    if patch:
-        lines += ["", "## Proposed patch", "", patch_block(patch)]
+    if has_patch:
+        # The diff itself is substituted for the placeholder when the mail is sent,
+        # from the same artifact it attaches.
+        lines += ["", "## Proposed patch", "", "```diff", PATCH_PLACEHOLDER, "```"]
     return subject, "\n".join(lines)

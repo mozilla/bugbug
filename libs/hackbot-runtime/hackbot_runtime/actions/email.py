@@ -25,16 +25,17 @@ from hackbot_runtime.actions.recorder import ActionsRecorder
 
 ACTION_TYPE = "email.send"
 
-# An inline diff is context, not the deliverable: the full patch rides along as an
-# attachment, so a long one is cut off rather than pushed into a scroll.
-MAX_PATCH_LINES = 400
+# Substituted with the run's patch when the mail is sent. The agent decides
+# whether the body mentions the patch at all, and how it is framed; this only
+# says where the text goes.
+PATCH_PLACEHOLDER = "{patch}"
 
 
 def _params(
     to: Iterable[str],
     subject: str,
     body_markdown: str,
-    attach_artifacts: Iterable[str] = (),
+    attach_patch: bool = False,
 ) -> dict:
     subject = subject.strip()
     body_markdown = body_markdown.strip()
@@ -53,7 +54,7 @@ def _params(
         "to": recipients,
         "subject": subject,
         "body_markdown": body_markdown,
-        "attach_artifacts": [key for key in attach_artifacts if key],
+        "attach_patch": attach_patch,
     }
 
 
@@ -110,20 +111,23 @@ def record_email(
     to: Iterable[str] = (),
     subject: str,
     body_markdown: str,
-    attach_artifacts: Iterable[str] = (),
+    attach_patch: bool = False,
     ref: str | None = None,
 ) -> dict:
     """Record a report the agent was never asked to decide on.
 
     For a run whose outcome is always worth reporting: the wording is code, not a
     model turn. ``to`` may be empty for a report that concerns no individual; the
-    handler still addresses the team. ``attach_artifacts`` names run artifact keys
-    (e.g. ``changes/changes.patch``) to attach, downloaded at apply time so the
-    body stays small and a missing artifact cannot fail the send.
+    handler still addresses the team.
+
+    The run's patch can travel two ways, independently: inline, by putting
+    :data:`PATCH_PLACEHOLDER` in the body, and as a file, with ``attach_patch``.
+    Either way it is read once when the mail is sent, so the diff a recipient
+    reads and the file they save cannot differ.
     """
     return recorder.record(
         ACTION_TYPE,
-        _params(to, subject, body_markdown, attach_artifacts),
+        _params(to, subject, body_markdown, attach_patch),
         ref=ref,
     )
 
@@ -147,18 +151,6 @@ def demote_headings(md: str, by: int = 2) -> str:
             line = "#" * level + line[len(match.group(1)) :]
         out.append(line)
     return "\n".join(out)
-
-
-def patch_block(patch: str, max_lines: int = MAX_PATCH_LINES) -> str:
-    """A fenced diff of ``patch``, truncated to ``max_lines``."""
-    lines = patch.splitlines()
-    block = ["```diff", *lines[:max_lines], "```"]
-    if len(lines) > max_lines:
-        block.append(
-            f"\n_Patch truncated to {max_lines} lines; "
-            "see the attached changes.patch for the full diff._"
-        )
-    return "\n".join(block)
 
 
 TOOLS = tools_in(__name__)

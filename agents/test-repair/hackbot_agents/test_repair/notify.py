@@ -23,7 +23,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from hackbot_runtime.actions.email import demote_headings, patch_block
+from hackbot_runtime.actions.email import PATCH_PLACEHOLDER, demote_headings
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 
 from .agent import TestRepairResult
@@ -207,7 +207,6 @@ def build_email(
     *,
     task_id: str,
     run_id: str,
-    patch: str = "",
     culprit_author: str | None = None,
     already_actioned: str | None = None,
 ) -> tuple[str, str]:
@@ -272,14 +271,18 @@ def build_email(
     lines.append("- **Run details:** " + RUN_URL.format(run_id=run_id))
 
     lines += _analysis_sections(result)
-    if patch:
+    if result.proposed_patch:
+        # The diff itself is substituted for the placeholder when the mail is sent,
+        # from the same artifact it attaches.
         lines += [
             "",
             "## Proposed patch",
             "",
-            patch_block(patch),
+            "```diff",
+            PATCH_PLACEHOLDER,
+            "```",
             "",
-            "_For the author: squash this into your existing patches and reland. It is"
-            " a suggestion, not a follow-up to land on its own._",
+            "_For the author: squash this into your existing patches and reland. It"
+            " is a suggestion, not a follow-up to land on its own._",
         ]
     return subject, "\n".join(lines)

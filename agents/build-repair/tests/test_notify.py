@@ -112,6 +112,12 @@ def test_no_verification_section_without_a_verdict():
     assert "## Verification" not in body
 
 
-def test_the_patch_is_quoted_when_the_run_produced_one():
-    _, body = _email(patch="--- a\n+++ b\n+fix")
-    assert "```diff\n--- a\n+++ b\n+fix\n```" in body
+def test_the_patch_section_frames_a_placeholder_the_apply_step_fills():
+    _, body = _email(has_patch=True)
+    assert body.endswith("## Proposed patch\n\n```diff\n{patch}\n```")
+
+
+def test_no_patch_section_without_a_patch():
+    _, body = _email()
+    assert "Proposed patch" not in body
+    assert "{patch}" not in body

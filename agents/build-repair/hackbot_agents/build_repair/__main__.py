@@ -77,8 +77,8 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
 def _record_analysis_email(
     ctx: HackbotContext, result: BuildRepairResult, push: PushInfo, task_id: str
 ) -> None:
-    patch = ctx.source_patch
-    if NOTIFY_ONLY_WITH_PATCH and not patch:
+    has_patch = ctx.source_changed
+    if NOTIFY_ONLY_WITH_PATCH and not has_patch:
         logger.info("Run produced no patch; not emailing the failure analysis")
         return
 
@@ -88,7 +88,7 @@ def _record_analysis_email(
         push,
         task_id=task_id,
         run_id=ctx.run_id,
-        patch=patch,
+        has_patch=has_patch,
         blamed_author=blamed_author,
     )
     record_email(
@@ -96,7 +96,7 @@ def _record_analysis_email(
         to=recipients(push, blamed_author),
         subject=subject,
         body_markdown=body,
-        attach_artifacts=["changes/changes.patch"] if patch else [],
+        attach_patch=has_patch,
     )
 
 

@@ -11,6 +11,12 @@ does not choose per run:
 ``NOTIFICATION_OVERRIDE_EMAIL``
     Replaces every recipient with this one address. The single switch that keeps
     a development deployment from mailing real developers.
+
+The recorded body is sent as it stands, except that ``{patch}`` is substituted
+with the run's patch artifact. That artifact is read here rather than baked in at
+record time, so an inline diff and an attachment of it cannot drift apart. How the
+patch is introduced -- headings, fencing, whether it appears at all -- is the
+recording agent's to decide.
 """
 
 from __future__ import annotations
@@ -20,9 +26,15 @@ import logging
 import os
 from typing import Any
 
+from hackbot_runtime.actions.email import PATCH_PLACEHOLDER
 from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
+from hackbot_runtime.changes import PATCH_ARTIFACT
 
 log = logging.getLogger(__name__)
+
+# A diff long enough to bury the rest of the mail is cut off; the attachment,
+# when the caller asked for one, still carries every line.
+_MAX_PATCH_LINES = 400
 
 
 def _recipients(params: dict[str, Any]) -> list[str]:
@@ -36,19 +48,28 @@ def _recipients(params: dict[str, Any]) -> list[str]:
     return recipients
 
 
-async def _attachments(params: dict[str, Any], ctx: ApplyContext) -> list[tuple]:
-    """``(filename, bytes)`` for each recorded artifact key that downloads.
+async def _patch(ctx: ApplyContext) -> bytes | None:
+    """The run's patch, or None when it published none.
 
-    A patch that never made it to storage costs the recipient an attachment, not
-    the whole notification.
+    Read once however many ways the mail carries it, so the diff a recipient reads
+    is the file they save. A patch that never made it to storage costs the
+    recipient the patch, not the whole notification.
     """
-    files = []
-    for key in params.get("attach_artifacts") or []:
-        try:
-            files.append((key.rsplit("/", 1)[-1], await ctx.download_artifact(key)))
-        except Exception:
-            log.exception("Could not attach artifact %s of run %s", key, ctx.run_id)
-    return files
+    try:
+        return await ctx.download_artifact(PATCH_ARTIFACT)
+    except Exception:
+        log.exception("Could not read the patch of run %s", ctx.run_id)
+        return None
+
+
+def _truncated(patch: bytes) -> str:
+    lines = patch.decode(errors="replace").splitlines()
+    if len(lines) <= _MAX_PATCH_LINES:
+        return "\n".join(lines)
+    return "\n".join(
+        lines[:_MAX_PATCH_LINES]
+        + [f"... truncated to {_MAX_PATCH_LINES} of {len(lines)} lines"]
+    )
 
 
 class SendEmailHandler:
@@ -82,6 +103,14 @@ class SendEmailHandler:
         )
 
         body_md = params["body_markdown"]
+        inline = PATCH_PLACEHOLDER in body_md
+        attach = bool(params.get("attach_patch"))
+        patch = await _patch(ctx) if inline or attach else None
+        if inline:
+            body_md = body_md.replace(
+                PATCH_PLACEHOLDER,
+                _truncated(patch) if patch else "(the patch could not be read)",
+            )
         message = Mail(
             From(sender),
             [To(recipients[0])] + [Cc(address) for address in recipients[1:]],
@@ -94,11 +123,11 @@ class SendEmailHandler:
         team = os.environ.get("NOTIFICATION_TEAM_EMAIL", "").strip()
         if team:
             message.reply_to = ReplyTo(team)
-        for filename, content in await _attachments(params, ctx):
+        if attach and patch is not None:
             message.add_attachment(
                 Attachment(
-                    FileContent(base64.b64encode(content).decode()),
-                    FileName(filename),
+                    FileContent(base64.b64encode(patch).decode()),
+                    FileName(PATCH_ARTIFACT.rsplit("/", 1)[-1]),
                     disposition=Disposition("attachment"),
                 )
             )

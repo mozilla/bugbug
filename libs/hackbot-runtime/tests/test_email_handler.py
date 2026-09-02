@@ -4,6 +4,7 @@ Mocks SendGrid so these exercise the handler's own logic -- recipient policy,
 attachments, error handling -- without touching a network.
 """
 
+import base64
 import json
 
 import pytest
@@ -51,7 +52,7 @@ def _params(**overrides):
         "to": ["dev@mozilla.com"],
         "subject": "build failure",
         "body_markdown": "# Analysis\n\ntext",
-        "attach_artifacts": [],
+        "attach_patch": False,
     }
     params.update(overrides)
     return params
@@ -95,32 +96,97 @@ async def test_the_body_is_sent_as_both_text_and_html():
     assert "<h1>Analysis</h1>" in contents[1]["value"]
 
 
-async def test_attaches_a_recorded_artifact():
+async def test_the_inline_diff_and_the_attachment_are_the_same_bytes():
+    patch = b"--- a/x\n+++ b/x\n+#include <y>\n"
     await email_handler.SendEmailHandler().apply(
-        _params(attach_artifacts=["changes/changes.patch"]),
-        _ctx({"changes/changes.patch": b"diff --git a b"}),
+        _params(
+            attach_patch=True,
+            body_markdown="# Analysis\n\n```diff\n{patch}\n```",
+        ),
+        _ctx({"changes/changes.patch": patch}),
     )
-    (attachment,) = _FakeClient.sent.get()["attachments"]
+    sent = _FakeClient.sent.get()
+    (attachment,) = sent["attachments"]
     assert attachment["filename"] == "changes.patch"
     assert attachment["disposition"] == "attachment"
+    assert base64.b64decode(attachment["content"]) == patch
+    body = sent["content"][0]["value"]
+    assert body == "# Analysis\n\n```diff\n" + patch.decode().rstrip("\n") + "\n```"
+
+
+async def test_the_patch_is_read_once_for_both_uses():
+    reads = []
+
+    async def download(key):
+        reads.append(key)
+        return b"+fix\n"
+
+    from hackbot_runtime.actions.handlers import ApplyContext
+
+    ctx = ApplyContext(run_id="r", agent="a", download_artifact=download)
+    await email_handler.SendEmailHandler().apply(
+        _params(
+            attach_patch=True,
+            body_markdown="```diff\n{patch}\n```",
+        ),
+        ctx,
+    )
+    assert reads == ["changes/changes.patch"]
+
+
+async def test_a_long_patch_is_truncated_inline_but_attached_whole():
+    patch = ("+line\n" * 500).encode()
+    await email_handler.SendEmailHandler().apply(
+        _params(
+            attach_patch=True,
+            body_markdown="```diff\n{patch}\n```",
+        ),
+        _ctx({"changes/changes.patch": patch}),
+    )
+    sent = _FakeClient.sent.get()
+    assert "truncated to 400 of 500 lines" in sent["content"][0]["value"]
+    assert base64.b64decode(sent["attachments"][0]["content"]) == patch
 
 
 async def test_the_built_payload_is_what_sendgrid_can_serialize():
     # `.get()` holding a helper object instead of its value only fails when the
     # SDK serializes the request, which a mocked client never reaches.
     await email_handler.SendEmailHandler().apply(
-        _params(attach_artifacts=["changes/changes.patch"]),
+        _params(attach_patch=True),
         _ctx({"changes/changes.patch": b"diff --git a b"}),
     )
     json.dumps(_FakeClient.sent.get())
 
 
-async def test_an_unavailable_artifact_does_not_lose_the_email():
+async def test_an_unreadable_patch_does_not_lose_the_email():
     result = await email_handler.SendEmailHandler().apply(
-        _params(attach_artifacts=["changes/changes.patch"]), _ctx()
+        _params(
+            attach_patch=True,
+            body_markdown="```diff\n{patch}\n```",
+        ),
+        _ctx(),
     )
     assert result.status == "applied"
-    assert "attachments" not in _FakeClient.sent.get()
+    sent = _FakeClient.sent.get()
+    assert "attachments" not in sent
+    assert "{patch}" not in sent["content"][0]["value"]
+
+
+async def test_a_body_can_reference_the_patch_without_attaching_it():
+    await email_handler.SendEmailHandler().apply(
+        _params(body_markdown="```diff\n{patch}\n```"),
+        _ctx({"changes/changes.patch": b"+fix\n"}),
+    )
+    sent = _FakeClient.sent.get()
+    assert "attachments" not in sent
+    assert "+fix" in sent["content"][0]["value"]
+
+
+async def test_the_body_is_untouched_when_the_run_recorded_no_patch():
+    await email_handler.SendEmailHandler().apply(_params(), _ctx())
+    sent = _FakeClient.sent.get()
+    assert "attachments" not in sent
+    assert sent["content"][0]["value"] == "# Analysis\n\ntext"
 
 
 async def test_without_sendgrid_configured_nothing_is_sent(monkeypatch):

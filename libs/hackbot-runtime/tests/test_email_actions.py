@@ -13,7 +13,7 @@ def test_record_email_records_the_action():
         to=["dev@mozilla.com"],
         subject="  build failure  ",
         body_markdown="  # Analysis  ",
-        attach_artifacts=["changes/changes.patch"],
+        attach_patch=True,
     )
     assert rec.actions == [action]
     assert action == {
@@ -22,7 +22,7 @@ def test_record_email_records_the_action():
             "to": ["dev@mozilla.com"],
             "subject": "build failure",
             "body_markdown": "# Analysis",
-            "attach_artifacts": ["changes/changes.patch"],
+            "attach_patch": True,
         },
         "reasoning": None,
     }
@@ -65,15 +65,20 @@ def test_demote_headings_leaves_fenced_code_alone():
     assert email.demote_headings(md) == "```\n# not a heading\n```\n### heading"
 
 
-def test_patch_block_truncates_and_says_so():
-    block = email.patch_block("\n".join(f"+line {i}" for i in range(10)), max_lines=3)
-    assert block.startswith("```diff\n+line 0\n+line 1\n+line 2\n```")
-    assert "truncated to 3 lines" in block
-    assert "+line 3" not in block
+def test_the_body_can_carry_the_patch_without_attaching_it():
+    rec = ActionsRecorder()
+    action = email.record_email(
+        rec, subject="s", body_markdown=f"```diff\n{email.PATCH_PLACEHOLDER}\n```"
+    )
+    assert action["params"]["attach_patch"] is False
+    assert email.PATCH_PLACEHOLDER in action["params"]["body_markdown"]
 
 
-def test_patch_block_keeps_a_short_patch_whole():
-    assert email.patch_block("+one\n+two") == "```diff\n+one\n+two\n```"
+def test_a_patch_can_be_attached_without_appearing_in_the_body():
+    rec = ActionsRecorder()
+    action = email.record_email(rec, subject="s", body_markdown="b", attach_patch=True)
+    assert action["params"]["attach_patch"] is True
+    assert email.PATCH_PLACEHOLDER not in action["params"]["body_markdown"]
 
 
 async def test_send_records_the_action():
@@ -93,7 +98,7 @@ async def test_send_records_the_action():
                 "to": ["dev@mozilla.com"],
                 "subject": "build failure",
                 "body_markdown": "# Analysis",
-                "attach_artifacts": [],
+                "attach_patch": False,
             },
             "reasoning": "the pusher has to back this out",
         }
