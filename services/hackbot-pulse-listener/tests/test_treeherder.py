@@ -582,3 +582,72 @@ def test_a_real_error_is_not_retried(monkeypatch):
     with pytest.raises(httpx.HTTPStatusError):
         treeherder._get("autoland/push/")
     assert len(calls) == 1
+
+
+_TEST_LINE = (
+    "TEST-UNEXPECTED-FAIL | browser/base/content/test/browser_tab.js | Test timed out."
+)
+
+
+def test_failing_tests_reads_the_test_paths(suggestions):
+    suggestions(_suggestion(_TEST_LINE, True))
+    assert treeherder.failing_tests("autoland", _failing_job()) == [
+        "browser/base/content/test/browser_tab.js"
+    ]
+
+
+def test_failing_tests_strips_the_xpcshell_manifest_prefix(suggestions):
+    suggestions(
+        _suggestion(
+            "TEST-UNEXPECTED-FAIL | xpcshell.toml:netwerk/test/unit/test_bug.js | boom",
+            True,
+        )
+    )
+    assert treeherder.failing_tests("autoland", _failing_job()) == [
+        "netwerk/test/unit/test_bug.js"
+    ]
+
+
+def test_failing_tests_deduplicates_repeated_lines(suggestions):
+    suggestions(_suggestion(_TEST_LINE, True), _suggestion(_TEST_LINE, True))
+    assert treeherder.failing_tests("autoland", _failing_job()) == [
+        "browser/base/content/test/browser_tab.js"
+    ]
+
+
+def test_failing_tests_ignores_lines_that_are_not_failures(suggestions):
+    suggestions(
+        _suggestion(_TEST_LINE, True),
+        _suggestion("[taskcluster:error] exit status 1", True),
+    )
+    assert treeherder.failing_tests("autoland", _failing_job()) == [
+        "browser/base/content/test/browser_tab.js"
+    ]
+
+
+def test_a_failure_not_attributed_to_a_test_yields_none(suggestions):
+    # "ShutdownLeaks" and "shutdown hang" name no test, so the failing tests of the
+    # job cannot be enumerated -- which must not read as "only the other one failed".
+    suggestions(
+        _suggestion(_TEST_LINE, True),
+        _suggestion("TEST-UNEXPECTED-FAIL | ShutdownLeaks | leaked 2 windows", True),
+    )
+    assert treeherder.failing_tests("autoland", _failing_job()) is None
+
+
+def test_failing_tests_is_none_without_any_failure_line(suggestions):
+    suggestions(_suggestion("[taskcluster:error] exit status 1", True))
+    assert treeherder.failing_tests("autoland", _failing_job()) is None
+
+
+def test_failing_tests_is_none_without_a_job(suggestions):
+    suggestions(_suggestion(_TEST_LINE, True))
+    assert treeherder.failing_tests("autoland", None) is None
+
+
+def test_failing_tests_fails_soft_on_error(monkeypatch):
+    def boom(project, job_id):
+        raise RuntimeError("treeherder is down")
+
+    monkeypatch.setattr(treeherder, "bug_suggestions", boom)
+    assert treeherder.failing_tests("autoland", _failing_job()) is None
