@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+# Duplicated in services/hackbot-api/app/schemas.py; keep these models in sync.
+
 
 class RunStatus(str, Enum):
     pending = "pending"
