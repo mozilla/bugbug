@@ -4,11 +4,15 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from bugbug.models.perf_regression_predictor import (
-    build_model_input,
-    clean_commit_message,
-    diff_to_structured_text,
-    extract_commit_message_from_patch,
+    CommitMessageCleaner,
+    DiffStructurer,
+    PatchCommitMessageExtractor,
+    PerfRegressionPredictorModel,
 )
+
+clean_commit_message = CommitMessageCleaner()
+diff_to_structured_text = DiffStructurer()
+extract_commit_message_from_patch = PatchCommitMessageExtractor()
 
 RAW_DIFF = """\
 diff --git a/widget.py b/widget.py
@@ -165,7 +169,8 @@ def test_diff_to_structured_text_binary_file() -> None:
 
 
 def test_build_model_input_cleans_commit_message() -> None:
-    prompt = build_model_input("[PATCH] Bug 123456 - Make it faster", RAW_DIFF)
+    model = PerfRegressionPredictorModel()
+    prompt = model.build_model_input("[PATCH] Bug 123456 - Make it faster", RAW_DIFF)
     assert prompt.startswith(
         "<COMMIT_MESSAGE>\nMake it faster\n</COMMIT_MESSAGE>\n<FILE>"
     )
@@ -174,7 +179,8 @@ def test_build_model_input_cleans_commit_message() -> None:
 
 
 def test_build_model_input_allows_missing_commit_message() -> None:
-    prompt = build_model_input(None, RAW_DIFF)
+    model = PerfRegressionPredictorModel()
+    prompt = model.build_model_input(None, RAW_DIFF)
     assert prompt.startswith("<COMMIT_MESSAGE>\n\n</COMMIT_MESSAGE>\n<FILE>")
     assert "widget.py" in prompt
 

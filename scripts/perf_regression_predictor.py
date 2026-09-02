@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 
 from bugbug.models.perf_regression_predictor import (
+    PatchCommitMessageExtractor,
     PerfRegressionPredictorModel,
-    extract_commit_message_from_patch,
 )
 
 
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         commit_message = args.commit_message_file.read_text(encoding="utf-8")
         commit_message_source = "file"
     else:
-        commit_message = extract_commit_message_from_patch(raw_diff) or ""
+        commit_message = PatchCommitMessageExtractor()(raw_diff) or ""
         commit_message_source = "patch" if commit_message else "none"
         if not commit_message:
             print(

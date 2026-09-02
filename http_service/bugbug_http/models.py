@@ -22,7 +22,7 @@ from bugbug.models import get_model_class, testselect
 from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
-from bugbug.models.perf_regression_predictor import extract_commit_message_from_patch
+from bugbug.models.perf_regression_predictor import PatchCommitMessageExtractor
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -297,14 +297,14 @@ def classify_perf_regression(branch: str, rev: str) -> str:
 
     # Score each commit separately. The service runs inference on CPU,
     # so we classify one at a time to keep memory flat.
+    extract_commit_message = PatchCommitMessageExtractor()
     commits = []
     for rev_node, patch in zip(revs, patches):
         patch_text = patch.decode("utf-8", "replace")
         commit_probabilities = model.classify(
             [
                 {
-                    "commit_message": extract_commit_message_from_patch(patch_text)
-                    or "",
+                    "commit_message": extract_commit_message(patch_text) or "",
                     "diff": patch_text,
                 }
             ],
