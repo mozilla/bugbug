@@ -508,6 +508,66 @@ def test_bug_suggestions_are_fetched_once_per_job(monkeypatch):
     assert calls[0].endswith("/project/autoland/jobs/42/bug_suggestions/")
 
 
+def test_empty_bug_suggestions_are_not_cached(monkeypatch):
+    # Empty means the log is not parsed yet; the next reader must ask again.
+    responses = iter([[], [_suggestion(_FAIL_LINE, False)]])
+    monkeypatch.setattr(
+        treeherder.httpx, "get", lambda url, **kw: _response(next(responses))
+    )
+    assert treeherder.bug_suggestions("autoland", 42) == []
+    assert len(treeherder.bug_suggestions("autoland", 42)) == 1
+
+
+@pytest.fixture
+def parse_poll(monkeypatch):
+    """Stub bug_suggestions with successive results and record every sleep taken."""
+    sleeps = []
+    monkeypatch.setattr(treeherder.time, "sleep", lambda s: sleeps.append(s))
+
+    def use(*results):
+        it = iter(results)
+        monkeypatch.setattr(treeherder, "bug_suggestions", lambda p, j: next(it))
+
+    return type("Poll", (), {"use": staticmethod(use), "sleeps": sleeps})
+
+
+def test_a_parsed_log_is_not_waited_for(parse_poll):
+    parse_poll.use([_suggestion(_FAIL_LINE, False)])
+    treeherder.await_bug_suggestions("autoland", _failing_job())
+    assert parse_poll.sleeps == []
+
+
+def test_an_unparsed_log_is_polled_until_it_is_parsed(parse_poll):
+    parse_poll.use([], [], [_suggestion(_FAIL_LINE, False)])
+    treeherder.await_bug_suggestions("autoland", _failing_job())
+    assert len(parse_poll.sleeps) == 2
+
+
+def test_the_parse_wait_is_bounded(parse_poll, monkeypatch):
+    clock = iter(range(0, 10_000, 100))
+    monkeypatch.setattr(treeherder.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(treeherder.settings, "treeherder_log_parse_wait_seconds", 250)
+    parse_poll.use(*([[]] * 50))
+    treeherder.await_bug_suggestions("autoland", _failing_job())
+    assert 1 <= len(parse_poll.sleeps) <= 3
+
+
+def test_the_parse_wait_is_skipped_without_a_job(parse_poll):
+    parse_poll.use([])
+    treeherder.await_bug_suggestions("autoland", None)
+    treeherder.await_bug_suggestions("autoland", {"task_id": "TT"})
+    assert parse_poll.sleeps == []
+
+
+def test_the_parse_wait_gives_up_on_an_error(monkeypatch, parse_poll):
+    def boom(project, job_id):
+        raise RuntimeError("treeherder is down")
+
+    monkeypatch.setattr(treeherder, "bug_suggestions", boom)
+    treeherder.await_bug_suggestions("autoland", _failing_job())
+    assert parse_poll.sleeps == []
+
+
 def test_push_url_points_at_the_push():
     assert treeherder.push_url("autoland", "abc123") == (
         "https://treeherder.mozilla.org/#/jobs?repo=autoland&revision=abc123"

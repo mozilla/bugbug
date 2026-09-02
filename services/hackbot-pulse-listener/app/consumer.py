@@ -321,7 +321,8 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     # The same record carries the configuration the regression check compares against.
     job = treeherder.job_for_task(project, task_id)
 
-    # Populated at ingestion, so this needs no wait for a sheriff to star the job.
+    # Needs no sheriff, only the parsed log, which trails ingestion by a little.
+    treeherder.await_bug_suggestions(project, job)
     intermittent = treeherder.intermittent_match(project, job)
     if intermittent.known:
         logger.info(

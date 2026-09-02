@@ -357,6 +357,7 @@ def env(monkeypatch):
         ),
         failing_tests=MagicMock(return_value=["dom/base/test/test_a.html"]),
         has_clean_history=MagicMock(return_value=False),
+        await_bug_suggestions=MagicMock(),
         new_test_failures=MagicMock(
             side_effect=lambda p, r, cfg, groups, abort=None: set(groups)
         ),
@@ -380,6 +381,9 @@ def env(monkeypatch):
     monkeypatch.setattr(consumer.treeherder, "failing_tests", mocks.failing_tests)
     monkeypatch.setattr(
         consumer.flakiness, "has_clean_history", mocks.has_clean_history
+    )
+    monkeypatch.setattr(
+        consumer.treeherder, "await_bug_suggestions", mocks.await_bug_suggestions
     )
     monkeypatch.setattr(
         consumer.regression, "new_test_failures", mocks.new_test_failures
@@ -475,6 +479,21 @@ def test_failing_tests_without_a_failing_group_still_honour_the_ancestor_walk(en
     env.is_new_task_failure.return_value = False
     assert consumer.process(_test_msg(), env.executor) is None
     env.trigger_run.assert_not_called()
+
+
+def test_the_log_is_awaited_before_its_failure_lines_are_read(env):
+    order = []
+    env.await_bug_suggestions.side_effect = lambda p, j: order.append("await")
+    env.intermittent_match.side_effect = lambda p, j: (
+        order.append("match"),
+        consumer.treeherder.IntermittentMatch(),
+    )[1]
+    env.failing_tests.side_effect = lambda p, j: (order.append("tests"), ["t"])[1]
+    consumer.process(_test_msg(), env.executor)
+    assert order[:3] == ["await", "match", "tests"]
+    env.await_bug_suggestions.assert_called_once_with(
+        "autoland", env.job_for_task.return_value
+    )
 
 
 def test_task_without_group_results_still_triggers_run(env):

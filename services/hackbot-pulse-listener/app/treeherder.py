@@ -364,9 +364,47 @@ def bug_suggestions(project: str, job_id: int) -> list[dict]:
             return _bug_suggestions_cache[key]
 
     suggestions = _get(f"{project}/jobs/{job_id}/bug_suggestions/") or []
-    with _cache_lock:
-        _bug_suggestions_cache[key] = suggestions
+    # Empty means the log is not parsed yet far more often than it means nothing
+    # failed, so only a parsed result is cached; the next reader tries again.
+    if suggestions:
+        with _cache_lock:
+            _bug_suggestions_cache[key] = suggestions
     return suggestions
+
+
+def await_bug_suggestions(project: str, job: dict | None) -> None:
+    """Wait a bounded time for Treeherder to parse the job's log.
+
+    The job is ingested before its log is parsed, and until then ``bug_suggestions``
+    is empty: the intermittent gate and the history check both read it, and both
+    fall through to the classification wait when it has nothing. Nothing is returned;
+    callers read ``bug_suggestions`` themselves, through the cache this fills.
+    """
+    job_id = (job or {}).get("id")
+    if job_id is None:
+        return
+    deadline = time.monotonic() + settings.treeherder_log_parse_wait_seconds
+    while True:
+        try:
+            if bug_suggestions(project, job_id):
+                return
+        except Exception:
+            logger.exception(
+                "Could not read the bug suggestions of job %s -- %s",
+                job_id,
+                job_url(project, None, (job or {}).get("task_id") or ""),
+            )
+            return
+        if time.monotonic() >= deadline:
+            logger.info(
+                "Treeherder has not parsed the log of job %s after %ss; judging the "
+                "task without its failure lines -- %s",
+                job_id,
+                settings.treeherder_log_parse_wait_seconds,
+                job_url(project, None, (job or {}).get("task_id") or ""),
+            )
+            return
+        time.sleep(settings.treeherder_ingest_poll_seconds)
 
 
 def _failure_line_test(search: str) -> str | None:

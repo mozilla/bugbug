@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # gate waits for the job to be ingested before reading that verdict.
     treeherder_ingest_poll_seconds: int = 30
     treeherder_ingest_max_wait_seconds: int = 240
+    # The log is parsed after the job is ingested; the failure lines the intermittent
+    # gate and the history check read are not there until it is. Measured on 40
+    # autoland failures: parsed by first sight in 39, within 24s in the last.
+    treeherder_log_parse_wait_seconds: int = 60
     # How long to wait for a verdict once the job is ingested. Most test failures turn
     # out to be intermittent or expected-fail, so waiting here rejects them before the
     # ancestor walk and before an agent run. Bounded by how late that makes the
