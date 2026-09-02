@@ -9,7 +9,15 @@ from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, lando, regression, taskcluster, treeherder, worker
+from app import (
+    client,
+    flakiness,
+    lando,
+    regression,
+    taskcluster,
+    treeherder,
+    worker,
+)
 from app.config import settings
 from app.models import RunContext
 
@@ -309,8 +317,8 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     # Cheapest gate first: it rules out intermittents and infra failures for every
     # harness before any group resolution or ancestor walking. Sheriffs classify a
     # minute or so after the job ends, so the verdict is waited for rather than read
-    # once. The same record carries the configuration the regression check compares
-    # against.
+    # once -- unless the failing tests' own history already rules an intermittent out.
+    # The same record carries the configuration the regression check compares against.
     job = treeherder.job_for_task(project, task_id)
 
     # Populated at ingestion, so this needs no wait for a sheriff to star the job.
@@ -325,7 +333,10 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
-    reason = treeherder.await_skip_reason(project, task_id, job)
+    tests = treeherder.failing_tests(project, job)
+    reason = _skip_reason(
+        project, task_id, job, tests, tags.get("test-suite") or "", label, job_link
+    )
     if reason:
         logger.info(
             "Treeherder classified task %s as %s; skipping -- %s",
@@ -427,6 +438,37 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
 
     return _trigger_test_repair(fresh, *trigger)
+
+
+def _skip_reason(
+    project: str,
+    task_id: str,
+    job: dict | None,
+    tests: list[str] | None,
+    suite: str,
+    label: str,
+    job_link: str,
+) -> str | None:
+    """Treeherder's reason not to investigate, waiting for one unless it is moot.
+
+    The wait exists to catch an intermittent before the ancestor walk, so it is worth
+    nothing on a task whose every failing test has weeks of CI runs behind it and next
+    to no failures among them: that is not a flaky test, and no verdict is coming that
+    would say otherwise. Skipping it takes ten minutes off the report for exactly the
+    failures the agent exists to explain.
+    """
+    reason = treeherder.skip_reason(job)
+    if job is None or reason:
+        return reason
+    if tests and flakiness.has_clean_history(tests, suite, label):
+        logger.info(
+            "Every test failing in task %s has a clean run history; not waiting for "
+            "a classification -- %s",
+            task_id,
+            job_link,
+        )
+        return None
+    return treeherder.await_skip_reason(project, task_id, job)
 
 
 def _build_claimed(hg_revision: str) -> bool:

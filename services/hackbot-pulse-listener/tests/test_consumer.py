@@ -355,6 +355,8 @@ def env(monkeypatch):
         intermittent_match=MagicMock(
             return_value=consumer.treeherder.IntermittentMatch()
         ),
+        failing_tests=MagicMock(return_value=["dom/base/test/test_a.html"]),
+        has_clean_history=MagicMock(return_value=False),
         new_test_failures=MagicMock(
             side_effect=lambda p, r, cfg, groups, abort=None: set(groups)
         ),
@@ -374,6 +376,10 @@ def env(monkeypatch):
     )
     monkeypatch.setattr(
         consumer.treeherder, "intermittent_match", mocks.intermittent_match
+    )
+    monkeypatch.setattr(consumer.treeherder, "failing_tests", mocks.failing_tests)
+    monkeypatch.setattr(
+        consumer.flakiness, "has_clean_history", mocks.has_clean_history
     )
     monkeypatch.setattr(
         consumer.regression, "new_test_failures", mocks.new_test_failures
@@ -1088,3 +1094,47 @@ def test_a_classified_build_failure_is_read_after_the_walk(monkeypatch):
 def test_an_unclassified_build_failure_still_runs(monkeypatch):
     env = _build_env(monkeypatch)
     assert consumer.process(_build_msg(), env.executor) == "run-1"
+
+
+def test_a_clean_test_history_skips_the_classification_wait(env):
+    env.has_clean_history.return_value = True
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.await_skip_reason.assert_not_called()
+
+
+def test_a_test_with_a_failure_history_still_waits_for_the_verdict(env):
+    env.has_clean_history.return_value = False
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.await_skip_reason.assert_called_once()
+
+
+def test_failures_not_attributable_to_tests_still_wait(env):
+    # Nothing to look a history up for, so the wait is the only filter left.
+    env.failing_tests.return_value = None
+    assert consumer.process(_test_msg(), env.executor) == "tr-1"
+    env.has_clean_history.assert_not_called()
+    env.await_skip_reason.assert_called_once()
+
+
+def test_a_classification_already_in_hand_is_honoured_without_waiting(env):
+    # A clean history says no verdict is coming, not that one already made is to be
+    # ignored: an infra failure stays an infra failure.
+    env.has_clean_history.return_value = True
+    env.job_for_task.return_value = {
+        "failure_classification_id": 5,
+        "platform": "linux1804-64",
+        "platform_option": "opt",
+    }
+    assert consumer.process(_test_msg(), env.executor) is None
+    env.has_clean_history.assert_not_called()
+    env.await_skip_reason.assert_not_called()
+    env.trigger_run.assert_not_called()
+
+
+def test_the_history_check_reads_the_task_suite_and_label(env):
+    env.has_clean_history.return_value = True
+    consumer.process(_test_msg(), env.executor)
+    tests, suite, label = env.has_clean_history.call_args.args
+    assert tests == ["dom/base/test/test_a.html"]
+    assert suite == "mochitest-browser-chrome"
+    assert label == "test-linux1804-64/opt-mochitest-browser-chrome-1"

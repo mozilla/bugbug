@@ -59,6 +59,30 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
 The dedupe caches, the daily budget and pending-run tracking are all in-memory, so
 a restart resets them.
 
+## Skipping the classification wait
+
+The wait costs the most on the failures worth repairing. On recent autoland jobs an
+intermittent is labelled a median of ~1.7 minutes after the job ends, 98% inside the
+wait; a genuine regression is labelled `fixed by commit` a median of ~7 minutes after,
+only 58% inside it. So a regression either sits out the whole
+`TREEHERDER_CLASSIFICATION_WAIT_SECONDS`, or a sheriff gets there first and the
+listener drops it as already classified.
+
+[`flakiness.py`](app/flakiness.py) short-circuits it with the
+[tests.firefox.dev](https://tests.firefox.dev) timings data — public Taskcluster index
+artifacts holding three weeks of every test's pass/fail record. When every test that
+failed here clears `FLAKINESS_MIN_RUNS` runs and `FLAKINESS_MAX_FAILURE_RATE`, it is no
+intermittent and no verdict is coming, so the classification already in hand is used
+as-is. The test names come from the bug suggestions the gate above already fetched, at
+no extra request. Anything the data cannot answer for — another harness, an unlisted or
+brand-new test, a failure naming no test, a read error — keeps the wait.
+
+Over 150 autoland pushes, 90% of those whose failure was eventually attributed to a
+commit skipped the wait, against 6 of 105 that turned out to be noise — and those 6
+still face the ancestor walk and the re-check after it. Expect more runs, not just
+faster ones: a regression a sheriff would have classified during the wait now reaches
+the agent. `MAX_TEST_REPAIRS_PER_DAY` is the backstop; watch it after deploying.
+
 ## The ancestor walk
 
 Both paths ask the same question — did this push introduce the failure, or inherit it
