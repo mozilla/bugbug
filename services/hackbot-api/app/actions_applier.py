@@ -37,6 +37,48 @@ log = logging.getLogger(__name__)
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 
 
+def _collect_refs(value: Any) -> set[str]:
+    """Every ref named by `{{actions.<ref>.<field>}}` placeholders in `value`.
+
+    Recurses through dicts/lists the same way :func:`resolve_placeholders`
+    does, so one action can depend on multiple referenced actions.
+    """
+    if isinstance(value, str):
+        return {match.group(1) for match in _PLACEHOLDER_RE.finditer(value)}
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, list):
+        refs: set[str] = set()
+        for item in value:
+            refs |= _collect_refs(item)
+        return refs
+    return set()
+
+
+def _order_units_by_dependencies(dependencies: list[set[int]]) -> list[int]:
+    """Order units after their dependencies, preserving order among ready units.
+
+    If no unit can progress, append the stuck remainder in its original order
+    because no dependency-respecting order exists for it.
+    """
+    ordered: list[int] = []
+    remaining = set(range(len(dependencies)))
+
+    while remaining:
+        progressed = False
+        for unit_id in range(len(dependencies)):
+            if unit_id in remaining and dependencies[unit_id].isdisjoint(remaining):
+                ordered.append(unit_id)
+                remaining.remove(unit_id)
+                progressed = True
+
+        if not progressed:
+            ordered.extend(sorted(remaining))
+            break
+
+    return ordered
+
+
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     """Substitute `{{actions.<ref>.<field>}}` in `value` using prior results.
 
@@ -184,7 +226,9 @@ async def _apply_pending_rows(
     Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
     earlier in this pass, so a later (even manual) apply can still reference an
-    earlier action's result.
+    earlier action's result. When the reference graph is acyclic, actions
+    defining refs apply before actions that name them, and recorded (idx) order
+    is kept among actions whose references are already satisfied.
     """
     results_by_ref: dict[str, dict] = {
         row.ref: row.result
@@ -205,18 +249,22 @@ async def _apply_pending_rows(
         )
         if all(pending[i][0].ref is None for i in group)
     ]
-    # Rows sit in idx order, so a group's last member is its max idx: apply the
-    # whole group there, once every earlier (backward) dependency is resolved.
+    # Each coalesced group applies as one unit, sitting where its last member
+    # is (rows are in idx order, so that's its max idx); every other row is a
+    # unit of its own. Units hold indices into `pending`.
     anchor_of = {i: max(group) for group in groups for i in group}
     group_at = {max(group): group for group in groups}
-
-    for pos, (row, attachments) in enumerate(pending):
+    units: list[list[int]] = []
+    for pos in range(len(pending)):
         anchor = anchor_of.get(pos)
-        if anchor is not None and pos != anchor:
-            continue  # non-anchor member: applied together with its anchor
+        if anchor is None:
+            units.append([pos])
+        elif pos == anchor:
+            units.append(group_at[anchor])
 
-        if anchor is not None:
-            member_rows = [pending[i][0] for i in group_at[anchor]]
+    async def _apply_unit(unit: list[int]) -> None:
+        if len(unit) > 1:
+            member_rows = [pending[i][0] for i in unit]
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
@@ -225,6 +273,7 @@ async def _apply_pending_rows(
                 run, "bugzilla.update_bug", merge_resolved(entries), []
             )
         else:
+            row, attachments = pending[unit[0]]
             member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
             outcome = await _dispatch(run, row.type, params, attachments)
@@ -244,6 +293,29 @@ async def _apply_pending_rows(
             for member in member_rows:
                 if member.ref:
                     results_by_ref[member.ref] = outcome.result
+
+    # Map each ref to its pending producer. Unknown refs retain the existing
+    # resolver behavior: they are logged and left in the payload.
+    producer_by_ref: dict[str, int] = {}
+    for unit_id, unit in enumerate(units):
+        for i in unit:
+            ref = pending[i][0].ref
+            if ref:
+                producer_by_ref[ref] = unit_id
+
+    # One unit may reference several actions, and several units may consume the
+    # same ref. Each ref is expected to identify one producer.
+    dependencies: list[set[int]] = []
+    for unit in units:
+        refs: set[str] = set()
+        for i in unit:
+            refs |= _collect_refs(pending[i][0].params)
+        dependencies.append(
+            {producer_by_ref[ref] for ref in refs if ref in producer_by_ref}
+        )
+
+    for unit_id in _order_units_by_dependencies(dependencies):
+        await _apply_unit(units[unit_id])
 
 
 async def on_run_completed(db: AsyncSession, run: Run) -> None:
