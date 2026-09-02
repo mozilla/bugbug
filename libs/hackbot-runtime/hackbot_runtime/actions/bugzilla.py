@@ -26,8 +26,8 @@ _COMMENT_FOOTER = (
 )
 
 
-def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
+def _confirm(action: dict) -> str:
+    return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
 @tool
@@ -61,12 +61,12 @@ async def update_bug(
 
     Recorded into the run summary for human review — does not modify Bugzilla.
     """
-    recorder.record(
+    action = recorder.record(
         "bugzilla.update_bug",
         {"bug_id": bug_id, "changes": changes},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "bugzilla.update_bug")
+    return _confirm(action)
 
 
 @tool
@@ -91,12 +91,12 @@ async def add_comment(
     summary for human review — does not post to Bugzilla.
     """
     text_with_footer = text.rstrip() + "\n\n---\n\n" + _COMMENT_FOOTER
-    recorder.record(
+    action = recorder.record(
         "bugzilla.add_comment",
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "bugzilla.add_comment")
+    return _confirm(action)
 
 
 @tool
@@ -181,13 +181,13 @@ async def add_attachment(
     if comment:
         params["comment"] = comment
 
-    recorder.record(
+    action = recorder.record(
         "bugzilla.add_attachment",
         params,
         reasoning=reasoning,
         attachments={"file": Path(file_path)},
     )
-    return _confirm(recorder, "bugzilla.add_attachment")
+    return _confirm(action)
 
 
 @tool
@@ -231,8 +231,8 @@ async def create_bug(
     for k, v in (extra or {}).items():
         body.setdefault(k, v)
 
-    recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
-    return _confirm(recorder, "bugzilla.create_bug")
+    action = recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
+    return _confirm(action)
 
 
 TOOLS = tools_in(__name__)

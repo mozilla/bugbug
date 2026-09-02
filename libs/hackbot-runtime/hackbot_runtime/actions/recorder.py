@@ -1,5 +1,9 @@
+import copy
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+
+from agent_tools.registry import ToolError
 
 from hackbot_runtime.artifacts import publish_file
 from hackbot_runtime.uploader import SignedPolicyUploader
@@ -37,7 +41,7 @@ class ActionsRecorder:
         artifacts_dir: Path | None = None,
         hooks: Mapping[str, Sequence[ActionHook]] = {},
     ) -> None:
-        self._actions: list[dict] = []
+        self._actions: dict[str, dict] = {}
         self._uploader = uploader
         self._artifacts_dir = artifacts_dir
         self._hooks = {
@@ -62,17 +66,17 @@ class ActionsRecorder:
         attachments: dict[str, Path] | None = None,
         ref: str | None = None,
     ) -> dict:
-        """Record an intended action.
+        """Record an action and return a detached copy with its ID.
 
         ``action_type`` uses ``<domain>.<verb>`` (e.g. ``bugzilla.update_bug``,
         ``phabricator.create_revision``). ``params`` is action-specific data
         the apply step will need. ``attachments`` maps a logical name to a
         local file path; each file is preserved under the stable key
-        ``attachments/<action_index>/<name>``: uploaded via the runtime
+        ``attachments/<action_id>/<name>``: uploaded via the runtime
         uploader when one is configured, otherwise copied into the local
         artifacts directory (so it is retrievable from compose/direct runs).
-        The recorded action references it by that key; the original local
-        path is not persisted (it disappears with the container).
+        The recorded action references it by that key; the original local path
+        is not persisted (it disappears with the container).
 
         ``ref`` optionally labels this action so a *later* action in the same
         run can reference its apply-time result (e.g. a Bugzilla comment's
@@ -88,7 +92,7 @@ class ActionsRecorder:
         recording leaves nothing behind: the action the hooks see carries no
         ``attachments`` key yet.
         """
-        idx = len(self._actions)
+        action_id = f"action-{uuid.uuid4().hex}"
         action: dict = {
             "type": action_type,
             "params": params,
@@ -106,15 +110,36 @@ class ActionsRecorder:
                 key = publish_file(
                     self._uploader,
                     self._artifacts_dir,
-                    f"attachments/{idx}/{name}",
+                    f"attachments/{action_id}/{name}",
                     path,
                 )
                 recorded_attachments.append({"name": name, "uploaded_key": key})
             action["attachments"] = recorded_attachments
 
-        self._actions.append(action)
-        return action
+        self._actions[action_id] = action
+        return _detach(action_id, action)
+
+    def list_actions(self) -> list[dict]:
+        """Return complete copies of the current actions with stable in-run IDs."""
+        return [
+            _detach(action_id, action) for action_id, action in self._actions.items()
+        ]
+
+    def remove_action(self, action_id: str) -> dict:
+        """Remove the action with the given ID and return a copy of it."""
+        action = self._actions.get(action_id)
+        if action is None:
+            raise ToolError(f"No recorded action with ID {action_id!r}.")
+
+        removed = _detach(action_id, action)
+        del self._actions[action_id]
+        return removed
 
     @property
     def actions(self) -> list[dict]:
-        return list(self._actions)
+        return list(self._actions.values())
+
+
+def _detach(action_id: str, action: dict) -> dict:
+    """Return a detached copy of an action with its ID."""
+    return {**copy.deepcopy(action), "action_id": action_id}

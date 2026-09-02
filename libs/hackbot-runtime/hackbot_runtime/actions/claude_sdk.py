@@ -13,6 +13,7 @@ from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.registry import tool_name_for
 
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions import action_records as _action_records
 from hackbot_runtime.actions import bugzilla as _bugzilla
 from hackbot_runtime.actions import phabricator as _phabricator
 from hackbot_runtime.actions import slack as _slack
@@ -37,7 +38,8 @@ def actions_server_for(
     if recorder is None:
         recorder = ActionsRecorder(artifacts_dir=fallback_artifacts_dir)
     tools = (
-        _bugzilla.TOOLS
+        _action_records.TOOLS
+        + _bugzilla.TOOLS
         + _phabricator.TOOLS
         + _testrail.TOOLS
         + _slack.TOOLS

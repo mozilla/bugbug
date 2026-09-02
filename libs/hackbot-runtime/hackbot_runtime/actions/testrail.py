@@ -121,8 +121,8 @@ class SubmitTestPlanInput(BaseModel):
         return self
 
 
-def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
+def _confirm(action: dict) -> str:
+    return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
 def _validated_params(
@@ -191,8 +191,8 @@ async def submit_test_plan(
         generated_test_cases,
         summary=summary,
     )
-    recorder.record(ACTION_TYPE, params)
-    return _confirm(recorder, ACTION_TYPE)
+    action = recorder.record(ACTION_TYPE, params)
+    return _confirm(action)
 
 
 TOOLS = tools_in(__name__)
