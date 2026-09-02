@@ -30,6 +30,7 @@ members = [
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
     "hackbot-api",
+    "hackbot-client",
     "hackbot-pulse-listener",
     "hackbot-runtime",
     "lando-client",
@@ -2714,8 +2715,8 @@ dependencies = [
     { name = "google-cloud-pubsub" },
     { name = "google-cloud-run" },
     { name = "google-cloud-storage" },
+    { name = "hackbot-client" },
     { name = "hackbot-runtime" },
-    { name = "httpx" },
     { name = "phabricator-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -2744,8 +2745,8 @@ requires-dist = [
     { name = "google-cloud-pubsub", specifier = ">=2.21.0" },
     { name = "google-cloud-run", specifier = ">=0.10.0" },
     { name = "google-cloud-storage", specifier = ">=2.16.0" },
+    { name = "hackbot-client", editable = "libs/hackbot-client" },
     { name = "hackbot-runtime", editable = "libs/hackbot-runtime" },
-    { name = "httpx", specifier = ">=0.26.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic", specifier = ">=2.6.0" },
@@ -2757,6 +2758,30 @@ requires-dist = [
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.25" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "hackbot-client"
+version = "0.1.0"
+source = { editable = "libs/hackbot-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
 ]
 provides-extras = ["dev"]
 
