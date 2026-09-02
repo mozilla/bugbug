@@ -60,8 +60,8 @@ The command prints the predicted binary `class`, both class probabilities in
 
 ## HTTP service
 
-The endpoint uses the service's existing Redis/RQ worker and API-key presence
-check:
+The generic push prediction endpoint (`/{model_name}/predict/push/{branch}/{rev}`)
+uses the service's existing Redis/RQ worker and API-key presence check:
 
 ```text
 GET /perfregressionpredictor/predict/push/{branch}/{rev}

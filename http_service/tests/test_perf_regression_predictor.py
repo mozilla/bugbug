@@ -73,6 +73,14 @@ def test_endpoint_queues_and_returns_prediction(client, jobs, add_result) -> Non
     )
     assert wrong_input_kind.status_code == 404
 
+    # Only models registered as push classifiers can be used with the push
+    # prediction endpoint.
+    non_push_model = client.get(
+        "/component/predict/push/autoland/abc123def456",
+        headers={API_TOKEN: "test"},
+    )
+    assert non_push_model.status_code == 404
+
     response = client.get(endpoint, headers={API_TOKEN: "test"})
     assert response.status_code == 202
     assert _response_json(response) == {"ready": False}

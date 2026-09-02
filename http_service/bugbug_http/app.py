@@ -32,11 +32,10 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from bugbug import bugzilla, get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
-    PERF_REGRESSION_LOG_PREFIX,
+    PUSH_CLASSIFIERS,
     classify_broken_site_report,
     classify_bug,
     classify_issue,
-    classify_perf_regression,
     get_config_specific_groups,
     schedule_tests,
     schedule_tests_from_patch,
@@ -133,6 +132,15 @@ class ModelName(Schema):
     model_name = fields.String(metadata={"enum": MODELS_NAMES, "example": "component"})
 
 
+class PushModelName(Schema):
+    model_name = fields.String(
+        metadata={
+            "enum": sorted(PUSH_CLASSIFIERS),
+            "example": "perfregressionpredictor",
+        }
+    )
+
+
 class UnauthorizedError(Schema):
     message = fields.String(dump_default="Error, missing X-API-KEY")
 
@@ -157,6 +165,7 @@ spec.components.schema(
 )
 spec.components.schema(NotAvailableYet.__name__, schema=NotAvailableYet)
 spec.components.schema(ModelName.__name__, schema=ModelName)
+spec.components.schema(PushModelName.__name__, schema=PushModelName)
 spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
 spec.components.schema(BranchName.__name__, schema=BranchName)
 spec.components.schema(Schedules.__name__, schema=Schedules)
@@ -547,15 +556,18 @@ def model_prediction(model_name, bug_id):
     return compress_response(data, status_code)
 
 
-@application.route("/perfregressionpredictor/predict/push/<path:branch>/<rev>")
+@application.route("/<model_name>/predict/push/<path:branch>/<rev>")
 @cross_origin()
-def perf_regression_prediction(branch: str, rev: str):
+def model_prediction_push(model_name: str, branch: str, rev: str):
     """
     ---
     get:
-      description: Predict performance-regression risk for a push
-      summary: Predict performance-regression risk
+      description: Classify a push using the given model, answer either 200 if the push is processed or 202 if the push is being processed
+      summary: Classify a single push
       parameters:
+      - name: model_name
+        in: path
+        schema: PushModelName
       - name: branch
         in: path
         required: true
@@ -569,12 +581,12 @@ def perf_regression_prediction(branch: str, rev: str):
           example: 76383a875678
       responses:
         200:
-          description: A performance-regression risk prediction
+          description: A single push prediction
           content:
             application/json:
               schema: PerformanceRegressionPrediction
         202:
-          description: The prediction is being processed
+          description: A temporary answer for the push being processed
           content:
             application/json:
               schema: NotAvailableYet
@@ -587,46 +599,29 @@ def perf_regression_prediction(branch: str, rev: str):
     if not request.headers.get(API_TOKEN):
         return jsonify(UnauthorizedError().dump({})), 401
 
+    if model_name not in PUSH_CLASSIFIERS:
+        return (
+            jsonify({"error": f"Model {model_name} doesn't support push predictions"}),
+            404,
+        )
+
     # Support the string 'autoland' for convenience.
     if branch == "autoland":
         branch = "integration/autoland"
 
     LOGGER.info(
-        "%s Received prediction request for %s @ %s",
-        PERF_REGRESSION_LOG_PREFIX,
-        branch,
-        rev,
+        "Received %s push prediction request for %s @ %s", model_name, branch, rev
     )
 
-    job = JobInfo(classify_perf_regression, branch, rev)
+    job = JobInfo(PUSH_CLASSIFIERS[model_name], branch, rev)
     data = get_result(job)
     status_code = 200
 
     if not data:
         if not is_pending(job):
-            LOGGER.info(
-                "%s Queueing prediction job for %s @ %s",
-                PERF_REGRESSION_LOG_PREFIX,
-                branch,
-                rev,
-            )
             schedule_job(job)
-        else:
-            LOGGER.info(
-                "%s Prediction job is pending for %s @ %s",
-                PERF_REGRESSION_LOG_PREFIX,
-                branch,
-                rev,
-            )
         status_code = 202
         data = {"ready": False}
-    else:
-        LOGGER.info(
-            "%s Returning cached prediction for %s @ %s",
-            PERF_REGRESSION_LOG_PREFIX,
-            branch,
-            rev,
-        )
 
     return compress_response(data, status_code)
 

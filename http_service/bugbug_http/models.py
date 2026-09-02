@@ -343,6 +343,13 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     return "OK"
 
 
+# Models that classify a push (branch + revision) rather than a bug or an
+# issue, keyed by the model name accepted by the push prediction endpoint.
+PUSH_CLASSIFIERS = {
+    PERF_REGRESSION_PREDICTOR: classify_perf_regression,
+}
+
+
 @lru_cache(maxsize=None)
 def get_known_tasks() -> tuple[str, ...]:
     with open("known_tasks", "r") as f:
