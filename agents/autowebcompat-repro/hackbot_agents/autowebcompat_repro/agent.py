@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Generic, Literal
+from typing import Any, Generic, Literal, Self
 
 from claude_agent_sdk import (
     ClaudeAgentOptions,
@@ -100,6 +100,7 @@ class TaskConfig:
     ) = None
     log: Path | None = None
     verbose: bool = True
+    headless: bool = False
 
 
 @dataclass
@@ -240,17 +241,21 @@ class Task(ABC, Generic[ResultT]):
 
 
 def run_confirmation_script(
-    script_path: Path, firefox_path: Path
+    script_path: Path, firefox_path: Path, headless: bool
 ) -> ReproductionResult | None:
     script_timeout = 5 * 60
+    env = {
+        **os.environ,
+        "BROWSER": "firefox",
+        "BROWSER_BIN": str(firefox_path),
+    }
+    if headless:
+        env["HEADLESS"] = "1"
+
     try:
         proc = subprocess.run(
             ["node", str(script_path)],
-            env={
-                **os.environ,
-                "BROWSER": "firefox",
-                "BROWSER_BIN": str(firefox_path),
-            },
+            env=env,
             capture_output=True,
             text=True,
             timeout=script_timeout,
@@ -370,7 +375,7 @@ class BugReproduction(Task):
             "firefox-devtools",
             build_firefox_devtools_server(
                 firefox_path=firefox_path,
-                headless=True,
+                headless=task_config.headless,
                 enable_script=True,
                 enable_privileged_context=False,
                 profile_path=profile_path,
@@ -380,7 +385,9 @@ class BugReproduction(Task):
 
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(chrome_path=chrome_path, headless=True),
+            build_chrome_devtools_server(
+                chrome_path=chrome_path, headless=task_config.headless
+            ),
             CHROME_DEVTOOLS_TOOLS,
         )
         if self.input_data.type == "bug_id":
@@ -397,8 +404,8 @@ class BugReproduction(Task):
             .format(
                 task_details=f"""
 1. Identify the affected URL and the described broken behavior.
-2. Baseline: Navigate to the URL with the Firefox DevTools MCP (headless, as is
-   every browser on this system) and try to reproduce the described broken behaviour.
+2. Baseline: Navigate to the URL with the Firefox DevTools MCP
+   and try to reproduce the described broken behaviour.
    - Reproduce against the actual reported site. If you cannot reach or
      reproduce on that site — e.g. it is behind a login wall, blocked,
      gated by a captcha, or down — do not substitute a reduced testcase,
@@ -409,10 +416,10 @@ class BugReproduction(Task):
 3. Cross-check in Chrome: run the same steps in Chrome using the Chrome DevTools
    MCP and report `chrome_reproduced`.
    - A genuine web-compat issue reproduces in Firefox but not in Chrome. If the
-     behavior is identical in both, your steps may be wrong or this may not be a
-     web-compat issue; refine the steps and re-check before concluding.
-   - If the reported broken behaviour reproduces in both browsers, it is not a
-     Firefox web-compat issue: set `failure_reason` to `non_compat`.
+     behavior is identical in both, your steps may be wrong; refine the steps
+     and re-check before concluding.
+   - If you confirmed that the reported broken behaviour reproduces in both browsers,
+   set `failure_reason` to `not_firefox_specific`.
 4. If the issue reproduces, write and run a Puppeteer script that drives the real
    reported site in both browsers and demonstrates the difference: follow the spec in
    `{repro_reference}`, write your script to exactly `{self.script_path}`
@@ -473,7 +480,7 @@ class StepsReproduction(Task):
             "firefox_devtools",
             build_firefox_devtools_server(
                 firefox_path=firefox_path,
-                headless=True,
+                headless=task_config.headless,
                 enable_script=True,
                 enable_privileged_context=False,
                 profile_path=profile_path,
@@ -519,7 +526,7 @@ class ChromeMaskReproduction(Task):
             "firefox_devtools",
             build_firefox_devtools_server(
                 firefox_path=firefox_path,
-                headless=True,
+                headless=task_config.headless,
                 enable_script=True,
                 enable_privileged_context=True,
                 profile_path=profile_path,
@@ -702,6 +709,43 @@ class ReproductionResults:
         )
 
 
+class Environment:
+    def __init__(self):
+        self.started_processes = []
+
+    def start(self, cmd: list[str]) -> None:
+        logging.info("Running %s", " ".join(cmd))
+        self.started_processes.append(subprocess.Popen(cmd))
+
+    def start_xvfb(self) -> None:
+        self.start(
+            [
+                "Xvfb",
+                os.environ["DISPLAY"],
+                "-screen",
+                "0",
+                "%sx%sx%s"
+                % (
+                    os.environ["SCREEN_WIDTH"],
+                    os.environ["SCREEN_HEIGHT"],
+                    os.environ["SCREEN_DEPTH"],
+                ),
+            ]
+        )
+        self.start(["fluxbox", "-display", os.environ["DISPLAY"]])
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args, **kwargs) -> None:
+        for process in self.started_processes:
+            process.terminate()
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
 async def run_autowebcompat_repro(
     default_config: TaskConfig,
     tracker: RunTracker,
@@ -714,121 +758,127 @@ async def run_autowebcompat_repro(
     Returns a :class:`AutowebcompatReproResult` on success; raises
     :class:`AgentError` if the agent ends in an error.
     """
-    firefox_browser = FirefoxBrowsers()
-    chrome_browser = ChromeBrowsers()
+    with Environment() as env:
+        if not default_config.headless:
+            env.start_xvfb()
 
-    test_plan_task = TestPlan(default_config, tracker, input_data, bugzilla_mcp_server)
-    test_plan_result = await test_plan_task.run()
-    repro_results = ReproductionResults(publish_file, test_plan_result)
+        firefox_browser = FirefoxBrowsers()
+        chrome_browser = ChromeBrowsers()
 
-    if not test_plan_result.is_webcompat:
-        result = repro_results.into_result()
-        result.summary = "Test was identified as a non-compat issue"
-        result.failure_reason = "non_compat"
-        return result
-    elif test_plan_result.affects_platforms == ["ios"]:
-        result = repro_results.into_result()
-        result.summary = "Issue was identified as iOS only"
-        result.failure_reason = "unsupported_platform"
-        return result
-
-    async def next_repro_task(
-        channel: FirefoxChannel,
-        extra: str | None = None,
-        config: TaskConfig = default_config,
-    ) -> None:
-        browser = getattr(firefox_browser, channel.value)
-        profile = setup_profile(browser)
-        logger.info(
-            "Trying reproduction in %s%s",
-            channel,
-            f" {extra}" if extra is not None else "",
+        test_plan_task = TestPlan(
+            default_config, tracker, input_data, bugzilla_mcp_server
         )
+        test_plan_result = await test_plan_task.run()
+        repro_results = ReproductionResults(publish_file, test_plan_result)
 
-        initial_repro = repro_results.initial_repro
-        if initial_repro is None:
-            task: Task = BugReproduction(
-                config,
+        if not test_plan_result.is_webcompat:
+            result = repro_results.into_result()
+            result.summary = "Test was identified as a non web-platform issue"
+            result.failure_reason = "not_web_platform"
+            return result
+        elif test_plan_result.affects_platforms == ["ios"]:
+            result = repro_results.into_result()
+            result.summary = "Issue was identified as iOS only"
+            result.failure_reason = "unsupported_ios"
+            return result
+
+        async def next_repro_task(
+            channel: FirefoxChannel,
+            extra: str | None = None,
+            config: TaskConfig = default_config,
+        ) -> None:
+            browser = getattr(firefox_browser, channel.value)
+            profile = setup_profile(browser)
+            logger.info(
+                "Trying reproduction in %s%s",
+                channel,
+                f" {extra}" if extra is not None else "",
+            )
+
+            initial_repro = repro_results.initial_repro
+            if initial_repro is None:
+                task: Task = BugReproduction(
+                    config,
+                    tracker,
+                    browser,
+                    profile,
+                    input_data,
+                    bugzilla_mcp_server,
+                    screenshots_dir,
+                    chrome_browser.stable,
+                )
+            else:
+                if initial_repro.script_path is not None:
+                    script_result = run_confirmation_script(
+                        initial_repro.script_path, browser, default_config.headless
+                    )
+                    if script_result is not None:
+                        repro_results.set_result(channel, extra, script_result)
+                        return
+                    logger.info(
+                        "Confirmation script did not reach a verdict in %s; "
+                        "falling back to the reproduction steps",
+                        channel,
+                    )
+                task = StepsReproduction(
+                    config,
+                    tracker,
+                    browser,
+                    profile,
+                    initial_repro.steps,
+                )
+            repro_results.set_result(channel, extra, await task.run())
+
+        screenshots_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-screenshots-"))
+
+        # Always try in nightly first
+        await next_repro_task(FirefoxChannel.nightly)
+
+        # If the reported behavior reproduced in both Firefox and Chrome it is not a
+        # Firefox specific issue: stop early.
+        if repro_results.reproduced and repro_results.chrome_reproduced:
+            result = repro_results.into_result()
+            if result.failure_reason != "not_firefox_specific":
+                logger.warning(
+                    "Issue reproduced in both Firefox and Chrome but failure_reason "
+                    "was %r, should have been not_firefox_specific",
+                    result.failure_reason,
+                )
+            result.failure_reason = "not_firefox_specific"
+            return result
+
+        if not repro_results.reproduced and test_plan_result.affects_platforms == [
+            "android"
+        ]:
+            result = repro_results.into_result()
+            result.summary = "Issue was identified as Android only and didn't reproduce on desktop nightly"
+            result.failure_reason = "unsupported_android"
+            return result
+
+        # If we don't think this is ESR only, try stable
+        if (
+            "stable" in test_plan_result.affects_channels
+            or "nightly" in test_plan_result.affects_channels
+        ):
+            await next_repro_task(FirefoxChannel.stable)
+
+        if repro_results.reproduced or "esr" in test_plan_result.affects_channels:
+            # If we have any result try ESR as a possible regression baseline,
+            # otherwise try ESR if we think it's affected
+            await next_repro_task(FirefoxChannel.esr)
+
+        if repro_results.initial_repro is not None:
+            channel = repro_results.initial_repro.channel
+            browser = getattr(firefox_browser, channel.value)
+            profile = setup_profile(browser, extensions=["chrome-mask"])
+
+            task = ChromeMaskReproduction(
+                default_config,
                 tracker,
                 browser,
                 profile,
-                input_data,
-                bugzilla_mcp_server,
-                screenshots_dir,
-                chrome_browser.stable,
+                repro_results.initial_repro.steps,
             )
-        else:
-            if initial_repro.script_path is not None:
-                script_result = run_confirmation_script(
-                    initial_repro.script_path, browser
-                )
-                if script_result is not None:
-                    repro_results.set_result(channel, extra, script_result)
-                    return
-                logger.info(
-                    "Confirmation script did not reach a verdict in %s; "
-                    "falling back to the reproduction steps",
-                    channel,
-                )
-            task = StepsReproduction(
-                config,
-                tracker,
-                browser,
-                profile,
-                initial_repro.steps,
-            )
-        repro_results.set_result(channel, extra, await task.run())
+            repro_results.set_result(channel, "chrome-mask", await task.run())
 
-    screenshots_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-screenshots-"))
-
-    # Always try in nightly first
-    await next_repro_task(FirefoxChannel.nightly)
-
-    # If the reported behavior reproduced in both Firefox and Chrome it is not a
-    # Firefox web-compat issue: stop early.
-    if repro_results.reproduced and repro_results.chrome_reproduced:
-        result = repro_results.into_result()
-        if result.failure_reason != "non_compat":
-            logger.warning(
-                "Issue reproduced in both Firefox and Chrome but failure_reason "
-                "was %r, should have been non_compat",
-                result.failure_reason,
-            )
-        result.failure_reason = "non_compat"
-        return result
-
-    if not repro_results.reproduced and test_plan_result.affects_platforms == [
-        "android"
-    ]:
-        result = repro_results.into_result()
-        result.summary = "Issue was identified as Android only and didn't reproduce on desktop nightly"
-        result.failure_reason = "unsupported_platform"
-        return result
-
-    # If we don't think this is ESR only, try stable
-    if (
-        "stable" in test_plan_result.affects_channels
-        or "nightly" in test_plan_result.affects_channels
-    ):
-        await next_repro_task(FirefoxChannel.stable)
-
-    if repro_results.reproduced or "esr" in test_plan_result.affects_channels:
-        # If we have any result try ESR as a possible regression baseline,
-        # otherwise try ESR if we think it's affected
-        await next_repro_task(FirefoxChannel.esr)
-
-    if repro_results.initial_repro is not None:
-        channel = repro_results.initial_repro.channel
-        browser = getattr(firefox_browser, channel.value)
-        profile = setup_profile(browser, extensions=["chrome-mask"])
-
-        task = ChromeMaskReproduction(
-            default_config,
-            tracker,
-            browser,
-            profile,
-            repro_results.initial_repro.steps,
-        )
-        repro_results.set_result(channel, "chrome-mask", await task.run())
-
-    return repro_results.into_result()
+        return repro_results.into_result()

@@ -1,3 +1,13 @@
+// For gecko engineers:
+// This script is designed to be used with mozregression.
+//
+// You will need to install node and npm. Once these are available,
+// install puppeteer-core:
+//   npm i puppeteer-core
+//
+// Then run mozregression like:
+//   mach mozregression --command="node <script.js>"
+
 // REFERENCE — use this structure, but replace this comment.
 //
 // This script checks whether one browser behaves as expected. Implement `probe`
@@ -18,13 +28,14 @@
 //   1 = the reported functionality did not work (breakage reproduced in this browser)
 //   2 = no verdict because the browser or script failed
 
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
 
-const { BROWSER, BROWSER_BIN } = process.env;
+const BROWSER = process.env.BROWSER ?? process.env.MOZREGRESSION_APP_NAME;
 if (BROWSER !== "firefox" && BROWSER !== "chrome") {
   console.error("set BROWSER to firefox or chrome");
   process.exit(2);
 }
+const BROWSER_BIN = process.env.BROWSER_BIN ?? process.env.MOZREGRESSION_BINARY;
 if (!BROWSER_BIN) {
   console.error("set BROWSER_BIN to the browser binary");
   process.exit(2);
@@ -36,7 +47,7 @@ async function probe() {
   const browser = await puppeteer.launch({
     browser: BROWSER,
     executablePath: BROWSER_BIN,
-    headless: true,
+    headless: process.env.HEADLESS ? true : false,
     ...(BROWSER === "chrome" ? { args: ["--no-sandbox"] } : {}),
   });
   try {

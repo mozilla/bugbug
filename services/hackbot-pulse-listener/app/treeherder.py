@@ -17,16 +17,28 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from dataclasses import dataclass, field
 from urllib.parse import quote
 
 import httpx
 from cachetools import TTLCache
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 15
+# Treeherder 502s under load. A failed read makes the caller fail open and spend a
+# run, so transient statuses are retried before that happens.
+_RETRY_STATUS = {429, 502, 503, 504}
+_ATTEMPTS = 3
 
 # Read-through caches, so one ancestor walk fetches each push once instead of once
 # per failing group, and the many failing tasks of a push share a fetch. The TTL is
@@ -37,6 +49,8 @@ _group_cache: TTLCache = TTLCache(maxsize=128, ttl=_TTL_SECONDS)
 _jobs_cache: TTLCache = TTLCache(maxsize=512, ttl=_TTL_SECONDS)
 # A revision never maps to a different push, so this one is held far longer.
 _push_id_cache: TTLCache = TTLCache(maxsize=512, ttl=6 * 60 * 60)
+# Derived from a parsed log, which no longer changes, so held longer than the rest.
+_bug_suggestions_cache: TTLCache = TTLCache(maxsize=512, ttl=30 * 60)
 _cache_lock = threading.Lock()
 
 # /api/failureclassification/
@@ -72,6 +86,33 @@ def job_url(project: str, revision: str | None, task_id: str) -> str:
     return f"{push_url(project, revision)}&selectedTaskRun={task_id}"
 
 
+def _is_transient(exc: BaseException) -> bool:
+    if isinstance(exc, httpx.TransportError):
+        return True
+    return (
+        isinstance(exc, httpx.HTTPStatusError)
+        and exc.response.status_code in _RETRY_STATUS
+    )
+
+
+@retry(
+    retry=retry_if_exception(_is_transient),
+    stop=stop_after_attempt(_ATTEMPTS),
+    wait=wait_exponential_jitter(initial=2, max=15, jitter=1),
+    before_sleep=before_sleep_log(logger, logging.INFO),
+    reraise=True,
+)
+def _fetch(url: str) -> httpx.Response:
+    """GET, retrying the transient failures Treeherder returns under load.
+
+    A caller that cannot read fails open and spends an agent run, so a single 502 --
+    routine on this API -- must not be taken as an answer.
+    """
+    resp = httpx.get(url, timeout=_TIMEOUT, follow_redirects=True)
+    resp.raise_for_status()
+    return resp
+
+
 def _job(project: str, task_id: str) -> dict | None:
     """The Treeherder job for a Taskcluster task, or None if not ingested yet.
 
@@ -83,17 +124,13 @@ def _job(project: str, task_id: str) -> dict | None:
         f"{settings.treeherder_url.rstrip('/')}/api/project/{project}/jobs/"
         f"?task_id={task_id}"
     )
-    resp = httpx.get(url, timeout=_TIMEOUT, follow_redirects=True)
-    resp.raise_for_status()
-    results = resp.json().get("results") or []
+    results = _fetch(url).json().get("results") or []
     return results[0] if results else None
 
 
-def _get(path: str) -> dict:
+def _get(path: str) -> dict | list:
     url = f"{settings.treeherder_url.rstrip('/')}/api/project/{path}"
-    resp = httpx.get(url, timeout=_TIMEOUT, follow_redirects=True)
-    resp.raise_for_status()
-    return resp.json()
+    return _fetch(url).json()
 
 
 def group_results(
@@ -311,3 +348,83 @@ def skip_reason(job: dict | None) -> str | None:
     if classification in _NOT_A_REGRESSION:
         return _CLASSIFICATIONS.get(classification, str(classification))
     return None
+
+
+# Harness noise like "[taskcluster:error] exit status 1" matches unrelated bugs on
+# nearly every failing job, so only real failure lines are judged.
+_FAILURE_LINE_PREFIX = "TEST-UNEXPECTED-"
+_INTERMITTENT_KEYWORD = "intermittent-failure"
+
+
+def bug_suggestions(project: str, job_id: int) -> list[dict]:
+    """Treeherder's bug matches for a job, one entry per parsed failure line."""
+    key = (project, job_id)
+    with _cache_lock:
+        if key in _bug_suggestions_cache:
+            return _bug_suggestions_cache[key]
+
+    suggestions = _get(f"{project}/jobs/{job_id}/bug_suggestions/") or []
+    with _cache_lock:
+        _bug_suggestions_cache[key] = suggestions
+    return suggestions
+
+
+@dataclass(frozen=True)
+class IntermittentMatch:
+    """What Treeherder's bug suggestions say about a failing job.
+
+    ``known`` means every unexpected-failure line is both already seen in this
+    revision and matched to one of ``bug_ids``.
+    """
+
+    bug_ids: list[int] = field(default_factory=list)
+    known: bool = False
+
+
+def intermittent_match(project: str, job: dict | None) -> IntermittentMatch:
+    """Read the bug suggestions of a failing job and judge it a known intermittent.
+
+    Both signals are required: genuine regressions also match open intermittent bugs,
+    so the bug alone would drop them. Fails open on any error or missing data.
+    """
+    job_id = (job or {}).get("id")
+    if job_id is None:
+        return IntermittentMatch()
+
+    try:
+        lines = [
+            line
+            for line in bug_suggestions(project, job_id)
+            if (line.get("search") or "").startswith(_FAILURE_LINE_PREFIX)
+        ]
+        if not lines:
+            return IntermittentMatch()
+
+        bug_ids: list[int] = []
+        known = True
+        for line in lines:
+            matched = _open_intermittent_bugs(line)
+            bug_ids += [bug for bug in matched if bug not in bug_ids]
+            # A missing flag counts as new, never as known.
+            if not matched or line.get("failure_new_in_rev", True):
+                known = False
+        return IntermittentMatch(bug_ids, known)
+    except Exception:
+        logger.exception(
+            "Could not read the bug suggestions of job %s; investigating -- %s",
+            job_id,
+            job_url(project, None, (job or {}).get("task_id") or ""),
+        )
+        return IntermittentMatch()
+
+
+def _open_intermittent_bugs(suggestion: dict) -> list[int]:
+    """Ids of the unresolved intermittent-failure bugs a failure line matches."""
+    bugs = suggestion.get("bugs") or {}
+    matched = []
+    for bug in (bugs.get("open_recent") or []) + (bugs.get("all_others") or []):
+        keywords = (bug.get("keywords") or "").split(",")
+        if bug.get("id") and not bug.get("resolution"):
+            if _INTERMITTENT_KEYWORD in [k.strip() for k in keywords]:
+                matched.append(bug["id"])
+    return matched

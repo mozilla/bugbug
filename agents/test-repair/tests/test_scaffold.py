@@ -1,32 +1,6 @@
-from hackbot_agents.test_repair import logs
 from hackbot_agents.test_repair.__main__ import _checkout_pin
 from hackbot_agents.test_repair.agent import TestRepairResult
 from hackbot_agents.test_repair.resolve import CommitRange, Investigation
-
-
-def test_sanitize_log_keeps_failure_and_error_lines():
-    raw = "\n".join(
-        [
-            "INFO - starting test",
-            "TEST-UNEXPECTED-FAIL | dom/test_a.js | assertion failed",
-            "some noise",
-            "12:00 ERROR - linker error",
-            "TEST-PASS | dom/test_b.js",
-            "FATAL - crash",
-        ]
-    )
-    out = logs.sanitize_log(raw).splitlines()
-    assert any("TEST-UNEXPECTED-FAIL" in line for line in out)
-    assert any("ERROR - linker error" in line for line in out)
-    assert any("FATAL - crash" in line for line in out)
-    # Passing/info lines are dropped.
-    assert all("TEST-PASS" not in line for line in out)
-    assert all("starting test" not in line for line in out)
-
-
-def test_sanitize_log_dedupes_consecutive_repeats():
-    raw = "\n".join(["TEST-UNEXPECTED-FAIL | x | boom"] * 3)
-    assert len(logs.sanitize_log(raw).splitlines()) == 1
 
 
 def _investigation(**kwargs):
@@ -36,8 +10,7 @@ def _investigation(**kwargs):
         harness="mochitest",
         platform="linux1804-64-qr/opt",
         failing_groups=[],
-        last_green_revision="greenhg",
-        commit_range=CommitRange(head="headsha", base="basesha", span=3, complete=True),
+        commit_range=CommitRange(head="headsha", span=3),
     )
     return Investigation(**{**defaults, **kwargs})
 

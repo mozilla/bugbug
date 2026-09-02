@@ -18,6 +18,7 @@ class ApplyContext:
     """
 
     run_id: str
+    agent: str
     download_artifact: Callable[[str], Awaitable[bytes]]
     attachments: list[dict[str, str]] = field(default_factory=list)
 

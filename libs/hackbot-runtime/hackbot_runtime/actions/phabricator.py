@@ -13,9 +13,10 @@ argument wrong.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
-from agent_tools.registry import tool, tools_in
+from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
@@ -25,9 +26,27 @@ from hackbot_runtime.actions.recorder import ActionsRecorder
 # in ``context.publish_changes`` — has to cover both types.
 PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
 
+_PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
+    r"^(?:Test Plan|Testplan|Tested|Tests):",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 
 def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
     return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
+
+
+def _validate_summary(summary: str | None) -> None:
+    if not summary:
+        return
+
+    match = _PHABRICATOR_TEST_PLAN_HEADER_RE.search(summary)
+    if match:
+        raise ToolError(
+            f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
+            "a line belongs in the Test Plan field. Move the verification details "
+            "to the test_plan argument and call submit_patch again."
+        )
 
 
 @tool
@@ -46,9 +65,19 @@ async def submit_patch(
     reasoning: Annotated[
         str, Field(description="Why you are submitting this patch (for audit log).")
     ],
+    test_plan: Annotated[
+        str | None,
+        Field(default=None, description="Revision test plan."),
+    ] = None,
     summary: Annotated[
         str | None,
-        Field(default=None, description="Revision summary/description."),
+        Field(
+            default=None,
+            description=(
+                "Revision summary/description. Keep test and verification details "
+                "in test_plan instead."
+            ),
+        ),
     ] = None,
     ref: Annotated[
         str | None,
@@ -80,9 +109,15 @@ async def submit_patch(
     in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
     bug comment).
     """
+    _validate_summary(summary)
     recorder.record(
         "phabricator.submit_patch",
-        {"bug_id": bug_id, "title": title, "summary": summary},
+        {
+            "bug_id": bug_id,
+            "title": title,
+            "summary": summary,
+            "test_plan": test_plan,
+        },
         reasoning=reasoning,
         ref=ref,
     )

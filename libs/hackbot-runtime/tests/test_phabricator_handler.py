@@ -56,7 +56,7 @@ def _ctx(diff=_DIFF_PAYLOAD, local_commits=None):
         assert key == "changes/phabricator_diff.json"
         return json.dumps(submission).encode()
 
-    return ApplyContext(run_id="run-1", download_artifact=download)
+    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
 
 
 def _fake_conduit(responses):
@@ -99,7 +99,12 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 1, "title": "Fix", "summary": "s"},
+        {
+            "bug_id": 1,
+            "title": "Fix",
+            "summary": "s",
+            "test_plan": "uv run pytest (passed)",
+        },
         _ctx(),
     )
 
@@ -123,6 +128,32 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     assert transactions["plan-changes"] is True
     assert "reviewers.add" not in transactions
     assert transactions["bugzilla.bug-id"] == "1"
+    assert transactions["summary"] == "s"
+    assert transactions["testPlan"] == "uv run pytest (passed)"
+
+
+async def test_submit_patch_accepts_legacy_action_without_test_plan(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "differential.revision.edit": {"object": {"id": 555}},
+            "differential.setdiffproperty": {},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 1, "title": "Fix", "summary": "s"},
+        _ctx(),
+    )
+
+    assert result.status == "applied"
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    transaction_types = {t["type"] for t in edit_call[1]["transactions"]}
+    assert "testPlan" not in transaction_types
 
 
 async def test_submit_patch_sets_local_commits_property(monkeypatch):
@@ -149,7 +180,12 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
         "tree": "tree1",
     }
     result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 5, "title": "Fix the thing", "summary": "does it"},
+        {
+            "bug_id": 5,
+            "title": "Fix the thing",
+            "summary": "does it",
+            "test_plan": "uv run pytest tests/test_thing.py (passed)",
+        },
         _ctx(local_commits={"node1": dict(git_fields)}),
     )
     assert result.status == "applied"
@@ -172,6 +208,7 @@ async def test_submit_patch_sets_local_commits_property(monkeypatch):
     # The stored title matches the visible revision title and reviewers are empty.
     assert stored["summary"] == "Fix the thing"
     assert stored["message"].startswith("Fix the thing\n\nSummary:\ndoes it")
+    assert "Test Plan:\nuv run pytest tests/test_thing.py (passed)" in stored["message"]
     assert (
         "Differential Revision: https://phabricator.services.mozilla.com/D77"
         in stored["message"]
@@ -227,6 +264,7 @@ async def test_update_patch_local_commits_use_the_revisions_own_fields(monkeypat
                         "fields": {
                             "title": "WIP: Existing title",
                             "summary": "old sum",
+                            "testPlan": "existing test plan",
                             "bugzilla.bug-id": "9",
                         }
                     }
@@ -253,6 +291,7 @@ async def test_update_patch_local_commits_use_the_revisions_own_fields(monkeypat
     )["n"]
     assert stored["summary"] == "WIP: Existing title"
     assert stored["message"].startswith("WIP: Existing title\n\nSummary:\nold sum")
+    assert "Test Plan:\nexisting test plan" in stored["message"]
     assert "Bug #: 9" in stored["message"]
     assert (
         "Differential Revision: https://phabricator.services.mozilla.com/D42"
@@ -341,7 +380,7 @@ async def test_missing_artifact_fails(handler, params):
     async def download(key):
         raise KeyError(key)
 
-    ctx = ApplyContext(run_id="run-1", download_artifact=download)
+    ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
     result = await getattr(phabricator_handler, handler)().apply(params, ctx)
     assert result.status == "failed"
     assert "No Phabricator submission artifact" in result.error
@@ -369,7 +408,7 @@ async def test_add_comment_posts_comment_transaction(monkeypatch):
 
     result = await phabricator_handler.AddCommentHandler().apply(
         {"revision_id": 42, "text": "Answering your question."},
-        ApplyContext(run_id="run-1", download_artifact=None),
+        ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None),
     )
 
     assert result.status == "applied"
@@ -392,7 +431,7 @@ async def test_add_comment_conduit_error_fails(monkeypatch):
 
     result = await phabricator_handler.AddCommentHandler().apply(
         {"revision_id": 42, "text": "x"},
-        ApplyContext(run_id="run-1", download_artifact=None),
+        ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None),
     )
     assert result.status == "failed"
     assert "ERR-CONDUIT-CORE" in result.error

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
@@ -16,6 +17,7 @@ _CASE_TYPE_NAME = "Functional"
 _CASE_TEMPLATE_NAME = "Test Case (Steps)"
 _CASE_LABEL = "AI Generated"
 _SECTION_NAME = "Test Cases"
+_CASE_STATUSES = ("passed", "failed", "unsuitable")
 
 
 @lru_cache(maxsize=1)
@@ -65,6 +67,22 @@ async def _resolve_template_id(client: TestRailClient) -> int:
     raise RuntimeError(f'TestRail has no template named "{_CASE_TEMPLATE_NAME}"')
 
 
+async def _resolve_status_ids(client: TestRailClient) -> dict[str, int]:
+    """Case status -> id of the TestRail status it is posted as.
+
+    An unsuitable case is posted as Blocked, the closest status a result can
+    carry; the other two match TestRail's own status names.
+    """
+    response = await client.get_statuses()
+    statuses = response.get("statuses", []) if isinstance(response, dict) else response
+    ids = {status["name"]: int(status["id"]) for status in statuses}
+    return {
+        "passed": ids["passed"],
+        "failed": ids["failed"],
+        "unsuitable": ids["blocked"],
+    }
+
+
 def _case_payload(
     test_case: dict[str, Any],
     case_type_id: int,
@@ -92,20 +110,79 @@ def _separated_steps(test_case: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def _run_name() -> str:
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    return f"[Hackbot] Run Results - {stamp}"
+
+
+def _result_comment(result: dict[str, Any]) -> str:
+    summary = str(result.get("summary") or "")
+    failure_reason = str(result.get("failure_reason") or "")
+    if failure_reason:
+        return f"{summary}\n\nFailure reason:\n{failure_reason}"
+    return summary
+
+
+def _executed_results(
+    params: dict[str, Any],
+    created_case_ids: dict[int, int],
+    status_ids: dict[str, int],
+) -> list[dict[str, Any]]:
+    """One TestRail result per generated case, in generation order.
+
+    ``SubmitTestPlanHandler.apply`` has already checked that every case carries a
+    recognised status, so indexing here cannot silently drop one.
+    """
+    return [
+        {
+            "case_id": created_case_ids[int(test_case["id"])],
+            "status_id": status_ids[test_case["result"]["status"]],
+            "comment": _result_comment(test_case["result"]),
+        }
+        for test_case in params["generated_test_cases"]
+    ]
+
+
+def _run_payload(
+    suite_id: int, case_ids: list[int], description: str
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "name": _run_name(),
+        "include_all": False,
+        "case_ids": case_ids,
+        "suite_id": suite_id,
+    }
+    if description:
+        payload["description"] = description
+    return payload
+
+
 class SubmitTestPlanHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         feature = str(params.get("feature") or "").strip()
         test_cases = params.get("generated_test_cases") or []
+        summary = str(params.get("summary") or "")
 
         if not feature:
             return ActionResult.failed("TestRail submission requires a feature name")
         if not test_cases:
             return ActionResult.failed("TestRail submission requires test cases")
+        if any(not test_case.get("result") for test_case in test_cases):
+            return ActionResult.failed("TestRail submission requires execution results")
+        if any(
+            str(test_case["result"].get("status") or "") not in _CASE_STATUSES
+            for test_case in test_cases
+        ):
+            return ActionResult.failed(
+                "TestRail submission requires all cases to have executed results"
+            )
 
         try:
             client = _client()
             case_type_id = await _resolve_case_type_id(client)
             template_id = await _resolve_template_id(client)
+            # Before anything is created, so a missing status leaves no suite behind.
+            status_ids = await _resolve_status_ids(client)
             suite_name = f"[Hackbot] - {feature}"
             suite_id = _require_id(
                 await client.add_suite(suite_name),
@@ -132,6 +209,16 @@ class SubmitTestPlanHandler:
                 )
                 created_case_ids[generated_id] = case_id
 
+            case_ids = list(created_case_ids.values())
+            run_id = _require_id(
+                await client.add_run(_run_payload(suite_id, case_ids, summary)),
+                "run",
+            )
+            await client.add_results_for_cases(
+                run_id,
+                _executed_results(params, created_case_ids, status_ids),
+            )
+
         except Exception as exc:
             log.exception(
                 "Failed to submit test plan to TestRail for run %s", ctx.run_id
@@ -143,6 +230,7 @@ class SubmitTestPlanHandler:
                 "suite_id": suite_id,
                 "url": client.suite_url(suite_id),
                 "section_id": section_id,
-                "case_ids": list(created_case_ids.values()),
+                "case_ids": case_ids,
+                "run_id": run_id,
             }
         )

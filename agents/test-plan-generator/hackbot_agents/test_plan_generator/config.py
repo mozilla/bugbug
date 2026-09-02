@@ -1,3 +1,9 @@
+# Recordable action types the agent may take, by dotted id. It generates and runs
+# test cases, then records them for TestRail; it takes no other action.
+ENABLED_ACTION_TYPES = [
+    "testrail.submit_test_plan",
+]
+
 # Firefox DevTools MCP tools (@mozilla/firefox-devtools-mcp-moz), exposed under
 # the "firefox-devtools" server name. Keep this focused on tools needed to
 # generate and execute Firefox QA cases: page interaction, observation,

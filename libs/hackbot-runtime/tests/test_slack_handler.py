@@ -13,7 +13,7 @@ def _ctx():
     async def download(_key):
         raise AssertionError("Slack messages do not use artifacts")
 
-    return ApplyContext(run_id="run-1", download_artifact=download)
+    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
 
 
 @pytest.fixture(autouse=True)
@@ -42,16 +42,17 @@ def _fake_client(monkeypatch, error=None):
     return client
 
 
-async def test_posts_recorded_message_and_returns_the_timestamp(monkeypatch):
+async def test_recorded_blocks_are_posted_with_the_text_as_fallback(monkeypatch):
     client = _fake_client(monkeypatch)
-    result = await slack_handler.PostMessageHandler().apply(
-        {"channel": "#sheriff-notifications", "text": "a test regressed"}, _ctx()
+    blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "*bug 1*"}}]
+    await slack_handler.PostMessageHandler().apply(
+        {"channel": "#c", "text": "bug 1", "blocks": blocks}, _ctx()
     )
-    assert client.calls == [
-        {"channel": "#sheriff-notifications", "text": "a test regressed"}
-    ]
-    assert result.status == "applied"
-    assert result.result == {"channel": "C1", "ts": "1700000000.000100"}
+    call = client.calls[0]
+    assert call["blocks"] == blocks
+    # `text` still travels with them: Slack uses it for the push notification and
+    # wherever blocks are not rendered.
+    assert call["text"] == "bug 1"
 
 
 async def test_posts_to_a_channel_id_as_recorded(monkeypatch):

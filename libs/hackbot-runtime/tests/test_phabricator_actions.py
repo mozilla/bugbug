@@ -1,13 +1,19 @@
 """Tests for the phabricator recording tools (submit/update patch, comment)."""
 
 import pytest
+from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder, phabricator
 
 
-async def test_submit_records_create_params_only():
+async def test_submit_records_test_plan():
     rec = ActionsRecorder()
     await phabricator.submit_patch(
-        rec, bug_id=1, title="Fix the thing", reasoning="r", summary="Details"
+        rec,
+        bug_id=1,
+        title="Fix the thing",
+        test_plan="uv run pytest tests/test_thing.py (passed)",
+        reasoning="r",
+        summary="Details",
     )
     action = rec.actions[0]
     assert action["type"] == "phabricator.submit_patch"
@@ -15,8 +21,54 @@ async def test_submit_records_create_params_only():
         "bug_id": 1,
         "title": "Fix the thing",
         "summary": "Details",
+        "test_plan": "uv run pytest tests/test_thing.py (passed)",
     }
     assert "ref" not in action
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["Tests", "tests", "Test Plan", "Testplan", "Tested"],
+)
+async def test_submit_rejects_test_plan_headers(header):
+    rec = ActionsRecorder()
+
+    with pytest.raises(ToolError) as exc:
+        await phabricator.submit_patch(
+            rec,
+            bug_id=1,
+            title="Fix",
+            reasoning="r",
+            summary=f"Explanation\n\n{header}: details",
+        )
+
+    assert header in str(exc.value)
+    assert "test_plan argument" in str(exc.value)
+    assert rec.actions == []
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        None,
+        "",
+        "Testing: details",
+        "Some Tests: details",
+        " Tests: already indented",
+    ],
+)
+async def test_submit_accepts_safe_summary(summary):
+    rec = ActionsRecorder()
+
+    await phabricator.submit_patch(
+        rec,
+        bug_id=1,
+        title="Fix",
+        reasoning="r",
+        summary=summary,
+    )
+
+    assert rec.actions[0]["params"]["summary"] == summary
 
 
 async def test_submit_requires_title():
@@ -25,10 +77,20 @@ async def test_submit_requires_title():
         await phabricator.submit_patch(rec, bug_id=1, reasoning="r")
 
 
+async def test_submit_accepts_missing_test_plan():
+    rec = ActionsRecorder()
+    await phabricator.submit_patch(rec, bug_id=1, title="Fix", reasoning="r")
+    assert rec.actions[0]["params"]["test_plan"] is None
+
+
 async def test_submit_ref_is_recorded():
     rec = ActionsRecorder()
     await phabricator.submit_patch(
-        rec, bug_id=1, title="Fix", reasoning="r", ref="patch"
+        rec,
+        bug_id=1,
+        title="Fix",
+        reasoning="r",
+        ref="patch",
     )
     assert rec.actions[0]["ref"] == "patch"
 
@@ -54,7 +116,12 @@ def test_agent_facing_schemas_are_case_specific():
     update = next(t for t in phabricator.TOOLS if t.name == "update_patch")
 
     assert "revision_id" not in submit.input_schema["properties"]
-    assert set(submit.input_schema["required"]) == {"bug_id", "title", "reasoning"}
+    assert set(submit.input_schema["required"]) == {
+        "bug_id",
+        "title",
+        "reasoning",
+    }
+    assert "test_plan" in submit.input_schema["properties"]
 
     # An update carries the revision id and nothing else: the revision's title,
     # summary and bug id stay as they are, and there is no new URL to reference.

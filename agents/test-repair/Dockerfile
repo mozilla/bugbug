@@ -17,6 +17,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
     uv sync --locked --no-dev --no-editable --package hackbot-agent-test-repair
 
+# treeherder-cli (MPL-2.0) lets the agent query Firefox CI: what failed on a push,
+# when a failure started, how often a job passes. Built from source because upstream
+# only ships prebuilt Linux binaries for x86_64, and `cargo install` also works for an
+# arm64 developer build. A bookworm builder is safe against either python:3.12 base
+# (same glibc, or older building for newer); rustls means no OpenSSL to link.
+FROM rust:1-slim-bookworm AS treeherder-cli
+ARG TREEHERDER_CLI_VERSION=0.2.17
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    CARGO_TARGET_DIR=/build/target \
+    cargo install treeherder-cli --version ${TREEHERDER_CLI_VERSION} --locked --root /out
+
 FROM python:3.12 AS base
 
 COPY --from=builder /opt/venv /opt/venv
@@ -41,6 +53,8 @@ RUN apt-get update \
         libcairo2 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 \
         libatspi2.0-0t64 \
         zip unzip bzip2 \
+        # Codecs and audio/video related dependencies
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
@@ -55,6 +69,12 @@ RUN useradd --create-home --shell /bin/bash agent \
     # Xvfb runs unprivileged and cannot create its own socket directory.
     && mkdir -p /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix
+
+# Not ~/.cargo/bin, where `mach bootstrap` installs the Rust toolchain at runtime:
+# that directory is rustup-managed and inside the agent's HOME, so a root-owned copy
+# made at build time does not belong in it. /usr/local/bin is on PATH for every user
+# and nothing at runtime writes to it.
+COPY --from=treeherder-cli /out/bin/treeherder-cli /usr/local/bin/treeherder-cli
 
 # `mach bootstrap` installs the toolchain here at runtime; put it on PATH so the
 # agent's own `./mach build` (and the build_firefox tool) find rustc/clang.

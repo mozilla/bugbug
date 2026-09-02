@@ -17,6 +17,7 @@ from typing import Any
 from slack_sdk import WebClient
 
 from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
+from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 
 log = logging.getLogger(__name__)
 
@@ -36,11 +37,31 @@ def _client() -> WebClient:
 class PostMessageHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         channel = params["channel"]
+        metadata = {
+            "event_type": "notification",
+            "event_payload": {
+                "notification_type": "info",
+                "source": {
+                    "ref_id": ctx.run_id,
+                    "ref_url": f"{HACKBOT_UI_URL}/runs/{ctx.run_id}",
+                },
+                "context": {
+                    "agent": ctx.agent,
+                    "run_id": ctx.run_id,
+                },
+            },
+        }
+
         try:
             # Slack reports application errors in a 200 body; the SDK raises
             # ``SlackApiError`` on them, so "channel_not_found" cannot read as a
             # delivered message.
-            response = _client().chat_postMessage(channel=channel, text=params["text"])
+            response = _client().chat_postMessage(
+                channel=channel,
+                text=params["text"],
+                blocks=params.get("blocks"),
+                metadata=metadata,
+            )
         except Exception as exc:
             log.exception("Failed to post to Slack channel %s", channel)
             return ActionResult.failed(str(exc))

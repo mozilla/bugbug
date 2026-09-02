@@ -15,6 +15,7 @@ derives the commits itself from a task id.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import requests
 
@@ -71,17 +72,37 @@ def _push_git_commits(project: str, rev: str) -> list[str]:
     return commits
 
 
-def resolve_git_commits(task_id: str, git_commit: str | None = None) -> list[str]:
-    """Resolve a failing task into its push commits, failure commit first.
+@dataclass(frozen=True)
+class PushInfo:
+    """The push a failing task belongs to.
+
+    ``project`` and ``hg_revision`` are what Treeherder is keyed on, so they are
+    kept alongside the git commits rather than discarded after the lookup.
+    """
+
+    project: str | None
+    hg_revision: str | None
+    git_commits: list[str]
+
+
+def task_push(task_id: str) -> tuple[str | None, str | None]:
+    """The ``(project, hg_revision)`` a task ran on; what Treeherder is keyed on."""
+    task = _get_json(_TC_TASK_URL.format(task_id=task_id))
+    tags = task.get("tags") or {}
+    return (
+        tags.get("project"),
+        (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV"),
+    )
+
+
+def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
+    """Resolve a failing task into its push, failure commit first.
 
     ``git_commit`` overrides the failure commit (skipping the lando lookup); the
     task is still fetched for its revision. Raises on network errors or when the
     failure commit cannot be determined.
     """
-    task = _get_json(_TC_TASK_URL.format(task_id=task_id))
-    tags = task.get("tags") or {}
-    project = tags.get("project")
-    hg_rev = (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV")
+    project, hg_rev = task_push(task_id)
 
     push = _push_git_commits(project, hg_rev) if hg_rev and project else []
 
@@ -93,4 +114,8 @@ def resolve_git_commits(task_id: str, git_commit: str | None = None) -> list[str
             )
         failure_commit = _hg_to_git(hg_rev)
 
-    return [failure_commit] + [c for c in push if c != failure_commit]
+    return PushInfo(
+        project=project,
+        hg_revision=hg_rev,
+        git_commits=[failure_commit] + [c for c in push if c != failure_commit],
+    )

@@ -1,21 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 
 import { signIn } from "@/lib/auth-client";
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{
+    callbackURL?: string | string[];
+    error?: string | string[];
+  }>;
+};
+
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  const params = use(searchParams);
+  const callbackURL =
+    typeof params.callbackURL === "string" ? params.callbackURL : "/";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onGoogle() {
     setError(null);
     setLoading(true);
+
+    // Keep the target across a denied sign-in so a retry still lands on it.
+    const errorParams = new URLSearchParams({ error: "denied", callbackURL });
+
     try {
       await signIn.social({
         provider: "google",
-        callbackURL: "/",
-        errorCallbackURL: "/login?error=denied",
+        callbackURL,
+        errorCallbackURL: `/login?${errorParams.toString()}`,
       });
     } catch (err) {
       setError((err as Error).message);
@@ -23,9 +37,7 @@ export default function LoginPage() {
     }
   }
 
-  const denied =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("error");
+  const denied = params.error === "denied";
 
   return (
     <div style={{ maxWidth: 420, margin: "64px auto" }}>

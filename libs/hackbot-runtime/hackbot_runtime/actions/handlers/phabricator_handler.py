@@ -145,7 +145,13 @@ def _local_commit_author_fields(previous_commits: list[dict]) -> dict[str, str]:
     }
 
 
-def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) -> str:
+def _arc_commit_message(
+    title: str,
+    summary: str | None,
+    test_plan: str | None,
+    bug_id: Any,
+    url: str,
+) -> str:
     """Build moz-phab's arc commit message, with the Differential Revision URL.
 
     Mirrors ``Commit.build_arc_commit_message`` + ``amend_revision_url`` so the
@@ -159,7 +165,7 @@ def _arc_commit_message(title: str, summary: str | None, bug_id: Any, url: str) 
     return _ARC_COMMIT_MESSAGE_TEMPLATE.format(
         title=title,
         body=body,
-        test_plan="",
+        test_plan=test_plan or "",
         reviewers="",
         bug_id=bug_id if bug_id is not None else "",
     )
@@ -170,6 +176,7 @@ async def _set_local_commits(
     local_commits: dict,
     title: str,
     summary: str | None,
+    test_plan: str | None,
     bug_id: Any,
     revision_id: int,
 ) -> None:
@@ -180,7 +187,9 @@ async def _set_local_commits(
     arc-formatted ``message`` are filled in here, since they need the revision
     URL.
     """
-    message = _arc_commit_message(title, summary, bug_id, _revision_url(revision_id))
+    message = _arc_commit_message(
+        title, summary, test_plan, bug_id, _revision_url(revision_id)
+    )
     for commit_info in local_commits.values():
         commit_info["summary"] = title
         commit_info["message"] = message
@@ -220,6 +229,7 @@ class SubmitPatchHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
         summary = params.get("summary")
+        test_plan = params.get("test_plan")
 
         try:
             raw = await ctx.download_artifact(_DIFF_ARTIFACT_KEY)
@@ -251,6 +261,8 @@ class SubmitPatchHandler:
             ]
             if summary:
                 transactions.append({"type": "summary", "value": summary})
+            if test_plan:
+                transactions.append({"type": "testPlan", "value": test_plan})
 
             revision_result = await _conduit_request(
                 "differential.revision.edit", transactions=transactions
@@ -266,6 +278,7 @@ class SubmitPatchHandler:
                 submission["local_commits"],
                 title,
                 summary,
+                test_plan,
                 bug_id,
                 revision_id,
             )
@@ -329,6 +342,7 @@ class UpdatePatchHandler:
                 submission["local_commits"],
                 fields.get("title") or f"D{revision_id}",
                 fields.get("summary"),
+                fields.get("testPlan"),
                 fields.get("bugzilla.bug-id"),
                 revision_id,
             )

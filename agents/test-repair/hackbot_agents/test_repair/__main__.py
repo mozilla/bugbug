@@ -8,8 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestRepairResult
 from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
-from .logs import download_failure_logs
-from .notify import build_message, resolve_culprit_author
+from .notify import build_message, resolve_culprit_author, sheriff_action_required
 from .resolve import Investigation, resolve_investigation
 
 logger = logging.getLogger(__name__)
@@ -45,13 +44,8 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
     investigation: Investigation = resolve_investigation(task_id)
 
     scratch_dir = Path(tempfile.mkdtemp(prefix="test-repair-"))
-    scratch_in = scratch_dir / "in"
     scratch_out = scratch_dir / "out"
-    scratch_in.mkdir(parents=True, exist_ok=True)
     scratch_out.mkdir(parents=True, exist_ok=True)
-
-    logger.info("Downloading failure logs for %d task(s)", len(inputs.failure_tasks))
-    task_logs = await download_failure_logs(inputs.failure_tasks, scratch_in)
 
     bugzilla_mcp_server = (
         {"type": "http", "url": inputs.bugzilla_mcp_url}
@@ -67,7 +61,6 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         source_repo=source_repo,
         fx_ctx=ctx.firefox,
         investigation=investigation,
-        task_logs=task_logs,
         scratch_out=scratch_out,
         skip_firefox_build=inputs.skip_firefox_build,
         model=inputs.model,
@@ -77,15 +70,19 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         publish_file=ctx.publish_file,
     )
 
-    # Notifications are active for all runs
-    message = build_message(
-        result,
-        investigation,
-        task_id=task_id,
-        run_id=ctx.run_id,
-        culprit_author=resolve_culprit_author(source_repo, result.culprit_commit),
-    )
-    record_message(ctx.actions, SLACK_CHANNEL, message)
+    if sheriff_action_required(result):
+        message = build_message(
+            result,
+            investigation,
+            task_id=task_id,
+            run_id=ctx.run_id,
+            culprit_author=resolve_culprit_author(source_repo, result.culprit_commit),
+        )
+        record_message(ctx.actions, SLACK_CHANNEL, message)
+    else:
+        logger.info(
+            "Verdict is %s; not notifying %s", result.classification, SLACK_CHANNEL
+        )
     return result
 
 

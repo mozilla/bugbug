@@ -9,7 +9,9 @@ Recorded as a ``slack.post_message`` action rather than posted from the run: it 
 then visible in the hackbot UI before it lands, and the apply step delivers it at
 most once (see ``hackbot_runtime.actions.slack``).
 
-Five lines of context, then the verdict in full. Every identifier a sheriff would
+Only verdicts a sheriff acts on are posted -- see :func:`sheriff_action_required`.
+
+A few lines of context, then the verdict in full. Every identifier a sheriff would
 otherwise have to look up -- revisions, task, bug, run -- is a link, the way the
 pulse listener's email does it
 (``services/hackbot-pulse-listener/app/notify.py``); unlike the email this stays
@@ -42,6 +44,19 @@ _RECOMMENDATIONS = {
     "do_not_backout": "DO NOT back out (intermittent)",
     "rerun": "RETRIGGER the job",
 }
+
+
+def sheriff_action_required(result: TestRepairResult) -> bool:
+    """Whether the verdict is one a sheriff has to act on.
+
+    A known intermittent asks for nothing -- no backout, no retrigger -- and it is the
+    majority verdict, so posting those is pure noise. ``rerun`` is not one of them: an
+    intermittent the agent could not confirm still asks for a retrigger.
+    """
+    return not (
+        result.classification == "intermittent"
+        and result.recommendation == "do_not_backout"
+    )
 
 
 def _link(url: str, label: str) -> str:
@@ -98,13 +113,10 @@ def _jobs_line(investigation: Investigation, task_id: str) -> str:
 
 
 def _push_line(investigation: Investigation) -> str:
-    line = (
+    return (
         f"Push: {investigation.project} {_hg_link(investigation.hg_revision)}"
         f" / {_commit_link(investigation.failure_commit)}"
     )
-    if investigation.last_green_revision:
-        line += f", last green {_hg_link(investigation.last_green_revision)}"
-    return line
 
 
 def _culprit_line(result: TestRepairResult, culprit_author: str | None) -> str:
@@ -120,9 +132,17 @@ def _culprit_line(result: TestRepairResult, culprit_author: str | None) -> str:
     bug = result.culprit_bug or result.intermittent_bug
     if bug:
         line += f" ({_bug_link(bug)})"
-    if result.proposed_patch:
-        line += ", patch attached"
     return line
+
+
+def _patch_lines(result: TestRepairResult) -> list[str]:
+    """Who the attached patch is for, so it is not read as an alternative action."""
+    if not result.proposed_patch:
+        return []
+    return [
+        "Patch attached for the author: squash it into the existing patches and"
+        " reland, rather than landing it as a follow-up. The backout still stands."
+    ]
 
 
 def build_message(
@@ -142,6 +162,7 @@ def build_message(
         _jobs_line(investigation, task_id),
         _push_line(investigation),
         _culprit_line(result, culprit_author),
+        *_patch_lines(result),
         _link(RUN_URL.format(run_id=run_id), "Hackbot run details"),
     ]
     if result.summary.strip():

@@ -1,8 +1,9 @@
-"""Tests for the Phabricator webhook receiver.
+"""Tests for the Phabricator and Bugzilla webhook receivers.
 
 Covers HMAC signature verification, mention detection / loop prevention, the
 revision -> (revision_id, bug_id) resolution, and the route's ignore/trigger
-branches (test ping, non-DREV, dedupe, and a successful @hackbot mention).
+branches. Bugzilla coverage includes shared-secret auth, structured needinfo
+detection, self/private-event suppression, dedupe, and dispatch retry behavior.
 """
 
 import hashlib
@@ -12,6 +13,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from app.auth import verify_phabricator_signature
+from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.main import app
 from app.phabricator_authorization import (
@@ -20,7 +22,7 @@ from app.phabricator_authorization import (
 )
 from app.phabricator_webhook import (
     HackbotMention,
-    _join_comments,
+    _format_comment,
     detect_mention_and_revision,
     find_hackbot_mentions,
     resolve_revision,
@@ -28,8 +30,11 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
+from hackbot_client import RunRef, RunStatus
 
 SECRET = "test-secret"
+BUGZILLA_SECRET = "test-bugzilla-secret"
+BUGZILLA_BOT_LOGIN = "hackbot@mozilla.tld"
 
 
 def _sign(body: bytes) -> str:
@@ -63,12 +68,21 @@ def test_signature_unconfigured_secret(monkeypatch):
 # --- mention detection / loop prevention ---
 
 
-def _comment_txn(phid: str, author: str, raw: str, txn_type: str = "comment") -> dict:
+def _comment_txn(
+    phid: str,
+    author: str,
+    raw: str,
+    txn_type: str = "comment",
+    *,
+    comment_id: int = 1,
+    fields: dict | None = None,
+) -> dict:
     return {
         "phid": phid,
         "type": txn_type,
         "authorPHID": author,
-        "comments": [{"content": {"raw": raw}}],
+        "comments": [{"id": comment_id, "content": {"raw": raw}}],
+        "fields": fields or {},
     }
 
 
@@ -76,7 +90,7 @@ def test_find_mention_matches():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "hey @hackbot please fix")]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a")]
+    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a", 1, "regular")]
 
 
 def test_find_mention_no_token():
@@ -122,20 +136,59 @@ def test_find_mention_ignores_non_comment_type():
 
 def test_find_mention_matches_inline_comment():
     txns = [
-        _comment_txn("PHID-XACT-1", "PHID-USER-a", "@hackbot here", txn_type="inline")
+        _comment_txn(
+            "PHID-XACT-1",
+            "PHID-USER-a",
+            "@hackbot here",
+            txn_type="inline",
+            fields={
+                "diff": {"id": 456},
+                "path": "browser/foo.cpp",
+                "line": 42,
+            },
+        )
     ]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("@hackbot here", "PHID-USER-a")]
+    ) == [
+        HackbotMention(
+            "@hackbot here",
+            "PHID-USER-a",
+            1,
+            "inline",
+            diff_id=456,
+        )
+    ]
 
 
 def test_find_mention_collects_all_inline_matches():
     # A review with several inline @hackbot comments (each its own transaction)
     # yields all of them, in order; comments without the token are skipped.
     txns = [
-        _comment_txn("PHID-XACT-1", "PHID-USER-a", "@hackbot fix this", "inline"),
-        _comment_txn("PHID-XACT-2", "PHID-USER-a", "no mention here", "inline"),
-        _comment_txn("PHID-XACT-3", "PHID-USER-a", "@hackbot and this too", "inline"),
+        _comment_txn(
+            "PHID-XACT-1",
+            "PHID-USER-a",
+            "@hackbot fix this",
+            "inline",
+            comment_id=1,
+            fields={"diff": {"id": 1}, "path": "a.cpp", "line": 10},
+        ),
+        _comment_txn(
+            "PHID-XACT-2",
+            "PHID-USER-a",
+            "no mention here",
+            "inline",
+            comment_id=2,
+            fields={"diff": {"id": 2}, "path": "b.cpp", "line": 20},
+        ),
+        _comment_txn(
+            "PHID-XACT-3",
+            "PHID-USER-a",
+            "@hackbot and this too",
+            "inline",
+            comment_id=3,
+            fields={"diff": {"id": 3}, "path": "c.cpp", "line": 30},
+        ),
     ]
     assert find_hackbot_mentions(
         txns,
@@ -143,8 +196,20 @@ def test_find_mention_collects_all_inline_matches():
         bot_phid="PHID-USER-bot",
         token="@hackbot",
     ) == [
-        HackbotMention("@hackbot fix this", "PHID-USER-a"),
-        HackbotMention("@hackbot and this too", "PHID-USER-a"),
+        HackbotMention(
+            "@hackbot fix this",
+            "PHID-USER-a",
+            1,
+            "inline",
+            diff_id=1,
+        ),
+        HackbotMention(
+            "@hackbot and this too",
+            "PHID-USER-a",
+            3,
+            "inline",
+            diff_id=3,
+        ),
     ]
 
 
@@ -156,23 +221,73 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
         "type": "inline",
         "authorPHID": "PHID-USER-a",
         "comments": [
-            {"content": {"raw": "@hackbot v1"}},
-            {"content": {"raw": "@hackbot v2 edited"}},
+            {"id": 456, "content": {"raw": "@hackbot v1"}},
+            {"id": 456, "content": {"raw": "@hackbot v2 edited"}},
         ],
+        "fields": {"diff": {"id": 456}, "path": "browser/foo.cpp", "line": 42},
     }
     assert find_hackbot_mentions(
         [txn], {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("@hackbot v1", "PHID-USER-a")]
+    ) == [
+        HackbotMention(
+            "@hackbot v1",
+            "PHID-USER-a",
+            456,
+            "inline",
+            diff_id=456,
+        )
+    ]
 
 
-def test_join_comments_single_passthrough():
-    assert _join_comments(["only one"]) == "only one"
+def test_format_comment_renders_regular_comment_as_xml():
+    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular")
+    assert _format_comment(mention) == (
+        '  <comment comment_id="123" type="regular">\n    only one\n  </comment>'
+    )
 
 
-def test_join_comments_numbers_multiple():
-    joined = _join_comments(["first", "second"])
-    assert "[comment 1]\nfirst" in joined
-    assert "[comment 2]\nsecond" in joined
+def test_format_comment_renders_inline_comment_as_xml():
+    mention = HackbotMention(
+        "fix this",
+        "PHID-USER-a",
+        456,
+        "inline",
+        diff_id=456,
+    )
+    assert _format_comment(mention) == (
+        '  <comment comment_id="456" type="inline" diff_id="456">\n'
+        "    fix this\n"
+        "  </comment>"
+    )
+
+
+def test_format_comments_renders_mixed_comments_in_order():
+    mentions = [
+        HackbotMention("first", "PHID-USER-a", 1, "regular"),
+        HackbotMention(
+            "second",
+            "PHID-USER-a",
+            2,
+            "inline",
+            diff_id=456,
+        ),
+    ]
+    formatted = "\n\n".join(_format_comment(mention) for mention in mentions)
+    assert formatted == (
+        '  <comment comment_id="1" type="regular">\n    first\n  </comment>\n\n'
+        '  <comment comment_id="2" type="inline" diff_id="456">\n'
+        "    second\n"
+        "  </comment>"
+    )
+
+
+def test_format_comment_escapes_comment_body():
+    mention = HackbotMention("@hackbot <fix> & explain", "PHID-USER-a", 1, "regular")
+    assert _format_comment(mention) == (
+        '  <comment comment_id="1" type="regular">\n'
+        "    @hackbot &lt;fix&gt; &amp; explain\n"
+        "  </comment>"
+    )
 
 
 # --- revision resolution ---
@@ -254,7 +369,54 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         ["PHID-XACT-1"],
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
-    assert result == ("@hackbot please fix", 42, 12345)
+    assert result == (
+        '  <comment comment_id="1" type="regular">\n'
+        "    @hackbot please fix\n"
+        "  </comment>",
+        42,
+        12345,
+    )
+    client.search_transactions.assert_awaited_once_with("PHID-DREV-x")
+
+
+async def test_detect_mention_enriches_inline_anchor(monkeypatch):
+    client = _FakeClient(
+        {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
+        members={"PHID-USER-authorized"},
+    )
+    transactions = [
+        _comment_txn(
+            "PHID-XACT-1",
+            "PHID-USER-authorized",
+            "@hackbot please fix",
+            "inline",
+            fields={
+                "diff": {"id": 456},
+                "path": "browser/foo.cpp",
+                "line": 42,
+            },
+        )
+    ]
+    monkeypatch.setattr(
+        client,
+        "search_transactions",
+        AsyncMock(return_value=transactions),
+    )
+
+    result = await detect_mention_and_revision(
+        client,
+        settings.webhook,
+        "PHID-DREV-x",
+        ["PHID-XACT-1"],
+        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+    )
+    assert result == (
+        '  <comment comment_id="1" type="inline" diff_id="456">\n'
+        "    @hackbot please fix\n"
+        "  </comment>",
+        42,
+        12345,
+    )
 
 
 # --- payload parsing ---
@@ -263,6 +425,101 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
 def test_triggering_transaction_phids():
     payload = {"transactions": [{"phid": "A"}, {"phid": "B"}, {"nophid": True}]}
     assert triggering_transaction_phids(payload) == ["A", "B"]
+
+
+def _bugzilla_payload(
+    *,
+    bug_id: int = 2022889,
+    flag_id: int = 2187233,
+    added: str = "? (hackbot@mozilla.tld)",
+    removed: str = "",
+    requestee: str = BUGZILLA_BOT_LOGIN,
+    actor: str = "gmierzwinski@mozilla.com",
+    event_time: str = "2026-08-07T18:00:05",
+) -> dict:
+    return {
+        "bug": {
+            "id": bug_id,
+            "is_private": False,
+            "flags": [
+                {
+                    "id": flag_id,
+                    "name": "needinfo",
+                    "requestee": {"login": requestee},
+                    "value": "?",
+                }
+            ],
+        },
+        "event": {
+            "action": "modify",
+            "changes": [
+                {
+                    "added": added,
+                    "field": "flag.needinfo",
+                    "removed": removed,
+                }
+            ],
+            "routing_key": "bug.modify:flag.needinfo",
+            "target": "bug",
+            "time": event_time,
+            "user": {
+                "id": 560562,
+                "login": actor,
+                "real_name": "Greg Mierzwinski [:sparky]",
+            },
+        },
+        "webhook_id": 121,
+        "webhook_name": "Hackbot needinfo dry run",
+    }
+
+
+def test_detect_bugzilla_needinfo_from_captured_payload_shape():
+    detected = detect_needinfo_request(
+        _bugzilla_payload(), bot_login=BUGZILLA_BOT_LOGIN
+    )
+    assert detected is not None
+    assert detected.bug_id == 2022889
+    assert detected.flag_id == 2187233
+    assert "gmierzwinski@mozilla.com" in detected.comment
+    assert "2026-08-07T18:00:05" in detected.comment
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload.pop("event"),
+        lambda payload: payload.pop("bug"),
+        lambda payload: payload["event"].pop("changes"),
+        lambda payload: payload["bug"].pop("id"),
+        lambda payload: payload["bug"].pop("flags"),
+    ],
+)
+def test_detect_bugzilla_needinfo_rejects_malformed_nested_fields(mutate):
+    payload = _bugzilla_payload()
+    mutate(payload)
+    with pytest.raises(KeyError):
+        detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
+
+
+def test_detect_bugzilla_needinfo_does_not_require_routing_key():
+    payload = _bugzilla_payload()
+    payload["event"]["routing_key"] = "bug.modify:summary,flag.needinfo"
+    assert detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN) is not None
+
+
+@pytest.mark.parametrize(
+    "flag_update",
+    [
+        {"id": 0},
+        {"name": "review"},
+        {"value": "+"},
+        {"requestee": {"login": "someone@mozilla.com"}},
+    ],
+)
+def test_detect_bugzilla_needinfo_requires_matching_structured_flag(flag_update):
+    payload = _bugzilla_payload()
+    payload["bug"]["flags"][0].update(flag_update)
+    assert detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN) is None
 
 
 # --- route ---
@@ -276,7 +533,11 @@ class _FakeHackbotClient:
 
     async def trigger_run(self, agent_name, inputs):
         self.calls.append((agent_name, inputs))
-        return "run-abc"
+        return RunRef(
+            run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+            agent=agent_name,
+            status=RunStatus.pending,
+        )
 
 
 class _FakeAuthorizer:
@@ -296,9 +557,13 @@ def phab_client():
 
 @pytest.fixture
 def client(monkeypatch, authorizer, phab_client):
+    monkeypatch.setattr(settings, "external_api_key", "test-api-key")
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
+    monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
+    monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
     # Fresh dedupe cache per test.
     webhooks._seen_transactions.clear()
+    webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
     try:
@@ -313,6 +578,14 @@ def _post(client, payload: dict):
         "/webhooks/phabricator",
         content=body,
         headers={"X-Phabricator-Webhook-Signature": _sign(body)},
+    )
+
+
+def _post_bugzilla(client, payload: dict, secret: str = BUGZILLA_SECRET):
+    return client.post(
+        "/webhooks/bugzilla",
+        json=payload,
+        headers={"X-Bugzilla-Webhook-Secret": secret},
     )
 
 
@@ -367,7 +640,10 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json() == {"status": "triggered", "run_id": "run-abc"}
+    assert resp.json() == {
+        "status": "triggered",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     assert detect.call_args.args[0] is phab_client
     assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
@@ -441,3 +717,92 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
             },
         )
     assert "PHID-XACT-1" not in webhooks._seen_transactions
+
+
+def test_bugzilla_route_ignores_non_object_payload(client):
+    resp = _post_bugzilla(client, [])
+    assert resp.status_code == 202
+    assert resp.json() == {
+        "status": "ignored",
+        "reason": "payload is not a JSON object",
+    }
+
+
+def test_bugzilla_route_rejects_bad_secret(client):
+    response = _post_bugzilla(client, _bugzilla_payload(), secret="wrong")
+    assert response.status_code == 401
+
+
+def test_bugzilla_route_ignores_non_matching_event(client):
+    response = _post_bugzilla(
+        client,
+        _bugzilla_payload(added="? (someone@mozilla.com)"),
+    )
+    assert response.status_code == 202
+    assert response.json() == {
+        "status": "ignored",
+        "reason": "no actionable Hackbot needinfo",
+    }
+
+
+def test_bugzilla_route_triggers_run(client):
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+
+    response = _post_bugzilla(client, _bugzilla_payload())
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "status": "triggered",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
+    expected_comment = (
+        "Check whether Bugzilla user gmierzwinski@mozilla.com posted a comment "
+        "at exactly 2026-08-07T18:00:05. If one exists, treat it as the "
+        "developer's request. A needinfo may be requested without a comment, "
+        "so use the surrounding bug context if none exists."
+    )
+    assert fake_api.calls == [
+        (
+            "bug-fix",
+            {
+                "bug_id": 2022889,
+                "bugzilla_needinfo_flag_id": 2187233,
+                "comment": expected_comment,
+            },
+        )
+    ]
+
+
+def test_bugzilla_route_dedupes_retry_but_not_later_event(client):
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    payload = _bugzilla_payload()
+
+    first = _post_bugzilla(client, payload)
+    duplicate = _post_bugzilla(client, payload)
+    later = _post_bugzilla(
+        client,
+        _bugzilla_payload(flag_id=2187234, event_time="2026-08-07T19:00:05"),
+    )
+
+    assert first.json()["status"] == "triggered"
+    assert duplicate.json()["reason"] == "duplicate delivery"
+    assert later.json()["status"] == "triggered"
+    assert len(fake_api.calls) == 2
+
+
+def test_bugzilla_route_does_not_dedupe_failed_dispatch(client):
+    class _FailingClient:
+        async def trigger_run(self, agent_name, inputs):
+            raise RuntimeError("run creation failed")
+
+    payload = _bugzilla_payload()
+    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
+    assert detected is not None
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
+
+    with pytest.raises(RuntimeError, match="run creation failed"):
+        _post_bugzilla(client, payload)
+
+    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
