@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # at p90, so waiting much past that buys few extra rejections and delays every
     # real regression by the full wait.
     treeherder_classification_wait_seconds: int = 600
+    # The wait is skipped for a task whose every failing test looks reliable in the
+    # tests.firefox.dev timings data (see the README). 0.05% is the measured knee: a
+    # strict 0% covers only two thirds of the genuine regressions that 0.05% does,
+    # and looser rates add noise without covering more. The runs floor only rules out
+    # tests too new to judge; anything from 30 to 1000 scores the same.
+    flakiness_min_runs: int = 100
+    flakiness_max_failure_rate: float = 0.0005
 
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60
