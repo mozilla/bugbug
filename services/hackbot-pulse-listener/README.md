@@ -36,12 +36,15 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
      regression (intermittent, infra, expected-fail, fixed-by-commit). Treeherder ingests
      the job a minute or so behind us, and sheriffs classify it — mostly by hand — a
      median of ~1 minute past the end of the job, ~11 minutes at p90 (measured over 40
-     recent autoland pushes), so this gate waits for the job to appear and then up to
-     `TREEHERDER_CLASSIFICATION_WAIT_SECONDS` for its verdict. It is the cheap filter,
-     and most test failures stop here, before any group is fetched or any ancestor
-     walked. What survives goes through the ancestor walk below, then Treeherder is
-     asked once more, since a verdict can still land while that walk runs. The run
-     carries only the task id.
+     recent autoland pushes), so this gate waits for the job to appear, briefly for its
+     log to be parsed (`TREEHERDER_LOG_PARSE_WAIT_SECONDS` — the failure lines the
+     intermittent gate and history check read are not there before), and then up to
+     `TREEHERDER_CLASSIFICATION_WAIT_SECONDS` for its verdict, unless the
+     [history check](#skipping-the-classification-wait) says no verdict is coming. It is
+     the cheap filter, and most test failures stop here, before any group is fetched or
+     any ancestor walked. What survives goes through the ancestor walk below, then
+     Treeherder is asked once more, since a verdict can still land while that walk runs.
+     The run carries only the task id.
    - _Both:_ a walk is abandoned as soon as another task triggers the run for that
      push. One push can emit dozens of failing tasks, and without this each one holds
      a worker for the full wait only to find the push already handed off.
