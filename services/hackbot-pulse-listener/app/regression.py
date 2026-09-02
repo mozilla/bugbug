@@ -104,14 +104,30 @@ def _group_status(project: str, rev: str, config: tuple[str, str], group: str):
     return None
 
 
-def _classify(project: str, rev: str, status_fn, describe: str, first_pass=True):
+def _classify(
+    project: str,
+    rev: str,
+    status_fn,
+    describe: str,
+    first_pass=True,
+    look_past_pending=False,
+):
     """Walk ancestors of `rev`; True (new), False (inherited) or _PENDING.
 
     status_fn(ancestor_rev) reports 'passed'/'failed'/_PENDING/None for the failing
     unit (build label or test group). `first_pass` keeps the "not settled" notice to
     one line per unit rather than repeating it on every poll for up to an hour.
+
+    With ``look_past_pending`` an unsettled ancestor is stepped over rather than
+    waited for. An older ancestor that already failed still makes the failure
+    inherited; one that passed makes it new somewhere between it and ``rev``, which
+    is answer enough when the agent works out the culprit commit itself. On autoland
+    the parent push is nearly always still running when a failure arrives, so
+    waiting for it costs the whole MAX_WAIT_SECONDS on almost every real regression.
     """
     push = Push(rev, branch=project)
+    notice = logger.info if first_pass else logger.debug
+    pending_at = None
     for _ in range(MAX_DEPTH):
         try:
             push = push.parent
@@ -122,15 +138,25 @@ def _classify(project: str, rev: str, status_fn, describe: str, first_pass=True)
             continue
         ancestor_link = treeherder.push_url(project, push.rev)
         if status is _PENDING:
-            notice = logger.info if first_pass else logger.debug
-            notice(
-                "%s not settled at %s; deferring for %s -- %s",
-                describe,
-                push.rev,
-                rev,
-                ancestor_link,
-            )
-            return _PENDING
+            if not look_past_pending:
+                notice(
+                    "%s not settled at %s; deferring for %s -- %s",
+                    describe,
+                    push.rev,
+                    rev,
+                    ancestor_link,
+                )
+                return _PENDING
+            if pending_at is None:
+                pending_at = push.rev
+                notice(
+                    "%s not settled at %s; looking further back for %s -- %s",
+                    describe,
+                    push.rev,
+                    rev,
+                    ancestor_link,
+                )
+            continue
         if status == "failed":
             logger.info(
                 "%s already failing at %s; inherited at %s -- %s",
@@ -140,15 +166,35 @@ def _classify(project: str, rev: str, status_fn, describe: str, first_pass=True)
                 ancestor_link,
             )
             return False
-        logger.info(
-            "%s passed at %s; new failure at %s -- %s",
-            describe,
-            push.rev,
-            rev,
-            ancestor_link,
-        )
+        if pending_at is None:
+            logger.info(
+                "%s passed at %s; new failure at %s -- %s",
+                describe,
+                push.rev,
+                rev,
+                ancestor_link,
+            )
+        else:
+            logger.info(
+                "%s passed at %s and not yet settled at %s; new failure at %s or "
+                "just before it -- %s",
+                describe,
+                push.rev,
+                pending_at,
+                rev,
+                ancestor_link,
+            )
         return True
 
+    if pending_at is not None:
+        notice(
+            "%s not settled at %s and undecided further back; deferring for %s -- %s",
+            describe,
+            pending_at,
+            rev,
+            treeherder.push_url(project, pending_at),
+        )
+        return _PENDING
     logger.warning(
         "No ancestor within %s pushes ran %s; running agent -- %s",
         MAX_DEPTH,
@@ -159,7 +205,13 @@ def _classify(project: str, rev: str, status_fn, describe: str, first_pass=True)
 
 
 def _await_new_failures(
-    project: str, rev: str, status_fn, units, describe: str, should_abort=None
+    project: str,
+    rev: str,
+    status_fn,
+    units,
+    describe: str,
+    should_abort=None,
+    look_past_pending=False,
 ) -> set:
     """The units whose failure `rev` introduced; the rest were inherited.
 
@@ -191,6 +243,7 @@ def _await_new_failures(
                     lambda ancestor, u=unit: status_fn(ancestor, u),
                     f"{describe} {unit}",
                     first_pass=first_pass,
+                    look_past_pending=look_past_pending,
                 )
                 if state is _PENDING:
                     pending.append(unit)
@@ -268,7 +321,12 @@ _CHUNKED_LABEL = re.compile(r"-\d+$")
 
 
 def _is_new_label_failure(
-    project: str, rev: str, label: str, describe: str, should_abort=None
+    project: str,
+    rev: str,
+    label: str,
+    describe: str,
+    should_abort=None,
+    look_past_pending=False,
 ) -> bool:
     return label in _await_new_failures(
         project,
@@ -277,6 +335,7 @@ def _is_new_label_failure(
         [label],
         describe,
         should_abort,
+        look_past_pending,
     )
 
 
@@ -300,7 +359,9 @@ def is_new_task_failure(project: str, rev: str, label: str, should_abort=None) -
             rev,
         )
         return True
-    return _is_new_label_failure(project, rev, label, "task", should_abort)
+    return _is_new_label_failure(
+        project, rev, label, "task", should_abort, look_past_pending=True
+    )
 
 
 def new_test_failures(
@@ -329,4 +390,5 @@ def new_test_failures(
         groups,
         "group",
         should_abort,
+        look_past_pending=True,
     )

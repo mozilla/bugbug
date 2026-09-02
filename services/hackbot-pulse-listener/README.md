@@ -90,8 +90,18 @@ the agent. `MAX_TEST_REPAIRS_PER_DAY` is the backstop; watch it after deploying.
 
 Both paths ask the same question — did this push introduce the failure, or inherit it
 from an ancestor? — by walking the push's ancestors (mozci resolves the chain from the
-pushlog) until one gives a verdict on the failing unit, and both wait up to ten minutes
-for an ancestor still running before failing open. What differs is the unit compared:
+pushlog) until one gives a verdict on the failing unit. An ancestor still running is
+waited for on the build path, up to ten minutes before failing open. The test path steps
+over it instead and asks the next ancestor back: one that already failed still makes the
+failure inherited, one that passed makes it new within the last few pushes, which is
+answer enough when the agent works out the culprit commit itself. On autoland the parent
+push is nearly always still running when a failure arrives, and in a dry run waiting for
+it cost the full ten minutes on almost every real regression — the same ten minutes the
+[history check](#skipping-the-classification-wait) had just saved. Only when every
+ancestor back to the depth limit is unsettled does the test path wait too. A build has no
+group dedupe, so deciding from the grandparent would run build-repair once for this push
+and again for the parent once it fails; it keeps waiting. What differs is the unit
+compared:
 
 - _Build:_ the task **label**. A build label carries no chunk number, so it means the
   same thing on every push: an ancestor whose same label passed makes the failure new,
