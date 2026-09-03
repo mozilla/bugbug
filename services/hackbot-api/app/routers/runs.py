@@ -273,7 +273,12 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
 
     await db.commit()
 
-    if _has_unsubmitted_patch(summary, artifacts):
+    agent_spec = AGENT_REGISTRY.get(run.agent)
+    if (
+        agent_spec is not None
+        and agent_spec.warn_on_unsubmitted_patch
+        and _has_unsubmitted_patch(summary, artifacts)
+    ):
         log.error(
             "Agent run produced code changes without submitting a patch "
             "(run_id=%s, agent=%s)",
