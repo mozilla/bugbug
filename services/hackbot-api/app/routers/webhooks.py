@@ -98,6 +98,11 @@ async def phabricator_webhook(
     # transaction, this is a retry of work already handled.
     fresh = [phid for phid in triggering if phid not in _seen_transactions]
     if not fresh:
+        log.info(
+            "Ignored duplicate Phabricator webhook for %s (transactions: %s)",
+            object_phid,
+            ", ".join(triggering),
+        )
         return {"status": "ignored", "reason": "duplicate delivery"}
 
     # Only consider this delivery's fresh transactions for the mention, so a
@@ -158,6 +163,11 @@ async def bugzilla_webhook(
         return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
     dedupe_key = f"ni{detected.flag_id}"
     if dedupe_key in _seen_bugzilla_events:
+        log.info(
+            "Ignored duplicate Bugzilla needinfo webhook for bug %s (flag: %s)",
+            detected.bug_id,
+            detected.flag_id,
+        )
         return {"status": "ignored", "reason": "duplicate delivery"}
 
     run = await api_client.trigger_run(
