@@ -1062,6 +1062,40 @@ def test_a_group_less_task_is_not_suppressed_by_the_manifest_cache(env):
     assert consumer.process(_test_msg(task_id="B"), env.executor) == "tr-1"
 
 
+def test_the_same_whole_task_failure_on_later_pushes_is_deduped(env):
+    # No manifest to dedupe on, so the label stands in for it: a debug assertion
+    # count broken by one push fails the same task on every push after it.
+    _consecutive_pushes(env, "rev-one", "rev-two", "rev-three")
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    assert consumer.process(_test_msg(task_id="B"), env.executor) is None
+    assert consumer.process(_test_msg(task_id="C"), env.executor) is None
+    env.trigger_run.assert_called_once()
+
+
+def test_whole_task_dedupe_ignores_the_chunk_number(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    chunked = "test-linux1804-64/opt-mochitest-browser-chrome-{}"
+    assert (
+        consumer.process(_test_msg(task_id="A", label=chunked.format(1)), env.executor)
+        == "tr-1"
+    )
+    assert (
+        consumer.process(_test_msg(task_id="B", label=chunked.format(7)), env.executor)
+        is None
+    )
+
+
+def test_a_different_whole_task_failure_on_a_later_push_still_runs(env):
+    _consecutive_pushes(env, "rev-one", "rev-two")
+    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"
+    other = "test-windows11-64/debug-mochitest-plain-3"
+    assert consumer.process(_test_msg(task_id="B", label=other), env.executor) == "tr-1"
+    assert env.trigger_run.call_count == 2
+
+
 def test_the_deduped_task_is_logged_with_a_treeherder_link(env, caplog):
     _consecutive_pushes(env, "rev-one", "hgrev")
     assert consumer.process(_test_msg(task_id="A"), env.executor) == "tr-1"

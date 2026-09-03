@@ -27,7 +27,11 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
    agent works from a single task but reads the push's other failures itself, so a
    second run for the same push would re-tread the same ground. A revision is recorded
    only once a run is actually triggered, so a task rejected as intermittent or
-   inherited leaves the push open for the next one.
+   inherited leaves the push open for the next one. A second cache spans pushes: a
+   failure already investigated on a recent push is skipped for
+   `GROUP_DEDUPE_TTL_SECONDS`, keyed by failing manifest — or, for a task compared as a
+   whole, by its label without the chunk number — since a broken manifest stays broken
+   on the pushes that follow.
 5. **Judge** whether the failure is worth a run. Every check fails open — an upstream
    error runs the agent rather than dropping a possible regression.
    - _Build:_ keep only failures this push introduced, waiting for an unsettled ancestor

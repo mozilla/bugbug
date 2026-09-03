@@ -428,9 +428,9 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
-    if _groups_claimed(project, fresh):
+    if _groups_claimed(project, _dedupe_units(fresh, label)):
         logger.info(
-            "Every failing group of task %s was already investigated on a recent "
+            "Everything failing in task %s was already investigated on a recent "
             "push; skipping -- %s",
             task_id,
             job_link,
@@ -512,8 +512,18 @@ def _claim_push(hg_revision: str) -> bool:
         return True
 
 
+def _dedupe_units(test_groups: list[str], label: str) -> list[str]:
+    """What a run covers, for the cross-push dedupe.
+
+    Its failing manifests, or, for a task compared as a whole, its label without the
+    chunk number: a whole-task failure stays broken on the following pushes just as a
+    manifest does, and without this each of them would get a near-identical run.
+    """
+    return test_groups or [regression.unchunked(label)]
+
+
 def _groups_claimed(project: str, groups: list[str]) -> bool:
-    """Whether a recent run already covered every one of these groups.
+    """Whether a recent run already covered every one of these groups (or the label).
 
     All, not any: a task that also broke an unanalysed manifest is still worth a run.
     """
@@ -623,7 +633,7 @@ def _trigger_test_repair(
         _release_test_run()
         return None
 
-    group_keys = _claim_groups(project, test_groups)
+    group_keys = _claim_groups(project, _dedupe_units(test_groups, label))
 
     try:
         run_id = client.trigger_run(
