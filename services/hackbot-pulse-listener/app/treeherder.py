@@ -364,9 +364,105 @@ def bug_suggestions(project: str, job_id: int) -> list[dict]:
             return _bug_suggestions_cache[key]
 
     suggestions = _get(f"{project}/jobs/{job_id}/bug_suggestions/") or []
-    with _cache_lock:
-        _bug_suggestions_cache[key] = suggestions
+    # Empty means the log is not parsed yet far more often than it means nothing
+    # failed, so only a parsed result is cached; the next reader tries again.
+    if suggestions:
+        with _cache_lock:
+            _bug_suggestions_cache[key] = suggestions
     return suggestions
+
+
+def await_bug_suggestions(project: str, job: dict | None) -> None:
+    """Wait a bounded time for Treeherder to parse the job's log.
+
+    The job is ingested before its log is parsed, and until then ``bug_suggestions``
+    is empty: the intermittent gate and the history check both read it, and both
+    fall through to the classification wait when it has nothing. Nothing is returned;
+    callers read ``bug_suggestions`` themselves, through the cache this fills.
+    """
+    job_id = (job or {}).get("id")
+    if job_id is None:
+        return
+    deadline = time.monotonic() + settings.treeherder_log_parse_wait_seconds
+    while True:
+        try:
+            if bug_suggestions(project, job_id):
+                return
+        except Exception:
+            logger.exception(
+                "Could not read the bug suggestions of job %s -- %s",
+                job_id,
+                job_url(project, None, (job or {}).get("task_id") or ""),
+            )
+            return
+        if time.monotonic() >= deadline:
+            logger.info(
+                "Treeherder has not parsed the log of job %s after %ss; judging the "
+                "task without its failure lines -- %s",
+                job_id,
+                settings.treeherder_log_parse_wait_seconds,
+                job_url(project, None, (job or {}).get("task_id") or ""),
+            )
+            return
+        time.sleep(settings.treeherder_ingest_poll_seconds)
+
+
+def _failure_line_test(search: str) -> str | None:
+    """The source-relative test path a parsed failure line names, if it names one.
+
+    Lines read ``TEST-UNEXPECTED-FAIL | <test> | <message>``. The middle field is a
+    test path for a per-test failure and a label like "ShutdownLeaks" or "shutdown
+    hang" for a task-level one; xpcshell prefixes the path with its manifest.
+    """
+    fields = [field.strip() for field in search.split("|")]
+    if len(fields) < 2:
+        return None
+    candidate = fields[1].rsplit(":", 1)[-1]
+    return candidate if "/" in candidate else None
+
+
+def failing_tests(project: str, job: dict | None) -> list[str] | None:
+    """The tests a job reported as failing, or None if they cannot be enumerated.
+
+    None means some unexpected failure was not attributable to a test -- a crash, a
+    leak, a shutdown hang, or a job whose log yielded no failure lines at all -- so a
+    caller must not read the empty result as "nothing else failed". Fails soft to
+    None on any error, for the same reason.
+    """
+    job_id = (job or {}).get("id")
+    if job_id is None:
+        return None
+    try:
+        lines = [
+            line.get("search") or ""
+            for line in bug_suggestions(project, job_id)
+            if (line.get("search") or "").startswith(_FAILURE_LINE_PREFIX)
+        ]
+    except Exception:
+        logger.exception(
+            "Could not read the bug suggestions of job %s -- %s",
+            job_id,
+            job_url(project, None, (job or {}).get("task_id") or ""),
+        )
+        return None
+
+    if not lines:
+        logger.info(
+            "Job %s has no parsed failure lines; its tests cannot be judged -- %s",
+            job_id,
+            job_url(project, None, (job or {}).get("task_id") or ""),
+        )
+        return None
+    tests = [_failure_line_test(line) for line in lines]
+    if None in tests:
+        logger.info(
+            "Job %s failed outside any test (%s); its tests cannot be judged -- %s",
+            job_id,
+            lines[tests.index(None)][:120],
+            job_url(project, None, (job or {}).get("task_id") or ""),
+        )
+        return None
+    return list(dict.fromkeys(tests))
 
 
 @dataclass(frozen=True)

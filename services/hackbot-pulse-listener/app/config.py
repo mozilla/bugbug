@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # gate waits for the job to be ingested before reading that verdict.
     treeherder_ingest_poll_seconds: int = 30
     treeherder_ingest_max_wait_seconds: int = 240
+    # The log is parsed after the job is ingested; the failure lines the intermittent
+    # gate and the history check read are not there until it is. Measured on 40
+    # autoland failures: parsed by first sight in 39, within 24s in the last.
+    treeherder_log_parse_wait_seconds: int = 60
     # How long to wait for a verdict once the job is ingested. Most test failures turn
     # out to be intermittent or expected-fail, so waiting here rejects them before the
     # ancestor walk and before an agent run. Bounded by how late that makes the
@@ -43,6 +47,13 @@ class Settings(BaseSettings):
     # at p90, so waiting much past that buys few extra rejections and delays every
     # real regression by the full wait.
     treeherder_classification_wait_seconds: int = 600
+    # The wait is skipped for a task whose every failing test looks reliable in the
+    # tests.firefox.dev timings data (see the README). 0.05% is the measured knee: a
+    # strict 0% covers only two thirds of the genuine regressions that 0.05% does,
+    # and looser rates add noise without covering more. The runs floor only rules out
+    # tests too new to judge; anything from 30 to 1000 scores the same.
+    flakiness_min_runs: int = 100
+    flakiness_max_failure_rate: float = 0.0005
 
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60
@@ -54,7 +65,9 @@ class Settings(BaseSettings):
     # builds Firefox in its own container, so a bad day on autoland -- a broken
     # manifest inherited by push after push, or a Treeherder outage that leaves every
     # gate failing open -- could otherwise cost far more than the failures are worth.
-    max_test_repairs_per_day: int = 50
+    # A cost backstop, not a quality gate: a 7-hour dry run on a busy day extrapolated
+    # to ~75 runs, so 50 would have dropped the afternoon's regressions unread.
+    max_test_repairs_per_day: int = 100
 
     # Polling the API for run completion
     poll_interval_seconds: int = 60
