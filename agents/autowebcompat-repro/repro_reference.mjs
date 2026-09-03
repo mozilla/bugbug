@@ -47,7 +47,7 @@ async function probe() {
   const browser = await puppeteer.launch({
     browser: BROWSER,
     executablePath: BROWSER_BIN,
-    headless: true,
+    headless: process.env.HEADLESS ? true : false,
     ...(BROWSER === "chrome" ? { args: ["--no-sandbox"] } : {}),
   });
   try {
