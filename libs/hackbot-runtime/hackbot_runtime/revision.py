@@ -120,19 +120,11 @@ async def checkout_revision(
         log.info("D%s is stacked on %s; replaying them first", revision_id, below)
         for patch in stack.ancestors:
             _apply(repo, patch)
-            # A commit each, attributed to whoever wrote the revision: this is
-            # what the agent will read in `git log`/`git blame`, and one squashed
-            # lump authored by hackbot would misattribute other people's work.
-            # Committing them also takes them out of the agent's own changes —
-            # the recorded base moves up to here, so what hackbot submits back
-            # covers D<revision_id> alone.
-            changes.commit_all(repo, patch.commit_message, author=patch.author)
-
-    _apply(repo, stack.target)
 
     # Whatever was seeded above is the agent's starting point, not its work.
-    # A no-op when nothing was seeded, so this stays unconditional.
     ctx.record_source_base()
+
+    _apply(repo, stack.target, should_commit=False)
 
 
 async def _resolve_stack(client: PhabricatorClient, revision_id: int) -> Stack:
@@ -220,7 +212,7 @@ async def _live_ancestors(client: PhabricatorClient, target: dict) -> list[dict]
     ]
 
 
-def _apply(repo: Path, patch: Patch) -> None:
+def _apply(repo: Path, patch: Patch, should_commit: bool = True) -> None:
     """Apply one revision's diff to ``repo``'s working tree."""
     result = subprocess.run(
         ["git", "-C", str(repo), "apply"],
@@ -238,3 +230,6 @@ def _apply(repo: Path, patch: Patch) -> None:
             "updated without this one being rebased onto them, that stack has "
             "to be rebased before hackbot can reproduce it."
         )
+
+    if should_commit:
+        changes.commit_all(repo, patch.commit_message, author=patch.author)
