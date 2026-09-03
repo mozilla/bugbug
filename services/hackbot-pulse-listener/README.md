@@ -48,7 +48,7 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
    - _Both:_ a walk is abandoned as soon as another task triggers the run for that
      push. One push can emit dozens of failing tasks, and without this each one holds
      a worker for the full wait only to find the push already handed off.
-6. **Budget.** At most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs (default 50) may
+6. **Budget.** At most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs (default 100) may
    start in any rolling 24 hours. A slot is taken when a run is triggered and given
    back if the trigger fails, so only runs that really started count. Once the budget
    is spent, later test failures stop before any Treeherder work. Build-repair is not

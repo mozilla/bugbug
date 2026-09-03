@@ -65,7 +65,9 @@ class Settings(BaseSettings):
     # builds Firefox in its own container, so a bad day on autoland -- a broken
     # manifest inherited by push after push, or a Treeherder outage that leaves every
     # gate failing open -- could otherwise cost far more than the failures are worth.
-    max_test_repairs_per_day: int = 50
+    # A cost backstop, not a quality gate: a 7-hour dry run on a busy day extrapolated
+    # to ~75 runs, so 50 would have dropped the afternoon's regressions unread.
+    max_test_repairs_per_day: int = 100
 
     # Polling the API for run completion
     poll_interval_seconds: int = 60
