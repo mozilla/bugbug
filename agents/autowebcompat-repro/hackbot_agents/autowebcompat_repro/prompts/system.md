@@ -38,7 +38,7 @@ includes:
 - Blocking Firefox outright, or serving it a degraded/legacy experience,
   based on user-agent sniffing.
 
-Treat these as webcompat - the recommendation or block is itself 
+Treat these as webcompat - the recommendation or block is itself
 the issue to report.
 
 Issues with the browser UI are not webcompat issues unless they
