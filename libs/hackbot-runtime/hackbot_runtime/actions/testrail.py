@@ -19,20 +19,26 @@ ACTION_TYPE = "testrail.submit_test_plan"
 
 
 class TestRailStepInput(BaseModel):
-    action: str = Field(description="Test step action.")
-    expectation: str | None = Field(
-        default=None,
-        description=("Expected result for this step."),
-    )
+    action: Annotated[str, Field(description="Test step action.")]
+    expectation: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=("Expected result for this step."),
+        ),
+    ]
 
 
 class TestRailCaseResultInput(BaseModel):
     status: Literal["passed", "failed", "unsuitable"]
     summary: str
-    failure_reason: str | None = Field(
-        default=None,
-        description="Required when status is failed or unsuitable.",
-    )
+    failure_reason: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Required when status is failed or unsuitable.",
+        ),
+    ]
 
     @model_validator(mode="after")
     def failure_reason_required_for_non_passing_cases(
@@ -45,10 +51,14 @@ class TestRailCaseResultInput(BaseModel):
 
 class TestRailCaseInput(BaseModel):
     id: int
-    title: str = Field(description="TestRail test case title.")
-    preconditions: str | None = Field(
-        default=None, description="Optional setup required before running this case."
-    )
+    title: Annotated[str, Field(description="TestRail test case title.")]
+    preconditions: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Optional setup required before running this case.",
+        ),
+    ]
     steps: Annotated[
         list[TestRailStepInput],
         Field(
@@ -59,11 +69,14 @@ class TestRailCaseInput(BaseModel):
             ),
         ),
     ]
-    result: TestRailCaseResultInput = Field(
-        description=(
-            "Execution result for this generated test case after the agent ran it."
-        )
-    )
+    result: Annotated[
+        TestRailCaseResultInput,
+        Field(
+            description=(
+                "Execution result for this generated test case after the agent ran it."
+            )
+        ),
+    ]
 
     @field_validator("title")
     @classmethod
@@ -90,7 +103,9 @@ class TestRailCaseInput(BaseModel):
 
 
 class SubmitTestPlanInput(BaseModel):
-    feature: str = Field(description="Feature covered by the generated test cases.")
+    feature: Annotated[
+        str, Field(description="Feature covered by the generated test cases.")
+    ]
     generated_test_cases: Annotated[
         list[TestRailCaseInput],
         Field(
@@ -99,10 +114,13 @@ class SubmitTestPlanInput(BaseModel):
             description="Generated test cases to upload to TestRail.",
         ),
     ]
-    summary: str | None = Field(
-        default=None,
-        description="Optional summary of the generated test-plan execution.",
-    )
+    summary: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Optional summary of the generated test-plan execution.",
+        ),
+    ]
 
     @field_validator("feature")
     @classmethod

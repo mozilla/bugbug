@@ -8,12 +8,14 @@ env-driven config (e.g. the agents' Cloud Run Jobs).
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class PhabricatorSettings(BaseModel):
-    api_key: str = Field(min_length=32, max_length=32)
+    api_key: Annotated[str, Field(min_length=32, max_length=32)]
     url: str = "https://phabricator.services.mozilla.com"
     timeout_seconds: int = 60
 

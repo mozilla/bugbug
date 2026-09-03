@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import imghdr
 from pathlib import Path
-from typing import Generic, Literal, TypeVar
+from typing import Annotated, Generic, Literal, TypeVar
 
 from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
 from pydantic import (
@@ -30,25 +30,34 @@ class ResultCollector(Generic[ResultT]):
 
 
 class TestPlanResult(BaseModel):
-    is_webcompat: bool = Field(
-        description=("true if the input describes a webcompat issue, otherwise false."),
-    )
+    is_webcompat: Annotated[
+        bool,
+        Field(
+            description=(
+                "true if the input describes a webcompat issue, otherwise false."
+            ),
+        ),
+    ]
 
-    affects_platforms: list[
-        Literal["ios"] | Literal["android"] | Literal["desktop"]
-    ] = Field(description="List of platforms which seem to be affected by the issue")
+    affects_platforms: Annotated[
+        list[Literal["ios"] | Literal["android"] | Literal["desktop"]],
+        Field(description="List of platforms which seem to be affected by the issue"),
+    ]
 
-    affects_os: (
-        None
-        | Literal["all"]
-        | list[Literal["windows"] | Literal["linux"] | Literal["macos"]]
-    ) = Field(
-        description="""List of desktop issues known to be affected.
+    affects_os: Annotated[
+        (
+            None
+            | Literal["all"]
+            | list[Literal["windows"] | Literal["linux"] | Literal["macos"]]
+        ),
+        Field(
+            description="""List of desktop issues known to be affected.
         - `null` if the issue does not affect desktop.
         - "all" if there is no strong evidence that the issue is OS specific"
         - Otherwise a list of OS names which are likely affected
         """
-    )
+        ),
+    ]
 
     affects_channels: list[Literal["nightly"] | Literal["stable"] | Literal["esr"]] = (
         Field(
@@ -62,38 +71,46 @@ class TestPlanResult(BaseModel):
 
 
 class ReproductionResult(BaseModel):
-    confirmed_by_script: bool = Field(
-        default=False,
-        description=(
-            "true if a Puppeteer script demonstrated the difference for this "
-            "Firefox build, false if you could not get one to pass or did not "
-            "run one."
+    confirmed_by_script: Annotated[
+        bool,
+        Field(
+            default=False,
+            description=(
+                "true if a Puppeteer script demonstrated the difference for this "
+                "Firefox build, false if you could not get one to pass or did not "
+                "run one."
+            ),
         ),
-    )
+    ]
 
-    reproduced: bool = Field(
-        description=(
-            "true if the reported issue reproduced in Firefox, otherwise false."
+    reproduced: Annotated[
+        bool,
+        Field(
+            description=(
+                "true if the reported issue reproduced in Firefox, otherwise false."
+            ),
         ),
-    )
+    ]
 
-    failure_reason: (
-        Literal["not_reproducible"]
-        | Literal["not_web_platform"]
-        | Literal["not_firefox_specific"]
-        | Literal["unsupported_android"]
-        | Literal["unsupported_ios"]
-        | Literal["unsupported_desktop_os"]
-        | Literal["blocked"]
-        | Literal["blocked_captcha"]
-        | Literal["blocked_geo"]
-        | Literal["login"]
-        | Literal["down"]
-        | Literal["headless"]
-        | Literal["other"]
-        | None
-    ) = Field(
-        description="""If an issue was reproduced as a Firefox web-compat issue then `null`.
+    failure_reason: Annotated[
+        (
+            Literal["not_reproducible"]
+            | Literal["not_web_platform"]
+            | Literal["not_firefox_specific"]
+            | Literal["unsupported_android"]
+            | Literal["unsupported_ios"]
+            | Literal["unsupported_desktop_os"]
+            | Literal["blocked"]
+            | Literal["blocked_captcha"]
+            | Literal["blocked_geo"]
+            | Literal["login"]
+            | Literal["down"]
+            | Literal["headless"]
+            | Literal["other"]
+            | None
+        ),
+        Field(
+            description="""If an issue was reproduced as a Firefox web-compat issue then `null`.
         Otherwise, one of the following categories describing the reason for the failure:
           * not_reproducible - When it was possible to run all the steps to reproduce, but no issue was found
           * not_web_platform - When the issue is not related to the the web content itself. This covers reports that don't refer
@@ -111,17 +128,21 @@ class ReproductionResult(BaseModel):
           * headless - When there is an evidence that the issue isn't reproducible due to the headless environment
           * other - When the issue could not be reproduced for some other reason (briefly state the reason in the summary)
 """
-    )
+        ),
+    ]
 
-    screenshot_path: Path | None = Field(
-        description=(
-            """The file path you saved a screenshot to via the `screenshot_page`
+    screenshot_path: Annotated[
+        Path | None,
+        Field(
+            description=(
+                """The file path you saved a screenshot to via the `screenshot_page`
             `saveTo` parameter, showing the issue. Use the exact path you passed
             as `saveTo` (do NOT paste image data). This must only be set for
             issues where the breakage is visual in nature i.e. incorrect site
             layout rather than broken interaction. Otherwise it must be null."""
+            ),
         ),
-    )
+    ]
 
     @field_validator("screenshot_path", mode="after")
     @classmethod
@@ -143,47 +164,59 @@ class BugReproductionResult(ReproductionResult):
     Chrome so it can cross-check the two browsers in a single context.
     """
 
-    summary: str = Field(
-        description="""A 2-4 sentence summary of your findings: what breaks in Firefox,
+    summary: Annotated[
+        str,
+        Field(
+            description="""A 2-4 sentence summary of your findings: what breaks in Firefox,
         and how Chrome differs.
 
         Hard limit: 500 characters. State conclusions, not the investigation.
         Do NOT include: measurements or coordinates, script exit codes or
         pass/fail counts, how the script works, restatements of other result
         fields, or justification that the issue qualifies as webcompat."""
-    )
-
-    chrome_reproduced: bool | None = Field(
-        description=(
-            "Result of running the cross-check step in Chrome: "
-            "true if the issue also reproduces in Chrome, false if the "
-            "issue does not reproduce in Chrome, or null if the Chrome "
-            "cross-check wasn't able to confirm reproduction."
         ),
-    )
+    ]
 
-    steps: str = Field(
-        description=(
-            "The ordered steps you took, as a single numbered list (1., 2., 3., "
-            "... one step per line), written so another agent could reproduce "
-            "them with no extra context. Each step must be self-contained: "
-            "whenever you introduce an input or artifact the report did not "
-            "provide (a file, image, account, or any other test data), state its "
-            "exact origin — the URL you fetched it from, the command you ran, or "
-            'how you generated it — not just that you "used" or "saved" it. A '
-            "reader must be able to obtain the same inputs. Omit the Chrome cross-check "
-            "reproduction, Puppeteer script and screenshot steps."
+    chrome_reproduced: Annotated[
+        bool | None,
+        Field(
+            description=(
+                "Result of running the cross-check step in Chrome: "
+                "true if the issue also reproduces in Chrome, false if the "
+                "issue does not reproduce in Chrome, or null if the Chrome "
+                "cross-check wasn't able to confirm reproduction."
+            ),
         ),
-    )
+    ]
 
-    script_path: Path | None = Field(
-        description=(
-            """The file path of the Puppeteer confirmation script you wrote and
+    steps: Annotated[
+        str,
+        Field(
+            description=(
+                "The ordered steps you took, as a single numbered list (1., 2., 3., "
+                "... one step per line), written so another agent could reproduce "
+                "them with no extra context. Each step must be self-contained: "
+                "whenever you introduce an input or artifact the report did not "
+                "provide (a file, image, account, or any other test data), state its "
+                "exact origin — the URL you fetched it from, the command you ran, or "
+                'how you generated it — not just that you "used" or "saved" it. A '
+                "reader must be able to obtain the same inputs. Omit the Chrome cross-check "
+                "reproduction, Puppeteer script and screenshot steps."
+            ),
+        ),
+    ]
+
+    script_path: Annotated[
+        Path | None,
+        Field(
+            description=(
+                """The file path of the Puppeteer confirmation script you wrote and
             ran successfully (exit code 0). Use the exact path you were given
             to write to (do NOT paste the script source). Must be null when
             `reproduced` is false."""
+            ),
         ),
-    )
+    ]
 
     @field_validator("script_path", mode="after")
     @classmethod
@@ -209,14 +242,17 @@ class BugReproductionResult(ReproductionResult):
 
 
 class ChromeMaskResult(BaseModel):
-    chrome_mask_fixed: bool | None = Field(
-        description=(
-            "Whether enabling the Chrome Mask extension (spoofing a Chrome "
-            "User-Agent) fixed the reported behavior: true if it fixed it, "
-            "false if it did not, null if the Chrome Mask test was not run "
-            "(e.g. the issue did not reproduce at baseline)."
+    chrome_mask_fixed: Annotated[
+        bool | None,
+        Field(
+            description=(
+                "Whether enabling the Chrome Mask extension (spoofing a Chrome "
+                "User-Agent) fixed the reported behavior: true if it fixed it, "
+                "false if it did not, null if the Chrome Mask test was not run "
+                "(e.g. the issue did not reproduce at baseline)."
+            ),
         ),
-    )
+    ]
 
 
 def build_result_server(collector: ResultCollector) -> McpServerConfig:
