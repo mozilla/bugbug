@@ -73,7 +73,7 @@ _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 _FEEDBACK_TAGS = (
     "If you want to categorize your feedback you can add one of the following "
     "tags: ai-triage-wrong-file, ai-triage-wrong-cause, ai-triage-hallucination, "
-    "ai-triage-out-of-scope."
+    "ai-triage-out-of-scope, ai-triage-wrong-fix, ai-triage-shallow-fix."
 )
 
 

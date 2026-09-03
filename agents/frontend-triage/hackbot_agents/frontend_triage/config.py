@@ -145,6 +145,43 @@ TRIAGE_SCOPE = (
     ),
     ScopedComponent(
         "Firefox",
+        "Sidebar",
+        "#p10y-bots",
+        trees=("browser/components/sidebar/",),
+        owns=("browser/components/sidebar/",),
+        notes=(
+            "**Two sidebars ship at once, and which one the reporter saw is a build "
+            "question**: `sidebar.revamp` is inside `#ifdef NIGHTLY_BUILD` in "
+            "`browser/app/profile/firefox.js`, so the same steps give different UI on "
+            "Nightly and on release. What that does **not** mean is two implementations "
+            "to choose between. `browser/components/sidebar/browser-sidebar.js` is one "
+            "`SidebarController` serving both, branching on `sidebarRevampEnabled` in 25 "
+            'places, so "only with the new sidebar" is usually a branch in a shared file '
+            "rather than a separate file to go and read. What is revamp-only is the lit "
+            "launcher and panels (`sidebar-main.mjs` and the `sidebar-*.mjs` beside it) "
+            "over `SidebarManager.sys.mjs` for global state and `SidebarState.sys.mjs` "
+            "per window.\n\n"
+            "**Vertical tabs is mostly not this component.** `sidebar.verticalTabs` is "
+            "off by default and turning it on moves work into three other places: the "
+            "strip itself is `browser/components/tabbrowser/`, the toolbar rearrangement "
+            "hangs off `CustomizableUI.verticalTabsEnabled` in "
+            "`browser/components/customizableui/CustomizableUI.sys.mjs`, and "
+            "`browser/base/content/navigator-toolbox.js` relocates the pieces. Say which "
+            "of the four you localized to; do not re-scope the bug off Sidebar for it.\n\n"
+            "**Coverage is good and an empty `relevant_tests` is almost always wrong "
+            "here**, but naming a file is only half the answer. 46 tests in "
+            "`browser/components/sidebar/tests/browser/`, and the 6 in "
+            "`browser/components/sidebar/tests/browser/legacy/` are listed twice on "
+            "purpose: `browser.toml` runs them with `sidebar.revamp=false` and "
+            "`browserSidebarRevamp.toml` runs the same files with it true, so cite the "
+            "manifest that matches the bug. Startup and launcher behavior is covered by "
+            "`browser/components/sidebar/tests/marionette/`, which a `browser_*.js` grep "
+            "misses entirely. Note also that `browser/base/content/test/sidebar/` is "
+            "`Firefox :: General` in `moz.build`, not this component."
+        ),
+    ),
+    ScopedComponent(
+        "Firefox",
         "Site Permissions",
         "#privacy-team-automation",
         trees=(
@@ -239,7 +276,73 @@ TRIAGE_SCOPE = (
         ),
         # Cookie permissions decide who is exempt from clear-on-shutdown and who is always
         # cleared, and site permissions owns `extensions/permissions/` where they live.
-        related=("Firefox :: Site Permissions",),
+        # Settings UI is here because the notes above send the agent to the "Manage Data"
+        # list and the site-data dialog to say they are *not* the sanitizer, and both are
+        # paths that component owns -- without it loaded, citing either is refused.
+        related=("Firefox :: Site Permissions", "Firefox :: Settings UI"),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Settings UI",
+        "#fx-recomp-bots",
+        # `browser/components/preferences/` claims `**`, which covers `config/`,
+        # `dialogs/` and `widgets/` -- none of those declare a `BUG_COMPONENT` of their
+        # own. The three modules are named one by one because `browser/modules/` is
+        # mostly not this component: site permissions has two files there and
+        # `Sanitizer.sys.mjs` belongs to Data Sanitization. `browser/tools/mozscreenshots/`
+        # claims `preferences/**` too, and is left out as screenshot tooling.
+        trees=(
+            "browser/components/preferences/",
+            "browser/modules/SiteDataManager.sys.mjs",
+            "browser/modules/SelectionChangedMenulist.sys.mjs",
+            "browser/modules/TransientPrefs.sys.mjs",
+        ),
+        owns=(
+            "browser/components/preferences/",
+            "browser/modules/SiteDataManager.sys.mjs",
+            "browser/modules/SelectionChangedMenulist.sys.mjs",
+            "browser/modules/TransientPrefs.sys.mjs",
+        ),
+        notes=(
+            "Nothing under these paths registers a `SPHINX_TREES`, so there is no "
+            "source doc to fall back on and the tree is the only reference.\n\n"
+            "**Two settings UIs are live and the redesign is the default**, so which one "
+            "the reporter saw comes before which file. `browser.settings-redesign.enabled` "
+            "is `true` in `browser/app/profile/firefox.js`, and `srdSectionEnabled` in "
+            "`browser/components/preferences/preferences.js` ORs it with a per-section "
+            "`browser.settings-redesign.<section>.enabled`, so one pane can be new while "
+            "another is old in the same profile. The legacy panes are `main.js`, "
+            "`privacy.js`, `search.js`, `sync.js` and `home.js` over the `*.inc.xhtml` "
+            "fragments; the redesign is declarative, one module per pane under "
+            "`browser/components/preferences/config/` driven by "
+            "`browser/components/preferences/config/SettingPaneManager.mjs` and "
+            "`browser/components/preferences/config/SettingGroupManager.mjs` and rendered "
+            "by the `setting-*` custom elements in "
+            "`browser/components/preferences/widgets/`. The same control therefore exists "
+            "twice, and a patch against the half the reporter was not on reads correct "
+            "and changes nothing.\n\n"
+            "**`about:settings` and `about:preferences` are both registered**, and a deep "
+            "link carries a subcategory (`#privacy-...`) that "
+            "`browser/components/preferences/config/LegacyPaneMappings.mjs`'s "
+            '`resolveLegacyCategory` remaps when the redesign pref is on. So "the link '
+            'took me to the wrong section" is that mapping rather than the pane it '
+            "landed on.\n\n"
+            "**A control that is greyed out, reset on restart, or carrying a notice is "
+            "usually an add-on holding the pref**, not a defect in the pane: "
+            "`browser/components/preferences/extensionControlled.js` is what puts it in "
+            "that state. Check for an installed extension before localizing.\n\n"
+            "**The clearing dialogs reached from the Privacy pane are `Toolkit :: Data "
+            "Sanitization`**, whose guidance ships alongside this one. The line runs the "
+            'other way too: the "Manage Data" site list is '
+            "`browser/modules/SiteDataManager.sys.mjs` and "
+            "`browser/components/preferences/dialogs/siteDataSettings.js`, which are this "
+            "component even though they clear data.\n\n"
+            "**Coverage is heavy, so an empty `relevant_tests` is almost always wrong** -- "
+            "260 `browser_*.js` under `browser/components/preferences/tests/`. As with the "
+            "panes, name the manifest and not just the file: 20 of them are duplicated as "
+            "`-srd.toml`, which runs the same tests with the redesign turned on."
+        ),
+        related=("Toolkit :: Data Sanitization",),
     ),
     ScopedComponent(
         "Firefox",

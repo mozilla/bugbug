@@ -81,9 +81,15 @@ export function parseTestPlan(
     return null;
   }
 
+  // Runs that predate per-case results keep them in a sibling `results` array,
+  // and only ever on findings — the action never carried one. So read it from
+  // findings rather than from `result`, which is the action once one exists.
+  const findingsResult = isPlainObject(findings.result)
+    ? findings.result
+    : null;
   const legacyResultsById = new Map<number, TestCaseResult>();
-  if (Array.isArray(result.results)) {
-    for (const value of result.results) {
+  if (Array.isArray(findingsResult?.results)) {
+    for (const value of findingsResult.results) {
       if (isPlainObject(value) && typeof value.id === "number") {
         const parsed = parseCaseResult(value, value.id);
         if (parsed) {
