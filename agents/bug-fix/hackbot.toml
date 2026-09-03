@@ -1,0 +1,7 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+
+[firefox]
+enabled = true
+objdir = "objdir-ff-asan"

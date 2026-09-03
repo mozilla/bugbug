@@ -1023,3 +1023,309 @@ def test_fallback_on_ini() -> None:
     past_failures.set("browser.toml", ExpQueue(0, 1, 22))
     assert_val("browser.toml", 22)
     assert_val("browser.ini", 42)
+
+
+def test_find_manifests_for_paths(tmp_path) -> None:
+    (tmp_path / "dom" / "battery" / "test").mkdir(parents=True)
+    (tmp_path / "dom" / "battery" / "test" / "mochitest.toml").touch()
+    (tmp_path / "dom" / "battery" / "test" / "chrome.toml").touch()
+
+    manifest = """[DEFAULT]
+head = "../prova.js"
+support-files = [
+  "!/absolute_path_with_glob/*.js",
+  "!/absolute_path_with_subdirglob/**",
+  "relative/path.png"
+]
+
+["test_resolve_uris_ipc.js"]
+"""
+
+    manifest2 = """[DEFAULT]
+head = ""
+support-files = ""
+
+["test_resolve_uris_ipc.js"]
+"""
+
+    (tmp_path / "test").mkdir(parents=True)
+    (tmp_path / "test" / "chrome.toml").write_text(manifest)
+    (tmp_path / "test" / "mochitest.toml").write_text(manifest2)
+    (tmp_path / "absolute_path_with_glob" / "subdir").mkdir(parents=True)
+    (tmp_path / "absolute_path_with_glob" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_glob" / "asd.png").touch()
+    (tmp_path / "absolute_path_with_glob" / "subdir" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_subdirglob" / "subdir").mkdir(parents=True)
+    (tmp_path / "absolute_path_with_subdirglob" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_subdirglob" / "subdir" / "asd.js").touch()
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["dom/battery/BatteryManager.cpp"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["dom/battery/BatteryManager.cpp", "test/chrome.toml"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+        "test/chrome.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["prova.js"]) == {
+        "test/chrome.toml"
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["test/test_resolve_uris_ipc.js"]
+    ) == {
+        "test/chrome.toml",
+        "test/mochitest.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["test/relative/path.png"]
+    ) == {"test/chrome.toml"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_glob/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["absolute_path_with_glob/asd.png"]
+        )
+        == set()
+    )
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["absolute_path_with_glob/subdir/asd.js"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_subdirglob/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_subdirglob/subdir/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    (tmp_path / "testing/web-platform/tests/html/semantics").mkdir(parents=True)
+    (tmp_path / "testing/web-platform/tests/.gitignore").touch()
+    (
+        tmp_path
+        / "testing/web-platform/tests/html/semantics/rellist-feature-detection.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/tests/html/semantics/META.yml").touch()
+    (tmp_path / "testing/web-platform/tests/html/semantics/interactive-elements").mkdir(
+        parents=True
+    )
+    (
+        tmp_path
+        / "testing/web-platform/tests/html/semantics/interactive-elements"
+        / "contextmenu-historical.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/mozilla/meta/pointerevents").mkdir(parents=True)
+    (
+        tmp_path
+        / "testing/web-platform/mozilla/meta/pointerevents/pointerevent_click_during_parent_capture.html.ini"
+    ).touch()
+    (tmp_path / "testing/web-platform/mozilla/tests/pointerevents").mkdir(parents=True)
+    (
+        tmp_path
+        / "testing/web-platform/mozilla/tests/pointerevents/pointerevent_click_during_parent_capture.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/tests/encrypted-media/content").mkdir(
+        parents=True
+    )
+    (
+        tmp_path
+        / "testing/web-platform/tests/encrypted-media/clearkey-events.https.html"
+    ).touch()
+    (
+        tmp_path
+        / "testing/web-platform/tests/encrypted-media/content/content-metadata.js"
+    ).touch()
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["testing/web-platform/tests/.gitignore"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        ["testing/web-platform/tests/html/semantics/rellist-feature-detection.html"],
+    ) == {"testing/web-platform/tests/html/semantics"}
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["testing/web-platform/tests/html/semantics/META.yml"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        [
+            "testing/web-platform/tests/html/semantics/interactive-elements/contextmenu-historical.html"
+        ],
+    ) == {"testing/web-platform/tests/html/semantics/interactive-elements"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        [
+            "testing/web-platform/mozilla/meta/pointerevents/pointerevent_click_during_parent_capture.html.ini"
+        ],
+    ) == {"testing/web-platform/mozilla/tests/pointerevents"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        ["testing/web-platform/tests/encrypted-media/content/content-metadata.js"],
+    ) == {"testing/web-platform/tests/encrypted-media"}
+
+
+def test_find_tasks_for_paths(tmp_path) -> None:
+    known_tasks = (
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-mochitest-browser-chrome-1proc",
+        "test-linux64/opt-gtest-e10s",
+        "test-linux64/opt-cppunit",
+        "test-linux64/opt-rusttests",
+    )
+
+    # Set up a minimal cppunittest.toml listing two test names.
+    (tmp_path / "testing").mkdir(parents=True)
+    (tmp_path / "testing" / "cppunittest.toml").write_text(
+        '[DEFAULT]\n\n["TestArray"]\n\n["TestArrayUtils"]\n'
+    )
+
+    # Non-C/C++ file containing GTest patterns should not trigger gtest selection.
+    (tmp_path / "script.py").write_bytes(b"TEST(Foo, Bar) {}")
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["script.py"])
+        == []
+    )
+
+    # C/C++ file without GTest patterns should not trigger gtest selection.
+    (tmp_path / "source.cpp").write_bytes(b"int main() { return 0; }")
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["source.cpp"])
+        == []
+    )
+
+    # C/C++ file with TEST macro selects tasks containing "gtest".
+    (tmp_path / "test_foo.cpp").write_bytes(b"TEST(FooTest, Bar) {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["test_foo.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # C/C++ file with TEST_F macro also triggers gtest selection.
+    (tmp_path / "test_fixture.cpp").write_bytes(b"TEST_F(FooFixture, Bar) {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["test_fixture.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # Non-existent C/C++ file raises OSError which is silently skipped.
+    assert (
+        test_scheduling.find_tasks_for_paths(
+            str(tmp_path), known_tasks, ["nonexistent.cpp"]
+        )
+        == []
+    )
+
+    # No paths -> no tasks selected.
+    assert test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, []) == []
+
+    # known_tasks without any "gtest" task -> empty even when GTest file present.
+    assert (
+        test_scheduling.find_tasks_for_paths(
+            str(tmp_path),
+            ("test-linux64/opt-mochitest-browser-chrome-1proc",),
+            ["test_foo.cpp"],
+        )
+        == []
+    )
+
+    # Two paths: one C/C++ with GTest patterns and one without -> gtest tasks selected.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["source.cpp", "test_foo.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # File whose path contains a gtest folder triggers gtest selection regardless of content.
+    (tmp_path / "dom" / "media" / "gtest").mkdir(parents=True)
+    (tmp_path / "dom" / "media" / "gtest" / "TestCubeb.cpp").write_bytes(
+        b"// no test macros\n"
+    )
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["dom/media/gtest/TestCubeb.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # File in a folder adjacent to a gtest subfolder triggers gtest selection.
+    (tmp_path / "dom" / "media" / "CubebUtils.cpp").write_bytes(b"int foo() {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["dom/media/CubebUtils.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # Rust file triggers rusttests selection.
+    (tmp_path / "servo").mkdir()
+    (tmp_path / "servo" / "lib.rs").write_bytes(b"pub fn foo() {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["servo/lib.rs"]
+    ) == ["test-linux64/opt-rusttests"]
+
+    # Non-Rust file does not trigger rusttests selection.
+    assert "test-linux64/opt-rusttests" not in test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["servo/foo.cpp"]
+    )
+
+    # Modifying testing/cppunittest.toml itself triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/cppunittest.toml"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # Modifying testing/remotecppunittests.py triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/remotecppunittests.py"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # Modifying testing/runcppunittests.py triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/runcppunittests.py"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # A .cpp file whose stem is listed in cppunittest.toml triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["mfbt/TestArrayUtils.cpp"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # A .cpp file whose stem is not listed in cppunittest.toml does not trigger cppunit.
+    assert "test-linux64/opt-cppunit" not in test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["mfbt/TestUnknown.cpp"]
+    )
+
+    # Empty known_tasks -> always empty.
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), (), ["test_foo.cpp"]) == []
+    )

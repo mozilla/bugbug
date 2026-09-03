@@ -1,13 +1,13 @@
 version: 1
 reporting: checks-v1
 policy:
-  pullRequests: public
+  pullRequests: public_restricted
 tasks:
   $let:
     user: ${event.sender.login}
 
     head_branch:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.head.ref}
       else:
         $if: 'tasks_for == "github-push"'
@@ -15,7 +15,7 @@ tasks:
         else: ${event.release.target_commitish}
 
     head_rev:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.head.sha}
       else:
         $if: 'tasks_for == "github-push"'
@@ -23,12 +23,12 @@ tasks:
         else: ${event.release.tag_name}
 
     repository:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
     pr_description:
-      $if: 'tasks_for == "github-pull-request"'
+      $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.body}
 
     taskboot_image: "mozilla/taskboot:0.4.2"
@@ -41,12 +41,12 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.12
+          image: astral/uv:python3.12-trixie
         metadata:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
     in:
-      $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
+      $if: '(tasks_for == "github-push" && head_branch[:18] != "refs/heads/deploy/") || (tasks_for[:19] == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
       then:
         - $mergeDeep:
             - { $eval: default_task_definition }
@@ -54,12 +54,12 @@ tasks:
               payload:
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "git clone --quiet ${repository} &&
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    pre-commit run -a --show-diff-on-failure"
+                    uv sync --locked --package bugbug --only-group test &&
+                    uv run pre-commit run -a --show-diff-on-failure"
               metadata:
                 name: bugbug lint
                 description: bugbug lint
@@ -72,7 +72,7 @@ tasks:
                 payload:
                   command:
                     - "/bin/bash"
-                    - "-lcx"
+                    - "-cx"
                     - "git clone --quiet ${repository} &&
                       cd bugbug &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -90,7 +90,7 @@ tasks:
                   CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev zstd &&
                     git clone --quiet ${repository} &&
@@ -98,12 +98,9 @@ tasks:
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r infra/spawn_pipeline_requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    hg clone -r 7436689a409528730ee6a7a2a5e763c9fb821a8f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
-                    python -m pytest --cov=./ tests/test_*.py &&
+                    uv sync --locked --package bugbug --group test --extra nlp --group spawn-pipeline &&
+                    hg clone -r 50a59e00c4a76fcfae660e3feb9b79e0cd549b15 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    uv run pytest --cov=./ tests/test_*.py &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug tests
@@ -118,7 +115,7 @@ tasks:
                   CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y zstd &&
                     git clone --quiet ${repository} &&
@@ -126,15 +123,39 @@ tasks:
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./http_service &&
-                    hg clone -r 7436689a409528730ee6a7a2a5e763c9fb821a8f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
-                    pytest --cov=http_service http_service/tests/ -vvv &&
+                    uv sync --locked --package bugbug --package bugbug-http-service --group test &&
+                    hg clone -r 50a59e00c4a76fcfae660e3feb9b79e0cd549b15 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    uv run pytest --cov=http_service http_service/tests/ -vvv &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug http service tests
                 description: bugbug http service tests
+
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("libs_tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-cx"
+                  - "git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    export COVERAGE_FILE=$(pwd)/.coverage &&
+                    cd libs/agent-tools &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra bugzilla --extra firefox --extra claude-sdk pytest --cov=agent_tools --cov-append tests/ &&
+                    cd ../hackbot-runtime &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra claude-sdk --extra phabricator pytest --cov=hackbot_runtime --cov-append tests/ &&
+                    cd ../lando-client &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=lando_client --cov-append tests/ &&
+                    cd ../.. &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug libs tests
+                description: bugbug libs tests
 
         - $mergeDeep:
             - { $eval: default_task_definition }
@@ -144,16 +165,16 @@ tasks:
                   CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
                 command:
                   - "/bin/bash"
-                  - "-lcx"
+                  - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev &&
                     git clone --quiet ${repository} &&
                     cd bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    python -m coverage run setup.py sdist &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz &&
-                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
+                    uv build &&
+                    uv venv /tmp/test-venv &&
+                    uv pip install --python /tmp/test-venv/bin/python dist/bugbug-$(cat VERSION).tar.gz &&
+                    uv pip install --python /tmp/test-venv/bin/python dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug packaging test
@@ -177,7 +198,7 @@ tasks:
                     else: "latest"
                 command:
                   - "/bin/sh"
-                  - "-lcxe"
+                  - "-cxe"
                   - "git clone --quiet ${repository} /code &&
                     cd /code &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -193,7 +214,7 @@ tasks:
                 name: bugbug docker build
                 description: bugbug docker build
 
-        - $if: 'tasks_for == "github-pull-request" && "Train on Taskcluster: " in pr_description'
+        - $if: 'tasks_for[:19] == "github-pull-request" && "Train on Taskcluster: " in pr_description'
           then:
             $mergeDeep:
               - { $eval: default_task_definition }
@@ -215,8 +236,8 @@ tasks:
                     PR_DESCRIPTION: "${pr_description}"
                   command:
                     - "/bin/sh"
-                    - "-lcx"
-                    - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
+                    - "-cx"
+                    - "uv run python -m scripts.trainer $(uv run python -m scripts.trainer_extract_args)"
                 metadata:
                   name: bugbug train on TC
                   description: Train a BugBug model on Taskcluster
@@ -228,7 +249,7 @@ tasks:
                 image: node:lts
                 command:
                   - "/bin/sh"
-                  - "-lcxe"
+                  - "-cxe"
                   - "git clone --quiet ${repository} /bugbug &&
                     cd /bugbug &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -244,6 +265,24 @@ tasks:
                 name: bugbug ui build
                 description: bugbug ui build
 
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("hackbot_ui_tests_task") }
+              payload:
+                image: node:lts
+                command:
+                  - "/bin/sh"
+                  - "-cxe"
+                  - "git clone --quiet ${repository} /bugbug &&
+                    cd /bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    cd services/hackbot-ui &&
+                    npm ci --no-progress &&
+                    npm test"
+              metadata:
+                name: bugbug hackbot-ui tests
+                description: bugbug hackbot-ui tests
+
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
             $mergeDeep:
@@ -252,7 +291,9 @@ tasks:
                   - { $eval: as_slugid("lint_task") }
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
+                  - { $eval: as_slugid("libs_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
+                  - { $eval: as_slugid("hackbot_ui_tests_task") }
                   - { $eval: as_slugid("packaging_test_task") }
                   - { $eval: as_slugid("version_check_task") }
                   - { $eval: as_slugid("integration_test") }
@@ -283,7 +324,9 @@ tasks:
                   - { $eval: as_slugid("version_check_task") }
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
+                  - { $eval: as_slugid("libs_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
+                  - { $eval: as_slugid("hackbot_ui_tests_task") }
                   - { $eval: as_slugid("packaging_test_task") }
                 scopes:
                   - secrets:get:project/bugbug/deploy
@@ -312,7 +355,7 @@ tasks:
               - taskId: { $eval: as_slugid("integration_test") }
                 dependencies:
                   - { $eval: as_slugid("docker_push") }
-                workerType: compute-small
+                workerType: compute-large
                 scopes:
                   - secrets:get:project/bugbug/integration
                   - "docker-worker:cache:bugbug-mercurial-repository"
@@ -327,7 +370,7 @@ tasks:
                     CACHE_DIR: "/cache"
                   command:
                     - "/bin/bash"
-                    - "-lcx"
+                    - "-cx"
                     - "apt-get -qq update &&
                       apt-get -qq install -y redis-server &&
                       git clone --quiet ${repository} &&
@@ -360,7 +403,7 @@ tasks:
                   image: "${taskboot_image}"
                   command:
                     - "/bin/sh"
-                    - "-lcxe"
+                    - "-cxe"
                     - "git clone --quiet ${repository} &&
                       cd bugbug &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&

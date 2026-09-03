@@ -59,7 +59,7 @@ def cf_rank(val):
 # E.g. https://bugzilla.mozilla.org/rest/bug/1162372.
 def version_to_branch(version):
     if version.startswith("Firefox "):
-        return f'{version[len("Firefox "):]} Branch'
+        return f"{version[len('Firefox ') :]} Branch"
 
     return version
 
@@ -537,7 +537,7 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
 
 def rollback(bug, when=None, do_assert=False):
     def assert_or_log(msg):
-        msg = f'{msg}, in bug {bug["id"]}'
+        msg = f"{msg}, in bug {bug['id']}"
         if do_assert:
             assert False, msg
         else:
@@ -655,7 +655,7 @@ def rollback(bug, when=None, do_assert=False):
                             break
 
                     if obj is None:
-                        assert_or_log(f'Attachment {change["attachment_id"]} not found')
+                        assert_or_log(f"Attachment {change['attachment_id']} not found")
                         continue
                 else:
                     obj = bug
@@ -747,7 +747,7 @@ def rollback(bug, when=None, do_assert=False):
 
                 if obj is None:
                     if change["comment_id"] != 14096735:
-                        assert_or_log(f'Comment {change["comment_id"]} not found')
+                        assert_or_log(f"Comment {change['comment_id']} not found")
                     continue
 
                 if obj["count"] != change["comment_count"]:

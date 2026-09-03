@@ -1,0 +1,33 @@
+[project]
+name = "hackbot-agent-build-repair"
+version = "0.1.0"
+description = "Cloud Run Job image that runs the build-repair agent for hackbot-api"
+requires-python = ">=3.12"
+dependencies = [
+    "hackbot-runtime[claude-sdk]",
+    "agent-tools[bugzilla,firefox]",
+    "bugsy",
+    "claude-agent-sdk>=0.1.30",
+    "mcp>=1.0.0",
+    "starlette>=0.36.0",
+    "uvicorn>=0.27.0",
+    "requests"
+]
+
+[project.optional-dependencies]
+eval = [
+    "weave",
+    "wandb",
+    "tenacity",
+]
+
+[tool.uv.sources]
+hackbot-runtime = { workspace = true }
+agent-tools = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hackbot_agents", "evals"]

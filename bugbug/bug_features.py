@@ -16,7 +16,9 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, bugzilla, repository
+from bugbug import bug_snapshot, bugzilla, repository, utils
+
+utils.setup_libmozdata()
 
 
 def field(bug, field):
@@ -821,6 +823,7 @@ class IsSecurityBug(SingleBugFeature):
         self,
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
+        **kwargs,
     ) -> bool:
         if any(
             keyword.startswith(prefix)
@@ -847,6 +850,7 @@ class IsCrashBug(SingleBugFeature):
         self,
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
+        **kwargs,
     ) -> bool:
         # Checking for `[@` will exclude some bugs that do not have valid
         # signatures: https://mzl.la/46XAqRF
@@ -883,16 +887,22 @@ class BugTypes(SingleBugFeature):
         """Infer bug types based on various bug characteristics.
 
         Args:
-        - bug (bugzilla.BugDict): A dictionary containing bug data.
-        - bug_map (Optional[dict[int, bugzilla.BugDict]]): A mapping
-            of bug IDs to bug dictionaries. Default is None.
+            bug: A dictionary containing bug data.
+            bug_map: A mapping of bug IDs to bug dictionaries. Default is `None`.
 
         Returns:
-        - list[str]: A list of inferred bug types (e.g., "memory", "power",
-            "performance", "security", "crash").
+            A list of inferred bug types (e.g., `"memory"`, `"power"`,
+            `"performance"`, `"security"`, `"crash"`).
         """
         return [
             is_type.type_name
             for is_type in self.bug_type_extractors
             if is_type(bug, bug_map)
         ]
+
+
+class BugType(SingleBugFeature):
+    """Extracts the type of the bug."""
+
+    def __call__(self, bug, **kwargs):
+        return bug["type"]

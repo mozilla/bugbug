@@ -61,7 +61,7 @@ def get_model_name(queue, task_id: str):
     # Show a warning if no matching route was found, this can happen when the
     # current task has a dependency to a non-training task or if the route
     # pattern changes.
-    LOGGER.warning(f"No matching route found for task id {task_id}")
+    LOGGER.warning("No matching route found for task id %s", task_id)
 
 
 def get_model_names(task_id: str) -> list[str]:
@@ -73,9 +73,10 @@ def get_model_names(task_id: str) -> list[str]:
 
     for i, task_id in enumerate(task["dependencies"]):
         LOGGER.info(
-            "Loading task dependencies {}/{} {}".format(
-                i + 1, len(task["dependencies"]), task_id
-            )
+            "Loading task dependencies %s/%s %s",
+            i + 1,
+            len(task["dependencies"]),
+            task_id,
         )
 
         model_name = get_model_name(queue, task_id)

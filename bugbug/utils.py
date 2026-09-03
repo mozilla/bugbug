@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import concurrent.futures
+import enum
 import errno
 import json
 import logging
@@ -16,19 +17,22 @@ import urllib.parse
 from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
-from functools import lru_cache
+from functools import cache
+from importlib.metadata import PackageNotFoundError
 from typing import Any, Iterator
 
 import boto3
+import botocore
 import dateutil.parser
+import libmozdata
 import lmdb
 import numpy as np
 import psutil
 import requests
 import scipy
 import taskcluster
+import tenacity
 import zstandard
-from pkg_resources import DistributionNotFound
 from requests.packages.urllib3.util.retry import Retry
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -93,6 +97,17 @@ class DictExtractor(BaseEstimator, TransformerMixin):
         return np.array([elem[self.key] for elem in data]).reshape(-1, 1)
 
 
+class MergeText(BaseEstimator, TransformerMixin):
+    def __init__(self, cols):
+        self.cols = cols
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        return X[self.cols].apply(lambda row: " ".join(row), axis=1)
+
+
 class MissingOrdinalEncoder(OrdinalEncoder):
     """Ordinal encoder that ignores missing values encountered after training.
 
@@ -128,7 +143,7 @@ def get_taskcluster_options() -> dict:
     return options
 
 
-def get_secret(secret_id: str) -> Any:
+def get_secret(secret_id: str, default_value: str | None = None) -> Any:
     """Return the secret value."""
     env_variable_name = f"BUGBUG_{secret_id}"
 
@@ -145,7 +160,10 @@ def get_secret(secret_id: str) -> Any:
         secrets = taskcluster.Secrets(get_taskcluster_options())
         secret_bucket = secrets.get(tc_secret_id)
 
-        return secret_bucket["secret"][secret_id]
+        return secret_bucket["secret"].get(secret_id, default_value)
+
+    elif default_value is not None:
+        return default_value
 
     else:
         raise ValueError("Failed to find secret {}".format(secret_id))
@@ -157,7 +175,7 @@ def get_s3_credentials() -> dict:
     return response["credentials"]
 
 
-def upload_s3(paths: str) -> None:
+def upload_s3(paths: list[str]) -> None:
     credentials = get_s3_credentials()
 
     client = boto3.client(
@@ -171,6 +189,44 @@ def upload_s3(paths: str) -> None:
     for path in paths:
         assert path.startswith("data/")
         transfer.upload_file(path, "communitytc-bugbug", path)
+
+
+def exists_s3(path: str) -> bool:
+    credentials = get_s3_credentials()
+
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=credentials["accessKeyId"],
+        aws_secret_access_key=credentials["secretAccessKey"],
+        aws_session_token=credentials["sessionToken"],
+    )
+
+    try:
+        client.head_object(Bucket="communitytc-bugbug", Key=path)
+        return True
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] == "404":
+            return False
+        raise
+
+
+def list_s3(prefix: str) -> set[str]:
+    """Return the set of all S3 keys under *prefix* in the bugbug bucket."""
+    credentials = get_s3_credentials()
+
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=credentials["accessKeyId"],
+        aws_secret_access_key=credentials["secretAccessKey"],
+        aws_session_token=credentials["sessionToken"],
+    )
+
+    keys: set[str] = set()
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket="communitytc-bugbug", Prefix=prefix):
+        for obj in page.get("Contents", []):
+            keys.add(obj["Key"])
+    return keys
 
 
 def download_check_etag(url, path=None):
@@ -192,7 +248,13 @@ def download_check_etag(url, path=None):
     if old_etag == new_etag:
         return False
 
-    r = session.get(url, stream=True)
+    r = session.get(
+        url,
+        stream=True,
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
     r.raise_for_status()
 
     with open(path, "wb") as f:
@@ -227,7 +289,7 @@ def download_model(model_name: str) -> str:
     if not version:
         try:
             version = f"v{get_bugbug_version()}"
-        except DistributionNotFound:
+        except PackageNotFoundError:
             version = "latest"
 
     path = f"{model_name}model"
@@ -367,9 +429,9 @@ class ExpQueue:
         return self.start_day + (self.list.maxlen - 1)
 
     def __getitem__(self, day: int) -> Any:
-        assert (
-            day >= self.start_day
-        ), f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
+        assert day >= self.start_day, (
+            f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
+        )
 
         if day < 0:
             return self.default
@@ -431,6 +493,11 @@ class LMDBDict:
     def __setitem__(self, key: bytes, value: Any) -> None:
         self.txn.put(key, value, dupdata=False)
 
+    def keys(self):
+        cursor = self.txn.cursor()
+        for key, value in cursor:
+            yield key.tobytes()
+
 
 def get_free_tcp_port() -> int:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -461,7 +528,7 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_session(name: str) -> requests.Session:
     session = requests.Session()
 
@@ -479,11 +546,34 @@ def get_session(name: str) -> requests.Session:
     return session
 
 
+def get_user_agent():
+    return get_secret("USER_AGENT", "bugbug")
+
+
+def setup_libmozdata():
+    libmozdata.config.set_config(libmozdata.config.ConfigEnv())
+    os.environ["LIBMOZDATA_CFG_USER-AGENT_NAME"] = get_user_agent()
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(7),
+    wait=tenacity.wait_exponential(multiplier=2, min=2),
+    reraise=True,
+)
+def get_automationrelevance(branch: str, revision: str) -> dict:
+    response = get_session("hgmo").get(
+        f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}",
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
     """Load descriptions of patches in the stack for a given revision."""
-    url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
-    r = get_session("hgmo").get(url)
-    r.raise_for_status()
+    automation_relevance = get_automationrelevance(branch, revision)
 
     def should_skip(changeset):
         # Analyze all changesets if we are not on try.
@@ -506,7 +596,9 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
         return False
 
     return [
-        c["node"].encode("ascii") for c in r.json()["changesets"] if not should_skip(c)
+        c["node"].encode("ascii")
+        for c in automation_relevance["changesets"]
+        if not should_skip(c)
     ]
 
 
@@ -558,3 +650,52 @@ def escape_markdown(text: str) -> str:
 def keep_as_is(x):
     """A tokenizer that does nothing."""
     return x
+
+
+def hg2git(hash: str) -> str:
+    r = get_session("lando").get(f"https://lando.moz.tools/api/hg2git/firefox/{hash}")
+    r.raise_for_status()
+    return r.json()["git_hash"]
+
+
+def git2hg(hash: str) -> str:
+    r = get_session("lando").get(f"https://lando.moz.tools/api/git2hg/firefox/{hash}")
+    r.raise_for_status()
+    return r.json()["hg_hash"]
+
+
+class RedashQueryStatus(enum.IntEnum):
+    PENDING = 1
+    STARTED = 2
+    SUCCESS = 3
+    FAILURE = 4
+    CANCELLED = 5
+
+
+@tenacity.retry(
+    retry=tenacity.retry_if_exception_type(tenacity.TryAgain),
+    wait=tenacity.wait_exponential(multiplier=2, max=60),
+    stop=tenacity.stop_after_delay(1800),
+    reraise=True,
+)
+def query_redash(query_id, parameters):
+    r = get_session("redash").post(
+        f"https://sql.telemetry.mozilla.org/api/queries/{query_id}/results",
+        json={
+            "parameters": parameters,
+            "max_age": 1800,
+        },
+        headers={"Authorization": f"Key {get_secret('REDASH_API_KEY')}"},
+    )
+    if not r.ok:
+        raise Exception(f"Redash query error: {r.text}")
+
+    result = r.json()
+    if "query_result" not in result:
+        status = result.get("job", {}).get("status")
+        if status == RedashQueryStatus.FAILURE:
+            raise Exception(f"Redash query failed: {result}")
+        logger.warning("query_result not in result (status=%s): %s", status, result)
+        raise tenacity.TryAgain
+
+    return result["query_result"]["data"]["rows"]

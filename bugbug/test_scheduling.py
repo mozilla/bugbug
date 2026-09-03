@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import collections
+import glob
 import itertools
 import logging
 import os
@@ -12,7 +13,9 @@ import re
 import shelve
 import shutil
 import struct
+import tomllib
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Callable,
@@ -26,11 +29,10 @@ from typing import (
     cast,
 )
 
-import requests
 from tqdm import tqdm
 
 from bugbug import db, repository
-from bugbug.utils import ExpQueue, LMDBDict
+from bugbug.utils import ExpQueue, LMDBDict, get_session, get_user_agent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,6 +100,12 @@ db.register(
 
 HISTORICAL_TIMESPAN = 4500
 
+# Lookback windows used when computing past failure features. These roughly
+# correspond to one week, two weeks, and one month of pushes on autoland.
+PAST_FAILURES_LOOKBACK_WEEK = 700
+PAST_FAILURES_LOOKBACK_TWO_WEEKS = 1400
+PAST_FAILURES_LOOKBACK_MONTH = 2800
+
 JOBS_TO_CONSIDER = ("test-", "build-")
 JOBS_TO_IGNORE = (
     "docker-image-",
@@ -106,14 +114,16 @@ JOBS_TO_IGNORE = (
     "-awsy-",
     "-raptor-",
     "-talos-",
+    "perftest",
     "browsertime",
     "backlog",
     # inclusive test suites -- these *only* run when certain files have changed
-    "-test-verify-",
-    "-test-coverage-",
+    "-test-verify",
+    "-test-coverage",
     "jittest",
     "jsreftest",
     "android-hw-gfx",
+    "build-extensions-browser",
 )
 
 
@@ -403,9 +413,9 @@ def remove_failing_together_db(granularity: str) -> None:
 
 def close_failing_together_db(granularity: str) -> None:
     global failing_together
-    assert (
-        granularity in failing_together
-    ), f"Failing together probabilities DB for {granularity} granularity was not open"
+    assert granularity in failing_together, (
+        f"Failing together probabilities DB for {granularity} granularity was not open"
+    )
     failing_together[granularity].close()
     failing_together.pop(granularity)
 
@@ -504,7 +514,7 @@ def generate_failing_together_probabilities(
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
         logger.info(
-            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            "%s - %s redundancy confidence %f, support %f (%d over %d).",
             couple[0],
             couple[1],
             confidence,
@@ -520,7 +530,7 @@ def generate_failing_together_probabilities(
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
         logger.info(
-            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            "%s - %s redundancy confidence %f, support %f (%d over %d).",
             couple[0],
             couple[1],
             confidence,
@@ -722,9 +732,15 @@ def _read_and_update_past_failures(
         value = cur[round(push_num / 100)]
 
         values_total.append(value)
-        values_prev_700.append(value - cur[round((push_num - 700) / 100)])
-        values_prev_1400.append(value - cur[round((push_num - 1400) / 100)])
-        values_prev_2800.append(value - cur[round((push_num - 2800) / 100)])
+        values_prev_700.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_WEEK) / 100)]
+        )
+        values_prev_1400.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_TWO_WEEKS) / 100)]
+        )
+        values_prev_2800.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_MONTH) / 100)]
+        )
 
         if is_regression:
             cur[round(push_num / 100)] = value + 1
@@ -873,21 +889,255 @@ def generate_data(
 
 
 def get_failure_bugs(since: datetime, until: datetime) -> list[dict[str, int]]:
-    r = requests.get(
+    r = get_session("treeherder").get(
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
         ),
-        headers={"Accept": "application/json", "User-Agent": "bugbug"},
+        headers={"Accept": "application/json", "User-Agent": get_user_agent()},
     )
     r.raise_for_status()
     return r.json()
 
 
 def get_test_info(date: datetime) -> dict[str, Any]:
-    r = requests.get(
+    r = get_session("firefox-ci-tc").get(
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.pushdate.{}.latest.source.test-info-all/artifacts/public/test-info-all-tests.json".format(
             date.strftime("%Y.%m.%d")
-        )
+        ),
+        headers={
+            "User-Agent": get_user_agent(),
+        },
     )
     r.raise_for_status()
     return r.json()
+
+
+manifest_by_path: dict[str, set[str]] | None = None
+
+
+def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
+    global manifest_by_path
+
+    repo_dir = Path(repo_dir_str)
+
+    manifests = set()
+
+    if manifest_by_path is None:
+        manifest_by_path = collections.defaultdict(set)
+
+        for toml_path in repo_dir.rglob("*.toml"):
+            # HACK: These are not test manifests, skip them.
+            if (
+                toml_path.name in ("Cargo.toml", "pyproject.toml")
+                or toml_path.parent.name == "test-manifest-toml"
+                or "third_party" in toml_path.parts
+                or "manifestparser" in toml_path.parts
+            ):
+                continue
+
+            with open(toml_path, "rb") as toml_f:
+                data = tomllib.load(toml_f)
+
+            # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
+            if "DEFAULT" not in data and not any(
+                key.startswith("test") for key in data.keys()
+            ):
+                continue
+
+            toml_rel = toml_path.relative_to(repo_dir)
+            toml_dir = toml_path.parent
+
+            # The manifest path itself, so we schedule it when it is touched.
+            manifest_by_path[str(toml_rel)].add(str(toml_rel))
+
+            # Collect head files.
+            head_value = data.get("DEFAULT", {}).get("head", [])
+            head_files = (
+                head_value if isinstance(head_value, list) else head_value.split(" ")
+            )
+            for head_file in head_files:
+                if not head_file.strip():
+                    continue
+
+                manifest_by_path[
+                    str((toml_dir / head_file).resolve().relative_to(repo_dir))
+                ].add(str(toml_rel))
+
+            # Collect support files.
+            def collect_support_files(value):
+                support_files = value.get("support-files", [])
+                if isinstance(support_files, str):
+                    support_files = [support_files]
+
+                for support_file in support_files:
+                    if not support_file.strip():
+                        continue
+
+                    if support_file.startswith("!"):
+                        support_file = support_file[1:]
+
+                    if support_file.startswith("/"):
+                        support_file_path = (repo_dir / support_file[1:]).resolve()
+                    else:
+                        support_file_path = (toml_dir / support_file).resolve()
+
+                    if "*" in support_file:
+                        files = [
+                            Path(f)
+                            for f in glob.glob(str(support_file_path), recursive=True)
+                        ]
+                    else:
+                        files = [support_file_path]
+
+                    for f in files:
+                        manifest_by_path[str(f.relative_to(repo_dir))].add(
+                            str(toml_rel)
+                        )
+
+            collect_support_files(data.get("DEFAULT", {}))
+
+            # Collect test files.
+            for key, val in data.items():
+                if key != "DEFAULT" and isinstance(val, dict):
+                    collect_support_files(val)
+
+                    manifest_by_path[
+                        str((toml_dir / key).resolve().relative_to(repo_dir))
+                    ].add(str(toml_rel))
+
+    for path in paths:
+        # If a manifest, a test, or a support file is modified, run the manifest that includes it.
+        if path in manifest_by_path:
+            manifests.update(manifest_by_path[path])
+        else:
+            # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
+            for sibling in (repo_dir / path).parent.rglob("*"):
+                if sibling.is_dir() and repository.is_test(f"{str(sibling)}/"):
+                    manifests.update(
+                        str(f.relative_to(repo_dir))
+                        for f in sibling.rglob("*.toml")
+                        if f.is_file()
+                    )
+
+        # If a web-platform test or meta is modified, run the relevant web-platform folder.
+        if not any(path.endswith(ignore) for ignore in ("/META.yml", "/README.md")):
+            for base in ("testing/web-platform/mozilla", "testing/web-platform"):
+                if path.startswith(f"{base}/meta/") or path.startswith(
+                    f"{base}/tests/"
+                ):
+                    sub = "meta" if "/meta/" in path else "tests"
+
+                    relative = Path(path).relative_to(f"{base}/{sub}")
+
+                    test_root = repo_dir / base / "tests"
+                    cur_dir = test_root / relative.parent
+
+                    def is_wpt_file(p: Path) -> bool:
+                        return any(
+                            str(p).endswith(suffix)
+                            for suffix in (".html", ".any.js", ".worker.js")
+                        )
+
+                    def has_wpt_files(d: Path) -> bool:
+                        return d.is_dir() and any(is_wpt_file(p) for p in d.iterdir())
+
+                    while cur_dir != test_root and not has_wpt_files(cur_dir):
+                        cur_dir = cur_dir.parent
+
+                    # Ignore files in top level "meta" or "tests".
+                    if len(cur_dir.parts) == 1:
+                        break
+
+                    if has_wpt_files(cur_dir):
+                        manifests.add(str(cur_dir.relative_to(repo_dir)))
+
+                    break
+
+    return manifests
+
+
+_GTEST_RE = re.compile(rb"^[ \t]*(?:TEST|TEST_F)\(", re.MULTILINE)
+_GTEST_FOLDERS = ("gtest", "gtests", "googletest")
+_CPPUNIT_INFRA_FILES = {
+    "testing/remotecppunittests.py",
+    "testing/runcppunittests.py",
+    "testing/cppunittest.toml",
+}
+
+
+def _get_cppunit_test_names(repo_dir: Path) -> set[str]:
+    try:
+        with open(repo_dir / "testing" / "cppunittest.toml", "rb") as f:
+            data = tomllib.load(f)
+        return {f"{key}.cpp" for key in data if key != "DEFAULT"}
+    except FileNotFoundError:
+        logger.error(
+            "testing/cppunittest.toml wasn't found, cppunit heuristic won't work"
+        )
+        return set()
+
+
+def find_tasks_for_paths(
+    repo_dir_str: str, known_tasks: tuple[str, ...], paths: list[str]
+) -> list[str]:
+    repo_dir = Path(repo_dir_str)
+
+    select_gtest = False
+    select_cppunit = False
+    select_rusttests = False
+
+    # Any Rust file is modified.
+    for path in paths:
+        if repository.get_type(path) == "Rust":
+            select_rusttests = True
+            break
+
+    # Any file in a gtest folder is modified.
+    for path in paths:
+        if any(f"/{gtest_path}/" in path for gtest_path in _GTEST_FOLDERS):
+            select_gtest = True
+            break
+
+    # Any file in a folder close to a gtest folder is modified (e.g. dom/media/CubebUtils.cpp and we have dom/media/gtest/).
+    if not select_gtest:
+        for path in paths:
+            for sibling in (repo_dir / path).parent.rglob("*"):
+                if sibling.is_dir() and any(
+                    part in _GTEST_FOLDERS for part in sibling.parts
+                ):
+                    select_gtest = True
+                    break
+            if select_gtest:
+                break
+
+    # Any C/C++ file containing gtests is modified.
+    if not select_gtest:
+        for path in paths:
+            if repository.get_type(path) in ["C/C++", "Objective-C/C++"]:
+                try:
+                    with open(repo_dir / path, "rb") as f:
+                        select_gtest = _GTEST_RE.search(f.read()) is not None
+                        if select_gtest:
+                            break
+                except OSError:
+                    pass
+
+    # Cppunit: run if infrastructure files are modified, or any .cpp file whose
+    # name matches a stem listed in testing/cppunittest.toml is modified.
+    cppunit_test_names = _get_cppunit_test_names(repo_dir)
+    for path in paths:
+        if path in _CPPUNIT_INFRA_FILES or Path(path).name in cppunit_test_names:
+            select_cppunit = True
+            break
+
+    selected_tasks = []
+
+    for task in known_tasks:
+        if select_gtest and "gtest" in task:
+            selected_tasks.append(task)
+        if select_cppunit and "cppunit" in task:
+            selected_tasks.append(task)
+        if select_rusttests and "rusttests" in task:
+            selected_tasks.append(task)
+
+    return selected_tasks

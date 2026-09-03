@@ -28,15 +28,19 @@ MODELS = {
     "regression": "bugbug.models.regression.RegressionModel",
     "regressionrange": "bugbug.models.regressionrange.RegressionRangeModel",
     "regressor": "bugbug.models.regressor.RegressorModel",
+    "severity": "bugbug.models.severity.SeverityModel",
     "spambug": "bugbug.models.spambug.SpamBugModel",
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "testlabelselect": "bugbug.models.testselect.TestLabelSelectModel",
     "testgroupselect": "bugbug.models.testselect.TestGroupSelectModel",
     "testconfiggroupselect": "bugbug.models.testselect.TestConfigGroupSelectModel",
+    "testconfig": "bugbug.models.testfailure.TestConfigModel",
     "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
     "worksforme": "bugbug.models.worksforme.WorksForMeModel",
+    "fenixcomponent": "bugbug.models.fenixcomponent.FenixComponentModel",
+    "componentspecific": "bugbug.models.component_specific.ComponentSpecificModel",
 }
 
 

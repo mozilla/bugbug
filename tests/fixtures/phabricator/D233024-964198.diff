@@ -1,0 +1,95 @@
+diff --git a/browser/components/asrouter/tests/browser/browser.toml b/browser/components/asrouter/tests/browser/browser.toml
+--- a/browser/components/asrouter/tests/browser/browser.toml
++++ b/browser/components/asrouter/tests/browser/browser.toml
+@@ -55,11 +55,20 @@
+   "os == 'mac' && os_version == '14.70' && processor == 'x86_64' && debug", # Bug 1932912
+ ]
+
+ ["browser_feature_callout_panel.js"]
+
++["browser_foxdoodle_set_default.js"]
++
++["browser_multistage_spotlight.js"]
++
++["browser_multistage_spotlight_telemetry.js"]
++skip-if = ["verify"] # bug 1834620 - order of events not stable
++
+ ["browser_remote_l10n.js"]
+
+ ["browser_spotlight_default_messages.js"]
+
+ ["browser_trigger_listeners.js"]
+ https_first_disabled = true
++
++["browser_trigger_messagesLoaded.js"]
+diff --git a/browser/components/newtab/test/browser/browser_foxdoodle_set_default.js b/browser/components/asrouter/tests/browser/browser_foxdoodle_set_default.js
+rename from browser/components/newtab/test/browser/browser_foxdoodle_set_default.js
+rename to browser/components/asrouter/tests/browser/browser_foxdoodle_set_default.js
+diff --git a/browser/components/newtab/test/browser/browser_multistage_spotlight.js b/browser/components/asrouter/tests/browser/browser_multistage_spotlight.js
+rename from browser/components/newtab/test/browser/browser_multistage_spotlight.js
+rename to browser/components/asrouter/tests/browser/browser_multistage_spotlight.js
+diff --git a/browser/components/newtab/test/browser/browser_multistage_spotlight_telemetry.js b/browser/components/asrouter/tests/browser/browser_multistage_spotlight_telemetry.js
+rename from browser/components/newtab/test/browser/browser_multistage_spotlight_telemetry.js
+rename to browser/components/asrouter/tests/browser/browser_multistage_spotlight_telemetry.js
+diff --git a/browser/components/newtab/test/browser/browser_trigger_messagesLoaded.js b/browser/components/asrouter/tests/browser/browser_trigger_messagesLoaded.js
+rename from browser/components/newtab/test/browser/browser_trigger_messagesLoaded.js
+rename to browser/components/asrouter/tests/browser/browser_trigger_messagesLoaded.js
+diff --git a/browser/components/newtab/test/browser/browser.toml b/browser/components/newtab/test/browser/browser.toml
+--- a/browser/components/newtab/test/browser/browser.toml
++++ b/browser/components/newtab/test/browser/browser.toml
+@@ -37,21 +37,14 @@
+
+ ["browser_discovery_render.js"]
+
+ ["browser_enabled_newtabpage.js"]
+
+-["browser_foxdoodle_set_default.js"]
+-
+ ["browser_getScreenshots.js"]
+
+ ["browser_highlights_section.js"]
+
+-["browser_multistage_spotlight.js"]
+-
+-["browser_multistage_spotlight_telemetry.js"]
+-skip-if = ["verify"] # bug 1834620 - order of events not stable
+-
+ ["browser_newtab_glean.js"]
+
+ ["browser_newtab_header.js"]
+
+ ["browser_newtab_last_LinkMenu.js"]
+@@ -73,7 +66,5 @@
+ ["browser_topsites_annotation.js"]
+
+ ["browser_topsites_contextMenu_options.js"]
+
+ ["browser_topsites_section.js"]
+-
+-["browser_trigger_messagesLoaded.js"]
+diff --git a/browser/components/newtab/test/browser/head.js b/browser/components/newtab/test/browser/head.js
+--- a/browser/components/newtab/test/browser/head.js
++++ b/browser/components/newtab/test/browser/head.js
+@@ -1,21 +1,11 @@
+ "use strict";
+
+ ChromeUtils.defineESModuleGetters(this, {
+-  ASRouter: "resource:///modules/asrouter/ASRouter.sys.mjs",
+-
+   DiscoveryStreamFeed:
+     "resource://activity-stream/lib/DiscoveryStreamFeed.sys.mjs",
+
+-  FeatureCallout: "resource:///modules/asrouter/FeatureCallout.sys.mjs",
+-
+-  FeatureCalloutBroker:
+-    "resource:///modules/asrouter/FeatureCalloutBroker.sys.mjs",
+-
+-  FeatureCalloutMessages:
+-    "resource:///modules/asrouter/FeatureCalloutMessages.sys.mjs",
+-
+   ObjectUtils: "resource://gre/modules/ObjectUtils.sys.mjs",
+   PlacesTestUtils: "resource://testing-common/PlacesTestUtils.sys.mjs",
+   QueryCache: "resource:///modules/asrouter/ASRouterTargeting.sys.mjs",
+ });
+
+

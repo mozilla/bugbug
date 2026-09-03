@@ -8,8 +8,9 @@ import csv
 import os
 import random
 
-from bugbug import bugzilla
 from bugbug.models.bug import BugModel
+
+from bugbug import bugzilla
 from bugbug.models.regression import RegressionModel
 
 parser = argparse.ArgumentParser()
@@ -73,7 +74,7 @@ for bug in bugs:
             continue
 
         os.system("clear")
-        print(f'Bug {bug["id"]} - {bug["summary"]}')
+        print(f"Bug {bug['id']} - {bug['summary']}")
         print(f"Comment {i}")
         print(comment["text"])
 

@@ -5,6 +5,7 @@
 
 import collections
 import csv
+import itertools
 import math
 import re
 from datetime import datetime
@@ -22,6 +23,8 @@ from bugbug import db, utils
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
+utils.setup_libmozdata()
+
 BugDict = NewType("BugDict", dict)
 
 BUGS_DB = "data/bugs.json"
@@ -38,7 +41,7 @@ PRODUCTS = (
     "DevTools",
     "Developer Infrastructure",
     "External Software Affecting Firefox",
-    "Fenix",
+    "Firefox for Android",
     "Firefox",
     "Firefox Build System",
     "Firefox for iOS",
@@ -54,6 +57,16 @@ PRODUCTS = (
     "Toolkit",
     "Web Compatibility",
     "WebExtensions",
+)
+
+ADDITIONAL_PRODUCTS = (
+    "bugzilla.mozilla.org",
+    "CA Program",
+    "Calendar",
+    "Chat Core",
+    "MailNews Core",
+    "SeaMonkey",
+    "Thunderbird",
 )
 
 ATTACHMENT_INCLUDE_FIELDS = [
@@ -90,16 +103,28 @@ MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
 INCLUDE_FIELDS = ["_default", "filed_via"]
 
 
-def get_bugs(include_invalid: bool | None = False) -> Iterator[BugDict]:
+def get_bugs(
+    include_invalid: bool | None = False,
+    include_additional_products: tuple[str, ...] = (),
+    include_all_products: bool = False,
+) -> Iterator[BugDict]:
+    products = (
+        PRODUCTS + include_additional_products
+        if include_additional_products
+        else PRODUCTS
+    )
     yield from (
         bug
         for bug in db.read(BUGS_DB)
-        if include_invalid or bug["product"] != "Invalid Bugs"
+        if (include_all_products or bug["product"] in products)
+        and (include_invalid or bug["product"] != "Invalid Bugs")
     )
 
 
 def set_token(token):
-    Bugzilla.TOKEN = token
+    from libmozdata.bugzilla import BugzillaBase
+
+    BugzillaBase.TOKEN = token
 
 
 def get_ids(params):
@@ -177,7 +202,7 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
         "f1": "creation_ts",
         "o1": "greaterthan",
         "v1": date_from.strftime("%Y-%m-%d"),
-        "product": PRODUCTS,
+        "product": PRODUCTS + ADDITIONAL_PRODUCTS,
     }
 
     if date_to is not None:
@@ -198,7 +223,9 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
 def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDict]:
     old_bug_count = 0
     new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
-    for bug in get_bugs(include_invalid=True):
+    for bug in get_bugs(
+        include_invalid=True, include_additional_products=ADDITIONAL_PRODUCTS
+    ):
         old_bug_count += 1
         new_bug_ids_set.discard(int(bug["id"]))
 
@@ -206,14 +233,11 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
 
     new_bug_ids = sorted(list(new_bug_ids_set))
 
-    chunks = (
-        new_bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
-        for i in range(0, len(new_bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE)
-    )
+    chunks = itertools.batched(new_bug_ids, Bugzilla.BUGZILLA_CHUNK_SIZE)
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),
-        wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+        wait=tenacity.wait_exponential(multiplier=2, min=2),
     )
     def get_chunk(chunk: list[int]) -> list[BugDict]:
         new_bugs = get(chunk)
@@ -301,6 +325,33 @@ def count_bugs(bug_query_params):
     return data["bug_count"]
 
 
+def fetch_components_list(product_types="accessible") -> list[tuple]:
+    """Fetch all components from all products.
+
+    Args:
+        product_types: The types of products to fetch components from. Defaults
+            to "accessible".
+
+    Returns:
+        A list of tuples where the first element is the product name and the
+        second element is the component name.
+    """
+    components: list[tuple] = []
+
+    def handler(product):
+        components.extend(
+            (product["name"], component["name"]) for component in product["components"]
+        )
+
+    BugzillaProduct(
+        product_types=product_types,
+        include_fields=["name", "components.name"],
+        product_handler=handler,
+    ).wait()
+
+    return components
+
+
 def get_product_component_count(months: int = 12) -> dict[str, int]:
     """Get the number of bugs per component.
 
@@ -324,7 +375,11 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
     }
 
     csv_file = utils.get_session("bugzilla").get(
-        PRODUCT_COMPONENT_CSV_REPORT_URL, params=params
+        PRODUCT_COMPONENT_CSV_REPORT_URL,
+        params=params,
+        headers={
+            "User-Agent": utils.get_user_agent(),
+        },
     )
     csv_file.raise_for_status()
     content = csv_file.text
@@ -398,7 +453,10 @@ def get_groups_users(group_names: list[str]) -> list[str]:
             "names": group_names,
             "membership": "1",
         },
-        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+        headers={
+            "X-Bugzilla-API-Key": Bugzilla.TOKEN,
+            "User-Agent": utils.get_user_agent(),
+        },
     )
     r.raise_for_status()
 
@@ -484,8 +542,8 @@ def calculate_maintenance_effectiveness_indicator(
         if query_type in ("opened", "closed"):
             params.update(
                 {
-                    "chfieldfrom": from_date.strftime("%Y-%m-%d"),
-                    "chfieldto": to_date.strftime("%Y-%m-%d"),
+                    "chfieldfrom": from_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    "chfieldto": to_date.strftime("%Y-%m-%d %H:%M:%S"),
                 }
             )
 
@@ -518,7 +576,10 @@ def calculate_maintenance_effectiveness_indicator(
             r = utils.get_session("bugzilla").get(
                 "https://bugzilla.mozilla.org/rest/bug",
                 params={**params, "count_only": 1},
-                headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+                headers={
+                    "X-Bugzilla-API-Key": Bugzilla.TOKEN,
+                    "User-Agent": utils.get_user_agent(),
+                },
             )
             r.raise_for_status()
 

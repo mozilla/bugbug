@@ -1,0 +1,31 @@
+[project]
+name = "agent-tools"
+version = "0.1.0"
+description = "Reusable, framework-neutral agent tools (declaration + per-framework adapters)"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.6.0",
+]
+
+[project.optional-dependencies]
+bugzilla = [
+    "bugsy",
+    # Workaround: bugsy imports six at runtime but doesn't declare it as a
+    # dependency (its setup.py only lists requests).
+    "six",
+]
+firefox = ["grizzly-framework", "prefpicker"]
+claude-sdk = ["claude-agent-sdk>=0.2.30"]
+searchfox = ["searchfox>=0.20.3"]
+vcs = ["httpx"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_tools"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

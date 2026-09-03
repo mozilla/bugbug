@@ -118,7 +118,7 @@ class Retriever(object):
                         yield value
                     except mozci.errors.MissingDataError:
                         logger.warning(
-                            f"Tasks for push {push.rev} can't be found on ActiveData"
+                            "Tasks for push %s can't be found on ActiveData", push.rev
                         )
                     except Exception:
                         num_errors += 1
@@ -139,13 +139,18 @@ class Retriever(object):
         def retrieve_from_cache(push):
             return mozci.config.cache.get(cache_key(push))
 
-        total_pushes = len(
-            mozci.push.make_push_objects(
-                from_date=from_date.strftime("%Y-%m-%d"),
-                to_date=to_date.strftime("%Y-%m-%d"),
-                branch="autoland",
-            )
-        )
+        first_push_id = mozci.push.make_push_objects(
+            from_date=from_date.strftime("%Y-%m-%d"),
+            to_date=(from_date + relativedelta(days=1)).strftime("%Y-%m-%d"),
+            branch="autoland",
+        )[0].id
+        last_push_id = mozci.push.make_push_objects(
+            from_date=(to_date - relativedelta(days=1)).strftime("%Y-%m-%d"),
+            to_date=to_date.strftime("%Y-%m-%d"),
+            branch="autoland",
+        )[-1].id
+
+        total_pushes = last_push_id - first_push_id + 1
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             with tqdm(total=total_pushes) as progress_bar:

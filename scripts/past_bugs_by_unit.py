@@ -79,12 +79,12 @@ class PastBugsCollector(object):
         past_fixed_bugs_by_function: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        past_regression_blocked_bugs_by_function: dict[
-            str, dict[str, list[int]]
-        ] = defaultdict(lambda: defaultdict(list))
-        past_fixed_bug_blocked_bugs_by_function: dict[
-            str, dict[str, list[int]]
-        ] = defaultdict(lambda: defaultdict(list))
+        past_regression_blocked_bugs_by_function: dict[str, dict[str, list[int]]] = (
+            defaultdict(lambda: defaultdict(list))
+        )
+        past_fixed_bug_blocked_bugs_by_function: dict[str, dict[str, list[int]]] = (
+            defaultdict(lambda: defaultdict(list))
+        )
 
         for commit in tqdm(repository.get_commits()):
             if commit["bug_id"] not in bug_map:

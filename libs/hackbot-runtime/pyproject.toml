@@ -1,0 +1,42 @@
+[project]
+name = "hackbot-runtime"
+version = "0.1.0"
+description = "Agent-side runtime for hackbot-api: signed-policy upload, summary contract, exception handling"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32.0",
+    "httpx>=0.26.0",
+    "pydantic-settings>=2.1.0",
+    "google-auth>=2.0.0",
+    "async-lru>=2.0.0",
+    "agent-tools",
+    "lando-client",
+    "phabricator-client",
+    "testrail-client",
+    "slack-sdk>=3.27.0",
+    "weave>=0.53.4"
+]
+
+[project.optional-dependencies]
+claude-sdk = ["claude-agent-sdk>=0.1.30", "agent-tools[claude-sdk]"]
+# Pinned exactly: mozphab.git/mozphab.diff are internal implementation
+# classes of a CLI tool, not a published library API — a minor/patch bump
+# could change their behavior without notice.
+phabricator = ["MozPhab==2.15.3"]
+
+[tool.uv.sources]
+agent-tools = { workspace = true }
+lando-client = { workspace = true }
+phabricator-client = { workspace = true }
+testrail-client = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hackbot_runtime"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

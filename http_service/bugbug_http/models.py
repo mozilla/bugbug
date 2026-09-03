@@ -15,7 +15,7 @@ import requests
 import zstandard
 from redis import Redis
 
-from bugbug import bugzilla, repository, test_scheduling
+from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testselect
@@ -28,6 +28,7 @@ LOGGER = logging.getLogger()
 MODELS_NAMES = [
     "defectenhancementtask",
     "component",
+    "componentspecific",
     "invalidcompatibilityreport",
     "needsdiagnosis",
     "regression",
@@ -38,6 +39,7 @@ MODELS_NAMES = [
     "accessibility",
     "performancebug",
     "worksforme",
+    "fenixcomponent",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
@@ -60,7 +62,7 @@ cctx = zstandard.ZstdCompressor(level=10)
 
 
 def setkey(key: str, value: bytes, compress: bool = False) -> None:
-    LOGGER.debug(f"Storing data at {key}: {value!r}")
+    LOGGER.debug("Storing data at %s: %r", key, value)
     if compress:
         value = cctx.compress(value)
     redis.set(key, value)
@@ -91,7 +93,7 @@ def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
@@ -151,7 +153,7 @@ def classify_issue(
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
@@ -212,7 +214,7 @@ def classify_comment(
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
@@ -258,7 +260,7 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
@@ -299,68 +301,25 @@ def schedule_tests(branch: str, rev: str) -> str:
 
     # Pull the revision to the local repository
     LOGGER.info("Pulling commits from the remote repository...")
-    repository.pull(REPO_DIR, branch, rev)
+    repository.pull(REPO_DIR, branch, rev, update=False)
 
     # Load the full stack of patches leading to that revision
     LOGGER.info("Loading commits to analyze using automationrelevance...")
     try:
         revs = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
-        LOGGER.warning(f"Push not found for {branch} @ {rev}!")
+        LOGGER.warning("Push not found for %s @ %s!", branch, rev)
         return "NOK"
 
-    test_selection_threshold = float(
-        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
-    )
-
     # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
-    # On other repos, only consider "tip" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
+    # On other repos, only consider "default" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
     if branch == "try":
         repo_branch = None
     else:
-        repo_branch = "tip"
+        repo_branch = "default"
 
-    # Analyze patches.
-    commits = repository.download_commits(
-        REPO_DIR,
-        revs=revs,
-        branch=repo_branch,
-        save=False,
-        use_single_process=True,
-        include_no_bug=True,
-    )
+    data = _analyze_patch(revs, repo_branch)
 
-    if len(commits) > 0:
-        testlabelselect_model = MODEL_CACHE.get("testlabelselect")
-        testgroupselect_model = MODEL_CACHE.get("testgroupselect")
-
-        tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
-
-        reduced = testselect.reduce_configs(
-            set(t for t, c in tasks.items() if c >= 0.8), 1.0
-        )
-
-        reduced_higher = testselect.reduce_configs(
-            set(t for t, c in tasks.items() if c >= 0.9), 1.0
-        )
-
-        groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
-
-        config_groups = testselect.select_configs(groups.keys(), 0.9)
-    else:
-        tasks = {}
-        reduced = set()
-        groups = {}
-        config_groups = {}
-
-    data = {
-        "tasks": tasks,
-        "groups": groups,
-        "config_groups": config_groups,
-        "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
-        "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
-        "known_tasks": get_known_tasks(),
-    }
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
     return "OK"
@@ -392,3 +351,98 @@ def get_config_specific_groups(config: str) -> str:
     )
 
     return "OK"
+
+
+def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
+    from bugbug_http import REPO_DIR
+    from bugbug_http.app import JobInfo
+
+    job = JobInfo(schedule_tests_from_patch, base_rev, patch_hash)
+    LOGGER.info("Processing %s...", job)
+
+    # Retrieve the patch from Redis
+    patch_key = f"bugbug:patch:{patch_hash}"
+    patch_data_raw = redis.get(patch_key)
+
+    if not patch_data_raw:
+        LOGGER.error("Patch not found in Redis for hash %s", patch_hash)
+        return "NOK"
+
+    hg_base_rev = utils.git2hg(base_rev)
+    LOGGER.info("Mapped git base rev %s to hg rev %s", base_rev, hg_base_rev)
+
+    # Pull the base revision to the local repository
+    LOGGER.info("Pulling base revision from the remote repository...")
+    repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=True)
+
+    LOGGER.info("Generating commit(s) from patch...")
+    revs = repository.import_commits(REPO_DIR, hg_base_rev, patch=patch_data_raw)
+
+    data = _analyze_patch(revs, "default")
+
+    setkey(job.result_key, orjson.dumps(data), compress=True)
+
+    return "OK"
+
+
+def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
+    from bugbug_http import REPO_DIR
+
+    commits = repository.download_commits(
+        REPO_DIR,
+        revs=revs,
+        branch=branch,
+        save=False,
+        include_no_bug=True,
+    )
+
+    if not commits:
+        return {
+            "tasks": {},
+            "groups": {},
+            "config_groups": {},
+            "reduced_tasks": {},
+            "reduced_tasks_higher": {},
+            "known_tasks": get_known_tasks(),
+        }
+
+    test_selection_threshold = float(
+        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
+    )
+
+    testlabelselect_model = MODEL_CACHE.get("testlabelselect")
+    testgroupselect_model = MODEL_CACHE.get("testgroupselect")
+
+    known_tasks = get_known_tasks()
+    modified_paths = list(set(path for commit in commits for path in commit["files"]))
+
+    tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+    for task in test_scheduling.find_tasks_for_paths(
+        REPO_DIR, known_tasks, modified_paths
+    ):
+        tasks[task] = 1.0
+
+    reduced = testselect.reduce_configs(
+        set(t for t, c in tasks.items() if c >= 0.8), 1.0
+    )
+
+    reduced_higher = testselect.reduce_configs(
+        set(t for t, c in tasks.items() if c >= 0.9), 1.0
+    )
+
+    groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+    for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
+        groups[group] = 1.0
+
+    config_groups = testselect.select_configs(groups, 0.9)
+
+    data = {
+        "tasks": tasks,
+        "groups": groups,
+        "config_groups": config_groups,
+        "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
+        "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
+        "known_tasks": known_tasks,
+    }
+
+    return data

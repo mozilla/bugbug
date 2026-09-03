@@ -11,6 +11,7 @@ import os
 import hglib
 import requests
 import tenacity
+from tqdm import tqdm
 
 from bugbug import repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
@@ -22,7 +23,9 @@ def boot_worker() -> None:
     # Clone autoland
     def clone_autoland() -> None:
         logger.info("Cloning autoland in %s...", REPO_DIR)
-        repository.clone(REPO_DIR, "https://hg.mozilla.org/integration/autoland")
+        repository.clone(
+            REPO_DIR, "https://hg.mozilla.org/integration/autoland", update=True
+        )
 
     def extract_past_failures_label() -> None:
         try:
@@ -130,6 +133,13 @@ def boot_worker() -> None:
             if r.ok:
                 known_tasks.update(r.json())
 
+        # We also use a mozilla-central task, to be even more protected from broken decision tasks.
+        r = requests.get(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.taskgraph.decision/artifacts/public/target-tasks.json"
+        )
+        if r.ok:
+            known_tasks.update(r.json())
+
         logger.info("Retrieved %d tasks", len(known_tasks))
 
         assert len(known_tasks) > 0
@@ -154,7 +164,8 @@ def boot_worker() -> None:
             # Update the commits DB.
             logger.info("Browsing all commits...")
             nodes = collections.deque(
-                (commit["node"] for commit in repository.get_commits()), maxlen=4096
+                (commit["node"] for commit in tqdm(repository.get_commits())),
+                maxlen=4096,
             )
             nodes.reverse()
             logger.info("All commits browsed.")
@@ -176,9 +187,7 @@ def boot_worker() -> None:
 
             logger.info("Updating commits DB...")
             try:
-                commits = repository.download_commits(
-                    REPO_DIR, revs=revs, use_single_process=True
-                )
+                commits = repository.download_commits(REPO_DIR, revs=revs)
                 logger.info("Commits DB updated.")
 
                 logger.info("Updating touched together DB...")

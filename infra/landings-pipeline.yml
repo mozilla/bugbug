@@ -5,10 +5,10 @@ tasks:
   in:
     - ID: landings-risk-report-generator
       created: { $fromNow: "" }
-      deadline: { $fromNow: "2 hours" }
+      deadline: { $fromNow: "6 hours" }
       expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       payload:
         features:
           taskclusterProxy: true
@@ -44,13 +44,12 @@ tasks:
         - generic-worker:cache:bugbug-mercurial-repository
         - secrets:get:project/bugbug/production
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.landings_risk_report.latest
       metadata:
         name: BugBug landings risk report
         description: BugBug landings risk report
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/${version}/infra/landings-pipeline.yml
 
     - ID: frontend-build
@@ -66,7 +65,7 @@ tasks:
         image: node:lts
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} /bugbug &&
             cd /bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -78,8 +77,7 @@ tasks:
             path: /bugbug/ui/changes/dist
             type: directory
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.landings_risk_report_ui.latest
       metadata:
         name: bugbug ui build

@@ -1,0 +1,232 @@
+# Proposed review-context.toml external content rules.
+#
+# This is a design sketch for the next rule language, not the format currently
+# accepted by the loader.
+#
+# This file is intentionally verbose. It shows the major language features and
+# comments on what each one does.
+
+# Version is required so the parser can reject files written for a future
+# incompatible format.
+version = 1
+
+# GitHub loads are restricted. The current review-context repo is always
+# allowed. Entries ending in `/` allow every repo under that organization;
+# entries in `org/repo` form allow a single repo.
+[policy.github]
+allowed_repos = [
+  "mozilla/",
+  "web-platform-tests/wpt",
+  "whatwg/html",
+]
+
+# Definitions are reusable predicate fragments. They are expanded structurally,
+# as if the referenced table had been written inline. The parser should reject
+# unknown refs, cycles, and refs to the wrong predicate kind.
+[definitions.files.media_impl]
+include = ["dom/media/**"]
+exclude = [
+  "dom/media/test/**",
+  "dom/media/gtest/**",
+  "dom/media/webaudio/test/**",
+  "dom/media/**/Generated*.cpp",
+]
+ext = [".cpp", ".h", ".mm"]
+
+[definitions.files.frontend_ui]
+include = [
+  "browser/components/**",
+  "browser/base/content/**",
+  "toolkit/components/**",
+  "toolkit/content/**",
+]
+exclude = [
+  "browser/components/**/test/**",
+  "toolkit/components/**/test/**",
+  "**/*.snap",
+]
+ext = [".js", ".mjs", ".sys.mjs", ".html", ".xhtml", ".css", ".scss"]
+
+[definitions.files.docs]
+ext = [".md", ".rst"]
+
+# Metadata predicates can be reusable too. A predicate can only reference a
+# definition from its own namespace: `bugzilla` refs `definitions.bugzilla.*`,
+# `review` refs `definitions.review.*`, and `patch` refs
+# `definitions.patch.*`.
+[definitions.bugzilla.dom_api]
+component = ["Core::DOM: Core & HTML", "Core::DOM: Events"]
+
+[definitions.review.frontend_reviewers]
+# `reviewer` matches both blocking and non-blocking reviewers.
+reviewer = ["frontend-reviewers"]
+
+[definitions.review.dom_reviewers]
+reviewer = ["dom-reviewers", "webidl-reviewers"]
+
+[definitions.review.blocking_media_reviewers]
+blocking_reviewer = ["padenot", "media-reviewers"]
+
+[definitions.patch.backport_repositories]
+is_backport = true
+repository = ["firefox-beta", "firefox-release", "firefox-esr"]
+
+# `priority` is optional. It defaults to 0 and only controls ordering among
+# loaded external content blocks. Higher priority loads first. Ties preserve
+# declaration order. All external content is injected before the patch diff.
+[[rules]]
+name = "Media: implementation"
+description = "Load media architecture and realtime-safety guidance for C++ media changes."
+owners = ["media-reviewers"]
+priority = 80
+
+# `all` means every child predicate must match.
+# `any_file` means at least one changed file must match the file predicate.
+# The file predicate uses the reusable definition above.
+when = { all = [
+  { any_file = { ref = "files.media_impl" } },
+] }
+
+# `kind` is an optional free-form audit/prompt hint. Load failures are
+# non-fatal: the loader logs an error and continues with remaining loads.
+load = [
+  { type = "file", path = ".claude/review/media-architecture.md", kind = "architecture" },
+  { type = "file", repo = "mozilla/cubeb", branch = "main", path = "docs/realtime-programming.md", kind = "policy" },
+]
+
+
+[[rules]]
+name = "Firefox frontend: JS, HTML, CSS"
+description = "Load frontend conventions for browser chrome, toolkit UI, and component styles."
+owners = ["frontend-reviewers"]
+priority = 60
+
+# `any` means at least one child predicate must match.
+# This rule fires for frontend UI files when a frontend reviewer/group is
+# assigned.
+when = { all = [
+  { any_file = { ref = "files.frontend_ui" } },
+  { review = { ref = "review.frontend_reviewers" } },
+] }
+
+load = [
+  { type = "file", path = ".claude/review/firefox-frontend.md", kind = "style-guide" },
+  { type = "file", path = "browser/docs/frontend/performance.md", kind = "performance" },
+]
+
+
+[[rules]]
+name = "DOM API implementation"
+description = "Load WebIDL and DOM binding guidance for changes that expose or implement web APIs."
+owners = ["dom-reviewers"]
+priority = 90
+
+# Boolean composition can be nested. This rule fires for:
+# - any WebIDL file under dom/,
+# - C++/header changes under dom/ when Bugzilla says this is a DOM bug, or
+# - DOM binding implementation files when a DOM/WebIDL reviewer is assigned.
+when = { any = [
+  { any_file = { include = ["dom/**"], ext = [".webidl"] } },
+  { all = [
+    { any_file = { include = ["dom/**"], ext = [".cpp", ".h"] } },
+    { bugzilla = { ref = "bugzilla.dom_api" } },
+  ] },
+  { all = [
+    { any_file = { include = ["dom/bindings/**"], ext = [".cpp", ".h", ".py"] } },
+    { review = { ref = "review.dom_reviewers" } },
+  ] },
+] }
+
+load = [
+  { type = "file", path = ".claude/review/dom-api.md", kind = "api-contract" },
+  { type = "file", path = "dom/docs/webidl-bindings.md", kind = "reference" },
+]
+
+
+[[rules]]
+name = "Docs-only change"
+description = "Load writing and API documentation guidance when every changed file is documentation."
+owners = ["docs-reviewers"]
+
+# `all_files` means every changed file must match the file predicate. This is
+# useful for patch-shape rules such as docs-only, tests-only, or generated-only.
+# This rule intentionally omits priority; it defaults to 0.
+when = { all_files = { ref = "files.docs" } }
+
+load = [
+  { type = "file", path = ".claude/review/docs.md", kind = "style-guide" },
+]
+
+
+[[rules]]
+name = "Security-sensitive DOM changes"
+description = "Load security guidance for non-test security-relevant DOM changes."
+owners = ["sec-reviewers", "dom-reviewers"]
+priority = 100
+
+# `not` negates its child predicate. This rule fires when some DOM security
+# file changed, but the patch is not test-only.
+when = { all = [
+  { any_file = { include = ["dom/security/**"], ext = [".cpp", ".h", ".webidl"] } },
+  { not = { all_files = { include = ["dom/security/test/**"] } } },
+] }
+
+load = [
+  { type = "file", path = ".claude/review/security-sensitive.md", kind = "policy" },
+]
+
+
+[[rules]]
+name = "Backport risk checklist"
+description = "Load release-branch guidance for patches targeting a backport repository or branch."
+owners = ["release-managers"]
+priority = 70
+
+# `patch.repository` and `patch.is_backport` come from trusted patch metadata.
+# For GitHub entrypoints, repository is org/project. For Phabricator reviews,
+# repository is the target Phabricator repository exposed by the Mozilla MCP.
+when = { all = [
+  { patch = { ref = "patch.backport_repositories" } },
+] }
+
+load = [
+  { type = "file", path = ".claude/review/backport-risk.md", kind = "release-policy" },
+]
+
+
+[[rules]]
+name = "Blocking reviewer guidance"
+description = "Load reviewer-specific expectations when a blocking media reviewer is assigned."
+owners = ["media-reviewers"]
+priority = 85
+
+# Review identities are Phabricator emails or review groups.
+# `blocking_reviewer` narrows to reviewers whose approval is required before
+# landing. Those reviewers also match ordinary `reviewer` predicates.
+when = { all = [
+  { any_file = { ref = "files.media_impl" } },
+  { review = { ref = "review.blocking_media_reviewers" } },
+] }
+
+# Dedupe is global per review. If another matched rule already loaded
+# media-architecture.md, this action records this rule in the manifest but does
+# not fetch or inject the same source a second time.
+load = [
+  { type = "file", path = ".claude/review/media-architecture.md", kind = "architecture" },
+  { type = "file", path = ".claude/review/media-reviewer-checklist.md", kind = "checklist" },
+]
+
+
+[[rules]]
+name = "Related revision context"
+description = "Load another reviewed diff when a patch depends on behavior from a known revision."
+owners = ["media-reviewers"]
+
+# `fetch_revision` injects a trusted diff as context. Phabricator revisions are
+# fetched through the platform client/MCP path; GitHub commits use repo+hash.
+when = { any_file = { include = ["dom/media/mediacontrol/**"] } }
+
+load = [
+  { type = "fetch_revision", revision = "D303229", kind = "related-diff" },
+  { type = "fetch_revision", repo = "mozilla/cubeb", hash = "0123456789abcdef0123456789abcdef01234567", kind = "related-diff" },
+]

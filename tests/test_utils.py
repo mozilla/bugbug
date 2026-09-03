@@ -13,7 +13,6 @@ import pandas as pd
 import pytest
 import requests
 import responses
-import urllib3
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -309,7 +308,7 @@ def test_get_last_modified_error():
         headers={},
     )
 
-    with pytest.raises(urllib3.exceptions.MaxRetryError, match="Max retries exceeded"):
+    with pytest.raises(requests.exceptions.RetryError):
         utils.get_last_modified(url)
 
     assert not os.path.exists("prova.txt")

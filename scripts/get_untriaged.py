@@ -54,7 +54,7 @@ def run_untriaged(untriaged_bugs):
         model = model_class.load(model_file_name)
         for bug in untriaged_bugs:
             p = model.classify(bug, probabilities=True)
-            url = f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}'
+            url = f"https://bugzilla.mozilla.org/show_bug.cgi?id={bug['id']}"
 
             classifiable = p[p >= 0.7].size >= 1
             classification = ""

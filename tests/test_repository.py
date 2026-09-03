@@ -6,6 +6,7 @@
 import json
 import os
 import pickle
+import re
 import shutil
 import time
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import commit_features, repository, rust_code_analysis_server
+from bugbug.utils import LMDBDict
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -174,14 +176,14 @@ def test_get_revs(fake_hg_repo):
 
     revs = repository.get_revs(hg, revision2, revision3)
 
-    assert (
-        len(revs) == 2
-    ), "There should be two revision after the first and up to the third"
+    assert len(revs) == 2, (
+        "There should be two revision after the first and up to the third"
+    )
     assert revs[0].decode("ascii") == revision2
     assert revs[1].decode("ascii") == revision3
 
 
-def test_hg_modified_files(fake_hg_repo):
+def test_hg_modified_files(fake_hg_repo, tmp_path):
     hg, local, remote = fake_hg_repo
 
     add_file(hg, local, "f1", "1\n2\n3\n4\n5\n6\n7\n")
@@ -211,7 +213,9 @@ def test_hg_modified_files(fake_hg_repo):
     revs = repository.get_revs(hg, revision1)
     commits = repository.hg_log(hg, revs)
 
-    repository.path_to_component = {}
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
 
     for c in commits:
         repository.hg_modified_files(hg, c)
@@ -235,6 +239,8 @@ def test_hg_modified_files(fake_hg_repo):
     assert commits[4].node == revision5
     assert commits[4].files == []
     assert commits[4].file_copies == {}
+
+    repository.close_component_mapping()
 
 
 def test_hg_log(fake_hg_repo):
@@ -551,12 +557,21 @@ def test_download_component_mapping():
     repository.close_component_mapping()
 
 
-@pytest.mark.parametrize("use_single_process", [True, False])
-def test_download_commits(fake_hg_repo, use_single_process):
+def test_download_commits(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
+
+    responses.add_callback(
+        responses.GET,
+        re.compile(r"https://lando\.moz\.tools/api/hg2git/firefox/(.+)"),
+        callback=lambda request: (
+            200,
+            {},
+            json.dumps({"git_hash": request.url.split("/hg2git/firefox/", 1)[1]}),
+        ),
+    )
 
     responses.add(
         responses.HEAD,
@@ -605,9 +620,7 @@ def test_download_commits(fake_hg_repo, use_single_process):
         callback=request_callback,
     )
 
-    commits = repository.download_commits(
-        local, rev_start=0, use_single_process=use_single_process
-    )
+    commits = repository.download_commits(local, rev_start=0)
     assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
@@ -631,9 +644,7 @@ def test_download_commits(fake_hg_repo, use_single_process):
 
     os.remove("data/coverage_mapping.json.zst.etag")
 
-    commits = repository.download_commits(
-        local, rev_start=0, use_single_process=use_single_process
-    )
+    commits = repository.download_commits(local, rev_start=0)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
@@ -652,9 +663,7 @@ def test_download_commits(fake_hg_repo, use_single_process):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(
-        local, rev_start=revision3, use_single_process=use_single_process
-    )
+    commits = repository.download_commits(local, rev_start=revision3)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 2
@@ -673,9 +682,7 @@ def test_download_commits(fake_hg_repo, use_single_process):
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(
-        local, rev_start=f"children({revision2})", use_single_process=use_single_process
-    )
+    commits = repository.download_commits(local, rev_start=f"children({revision2})")
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
@@ -684,16 +691,13 @@ def test_download_commits(fake_hg_repo, use_single_process):
     commits = repository.download_commits(
         local,
         revs=[revision2.encode("ascii"), revision3.encode("ascii")],
-        use_single_process=use_single_process,
     )
     assert len(commits) == 2
     assert len(list(repository.get_commits())) == 2
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(
-        local, rev_start=0, use_single_process=use_single_process
-    )
+    commits = repository.download_commits(local, rev_start=0)
     assert len(list(repository.get_commits())) == 2
 
     os.remove("data/commits.json")
@@ -701,7 +705,6 @@ def test_download_commits(fake_hg_repo, use_single_process):
     commits = repository.download_commits(
         local,
         revs=[],
-        use_single_process=use_single_process,
     )
     assert len(commits) == 0
     assert len(list(repository.get_commits())) == 0
@@ -729,10 +732,12 @@ def test_get_directories():
 
 
 @pytest.fixture
-def ignored_commits_to_test(fake_hg_repo):
+def ignored_commits_to_test(fake_hg_repo, tmp_path):
     hg, local, remote = fake_hg_repo
 
-    repository.path_to_component = {}
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
 
     add_file(
         hg,
@@ -772,7 +777,9 @@ def ignored_commits_to_test(fake_hg_repo):
         ),
     ]
 
-    return hg, local, commits
+    yield hg, local, commits
+
+    repository.close_component_mapping()
 
 
 def test_set_commits_to_ignore(ignored_commits_to_test):
@@ -846,14 +853,15 @@ def test_filter_commits(ignored_commits_to_test):
     }
 
 
-def test_calculate_experiences() -> None:
-    repository.path_to_component = {
-        b"dom/file1.cpp": memoryview(b"Core::DOM"),
-        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
-        b"dom/file2.cpp": memoryview(b"Core::Layout"),
-        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
-        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
-    }
+def test_calculate_experiences(tmp_path) -> None:
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
+    repository.path_to_component[b"dom/file1.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file1copied.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file2.cpp"] = b"Core::Layout"
+    repository.path_to_component[b"apps/file1.jsm"] = b"Firefox::Boh"
+    repository.path_to_component[b"apps/file2.jsm"] = b"Firefox::Boh"
 
     commits = {
         "commit1": repository.Commit(
@@ -1321,15 +1329,18 @@ def test_calculate_experiences() -> None:
     ):
         repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
 
+    repository.close_component_mapping()
 
-def test_calculate_experiences_no_save() -> None:
-    repository.path_to_component = {
-        b"dom/file1.cpp": memoryview(b"Core::DOM"),
-        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
-        b"dom/file2.cpp": memoryview(b"Core::Layout"),
-        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
-        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
-    }
+
+def test_calculate_experiences_no_save(tmp_path) -> None:
+    repository.path_to_component = LMDBDict(
+        str(tmp_path / "component_mapping.lmdb"), readonly=False
+    )
+    repository.path_to_component[b"dom/file1.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file1copied.cpp"] = b"Core::DOM"
+    repository.path_to_component[b"dom/file2.cpp"] = b"Core::Layout"
+    repository.path_to_component[b"apps/file1.jsm"] = b"Firefox::Boh"
+    repository.path_to_component[b"apps/file2.jsm"] = b"Firefox::Boh"
 
     commits = {
         "commit1": repository.Commit(
@@ -1774,6 +1785,8 @@ def test_calculate_experiences_no_save() -> None:
     assert commits["commit6"].touched_prev_90_days_component_sum == 2
     assert commits["commit6"].touched_prev_90_days_component_max == 2
     assert commits["commit6"].touched_prev_90_days_component_min == 2
+
+    repository.close_component_mapping()
 
 
 def test_get_touched_functions():
@@ -2859,3 +2872,94 @@ void main() {
             }
         ]
     }
+
+
+def test_import_commits_single_commit(fake_hg_repo):
+    """Test that a patch with a single commit returns one commit."""
+    hg, local, _ = fake_hg_repo
+
+    # Create an initial commit to serve as the base revision
+    add_file(hg, local, "initial.txt", "initial content\n")
+    base_rev = commit(hg, "Initial commit")
+
+    # Create a patch with a single commit
+    patch = b"""# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Single commit message
+
+diff --git a/file1.txt b/file1.txt
+new file mode 100644
+--- /dev/null
++++ b/file1.txt
+@@ -0,0 +1,1 @@
++line1
+"""
+
+    # Apply the patch
+    revs = repository.import_commits(local, base_rev, patch)
+
+    # Verify we got exactly one commit
+    assert len(revs) == 1
+
+    commits = repository.hg_log(hg, revs)
+    assert commits[0].desc == "Single commit message"
+
+
+def test_import_commits_multiple_commits(fake_hg_repo):
+    """Test that a patch with multiple commits returns all commits."""
+    hg, local, _ = fake_hg_repo
+
+    # Create an initial commit to serve as the base revision
+    add_file(hg, local, "initial.txt", "initial content\n")
+    base_rev = commit(hg, "Initial commit")
+
+    # Create a patch with multiple commits
+    patch = b"""# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+First commit message
+
+diff --git a/file1.txt b/file1.txt
+new file mode 100644
+--- /dev/null
++++ b/file1.txt
+@@ -0,0 +1,1 @@
++line1
+
+# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Second commit message
+
+diff --git a/file2.txt b/file2.txt
+new file mode 100644
+--- /dev/null
++++ b/file2.txt
+@@ -0,0 +1,1 @@
++line2
+
+# HG changeset patch
+# User Test User <test@mozilla.org>
+# Date 0 0
+Third commit message
+
+diff --git a/file3.txt b/file3.txt
+new file mode 100644
+--- /dev/null
++++ b/file3.txt
+@@ -0,0 +1,1 @@
++line3
+"""
+
+    # Apply the patch
+    revs = repository.import_commits(local, base_rev, patch)
+
+    # Verify we got all three commits
+    assert len(revs) == 3
+
+    # Verify the commits are in order (oldest to newest)
+    commits = repository.hg_log(hg, revs)
+    assert commits[0].desc == "First commit message"
+    assert commits[1].desc == "Second commit message"
+    assert commits[2].desc == "Third commit message"

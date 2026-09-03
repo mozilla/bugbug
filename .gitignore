@@ -49,3 +49,6 @@ node_modules/
 *.log
 # Desktop Service Store
 *.DS_Store
+
+# Local env files
+.env

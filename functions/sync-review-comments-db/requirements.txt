@@ -1,0 +1,4 @@
+bugbug
+cloud-sql-python-connector[pg8000]==1.13.0
+functions-framework==3.5.0
+SQLAlchemy==2.0.25

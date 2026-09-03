@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import itertools
 import os
 from logging import INFO, basicConfig, getLogger
 
@@ -14,13 +15,14 @@ logger = getLogger(__name__)
 
 
 class Retriever(object):
-    def __init__(self, cache_root):
+    def __init__(self, cache_root: str) -> None:
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
-    def retrieve_commits(self, limit):
+    def retrieve_commits(self, limit: int | None) -> None:
         repository.clone(self.repo_dir)
 
+        rev_start: int | str
         if limit:
             # Mercurial revset supports negative integers starting from tip
             rev_start = -limit
@@ -36,8 +38,8 @@ class Retriever(object):
 
         chunk_size = 70000
 
-        for i in range(0, len(revs), chunk_size):
-            repository.download_commits(self.repo_dir, revs=revs[i : (i + chunk_size)])
+        for chunk in itertools.batched(revs, chunk_size):
+            repository.download_commits(self.repo_dir, revs=list(chunk))
 
         logger.info("commit data extracted from repository")
 
@@ -49,7 +51,7 @@ class Retriever(object):
         create_tar_zst(os.path.join("data", repository.COMMIT_EXPERIENCES_DB))
 
 
-def main():
+def main() -> None:
     description = "Retrieve and extract the information from Mozilla-Central repository"
     parser = argparse.ArgumentParser(description=description)
 

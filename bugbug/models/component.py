@@ -17,6 +17,7 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
+from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class ComponentModel(BugModel):
         "Core",
         "External Software Affecting Firefox",
         "DevTools",
-        "Fenix",
+        "Firefox for Android",
         "Firefox",
         "Toolkit",
         "WebExtensions",
@@ -53,7 +54,7 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox",
         "WebExtensions",
         "Firefox Build System",
-        "Fenix",
+        "Firefox for Android",
     ]
 
     CONFLATED_COMPONENTS_MAPPING = {
@@ -64,10 +65,10 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox": "External Software Affecting Firefox::Other",
         "WebExtensions": "WebExtensions::Untriaged",
         "Firefox Build System": "Firefox Build System::General",
-        "Fenix": "Fenix::General",
+        "Firefox for Android": "Firefox for Android::General",
     }
 
-    def __init__(self, lemmatization=False):
+    def __init__(self, calibration=True, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
         self.cross_validation_enabled = False
@@ -103,6 +104,12 @@ class ComponentModel(BugModel):
             ]
         )
 
+        estimator = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        if calibration:
+            estimator = IsotonicRegressionCalibrator(estimator)
+            # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
+            self.calculate_importance = False
+
         self.clf = Pipeline(
             [
                 (
@@ -121,7 +128,7 @@ class ComponentModel(BugModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    estimator,
                 ),
             ]
         )
@@ -131,6 +138,9 @@ class ComponentModel(BugModel):
         }
 
     def filter_component(self, product, component):
+        if product == "Firefox for Android" or product == "GeckoView":
+            return "Firefox for Android"
+
         full_comp = f"{product}::{component}"
 
         if full_comp in self.CONFLATED_COMPONENTS_INVERSE_MAPPING:

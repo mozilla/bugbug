@@ -1,16 +1,22 @@
-version: "3.2"
+# The version property should be dropped once this is supported by task-boot
+# See https://github.com/mozilla/task-boot/issues/505
+version: "3.8"
+
+include:
+  - path: agents/autowebcompat-repro/compose.yml
+  - path: agents/autowebcompat-diagnosis/compose.yml
+  - path: agents/bug-fix/compose.yml
+  - path: agents/build-repair/compose.yml
+  - path: agents/test-repair/compose.yml
+  - path: agents/frontend-triage/compose.yml
+  - path: agents/test-plan-generator/compose.yml
+
 services:
   bugbug-base:
     build:
       context: .
       dockerfile: infra/dockerfile.base
     image: mozilla/bugbug-base
-
-  bugbug-nlp:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.base-nlp
-    image: mozilla/bugbug-base-nlp
 
   bugbug-commit-retrieval:
     build:
@@ -26,7 +32,8 @@ services:
 
   bugbug-http-service:
     build:
-      context: http_service
+      context: .
+      dockerfile: http_service/Dockerfile
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
@@ -40,8 +47,8 @@ services:
 
   bugbug-http-service-bg-worker:
     build:
-      context: http_service
-      dockerfile: Dockerfile.bg_worker
+      context: .
+      dockerfile: http_service/Dockerfile.bg_worker
     image: mozilla/bugbug-http-service-bg-worker
     environment:
       - BUGBUG_BUGZILLA_TOKEN
@@ -49,6 +56,6 @@ services:
 
   bugbug-spawn-pipeline:
     build:
-      context: infra/
-      dockerfile: dockerfile.spawn_pipeline
+      context: .
+      dockerfile: infra/dockerfile.spawn_pipeline
     image: mozilla/bugbug-spawn-pipeline

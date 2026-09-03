@@ -9,7 +9,7 @@ import os
 import pickle
 import re
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 import hglib
@@ -106,7 +106,7 @@ def patch_resources(monkeypatch, jobs):
 
         def __init__(self, job_id):
             self.job_id = job_id
-            self.enqueued_at = datetime.today()
+            self.enqueued_at = datetime.now(timezone.utc)
             self.timeout = 10
 
         @staticmethod
@@ -199,6 +199,16 @@ def mock_hgmo(mock_repo: tuple[str, str]) -> None:
             r"^https?://(hgmo|hg\.mozilla\.org)/[\w\-\/]+/json-automationrelevance/(\w+)"
         ),
         callback=fake_json_relevance,
+    )
+
+    responses.add_callback(
+        responses.GET,
+        re.compile(r"https://lando\.moz\.tools/api/hg2git/firefox/(.+)"),
+        callback=lambda request: (
+            200,
+            {},
+            json.dumps({"git_hash": request.url.split("/hg2git/firefox/", 1)[1]}),
+        ),
     )
 
 

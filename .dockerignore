@@ -97,5 +97,4 @@ venv/
 # Project-specific stuff
 cache/
 data/
-http_service/
 .taskcluster.yml

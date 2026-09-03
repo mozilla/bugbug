@@ -16,9 +16,15 @@ class Name(object):
 class Platform(object):
     def __call__(self, test_job, **kwargs):
         platforms = []
-        for ps in (("linux",), ("windows", "win"), ("android",), ("macosx",)):
+        for ps in (
+            ("linux",),
+            ("windows", "win"),
+            ("android", "apk", "fenix", "components", "focus", "klar", "samples"),
+            ("macosx",),
+            ("ios",),
+        ):
             for p in ps:
-                if p in test_job["name"][: test_job["name"].index("/")]:
+                if p in test_job["name"].split("/")[0]:
                     platforms.append(ps[0])
                     break
         assert len(platforms) == 1, "Wrong platforms ({}) in {}".format(
@@ -38,7 +44,7 @@ def get_chunk(name):
 
     assert name.startswith("test-"), f"{name} should start with test-"
 
-    name = name.split("/")[1]
+    name = name.split("/")[1] if "/" in name else name
 
     return "-".join([p for p in name.split("-") if p not in NAME_PARTS_TO_SKIP])
 

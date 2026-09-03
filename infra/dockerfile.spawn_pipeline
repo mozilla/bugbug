@@ -1,12 +1,19 @@
-FROM python:3.12.2-slim
+FROM python:3.14.7-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV PATH="/opt/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/opt/venv"
+ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
 
 # Setup dependencies in a cacheable step
-ADD spawn_pipeline_requirements.txt /code/
+RUN --mount=type=bind,source=pyproject.toml,target=/tmp/bugbug/pyproject.toml \
+	--mount=type=bind,source=uv.lock,target=/tmp/bugbug/uv.lock \
+	--mount=type=bind,source=VERSION,target=/tmp/bugbug/VERSION \
+	cd /tmp/bugbug && uv sync --frozen --package bugbug --no-dev --only-group spawn-pipeline --no-install-workspace
 
-RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /code/spawn_pipeline_requirements.txt
+ADD infra/spawn_pipeline.py /code/
 
-ADD spawn_pipeline.py /code
-
-ADD *-pipeline.yml /code/
+ADD infra/*-pipeline.yml /code/
 
 CMD python /code/spawn_pipeline.py

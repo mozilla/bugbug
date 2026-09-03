@@ -1,0 +1,9 @@
+#!include:.gitignore
+#!include:.dockerignore
+
+.gitignore
+.vscode
+.venv
+*.md
+.gcloudignore
+.dockerignore

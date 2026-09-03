@@ -1,0 +1,243 @@
+"""Tests for finalize_run.
+
+The Eventarc-triggered /internal/events/agent-run-finished route calls
+this instead of a client's GET /runs/{run_id} triggering it (see
+app/routers/runs.py).
+"""
+
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+
+import pytest
+from app import gcs, jobs, pubsub
+from app.jobs import ExecutionStatus
+from app.routers import runs as runs_module
+from app.routers.runs import finalize_run
+from app.schemas import ArtifactRef, RunStatus, RunSummary
+
+
+@dataclass
+class _FakeRun:
+    run_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    agent: str = "bug-fix"
+    status: str = RunStatus.pending.value
+    execution_name: str | None = "projects/p/locations/l/jobs/j/executions/e"
+    artifacts: list = field(default_factory=list)
+    summary: dict | None = None
+    error: str | None = None
+    finalized_at: datetime | None = None
+
+
+class _FakeDB:
+    def __init__(self):
+        self.commits = 0
+
+    async def commit(self):
+        self.commits += 1
+
+
+@pytest.fixture(autouse=True)
+def _no_publish(monkeypatch):
+    published = []
+
+    async def fake_publish(run_id, agent, status):
+        published.append((run_id, agent, status))
+
+    monkeypatch.setattr(pubsub, "publish_run_completed", fake_publish)
+    return published
+
+
+async def test_noop_when_already_finalized(monkeypatch):
+    run = _FakeRun(finalized_at=datetime.now(timezone.utc))
+    db = _FakeDB()
+
+    async def fail(*_a, **_k):
+        raise AssertionError("should not check execution status once finalized")
+
+    monkeypatch.setattr(jobs, "get_execution_status", fail)
+    await finalize_run(db, run)
+    assert db.commits == 0
+
+
+def _async(value):
+    """An async callable that ignores its args and returns `value`."""
+
+    async def _fn(*_args, **_kwargs):
+        return value
+
+    return _fn
+
+
+async def test_transitions_pending_to_running(monkeypatch):
+    run = _FakeRun(status=RunStatus.pending.value)
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.running))
+    await finalize_run(db, run)
+    assert run.status == RunStatus.running.value
+    assert run.finalized_at is None
+    assert db.commits == 1
+
+
+async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.succeeded))
+    monkeypatch.setattr(gcs, "read_summary", _async(RunSummary(status="ok")))
+    monkeypatch.setattr(
+        gcs, "list_artifacts", _async([ArtifactRef(name="summary.json", size=10)])
+    )
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.succeeded.value
+    assert run.finalized_at is not None
+    assert run.artifacts == [{"name": "summary.json", "size": 10, "content_type": None}]
+    assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+
+
+@pytest.mark.parametrize(
+    ("actions", "artifacts", "expected"),
+    [
+        ([], ["changes/changes.patch"], True),
+        (
+            ["phabricator.submit_patch"],
+            ["changes/changes.patch"],
+            False,
+        ),
+        (
+            ["phabricator.update_patch"],
+            ["changes/changes.patch"],
+            False,
+        ),
+        ([], [], False),
+        (None, ["changes/changes.patch"], True),
+    ],
+)
+def test_has_unsubmitted_patch(actions, artifacts, expected):
+    summary = (
+        None
+        if actions is None
+        else RunSummary(status="ok", actions=[{"type": action} for action in actions])
+    )
+    artifact_refs = [ArtifactRef(name=artifact, size=10) for artifact in artifacts]
+
+    assert runs_module._has_unsubmitted_patch(summary, artifact_refs) is expected
+
+
+async def test_finalizes_as_failed_when_summary_missing(monkeypatch):
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.succeeded))
+    monkeypatch.setattr(gcs, "read_summary", _async(None))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.failed.value
+    assert "summary.json" in run.error
+    assert run.finalized_at is not None
+
+
+async def test_cancelled_execution_marks_timed_out(monkeypatch):
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.cancelled))
+    monkeypatch.setattr(gcs, "read_summary", _async(None))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.timed_out.value
+    assert run.finalized_at is not None
+
+
+async def test_second_call_is_noop_after_finalizing(monkeypatch):
+    run = _FakeRun()
+    db = _FakeDB()
+    calls = []
+
+    async def fake_status(name):
+        calls.append(name)
+        return ExecutionStatus.succeeded
+
+    monkeypatch.setattr(jobs, "get_execution_status", fake_status)
+    monkeypatch.setattr(gcs, "read_summary", _async(RunSummary(status="ok")))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+    await finalize_run(db, run)
+
+    assert len(calls) == 1
+
+
+async def test_recovers_status_from_summary_when_execution_is_gone(
+    monkeypatch, _no_publish
+):
+    """A deleted execution is missing evidence, not a reason to retry forever.
+
+    Cloud Run garbage-collects old executions, after which GetExecution 404s
+    permanently. Treating that as retryable is what turned lost completions
+    into a poison-message loop (see STUCK-PENDING-RUNS.md). The run's real
+    outcome still exists in summary.json, so finalize from that.
+    """
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.gone))
+    monkeypatch.setattr(gcs, "read_summary", _async(RunSummary(status="ok")))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.succeeded.value
+    assert run.finalized_at is not None
+    assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+
+
+async def test_gone_execution_reports_summary_error(monkeypatch):
+    """The summary decides the outcome, including when the outcome is failure."""
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.gone))
+    monkeypatch.setattr(
+        gcs, "read_summary", _async(RunSummary(status="error", error="agent blew up"))
+    )
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.failed.value
+    assert run.error == "agent blew up"
+
+
+async def test_gone_execution_without_summary_fails(monkeypatch):
+    """Only when no evidence survives at all is the outcome unrecoverable."""
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.gone))
+    monkeypatch.setattr(gcs, "read_summary", _async(None))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.failed.value
+    assert "cannot be recovered" in run.error
+    assert run.finalized_at is not None
+
+
+async def test_run_without_execution_name_is_failed_not_asserted(monkeypatch):
+    """A run that can never be correlated must still reach a terminal state."""
+    run = _FakeRun(execution_name=None)
+    db = _FakeDB()
+
+    async def fail(*_a, **_k):
+        raise AssertionError("should not check status without an execution name")
+
+    monkeypatch.setattr(jobs, "get_execution_status", fail)
+
+    await finalize_run(db, run)
+
+    assert run.status == RunStatus.failed.value
+    assert run.error == "Run was never associated with an execution"
+    assert run.finalized_at is not None
+    assert db.commits == 1

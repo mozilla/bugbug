@@ -4,8 +4,10 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import collections
 import concurrent.futures
 import copy
+import io
 import itertools
 import json
 import logging
@@ -24,6 +26,7 @@ from typing import Collection, Iterable, Iterator, NewType, Set, Union
 
 import hglib
 import lmdb
+import requests
 import rs_parsepatch
 import tenacity
 from tqdm import tqdm
@@ -359,7 +362,7 @@ def hg_modified_files(hg, commit):
         template=template,
         no_merges=True,
         rev=commit.node.encode("ascii"),
-        branch="tip",
+        branch="default",
     )
     x = hg.rawcommand(args)
     files_str, file_copies_str = x.split(b"\x00")[:-1]
@@ -668,7 +671,9 @@ def set_commit_metrics(
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
     except AnalysisException:
-        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+        logger.debug(
+            "rust-code-analysis error on commit %s, path %s", commit.node, path
+        )
 
     before_metrics_dict = get_total_metrics_dict()
     try:
@@ -677,7 +682,9 @@ def set_commit_metrics(
                 before_metrics_dict, before_metrics["spaces"], calc_summaries=False
             )
     except AnalysisException:
-        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+        logger.debug(
+            "rust-code-analysis error on commit %s, path %s", commit.node, path
+        )
 
     commit.metrics_diff = {
         f"{metric}_total": commit.metrics[f"{metric}_total"]
@@ -702,7 +709,10 @@ def set_commit_metrics(
             get_space_metrics(metrics_dict, func, calc_summaries=False)
         except AnalysisException:
             logger.debug(
-                f"rust-code-analysis error on commit {commit.node}, path {path}, function {func['name']}"
+                "rust-code-analysis error on commit %s, path %s, function %s}",
+                commit.node,
+                path,
+                func["name"],
             )
 
         commit.functions[path].append(
@@ -732,7 +742,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     try:
         patch_data = rs_parsepatch.get_lines(patch)
     except Exception:
-        logger.error(f"Exception while analyzing {commit.node}")
+        logger.error("Exception while analyzing %s", commit.node)
         raise
 
     for stats in patch_data:
@@ -871,7 +881,7 @@ def _transform(commit):
 
 
 def hg_log(
-    hg: hglib.client, revs: list[bytes], branch: str | None = "tip"
+    hg: hglib.client, revs: list[bytes], branch: str | None = "default"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -958,18 +968,18 @@ def hg_log(
     return tuple(commits)
 
 
-def _hg_log(revs: list[bytes], branch: str = "tip") -> tuple[Commit, ...]:
+def _hg_log(revs: list[bytes], branch: str = "default") -> tuple[Commit, ...]:
     return hg_log(thread_local.hg, revs, branch)
 
 
-def get_revs(hg, rev_start=0, rev_end="tip"):
+def get_revs(hg, rev_start=0, rev_end="default"):
     logger.info("Getting revs from %s to %s...", rev_start, rev_end)
 
     args = hglib.util.cmdbuilder(
         b"log",
         template="{node}\n",
         no_merges=True,
-        branch="tip",
+        branch="default",
         rev=f"{rev_start}:{rev_end}",
     )
     x = hg.rawcommand(args)
@@ -1183,7 +1193,10 @@ def calculate_experiences(
                     )
                 else:
                     logger.warning(
-                        f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                        "Experience missing for file %s, type '%s', on commit %s",
+                        orig,
+                        commit_type,
+                        commit.node,
                     )
 
         if (
@@ -1206,7 +1219,8 @@ def set_commits_to_ignore(
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
     ignore_revs_content = hg.cat(
-        [os.path.join(repo_dir, ".hg-annotate-ignore-revs").encode("ascii")], rev=b"-1"
+        [os.path.join(repo_dir, ".hg-annotate-ignore-revs").encode("ascii")],
+        rev=b"default",
     ).decode("utf-8")
     ignore_revs = set(line[:40] for line in ignore_revs_content.splitlines())
 
@@ -1219,25 +1233,30 @@ def set_commits_to_ignore(
 def download_coverage_mapping() -> None:
     commit_to_coverage = get_coverage_mapping(False)
 
-    utils.download_check_etag(
-        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
-        "data/coverage_mapping.json.zst",
-    )
+    try:
+        utils.download_check_etag(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+            "data/coverage_mapping.json.zst",
+        )
 
-    zstd_decompress("data/coverage_mapping.json")
-    assert os.path.exists("data/coverage_mapping.json")
+        zstd_decompress("data/coverage_mapping.json")
+        assert os.path.exists("data/coverage_mapping.json")
 
-    with open("data/coverage_mapping.json", "r") as f:
-        data = json.load(f)
+        with open("data/coverage_mapping.json", "r") as f:
+            data = json.load(f)
 
-    for commit_hash, commit_stats in data.items():
-        commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+        for commit_hash, commit_stats in data.items():
+            commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+    except requests.exceptions.HTTPError as e:
+        logger.error("Failure downloading commit->coverage mapping %s", e)
 
     close_coverage_mapping()
 
 
 def get_coverage_mapping(readonly: bool = True) -> LMDBDict:
     global commit_to_coverage
+    if commit_to_coverage is not None:
+        return commit_to_coverage
     commit_to_coverage = LMDBDict("data/coverage_mapping.lmdb", readonly=readonly)
     return commit_to_coverage
 
@@ -1292,6 +1311,8 @@ def download_component_mapping():
 
 def get_component_mapping(readonly=True):
     global path_to_component
+    if path_to_component is not None:
+        return path_to_component
     path_to_component = LMDBDict("data/component_mapping.lmdb", readonly=readonly)
     return path_to_component
 
@@ -1302,8 +1323,24 @@ def close_component_mapping():
     path_to_component = None
 
 
+def set_git_hash(commits: Iterable[CommitDict]) -> None:
+    def apply_git_hash(commit: CommitDict) -> None:
+        try:
+            commit["git_hash"] = utils.hg2git(commit["node"])
+        except requests.exceptions.HTTPError as e:
+            logger.error(
+                "Failure mapping hg commit hash (%s) to git commit hash %s",
+                commit["node"],
+                e,
+            )
+            commit["git_hash"] = None
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        collections.deque(executor.map(apply_git_hash, commits), maxlen=0)
+
+
 def hg_log_multi(
-    repo_dir: str, revs: list[bytes], branch: str | None = "tip"
+    repo_dir: str, revs: list[bytes], branch: str | None = "default"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -1331,16 +1368,19 @@ def hg_log_multi(
 @lru_cache(maxsize=None)
 def get_first_pushdate(repo_dir):
     with hglib.open(repo_dir) as hg:
-        return hg_log(hg, [b"0"])[0].pushdate
+        commits = hg_log(hg, [b"0"])
+        assert len(commits) == 1, (
+            f"There should be exactly one commit corresponding to revision 0: {commits}"
+        )
+        return commits[0].pushdate
 
 
 def download_commits(
     repo_dir: str,
     rev_start: str | None = None,
     revs: list[bytes] | None = None,
-    branch: str | None = "tip",
+    branch: str | None = "default",
     save: bool = True,
-    use_single_process: bool = False,
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
@@ -1366,6 +1406,12 @@ def download_commits(
         first_pushdate = get_first_pushdate(repo_dir)
 
         logger.info("Mining %d commits...", len(revs))
+
+        cpu_count = os.cpu_count()
+        threads_num = cpu_count + 1 if cpu_count is not None else 1
+        # Only process revisions in parallel when we have enough of them, otherwise
+        # we'll pay the cost of starting multiple threads for nothing.
+        use_single_process = len(revs) < threads_num
 
         if not use_single_process:
             logger.info("Using %d processes...", os.cpu_count())
@@ -1398,7 +1444,7 @@ def download_commits(
 
             get_component_mapping()
 
-            commits = tuple(transform(hg, repo_dir, c) for c in commits)
+            commits = tuple(transform(hg, repo_dir, c) for c in tqdm(commits))
 
             close_component_mapping()
 
@@ -1411,6 +1457,7 @@ def download_commits(
     commit_dicts = tuple(commit.to_dict() for commit in commits)
 
     set_commit_coverage(commit_dicts)
+    set_git_hash(commit_dicts)
 
     if save:
         db.append(COMMITS_DB, commit_dicts)
@@ -1501,7 +1548,7 @@ def clone(
         purge=True,
         sharebase=repo_dir + "-shared",
         networkattempts=7,
-        branch=b"tip",
+        branch=b"default",
         noupdate=not update,
     )
     subprocess.run(cmd, check=True)
@@ -1509,14 +1556,17 @@ def clone(
     logger.info("%s cloned", repo_dir)
 
 
-def pull(repo_dir: str, branch: str, revision: str) -> None:
+def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> None:
     """Pull a revision from a branch of a remote repository into a local repository."""
 
     @tenacity.retry(
-        stop=tenacity.stop_after_attempt(2),
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
         reraise=True,
         after=tenacity.after_log(logger, logging.DEBUG),
-        retry=tenacity.retry_if_exception_type(subprocess.TimeoutExpired),
+        retry=tenacity.retry_if_exception_type(
+            (subprocess.TimeoutExpired, RuntimeError)
+        ),
     )
     def trigger_pull() -> None:
         cmd = _build_hg_cmd(
@@ -1540,7 +1590,24 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
                 f"Error {p.returncode} when pulling {revision} from {branch}"
             )
 
+        if update:
+            with hglib.open(repo_dir) as hg:
+                hg.update(revision.encode("utf-8"), clean=True)
+
     trigger_pull()
+
+
+def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
+    """Import commits from a git format-patch style patches into a Mercurial repository."""
+    with hglib.open(repo_dir) as hg:
+        logger.info("Applying the patch ...")
+        hg.import_(patches=io.BytesIO(patch))
+
+        revs = get_revs(hg, rev_start=f"children({base_rev})::.")
+        if not revs:
+            raise Exception("Failed to retrieve commits after applying patch")
+
+        return revs
 
 
 if __name__ == "__main__":

@@ -58,12 +58,11 @@
       "image": "mozilla/bugbug-commit-retrieval",
       "maxRunTime": 7200
     },
-    "priority": "normal",
+    "priority": "lowest",
     "provisionerId": "proj-bugbug",
     "retries": 5,
     "routes": [
-      "notify.email.mcastelluccio@mozilla.com.on-failed",
-      "notify.irc-channel.#bugbug.on-failed",
+      "notify.email.bugbug-team@mozilla.com.on-failed",
       "index.project.bugbug.classify_patch.latest",
       "index.project.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
     ],

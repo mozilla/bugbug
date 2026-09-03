@@ -56,8 +56,10 @@ def _get_cost(config: str) -> int:
         (("build", "opt"), 1),
         (("build", "debug"), 2),
         (("build", "plain"), 3),
-        (("linux1804-64", "opt"), 2),
-        (("linux1804-64", "debug"), 3),
+        (("linux2404-64", "opt"), 2),
+        (("linux2404-64", "debug"), 3),
+        (("linux1804-64", "opt"), 4),
+        (("linux1804-64", "debug"), 5),
         (("linux2204-64", "opt"), 4),
         (("linux2204-64", "debug"), 5),
         (("windows11", "opt"), 6),
@@ -83,7 +85,7 @@ def _get_cost(config: str) -> int:
         if all(s in config for s in substrings):
             return cost
 
-    logger.warning(f"Couldn't find cost for {config}")
+    logger.warning("Couldn't find cost for %s", config)
     return max(cost for _, cost in costs)
 
 
@@ -278,7 +280,7 @@ def reduce_configs(
 
 
 def select_configs(
-    groups: Collection[str],
+    group_confidences: dict[str, float],
     min_redundancy_confidence: float,
     max_configurations: int = 3,
 ) -> dict[str, list[str]]:
@@ -287,6 +289,12 @@ def select_configs(
     all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
     all_configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
     config_costs = {config: _get_cost(config) for config in all_configs}
+
+    all_groups = group_confidences.keys()
+    high_confidence_groups = {
+        group for group in all_groups if group_confidences.get(group, 0.0) >= 0.99
+    }
+    groups = [group for group in all_groups if group not in high_confidence_groups]
 
     solver = pywraplp.Solver(
         "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
@@ -303,9 +311,20 @@ def select_configs(
         )
     }
 
+    # Configs used by high-confidence groups are already committed; fix their
+    # config_vars to 1 so the solver treats their fixed cost as already paid.
+    committed_configs = set()
+    for group in high_confidence_groups:
+        committed_configs |= set(all_configs_by_group.get(group, all_configs))
+    for config in committed_configs:
+        solver.Add(config_vars[config] == 1)
+
     equivalence_sets = _get_equivalence_sets(min_redundancy_confidence)
 
     for group in groups:
+        if group not in equivalence_sets:
+            logger.warning("No equivalence sets for group %s", group)
+            continue
         # Create constraints to ensure at least one task from each set of equivalent
         # groups is selected.
 
@@ -369,7 +388,10 @@ def select_configs(
         )
     )
 
-    configs_by_group: dict[str, list[str]] = {}
+    configs_by_group: dict[str, list[str]] = {
+        group: list(all_configs_by_group.get(group, all_configs))
+        for group in high_confidence_groups
+    }
     for group in groups:
         configs_by_group[group] = []
 
@@ -685,9 +707,19 @@ class TestSelectModel(Model):
             # past failure data for the push itself.
             # The number 100 comes from the fact that in the past failure data
             # generation we store past failures in batches of 100 pushes.
-            push["all_possibly_selected"] = self.select_tests(
-                commits, 0.5, push_num - 100
+            push_num -= 100
+
+            # Clamp so that the PAST_FAILURES_LOOKBACK_MONTH-push lookback doesn't
+            # fall before the queue's start_day.
+            start_day_max = round(last_push_num / 100) - int(
+                test_scheduling.HISTORICAL_TIMESPAN / 100
             )
+            min_push_num = (
+                start_day_max + int(test_scheduling.PAST_FAILURES_LOOKBACK_MONTH / 100)
+            ) * 100
+            push_num = max(push_num, min_push_num)
+
+            push["all_possibly_selected"] = self.select_tests(commits, 0.5, push_num)
 
         def do_eval(
             executor: concurrent.futures.ProcessPoolExecutor,
@@ -829,14 +861,23 @@ class TestSelectModel(Model):
                 )
                 percentage_caught_one_config_group = (
                     100
-                    * num_caught_one_config_group
-                    / num_failing_pushes_with_config_group
+                    * (
+                        num_caught_one_config_group
+                        / num_failing_pushes_with_config_group
+                    )
+                    if num_failing_pushes_with_config_group > 0
+                    else 1
                 )
-                average_caught_percentage_config_group = 100 * statistics.mean(
-                    result["caught_percentage_config_group"]
-                    for result in test_pushes.values()
-                    if "caught_percentage_config_group" in result
-                    and result["caught_percentage_config_group"] is not None
+                average_caught_percentage_config_group = (
+                    100
+                    * statistics.mean(
+                        result["caught_percentage_config_group"]
+                        for result in test_pushes.values()
+                        if "caught_percentage_config_group" in result
+                        and result["caught_percentage_config_group"] is not None
+                    )
+                    if num_failing_pushes_with_config_group > 0
+                    else 1
                 )
 
                 message += f" In {percentage_caught_one_config_group}% of pushes we caught at least one config/group failure. On average, we caught {average_caught_percentage_config_group}% of all seen config/group failures."
@@ -898,7 +939,14 @@ def eval_apply_transforms(
         if granularity == "label":
             selected = reduce_configs(selected, reduction)
         elif granularity == "group":
-            group_configs = select_configs(selected, reduction)
+            group_configs = select_configs(
+                {
+                    name: confidence
+                    for name, confidence in push["all_possibly_selected"].items()
+                    if name in selected
+                },
+                reduction,
+            )
 
     if minimum is not None and len(selected) < minimum:
         remaining = [

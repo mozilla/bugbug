@@ -8,12 +8,12 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.4.2
+    taskboot_image: mozilla/taskboot:0.4.5
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -36,20 +36,19 @@ tasks:
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.microannotate_gecko-dev-wordified.${version}
         - index.project.bugbug.microannotate_gecko-dev-wordified.latest
       metadata:
         name: bugbug microannotate tokenized repository generator
         description: bugbug microannotate tokenized repository generator
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: microannotate-generate-remove-comments
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -72,20 +71,19 @@ tasks:
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.microannotate_gecko-dev-comments-removed.${version}
         - index.project.bugbug.microannotate_gecko-dev-comments-removed.latest
       metadata:
         name: bugbug microannotate repository with comments removed generator
         description: bugbug microannotate repository with comments removed generator
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: microannotate-generate-tokenize-and-remove-comments
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -109,22 +107,21 @@ tasks:
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.${version}
         - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.latest
       metadata:
         name: bugbug microannotate tokenized repository with comments removed generator
         description: bugbug microannotate tokenized repository with comments removed generator
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: commit-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -145,22 +142,21 @@ tasks:
         - "docker-worker:cache:bugbug-mercurial-repository"
         - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_commits.${version}
         - index.project.bugbug.data_commits.latest
       metadata:
         name: bugbug commit retrieval
         description: bugbug commit retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: bugs-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: batch
+      workerType: compute-small
       dependencies:
         - commit-retrieval
       payload:
@@ -184,20 +180,19 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_bugs.${version}
         - index.project.bugbug.data_bugs.latest
       metadata:
         name: bugbug bugs retrieval
         description: bugbug bugs retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: revisions-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -224,20 +219,138 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_revisions.${version}
         - index.project.bugbug.data_revisions.latest
       metadata:
         name: bugbug revisions retrieval
         description: bugbug revisions retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: fixed-comments-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - revisions-retrieval
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - "bugbug-fixed-comments"
+
+        artifacts:
+          public/fixed_comments.json.zst:
+            path: /data/fixed_comments.json.zst
+            type: file
+          public/fixed_comments.json.version:
+            path: /data/fixed_comments.json.version
+            type: file
+          public/fixed_comments_already_analyzed.pickle.zst:
+            path: /data/fixed_comments_already_analyzed.pickle.zst
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.fixed_comments.${version}
+        - index.project.bugbug.fixed_comments.latest
+      metadata:
+        name: bugbug fixed comments retrieval
+        description: bugbug fixed comments retrieval
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: ci-failures-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      dependencies:
+        - commit-retrieval
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-ci-failures-retriever
+          - https://github.com/mozilla-firefox/firefox
+          - /firefox
+          - --upload
+
+        artifacts:
+          public/ci_failures.json.zst:
+            path: /data/ci_failures.json.zst
+            type: file
+          public/ci_failures.json.version:
+            path: /data/ci_failures.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_ci_failures.${version}
+        - index.project.bugbug.data_ci_failures.latest
+      metadata:
+        name: bugbug CI failures retriever
+        description: bugbug CI failures retriever
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: try-pushes-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-try-pushes-retriever
+
+        artifacts:
+          public/try_pushes.json.zst:
+            path: /data/try_pushes.json.zst
+            type: file
+          public/try_pushes.json.version:
+            path: /data/try_pushes.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_try_pushes.${version}
+        - index.project.bugbug.data_try_pushes.latest
+      metadata:
+        name: bugbug try pushes retriever
+        description: bugbug try pushes retriever
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: issues-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -265,20 +378,19 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_github_webcompat_web-bugs_issues.${version}
         - index.project.bugbug.data_github_webcompat_web-bugs_issues.latest
       metadata:
         name: bugbug webcompat issues retrieval
         description: bugbug webcompat issues retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-label-scheduling-history-push_data-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -289,7 +401,7 @@ tasks:
           - retrieve
           - label
           - --reretrieve=0
-          - --training-months=8
+          - --training-months=12
 
         artifacts:
           public/push_data_label.json.zst:
@@ -304,20 +416,19 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_test_label_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_label_scheduling_history_push_data.latest
       metadata:
         name: bugbug test label scheduling history push data retrieval
         description: bugbug test label scheduling history push data retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-group-scheduling-history-push_data-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -343,20 +454,19 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_test_group_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_group_scheduling_history_push_data.latest
       metadata:
         name: bugbug test group scheduling history push data retrieval
         description: bugbug test group scheduling history push data retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-config_group-scheduling-history-push_data-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -382,20 +492,19 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_test_config_group_scheduling_history_push_data.${version}
         - index.project.bugbug.data_test_config_group_scheduling_history_push_data.latest
       metadata:
         name: bugbug test config_group scheduling history push data retrieval
         description: bugbug test config_group scheduling history push data retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-label-scheduling-history-generator
       created: { $fromNow: "" }
       deadline: { $fromNow: "4 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-large
       dependencies:
@@ -410,7 +519,7 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - label
-          - --training-months=8
+          - --training-months=12
 
         artifacts:
           public/test_label_scheduling_history.pickle.zst:
@@ -431,22 +540,21 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_test_label_scheduling_history.${version}
         - index.project.bugbug.data_test_label_scheduling_history.latest
       metadata:
         name: bugbug test label scheduling history retrieval
         description: bugbug test label scheduling history retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-group-scheduling-history-generator
       created: { $fromNow: "" }
       deadline: { $fromNow: "4 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       dependencies:
         - commit-retrieval
         - test-group-scheduling-history-push_data-retrieval
@@ -480,20 +588,19 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_test_group_scheduling_history.${version}
         - index.project.bugbug.data_test_group_scheduling_history.latest
       metadata:
         name: bugbug test group scheduling history retrieval
         description: bugbug test group scheduling history retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-config_group-scheduling-history-generator
       created: { $fromNow: "" }
       deadline: { $fromNow: "4 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -522,20 +629,19 @@ tasks:
       scopes:
         - "secrets:get:project/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.data_test_config_group_scheduling_history.${version}
         - index.project.bugbug.data_test_config_group_scheduling_history.latest
       metadata:
         name: bugbug test config_group scheduling history retrieval
         description: bugbug test config_group scheduling history retrieval
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: rollback-test-task
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -545,16 +651,15 @@ tasks:
         image: mozilla/bugbug-base:${version}
         command:
           - "/bin/bash"
-          - "-lcx"
+          - "-cx"
           - "python -c 'from bugbug import bugzilla, db; db.download(bugzilla.BUGS_DB)' &&
             python -m bugbug.bug_snapshot --verbose"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
       metadata:
         name: bugbug rollback test
         description: bugbug rollback test
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-component
@@ -574,17 +679,14 @@ tasks:
 
         artifacts:
           public/componentmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /componentmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_component.${version}
         - index.project.bugbug.train_component.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_component.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -592,7 +694,42 @@ tasks:
       metadata:
         name: bugbug train component model
         description: bugbug train component model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-componentspecific
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - componentspecific
+
+        artifacts:
+          public/componentspecificmodel.tar.zst:
+            path: /componentspecificmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_componentspecific.${version}
+        - index.project.bugbug.train_componentspecific.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_componentspecific.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_componentspecific.latest
+      metadata:
+        name: bugbug train componentspecific model
+        description: bugbug train componentspecific model
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-defectenhancementtask
@@ -612,17 +749,14 @@ tasks:
 
         artifacts:
           public/defectenhancementtaskmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /defectenhancementtaskmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_defectenhancementtask.${version}
         - index.project.bugbug.train_defectenhancementtask.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_defectenhancementtask.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -630,7 +764,7 @@ tasks:
       metadata:
         name: bugbug train defect/enhancement/task model
         description: bugbug train defect/enhancement/task model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-regression
@@ -650,17 +784,14 @@ tasks:
 
         artifacts:
           public/regressionmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressionmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_regression.${version}
         - index.project.bugbug.train_regression.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_regression.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -668,13 +799,13 @@ tasks:
       metadata:
         name: bugbug train regression model
         description: bugbug train regression model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: regressor-finder-commits-to-ignore
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -690,19 +821,18 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug_annotate.regressor_finder_commits_to_ignore.latest
       metadata:
         name: bugbug regressor finder (commits to ignore)
         description: bugbug regressor finder (commits to ignore)
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: regressor-finder-bug-fixing-commits
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -721,19 +851,18 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_fixing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-fixing commits)
         description: bugbug regressor finder (bug-fixing commits)
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     #    - ID: regressor-finder-tokenized-bug-introducing
     #      created: {$fromNow: ''}
     #      deadline: {$fromNow: '5 days'}
-    #      expires: {$fromNow: '1 month'}
+    #      expires: {$fromNow: '1 year'}
     #      provisionerId: proj-bugbug
     #      workerType: compute-large
     #      dependencies:
@@ -758,19 +887,18 @@ tasks:
     #      scopes:
     #        - "auth:aws-s3:read-write:communitytc-bugbug/*"
     #      routes:
-    #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-    #        - notify.irc-channel.#bugbug.on-failed
+    #        - notify.email.bugbug-team@mozilla.com.on-failed
     #        - index.project.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
     #      metadata:
     #        name: bugbug regressor finder (tokenized bug-introducing commits)
     #        description: bugbug regressor finder (tokenized bug-introducing commits)
-    #        owner: release-mgmt-analysis@mozilla.com
+    #        owner: bugbug-team@mozilla.com
     #        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: regressor-finder-bug-introducing
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -791,19 +919,18 @@ tasks:
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-introducing commits)
         description: bugbug regressor finder (bug-introducing commits)
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: past-bugs-by-unit
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -866,14 +993,13 @@ tasks:
             path: /data/past_fixed_bug_blocked_bugs_by_function.json.zst
             type: file
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.past_bugs_by_unit.${version}
         - index.project.bugbug.past_bugs_by_unit.latest
       metadata:
         name: bugbug past bugs by function
         description: bugbug past bugs by function
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-regressor
@@ -894,25 +1020,20 @@ tasks:
 
         artifacts:
           public/regressormodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressormodel.tar.zst
             type: file
           public/regressormodel_data_X.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressormodel_data_X.zst
             type: file
           public/regressormodel_data_y.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressormodel_data_y.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_regressor.${version}
         - index.project.bugbug.train_regressor.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_regressor.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -920,7 +1041,7 @@ tasks:
       metadata:
         name: bugbug train regressor model
         description: bugbug train regressor model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-stepstoreproduce
@@ -940,21 +1061,17 @@ tasks:
 
         artifacts:
           public/stepstoreproducemodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /stepstoreproducemodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
           public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
             path: /feature_importance.png
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_stepstoreproduce.${version}
         - index.project.bugbug.train_stepstoreproduce.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_stepstoreproduce.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -962,7 +1079,7 @@ tasks:
       metadata:
         name: bugbug train stepstoreproduce model
         description: bugbug train stepstoreproduce model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-spambug
@@ -982,17 +1099,14 @@ tasks:
 
         artifacts:
           public/spambugmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /spambugmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_spambug.${version}
         - index.project.bugbug.train_spambug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_spambug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1000,7 +1114,7 @@ tasks:
       metadata:
         name: bugbug train spambug model
         description: bugbug train spambug model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-accessibility
@@ -1020,17 +1134,14 @@ tasks:
 
         artifacts:
           public/accessibilitymodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /accessibilitymodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_accessibility.${version}
         - index.project.bugbug.train_accessibility.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_accessibility.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1038,7 +1149,7 @@ tasks:
       metadata:
         name: bugbug train accessibility model
         description: bugbug train accessibility model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-label-select
@@ -1046,7 +1157,7 @@ tasks:
       deadline: { $fromNow: "5 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-generator
@@ -1060,17 +1171,14 @@ tasks:
 
         artifacts:
           public/testlabelselectmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /testlabelselectmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_testlabelselect.${version}
         - index.project.bugbug.train_testlabelselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_testlabelselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1078,7 +1186,7 @@ tasks:
       metadata:
         name: bugbug train test label selection model
         description: bugbug train test label selection model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-group-select
@@ -1101,17 +1209,14 @@ tasks:
 
         artifacts:
           public/testgroupselectmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /testgroupselectmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_testgroupselect.${version}
         - index.project.bugbug.train_testgroupselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_testgroupselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1119,7 +1224,7 @@ tasks:
       metadata:
         name: bugbug train test group selection model
         description: bugbug train test group selection model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-failure
@@ -1131,6 +1236,7 @@ tasks:
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-generator
+        - test-group-scheduling-history-generator
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
@@ -1140,17 +1246,14 @@ tasks:
 
         artifacts:
           public/testfailuremodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /testfailuremodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_testfailure.${version}
         - index.project.bugbug.train_testfailure.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_testfailure.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1158,7 +1261,44 @@ tasks:
       metadata:
         name: bugbug train test failure model
         description: bugbug train test failure model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-test-config
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - test-label-scheduling-history-generator
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfig
+
+        artifacts:
+          public/testconfigmodel.tar.zst:
+            path: /testconfigmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfig.${version}
+        - index.project.bugbug.train_testconfig.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfig.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfig.latest
+      metadata:
+        name: bugbug train testconfig model
+        description: bugbug train testconfig model
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-needsdiagnosis
@@ -1178,17 +1318,14 @@ tasks:
 
         artifacts:
           public/needsdiagnosismodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /needsdiagnosismodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_needsdiagnosis.${version}
         - index.project.bugbug.train_needsdiagnosis.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_needsdiagnosis.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1196,7 +1333,7 @@ tasks:
       metadata:
         name: bugbug train needsdiagnosis model
         description: bugbug train needsdiagnosis model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-invalidcompatibilityreport
@@ -1216,17 +1353,14 @@ tasks:
 
         artifacts:
           public/invalidcompatibilityreportmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /invalidcompatibilityreportmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_invalidcompatibilityreport.${version}
         - index.project.bugbug.train_invalidcompatibilityreport.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_invalidcompatibilityreport.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1234,7 +1368,7 @@ tasks:
       metadata:
         name: bugbug train invalidcompatibilityreport model
         description: bugbug train invalidcompatibilityreport model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-performancebug
@@ -1254,17 +1388,14 @@ tasks:
 
         artifacts:
           public/performancebugmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /performancebugmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug.train_performancebug.${version}
         - index.project.bugbug.train_performancebug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
         - index.project.bugbug.train_performancebug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
@@ -1272,10 +1403,80 @@ tasks:
       metadata:
         name: bugbug train performancebug model
         description: bugbug train performancebug model
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-worksforme
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - worksforme
+
+        artifacts:
+          public/worksformemodel.tar.zst:
+            path: /worksformemodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_worksforme.${version}
+        - index.project.bugbug.train_worksforme.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_worksforme.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_worksforme.latest
+      metadata:
+        name: bugbug train worksforme model
+        description: bugbug train worksforme model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-fenixcomponent
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - fenixcomponent
+
+        artifacts:
+          public/fenixcomponentmodel.tar.zst:
+            path: /fenixcomponentmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_fenixcomponent.${version}
+        - index.project.bugbug.train_fenixcomponent.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_fenixcomponent.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_fenixcomponent.latest
+      metadata:
+        name: bugbug train fenixcomponent model
+        description: bugbug train fenixcomponent model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-severity
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
       expires: { $fromNow: "1 year" }
@@ -1288,29 +1489,26 @@ tasks:
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-train
-          - worksforme
+          - severity
 
         artifacts:
-          public/worksformemodel.tar.zst:
-            expires: { $fromNow: "1 month" }
-            path: /worksformemodel.tar.zst
+          public/severitymodel.tar.zst:
+            path: /severitymodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.bugbug.train_worksforme.${version}
-        - index.project.bugbug.train_worksforme.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.bugbug.train_worksforme.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.bugbug.train_worksforme.latest
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_severity.${version}
+        - index.project.bugbug.train_severity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_severity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_severity.latest
       metadata:
-        name: bugbug train worksforme model
-        description: bugbug train worksforme model
-        owner: release-mgmt-analysis@mozilla.com
+        name: bugbug train severity model
+        description: bugbug train severity model
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: check_metrics
@@ -1320,6 +1518,7 @@ tasks:
       workerType: batch
       dependencies:
         - train-component
+        - train-componentspecific
         - train-defectenhancementtask
         - train-regression
         - train-regressor
@@ -1328,48 +1527,55 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-test-failure
+        - train-test-config
         - train-needsdiagnosis
         - train-accessibility
         - train-performancebug
         - train-worksforme
+        - train-fenixcomponent
+        - train-invalidcompatibilityreport
+        - train-severity
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
         command:
           - "/bin/bash"
-          - "-lcx"
+          - "-cx"
           - "mkdir /metrics &&
             mkdir /metrics-output &&
             bugbug-check-all-metrics /metrics /metrics-output"
         artifacts:
           public/bugbug:
-            expires: { $fromNow: "2 weeks" }
             path: /metrics-output
             type: directory
       metadata:
         name: bugbug check_metrics
         description: bugbug check_metrics
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: docker-build
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: ci
       dependencies:
         - train-defectenhancementtask
         - train-component
+        - train-componentspecific
         - train-regression
         - train-stepstoreproduce
         - train-spambug
         - train-test-label-select
         - train-test-group-select
+        - train-test-config
         - train-needsdiagnosis
         - train-accessibility
         - train-performancebug
         - train-worksforme
+        - train-fenixcomponent
+        - train-invalidcompatibilityreport
       payload:
         capabilities:
           privileged: true
@@ -1377,7 +1583,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} /code &&
             cd /code &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1385,28 +1591,26 @@ tasks:
             taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
         artifacts:
           public/bugbug:
-            expires: { $fromNow: "2 weeks" }
             path: /images
             type: directory
       scopes:
         - docker-worker:capability:privileged
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
       metadata:
         name: bugbug docker http build
         description: bugbug docker http build
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     # It's the same task integration_test as in .taskcluster.yml
     - ID: integration-test
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - docker-build
       scopes:
@@ -1423,7 +1627,7 @@ tasks:
           CACHE_DIR: "/cache"
         command:
           - "/bin/bash"
-          - "-lcx"
+          - "-cx"
           - "apt-get -qq update &&
             apt-get -qq install -y redis-server &&
             git clone --quiet ${repository} &&
@@ -1436,13 +1640,13 @@ tasks:
       metadata:
         name: bugbug integration test
         description: bugbug integration test
-        owner: release-mgmt-analysis@mozilla.com
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: update_hook_check_pipeline
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       dependencies:
         - integration-test
       scopes:
@@ -1457,7 +1661,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} &&
             cd bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1472,7 +1676,7 @@ tasks:
     - ID: update_hook_classify_patch
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       dependencies:
         - past-bugs-by-unit
         - train-regressor
@@ -1488,7 +1692,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} &&
             cd bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1500,41 +1704,10 @@ tasks:
         owner: mcastelluccio@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: update_hook_test_select
-      created: { $fromNow: "" }
-      deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
-      dependencies:
-        - train-test-failure
-        - train-test-label-select
-      scopes:
-        - hooks:modify-hook:project-bugbug/bugbug-test-select
-        - assume:hook-id:project-bugbug/bugbug-test-select
-      provisionerId: proj-bugbug
-      workerType: batch
-      payload:
-        features:
-          taskclusterProxy: true
-        maxRunTime: 3600
-        image: ${taskboot_image}
-        command:
-          - "/bin/sh"
-          - "-lcxe"
-          - "git clone --quiet ${repository} &&
-            cd bugbug &&
-            git -c advice.detachedHead=false checkout ${version} &&
-            python infra/set_hook_version.py ${version} infra/taskcluster-hook-test-select.json &&
-            taskboot --target . build-hook infra/taskcluster-hook-test-select.json project-bugbug bugbug-test-select"
-      metadata:
-        name: bugbug update test select hook
-        description: bugbug update test select hook
-        owner: mcastelluccio@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
-
     - ID: update_hook_landings_risk_report
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       dependencies:
         - past-bugs-by-unit
         - revisions-retrieval
@@ -1552,7 +1725,7 @@ tasks:
         image: ${taskboot_image}
         command:
           - "/bin/sh"
-          - "-lcxe"
+          - "-cxe"
           - "git clone --quiet ${repository} &&
             cd bugbug &&
             git -c advice.detachedHead=false checkout ${version} &&
@@ -1572,38 +1745,7 @@ tasks:
         - secrets:get:project/bugbug/deploy
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
-      provisionerId: proj-bugbug
-      workerType: compute-smaller
-      payload:
-        features:
-          taskclusterProxy: true
-        maxRunTime: 3600
-        image: ${taskboot_image}
-        env:
-          TASKCLUSTER_SECRET: project/bugbug/deploy
-        command:
-          - taskboot
-          - push-artifact
-
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-      metadata:
-        name: bugbug docker http push
-        description: bugbug docker http push
-        owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
-
-    - ID: http-deploy
-      dependencies:
-        - docker-build
-        - integration-test
-      scopes:
-        - secrets:get:project/bugbug/deploy
-      created: { $fromNow: "" }
-      deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-smaller
       payload:
@@ -1615,14 +1757,13 @@ tasks:
           TASKCLUSTER_SECRET: project/bugbug/deploy
         command:
           - "/bin/sh"
-          - "-lcxe"
-          - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar.zst' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar.zst'"
-
+          - "-cxe"
+          - 'taskboot push-artifact &&
+            taskboot github-workflow-dispatch mozilla/bugbug docker-push.yml ${version} --inputs ''{"image_tag": "${version}"}'''
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
+        - notify.email.bugbug-team@mozilla.com.on-failed
       metadata:
-        name: bugbug docker http service deploy
-        description: bugbug docker http service deploy
-        owner: release-mgmt-analysis@mozilla.com
+        name: bugbug docker http push
+        description: bugbug docker http push
+        owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml

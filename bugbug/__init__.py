@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import importlib.metadata
 import logging
-
-import pkg_resources
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s:%(levelname)s:%(name)s:%(message)s"
@@ -10,4 +9,4 @@ logging.basicConfig(
 
 
 def get_bugbug_version():
-    return pkg_resources.get_distribution("bugbug").version
+    return importlib.metadata.version("bugbug")

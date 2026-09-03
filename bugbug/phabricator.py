@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
 import logging
 from datetime import datetime, timedelta
 from typing import Collection, Iterator, NewType
@@ -11,11 +12,13 @@ import tenacity
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
 
-from bugbug import db
+from bugbug import db, utils
 from bugbug.db import LastModifiedNotAvailable
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+utils.setup_libmozdata()
 
 RevisionDict = NewType("RevisionDict", dict)
 TransactionDict = NewType("TransactionDict", dict)
@@ -25,6 +28,15 @@ db.register(
     REVISIONS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_revisions.latest/artifacts/public/revisions.json.zst",
     4,
+)
+
+FIXED_COMMENTS_DB = "data/fixed_comments.json"
+FIXED_COMMENTS_ALREADY_ANALYZED_DB = "fixed_comments_already_analyzed.pickle.zst"
+db.register(
+    FIXED_COMMENTS_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.fixed_comments.latest/artifacts/public/fixed_comments.json.zst",
+    1,
+    [FIXED_COMMENTS_ALREADY_ANALYZED_DB],
 )
 
 PHABRICATOR_API = None
@@ -42,6 +54,10 @@ def get_revisions() -> Iterator[RevisionDict]:
     yield from db.read(REVISIONS_DB)
 
 
+def count_revisions() -> Iterator[RevisionDict]:
+    return db.size(REVISIONS_DB)
+
+
 def set_api_key(url: str, api_key: str) -> None:
     global PHABRICATOR_API
     PHABRICATOR_API = PhabricatorAPI(api_key, url)
@@ -54,14 +70,18 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
     data = []
 
     while after is not None:
-        out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
-            stop=tenacity.stop_after_attempt(7),
-        )(
-            lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
-                "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
-            )
-        )()
+        for attempt in tenacity.Retrying(
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(9),
+        ):
+            with attempt:
+                out = PHABRICATOR_API.request(
+                    "transaction.search",
+                    objectIdentifier=rev_phid,
+                    limit=1000,
+                    after=after,
+                )
+
         data += out["data"]
         after = out["cursor"]["after"]
 
@@ -70,7 +90,7 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
 
 def get(
     rev_ids: Collection[int] | None = None, modified_start: datetime | None = None
-) -> Collection[RevisionDict]:
+) -> list[RevisionDict]:
     assert PHABRICATOR_API is not None
 
     assert (rev_ids is not None) ^ (modified_start is not None)
@@ -86,17 +106,18 @@ def get(
     data = []
 
     while after is not None:
-        out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
-            stop=tenacity.stop_after_attempt(7),
-        )(
-            lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
-                "differential.revision.search",
-                constraints=constraints,
-                attachments={"projects": True, "reviewers": True},
-                after=after,
-            )
-        )()
+        for attempt in tenacity.Retrying(
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(9),
+        ):
+            with attempt:
+                out = PHABRICATOR_API.request(
+                    "differential.revision.search",
+                    constraints=constraints,
+                    attachments={"projects": True, "reviewers": True},
+                    after=after,
+                )
+
         data += out["data"]
         after = out["cursor"]["after"]
 
@@ -130,9 +151,7 @@ def download_revisions(rev_ids: Collection[int]) -> None:
     logger.info("Loaded %d revisions.", old_rev_count)
 
     new_rev_ids_list = sorted(list(new_rev_ids))
-    rev_ids_groups = (
-        new_rev_ids_list[i : i + 100] for i in range(0, len(new_rev_ids_list), 100)
-    )
+    rev_ids_groups = itertools.batched(new_rev_ids_list, 100)
 
     logger.info("%d revisions left to download", len(new_rev_ids_list))
 
@@ -167,7 +186,7 @@ def get_testing_project(rev: RevisionDict) -> str | None:
     ]
 
     if len(testing_projects) > 1:
-        logger.warning("Revision D{} has more than one testing tag.".format(rev["id"]))
+        logger.warning("Revision D%s has more than one testing tag.", rev["id"])
 
     if len(testing_projects) == 0:
         return None
@@ -217,7 +236,7 @@ def get_first_review_time(rev: RevisionDict) -> timedelta | None:
     ) = get_review_dates(rev)
 
     if creation_date is None:
-        logger.warning("Revision D{} has no creation date.".format(rev["id"]))
+        logger.warning("Revision D%s has no creation date.", rev["id"])
         return None
 
     if len(review_dates) == 0:
@@ -233,7 +252,7 @@ def get_first_review_time(rev: RevisionDict) -> timedelta | None:
         and first_exclusion_end_date is not None
         and first_exclusion_start_date > first_exclusion_end_date
     ):
-        logger.warning("Revision D{} was in an inconsistent state.".format(rev["id"]))
+        logger.warning("Revision D%s was in an inconsistent state.", rev["id"])
 
     if (
         first_exclusion_start_date is None
@@ -244,9 +263,8 @@ def get_first_review_time(rev: RevisionDict) -> timedelta | None:
         first_exclusion_end_date is None or first_exclusion_end_date > first_review_date
     ):
         logger.warning(
-            "Revision D{} was accepted while in 'planned changes' or 'closed' state.".format(
-                rev["id"]
-            )
+            "Revision D%s was accepted while in 'planned changes' or 'closed' state.",
+            rev["id"],
         )
         return first_review_date - creation_date
     else:
@@ -264,7 +282,7 @@ def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
     creation_date, _, exclusion_start_dates, exclusion_end_dates = get_review_dates(rev)
 
     if creation_date is None:
-        logger.warning("Revision D{} has no creation date.".format(rev["id"]))
+        logger.warning("Revision D%s has no creation date.", rev["id"])
         return None
 
     last_exclusion_start_date = max(exclusion_start_dates, default=None)
@@ -275,12 +293,30 @@ def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
         or last_exclusion_start_date > last_exclusion_end_date
     ):
         logger.warning(
-            "Revision D{} was in an inconsistent state (needs review, but is in an exception timespan).".format(
-                rev["id"]
-            )
+            "Revision D%s was in an inconsistent state (needs review, but is in an exception timespan).",
+            rev["id"],
         )
 
     if last_exclusion_end_date is not None:
         return datetime.utcnow() - last_exclusion_end_date
     else:
         return datetime.utcnow() - creation_date
+
+
+def fetch_diff_from_url(
+    revision_id, first_patch, second_patch=None, single_patch=False
+):
+    if single_patch:
+        url = f"https://phabricator.services.mozilla.com/D{revision_id}?id={first_patch}&download=true"
+    else:
+        url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={first_patch}&id={second_patch}&download=true"
+
+    response = utils.get_session("phabricator").get(
+        url,
+        headers={
+            "User-Agent": utils.get_user_agent(),
+        },
+    )
+    response.raise_for_status()
+
+    return response.text

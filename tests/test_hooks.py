@@ -23,18 +23,6 @@ parameters = [
         os.path.realpath("infra/taskcluster-hook-classify-patch.json"),
         {"PHABRICATOR_DEPLOYMENT": "prod", "DIFF_ID": 123},
     ),
-    (
-        os.path.realpath("infra/taskcluster-hook-test-select.json"),
-        {"PHABRICATOR_DEPLOYMENT": "dev", "DIFF_ID": 123},
-    ),
-    (
-        os.path.realpath("infra/taskcluster-hook-test-select.json"),
-        {
-            "PHABRICATOR_DEPLOYMENT": "prod",
-            "DIFF_ID": 123,
-            "RUNNABLE_JOBS": "http://localhost",
-        },
-    ),
     (os.path.realpath("infra/taskcluster-hook-landings-risk-report.json"), {}),
 ]
 

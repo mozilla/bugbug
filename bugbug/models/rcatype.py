@@ -157,7 +157,7 @@ class RCATypeModel(BugModel):
             )
 
             if rca_whiteboard_split[1] not in self.RCA_LIST:
-                logger.warning(rca_whiteboard_split[1] + " not in RCA_LIST")
+                logger.warning("%s not in RCA_LIST", rca_whiteboard_split[1])
             else:
                 rca.append(rca_whiteboard_split[1])
         return rca

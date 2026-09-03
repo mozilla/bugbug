@@ -1,0 +1,341 @@
+"""Collect an agent's source-tree changes into a git-am patch + metadata.
+
+After an agent runs, its work may be committed locally (each commit with its own
+message/author) or left uncommitted/untracked. This module captures all of it,
+relative to the commit the checkout started from, as a single mbox patch that
+``git am`` applies in one command — preserving the local commit history — plus a
+JSON summary of the commits and files touched.
+
+Any uncommitted remainder is wrapped into one synthetic commit first, so nothing
+is lost. The checkout is ephemeral (one run per container), so mutating its index
+and creating that commit is safe.
+"""
+
+from __future__ import annotations
+
+import base64
+import contextlib
+import logging
+import os
+import re
+import subprocess
+import tempfile
+from collections.abc import Iterator
+from pathlib import Path
+from typing import NamedTuple
+
+log = logging.getLogger("hackbot_runtime.changes")
+
+_FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
+
+# Author stamped on the synthetic commit that wraps any uncommitted remainder.
+_WIP_NAME = "Hackbot"
+_WIP_EMAIL = "hackbot@mozilla.tld"
+_WIP_MESSAGE = "Uncommitted agent changes"
+
+# Record separator for parsing ``git log`` output (NUL avoids clashing with
+# anything in commit messages).
+_FIELD_SEP = "\x1f"
+_RECORD_SEP = "\x1e"
+
+
+class ChangeSet(NamedTuple):
+    """The collected agent changes: an mbox patch plus its metadata."""
+
+    patch: bytes
+    metadata: dict
+
+
+def _git(repo: Path, *args: str) -> str:
+    """Run a git command in ``repo`` and return its stdout (text)."""
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+
+def _git_bytes(repo: Path, *args: str) -> bytes:
+    """Run a git command in ``repo`` and return its stdout (bytes).
+
+    Used for ``format-patch``, whose output may contain binary diffs.
+    """
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+    ).stdout
+
+
+def base_commit(repo: Path) -> str:
+    """Return the current HEAD sha — the base the agent starts editing from."""
+    return _git(repo, "rev-parse", "HEAD").strip()
+
+
+def _has_uncommitted(repo: Path) -> bool:
+    return bool(_git(repo, "status", "--porcelain").strip())
+
+
+def _wrap_uncommitted(repo: Path) -> bool:
+    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+
+    Returns ``True`` if such a commit was created, ``False`` if the tree was
+    already clean.
+    """
+    if not _has_uncommitted(repo):
+        return False
+    _git(repo, "add", "-A")
+    _git(
+        repo,
+        "-c",
+        f"user.name={_WIP_NAME}",
+        "-c",
+        f"user.email={_WIP_EMAIL}",
+        "commit",
+        "--no-verify",
+        "-m",
+        _WIP_MESSAGE,
+    )
+    return True
+
+
+def _commit_metadata(repo: Path, base: str) -> list[dict]:
+    """Structured info for each commit in ``base..HEAD`` (oldest first)."""
+    fmt = _FIELD_SEP.join(["%H", "%an", "%ae", "%aI", "%s", "%b"]) + _RECORD_SEP
+    out = _git(repo, "log", "--reverse", f"--format={fmt}", f"{base}..HEAD")
+    commits = []
+    for record in out.split(_RECORD_SEP):
+        record = record.strip("\n")
+        if not record:
+            continue
+        sha, author_name, author_email, authored_date, subject, body = record.split(
+            _FIELD_SEP
+        )
+        commits.append(
+            {
+                "sha": sha,
+                "author_name": author_name,
+                "author_email": author_email,
+                "authored_date": authored_date,
+                "subject": subject,
+                "body": body,
+            }
+        )
+    return commits
+
+
+def _synthetic_commit(repo: Path, base: str) -> str:
+    """Create a detached commit object squashing ``base..HEAD``'s tree.
+
+    Doesn't touch the working tree, index, or branch pointer — `commit-tree`
+    just writes one new commit object with `base` as its sole parent, giving
+    `build_phabricator_diff` a single commit to diff (moz-phab's diff-tree
+    based diffing only supports one commit vs. its immediate parent, no
+    range).
+    """
+    tree = _git(repo, "rev-parse", "HEAD^{tree}").strip()
+    # Pass an explicit identity (as _wrap_uncommitted does): the synthetic
+    # commit's author is throwaway — only its tree diff is used — but
+    # `commit-tree` errors under `user.useConfigOnly=true` and otherwise
+    # invents a `user@hostname` author when the container has no git identity
+    # configured. A fixed identity keeps it deterministic and unconditional.
+    return _git(
+        repo,
+        "-c",
+        f"user.name={_WIP_NAME}",
+        "-c",
+        f"user.email={_WIP_EMAIL}",
+        "commit-tree",
+        tree,
+        "-p",
+        base,
+        "-m",
+        "hackbot: squashed changes for Phabricator diff",
+    ).strip()
+
+
+def _local_commits_property(repo: Path, node: str, base: str) -> dict:
+    """The git side of moz-phab's ``local:commits`` diff property for ``node``.
+
+    Phabricator stores this alongside the diff so ``moz-phab patch`` can
+    reconstruct a real local commit from the revision; without it, patching a
+    hackbot-created revision fails with "a diff without commit information
+    detected". Only the fields knowable from git are set here (author, time,
+    tree, node, parents); the apply-side handler fills in ``summary`` and the
+    arc-formatted ``message`` once it has the revision URL, matching moz-phab's
+    ``conduit.set_diff_property``.
+    """
+    fmt = _FIELD_SEP.join(["%an", "%ae", "%at", "%T"])
+    out = _git(repo, "show", "-s", f"--format={fmt}", node)
+    author_name, author_email, epoch, tree = out.rstrip("\n").split(_FIELD_SEP)
+    return {
+        node: {
+            "author": author_name,
+            "authorEmail": author_email,
+            "time": int(epoch),
+            "commit": node,
+            "parents": [base],
+            "tree": tree,
+        }
+    }
+
+
+@contextlib.contextmanager
+def _ambient_git_identity() -> Iterator[None]:
+    """Give moz-phab an ambient git identity for its `git config --list` check.
+
+    moz-phab's git client reads ``user.email`` from the *ambient* git config
+    (not the target repo's local config) and refuses to run without it. Agent
+    containers and CI often have no global identity, so point
+    ``GIT_CONFIG_GLOBAL`` at a throwaway config carrying a hackbot identity for
+    the duration of the call (moz-phab copies ``os.environ`` when it builds its
+    git client). The identity is cosmetic — only the diff is used, never a
+    commit moz-phab would author.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".gitconfig") as gc:
+        gc.write(f"[user]\n\temail = {_WIP_EMAIL}\n\tname = {_WIP_NAME}\n")
+        gc.flush()
+        overrides = {"GIT_CONFIG_GLOBAL": gc.name, "GIT_CONFIG_SYSTEM": os.devnull}
+        previous = {k: os.environ.get(k) for k in overrides}
+        os.environ.update(overrides)
+        try:
+            yield
+        finally:
+            for key, prev in previous.items():
+                if prev is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = prev
+
+
+def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
+    """Build the artifact for submitting a Phabricator revision.
+
+    Returns ``{"diff": <differential.creatediff payload>, "local_commits":
+    <partial local:commits property>}`` (or ``None`` on failure), published as a
+    single ``phabricator_diff.json`` artifact. The apply-side handler sends
+    ``diff`` to ``differential.creatediff``, completes ``local_commits`` (summary
+    + message), and stores it on the resulting diff via
+    ``differential.setdiffproperty`` so ``moz-phab patch`` can reconstruct a real
+    commit from the revision (see `_local_commits_property`).
+
+    Uses ``moz-phab``'s own diff-building code (``mozphab.git``/``mozphab.diff``,
+    imported as a library — requires the ``hackbot-runtime[phabricator]``
+    extra) against ``repo``, which the agent already has fully checked out
+    for its own work — no separate clone or checkout happens here. Returns
+    ``None`` if building the diff fails for any reason (e.g. the checkout
+    lacks an ``.arcconfig``, or nothing actually changed) — this is
+    best-effort, gated by the caller on whether a Phabricator patch action
+    was even recorded, so a failure here shouldn't break an otherwise
+    successful run.
+
+    ``repositoryPHID`` is deliberately not included here — it's resolved by
+    the apply-side handler instead, since it's specific to which Phabricator
+    instance/environment (staging vs. prod) the diff actually gets submitted
+    to, and that shouldn't be baked into an artifact built at agent-run time.
+    """
+    try:
+        from mozphab.args import parse_args
+        from mozphab.commits import Commit
+        from mozphab.git import Git
+    except ImportError:
+        log.warning(
+            "hackbot-runtime[phabricator] extra not installed; "
+            "cannot build a Phabricator diff"
+        )
+        return None
+
+    try:
+        node = _synthetic_commit(repo, base)
+        with _ambient_git_identity():
+            mozphab_repo = Git(str(repo))
+            # `set_args` needs a fully-populated argparse.Namespace matching what
+            # moz-phab's own CLI would build (several unrelated code paths read
+            # attributes off it) — going through its real parser instead of
+            # hand-listing the handful of attributes get_diff() happens to touch
+            # today, which would silently bit-rot on a moz-phab upgrade.
+            mozphab_repo.set_args(parse_args(["submit", "--yes"]))
+            diff = mozphab_repo.get_diff(Commit(node=node))
+    except Exception:
+        log.warning("Could not build Phabricator diff for %s", repo, exc_info=True)
+        return None
+
+    changes_payload = [change.to_conduit(node) for change in diff.changes.values()]
+    if not changes_payload:
+        return None
+
+    diff_payload = {
+        "changes": changes_payload,
+        "sourceMachine": repo_url,
+        "sourcePath": str(repo),
+        "sourceControlBaseRevision": base,
+        "sourceControlPath": "/",
+        "sourceControlSystem": "git",
+        "branch": "HEAD",
+        "creationMethod": "hackbot",
+        "lintStatus": "none",
+        "unitStatus": "none",
+    }
+    return {
+        "diff": diff_payload,
+        "local_commits": _local_commits_property(repo, node, base),
+    }
+
+
+def build_try_push(repo: Path, base: str) -> dict | None:
+    """Build the artifact for pushing the agent's changes to the try server."""
+    if not _FULL_SHA_RE.fullmatch(base):
+        log.warning(
+            "Cannot build a try push from base commit %r: Lando needs a full "
+            "40-character published commit hash",
+            base,
+        )
+        return None
+
+    # Normally already done by `collect`; repeated here (it is a no-op on a
+    # clean tree) so this does not silently drop the agent's uncommitted work if
+    # it is ever called on its own.
+    _wrap_uncommitted(repo)
+
+    revisions = _git(repo, "rev-list", "--reverse", f"{base}..HEAD").split()
+    if not revisions:
+        return None
+
+    return {
+        "base_commit": base,
+        "base_commit_vcs": "git",
+        "patch_format": "git-format-patch",
+        "patches": [
+            base64.b64encode(
+                _git_bytes(repo, "format-patch", "--binary", "--stdout", "-1", revision)
+            ).decode("ascii")
+            for revision in revisions
+        ],
+    }
+
+
+def collect(repo: Path, base: str, repo_url: str) -> ChangeSet | None:
+    """Collect changes in ``repo`` since ``base`` as a patch plus metadata.
+
+    Returns ``None`` when the agent made no changes at all (nothing committed and
+    a clean working tree). Otherwise returns a :class:`ChangeSet` whose ``patch``
+    is an mbox (``git format-patch`` output) applied with ``git am`` and whose
+    ``metadata`` describes the base, the commits, and the files touched.
+
+    ``repo_url`` is carried into the metadata (not derived from ``repo``, a local
+    path) so a later, out-of-process apply step — e.g. the Phabricator submit
+    handler, which needs to re-check-out this same base commit — knows where
+    to clone from without re-deriving agent-specific config.
+    """
+    wrapped = _wrap_uncommitted(repo)
+    patch = _git_bytes(repo, "format-patch", "--stdout", "--binary", f"{base}..HEAD")
+    if not patch.strip():
+        return None
+    metadata = {
+        "base_commit": base,
+        "repo_url": repo_url,
+        "wrapped_uncommitted": wrapped,
+        "commits": _commit_metadata(repo, base),
+    }
+    return ChangeSet(patch=patch, metadata=metadata)

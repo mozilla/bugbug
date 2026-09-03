@@ -4,11 +4,12 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
+import itertools
 import logging
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Sequence
 from urllib.parse import urlparse
 
@@ -36,11 +37,14 @@ from bugbug_http.models import (
     classify_issue,
     get_config_specific_groups,
     schedule_tests,
+    schedule_tests_from_patch,
 )
 from bugbug_http.sentry import setup_sentry
 
 if os.environ.get("SENTRY_DSN"):
     setup_sentry(dsn=os.environ.get("SENTRY_DSN"), integrations=[FlaskIntegration()])
+
+utils.setup_libmozdata()
 
 API_TOKEN = "X-Api-Key"
 
@@ -100,29 +104,29 @@ LOGGER = logging.getLogger()
 class BugPrediction(Schema):
     prob = fields.List(fields.Float())
     index = fields.Integer()
-    suggestion = fields.Str()
+    suggestion = fields.String()
     extra_data = fields.Dict()
 
 
 class NotAvailableYet(Schema):
-    ready = fields.Boolean(enum=[False])
+    ready = fields.Boolean(metadata={"enum": [False]})
 
 
 class ModelName(Schema):
-    model_name = fields.Str(enum=MODELS_NAMES, example="component")
+    model_name = fields.String(metadata={"enum": MODELS_NAMES, "example": "component"})
 
 
 class UnauthorizedError(Schema):
-    message = fields.Str(default="Error, missing X-API-KEY")
+    message = fields.String(dump_default="Error, missing X-API-KEY")
 
 
 class BranchName(Schema):
-    branch = fields.Str(example="autoland")
+    branch = fields.String(metadata={"example": "autoland"})
 
 
 class Schedules(Schema):
-    tasks = fields.List(fields.Str)
-    groups = fields.List(fields.Str)
+    tasks = fields.List(fields.String())
+    groups = fields.List(fields.String())
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
@@ -288,38 +292,38 @@ def is_pending(job):
     job_id = redis_conn.get(job.mapping_key)
 
     if not job_id:
-        LOGGER.debug(f"No job ID mapping {job_id}, False")
+        LOGGER.debug("No job ID mapping %s, False", job_id)
         return False
 
     try:
         job = Job.fetch(job_id.decode("ascii"), connection=redis_conn)
     except NoSuchJobError:
-        LOGGER.debug(f"No job in DB for {job_id}, False")
+        LOGGER.debug("No job in DB for %s, False", job_id)
         # The job might have expired from redis
         return False
 
     job_status = job.get_status()
     if job_status == "started":
-        LOGGER.debug(f"Job {job_id} is running, True")
+        LOGGER.debug("Job %s is running, True", job_id)
         return True
 
     # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
     timeout_datetime = job.enqueued_at + timedelta(seconds=job.timeout)
-    utcnow = datetime.utcnow()
+    utcnow = datetime.now(timezone.utc)
     if timeout_datetime < utcnow:
         # Remove the timeouted job so it will be requeued
         job.cancel()
         job.cleanup()
 
-        LOGGER.debug(f"Job timeout {job_id}, False")
+        LOGGER.debug("Job timeout %s, False", job_id)
 
         return False
 
     if job_status == "queued":
-        LOGGER.debug(f"Job {job_id} is queued, True")
+        LOGGER.debug("Job %s is queued, True", job_id)
         return True
 
-    LOGGER.debug(f"Job {job_id} has status {job_status}, False")
+    LOGGER.debug("Job %s has status %s, False", job_id, job_status)
 
     return False
 
@@ -381,18 +385,18 @@ def is_prediction_invalidated(job, change_time):
 
 def clean_prediction_cache(job):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
-    LOGGER.debug(f"Cleaning results for {job}")
+    LOGGER.debug("Cleaning results for %s", job)
 
     redis_conn.delete(job.result_key)
     redis_conn.delete(job.change_time_key)
 
 
 def get_result(job: JobInfo) -> Any | None:
-    LOGGER.debug(f"Checking for existing results at {job.result_key}")
+    LOGGER.debug("Checking for existing results at %s", job.result_key)
     result = redis_conn.get(job.result_key)
 
     if result:
-        LOGGER.debug(f"Found {result!r}")
+        LOGGER.debug("Found %r", result)
         try:
             result = dctx.decompress(result)
         except zstandard.ZstdError:
@@ -427,6 +431,25 @@ def compress_response(data: dict, status_code: int):
     response.headers["Content-Type"] = "application/json"
 
     return response
+
+
+def has_diff_content(patch: str) -> bool:
+    """Check if a patch contains actual diff content.
+
+    A valid patch should have at least one diff block with hunks.
+    Empty patches may have headers (From, Date, Subject) but no actual diffs.
+
+    :param patch: The patch content as a string
+    :type patch: str
+    :return: True if the patch has diff content, False otherwise
+    :rtype: bool
+    """
+    # Check for Git diff markers that indicate actual changes
+    has_diff_header = "\ndiff --git" in patch
+    has_hunk = "\n@@" in patch
+
+    # A valid patch needs both a diff header and at least one hunk
+    return has_diff_header and has_hunk
 
 
 @application.route("/<model_name>/predict/<int:bug_id>")
@@ -743,8 +766,7 @@ def batch_prediction(model_name):
 
     queueJobList: Queue = []
 
-    for i in range(0, len(missing_bugs), 100):
-        bug_ids = missing_bugs[i : (i + 100)]
+    for bug_ids in itertools.batched(missing_bugs, 100):
         job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
     q.enqueue_many(queueJobList)
@@ -926,8 +948,7 @@ def batch_prediction_broken_site_report(model_name):
 
     queueJobList: Queue = []
 
-    for i in range(0, len(missing_reports), 100):
-        reports = missing_reports[i : (i + 100)]
+    for reports in itertools.batched(missing_reports, 100):
         job_info, job_id, timeout = create_broken_site_report_classification_jobs(
             model_name, reports
         )
@@ -992,6 +1013,125 @@ def push_schedules(branch, rev):
 
     if not is_pending(job):
         schedule_job(job)
+    return jsonify({"ready": False}), 202
+
+
+@application.route("/patch/<base_rev>/<patch_hash>/schedules", methods=["GET", "POST"])
+@cross_origin()
+def patch_schedules(base_rev, patch_hash):
+    """
+    ---
+    get:
+      description: Get results of patch-based test selection.
+      summary: Get test selection results for a previously submitted patch.
+      parameters:
+      - name: base_rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+        description: The base commit hash that the patch is based on
+      - name: patch_hash
+        in: path
+        schema:
+          type: str
+          example: abc123def456
+        description: Hash of the patch content for unique identification
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    post:
+      description: Submit a patch for test selection analysis.
+      summary: Determine which tests and tasks should run for a patch.
+      parameters:
+      - name: base_rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+        description: The base commit hash that the patch is based on
+      - name: patch_hash
+        in: path
+        schema:
+          type: str
+          example: abc123def456
+        description: Hash of the patch content for unique identification
+      requestBody:
+        description: The patch content in git diff format
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    job = JobInfo(schedule_tests_from_patch, base_rev, patch_hash)
+    data = get_result(job)
+    if data:
+        # We don't need to read the POST data to find the response in the cache
+        # because the hash of the data is in the URL. However, we must consume
+        # the request body for POST requests before returning the cached response
+        # to avoid the client receiving a response before finishing sending the body.
+        if request.method == "POST":
+            _ = request.data
+        return compress_response(data, 200)
+
+    if not is_pending(job):
+        if request.method != "POST":
+            return jsonify({"error": "Patch not submitted yet"}), 404
+
+        patch = request.data.decode("utf-8")
+        if not patch:
+            return jsonify({"error": "Empty patch"}), 400
+
+        if not has_diff_content(patch):
+            return jsonify({"error": "Patch contains no diff content"}), 400
+
+        patch_key = f"bugbug:patch:{patch_hash}"
+        redis_conn.set(patch_key, patch)
+        redis_conn.expire(patch_key, 7 * 24 * 3600)  # 7 days expiration
+
+        LOGGER.info("Stored patch with hash %s", patch_hash)
+
+        schedule_job(job)
+
     return jsonify({"ready": False}), 202
 
 
@@ -1063,3 +1203,8 @@ def swagger():
 @application.route("/doc")
 def doc():
     return render_template("doc.html")
+
+
+@application.route("/__lbheartbeat__")
+def heartbeat():
+    return ""

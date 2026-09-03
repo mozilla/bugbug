@@ -13,10 +13,10 @@ logger = getLogger(__name__)
 
 
 def test_import_all_models():
-    """Try loading all defined models to ensure that their full qualified
-    names are still good
-    """
+    """Try loading all defined models to ensure that their full qualified names are still good.
 
+    Iterates over all known model names and attempts to import them.
+    """
     for model_name in MODELS:
         logger.info("Try loading model %s", model_name)
         get_model_class(model_name)

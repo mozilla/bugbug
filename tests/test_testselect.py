@@ -623,18 +623,18 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
 
     failing_together_config_group[b"group1"] = pickle.dumps(
         {
-            "linux1804-64-asan/debug": {
-                "linux1804-64/debug": (1.0, 0.0),
-                "linux1804-64/opt": (1.0, 0.0),
+            "linux2404-64-asan/debug": {
+                "linux2404-64/debug": (1.0, 0.0),
+                "linux2404-64/opt": (1.0, 0.0),
                 "mac/debug": (1.0, 0.0),
                 "windows10/debug": (1.0, 0.0),
             },
-            "linux1804-64/debug": {
-                "linux1804-64/opt": (1.0, 1.0),
+            "linux2404-64/debug": {
+                "linux2404-64/opt": (1.0, 1.0),
                 "mac/debug": (1.0, 1.0),
                 "windows10/debug": (1.0, 1.0),
             },
-            "linux1804-64/opt": {
+            "linux2404-64/opt": {
                 "mac/debug": (1.0, 1.0),
                 "windows10/debug": (1.0, 1.0),
             },
@@ -643,18 +643,18 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     )
     failing_together_config_group[b"group2"] = pickle.dumps(
         {
-            "linux1804-64-asan/debug": {
-                "linux1804-64/debug": (1.0, 1.0),
-                "linux1804-64/opt": (1.0, 0.0),
+            "linux2404-64-asan/debug": {
+                "linux2404-64/debug": (1.0, 1.0),
+                "linux2404-64/opt": (1.0, 0.0),
                 "mac/debug": (1.0, 0.0),
                 "windows10/debug": (1.0, 0.0),
             },
-            "linux1804-64/debug": {
-                "linux1804-64/opt": (1.0, 0.0),
+            "linux2404-64/debug": {
+                "linux2404-64/opt": (1.0, 0.0),
                 "mac/debug": (1.0, 0.0),
                 "windows10/debug": (1.0, 1.0),
             },
-            "linux1804-64/opt": {
+            "linux2404-64/opt": {
                 "mac/debug": (1.0, 0.0),
                 "windows10/debug": (1.0, 0.0),
             },
@@ -663,18 +663,18 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     )
     failing_together_config_group[b"group3"] = pickle.dumps(
         {
-            "linux1804-64-asan/debug": {
-                "linux1804-64/debug": (1.0, 1.0),
-                "linux1804-64/opt": (1.0, 1.0),
+            "linux2404-64-asan/debug": {
+                "linux2404-64/debug": (1.0, 1.0),
+                "linux2404-64/opt": (1.0, 1.0),
                 "mac/debug": (1.0, 1.0),
                 "windows10/debug": (1.0, 0.0),
             },
-            "linux1804-64/debug": {
-                "linux1804-64/opt": (1.0, 1.0),
+            "linux2404-64/debug": {
+                "linux2404-64/opt": (1.0, 1.0),
                 "mac/debug": (1.0, 1.0),
                 "windows10/debug": (1.0, 0.0),
             },
-            "linux1804-64/opt": {
+            "linux2404-64/opt": {
                 "mac/debug": (1.0, 1.0),
                 "windows10/debug": (1.0, 0.0),
             },
@@ -683,9 +683,9 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     )
     failing_together_config_group[b"$ALL_CONFIGS$"] = pickle.dumps(
         [
-            "linux1804-64-asan/debug",
-            "linux1804-64/debug",
-            "linux1804-64/opt",
+            "linux2404-64-asan/debug",
+            "linux2404-64/debug",
+            "linux2404-64/opt",
             "mac/debug",
             "windows10/debug",
         ]
@@ -693,23 +693,23 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     failing_together_config_group[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
         {
             "group1": {
-                "linux1804-64-asan/debug",
-                "linux1804-64/debug",
-                "linux1804-64/opt",
+                "linux2404-64-asan/debug",
+                "linux2404-64/debug",
+                "linux2404-64/opt",
                 "mac/debug",
                 "windows10/debug",
             },
             "group2": {
-                "linux1804-64-asan/debug",
-                "linux1804-64/debug",
-                "linux1804-64/opt",
+                "linux2404-64-asan/debug",
+                "linux2404-64/debug",
+                "linux2404-64/opt",
                 "mac/debug",
                 "windows10/debug",
             },
             "group3": {
-                "linux1804-64-asan/debug",
-                "linux1804-64/debug",
-                "linux1804-64/opt",
+                "linux2404-64-asan/debug",
+                "linux2404-64/debug",
+                "linux2404-64/opt",
                 "mac/debug",
                 "windows10/debug",
             },
@@ -718,81 +718,78 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     test_scheduling.close_failing_together_db("config_group")
 
     result = testselect.select_configs(
-        {
-            "group1",
-        },
+        {"group1": 0.0},
         1.0,
     )
     assert len(result) == 1
-    assert set(result["group1"]) == {"linux1804-64-asan/debug", "linux1804-64/opt"}
+    assert set(result["group1"]) == {"linux2404-64-asan/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group2",
-        },
+        {"group2": 0.0},
         1.0,
     )
     assert len(result) == 1
-    assert set(result["group2"]) == {"linux1804-64/debug", "linux1804-64/opt"}
+    assert set(result["group2"]) == {"linux2404-64/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group3",
-        },
+        {"group3": 0.0},
         1.0,
     )
     assert len(result) == 1
-    assert set(result["group3"]) == {"windows10/debug", "linux1804-64/opt"}
+    assert set(result["group3"]) == {"windows10/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group1",
-            "group2",
-        },
+        {"group1": 0.0, "group2": 0.0},
         1.0,
     )
     assert len(result) == 2
-    assert set(result["group1"]) == {"linux1804-64/opt", "linux1804-64-asan/debug"}
+    assert set(result["group1"]) == {"linux2404-64/opt", "linux2404-64-asan/debug"}
     assert set(result["group2"]) == {
-        "linux1804-64/opt",
-        "linux1804-64/debug",
+        "linux2404-64/opt",
+        "linux2404-64/debug",
     }
 
     result = testselect.select_configs(
-        {
-            "group1",
-            "group3",
-        },
+        {"group1": 0.0, "group3": 0.0},
         1.0,
     )
     assert len(result) == 2
-    assert set(result["group1"]) == {"linux1804-64/opt", "linux1804-64-asan/debug"}
-    assert set(result["group3"]) == {"windows10/debug", "linux1804-64/opt"}
+    assert set(result["group1"]) == {"linux2404-64/opt", "linux2404-64-asan/debug"}
+    assert set(result["group3"]) == {"windows10/debug", "linux2404-64/opt"}
 
     result = testselect.select_configs(
-        {
-            "group2",
-            "group3",
-        },
+        {"group2": 0.0, "group3": 0.0},
         1.0,
     )
     assert len(result) == 2
-    assert set(result["group2"]) == {"linux1804-64/opt", "linux1804-64/debug"}
-    assert set(result["group3"]) == {"linux1804-64/opt", "windows10/debug"}
+    assert set(result["group2"]) == {"linux2404-64/opt", "linux2404-64/debug"}
+    assert set(result["group3"]) == {"linux2404-64/opt", "windows10/debug"}
 
     result = testselect.select_configs(
-        {
-            "group1",
-            "group2",
-            "group3",
-        },
+        {"group1": 0.0, "group2": 0.0, "group3": 0.0},
         1.0,
     )
     assert len(result) == 3
-    assert set(result["group1"]) == {"linux1804-64/opt", "linux1804-64-asan/debug"}
+    assert set(result["group1"]) == {"linux2404-64/opt", "linux2404-64-asan/debug"}
     assert set(result["group2"]) == {
-        "linux1804-64/opt",
+        "linux2404-64/opt",
         "windows10/debug",
-        "linux1804-64-asan/debug",
+        "linux2404-64-asan/debug",
     }
-    assert set(result["group3"]) == {"linux1804-64/opt", "windows10/debug"}
+    assert set(result["group3"]) == {"linux2404-64/opt", "windows10/debug"}
+
+    # A group selected with >= 0.99 confidence runs on all its configs.
+    all_configs = {
+        "linux2404-64-asan/debug",
+        "linux2404-64/debug",
+        "linux2404-64/opt",
+        "mac/debug",
+        "windows10/debug",
+    }
+    result = testselect.select_configs(
+        {"group1": 0.99, "group2": 0.0},
+        1.0,
+    )
+    assert len(result) == 2
+    assert set(result["group1"]) == all_configs
+    assert set(result["group2"]) == {"linux2404-64/opt", "linux2404-64/debug"}

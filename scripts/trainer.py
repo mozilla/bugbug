@@ -113,14 +113,16 @@ def parse_args(args):
                 parameter_type = type(parameter.default)
             assert parameter_type is not None
 
-            if parameter_type == bool:
+            if parameter_type is bool:
                 subparser.add_argument(
-                    f"--{parameter.name}"
-                    if parameter.default is False
-                    else f"--no-{parameter.name}",
-                    action="store_true"
-                    if parameter.default is False
-                    else "store_false",
+                    (
+                        f"--{parameter.name}"
+                        if parameter.default is False
+                        else f"--no-{parameter.name}"
+                    ),
+                    action=(
+                        "store_true" if parameter.default is False else "store_false"
+                    ),
                     dest=parameter.name,
                 )
             else:
@@ -128,7 +130,7 @@ def parse_args(args):
                     f"--{parameter.name}",
                     default=parameter.default,
                     dest=parameter.name,
-                    type=int,
+                    type=parameter_type,
                 )
 
     return main_parser.parse_args(args)

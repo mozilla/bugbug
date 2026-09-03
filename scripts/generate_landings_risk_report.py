@@ -36,6 +36,7 @@ from bugbug.utils import (
     download_model,
     escape_markdown,
     get_secret,
+    setup_libmozdata,
     zstd_compress,
     zstd_decompress,
 )
@@ -43,6 +44,7 @@ from bugbug.utils import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+setup_libmozdata()
 
 TEST_INFOS_DB = "data/test_info.json"
 db.register(
@@ -117,6 +119,7 @@ def get_component_team_mapping() -> dict[str, dict[str, str]]:
 
 def get_crash_signatures(channel: str) -> dict:
     r = requests.get(f"https://mozilla.github.io/stab-crashes/{channel}.json")
+    r.raise_for_status()
     response = r.json()
     return response["signatures"]
 
@@ -322,12 +325,12 @@ class LandingsRiskReportGenerator(object):
                 -3:
             ]
             commit_group["most_common_fixed_bugs_components"] = fixed_bugs_components
-            commit_group[
-                "most_common_regression_blocked_bug_components"
-            ] = regression_blocked_bug_components
-            commit_group[
-                "most_common_fixed_bug_blocked_bug_components"
-            ] = fixed_bug_blocked_bug_components
+            commit_group["most_common_regression_blocked_bug_components"] = (
+                regression_blocked_bug_components
+            )
+            commit_group["most_common_fixed_bug_blocked_bug_components"] = (
+                fixed_bug_blocked_bug_components
+            )
 
     def get_landed_and_filed_since(self, days: int) -> list[int]:
         since = datetime.utcnow() - timedelta(days=days)
@@ -355,9 +358,11 @@ class LandingsRiskReportGenerator(object):
         return list(set(commit["bug_id"] for commit in commits) | set(timespan_ids))
 
     def get_blocking_of(
-        self, bug_ids: list[int], meta_only: bool = False
+        self,
+        bug_map: dict[int, bugzilla.BugDict],
+        bug_ids: list[int],
+        meta_only: bool = False,
     ) -> dict[int, list[int]]:
-        bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
         return {
             bug_id: bugzilla.find_blocking(bug_map, bug_map[bug_id])
             for bug_id in bug_ids
@@ -369,7 +374,6 @@ class LandingsRiskReportGenerator(object):
             {
                 "keywords": "feature-testing-meta",
                 "keywords_type": "allwords",
-                "resolution": "---",
                 "f1": "anything",
                 "o1": "changedafter",
                 "v1": "-90d",
@@ -381,7 +385,8 @@ class LandingsRiskReportGenerator(object):
         db.download(TEST_INFOS_DB)
 
         dates = [
-            datetime.utcnow() - timedelta(days=day) for day in reversed(range(days))
+            datetime.utcnow() - timedelta(days=day)
+            for day in reversed(range(min(days, 90)))
         ]
 
         logger.info("Get previously gathered test info...")
@@ -457,7 +462,9 @@ class LandingsRiskReportGenerator(object):
         fuzzing_bugs = (
             set(
                 sum(
-                    self.get_blocking_of([FUZZING_METABUG_ID], meta_only=True).values(),
+                    self.get_blocking_of(
+                        bug_map, [FUZZING_METABUG_ID], meta_only=True
+                    ).values(),
                     [],
                 )
                 + [
@@ -801,10 +808,10 @@ class LandingsRiskReportGenerator(object):
     def generate_component_test_stats(
         self, bug_map: dict[int, bugzilla.BugDict], test_infos: dict[str, Any]
     ) -> None:
-        component_test_stats: dict[
-            str, dict[str, dict[str, list[dict[str, int]]]]
-        ] = collections.defaultdict(
-            lambda: collections.defaultdict(lambda: collections.defaultdict(list))
+        component_test_stats: dict[str, dict[str, dict[str, list[dict[str, int]]]]] = (
+            collections.defaultdict(
+                lambda: collections.defaultdict(lambda: collections.defaultdict(list))
+            )
         )
         for date, test_info in test_infos.items():
             for component, count in test_info["skips"].items():
@@ -837,7 +844,10 @@ class LandingsRiskReportGenerator(object):
 
         test_infos = self.retrieve_test_info(days)
         test_info_bugs: list[int] = [
-            bug["id"] for test_info in test_infos.values() for bug in test_info["bugs"]
+            bug["id"]
+            for test_info in test_infos.values()
+            for bug in test_info["bugs"]
+            if bug["id"] is not None
         ]
 
         crash_signatures = {
@@ -878,10 +888,10 @@ class LandingsRiskReportGenerator(object):
 
         logger.info("%d bugs to analyze.", len(bugs))
 
-        bugs_set = set(bugs + test_info_bugs + meta_bugs)
+        bugs_set = set(bugs + test_info_bugs + meta_bugs + [FUZZING_METABUG_ID])
 
         bug_map = {}
-        for bug in bugzilla.get_bugs():
+        for bug in bugzilla.get_bugs(include_all_products=True):
             # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the bug_to_types call) and bugs that caused regressions.
             if (
                 bug["id"] in bugs_set
@@ -890,7 +900,9 @@ class LandingsRiskReportGenerator(object):
             ):
                 bug_map[bug["id"]] = bug
 
-        self.generate_landings_by_date(bug_map, bugs, self.get_blocking_of(meta_bugs))
+        self.generate_landings_by_date(
+            bug_map, bugs, self.get_blocking_of(bug_map, meta_bugs)
+        )
 
         self.generate_component_connections(bug_map, bugs)
 
@@ -921,7 +933,7 @@ def notification(days: int) -> None:
     all_intermittent_failure_bugs: Set[int] = set()
     component_team_mapping = get_component_team_mapping()
     for product_component, day_to_data in component_test_stats.items():
-        product, component = product_component.split("::")
+        product, component = product_component.split("::", 1)
         cur_team = component_team_mapping.get(product, {}).get(component)
         if cur_team is None or cur_team in ("Other", "Mozilla"):
             continue
@@ -938,7 +950,7 @@ def notification(days: int) -> None:
     all_s1_s2_bugs = []
 
     bug_map = {}
-    for b in bugzilla.get_bugs():
+    for b in bugzilla.get_bugs(include_all_products=True):
         if (
             b["id"] in bug_summary_ids
             or b["id"] in all_crash_bugs
@@ -1161,7 +1173,7 @@ def notification(days: int) -> None:
                 team_data[team]["s2_bugs"].append(bug)
 
     for product_component, day_to_data in component_test_stats.items():
-        product, component = product_component.split("::")
+        product, component = product_component.split("::", 1)
         team = component_team_mapping.get(product, {}).get(component)
         if team is None or team in ("Other", "Mozilla") or team not in team_data:
             continue

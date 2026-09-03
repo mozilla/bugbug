@@ -2,7 +2,15 @@ version: "3.2"
 services:
   bugbug-http-service:
     build:
-      context: .
+      context: ..
+      dockerfile: http_service/Dockerfile
+    develop:
+      watch:
+        - action: sync+restart
+          path: .
+          target: /code/http_service
+          initial_sync: true
+
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
@@ -22,8 +30,8 @@ services:
 
   bugbug-http-service-bg-worker:
     build:
-      context: .
-      dockerfile: Dockerfile.bg_worker
+      context: ..
+      dockerfile: http_service/Dockerfile.bg_worker
     image: mozilla/bugbug-http-service-bg-worker
     environment:
       - BUGBUG_BUGZILLA_TOKEN
@@ -37,8 +45,8 @@ services:
 
   bugbug-http-service-rq-dasboard:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: http_service/Dockerfile
     image: mozilla/bugbug-http-service-bg-worker
     command:
       - rq-dashboard

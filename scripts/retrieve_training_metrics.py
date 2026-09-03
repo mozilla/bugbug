@@ -30,7 +30,7 @@ def get_task_metrics_from_uri(index_uri):
     r = requests.get(index_url)
 
     if r.status_code == 404:
-        LOGGER.error(f"File not found for URL {index_url}, check your arguments")
+        LOGGER.error("File not found for URL %s, check your arguments", index_url)
         sys.exit(1)
 
     r.raise_for_status()

@@ -5,3 +5,9 @@ robustcheckout = /version-control-tools/hgext/robustcheckout/__init__.py
 hgmo = /version-control-tools/hgext/hgmo
 pushlog = /version-control-tools/hgext/pushlog
 mozext = /version-control-tools/hgext/mozext
+
+[mozext]
+# https://bugzilla.mozilla.org/show_bug.cgi?id=2024739#c15
+# Disable the mozext `changetracker.db` SQLite database as
+# we don't need any of the functionality it provides.
+disable_local_database = true
