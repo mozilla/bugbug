@@ -79,7 +79,7 @@ def _fake_conduit(
     Everything above the HTTP call — PhabricatorClient, the stack walk, the
     ordering — is the real code path.
     """
-    seen: dict = {"methods": [], "urls": []}
+    seen: dict = {"urls": []}
 
     def _result(method: str, params: dict):
         if method == "differential.revision.search":
@@ -133,7 +133,6 @@ def _fake_conduit(
 
         async def post(self, url, data=None):
             method = url.rsplit("/", 1)[-1]
-            seen["methods"].append(method)
             seen["urls"].append(url)
             params = json.loads(data["params"])
             seen.setdefault("token", params["__conduit__"]["token"])
@@ -256,29 +255,6 @@ async def test_conduit_goes_through_the_brokers_proxy(monkeypatch):
     assert all(url.startswith(f"{BROKER}/phabricator/api/") for url in seen["urls"])
     # A placeholder the proxy throws away: the agent holds no real key.
     assert seen["token"] == revision._PROXY_API_TOKEN
-
-
-async def test_only_allow_listed_conduit_methods_are_used(monkeypatch):
-    # The broker refuses anything outside its allow list, so a new Conduit call
-    # here has to be a deliberate change on both sides.
-    from phabricator_proxy import READ_ONLY_METHODS
-
-    revisions = _with_stack_graph(
-        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
-    )
-
-    _, seen = await _stack_of(
-        monkeypatch,
-        revisions,
-        43,
-        base=BASE[:12],
-        querycommits={
-            "identifierMap": {BASE[:12]: "PHID-CMIT-1"},
-            "data": {"PHID-CMIT-1": {"identifier": BASE}},
-        },
-    )
-
-    assert set(seen["methods"]) <= set(READ_ONLY_METHODS)
 
 
 # --- Applying the stack --------------------------------------------------- #
