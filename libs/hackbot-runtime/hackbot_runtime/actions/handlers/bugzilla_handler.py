@@ -143,13 +143,8 @@ class AddAttachmentHandler:
 
 class CreateBugHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
-        # TEMPORARY: BMO's POST /bug rejects `is_markdown` with a 400 Bad
-        # Request. `create_bug` no longer records it, but this strip is needed
-        # to apply actions recorded before that change. Delete it once no
-        # pending/failed `bugzilla.create_bug` row still carries the flag.
-        body = {k: v for k, v in params.items() if k != "is_markdown"}
         try:
-            data = _request("POST", "bug", body)
+            data = _request("POST", "bug", params)
         except Exception as exc:
             log.exception("Failed to create bug: %s", params.get("summary"))
             return ActionResult.failed(str(exc))
