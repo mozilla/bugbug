@@ -83,18 +83,22 @@ def _wrap_uncommitted(repo: Path) -> bool:
     Returns ``True`` if such a commit was created, ``False`` if the tree was
     already clean.
     """
+    return commit_all(repo, _WIP_MESSAGE)
+
+
+def commit_all(repo: Path, message: str, *, author: str | None = None) -> bool:
+    """Stage everything in ``repo`` and commit it, if there is anything to commit.
+
+    Returns ``True`` if a commit was made, ``False`` if the tree was clean.
+
+    The committer identity is passed explicitly because agent containers often
+    have no git identity configured, which would make ``git commit`` fail
+    outright. ``author`` (``"Name <email>"``) attributes the change to someone
+    else, for commits that replay another author's work; the committer stays
+    hackbot either way, which is the honest split and what `git` is designed for.
+    """
     if not _has_uncommitted(repo):
         return False
-    commit_all(repo, _WIP_MESSAGE)
-    return True
-
-
-def commit_all(repo: Path, message: str) -> None:
-    """Stage everything in ``repo`` and commit it under the hackbot identity.
-
-    The identity is passed explicitly because agent containers often have no git
-    identity configured, which would make ``git commit`` fail outright.
-    """
     _git(repo, "add", "-A")
     _git(
         repo,
@@ -104,9 +108,11 @@ def commit_all(repo: Path, message: str) -> None:
         f"user.email={_WIP_EMAIL}",
         "commit",
         "--no-verify",
+        *(["--author", author] if author else []),
         "-m",
         message,
     )
+    return True
 
 
 def _commit_metadata(repo: Path, base: str) -> list[dict]:

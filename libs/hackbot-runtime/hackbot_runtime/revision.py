@@ -7,10 +7,12 @@ it: the base commit the revision records is then its parent's *local* commit,
 which never landed and cannot be fetched from the git mirror.
 
 So the checkout is built from the bottom up: check out the last landed commit
-underneath the stack, replay each unlanded ancestor onto it and commit them
-together — they are this revision's base, not the agent's work — then apply the
-revision's own diff on top and leave it uncommitted. The diff hackbot submits
-afterwards therefore covers just this revision plus the agent's follow-up edits.
+underneath the stack, then replay each unlanded ancestor onto it as its own
+commit, attributed to whoever wrote that revision — they are this revision's
+base, not the agent's work, and the agent will read them in ``git log`` and
+``git blame``. The revision's own diff goes on top and is left uncommitted, so
+the diff hackbot submits afterwards covers just this revision plus the agent's
+follow-up edits.
 
 The agent holds no credentials: every Conduit call goes to the broker sidecar's
 read-only proxy (``POST {broker_url}/phabricator/api/<method>``), which
@@ -45,10 +47,32 @@ _PROXY_API_TOKEN = "hackbot-broker-proxy-placeholder"
 
 
 class Patch(NamedTuple):
-    """One revision's latest diff, as raw unified-diff text."""
+    """One revision's latest diff, with what is needed to commit it as its own.
+
+    ``author`` is ``"Name <email>"`` from the commit the diff was built from, or
+    ``None`` when Phabricator has none to give (a diff uploaded through the web
+    UI, say).
+    """
 
     revision_id: int
+    title: str
     raw_diff: str
+    author: str | None
+
+    @property
+    def commit_message(self) -> str:
+        """A message that says which revision the change came from, and why.
+
+        The revisions below the target get a commit each rather than one
+        squashed lump, so that reading `git log` or `git blame` in the checkout
+        attributes each change to the revision it came from instead of to
+        hackbot.
+        """
+        return (
+            f"D{self.revision_id}: {self.title}\n\n"
+            "Replayed by hackbot from Phabricator to rebuild the base of the "
+            "revision it was asked to work on. Not the original commit."
+        )
 
 
 class Stack(NamedTuple):
@@ -96,9 +120,13 @@ async def checkout_revision(
         log.info("D%s is stacked on %s; replaying them first", revision_id, below)
         for patch in stack.ancestors:
             _apply(repo, patch)
-        # Committing them takes them out of the agent's changes: the recorded
-        # base moves here, so what hackbot submits covers D<revision_id> alone.
-        changes.commit_all(repo, f"Revisions below D{revision_id}")
+            # A commit each, attributed to whoever wrote the revision: this is
+            # what the agent will read in `git log`/`git blame`, and one squashed
+            # lump authored by hackbot would misattribute other people's work.
+            # Committing them also takes them out of the agent's own changes —
+            # the recorded base moves up to here, so what hackbot submits back
+            # covers D<revision_id> alone.
+            changes.commit_all(repo, patch.commit_message, author=patch.author)
 
     _apply(repo, stack.target)
 
@@ -135,7 +163,9 @@ async def _resolve_stack(client: PhabricatorClient, revision_id: int) -> Stack:
         patches.append(
             Patch(
                 revision_id=revision["id"],
+                title=revision["fields"].get("title") or "",
                 raw_diff=await client.get_raw_diff(diff.id),
+                author=diff.author,
             )
         )
 

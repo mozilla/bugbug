@@ -46,7 +46,11 @@ def _revision(rev_id: int, *, status: str = "needs-review"):
     return {
         "id": rev_id,
         "phid": f"PHID-DREV-{rev_id}",
-        "fields": {"status": {"value": status}, "stackGraph": {}},
+        "fields": {
+            "title": f"Do the thing in D{rev_id}",
+            "status": {"value": status},
+            "stackGraph": {},
+        },
     }
 
 
@@ -68,6 +72,7 @@ def _fake_conduit(
     base: str = BASE,
     querycommits: dict | None = None,
     raw_diffs: dict[int, str] | None = None,
+    with_authors: bool = True,
 ):
     """Serve Conduit over a stubbed httpx, recording what was asked for.
 
@@ -92,12 +97,11 @@ def _fake_conduit(
             (rev_id,) = params["revisionIDs"]
             if rev_id not in revisions:
                 return {}
-            return {
-                str(rev_id * 10): {
-                    "id": rev_id * 10,
-                    "sourceControlBaseRevision": base,
-                }
-            }
+            diff = {"id": rev_id * 10, "sourceControlBaseRevision": base}
+            if with_authors:
+                diff["authorName"] = f"Author {rev_id}"
+                diff["authorEmail"] = f"author{rev_id}@example.com"
+            return {str(rev_id * 10): diff}
         if method == "differential.getrawdiff":
             diff_id = params["diffID"]
             if raw_diffs is not None:
@@ -353,7 +357,9 @@ async def test_only_the_target_is_left_uncommitted(
     assert ctx.rebased_base is True
 
 
-async def test_ancestors_land_in_one_commit_named_for_the_target(monkeypatch, tmp_path):
+async def test_each_ancestor_gets_its_own_commit(monkeypatch, tmp_path):
+    # One squashed lump would leave the agent unable to tell which change came
+    # from which revision, which is exactly what it reads `git log` for.
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph(
         {42: _revision(42), 43: _revision(43), 44: _revision(44)},
@@ -372,9 +378,61 @@ async def test_ancestors_land_in_one_commit_named_for_the_target(monkeypatch, tm
     await revision.checkout_revision(_FakeCtx(repo), 44, BROKER)
 
     assert _git(repo, "log", "--format=%s").splitlines() == [
-        "Revisions below D44",
+        "D43: Do the thing in D43",
+        "D42: Do the thing in D42",
         "base commit",
     ]
+    # And each says what it is, so nobody mistakes it for the original commit.
+    assert "Replayed by hackbot" in _git(repo, "log", "-1", "--format=%b", "HEAD")
+
+
+async def test_ancestor_commits_keep_their_original_author(monkeypatch, tmp_path):
+    # `git blame` over the revisions below the target should name whoever wrote
+    # them, not hackbot. Hackbot stays the committer, which is the honest split.
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", "from D42"),
+            43: _diff("from D42", "from D43"),
+        },
+    )
+
+    await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
+
+    assert _git(repo, "log", "-1", "--format=%an <%ae>", "HEAD").strip() == (
+        "Author 42 <author42@example.com>"
+    )
+    assert _git(repo, "log", "-1", "--format=%cn", "HEAD").strip() == "Hackbot"
+
+
+async def test_an_ancestor_without_author_info_still_commits(monkeypatch, tmp_path):
+    # A diff uploaded through the web UI carries no commit to take an author
+    # from. That must not stop the checkout; it just falls back to hackbot.
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43)}, {42: [], 43: [42]}
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        with_authors=False,
+        raw_diffs={
+            42: _diff("base", "from D42"),
+            43: _diff("from D42", "from D43"),
+        },
+    )
+
+    await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
+
+    assert _git(repo, "log", "-1", "--format=%s", "HEAD").strip() == (
+        "D42: Do the thing in D42"
+    )
+    assert _git(repo, "log", "-1", "--format=%an", "HEAD").strip() == "Hackbot"
 
 
 async def test_descendants_of_the_target_are_not_applied(monkeypatch, tmp_path):

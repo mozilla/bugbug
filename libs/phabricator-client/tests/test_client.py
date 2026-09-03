@@ -253,6 +253,39 @@ async def test_query_latest_diff_picks_highest_id(monkeypatch):
     assert diff.base_commit == "base9"
 
 
+async def test_query_latest_diff_carries_the_author(monkeypatch):
+    # Used to attribute a replayed revision to whoever wrote it, rather than to
+    # hackbot (see revision.checkout_revision).
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "9": {
+                    "id": "9",
+                    "sourceControlBaseRevision": "base9",
+                    "authorName": "Ada Lovelace",
+                    "authorEmail": "ada@example.com",
+                }
+            }
+        },
+    )
+    diff = await _client().query_latest_diff(42)
+    assert diff.author == "Ada Lovelace <ada@example.com>"
+
+
+async def test_query_latest_diff_has_no_author_when_phabricator_gives_none(
+    monkeypatch,
+):
+    # A diff uploaded through the web UI has no commit to take an author from;
+    # a half-known author is no author, since git needs both parts.
+    _capture_post(
+        monkeypatch,
+        {"result": {"9": {"id": "9", "authorName": "Ada Lovelace"}}},
+    )
+    diff = await _client().query_latest_diff(42)
+    assert diff.author is None
+
+
 async def test_query_latest_diff_none_when_no_diffs(monkeypatch):
     _capture_post(monkeypatch, {"result": {}})
     assert await _client().query_latest_diff(42) is None
