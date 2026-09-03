@@ -1,24 +1,4 @@
-"""Check an agent's source tree out at a Phabricator revision, stack included.
-
-For a follow-up run (e.g. an ``@hackbot`` mention) we want the agent to operate
-on the revision's actual code, not a clean base checkout. When the revision is
-stacked on other unlanded revisions, its "actual code" is the whole stack below
-it: the base commit the revision records is then its parent's *local* commit,
-which never landed and cannot be fetched from the git mirror.
-
-So the checkout is built from the bottom up: check out the last landed commit
-underneath the stack, then replay each unlanded ancestor onto it as its own
-commit, attributed to whoever wrote that revision — they are this revision's
-base, not the agent's work, and the agent will read them in ``git log`` and
-``git blame``. The revision's own diff goes on top and is left uncommitted, so
-the diff hackbot submits afterwards covers just this revision plus the agent's
-follow-up edits.
-
-The agent holds no credentials: every Conduit call goes to the broker sidecar's
-read-only proxy (``POST {broker_url}/phabricator/api/<method>``), which
-substitutes the real key. Only four read methods are involved, all on the
-proxy's allow list — see ``phabricator_proxy.READ_ONLY_METHODS``.
-"""
+"""Check an agent's source tree out at a Phabricator revision, stack included."""
 
 from __future__ import annotations
 
