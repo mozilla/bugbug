@@ -55,7 +55,7 @@ code calls directly rather than the model choosing to — for an action the agen
 once it has a result, not one the model decides on.
 
 `slack.post_message` is posted without Slack's link and media previews; they can
-be turned back on for a message that wants them by passing `unfurl=True`.
+be turned back on for a recorded message by passing `unfurl=True` to `record_message`.
 
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.
