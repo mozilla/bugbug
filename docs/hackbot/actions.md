@@ -54,6 +54,9 @@ is the only model-facing tool that exposes **`ref`** (see cross-references below
 code calls directly rather than the model choosing to — for an action the agent always takes
 once it has a result, not one the model decides on.
 
+`slack.post_message` is posted without Slack's link and media previews; they can
+be turned back on for a message that wants them by passing `unfurl=True`.
+
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.
 
