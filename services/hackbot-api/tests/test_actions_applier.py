@@ -375,6 +375,301 @@ async def test_try_result_resolves_in_phabricator_summary(monkeypatch):
     ]
 
 
+# --- reference-dependency apply order ----------------------------------- #
+
+
+def test_orders_units_after_their_dependencies():
+    dependencies = [{1, 2}, set(), set()]
+    assert actions_applier._order_units_by_dependencies(dependencies) == [1, 2, 0]
+
+
+def test_dependency_order_keeps_stuck_units_in_recorded_order():
+    dependencies = [{1}, {0}, set()]
+    assert actions_applier._order_units_by_dependencies(dependencies) == [2, 0, 1]
+
+
+def _typed_handlers(monkeypatch, outcomes):
+    """Route dispatches by action type and record their order.
+
+    `outcomes` maps action type -> the ActionResult-shaped outcome to return.
+    Returns the shared `(action_type, params)` call log.
+    """
+    calls: list[tuple[str, dict]] = []
+
+    class _Handler:
+        def __init__(self, action_type):
+            self.action_type = action_type
+
+        async def apply(self, params, ctx):
+            calls.append((self.action_type, params))
+            return outcomes[self.action_type]
+
+    monkeypatch.setattr(actions_applier, "get_handler", _Handler)
+    return calls
+
+
+def _applied(result):
+    return SimpleNamespace(status="applied", result=result, error=None)
+
+
+async def test_forward_reference_applies_producer_first(monkeypatch):
+    # The reverse of test_try_result_resolves_in_phabricator_summary: the
+    # referencing patch is recorded *before* the try push defining the ref.
+    treeherder_url = "https://treeherder.mozilla.org/jobs?repo=try&landoCommitID=7"
+    calls = _typed_handlers(
+        monkeypatch,
+        {
+            "try_server.push": _applied({"job_id": 7, "url": treeherder_url}),
+            "phabricator.submit_patch": _applied({"revision_id": 2}),
+        },
+    )
+
+    patch = _row(
+        0,
+        "pending",
+        action_type="phabricator.submit_patch",
+        params={"bug_id": 1, "title": "Fix", "summary": "Try: {{actions.try.url}}"},
+    )
+    try_push = _row(
+        1,
+        "pending",
+        action_type="try_server.push",
+        params={"auto": True},
+        ref="try",
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(patch, []), (try_push, [])],
+    )
+
+    assert calls == [
+        ("try_server.push", {"auto": True}),
+        (
+            "phabricator.submit_patch",
+            {"bug_id": 1, "title": "Fix", "summary": f"Try: {treeherder_url}"},
+        ),
+    ]
+    assert patch.status == "applied" and try_push.status == "applied"
+
+
+async def test_transitive_forward_references(monkeypatch):
+    calls = _typed_handlers(
+        monkeypatch,
+        {
+            "slack.post_message": _applied({"url": "s"}),
+            "phabricator.submit_patch": _applied({"url": "p"}),
+            "try_server.push": _applied({"url": "t"}),
+        },
+    )
+
+    # Recorded in fully reversed dependency order: slack needs patch, patch
+    # needs try.
+    slack = _row(
+        0,
+        "pending",
+        action_type="slack.post_message",
+        params={"text": "patch {{actions.patch.url}}"},
+    )
+    patch = _row(
+        1,
+        "pending",
+        action_type="phabricator.submit_patch",
+        params={"summary": "try {{actions.try.url}}"},
+        ref="patch",
+    )
+    try_push = _row(
+        2, "pending", action_type="try_server.push", params={"auto": True}, ref="try"
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(slack, []), (patch, []), (try_push, [])],
+    )
+
+    assert [c[0] for c in calls] == [
+        "try_server.push",
+        "phabricator.submit_patch",
+        "slack.post_message",
+    ]
+    assert calls[1][1] == {"summary": "try t"}
+    assert calls[2][1] == {"text": "patch p"}
+
+
+async def test_one_action_can_reference_multiple_producers(monkeypatch):
+    calls = _typed_handlers(
+        monkeypatch,
+        {
+            "slack.post_message": _applied({"ts": "1"}),
+            "try_server.push": _applied({"url": "try-url"}),
+            "phabricator.submit_patch": _applied({"url": "patch-url"}),
+        },
+    )
+
+    message = _row(
+        0,
+        "pending",
+        action_type="slack.post_message",
+        params={"text": "Try {{actions.try.url}}, patch {{actions.patch.url}}"},
+    )
+    try_push = _row(1, "pending", action_type="try_server.push", params={}, ref="try")
+    patch = _row(
+        2, "pending", action_type="phabricator.submit_patch", params={}, ref="patch"
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(message, []), (try_push, []), (patch, [])],
+    )
+
+    assert [action_type for action_type, _ in calls] == [
+        "try_server.push",
+        "phabricator.submit_patch",
+        "slack.post_message",
+    ]
+    assert calls[2][1] == {"text": "Try try-url, patch patch-url"}
+
+
+async def test_multiple_consumers_can_reference_same_producer(monkeypatch):
+    calls = _typed_handlers(
+        monkeypatch,
+        {
+            "bugzilla.add_comment": _applied({"bug_id": 5}),
+            "slack.post_message": _applied({"ts": "1"}),
+            "try_server.push": _applied({"url": "try-url"}),
+        },
+    )
+
+    comment = _row(
+        0,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "Try: {{actions.try.url}}"},
+    )
+    message = _row(
+        1,
+        "pending",
+        action_type="slack.post_message",
+        params={"text": "Try: {{actions.try.url}}"},
+    )
+    try_push = _row(
+        2,
+        "pending",
+        action_type="try_server.push",
+        params={"auto": True},
+        ref="try",
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(comment, []), (message, []), (try_push, [])],
+    )
+
+    assert calls == [
+        ("try_server.push", {"auto": True}),
+        ("bugzilla.add_comment", {"bug_id": 5, "text": "Try: try-url"}),
+        ("slack.post_message", {"text": "Try: try-url"}),
+    ]
+    assert comment.status == "applied"
+    assert message.status == "applied"
+    assert try_push.status == "applied"
+
+
+async def test_failed_producer_still_dispatches_consumer(monkeypatch):
+    calls = _typed_handlers(
+        monkeypatch,
+        {
+            "try_server.push": SimpleNamespace(
+                status="failed", result=None, error="lando is down"
+            ),
+            "slack.post_message": _applied({"ts": "1"}),
+        },
+    )
+
+    consumer = _row(
+        0,
+        "pending",
+        action_type="slack.post_message",
+        params={"text": "Try: {{actions.try.url}}"},
+    )
+    producer = _row(
+        1,
+        "pending",
+        action_type="try_server.push",
+        params={"auto": True},
+        ref="try",
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(consumer, []), (producer, [])],
+    )
+
+    assert calls == [
+        ("try_server.push", {"auto": True}),
+        ("slack.post_message", {"text": "Try: {{actions.try.url}}"}),
+    ]
+    assert producer.status == "failed"
+    assert consumer.status == "applied"
+
+
+async def test_forward_reference_inside_coalesced_group(monkeypatch):
+    # A coalesced bug PUT waits, as one unit, for a ref one of its members
+    # names — even though the defining action was recorded after the group.
+    url = "https://treeherder.mozilla.org/jobs?repo=try&landoCommitID=7"
+    calls = _typed_handlers(
+        monkeypatch,
+        {
+            "try_server.push": _applied({"url": url}),
+            "bugzilla.update_bug": _applied({"bug_id": 5}),
+        },
+    )
+
+    update = _row(
+        0,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"status": "RESOLVED"}},
+    )
+    comment = _row(
+        1,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "pushed: {{actions.try.url}}"},
+    )
+    try_push = _row(
+        2, "pending", action_type="try_server.push", params={"auto": True}, ref="try"
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(update, []), (comment, []), (try_push, [])],
+    )
+
+    assert calls == [
+        ("try_server.push", {"auto": True}),
+        (
+            "bugzilla.update_bug",
+            {
+                "bug_id": 5,
+                "changes": {"status": "RESOLVED"},
+                "comment": {
+                    "body": f"pushed: {url}",
+                    "is_private": False,
+                    "is_markdown": True,
+                },
+            },
+        ),
+    ]
+    assert update.status == "applied" and comment.status == "applied"
+
+
 # --- coalescing same-bug Bugzilla mutations into one PUT ---------------- #
 
 

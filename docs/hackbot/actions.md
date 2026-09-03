@@ -107,12 +107,15 @@ verified-good state is not wanted even if it recorded something before erroring.
 ## Cross-action references
 
 An action's result often isn't known until it's applied — a Phabricator revision has no URL
-until it exists. So a later action can reference an earlier one's result by label:
+until it exists. Another action can reference that result by label:
 
 ```
 submit_patch(..., ref="patch")
 add_comment(text="Patch up for review: {{actions.patch.url}}")
 ```
+
+Hackbot applies the action defining a ref before actions that use it, even if they were
+recorded in a different order.
 
 `{{actions.<ref>.<field>}}` is substituted at apply time, recursively through params.
 Resolution draws on rows already `applied` in earlier passes as well as this one, so a
