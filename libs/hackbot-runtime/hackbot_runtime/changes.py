@@ -77,6 +77,18 @@ def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
 
+def _wrap_uncommitted(repo: Path) -> bool:
+    """Commit any staged/unstaged/untracked changes into one synthetic commit.
+
+    Returns ``True`` if such a commit was created, ``False`` if the tree was
+    already clean.
+    """
+    if not _has_uncommitted(repo):
+        return False
+    commit_all(repo, _WIP_MESSAGE)
+    return True
+
+
 def commit_all(repo: Path, message: str) -> None:
     """Stage everything in ``repo`` and commit it under the hackbot identity.
 
@@ -95,18 +107,6 @@ def commit_all(repo: Path, message: str) -> None:
         "-m",
         message,
     )
-
-
-def _wrap_uncommitted(repo: Path) -> bool:
-    """Commit any staged/unstaged/untracked changes into one synthetic commit.
-
-    Returns ``True`` if such a commit was created, ``False`` if the tree was
-    already clean.
-    """
-    if not _has_uncommitted(repo):
-        return False
-    commit_all(repo, _WIP_MESSAGE)
-    return True
 
 
 def _commit_metadata(repo: Path, base: str) -> list[dict]:
