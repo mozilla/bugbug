@@ -25,11 +25,11 @@ function commentPreview(a: RunAction): string | null {
   return typeof text === "string" && text.trim() ? text : null;
 }
 
-//Every action may have a result.url, which is a link to the external system (e.g. Bugzilla) where the action was applied.
+// Only some action types return a link to the external system (e.g. Bugzilla) where the action was applied.
 // We surface that as an "Open" link in the actions list.
 function actionUrl(a: RunAction): string | null {
   const url = a.result?.url;
-  return typeof url === "string" && url.trim() ? url : null;
+  return typeof url === "string" && url ? url : null;
 }
 
 const POLL_MS = 4000;
