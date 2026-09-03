@@ -73,6 +73,22 @@ def base_commit(repo: Path) -> str:
     return _git(repo, "rev-parse", "HEAD").strip()
 
 
+# Where publish_changes() puts the run's patch; the same key downstream reads.
+PATCH_ARTIFACT = "changes/changes.patch"
+
+
+def has_changes(repo: Path, base: str) -> bool:
+    """Whether the agent left anything for :func:`collect` to publish.
+
+    Read-only, unlike ``collect``, which commits the working tree as it goes: for
+    code that needs the answer mid-run without disturbing what the agent is
+    editing.
+    """
+    return _has_uncommitted(repo) or bool(
+        _git(repo, "rev-list", "-1", f"{base}..HEAD").strip()
+    )
+
+
 def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 

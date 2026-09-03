@@ -221,9 +221,20 @@ class HackbotContext(BaseSettings):
             self.uploader, self.run_artifacts_dir, key, payload
         )
 
+    @property
+    def source_changed(self) -> bool:
+        """Whether this run will publish a patch, for a notification to gate on.
+
+        Read-only: the patch itself belongs to the apply step, which reads the
+        published artifact (see ``actions/handlers/email_handler.py``).
+        """
+        if self._repo_path is None or self._source_base is None:
+            return False
+        return changes.has_changes(self._repo_path, self._source_base)
+
     def publish_changes(
         self,
-        patch_key: str = "changes/changes.patch",
+        patch_key: str = changes.PATCH_ARTIFACT,
         meta_key: str = "changes/changes.json",
         phabricator_diff_key: str = "changes/phabricator_diff.json",
         try_push_key: str = "changes/try_push.json",

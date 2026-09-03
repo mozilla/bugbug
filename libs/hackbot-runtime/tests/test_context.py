@@ -243,3 +243,32 @@ def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeyp
         tmp_path / "artifacts" / "local-test" / "changes" / "phabricator_diff.json"
     )
     assert not written.exists()
+
+
+def test_source_changed_is_false_for_an_agent_that_touched_no_source(tmp_path):
+    hb = _hb(tmp_path, HackbotConfig())
+    assert hb.source_changed is False
+
+
+def test_source_changed_asks_git_without_disturbing_the_tree(tmp_path, monkeypatch):
+    # Read-only, unlike collect(): a notification gating on this must not commit
+    # the working tree out from under the agent.
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    collected = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.collect",
+        lambda repo, base, repo_url: collected.append(base),
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.has_changes", lambda repo, base: True
+    )
+    assert hb.source_changed is True
+    assert collected == []
+
+
+def test_source_changed_is_false_when_the_agent_changed_nothing(tmp_path, monkeypatch):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.has_changes", lambda repo, base: False
+    )
+    assert hb.source_changed is False
