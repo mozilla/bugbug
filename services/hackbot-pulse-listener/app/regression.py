@@ -320,6 +320,11 @@ def is_stale_push(project: str, rev: str, max_age_seconds: float) -> bool:
 _CHUNKED_LABEL = re.compile(r"-\d+$")
 
 
+def unchunked(label: str) -> str:
+    """The task label without its chunk number, the same on every push."""
+    return _CHUNKED_LABEL.sub("", label)
+
+
 def _is_new_label_failure(
     project: str,
     rev: str,
