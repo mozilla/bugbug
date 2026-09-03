@@ -58,7 +58,8 @@ async def test_create_bug_merges_extra_top_level_wins():
     body = rec.actions[0]["params"]
     assert body["severity"] == "S3"
     assert body["product"] == "Core"  # explicit arg wins over extra
-    assert body["is_markdown"] is True
+    # BMO's POST /bug rejects `is_markdown` with a 400, so it is never recorded.
+    assert "is_markdown" not in body
 
 
 async def test_handlers_return_confirmation_string():
