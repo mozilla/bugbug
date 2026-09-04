@@ -149,9 +149,14 @@ def _ancestor_phids(stack_graph: dict[str, list[str]], target_phid: str) -> list
 
     ``stackGraph`` maps each revision in the stack to its parents, and is part
     of what ``differential.revision.search`` returns. Only a linear chain can be
-    replayed as a sequence of patches, so more than one parent is an error; a
-    cycle would be Conduit misbehaving, but it costs one ``seen`` set not to
-    hang on it.
+    replayed as a sequence of patches, so anything else is refused: more than
+    one parent, or a cycle.
+
+    ``moz-phab patch`` stops the walk instead of refusing on a cycle, which
+    leaves it patching a truncated stack. Refusing is the deliberate difference:
+    a cycle has no oldest-first order, so a truncated one would be applied onto
+    the wrong base, and the point of this module is to fail rather than hand the
+    agent a tree that is not the revision.
     """
     ancestors: list[str] = []
     seen = {target_phid}
@@ -167,7 +172,10 @@ def _ancestor_phids(stack_graph: dict[str, list[str]], target_phid: str) -> list
             )
         parent = parents[0]
         if parent in seen:
-            return ancestors
+            raise RuntimeError(
+                "hackbot cannot reconstruct a stack that depends on itself: "
+                f"{parent} is already below {target_phid}."
+            )
         seen.add(parent)
         ancestors.append(parent)
         current = parent

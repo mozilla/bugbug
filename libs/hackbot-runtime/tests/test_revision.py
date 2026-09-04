@@ -201,12 +201,15 @@ async def test_a_non_linear_stack_is_rejected(monkeypatch):
         await _stack_of(monkeypatch, revisions, 44)
 
 
-def test_a_cycle_in_the_stack_graph_does_not_hang():
-    # Conduit misbehaving rather than anything real, but a walk that loops
-    # forever would be a much worse failure than a short one.
+def test_a_cycle_in_the_stack_graph_is_refused():
+    # A cycle has no oldest-first order, so there is no correct stack to
+    # replay. moz-phab stops the walk and patches what it has; refusing is the
+    # deliberate difference, because a truncated stack would be applied onto
+    # the wrong base and might quietly succeed.
     graph = {"A": ["B"], "B": ["C"], "C": ["A"]}
 
-    assert revision._ancestor_phids(graph, "A") == ["B", "C"]
+    with pytest.raises(RuntimeError, match="depends on itself"):
+        revision._ancestor_phids(graph, "A")
 
 
 async def test_an_abbreviated_base_is_expanded(monkeypatch):
