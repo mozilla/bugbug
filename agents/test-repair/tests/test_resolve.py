@@ -207,3 +207,29 @@ def test_known_intermittent_bugs_survive_a_treeherder_error(monkeypatch):
 
     monkeypatch.setattr(resolve, "_get_json", boom)
     assert resolve._known_intermittent_bugs("autoland", "TASK") == []
+
+
+def test_sheriff_classification_names_the_verdict(monkeypatch):
+    monkeypatch.setattr(
+        resolve,
+        "_get_json",
+        lambda url: {"results": [{"failure_classification_id": 2}]},
+    )
+    assert resolve.sheriff_classification("autoland", "TASK") == "fixed by commit"
+
+
+def test_an_unclassified_job_was_not_actioned(monkeypatch):
+    monkeypatch.setattr(
+        resolve,
+        "_get_json",
+        lambda url: {"results": [{"failure_classification_id": 6}]},
+    )
+    assert resolve.sheriff_classification("autoland", "TASK") is None
+
+
+def test_sheriff_classification_survives_a_treeherder_error(monkeypatch):
+    def boom(url):
+        raise resolve.requests.exceptions.RequestException("down")
+
+    monkeypatch.setattr(resolve, "_get_json", boom)
+    assert resolve.sheriff_classification("autoland", "TASK") is None

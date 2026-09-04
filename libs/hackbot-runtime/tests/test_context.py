@@ -146,7 +146,7 @@ def _hb_with_source(tmp_path, monkeypatch):
     """
     cfg = HackbotConfig(source=SourceConfig(repo_url="https://example.com/r.git"))
     hb = _hb(tmp_path, cfg)
-    hb._source_base = "basecommit"
+    hb._source_base = hb._published_base = "basecommit"
     # prepare_repo would normally clone and set this; publish_changes only reads
     # repo_path and passes it to the (mocked) changes helpers, so a bare path is
     # enough here.
@@ -210,6 +210,42 @@ def test_publish_changes_builds_try_push_when_action_recorded(tmp_path, monkeypa
     assert payload["base_commit"] == "basecommit"
 
 
+def test_try_push_uses_the_published_base_not_a_local_one(tmp_path, monkeypatch):
+    # A stacked-revision checkout seeds local commits and re-records the source
+    # base onto one of them (see revision.checkout_revision). Lando has to
+    # resolve the base in its own clone, so it must still be given the commit
+    # the checkout was fetched at — a local sha would look valid (40 hex chars)
+    # and then fail at Lando.
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    bases = {}
+
+    def _try_push(repo, base):
+        bases["try"] = base
+        return {"base_commit": base, "patches": []}
+
+    def _phabricator_diff(repo, base, repo_url):
+        bases["diff"] = base
+        return None
+
+    monkeypatch.setattr("hackbot_runtime.context.changes.build_try_push", _try_push)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_phabricator_diff", _phabricator_diff
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.base_commit", lambda repo: "localseededsha"
+    )
+    hb.record_source_base()
+    hb.actions.record("try_server.push", {"tasks": ["t"]}, reasoning="r")
+    hb.actions.record("phabricator.update_patch", {"revision_id": 1}, reasoning="r")
+
+    hb.publish_changes()
+
+    assert bases["try"] == "basecommit"
+    # The submitted diff still measures from the seeded commit, so it covers
+    # only the revision plus the agent's edits.
+    assert bases["diff"] == "localseededsha"
+
+
 def test_publish_changes_skips_try_push_without_action(tmp_path, monkeypatch):
     hb = _hb_with_source(tmp_path, monkeypatch)
     called = []
@@ -243,3 +279,32 @@ def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeyp
         tmp_path / "artifacts" / "local-test" / "changes" / "phabricator_diff.json"
     )
     assert not written.exists()
+
+
+def test_source_changed_is_false_for_an_agent_that_touched_no_source(tmp_path):
+    hb = _hb(tmp_path, HackbotConfig())
+    assert hb.source_changed is False
+
+
+def test_source_changed_asks_git_without_disturbing_the_tree(tmp_path, monkeypatch):
+    # Read-only, unlike collect(): a notification gating on this must not commit
+    # the working tree out from under the agent.
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    collected = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.collect",
+        lambda repo, base, repo_url: collected.append(base),
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.has_changes", lambda repo, base: True
+    )
+    assert hb.source_changed is True
+    assert collected == []
+
+
+def test_source_changed_is_false_when_the_agent_changed_nothing(tmp_path, monkeypatch):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.has_changes", lambda repo, base: False
+    )
+    assert hb.source_changed is False

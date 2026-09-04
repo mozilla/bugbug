@@ -3,8 +3,8 @@
 Its job is to **subscribe** to Taskcluster failure messages, **filter** them down to
 failures worth acting on, **dedupe** them, and dispatch a hackbot agent through the
 hackbot-api. It deliberately holds no investigation logic: each agent resolves the push
-and commits itself, so the listener only decides _what to hand off_. When a run finishes
-(minutes later) the listener polls the result and emails a report.
+and commits itself, so the listener only decides _what to hand off_. Reporting is the
+agent's too -- it records the email and Slack notification as actions.
 
 Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-repair`.
 
@@ -50,11 +50,10 @@ Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-r
    back if the trigger fails, so only runs that really started count. Once the budget
    is spent, later test failures stop before any Treeherder work. Build-repair is not
    capped.
-7. **Dispatch & report.** `POST /agents/{agent}/runs`, poll `GET /runs/{run_id}` until
-   terminal, then email a hackbot UI link, the analysis summary, a Treeherder link, and the
-   commit the agent blamed. Build-repair looks the blamed commit up in the firefox GitHub
-   mirror and mails its author; test-repair mails only the team address
-   (`NOTIFICATION_TEAM_EMAIL`) -- sheriffs are notified by the agent in Slack instead.
+7. **Dispatch.** `POST /agents/{agent}/runs`, and that is the end of the listener's
+   involvement. Reporting belongs to the agent: it records an `email.send` action (and,
+   for test-repair, a Slack message), which hackbot-api applies once the run has
+   succeeded. See [docs/hackbot/actions.md](../../docs/hackbot/actions.md).
 
 The dedupe caches, the daily budget and pending-run tracking are all in-memory, so
 a restart resets them.
@@ -89,25 +88,10 @@ for an ancestor still running before failing open. What differs is the unit comp
 ```bash
 export PULSE_USER=... PULSE_PASSWORD=...          # https://pulseguardian.mozilla.org
 export HACKBOT_API_URL=https://hackbot-api.../ HACKBOT_API_KEY=...
-export HACKBOT_UI_URL=https://hackbot-ui.../
 export WATCHED_REPOS=autoland
 export DRY_RUN=true                               # log intended calls, don't POST
 uv run --package hackbot-pulse-listener python -m app
 ```
-
-Email is sent only when `SENDGRID_API_KEY` and `NOTIFICATION_SENDER` are set; otherwise it
-is logged and skipped. Build-repair mails the blamed commit's author (looked up in the
-firefox GitHub mirror), the pushing developer, and the `NOTIFICATION_TEAM_EMAIL` team
-address if set; test-repair mails only the team address -- never the culprit author or
-the pushing developer, though the culprit is still named in the body. Its verdicts are
-tracking for the hackbot team, so every verdict is mailed, intermittents included; what
-reaches sheriffs is the agent's Slack message, and only when they have to act. Set
-`NOTIFICATION_OVERRIDE_EMAIL` to route every notification to a single address (useful for
-local testing). By default only build-repair runs that produced a patch are emailed; set
-`NOTIFY_ONLY_WITH_PATCH=false` to also notify on transient / not-to-blame runs (test-repair always
-notifies).
-When `NOTIFICATION_TEAM_EMAIL` is set, notifications use it as `Reply-To` so recipients can
-reply with feedback on the analysis.
 
 ## Test
 

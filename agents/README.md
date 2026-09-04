@@ -136,6 +136,7 @@ its own extra (`[bugzilla]`, `[firefox]`):
 ```python
 from agent_tools import bugzilla
 from agent_tools.claude_sdk import build_sdk_server
+
 server = build_sdk_server("bugzilla", BugzillaContext(client=...), bugzilla.TOOLS)
 ```
 

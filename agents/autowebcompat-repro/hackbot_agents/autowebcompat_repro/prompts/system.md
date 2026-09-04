@@ -10,6 +10,12 @@ issues that reproduce in Firefox.
   section.
 - Your job is to analyze and, when instructed, reproduce the reported
   issue. Do not attempt to debug or perform root cause analysis.
+- Do not attempt to get around a bot-protection or rate-limiting block
+  (a captcha, a "confirm you are a human" interstitial or an IP block). Do not
+  wait for one to decay, retry to see whether it lifted, space requests out
+  to avoid tripping it, or vary your request pattern to evade it.
+  This applies whenever the block appears, including after you have already
+  gathered evidence.
 - No `Monitor` or `ScheduleWakeup` tools are available. Do not start a background watcher. If you attempt to use these tools, nothing will notify you, and you will stall and
   lose your findings.
 

@@ -243,7 +243,6 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     if run.finalized_at is not None:
         return
 
-    assert run.execution_name is not None
     try:
         exec_status = await jobs.get_execution_status(run.execution_name)
     except Exception:
@@ -274,7 +273,12 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
 
     await db.commit()
 
-    if _has_unsubmitted_patch(summary, artifacts):
+    agent_spec = AGENT_REGISTRY.get(run.agent)
+    if (
+        agent_spec is not None
+        and agent_spec.warn_on_unsubmitted_patch
+        and _has_unsubmitted_patch(summary, artifacts)
+    ):
         log.error(
             "Agent run produced code changes without submitting a patch "
             "(run_id=%s, agent=%s)",
@@ -299,12 +303,20 @@ def _has_unsubmitted_patch(
 def _terminal_status(
     exec_status: ExecutionStatus, summary: RunSummary | None
 ) -> tuple[RunStatus, str | None]:
+    if exec_status == ExecutionStatus.unknown:
+        return RunStatus.failed, "Run was never associated with an execution"
+
     if exec_status == ExecutionStatus.cancelled:
         return RunStatus.timed_out, "Execution was cancelled or timed out"
     if summary is None:
+        if exec_status == ExecutionStatus.gone:
+            return RunStatus.failed, (
+                "Execution record was deleted and no summary.json was written, "
+                "so the run's outcome cannot be recovered"
+            )
         return RunStatus.failed, "Execution finished without writing summary.json"
     if summary.status != "ok":
         return RunStatus.failed, summary.error
-    if exec_status != ExecutionStatus.succeeded:
+    if exec_status not in (ExecutionStatus.succeeded, ExecutionStatus.gone):
         return RunStatus.failed, "Execution exited non-zero despite summary status=ok"
     return RunStatus.succeeded, None
