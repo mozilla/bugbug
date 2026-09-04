@@ -23,21 +23,24 @@ component's code lives in. A bug handed to the agent by hand in some other compo
 (`Firefox :: Menus`, say) is triaged the same way and reports to nobody. The components,
 and the channel each reports to:
 
-| Component                         | Reports to                       |
-| --------------------------------- | -------------------------------- |
-| `Firefox :: New Tab Page`         | `#hnt-dev-triage`                |
-| `Firefox :: Sidebar`              | `#p10y-bots`                     |
-| `Firefox :: Site Permissions`     | `#privacy-team-automation`       |
-| `Toolkit :: Data Sanitization`    | `#privacy-team-automation`       |
-| `Firefox :: Settings UI`          | `#fx-recomp-bots`                |
-| `Firefox :: Sharing`              | `#content-sharing-automation`    |
-| `Firefox :: IP Protection`        | `#team-eng-ip-protection-triage` |
-| `Firefox :: Messaging System`     | `#omc-triage`                    |
-| `Firefox for Android :: History`  | `#android-core-dev`              |
-| `Firefox for Android :: Toolbar`  | `#android-core-dev`              |
-| `Firefox for Android :: Homepage` | `#android-core-dev`              |
-| `Toolkit :: Application Update`   | `#installer-updater-bug-triage`  |
-| `Firefox :: Installer`            | `#installer-updater-bug-triage`  |
+| Component                            | Reports to                       |
+| ------------------------------------ | -------------------------------- |
+| `Firefox :: New Tab Page`            | `#hnt-dev-triage`                |
+| `Firefox :: Sidebar`                 | `#p10y-bots`                     |
+| `Firefox :: Site Permissions`        | `#privacy-team-automation`       |
+| `Toolkit :: Data Sanitization`       | `#privacy-team-automation`       |
+| `Firefox :: Settings UI`             | `#fx-recomp-bots`                |
+| `Firefox :: Sharing`                 | `#content-sharing-automation`    |
+| `Firefox :: IP Protection`           | `#team-eng-ip-protection-triage` |
+| `Firefox :: Messaging System`        | `#omc-triage`                    |
+| `Core :: Machine Learning: Frontend` | `#smart-window-bug-triage`       |
+| `Core :: Machine Learning: Models`   | `#smart-window-bug-triage`       |
+| `Core :: Machine Learning: General`  | `#smart-window-bug-triage`       |
+| `Firefox for Android :: History`     | `#android-core-dev`              |
+| `Firefox for Android :: Toolbar`     | `#android-core-dev`              |
+| `Firefox for Android :: Homepage`    | `#android-core-dev`              |
+| `Toolkit :: Application Update`      | `#installer-updater-bug-triage`  |
+| `Firefox :: Installer`               | `#installer-updater-bug-triage`  |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
