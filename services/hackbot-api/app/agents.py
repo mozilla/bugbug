@@ -34,6 +34,10 @@ class AgentSpec:
     # was; this is where that verdict is honored. Fails closed, so a run that reports
     # no verdict never qualifies.
     auto_apply_requires_consent: bool = False
+    # Whether a run that produced source changes is expected to submit those changes
+    # to Phabricator. Agents without Phabricator submission tools may legitimately
+    # leave a patch artifact behind, so they must not trigger the warning.
+    warn_on_unsubmitted_patch: bool = False
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -66,6 +70,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-bug-fix",
         input_schema=BugFixInputs,
         auto_apply_actions=True,
+        warn_on_unsubmitted_patch=True,
     ),
     "autowebcompat-repro": AgentSpec(
         name="autowebcompat-repro",
