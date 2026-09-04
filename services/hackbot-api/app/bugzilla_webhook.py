@@ -12,6 +12,7 @@ class BugzillaNeedinfoEvent:
     bug_id: int
     flag_id: int
     comment: str
+    actor_login: str
 
 
 def detect_needinfo_request(
@@ -71,4 +72,6 @@ def detect_needinfo_request(
         "A needinfo may be requested without a comment, so use the surrounding "
         "bug context if none exists."
     )
-    return BugzillaNeedinfoEvent(bug_id=bug_id, flag_id=flag_id, comment=comment)
+    return BugzillaNeedinfoEvent(
+        bug_id=bug_id, flag_id=flag_id, comment=comment, actor_login=actor_login
+    )

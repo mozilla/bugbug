@@ -11,6 +11,8 @@ from app.auth import (
     require_bugzilla_webhook_secret,
     require_phabricator_signature,
 )
+from app.bugzilla_authorization import AUTHORIZED_GROUP_ID, BugzillaAuthorizer
+from app.bugzilla_client import BugzillaUserClient
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.phabricator_authorization import (
@@ -49,6 +51,16 @@ def get_phabricator_authorizer(
     if authorizer is None:
         authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
         request.app.state.phabricator_authorizer = authorizer
+    return authorizer
+
+
+def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
+    """Dependency: lazily create the app-scoped authorizer and its user cache."""
+    authorizer = getattr(request.app.state, "bugzilla_authorizer", None)
+    if authorizer is None:
+        client = BugzillaUserClient(settings.bugzilla_webhook.url)
+        authorizer = BugzillaAuthorizer(client, AUTHORIZED_GROUP_ID)
+        request.app.state.bugzilla_authorizer = authorizer
     return authorizer
 
 
@@ -149,6 +161,7 @@ async def phabricator_webhook(
 async def bugzilla_webhook(
     request: Request,
     api_client: HackbotClient = Depends(get_hackbot_client),
+    authorizer: BugzillaAuthorizer = Depends(get_bugzilla_authorizer),
 ) -> dict:
     """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
     payload = await request.json()
@@ -169,6 +182,15 @@ async def bugzilla_webhook(
             detected.flag_id,
         )
         return {"status": "ignored", "reason": "duplicate delivery"}
+
+    # Ignore requests from users without editbugs
+    if not await authorizer.is_authorized(detected.actor_login):
+        log.info(
+            "Ignored Bugzilla needinfo webhook for bug %s: %s is not authorized",
+            detected.bug_id,
+            detected.actor_login,
+        )
+        return {"status": "ignored", "reason": "unauthorized user"}
 
     run = await api_client.trigger_run(
         "bug-fix",
