@@ -13,10 +13,7 @@ credentials:
 - Phabricator: `/phabricator/api` mounts a read-only Conduit proxy
   (``phabricator_proxy``) — the broker looks enough like a Phabricator instance
   for a Conduit client to talk to it, but only for an allow-listed set of read
-  methods, and it swaps in the real key so the caller never holds one. That is
-  how the agent checks its source tree out at a (possibly stacked) revision
-  before running, driving moz-phab's own Conduit client against this URL (see
-  ``revision.checkout_revision``).
+  methods, and it swaps in the real key so the caller never holds one.
 """
 
 import logging

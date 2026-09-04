@@ -55,9 +55,11 @@ def _conduit_error(code: str, info: str, status: int) -> JSONResponse:
 def _parse_params(body: bytes) -> dict:
     """Read Conduit's ``params`` field out of a url-encoded request body.
 
-    Parsed directly rather than via ``request.form()``: moz-phab's Conduit client
-    posts a url-encoded body with no ``Content-Type`` header, which
-    ``request.form()`` would read as empty.
+    Parsed directly rather than via ``request.form()``, which needs a
+    ``Content-Type`` to recognise a form and would otherwise read the body as
+    empty. Not every Conduit client sends one — moz-phab's does not — and this
+    is a façade for Conduit clients in general, not only for the one hackbot
+    happens to use.
 
     Raises :class:`ValueError` if ``params`` is not a JSON object.
     """

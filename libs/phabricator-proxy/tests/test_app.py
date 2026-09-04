@@ -21,10 +21,11 @@ def _client(phabricator_client, **kwargs) -> TestClient:
 
 
 def _conduit_body(params: dict) -> bytes:
-    """A request body shaped like moz-phab's: url-encoded, no Content-Type.
+    """A url-encoded request body with no Content-Type header.
 
-    Posted with httpx's `content=`, which sets no Content-Type — exactly what
-    moz-phab's urllib3-based Conduit client sends.
+    Posted with httpx's `content=`, which sets no Content-Type. That is the
+    awkward shape the proxy has to cope with — moz-phab's Conduit client sends
+    it — and the one `request.form()` would read as empty.
     """
     return urllib.parse.urlencode(
         {"params": json.dumps(params), "output": "json"}

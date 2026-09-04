@@ -29,23 +29,22 @@ class UnresolvedCommitError(Exception):
     """A commit identifier could not be expanded to a full, fetchable hash."""
 
 
-def is_full_commit(ref: str) -> bool:
+def _is_full_commit(ref: str) -> bool:
     """True if ``ref`` is a full 40-char lowercase-hex git commit hash."""
     ref = ref.lower()
     return len(ref) == _FULL_COMMIT_LEN and all(c in "0123456789abcdef" for c in ref)
 
 
-def select_full_commit(ref: str, result: dict) -> str:
+def _select_full_commit(ref: str, result: dict) -> str:
     """Pick the one full commit hash matching ``ref`` in a Diffusion result.
 
-    ``result`` is a ``diffusion.querycommits`` response. Split out from
-    :meth:`PhabricatorClient.resolve_commit` so callers that reach Conduit by
-    another route (e.g. the agent talking to the broker's read-only proxy
-    through moz-phab's own client) share the same resolution rules.
+    ``result`` is a ``diffusion.querycommits`` response; kept apart from
+    :meth:`PhabricatorClient.resolve_commit` so the choosing rules can be read
+    without the Conduit call around them.
 
     Raises :class:`UnresolvedCommitError` when no single full hash can be named.
     """
-    if is_full_commit(ref):
+    if _is_full_commit(ref):
         return ref
     data = result.get("data") or {}
     commit_phid = (result.get("identifierMap") or {}).get(ref)
@@ -60,7 +59,8 @@ def select_full_commit(ref: str, result: dict) -> str:
     identifiers = {
         commit["identifier"]
         for commit in commits
-        if commit["identifier"].startswith(ref) and is_full_commit(commit["identifier"])
+        if commit["identifier"].startswith(ref)
+        and _is_full_commit(commit["identifier"])
     }
 
     if len(identifiers) != 1:
@@ -232,7 +232,7 @@ class PhabricatorClient:
 
         Raises :class:`UnresolvedCommitError` when no full hash can be named.
         """
-        if is_full_commit(ref):
+        if _is_full_commit(ref):
             return ref
         result = await self.conduit_request("diffusion.querycommits", names=[ref])
-        return select_full_commit(ref, result)
+        return _select_full_commit(ref, result)
