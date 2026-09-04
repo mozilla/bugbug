@@ -35,8 +35,6 @@ includes:
   browser (e.g. "it is recommended to use Chrome").
 - Warning that Firefox is unsupported, or that some feature will not work
   in Firefox.
-- Blocking Firefox outright, or serving it a degraded/legacy experience,
-  based on user-agent sniffing.
 
 Treat these as webcompat - the recommendation or block is itself
 the issue to report.
