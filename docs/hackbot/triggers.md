@@ -137,10 +137,14 @@ Guards, each closing a specific failure mode:
 - **Latest flag wins** — BMO orders flags by id, so the last matching one is the newly
   requested one.
 
-Authorization is Bugzilla's own: anyone who can set a needinfo on the bot can ask it for
-something. There is no separate group check like the Phabricator trigger's
-`bmo-editbugs-team`, because a private bug is already excluded and the flag itself is the
-request.
+Only requesters in Bugzilla's `editbugs` group are authorized (all Mozilla Corporation
+members belong to this group) — see
+[bugzilla_authorization.py](../../services/hackbot-api/app/bugzilla_authorization.py).
+Membership is checked per login with BMO's server-side `group_ids` filter on `/rest/user`.
+
+- An unauthorized request is ignored without
+  consuming the dedupe key, leaving the same flag eligible for a later delivery after the
+  requester becomes authorized.
 
 The receiver passes the requester's login and the change timestamp to the agent as context
 for locating the accompanying comment — a needinfo may be filed without one, in which case
@@ -154,6 +158,6 @@ existing one. The needinfo flag is cleared automatically as a recorded
 the reply comment into a single Bugzilla transaction (see [actions.md](actions.md)). A run
 that records nothing leaves the flag standing.
 
-Configuration is three env vars — `BUGZILLA_WEBHOOK_SECRET` (required, no default),
-`BUGZILLA_WEBHOOK_BOT_LOGIN` and `BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS`; see
-[deployment.md](deployment.md).
+Configuration is four env vars — `BUGZILLA_WEBHOOK_SECRET` (required, no default),
+`BUGZILLA_WEBHOOK_BOT_LOGIN`, `BUGZILLA_WEBHOOK_URL` and
+`BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS`; see [deployment.md](deployment.md).
