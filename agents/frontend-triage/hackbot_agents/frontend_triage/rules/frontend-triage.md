@@ -19,6 +19,12 @@ Typical components:
 Desktop and Android bugs here are usually UI/UX papercuts, documented with a
 **video or screenshot** and steps to reproduce.
 
+Screenshots you can look at; screen recordings you cannot. `download_attachment`
+refuses video, audio, and archive attachments, because Claude cannot interpret them
+and fetching one costs a large download for nothing. When the only evidence is a
+recording, triage from the description, the steps to reproduce, and the code, and say
+plainly in your comment that you did not view the recording — do not imply you did.
+
 **Install and update bugs look different, and that is not a reason to skip them.**
 An installer or updater bug is normally a _failure_ rather than a papercut: an update
 that did not apply, an install that rolled back, a version that stayed where it was,
