@@ -1,6 +1,6 @@
 # Application updater
 
-`toolkit/mozapps/update/`. `.sys.mjs` modules (`AppUpdater.sys.mjs`, `UpdateService.sys.mjs`, `BackgroundUpdate.sys.mjs`), the XPCOM interfaces in `nsIUpdateService.idl`, and the C++ updater binary under `toolkit/mozapps/update/updater/`. Update behaviour is heavily driven by prefs under `app.update.*` and by the state written to the update directory, so read `common/` for the shared constants and status codes.
+`toolkit/mozapps/update/`. `.sys.mjs` modules (`AppUpdater.sys.mjs`, `UpdateService.sys.mjs`, `BackgroundUpdate.sys.mjs`), the XPCOM interfaces in `nsIUpdateService.idl`, and the C++ updater binary under `toolkit/mozapps/update/updater/`. Update behavior is heavily driven by prefs under `app.update.*` and by the state written to the update directory, so read `common/` for the shared constants and status codes.
 
 ## Tests
 

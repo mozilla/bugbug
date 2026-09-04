@@ -76,7 +76,7 @@ the secrets in a gitignored `.env` at the repo root:
 
 ```dotenv
 ANTHROPIC_API_KEY=sk-ant-...
-BUGZILLA_API_URL=https://bugzilla.mozilla.org
+BUGZILLA_API_URL=https://bugzilla.mozilla.org/rest
 BUGZILLA_API_KEY=...
 ```
 
@@ -109,7 +109,7 @@ they come from `.env`, `compose.yml`, or the command line.
 | `BUG_ID`            | yes      | The Bugzilla bug to triage                                                                                     |
 | `BROKER_URL`        | yes      | Bugzilla broker base URL; the agent appends `/mcp`. `compose.yml` sets it                                      |
 | `ANTHROPIC_API_KEY` | yes      | Drives the agent (billed per token)                                                                            |
-| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org` — **broker container only**                                                |
+| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org/rest` — **broker container only**                                           |
 | `BUGZILLA_API_KEY`  | yes      | **Broker container only**; reads only. The agent never sees it                                                 |
 | `MODEL`             | no       | Defaults to `claude-opus-5` (`DEFAULT_MODEL` in `__main__.py`); pinned so runs are reproducible and comparable |
 | `MAX_TURNS`         | no       | Hard cap on loop iterations — a runaway guard, cut off if hit                                                  |
