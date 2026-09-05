@@ -228,15 +228,23 @@ class PerfRegressionPredictorModel(Model):
         "perf-regression-predictor-v1.tar.zst"
     )
 
-    def __init__(self, tokenizer: Any = None, transformer_model: Any = None) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.tokenizer = tokenizer
-        self.transformer_model = transformer_model
+        # Assigned by load(); a transformer checkpoint replaces the
+        # extraction_pipeline/clf pair other models build here.
+        self.tokenizer: Any = None
+        self.transformer_model: Any = None
         self.calculate_importance = False
         self.model_directory: str | None = None
         self.model_metadata: dict[str, Any] = {}
         self.commit_message_cleaner = CommitMessageCleaner()
         self.diff_structurer = DiffStructurer()
+
+    def train(self, importance_cutoff=0.15, limit=None):
+        raise NotImplementedError(
+            "This model is trained outside bugbug; see "
+            "docs/models/perf-regression-predictor.md"
+        )
 
     def build_model_input(self, commit_message: str | None, raw_diff: str) -> str:
         """Build the exact text representation consumed during training."""
@@ -268,7 +276,9 @@ class PerfRegressionPredictorModel(Model):
         transformer_model.float().to("cpu")
         transformer_model.eval()
 
-        model = cls(tokenizer=tokenizer, transformer_model=transformer_model)
+        model = cls()
+        model.tokenizer = tokenizer
+        model.transformer_model = transformer_model
         model.model_directory = model_directory
 
         metadata_path = Path(model_directory) / "bugbug_model.json"
