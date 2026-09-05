@@ -38,21 +38,47 @@ def _job_resource_name(job_name: str) -> str:
 
 
 _AGENT_CONTAINER_NAME = "agent"
+_BROKER_CONTAINER_NAME = "broker"
+
+# The only variables settable on the credentialed `broker` container. What
+# keeps a run's inputs out of it is that everything else targets `agent`, and
+# this allowlist is what keeps that true as new overrides get added.
+_BROKER_ENV_ALLOWLIST = frozenset({"BUGZILLA_SCOPE_TOKEN"})
 
 
-def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
-    # Each agent's Job manifest declares two containers: `agent` (no
-    # tokens) and `broker` (holds tokens, fully configured at deploy
-    # time). Per-execution env overrides target only the agent
-    # container by name so the broker's env (Secret Manager-backed) is
-    # untouched.
+def _container_override(
+    name: str, env: dict[str, str]
+) -> run_v2.RunJobRequest.Overrides.ContainerOverride:
+    return run_v2.RunJobRequest.Overrides.ContainerOverride(
+        name=name,
+        env=[run_v2.EnvVar(name=k, value=v) for k, v in env.items()],
+    )
+
+
+def _trigger_sync(
+    job_name: str,
+    env_overrides: dict[str, str],
+    broker_env: dict[str, str] | None = None,
+) -> str:
+    # Each agent's Job declares two containers: `agent` (no tokens) and
+    # `broker` (holds tokens, configured at deploy time). Per-execution
+    # overrides target `agent` so the broker's Secret Manager-backed env is
+    # untouched. `broker_env` is the exception, carrying the run's capability
+    # token, and is allowlisted by name above.
+    broker_env = broker_env or {}
+    disallowed = set(broker_env) - _BROKER_ENV_ALLOWLIST
+    if disallowed:
+        raise ValueError(
+            f"refusing to set {sorted(disallowed)} on the broker container; "
+            f"only {sorted(_BROKER_ENV_ALLOWLIST)} may be overridden there"
+        )
+
+    containers = [_container_override(_AGENT_CONTAINER_NAME, env_overrides)]
+    if broker_env:
+        containers.append(_container_override(_BROKER_CONTAINER_NAME, broker_env))
+
     overrides = run_v2.RunJobRequest.Overrides(
-        container_overrides=[
-            run_v2.RunJobRequest.Overrides.ContainerOverride(
-                name=_AGENT_CONTAINER_NAME,
-                env=[run_v2.EnvVar(name=k, value=v) for k, v in env_overrides.items()],
-            )
-        ],
+        container_overrides=containers,
         timeout={"seconds": settings.job_execution_timeout_seconds},
         task_count=1,
     )
@@ -64,8 +90,12 @@ def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
     return operation.metadata.name
 
 
-async def trigger_execution(job_name: str, env_overrides: dict[str, str]) -> str:
-    return await asyncio.to_thread(_trigger_sync, job_name, env_overrides)
+async def trigger_execution(
+    job_name: str,
+    env_overrides: dict[str, str],
+    broker_env: dict[str, str] | None = None,
+) -> str:
+    return await asyncio.to_thread(_trigger_sync, job_name, env_overrides, broker_env)
 
 
 def _execution_status_sync(execution_name: str) -> ExecutionStatus:

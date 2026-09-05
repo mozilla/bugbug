@@ -10,7 +10,7 @@ from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import gcs, jobs, pubsub
+from app import bz_token, gcs, jobs, pubsub
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
@@ -112,8 +112,21 @@ async def create_run(
         **(agent.build_env or model_to_env)(inputs),
     }
 
+    # The broker's per-run environment, carrying this run's Bugzilla capability
+    # token when the agent has a registered scope. Built from the registry, not
+    # from `payload`, so the caller has no say in what the run may read.
+    broker_env = bz_token.broker_env_for(
+        run_id=str(run_id),
+        agent=agent.name,
+        scope=agent.bugzilla_scope,
+        inputs=inputs,
+        requested_by=on_behalf_of,
+    )
+
     try:
-        execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
+        execution_name = await jobs.trigger_execution(
+            agent.job_name, env_overrides, broker_env
+        )
     except Exception as exc:
         log.exception("Failed to trigger Cloud Run Job for run %s", run_id)
         run.status = RunStatus.failed.value

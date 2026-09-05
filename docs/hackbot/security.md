@@ -36,6 +36,17 @@ Today `bug-fix`, `build-repair`, `frontend-triage` and `autowebcompat-repro` run
 `test-plan-generator` needs no credentialed reads at all. The invariant holds in every case:
 **the key is never in the agent container.**
 
+### Bugzilla reads are moving behind a proxy
+
+A broker holding a Bugzilla key can read whatever that account can, for every run of that
+agent. [bugzilla-proxy](bugzilla-proxy.md) replaces the key with a per-run capability token:
+the credential moves to one shared service, and the broker holds only a signed statement of
+what this run may read. The service and the minting exist; **no agent uses them yet**, and
+every broker still holds its own key until the service is deployed and tested.
+
+This is what makes private bugs reachable later, under a scope narrow enough to review. The
+containment that has to land first is in [bugzilla-proxy.md](bugzilla-proxy.md).
+
 ## Workload Identity Federation
 
 Anthropic and W&B both accept a Google-signed OIDC identity token exchanged for a
