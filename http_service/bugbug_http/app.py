@@ -32,6 +32,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from bugbug import bugzilla, get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
+    PUSH_CLASSIFIERS,
     classify_broken_site_report,
     classify_bug,
     classify_issue,
@@ -108,12 +109,36 @@ class BugPrediction(Schema):
     extra_data = fields.Dict()
 
 
+class PerformanceRegressionCommitPrediction(Schema):
+    node = fields.String()
+    prob = fields.List(fields.Float())
+    predicted_class = fields.Integer(data_key="class")
+    risk_score = fields.Float()
+
+
+class PerformanceRegressionPrediction(Schema):
+    branch = fields.String()
+    rev = fields.String()
+    risk_score = fields.Float()
+    commits = fields.List(fields.Nested(PerformanceRegressionCommitPrediction))
+    extra_data = fields.Dict()
+
+
 class NotAvailableYet(Schema):
     ready = fields.Boolean(metadata={"enum": [False]})
 
 
 class ModelName(Schema):
     model_name = fields.String(metadata={"enum": MODELS_NAMES, "example": "component"})
+
+
+class PushModelName(Schema):
+    model_name = fields.String(
+        metadata={
+            "enum": sorted(PUSH_CLASSIFIERS),
+            "example": "perfregressionpredictor",
+        }
+    )
 
 
 class UnauthorizedError(Schema):
@@ -130,8 +155,17 @@ class Schedules(Schema):
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
+spec.components.schema(
+    PerformanceRegressionCommitPrediction.__name__,
+    schema=PerformanceRegressionCommitPrediction,
+)
+spec.components.schema(
+    PerformanceRegressionPrediction.__name__,
+    schema=PerformanceRegressionPrediction,
+)
 spec.components.schema(NotAvailableYet.__name__, schema=NotAvailableYet)
 spec.components.schema(ModelName.__name__, schema=ModelName)
+spec.components.schema(PushModelName.__name__, schema=PushModelName)
 spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
 spec.components.schema(BranchName.__name__, schema=BranchName)
 spec.components.schema(Schedules.__name__, schema=Schedules)
@@ -516,6 +550,76 @@ def model_prediction(model_name, bug_id):
                 model_name, [bug_id]
             )
             schedule_job(job_info, job_id=job_id, timeout=timeout)
+        status_code = 202
+        data = {"ready": False}
+
+    return compress_response(data, status_code)
+
+
+@application.route("/<model_name>/predict/push/<path:branch>/<rev>")
+@cross_origin()
+def model_prediction_push(model_name: str, branch: str, rev: str):
+    """
+    ---
+    get:
+      description: Classify a push using the given model, answer either 200 if the push is processed or 202 if the push is being processed
+      summary: Classify a single push
+      parameters:
+      - name: model_name
+        in: path
+        schema: PushModelName
+      - name: branch
+        in: path
+        required: true
+        schema:
+          BranchName
+      - name: rev
+        in: path
+        required: true
+        schema:
+          type: str
+          example: 76383a875678
+      responses:
+        200:
+          description: A single push prediction
+          content:
+            application/json:
+              schema: PerformanceRegressionPrediction
+        202:
+          description: A temporary answer for the push being processed
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if model_name not in PUSH_CLASSIFIERS:
+        return (
+            jsonify({"error": f"Model {model_name} doesn't support push predictions"}),
+            404,
+        )
+
+    # Support the string 'autoland' for convenience.
+    if branch == "autoland":
+        branch = "integration/autoland"
+
+    LOGGER.info(
+        "Received %s push prediction request for %s @ %s", model_name, branch, rev
+    )
+
+    job = JobInfo(PUSH_CLASSIFIERS[model_name], branch, rev)
+    data = get_result(job)
+    status_code = 200
+
+    if not data:
+        if not is_pending(job):
+            schedule_job(job)
         status_code = 202
         data = {"ready": False}
 
