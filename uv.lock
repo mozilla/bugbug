@@ -38,6 +38,7 @@ members = [
     "hackbot-runtime",
     "lando-client",
     "phabricator-client",
+    "phabricator-proxy",
     "reviewhelper-api",
     "testrail-client",
 ]
@@ -2569,6 +2570,7 @@ dependencies = [
     { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
     { name = "phabricator-client" },
+    { name = "phabricator-proxy" },
     { name = "starlette" },
     { name = "uvicorn" },
 ]
@@ -2587,6 +2589,7 @@ requires-dist = [
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
+    { name = "phabricator-proxy", editable = "libs/phabricator-proxy" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "starlette", specifier = ">=0.36.0" },
@@ -2804,10 +2807,8 @@ dependencies = [
     { name = "cachetools" },
     { name = "httpx" },
     { name = "kombu" },
-    { name = "markdown2" },
     { name = "mozci" },
     { name = "pydantic-settings" },
-    { name = "sendgrid" },
     { name = "sentry-sdk" },
     { name = "taskcluster" },
     { name = "tenacity" },
@@ -2824,11 +2825,9 @@ requires-dist = [
     { name = "cachetools", specifier = ">=5.3.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "kombu", specifier = ">=5.6,<6" },
-    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "mozci", specifier = "~=2.4.8" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
     { name = "taskcluster", specifier = ">=97.1,<103.1" },
     { name = "tenacity", specifier = "~=9.1.4" },
@@ -2846,9 +2845,11 @@ dependencies = [
     { name = "google-auth" },
     { name = "httpx" },
     { name = "lando-client" },
+    { name = "markdown2" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
+    { name = "sendgrid" },
     { name = "slack-sdk" },
     { name = "testrail-client" },
     { name = "weave" },
@@ -2872,10 +2873,12 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "lando-client", editable = "libs/lando-client" },
+    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
+    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "weave", specifier = ">=0.53.4" },
@@ -5192,6 +5195,32 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "phabricator-proxy"
+version = "0.1.0"
+source = { editable = "libs/phabricator-proxy" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "phabricator-client" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
 ]

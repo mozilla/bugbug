@@ -1,5 +1,9 @@
 from hackbot_agents.test_repair.agent import TestRepairResult
-from hackbot_agents.test_repair.notify import build_message, sheriff_action_required
+from hackbot_agents.test_repair.notify import (
+    build_email,
+    build_message,
+    sheriff_action_required,
+)
 from hackbot_agents.test_repair.resolve import (
     CommitRange,
     FailingGroup,
@@ -174,3 +178,88 @@ def test_lists_every_failing_group():
 def test_falls_back_when_groups_and_label_are_unknown():
     message = _message(investigation=_investigation(groups=[], label=""))
     assert "Failing: tests not resolved in `xpcshell on linux1804-64/opt`" in message
+
+
+def _email(result=None, investigation=None, **kwargs):
+    return build_email(
+        result or _result(),
+        investigation or _investigation(),
+        task_id=TASK_ID,
+        run_id="1218e630-78c8",
+        **kwargs,
+    )
+
+
+def test_the_email_subject_names_the_verdict_and_the_failing_group():
+    subject, _ = _email()
+    assert subject == (
+        "[test-repair] BACK OUT the culprit - "
+        "toolkit/modules/tests/xpcshell/xpcshell.toml (autoland)"
+    )
+
+
+def test_extra_failing_groups_are_counted_in_the_subject():
+    subject, _ = _email(
+        investigation=_investigation(
+            groups=[FailingGroup("a.toml", ["a.js"]), FailingGroup("b.toml", ["b.js"])]
+        )
+    )
+    assert subject.startswith("[test-repair] BACK OUT the culprit - a.toml (+1 more)")
+
+
+def test_an_already_actioned_failure_is_flagged_in_subject_and_body():
+    subject, body = _email(already_actioned="fixed by commit")
+    assert subject.startswith("[test-repair] [already actioned] ")
+    assert "Already actioned by a sheriff" in body
+    assert "_fixed by commit_" in body
+
+
+def test_the_email_links_every_identifier():
+    _, body = _email()
+    assert f"[`{GIT_REVISION[:12]}`]({GIT_URL})" in body
+    assert f"[`{HG_REVISION[:12]}`]({HG_URL})" in body
+    assert (
+        f"[`{TASK_ID}`](https://firefox-ci-tc.services.mozilla.com/tasks/{TASK_ID})"
+        in body
+    )
+    assert "https://hackbot.moz.tools/runs/1218e630-78c8" in body
+
+
+def test_the_culprit_author_is_named_when_known():
+    _, body = _email(culprit_author="author@mozilla.com")
+    assert "by author@mozilla.com" in body
+
+
+def test_agent_prose_nests_under_the_email_headings():
+    _, body = _email(result=_result(analysis="# Root cause\n\ndetail"))
+    assert "## Analysis" in body
+    assert "### Root cause" in body
+
+
+def test_the_patch_section_frames_a_placeholder_the_apply_step_fills():
+    _, body = _email(result=_result(proposed_patch=True))
+    assert "## Proposed patch\n\n```diff\n{patch}\n```" in body
+
+
+def test_the_author_advice_follows_the_patch():
+    _, body = _email(result=_result(proposed_patch=True))
+    assert body.index("{patch}") < body.index("squash this into your existing")
+
+
+def test_no_patch_section_without_a_patch():
+    _, body = _email()
+    assert "Proposed patch" not in body
+    assert "{patch}" not in body
+
+
+def test_an_intermittent_verdict_is_still_emailed():
+    # Unlike Slack, the email is not filtered by sheriff_action_required.
+    subject, body = _email(
+        result=_result(
+            classification="intermittent",
+            recommendation="do_not_backout",
+            culprit_commit=None,
+        )
+    )
+    assert "DO NOT back out (intermittent)" in subject
+    assert "**Classification:** intermittent" in body
