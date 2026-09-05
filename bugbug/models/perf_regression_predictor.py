@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass, field
 from email import policy
 from email.parser import Parser
 from pathlib import Path
@@ -103,57 +104,63 @@ class PatchCommitMessageExtractor:
         return None
 
 
+@dataclass
+class _DiffParseState:
+    """Working state for a single DiffStructurer call."""
+
+    output: list[str] = field(default_factory=list)
+    current_file: str | None = None
+    current_block_type: str | None = None
+    current_block_lines: list[str] = field(default_factory=list)
+    pending_binary_status: str | None = None
+    rename_from: str | None = None
+    rename_to: str | None = None
+    pending_rename: bool = False
+
+
 class DiffStructurer:
     """Convert a Git or Mercurial diff to the model's structured format.
 
     The input may be a bare diff or a full ``hg export`` / ``git format-patch``
     payload that still carries the commit-message header; any preamble before
     the first ``diff`` header is ignored.
+
+    Instances are stateless: each call keeps its working state in a local
+    ``_DiffParseState``, so one instance can safely be shared across commits.
     """
 
     def __init__(self) -> None:
         self.git_header_pattern = re.compile(r"diff --git a/(.+?) b/(.+)")
-        self._reset()
 
-    def _reset(self) -> None:
-        self.output: list[str] = []
-        self.current_file: str | None = None
-        self.current_block_type: str | None = None
-        self.current_block_lines: list[str] = []
-        self.pending_binary_status: str | None = None
-        self.rename_from: str | None = None
-        self.rename_to: str | None = None
-        self.pending_rename = False
+    def _start_file(self, state: _DiffParseState, file_name: str) -> None:
+        state.current_file = file_name
+        state.output.extend(("<FILE>", f"  {file_name}"))
 
-    def _start_file(self, file_name: str) -> None:
-        self.current_file = file_name
-        self.output.extend(("<FILE>", f"  {file_name}"))
+    def _flush_block(self, state: _DiffParseState) -> None:
+        if state.current_block_type and state.current_block_lines:
+            state.output.append(f"  <{state.current_block_type.upper()}>")
+            state.output.extend(f"      {line}" for line in state.current_block_lines)
+            state.output.append(f"  </{state.current_block_type.upper()}>")
+        state.current_block_type = None
+        state.current_block_lines = []
 
-    def _flush_block(self) -> None:
-        if self.current_block_type and self.current_block_lines:
-            self.output.append(f"  <{self.current_block_type.upper()}>")
-            self.output.extend(f"      {line}" for line in self.current_block_lines)
-            self.output.append(f"  </{self.current_block_type.upper()}>")
-        self.current_block_type = None
-        self.current_block_lines = []
+    def _flush_file(self, state: _DiffParseState) -> None:
+        if state.current_file:
+            self._flush_block(state)
+            if state.pending_rename and state.rename_from and state.rename_to:
+                state.output.append(f"  File renamed from {state.rename_from}.")
+            elif state.pending_binary_status:
+                state.output.append(f"  Binary file {state.pending_binary_status}.")
+            state.output.append("</FILE>")
 
-    def _flush_file(self) -> None:
-        if self.current_file:
-            self._flush_block()
-            if self.pending_rename and self.rename_from and self.rename_to:
-                self.output.append(f"  File renamed from {self.rename_from}.")
-            elif self.pending_binary_status:
-                self.output.append(f"  Binary file {self.pending_binary_status}.")
-            self.output.append("</FILE>")
-
-        self.current_file = None
-        self.pending_binary_status = None
-        self.rename_from = None
-        self.rename_to = None
-        self.pending_rename = False
+        state.current_file = None
+        state.pending_binary_status = None
+        state.rename_from = None
+        state.rename_to = None
+        state.pending_rename = False
 
     def __call__(self, diff_string: str) -> str:
-        self._reset()
+        state = _DiffParseState()
         started = False
 
         for line in diff_string.strip().splitlines():
@@ -164,49 +171,49 @@ class DiffStructurer:
                     continue
 
             if line.startswith("diff -r"):
-                self._flush_file()
+                self._flush_file(state)
                 parts = line.split()
                 if len(parts) >= 4:
-                    self._start_file(parts[-1])
+                    self._start_file(state, parts[-1])
                 continue
 
             if line.startswith("diff --git"):
-                self._flush_file()
+                self._flush_file(state)
                 match = self.git_header_pattern.match(line)
                 if match:
-                    self._start_file(match.group(2))
+                    self._start_file(state, match.group(2))
             elif line.startswith("rename from "):
-                self.rename_from = line[len("rename from ") :].strip()
-                self.pending_rename = True
+                state.rename_from = line[len("rename from ") :].strip()
+                state.pending_rename = True
             elif line.startswith("rename to "):
-                self.rename_to = line[len("rename to ") :].strip()
-                if not self.current_file:
-                    self._start_file(self.rename_to)
+                state.rename_to = line[len("rename to ") :].strip()
+                if not state.current_file:
+                    self._start_file(state, state.rename_to)
             elif line.startswith("--- "):
                 pass
             elif line.startswith("+++ "):
                 pass
             elif line.startswith("Binary files "):
-                self._flush_block()
-                self.pending_binary_status = "changed"
-                self._flush_file()
+                self._flush_block(state)
+                state.pending_binary_status = "changed"
+                self._flush_file(state)
             elif line.startswith("@@"):
-                self._flush_block()
+                self._flush_block(state)
             elif line.startswith("-"):
-                if self.current_block_type != "REMOVED":
-                    self._flush_block()
-                    self.current_block_type = "REMOVED"
-                self.current_block_lines.append(line[1:].rstrip())
+                if state.current_block_type != "REMOVED":
+                    self._flush_block(state)
+                    state.current_block_type = "REMOVED"
+                state.current_block_lines.append(line[1:].rstrip())
             elif line.startswith("+"):
-                if self.current_block_type != "ADDED":
-                    self._flush_block()
-                    self.current_block_type = "ADDED"
-                self.current_block_lines.append(line[1:].rstrip())
+                if state.current_block_type != "ADDED":
+                    self._flush_block(state)
+                    state.current_block_type = "ADDED"
+                state.current_block_lines.append(line[1:].rstrip())
             else:
-                self._flush_block()
+                self._flush_block(state)
 
-        self._flush_file()
-        return "\n".join(self.output)
+        self._flush_file(state)
+        return "\n".join(state.output)
 
 
 class PerfRegressionPredictorModel(Model):
