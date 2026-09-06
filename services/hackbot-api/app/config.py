@@ -38,8 +38,6 @@ class BugzillaWebhookSettings(BaseModel):
     bot_login: str = "hackbot@mozilla.tld"
     # Best-effort in-memory dedupe of retried bug-modification deliveries.
     dedupe_ttl_seconds: int = 6 * 60 * 60
-    # Bugzilla instance queried to authorize the requesting user.
-    url: str = "https://bugzilla.mozilla.org"
 
 
 class SlackSettings(BaseModel):
@@ -82,9 +80,12 @@ class Settings(BaseSettings):
     webhook: WebhookSettings
 
     # Bugzilla uses a separate shared-secret header and bot identity. These map
-    # from BUGZILLA_WEBHOOK_SECRET, BUGZILLA_WEBHOOK_BOT_LOGIN,
-    # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS, and BUGZILLA_WEBHOOK_URL.
+    # from BUGZILLA_WEBHOOK_SECRET, BUGZILLA_WEBHOOK_BOT_LOGIN, and
+    # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
+
+    # The Bugzilla REST endpoint this service talks to. Includes /rest.
+    bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
 
     slack: SlackSettings
 

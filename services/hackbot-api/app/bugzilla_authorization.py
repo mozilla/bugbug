@@ -17,13 +17,13 @@ class BugzillaAuthorizer:
 
     def __init__(
         self,
-        url: str,
+        api_url: str,
         authorized_group_id: int,
         *,
         cache_ttl_seconds: int = 300,
         cache_maxsize: int = 4096,
     ) -> None:
-        self._rest_url = url.rstrip("/") + "/rest"
+        self._api_url = api_url.rstrip("/")
         self._authorized_group_id = authorized_group_id
         self._cache: TTLCache[str, bool] = TTLCache(
             maxsize=cache_maxsize,
@@ -57,7 +57,7 @@ class BugzillaAuthorizer:
         """
         async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
             response = await client.get(
-                f"{self._rest_url}/user",
+                f"{self._api_url}/user",
                 params={
                     "names": login,
                     "group_ids": str(group_id),

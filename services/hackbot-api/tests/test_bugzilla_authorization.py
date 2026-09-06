@@ -8,7 +8,9 @@ from app.bugzilla_authorization import AUTHORIZED_GROUP_ID, BugzillaAuthorizer
 
 def _authorizer(member: bool) -> tuple[BugzillaAuthorizer, AsyncMock]:
     """An authorizer whose membership lookup is stubbed to ``member``."""
-    authorizer = BugzillaAuthorizer("https://bugzilla.example.com", AUTHORIZED_GROUP_ID)
+    authorizer = BugzillaAuthorizer(
+        "https://bugzilla.example.com/rest", AUTHORIZED_GROUP_ID
+    )
     lookup = AsyncMock(return_value=member)
     authorizer._is_user_in_group = lookup
     return authorizer, lookup
@@ -59,7 +61,9 @@ def _http_authorizer(
             transport=httpx.MockTransport(handler), **kwargs
         ),
     )
-    authorizer = BugzillaAuthorizer("https://bugzilla.example.com", AUTHORIZED_GROUP_ID)
+    authorizer = BugzillaAuthorizer(
+        "https://bugzilla.example.com/rest", AUTHORIZED_GROUP_ID
+    )
     return authorizer, requests
 
 
