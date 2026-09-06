@@ -3,7 +3,7 @@
 Covers HMAC signature verification, mention detection / loop prevention, the
 revision -> (revision_id, bug_id) resolution, and the route's ignore/trigger
 branches. Bugzilla coverage includes shared-secret auth, structured needinfo
-detection, self/private-event suppression, actor authorization, dedupe, and
+detection, self/private-event suppression, user authorization, dedupe, and
 dispatch retry behavior.
 """
 
@@ -481,7 +481,7 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
     assert detected is not None
     assert detected.bug_id == 2022889
     assert detected.flag_id == 2187233
-    assert detected.actor_login == "gmierzwinski@mozilla.com"
+    assert detected.user_login == "gmierzwinski@mozilla.com"
     assert "gmierzwinski@mozilla.com" in detected.comment
     assert "2026-08-07T18:00:05" in detected.comment
 

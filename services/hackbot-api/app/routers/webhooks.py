@@ -182,11 +182,11 @@ async def bugzilla_webhook(
         return {"status": "ignored", "reason": "duplicate delivery"}
 
     # Ignore requests from users without editbugs
-    if not await authorizer.is_authorized(detected.actor_login):
+    if not await authorizer.is_authorized(detected.user_login):
         log.info(
             "Ignored Bugzilla needinfo webhook for bug %s: %s is not authorized",
             detected.bug_id,
-            detected.actor_login,
+            detected.user_login,
         )
         return {"status": "ignored", "reason": "unauthorized user"}
 
