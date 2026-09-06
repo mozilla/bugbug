@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Small shared Hackbot API client (httpx-based)"
 requires-python = ">=3.12"
 dependencies = [
+    "google-auth[requests]>=2.25.0",
     "httpx>=0.26.0",
     "pydantic>=2.6.0",
 ]
