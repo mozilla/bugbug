@@ -142,10 +142,6 @@ members belong to this group) — see
 [bugzilla_authorization.py](../../services/hackbot-api/app/bugzilla_authorization.py).
 Membership is checked per login with BMO's server-side `group_ids` filter on `/rest/user`.
 
-- An unauthorized request is ignored without
-  consuming the dedupe key, leaving the same flag eligible for a later delivery after the
-  requester becomes authorized.
-
 The receiver passes the requester's login and the change timestamp to the agent as context
 for locating the accompanying comment — a needinfo may be filed without one, in which case
 the agent falls back to the surrounding bug context. That text is **passed through as data**;
@@ -157,7 +153,3 @@ existing one. The needinfo flag is cleared automatically as a recorded
 `bugzilla.update_bug` action once the run produces at least one other action, coalesced with
 the reply comment into a single Bugzilla transaction (see [actions.md](actions.md)). A run
 that records nothing leaves the flag standing.
-
-Configuration is four env vars — `BUGZILLA_WEBHOOK_SECRET` (required, no default),
-`BUGZILLA_WEBHOOK_BOT_LOGIN`, `BUGZILLA_WEBHOOK_URL` and
-`BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS`; see [deployment.md](deployment.md).
