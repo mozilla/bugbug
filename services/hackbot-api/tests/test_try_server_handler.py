@@ -15,9 +15,11 @@ from datetime import datetime, timezone
 
 import pytest
 from app.action_handlers import ApplyContext, try_server_handler
-from app.action_handlers.contract import TRY_ACTION_TYPES
 from app.action_handlers.registry import get_handler
 from lando_client import LandoClient
+
+# Actions that submit source changes to the Try server.
+TRY_ACTION_TYPES = frozenset({"try_server.push"})
 
 
 def _git(repo, *args: str) -> str:

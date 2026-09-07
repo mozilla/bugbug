@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
-from app.action_handlers.contract import PATCH_ACTION_TYPES
+from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key

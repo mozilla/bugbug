@@ -17,6 +17,9 @@ from app.action_handlers.slack_handler import PostMessageHandler
 from app.action_handlers.testrail_handler import SubmitTestPlanHandler
 from app.action_handlers.try_server_handler import PushHandler
 
+# Actions that submit source changes to Phabricator.
+PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
+
 # Maps a recorded action's dotted `type` to the handler that applies it.
 # Adding a new action type later is a one-line addition here — the dispatch
 # loop (see the apply-run-actions route) never changes.

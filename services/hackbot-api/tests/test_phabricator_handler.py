@@ -12,8 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from app.action_handlers import ApplyContext, phabricator_handler
-from app.action_handlers.contract import PATCH_ACTION_TYPES
-from app.action_handlers.registry import get_handler
+from app.action_handlers.registry import PATCH_ACTION_TYPES, get_handler
 
 
 @pytest.fixture(autouse=True)
