@@ -1,6 +1,7 @@
 """Tests for the apply-side TestRail action handler."""
 
-from app.action_handlers import ApplyContext, testrail_handler
+from app.action_handlers import ApplyContext, get_handler, testrail_handler
+from app.action_handlers.testrail_handler import SubmitTestPlanHandler
 
 
 def _ctx():
@@ -340,3 +341,7 @@ async def test_resolve_template_id_requires_steps_template():
         assert str(exc) == 'TestRail has no template named "Test Case (Steps)"'
     else:
         raise AssertionError("missing Test Case (Steps) template did not fail")
+
+
+def test_submit_test_plan_handler_is_registered():
+    assert isinstance(get_handler("testrail.submit_test_plan"), SubmitTestPlanHandler)
