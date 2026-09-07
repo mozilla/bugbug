@@ -26,9 +26,8 @@ import logging
 import os
 from typing import Any
 
-from hackbot_runtime.actions.email import PATCH_PLACEHOLDER
-from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
-from hackbot_runtime.changes import PATCH_ARTIFACT
+from app.action_handlers.base import ActionResult, ApplyContext
+from app.action_handlers.contract import PATCH_ARTIFACT, PATCH_PLACEHOLDER
 
 log = logging.getLogger(__name__)
 

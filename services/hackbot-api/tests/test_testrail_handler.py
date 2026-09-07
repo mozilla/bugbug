@@ -1,6 +1,6 @@
 """Tests for the apply-side TestRail action handler."""
 
-from hackbot_runtime.actions.handlers import ApplyContext, testrail_handler
+from app.action_handlers import ApplyContext, testrail_handler
 
 
 def _ctx():

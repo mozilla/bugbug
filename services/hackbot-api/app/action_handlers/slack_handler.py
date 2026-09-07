@@ -13,8 +13,8 @@ from typing import Any
 
 from slack_sdk import WebClient
 
-from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
-from hackbot_runtime.actions.slack import HACKBOT_UI_URL
+from app.action_handlers.base import ActionResult, ApplyContext
+from app.action_handlers.contract import HACKBOT_UI_URL
 
 log = logging.getLogger(__name__)
 

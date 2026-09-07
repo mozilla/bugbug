@@ -11,7 +11,7 @@ from typing import Any
 
 from lando_client import LandoClient, encode_patch
 
-from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
+from app.action_handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
 

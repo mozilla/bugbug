@@ -11,9 +11,9 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from hackbot_runtime.actions.handlers import ApplyContext, phabricator_handler
-from hackbot_runtime.actions.handlers.registry import get_handler
-from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
+from app.action_handlers import ApplyContext, phabricator_handler
+from app.action_handlers.contract import PATCH_ACTION_TYPES
+from app.action_handlers.registry import get_handler
 
 
 @pytest.fixture(autouse=True)

@@ -1,21 +1,21 @@
-from hackbot_runtime.actions.handlers.base import ActionHandler
-from hackbot_runtime.actions.handlers.bugzilla_handler import (
+from app.action_handlers.base import ActionHandler
+from app.action_handlers.bugzilla_handler import (
     AddAttachmentHandler,
     AddCommentHandler,
     CreateBugHandler,
     UpdateBugHandler,
 )
-from hackbot_runtime.actions.handlers.email_handler import SendEmailHandler
-from hackbot_runtime.actions.handlers.phabricator_handler import (
+from app.action_handlers.email_handler import SendEmailHandler
+from app.action_handlers.phabricator_handler import (
     AddCommentHandler as PhabricatorAddCommentHandler,
 )
-from hackbot_runtime.actions.handlers.phabricator_handler import (
+from app.action_handlers.phabricator_handler import (
     SubmitPatchHandler,
     UpdatePatchHandler,
 )
-from hackbot_runtime.actions.handlers.slack_handler import PostMessageHandler
-from hackbot_runtime.actions.handlers.testrail_handler import SubmitTestPlanHandler
-from hackbot_runtime.actions.handlers.try_server_handler import PushHandler
+from app.action_handlers.slack_handler import PostMessageHandler
+from app.action_handlers.testrail_handler import SubmitTestPlanHandler
+from app.action_handlers.try_server_handler import PushHandler
 
 # Maps a recorded action's dotted `type` to the handler that applies it.
 # Adding a new action type later is a one-line addition here — the dispatch

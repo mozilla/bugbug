@@ -9,15 +9,26 @@ to diagnose.
 """
 
 import json
+import subprocess
 from base64 import b64decode
 from datetime import datetime, timezone
 
 import pytest
-from hackbot_runtime.actions.handlers import ApplyContext, try_server_handler
-from hackbot_runtime.actions.handlers.registry import get_handler
-from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
-from hackbot_runtime.changes import _git
+from app.action_handlers import ApplyContext, try_server_handler
+from app.action_handlers.contract import TRY_ACTION_TYPES
+from app.action_handlers.registry import get_handler
 from lando_client import LandoClient
+
+
+def _git(repo, *args: str) -> str:
+    """Run a git command in ``repo`` and return its stdout."""
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
 
 _SUBMISSION = {
     "base_commit": "a" * 40,
