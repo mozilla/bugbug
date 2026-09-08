@@ -60,7 +60,7 @@ async def submit_patch(
                 "Title for the new revision: a single line describing the fix, "
                 "as you would write a commit message subject. Do not include "
                 "reviewer annotations (r=... or r?...): reviewer selection is "
-                "handled by Herald rules on the Phabricator side."
+                "handled on the Phabricator side."
             )
         ),
     ],
