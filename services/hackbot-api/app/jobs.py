@@ -3,6 +3,7 @@ import logging
 from enum import Enum
 from functools import lru_cache
 
+from google.api_core.exceptions import NotFound
 from google.cloud import run_v2
 
 from app.config import settings
@@ -16,6 +17,8 @@ class ExecutionStatus(str, Enum):
     succeeded = "succeeded"
     failed = "failed"
     cancelled = "cancelled"
+    gone = "gone"
+    unknown = "unknown"
 
 
 @lru_cache(maxsize=1)
@@ -66,7 +69,12 @@ async def trigger_execution(job_name: str, env_overrides: dict[str, str]) -> str
 
 
 def _execution_status_sync(execution_name: str) -> ExecutionStatus:
-    execution = _executions_client().get_execution(name=execution_name)
+    try:
+        execution = _executions_client().get_execution(name=execution_name)
+    except NotFound:
+        log.warning("Execution %s no longer exists", execution_name)
+        return ExecutionStatus.gone
+
     if execution.completion_time:
         if execution.succeeded_count and not execution.failed_count:
             return ExecutionStatus.succeeded
@@ -78,5 +86,8 @@ def _execution_status_sync(execution_name: str) -> ExecutionStatus:
     return ExecutionStatus.pending
 
 
-async def get_execution_status(execution_name: str) -> ExecutionStatus:
+async def get_execution_status(execution_name: str | None) -> ExecutionStatus:
+    if execution_name is None:
+        return ExecutionStatus.unknown
+
     return await asyncio.to_thread(_execution_status_sync, execution_name)

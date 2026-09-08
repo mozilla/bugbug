@@ -20,7 +20,7 @@ dependencies = [
     "cachetools>=5.3.0",
     "slack-sdk>=3.27.0",
     "python-multipart>=0.0.9",
-    "httpx>=0.26.0",
+    "hackbot-client",
     "hackbot-runtime",
     "phabricator-client",
 ]
@@ -29,6 +29,7 @@ dependencies = [
 dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "httpx>=0.26.0"]
 
 [tool.uv.sources]
+hackbot-client = { workspace = true }
 hackbot-runtime = { workspace = true }
 phabricator-client = { workspace = true }
 

@@ -5,6 +5,7 @@ from hackbot_runtime.actions.handlers.bugzilla_handler import (
     CreateBugHandler,
     UpdateBugHandler,
 )
+from hackbot_runtime.actions.handlers.email_handler import SendEmailHandler
 from hackbot_runtime.actions.handlers.phabricator_handler import (
     AddCommentHandler as PhabricatorAddCommentHandler,
 )
@@ -29,6 +30,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "phabricator.add_comment": PhabricatorAddCommentHandler(),
     "testrail.submit_test_plan": SubmitTestPlanHandler(),
     "slack.post_message": PostMessageHandler(),
+    "email.send": SendEmailHandler(),
     "try_server.push": PushHandler(),
 }
 
