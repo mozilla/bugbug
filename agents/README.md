@@ -63,7 +63,7 @@ the repo's root `docker-compose.yml`, so running it is three steps:
    ```dotenv
    # .env (repo root) — never commit this file
    ANTHROPIC_API_KEY=sk-ant-...
-   BUGZILLA_API_URL=https://bugzilla.mozilla.org
+   BUGZILLA_API_URL=https://bugzilla.mozilla.org/rest
    BUGZILLA_API_KEY=...
    ```
 
