@@ -11,7 +11,7 @@ from app.auth import (
     require_bugzilla_webhook_secret,
     require_phabricator_signature,
 )
-from app.bugzilla_authorization import AUTHORIZED_GROUP_ID, BugzillaAuthorizer
+from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.phabricator_authorization import (
@@ -57,7 +57,11 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
     """Dependency: lazily create the app-scoped authorizer and its user cache."""
     authorizer = getattr(request.app.state, "bugzilla_authorizer", None)
     if authorizer is None:
-        authorizer = BugzillaAuthorizer(settings.bugzilla_api_url, AUTHORIZED_GROUP_ID)
+        authorizer = BugzillaAuthorizer(
+            settings.bugzilla_api_url,
+            settings.bugzilla_api_key,
+            AUTHORIZED_GROUP_NAME,
+        )
         request.app.state.bugzilla_authorizer = authorizer
     return authorizer
 

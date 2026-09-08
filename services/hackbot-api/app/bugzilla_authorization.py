@@ -7,7 +7,7 @@ import asyncio
 import httpx
 from cachetools import TTLCache
 
-AUTHORIZED_GROUP_ID = 9  # bmo-editbugs-team
+AUTHORIZED_GROUP_NAME = "editbugs"
 
 _REQUEST_TIMEOUT_SECONDS = 30
 
@@ -18,13 +18,15 @@ class BugzillaAuthorizer:
     def __init__(
         self,
         api_url: str,
-        authorized_group_id: int,
+        api_key: str,
+        authorized_group_name: str,
         *,
         cache_ttl_seconds: int = 300,
         cache_maxsize: int = 4096,
     ) -> None:
         self._api_url = api_url.rstrip("/")
-        self._authorized_group_id = authorized_group_id
+        self._api_key = api_key
+        self._authorized_group_name = authorized_group_name
         self._cache: TTLCache[str, bool] = TTLCache(
             maxsize=cache_maxsize,
             ttl=cache_ttl_seconds,
@@ -44,28 +46,27 @@ class BugzillaAuthorizer:
             if cached is not None:
                 return cached
 
-            authorized = await self._is_user_in_group(login, self._authorized_group_id)
+            authorized = await self._is_user_in_group(
+                login, self._authorized_group_name
+            )
             self._cache[login] = authorized
             return authorized
 
     # TODO: Move this REST call to a shared Bugzilla client library (#6459).
-    async def _is_user_in_group(self, login: str, group_id: int) -> bool:
-        """Return whether a Bugzilla account exists and belongs to a group.
-
-        The ``group_ids`` parameter filters server-side and needs no API key,
-        so the service holds no Bugzilla credential.
-        """
+    async def _is_user_in_group(self, login: str, group_name: str) -> bool:
+        """Return whether a Bugzilla account exists and belongs to a group."""
         async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
             response = await client.get(
                 f"{self._api_url}/user",
                 params={
                     "names": login,
-                    "group_ids": str(group_id),
+                    "groups": group_name,
                     "include_fields": "name",
                     # Report an unknown login in ``faults`` instead of failing
                     # the request, so it maps to "not authorized", not a 500.
                     "permissive": "1",
                 },
+                headers={"X-Bugzilla-API-Key": self._api_key},
             )
         response.raise_for_status()
         return bool(response.json().get("users"))

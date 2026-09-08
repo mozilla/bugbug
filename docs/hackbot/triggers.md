@@ -140,7 +140,7 @@ Guards, each closing a specific failure mode:
 Only requesters in Bugzilla's `editbugs` group are authorized (all Mozilla Corporation
 members belong to this group) — see
 [bugzilla_authorization.py](../../services/hackbot-api/app/bugzilla_authorization.py).
-Membership is checked per login with BMO's server-side `group_ids` filter on `/rest/user`.
+Membership is checked per login through Bugzilla's REST API.
 
 The receiver passes the requester's login and the change timestamp to the agent as context
 for locating the accompanying comment — a needinfo may be filed without one, in which case

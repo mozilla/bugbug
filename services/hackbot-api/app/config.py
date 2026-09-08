@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     bugzilla_webhook: BugzillaWebhookSettings
 
     bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
+    bugzilla_api_key: str
 
     slack: SlackSettings
 

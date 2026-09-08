@@ -3,13 +3,17 @@
 from unittest.mock import AsyncMock
 
 import httpx
-from app.bugzilla_authorization import AUTHORIZED_GROUP_ID, BugzillaAuthorizer
+from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
+
+BUGZILLA_API_KEY = "test-bugzilla-api-key"
 
 
 def _authorizer(member: bool) -> tuple[BugzillaAuthorizer, AsyncMock]:
     """An authorizer whose membership lookup is stubbed to ``member``."""
     authorizer = BugzillaAuthorizer(
-        "https://bugzilla.example.com/rest", AUTHORIZED_GROUP_ID
+        "https://bugzilla.example.com/rest",
+        BUGZILLA_API_KEY,
+        AUTHORIZED_GROUP_NAME,
     )
     lookup = AsyncMock(return_value=member)
     authorizer._is_user_in_group = lookup
@@ -21,7 +25,7 @@ async def test_is_authorized_caches_positive_lookup():
 
     assert await authorizer.is_authorized("dev@mozilla.com") is True
     assert await authorizer.is_authorized("dev@mozilla.com") is True
-    lookup.assert_awaited_once_with("dev@mozilla.com", AUTHORIZED_GROUP_ID)
+    lookup.assert_awaited_once_with("dev@mozilla.com", AUTHORIZED_GROUP_NAME)
 
 
 async def test_is_authorized_caches_negative_lookup():
@@ -29,7 +33,7 @@ async def test_is_authorized_caches_negative_lookup():
 
     assert await authorizer.is_authorized("someone@example.com") is False
     assert await authorizer.is_authorized("someone@example.com") is False
-    lookup.assert_awaited_once_with("someone@example.com", AUTHORIZED_GROUP_ID)
+    lookup.assert_awaited_once_with("someone@example.com", AUTHORIZED_GROUP_NAME)
 
 
 async def test_is_authorized_normalizes_login_case():
@@ -37,7 +41,7 @@ async def test_is_authorized_normalizes_login_case():
 
     assert await authorizer.is_authorized("Dev@Mozilla.com") is True
     assert await authorizer.is_authorized("dev@mozilla.com") is True
-    lookup.assert_awaited_once_with("dev@mozilla.com", AUTHORIZED_GROUP_ID)
+    lookup.assert_awaited_once_with("dev@mozilla.com", AUTHORIZED_GROUP_NAME)
 
 
 # --- the membership lookup itself, on BMO's captured payload shapes ---
@@ -62,7 +66,9 @@ def _http_authorizer(
         ),
     )
     authorizer = BugzillaAuthorizer(
-        "https://bugzilla.example.com/rest", AUTHORIZED_GROUP_ID
+        "https://bugzilla.example.com/rest",
+        BUGZILLA_API_KEY,
+        AUTHORIZED_GROUP_NAME,
     )
     return authorizer, requests
 
@@ -78,10 +84,9 @@ async def test_lookup_authorizes_group_member(monkeypatch):
     assert request.url.host == "bugzilla.example.com"
     assert request.url.path == "/rest/user"
     assert request.url.params["names"] == "dev@mozilla.com"
-    assert request.url.params["group_ids"] == str(AUTHORIZED_GROUP_ID)
+    assert request.url.params["groups"] == AUTHORIZED_GROUP_NAME
     assert request.url.params["permissive"] == "1"
-    # The membership filter is anonymous: no credential must ever be sent.
-    assert "X-Bugzilla-API-Key" not in request.headers
+    assert request.headers["X-Bugzilla-API-Key"] == BUGZILLA_API_KEY
 
 
 async def test_lookup_rejects_non_member(monkeypatch):
