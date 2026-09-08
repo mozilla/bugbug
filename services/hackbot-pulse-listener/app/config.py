@@ -10,15 +10,10 @@ class Settings(BaseSettings):
     # hackbot-api
     hackbot_api_url: str = ""
     hackbot_api_key: str = ""
-    hackbot_ui_url: str = "https://hackbot.moz.tools"
     agent_name: str = "build-repair"
     # Agent that analyzes test failures (separate Cloud Run Job from build-repair).
     test_repair_agent_name: str = "test-repair"
 
-    # Source links shown in notifications.
-    firefox_git_url: str = "https://github.com/mozilla-firefox/firefox"
-    firefox_hg_url: str = "https://hg.mozilla.org/mozilla-unified"
-    bugzilla_url: str = "https://bugzilla.mozilla.org"
     treeherder_url: str = "https://treeherder.mozilla.org"
 
     # Failure filtering and agent inputs.
@@ -56,26 +51,11 @@ class Settings(BaseSettings):
     # gate failing open -- could otherwise cost far more than the failures are worth.
     max_test_repairs_per_day: int = 50
 
-    # Polling the API for run completion
-    poll_interval_seconds: int = 60
-    run_max_age_minutes: int = 12 * 60
-    # Shared worker pool for message processing and run polling. A
-    # regression check may block for a few minutes waiting for a parent
-    # build to settle, so the pool is sized well above the number of
-    # builds/runs in flight at once. Threads are cheap and mostly idle
+    # Worker pool for message processing. A regression check may block for a few
+    # minutes waiting for a parent build to settle, so the pool is sized well above
+    # the number of builds in flight at once. Threads are cheap and mostly idle
     # while waiting.
     max_workers: int = 256
-
-    # Email notifications (SendGrid)
-    sendgrid_api_key: str | None = None
-    notification_sender: str | None = None
-    # Team address CC'd on every build-repair notification alongside the revision
-    # author, and the only recipient of test-repair verdicts.
-    notification_team_email: str | None = None
-    # Send all notifications to this address instead of the developer (local testing).
-    notification_override_email: str | None = None
-    # Only notify when the run produced a patch (skip transient / not-to-blame runs).
-    notify_only_with_patch: bool = True
 
     dry_run: bool = False
     log_level: str = "INFO"

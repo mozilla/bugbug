@@ -35,6 +35,18 @@ Second stage - fixing:
 
 The result reports `blamed_commit` so the caller can attribute the failure to a developer.
 
+## Email notification
+
+A run that produced a patch records an `email.send` action carrying the analysis, the
+blamed commit and the patch, addressed to that commit's author and to the developer who
+pushed the failing change (the hackbot team is copied apply-side). A run that proposed no
+patch is a transient or not-to-blame failure and is not emailed -- see
+`NOTIFY_ONLY_WITH_PATCH` in [config.py](hackbot_agents/build_repair/config.py).
+
+The email is delivered by the apply step, not from the run, so it is visible in the
+hackbot UI before it lands and is delivered at most once. `build-repair` opts into
+auto-apply, so a succeeded run reports without waiting for a human.
+
 ## Test the agent
 
 ```sh

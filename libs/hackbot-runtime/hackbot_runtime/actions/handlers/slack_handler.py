@@ -3,9 +3,6 @@
 Authenticates as a Slack app with a bot token (``SLACK_BOT_TOKEN``, needing the
 ``chat:write`` scope, plus ``chat:write.public`` for a public channel the app has
 not been invited to), through the official ``slack_sdk`` client.
-
-Posts the recorded action as it stands: both the channel and the message are the
-recording side's to decide (see ``actions/slack.py``).
 """
 
 from __future__ import annotations
@@ -61,6 +58,8 @@ class PostMessageHandler:
                 text=params["text"],
                 blocks=params.get("blocks"),
                 metadata=metadata,
+                unfurl_links=bool(params.get("unfurl_links", False)),
+                unfurl_media=bool(params.get("unfurl_media", False)),
             )
         except Exception as exc:
             log.exception("Failed to post to Slack channel %s", channel)

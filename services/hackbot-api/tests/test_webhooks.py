@@ -30,6 +30,7 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
+from hackbot_client import RunRef, RunStatus
 
 SECRET = "test-secret"
 BUGZILLA_SECRET = "test-bugzilla-secret"
@@ -532,7 +533,11 @@ class _FakeHackbotClient:
 
     async def trigger_run(self, agent_name, inputs):
         self.calls.append((agent_name, inputs))
-        return "run-abc"
+        return RunRef(
+            run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+            agent=agent_name,
+            status=RunStatus.pending,
+        )
 
 
 class _FakeAuthorizer:
@@ -552,6 +557,7 @@ def phab_client():
 
 @pytest.fixture
 def client(monkeypatch, authorizer, phab_client):
+    monkeypatch.setattr(settings, "external_api_key", "test-api-key")
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
@@ -634,7 +640,10 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json() == {"status": "triggered", "run_id": "run-abc"}
+    assert resp.json() == {
+        "status": "triggered",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     assert detect.call_args.args[0] is phab_client
     assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
@@ -743,7 +752,10 @@ def test_bugzilla_route_triggers_run(client):
     response = _post_bugzilla(client, _bugzilla_payload())
 
     assert response.status_code == 202
-    assert response.json() == {"status": "triggered", "run_id": "run-abc"}
+    assert response.json() == {
+        "status": "triggered",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     expected_comment = (
         "Check whether Bugzilla user gmierzwinski@mozilla.com posted a comment "
         "at exactly 2026-08-07T18:00:05. If one exists, treat it as the "

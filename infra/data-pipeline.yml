@@ -1157,7 +1157,7 @@ tasks:
       deadline: { $fromNow: "5 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-generator

@@ -226,7 +226,6 @@ async def create_bug(
         "summary": summary,
         "version": version,
         "description": description,
-        "is_markdown": True,
     }
     for k, v in (extra or {}).items():
         body.setdefault(k, v)
