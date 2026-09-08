@@ -84,7 +84,6 @@ class Settings(BaseSettings):
     # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
 
-    # The Bugzilla REST endpoint this service talks to. Includes /rest.
     bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
 
     slack: SlackSettings
