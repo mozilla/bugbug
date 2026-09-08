@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import httpx
 from cachetools import TTLCache
 
@@ -31,7 +29,6 @@ class BugzillaAuthorizer:
             maxsize=cache_maxsize,
             ttl=cache_ttl_seconds,
         )
-        self._lock = asyncio.Lock()
 
     async def is_authorized(self, login: str) -> bool:
         """Return whether a Bugzilla login belongs to the authorized group."""
@@ -41,16 +38,9 @@ class BugzillaAuthorizer:
         if cached is not None:
             return cached
 
-        async with self._lock:
-            cached = self._cache.get(login)
-            if cached is not None:
-                return cached
-
-            authorized = await self._is_user_in_group(
-                login, self._authorized_group_name
-            )
-            self._cache[login] = authorized
-            return authorized
+        authorized = await self._is_user_in_group(login, self._authorized_group_name)
+        self._cache[login] = authorized
+        return authorized
 
     # TODO: Move this REST call to a shared Bugzilla client library (#6459).
     async def _is_user_in_group(self, login: str, group_name: str) -> bool:
