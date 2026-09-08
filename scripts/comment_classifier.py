@@ -46,7 +46,7 @@ def classify_comments(model_name: str, comment_id: int) -> None:
 
     for comment in comments:
         print(
-            f'https://bugzilla.mozilla.org/show_bug.cgi?id={comment["bug_id"]}#c{comment["count"]}'
+            f"https://bugzilla.mozilla.org/show_bug.cgi?id={comment['bug_id']}#c{comment['count']}"
         )
 
         if model.calculate_importance:
