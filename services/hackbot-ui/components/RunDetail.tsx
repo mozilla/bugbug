@@ -25,13 +25,6 @@ function commentPreview(a: RunAction): string | null {
   return typeof text === "string" && text.trim() ? text : null;
 }
 
-// Only some action types return a link to the external system (e.g. Bugzilla) where the action was applied.
-// We surface that as an "Open" link in the actions list.
-function actionUrl(a: RunAction): string | null {
-  const url = a.result?.url;
-  return typeof url === "string" && url ? url : null;
-}
-
 const POLL_MS = 4000;
 
 function formatBytes(n: number): string {
@@ -278,7 +271,8 @@ export function RunDetail({ runId }: { runId: string }) {
           <ul className="action-list">
             {actions.map((a) => {
               const preview = commentPreview(a);
-              const url = actionUrl(a);
+              const url =
+                typeof a.result?.url === "string" ? a.result.url : null;
               return (
                 <li key={a.idx}>
                   <div className="action-row">
