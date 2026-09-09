@@ -25,6 +25,15 @@ log = logging.getLogger(__name__)
 _COMMENT_TYPES = frozenset({"comment", "inline"})
 
 
+def _strip_quoted_lines(text: str) -> str:
+    """Return ``text`` with every line that starts with ``>`` removed.
+
+    Phabricator uses these lines for quoted replies. Excluding them prevents a
+    mention copied from an earlier comment from being treated as a new request.
+    """
+    return "\n".join(line for line in text.splitlines() if not line.startswith(">"))
+
+
 @dataclass(frozen=True)
 class HackbotMention:
     comment: str
@@ -52,11 +61,13 @@ def find_hackbot_mentions(
 ) -> list[HackbotMention]:
     """Return every triggering comment that mentions ``token``.
 
-    Only considers transactions named in this delivery, of a comment type, not
-    authored by the bot itself (loop prevention). A single review can leave
-    several inline comments (each its own transaction), so all matches are
-    returned, in transaction order. At most one per transaction: a transaction's
-    ``comments`` list is that comment's version history, not distinct comments.
+    Only considers comment transactions named in this delivery and not authored
+    by the bot itself (loop prevention). Mentions that appear only in Remarkup
+    quote lines are ignored; a fresh, unquoted mention still counts. A single
+    review can leave several inline comments, each represented by its own
+    transaction, so all matches are returned in transaction order. At most one
+    match is returned per transaction because its ``comments`` list contains the
+    comment's version history, not distinct comments.
     """
     matches: list[HackbotMention] = []
     for transaction in transactions:
@@ -71,7 +82,7 @@ def find_hackbot_mentions(
 
         for comment in transaction.get("comments") or []:
             comment_text = comment["content"]["raw"]
-            if token not in comment_text:
+            if token not in _strip_quoted_lines(comment_text):
                 continue
 
             diff_id = (
