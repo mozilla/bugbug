@@ -140,12 +140,15 @@ class HackbotContext(BaseSettings):
         path = Path(env_path) if env_path else self._config.source.checkout_path
         ensure_source_repo(path, self._config.source.repo_url, resolved_ref, depth)
         # Record where the agent starts editing, so publish_changes() can later
-        # diff the final tree against it. Best-effort: a failure here must not
-        # break the agent's access to source — it only disables change capture.
+        # diff the final tree against it, and give the checkout an identity so an
+        # agent that commits its own work can do so with a plain `git commit`.
+        # Both best-effort: a failure here must not break the agent's access to
+        # source — it only costs change capture or a nicer commit message.
         try:
             self._source_base = self._published_base = changes.base_commit(path)
+            changes.ensure_git_identity(path)
         except Exception:
-            log.warning("Could not record source base commit at %s", path)
+            log.warning("Could not prepare git state at %s", path)
         self._repo_path = path
         self._prepared_ref = resolved_ref
         return path

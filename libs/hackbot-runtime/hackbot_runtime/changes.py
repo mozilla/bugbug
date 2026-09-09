@@ -68,6 +68,19 @@ def _git_bytes(repo: Path, *args: str) -> bytes:
     ).stdout
 
 
+def ensure_git_identity(repo: Path) -> None:
+    """Set a commit identity on ``repo`` so the agent can just ``git commit``.
+
+    Agent containers carry no global git identity, so an agent that commits its
+    own work (with a real message, rather than leaving the remainder for
+    :func:`collect` to wrap) would otherwise hit "unable to auto-detect email
+    address". Configured on the checkout only; the wrap commit passes the same
+    identity explicitly and does not rely on this.
+    """
+    _git(repo, "config", "user.name", _WIP_NAME)
+    _git(repo, "config", "user.email", _WIP_EMAIL)
+
+
 def base_commit(repo: Path) -> str:
     """Return the current HEAD sha — the base the agent starts editing from."""
     return _git(repo, "rev-parse", "HEAD").strip()
