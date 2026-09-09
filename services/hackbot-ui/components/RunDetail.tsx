@@ -14,15 +14,28 @@ import {
 } from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
+import { PATCH_ARTIFACT, PatchView } from "./PatchView";
 import { StatusBadge } from "./StatusBadge";
 import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
-// Proposed bugzilla.add_comment actions carry the comment body in params.text;
-// pull it out so we can preview what would be posted to the bug.
-function commentPreview(a: RunAction): string | null {
-  if (a.type !== "bugzilla.add_comment") return null;
-  const text = a.params?.text;
-  return typeof text === "string" && text.trim() ? text : null;
+// What a proposed action would write, rendered under its row so the reviewer
+// approves the actual text and not just an action type. A comment carries its
+// body in params.text; a Phabricator submission carries the title and summary of
+// the revision it would open for the patch (previewed by PatchView).
+function actionPreview(a: RunAction): { label: string; text: string } | null {
+  const text = (v: unknown): string =>
+    typeof v === "string" && v.trim() ? v : "";
+  if (a.type === "bugzilla.add_comment") {
+    const body = text(a.params?.text);
+    return body ? { label: "Comment preview", text: body } : null;
+  }
+  if (a.type === "phabricator.submit_patch") {
+    const body = [text(a.params?.title), text(a.params?.summary)]
+      .filter(Boolean)
+      .join("\n\n");
+    return body ? { label: "Revision preview", text: body } : null;
+  }
+  return null;
 }
 
 const POLL_MS = 4000;
@@ -183,6 +196,8 @@ export function RunDetail({ runId }: { runId: string }) {
         ? "Retry failed actions"
         : "Apply pending actions";
 
+  const hasPatch = run.artifacts.some((a) => a.name === PATCH_ARTIFACT);
+
   const canRetrigger = isFailed(run.status);
   const retriggerLabel = retriggering
     ? "Currently retriggering"
@@ -264,13 +279,15 @@ export function RunDetail({ runId }: { runId: string }) {
         hasFindings && <FindingsView findings={findings} />
       )}
 
+      {hasPatch && <PatchView runId={run.run_id} />}
+
       {actions && actions.length > 0 && (
         <div className="panel">
           <h2>Actions ({actions.length})</h2>
           {applyError && <div className="error-banner">{applyError}</div>}
           <ul className="action-list">
             {actions.map((a) => {
-              const preview = commentPreview(a);
+              const preview = actionPreview(a);
               const url =
                 typeof a.result?.url === "string" ? a.result.url : null;
               return (
@@ -287,8 +304,8 @@ export function RunDetail({ runId }: { runId: string }) {
                   </div>
                   {preview && (
                     <div className="action-preview">
-                      <span className="muted">Comment preview</span>
-                      <Markdown text={preview} />
+                      <span className="muted">{preview.label}</span>
+                      <Markdown text={preview.text} />
                     </div>
                   )}
                 </li>
