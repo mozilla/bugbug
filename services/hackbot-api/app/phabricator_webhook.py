@@ -62,9 +62,7 @@ def find_hackbot_mentions(
     """Return every triggering comment that mentions ``token``.
 
     Only considers transactions named in this delivery, of a comment type, not
-    authored by the bot itself (loop prevention). Mentions appearing only in
-    quoted lines (replies quote the original comment) don't count. A single
-    review can leave
+    authored by the bot itself (loop prevention). A single review can leave
     several inline comments (each its own transaction), so all matches are
     returned, in transaction order. At most one per transaction: a transaction's
     ``comments`` list is that comment's version history, not distinct comments.
