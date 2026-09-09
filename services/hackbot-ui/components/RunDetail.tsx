@@ -14,6 +14,7 @@ import {
 } from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
+import { PATCH_ARTIFACT, PatchView } from "./PatchView";
 import { StatusBadge } from "./StatusBadge";
 import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
@@ -189,6 +190,8 @@ export function RunDetail({
         ? "Retry failed actions"
         : "Apply pending actions";
 
+  const hasPatch = run.artifacts.some((a) => a.name === PATCH_ARTIFACT);
+
   const canRetrigger = isFailed(run.status);
   const retriggerLabel = retriggering
     ? "Currently retriggering"
@@ -275,6 +278,8 @@ export function RunDetail({
       ) : (
         hasFindings && <FindingsView findings={findings} />
       )}
+
+      {hasPatch && <PatchView runId={run.run_id} />}
 
       {actions && actions.length > 0 && (
         <div className="panel">
