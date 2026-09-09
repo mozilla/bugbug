@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
 
+    bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
+    bugzilla_api_key: str
+
     slack: SlackSettings
 
     # The webhook receiver triggers runs over the public API (rather than calling

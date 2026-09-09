@@ -1,39 +1,36 @@
 # User-facing Firefox defect triage
 
-These rules apply to **defects in user-facing Firefox** — the desktop frontend,
-Firefox for Android, and the Windows installer and application updater. **Components in
-scope** in the system prompt lists the components bugs normally arrive from, and
-**Source repository** carries the guidance for the one this bug was filed in. Any
-user-facing Firefox defect is in scope, though, whether or not its component is on that
-list; see `scoping.md`.
-
-Typical components:
-
-- Desktop frontend, all under `Firefox`: `Tabbed Browser`,
-  `Tabbed Browser: Split View`, `New Tab Page`, `Address Bar`, `Menus`,
-  `Toolbars and Customization`, `Sidebar`, `Theme`.
-- Android: `Firefox for Android :: History`.
-- Install and update: `Firefox :: Installer`, `Toolkit :: Application Update`.
-- Messaging System: `Firefox :: Messaging System`.
+These rules apply to **defects in user-facing Firefox**. **Components in scope** in the
+system prompt lists the components bugs normally arrive from, and **Source repository**
+carries the guidance for the one this bug was filed in. That list is not a limit: any
+user-facing Firefox defect is in scope whether or not its component is on it. See
+`scoping.md`.
 
 Desktop and Android bugs here are usually UI/UX papercuts, documented with a
 **video or screenshot** and steps to reproduce.
 
+Screenshots you can look at: download one with `download_attachment` and `Read` the
+file. Screen recordings you cannot, because this agent's image has no ffmpeg to pull
+frames out of them, so downloading a video buys nothing here. When the only evidence
+is a recording, triage from the description, the steps to reproduce, and the code,
+and say plainly in your comment that you did not view the recording. Do not imply you
+did.
+
 **Install and update bugs look different, and that is not a reason to skip them.**
 An installer or updater bug is normally a _failure_ rather than a papercut: an update
 that did not apply, an install that rolled back, a version that stayed where it was,
-a wrong or unhelpful error dialog — reported with an error or status code, an
+a wrong or unhelpful error dialog, reported with an error or status code, an
 `update.log` or installer log excerpt, and an OS and channel rather than a
 screenshot. Triage those normally: read the log the reporter pasted, map the status
 code to its definition in `toolkit/mozapps/update/common/` or to the NSIS `.nsh` that
 emits it, and localize from there. Missing steps to reproduce is the norm in this area
-and is not by itself grounds to call a bug unactionable — say what you would need
+and is not by itself grounds to call a bug unactionable. Say what you would need
 instead.
 
 If the bug is a crash, assertion failure, or sanitizer report, this ruleset does not
-apply — note that and stop. "The installer failed" and "the update did not apply" are
-**not** crash reports. Also stop if the bug is not in user-facing Firefox at all — a
-Core, DevTools-internals, or build-system bug — and say which area it looks like.
+apply. Note that and stop. "The installer failed" and "the update did not apply" are
+**not** crash reports. Also stop if the bug is not in user-facing Firefox at all, a
+Core, DevTools-internals, or build-system bug, and say which area it looks like.
 
 ## What to produce
 
@@ -43,7 +40,7 @@ Core, DevTools-internals, or build-system bug — and say which area it looks li
    rather than working the structure out from the source; it is written by the people who
    own the code, and it is the copy that stays current. Find the module, the markup or layout,
    and any relevant pref (often `modules/libpref/init/all.js`, or `app.update.*`
-   for the updater) that governs the behaviour. Use the `investigator` subagent for
+   for the updater) that governs the behavior. Use the `investigator` subagent for
    deep searches.
 2. **Confirm the area is still live.** Check the referenced code/strings still
    exist and aren't already changed by a recent commit. If the bug looks already
@@ -52,34 +49,100 @@ Core, DevTools-internals, or build-system bug — and say which area it looks li
    inventing a fix.
 3. **Write a fix plan**: root cause, the specific files/functions/selectors to
    change, and the approach. Prefer a comprehensive fix at the right level over a
-   spot fix.
-4. **Assess severity.** Apply the `severity-assessment` rules to judge the bug's
-   severity from its user impact. It goes in the severity block at the end of your
-   comment and in the structured output — never on the bug's `severity` field,
-   which you cannot set.
+   spot fix. The full plan goes in the structured output; the comment carries only
+   its conclusion.
+4. **Assess severity** per the `severity-assessment` rules.
 
 ## Comment
 
-When the `duplicate_hunter` named a candidate, the comment opens with
-`**Possible duplicate:** <linked bug id>` on its own line, above everything else —
-see **Checking for a duplicate** in the system prompt. Nothing when it found none.
+**Four to five sentences in total.** That is the whole comment, counting the severity
+rationale and counting each numbered fix step as a sentence. The footer the runtime
+appends does not count. Treat this as a hard budget: an earlier version of this file
+asked for "a few sentences" and every run produced twelve to seventeen.
 
-Then a single brief comment (a few sentences) with: the suspected root cause,
-the target file(s), and the proposed approach. Cite concrete paths, each as an
-inline Markdown link to its Searchfox permalink (with a line anchor where you
-know the line) per the **Linking source files** section of the system prompt. Do
-not restate the whole bug. Do not claim the fix is verified — you did not run it.
+The budget is affordable because the comment is not the handoff. `root_cause`,
+`proposed_fix`, `target_files` and `relevant_tests` in the structured output carry the
+detail for the executor and have no length limit. The comment exists so a human
+scanning the bug learns, in one screenful, what is broken and what to do about it. Put
+the depth in the JSON and keep the comment to its conclusion.
 
-Close with the severity block — a horizontal rule, `Suggested severity: <level>`,
-then the reasoning — unless your severity confidence is low or you could not assess
-it, in which case leave the block out entirely. Exact shape is in **Severity in the
-comment** in the system prompt.
+A comment that fits is roughly one or two sentences naming the file and the mechanism,
+then a new paragraph opening with a bold `Fix:` label and one or two sentences on the
+fix, then the closing severity sentence. Keep those three as separate paragraphs and
+keep the `Fix:` label bold: the budget is a limit on length, not an instruction to run
+everything together. Anything else has to earn its sentence by displacing one of those.
+
+### Worked example
+
+From a different bug, in another area, to show the shape. The paths and line numbers
+below are that bug's, not yours. Do not reuse them.
+
+```
+[nsUpdateService.sys.mjs]({{searchfox.permalink}}/toolkit/mozapps/update/nsUpdateService.sys.mjs#3410-3428)
+gives up on the update when a partial patch fails verification, because
+`#handlePatchFailure` is reached from the apply path and not from the download path,
+so the complete-patch fallback at
+[#3502]({{searchfox.permalink}}/toolkit/mozapps/update/nsUpdateService.sys.mjs#3502-3515)
+never runs and the update stays pending across restarts.
+
+**Fix:** Route the download failure through the same handler, and extend
+[test_0113_general.js]({{searchfox.permalink}}/toolkit/mozapps/update/tests/unit_service_updater/test_0113_general.js)
+with a partial-patch verification failure asserting the complete patch is fetched.
+
+Suggested severity: S2. A user on the release channel stops receiving updates entirely
+after one corrupt partial, with no in-product workaround and nothing telling them
+anything is wrong.
+```
+
+Three sentences and a severity sentence, in three short paragraphs. It names two files,
+a private method, two line anchors and a test, and it never narrates the investigation
+that found them. The three paragraphs are the whole structure: what is broken, then
+**Fix:** on its own line, then the severity. A budgeted comment run together as one
+block is technically within the limit and still hard to skim, and the bolded label is
+what a reader scanning the bug looks for first.
+
+### How the comment reads
+
+Engineers have told us these comments are hard to follow: correct, but written like
+an essay about an investigation rather than a note from one engineer to another.
+"Be brief" did not fix it, so here are the specific habits to drop. Each one is
+checkable against your draft before you record it.
+
+- **Open on the mechanism, not on a frame.** The first sentence names the file or
+  function and says what it does wrong. Cut openers that tell the reader how to
+  read what follows: "Two different mechanisms are in play here, and only one of
+  them is actually broken", "Unlike every other widget", "The interesting case is".
+- **Do not rule out the alternatives you considered.** "Pref-backed state is not at
+  risk", "Redux widgets are unaffected", "the preloading machinery is fine" answer
+  questions the reader did not ask, and they are the single largest source of length
+  in these comments. What you eliminated goes in `reasoning`, not in the comment.
+- **No em dashes.** Every one is a sentence that has not decided where it ends. Use
+  a period, a comma, or a colon.
+- **No one-line paragraph used as a beat.** "The crossword does not." on its own
+  line is rhetoric. Fold it into the sentence carrying the evidence.
+- **A parenthetical longer than about five words is a sentence.** Promote it or cut
+  it. Do not nest one inside another.
+- **Recommend once.** A "worth auditing the other widgets too" or "worth confirming
+  with the vendor" bolted onto the end of a fix plan is a second, unranked proposal
+  competing with the first. Either it is a numbered step or it is not in the
+  comment.
+- **Report the finding, not the search.** What you read and which tools you reached
+  for belong in `reasoning`.
+- **Say the thing once.** If the root cause is in the first sentence, the fix does
+  not restate it and the severity rationale does not restate it again.
+- **American English.** "behavior", "initialize", "generalize", "license", never
+  "behaviour", "initialise", "generalise", "licence".
+
+None of this is license to drop substance. Every file name, function name, line
+anchor and Searchfox link that carried weight in the long version carries it in the
+short one. The target is the same findings in fewer, flatter sentences, not fewer
+findings.
 
 ## Confidence
 
-Your `confidence` decides whether your comment reaches the bug unreviewed — see
+Your `confidence` decides whether your comment reaches the bug unreviewed. See
 **Recording actions** in the system prompt before you pick a level. This is the
-run's confidence in the _localization_; the severity block has its own, separate
+run's confidence in the _localization_; the severity suggestion has its own, separate
 confidence (see `severity-assessment`).
 
 - **High** (you found the specific code and the cause is clear): record the

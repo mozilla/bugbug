@@ -271,11 +271,18 @@ export function RunDetail({ runId }: { runId: string }) {
           <ul className="action-list">
             {actions.map((a) => {
               const preview = commentPreview(a);
+              const url =
+                typeof a.result?.url === "string" ? a.result.url : null;
               return (
                 <li key={a.idx}>
                   <div className="action-row">
                     <span className={`badge ${a.status}`}>{a.status}</span>
                     <code>{a.type}</code>
+                    {url && (
+                      <a href={url} target="_blank" rel="noreferrer">
+                        Open
+                      </a>
+                    )}
                     {a.error && <span className="muted">{a.error}</span>}
                   </div>
                   {preview && (
