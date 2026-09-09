@@ -214,7 +214,7 @@ def test_which_agents_auto_apply_without_asking_for_consent():
         for name, spec in AGENT_REGISTRY.items()
         if spec.auto_apply_actions and not spec.auto_apply_requires_consent
     }
-    assert unbounded == {"bug-fix", "build-repair", "test-repair"}
+    assert unbounded == {"bug-fix", "test-repair"}
 
 
 class _FakeDB:
@@ -320,13 +320,13 @@ async def test_succeeded_run_only_applies_eligible_action_types(monkeypatch):
 
 
 async def test_other_agents_do_not_auto_apply():
-    # Opting an agent in is a deliberate edit, so spell out who is in today: bug-fix,
-    # build-repair and test-repair auto-apply unconditionally, frontend-triage only
-    # when the run vouched for itself, and everyone else stays human-gated.
+    # Opting an agent in is a deliberate edit, so spell out who is in today: bug-fix
+    # and test-repair auto-apply unconditionally, frontend-triage only when the run
+    # vouched for itself, build-repair only its email, and everyone else stays
+    # human-gated.
     auto_apply = {n for n, s in AGENT_REGISTRY.items() if s.auto_apply_actions}
     assert auto_apply == {
         "bug-fix",
-        "build-repair",
         "frontend-triage",
         "test-repair",
     }
@@ -684,3 +684,10 @@ async def test_comment_and_needinfo_clear_coalesce_into_one_update(monkeypatch):
     ]
     assert comment.status == "applied"
     assert clear.status == "applied"
+
+
+def test_build_repair_mails_unattended_but_holds_the_revision():
+    spec = AGENT_REGISTRY["build-repair"]
+    run = _run_with_findings()
+    assert _action_auto_applies(spec, run, "email.send")
+    assert not _action_auto_applies(spec, run, "phabricator.submit_patch")
