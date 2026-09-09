@@ -1,3 +1,5 @@
+@import "diff2html/bundles/css/diff2html.min.css";
+
 :root {
   --bg: #0f1117;
   --panel: #171a23;
@@ -392,23 +394,6 @@ dl.kv dd {
   display: block;
   font-size: 12px;
   margin-bottom: 4px;
-}
-
-.artifact-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.artifact-list li {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--mono);
-  font-size: 13px;
-}
-.artifact-list li:last-child {
-  border-bottom: none;
 }
 
 .toolbar {
