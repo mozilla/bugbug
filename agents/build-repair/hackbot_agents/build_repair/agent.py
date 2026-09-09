@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 import tempfile
 from collections.abc import Callable
@@ -35,7 +36,9 @@ from claude_agent_sdk import (
     UserMessage,
 )
 from hackbot_agents.build_repair.try_push import TRY_TOOLS
-from hackbot_runtime import AgentError, HackbotAgentResult
+from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 
 from .config import (
@@ -45,6 +48,7 @@ from .config import (
     BUGZILLA_READ_TOOLS,
     BUILD_TOOL,
     CHECKOUT_DEPTH,
+    ENABLED_ACTION_TYPES,
     FIREFOX_TOOLS,
     FIX_MODEL,
     TRY_PUSH_TOOL,
@@ -55,15 +59,17 @@ from .prompts import (
     BUG_ANALYSIS_STEP,
     BUG_CONTEXT,
     CHECKOUT_HISTORY,
+    COMMIT_INSTRUCTIONS,
     FIX_TEMPLATE,
     PUSH_COMMIT_LINE,
     PUSH_CONTEXT,
+    REPORT_INSTRUCTIONS,
     SINGLE_COMMIT_CONTEXT,
     TREEHERDER_STEP,
     TREEHERDER_STEP_NO_PUSH,
     TRY_PUSH_INSTRUCTIONS,
 )
-from .resolve import task_push
+from .resolve import _bug_from_desc, task_push
 
 TARGET_SOFTWARE = "Mozilla Firefox"
 
@@ -148,6 +154,7 @@ async def run_build_repair(
     source_repo: Path,
     fx_ctx: FirefoxContext,
     bug_id: int | None = None,
+    commit_bugs: dict[str, int] | None = None,
     git_commits: list[str],
     project: str | None = None,
     hg_revision: str | None = None,
@@ -158,19 +165,40 @@ async def run_build_repair(
     verbose: bool = False,
     log: Path | None = None,
     publish_file: Callable[[str, Path, str | None], str] | None = None,
+    actions_recorder: ActionsRecorder | None = None,
 ) -> BuildRepairResult:
     """Analyze a build failure and implement a fix in ``source_repo``.
 
     Returns a :class:`BuildRepairResult`; raises :class:`AgentError` if a stage
     ends in an error or produces no result.
+
+    ``commit_bugs`` maps each push commit to the bug it landed for (from the
+    pushlog, see ``resolve_push``). A run is never told which bug a failure
+    belongs to, so that mapping is what an unset ``bug_id`` falls back to.
+
+    Pass ``actions_recorder`` to let the fix stage submit the fix for review as a
+    Phabricator revision, recorded as a proposed action rather than submitted
+    here. Runs without a recorder, or with no bug for the blamed commit, only
+    produce the fix in the source tree.
     """
     if not git_commits:
         raise AgentError("git_commits must contain at least one commit")
     failure_commit = git_commits[0]
-    label = f"bug {bug_id}" if bug_id is not None else f"commit {failure_commit[:12]}"
+    commit_bugs = commit_bugs or {}
+    # The failure commit's bug gives stage 1 its Bugzilla context. Which bug the
+    # *fix* is filed against is only settled once stage 1 picks the culprit out
+    # of the push, so it is resolved again below.
+    push_bug_id = bug_id if bug_id is not None else commit_bugs.get(failure_commit)
+    label = (
+        f"bug {push_bug_id}"
+        if push_bug_id is not None
+        else f"commit {failure_commit[:12]}"
+    )
     print(f"[build_repair] repairing {label} at {failure_commit}", file=sys.stderr)
 
-    scratch_dir = Path(tempfile.mkdtemp(prefix=f"build-repair-{bug_id or 'nobug'}-"))
+    scratch_dir = Path(
+        tempfile.mkdtemp(prefix=f"build-repair-{push_bug_id or 'nobug'}-")
+    )
     scratch_out = scratch_dir / "out"
     scratch_out.mkdir(parents=True, exist_ok=True)
 
@@ -213,19 +241,16 @@ async def run_build_repair(
         treeherder_step=treeherder_step,
         blame_step=_blame_step(git_commits, scratch_out),
         scratch_out=scratch_out,
-        bug_context=BUG_CONTEXT.format(bug_id=bug_id) if bug_id is not None else "",
-        bug_step=BUG_ANALYSIS_STEP.format(bug_id=bug_id) if bug_id is not None else "",
-        logs_num=3 if bug_id is not None else 2,
-    )
-    fix_prompt = FIX_TEMPLATE.format(
-        target_software=TARGET_SOFTWARE,
-        source_repo=source_repo,
-        scratch_out=scratch_out,
-        try_push=(
-            TRY_PUSH_INSTRUCTIONS.format(task_name=task_name) if run_try_push else ""
+        bug_context=(
+            BUG_CONTEXT.format(bug_id=push_bug_id) if push_bug_id is not None else ""
         ),
+        bug_step=(
+            BUG_ANALYSIS_STEP.format(bug_id=push_bug_id)
+            if push_bug_id is not None
+            else ""
+        ),
+        logs_num=3 if push_bug_id is not None else 2,
     )
-
     total_cost = 0.0
     total_turns = 0
     # Last JSON result of each tracked tool, keyed by tool name. Lets us report
@@ -253,17 +278,74 @@ async def run_build_repair(
         total_cost += result_msg.total_cost_usd or 0.0
         total_turns += result_msg.num_turns or 0
 
+        # Which bug the fix belongs to is only settled now: when the push has
+        # several commits, stage 1 is what picks the culprit, and it is the
+        # culprit's bug a revision has to be filed against.
+        blamed_commit = _resolve_blame(scratch_out, git_commits)
+        resolved_bug_id = bug_id
+        if resolved_bug_id is None and blamed_commit is not None:
+            # A culprit from an earlier push is not in the pushlog mapping, but
+            # the checkout reaches CHECKOUT_DEPTH commits back, so its subject
+            # still names the bug.
+            resolved_bug_id = commit_bugs.get(blamed_commit) or _bug_from_commit(
+                source_repo, blamed_commit
+            )
+
+        # Reporting is confined to the fix stage: the analysis stage must not
+        # submit anything before there is a verified fix.
+        report = actions_recorder is not None and resolved_bug_id is not None
+        fix_mcp_servers = mcp_servers
+        fix_allowed_tools = allowed_tools
+        if report:
+            _, actions_server = actions_server_for(
+                actions_recorder, types=ENABLED_ACTION_TYPES
+            )
+            fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
+            fix_allowed_tools = [
+                *allowed_tools,
+                *actions_to_tool_names(ENABLED_ACTION_TYPES),
+            ]
+        elif actions_recorder is not None:
+            print(
+                f"[build_repair] no bug for blamed commit {blamed_commit}: the fix "
+                "will be produced but not submitted for review, since a "
+                "Phabricator revision is filed against a bug",
+                file=sys.stderr,
+            )
+
+        fix_prompt = FIX_TEMPLATE.format(
+            target_software=TARGET_SOFTWARE,
+            source_repo=source_repo,
+            scratch_out=scratch_out,
+            try_push=(
+                TRY_PUSH_INSTRUCTIONS.format(task_name=task_name)
+                if run_try_push
+                else ""
+            ),
+            commit=COMMIT_INSTRUCTIONS.format(
+                bug_prefix=(
+                    f"Bug {resolved_bug_id} - "
+                    if resolved_bug_id is not None
+                    else "No bug - "
+                )
+            ),
+            report=(
+                REPORT_INSTRUCTIONS.format(bug_id=resolved_bug_id) if report else ""
+            ),
+        )
+
         # Stage 2: fix (lower effort, edits the source tree and verifies it
         # builds against a mozconfig that mirrors the failing CI config).
         _write_mozconfig(fx_ctx)
-        reporter.header(f"{label}: fix")
+        fix_label = f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
+        reporter.header(f"{fix_label}: fix")
         fix_opts = _build_options(
             model=model or FIX_MODEL,
             effort="low",
             cwd=source_repo,
             scratch_dir=scratch_dir,
-            mcp_servers=mcp_servers,
-            allowed_tools=allowed_tools,
+            mcp_servers=fix_mcp_servers,
+            allowed_tools=fix_allowed_tools,
             max_turns=max_turns,
         )
         result_msg = await _run_session(
@@ -278,10 +360,9 @@ async def run_build_repair(
 
     build_result = captured.get(BUILD_TOOL)
     try_result = captured.get(TRY_PUSH_TOOL, {})
-    blamed_commit = _resolve_blame(scratch_out, git_commits)
 
     return BuildRepairResult(
-        bug_id=bug_id,
+        bug_id=resolved_bug_id,
         git_commit=failure_commit,
         summary=summary,
         analysis=analysis,
@@ -400,6 +481,20 @@ def _blame_step(git_commits: list[str], scratch_out: Path) -> str:
     that the lone commit is innocent and the bustage came from somewhere else.
     """
     return BLAME_STEP.format(scratch_out=scratch_out)
+
+
+def _bug_from_commit(repo: Path, sha: str) -> int | None:
+    """The bug a commit landed for, read off its subject in the local checkout."""
+    try:
+        subject = subprocess.run(
+            ["git", "-C", str(repo), "log", "-1", "--format=%s", sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return _bug_from_desc(subject)
 
 
 _SHA_RE = re.compile(r"[0-9a-f]{7,40}$")

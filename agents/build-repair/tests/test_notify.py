@@ -138,3 +138,18 @@ def test_no_patch_section_without_a_patch():
     _, body = _email()
     assert "Proposed patch" not in body
     assert "{patch}" not in body
+
+
+def test_a_pending_revision_comes_with_submit_instructions():
+    _, body = _email(_result(bug_id=2063979), has_patch=True, revision_pending=True)
+    assert "## How to submit the fix to Phabricator" in body
+    assert "Patch panel: https://hackbot.moz.tools/runs/1218e630-78c8" in body
+    assert "*Apply pending actions*" in body
+    assert "[bug 2063979](https://bugzilla.mozilla.org/show_bug.cgi?id=2063979)" in body
+    # Instructions come before the diff, which can run long.
+    assert body.index("How to submit") < body.index("## Proposed patch")
+
+
+def test_no_submit_instructions_without_a_pending_revision():
+    _, body = _email(has_patch=True)
+    assert "How to submit" not in body

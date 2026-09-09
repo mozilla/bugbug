@@ -163,7 +163,7 @@ fast, focused build -- prefer this over a full tree build. If the build reports 
 missing toolchain (e.g. rustc or clang), run the bootstrap_firefox tool once and
 then build again. Verify via the build_firefox tool rather than a raw `./mach
 build` so the build result is recorded.
-{try_push}
+{try_push}{commit}{report}
 
 Do not prompt to edit files. Work fully autonomously, do not ask any questions.
 Use all allowed tools without prompting.
@@ -172,4 +172,33 @@ Use all allowed tools without prompting.
 TRY_PUSH_INSTRUCTIONS = """
 Once the fix builds locally, validate it on CI: call the submit_try_push tool with the
 failing task name ('{task_name}') to push to the try server and report the build result.
+"""
+
+COMMIT_INSTRUCTIONS = """
+Once the build passes, commit the fix so the patch carries a real message. Stage
+only the files you edited (`git add <path> ...`, never `git add -A`) and commit
+with the subject "{bug_prefix}<what the fix does, imperative, under 72 chars>"
+and a body of one short paragraph: which commit broke the build, how it broke,
+and what this change does about it. An identity is already configured, so a plain
+`git commit` works. Leave nothing uncommitted -- anything you skip is squashed
+into a nameless "Uncommitted agent changes" commit instead. End the message after
+that paragraph: no Co-Authored-By, no Signed-off-by, no tool attribution.
+"""
+
+REPORT_INSTRUCTIONS = """
+Once the build is verified, submit the fix for review with the
+`phabricator_submit_patch` action. It does not reach Phabricator during this run
+-- it records the submission into the run summary, and a developer reviews the
+patch and approves it -- so call it exactly once and treat what you record as
+final. It opens a new revision; the busted commit has already landed, so never
+touch the revision it came from.
+
+Pass bug_id={bug_id}, a `title` of the form "Bug {bug_id} - <what the fix does>",
+a `summary` naming the busted commit, the failing task, the root cause and the
+fix, and the `reasoning` it stores for the audit log. Your final working-tree
+edits are submitted as the diff, so make every edit first and pass no patch file.
+Do not attach the patch to the bug instead, and do not comment on the bug.
+
+If the fix does not build, or you are not confident in it, record nothing and say
+so in your final message.
 """
