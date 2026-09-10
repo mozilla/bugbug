@@ -75,6 +75,7 @@ gcloud builds submit "${SCRIPT_DIR}" --tag "${IMAGE}"
 echo "==> Deploying to Cloud Run"
 ENV_VARS="HACKBOT_API_URL=${HACKBOT_API_URL},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
 [ -n "${BETTER_AUTH_URL}" ] && ENV_VARS="${ENV_VARS},BETTER_AUTH_URL=${BETTER_AUTH_URL}"
+[ -n "${WEAVE_PROJECT:-}" ] && ENV_VARS="${ENV_VARS},WEAVE_PROJECT=${WEAVE_PROJECT}"
 
 gcloud run deploy "${SERVICE}" \
   --image "${IMAGE}" \

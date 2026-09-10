@@ -2,6 +2,7 @@
 
 import pytest
 from hackbot_runtime import tracing, wandb_wif
+from opentelemetry.sdk.trace import TracerProvider
 from weave.conversation.agent_context import resolve_agent_name as weave_agent_name
 
 
@@ -69,7 +70,7 @@ def test_init_weave_enabled_by_wif_token_file(monkeypatch):
 
 def test_trace_agent_is_noop_without_credentials():
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
-    with tracing.trace_agent(entry):
+    with tracing.trace_agent(entry, "run-1"):
         assert weave_agent_name("claude_agent_sdk") == "claude_agent_sdk"
 
 
@@ -77,6 +78,28 @@ def test_trace_agent_labels_spans_when_enabled(monkeypatch):
     monkeypatch.setattr(tracing, "_init_weave", lambda: True)
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
 
-    with tracing.trace_agent(entry):
+    with tracing.trace_agent(entry, "run-1"):
         assert weave_agent_name("claude_agent_sdk") == "build-repair"
     assert weave_agent_name("claude_agent_sdk") == "claude_agent_sdk"
+
+
+def test_trace_agent_tags_spans_with_run_id(monkeypatch):
+    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    provider = TracerProvider()
+    monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: provider)
+    entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
+
+    with tracing.trace_agent(entry, "run-1"):
+        with provider.get_tracer("test").start_as_current_span("turn") as span:
+            pass
+
+    assert span.attributes[tracing.RUN_ID_SPAN_ATTRIBUTE] == "run-1"
+
+
+def test_trace_agent_skips_tagging_without_sdk_provider(monkeypatch):
+    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: object())
+    entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
+
+    with tracing.trace_agent(entry, "run-1"):
+        pass

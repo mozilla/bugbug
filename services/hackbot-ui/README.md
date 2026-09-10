@@ -132,6 +132,7 @@ must match its `X-API-Key`.
 | ---------------------- | -------------------------------------------------- |
 | `HACKBOT_API_URL`      | Base URL of hackbot-api (no trailing slash)        |
 | `HACKBOT_API_KEY`      | Value for the `X-API-Key` header (server-side)     |
+| `WEAVE_PROJECT`        | Weave `entity/project` for run trace links         |
 | `BETTER_AUTH_URL`      | Public base URL of this app                        |
 | `BETTER_AUTH_SECRET`   | Session signing secret (`openssl rand -base64 32`) |
 | `GOOGLE_CLIENT_ID`     | Google OAuth client ID                             |
