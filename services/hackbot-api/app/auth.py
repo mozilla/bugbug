@@ -3,6 +3,7 @@ import hmac
 import logging
 
 from fastapi import Header, HTTPException, Request, status
+from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from slack_sdk.signature import SignatureVerifier
@@ -79,18 +80,44 @@ async def require_slack_signature(
         )
 
 
-async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
-    if not settings.external_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key not configured",
-        )
-    if x_api_key is None or not hmac.compare_digest(
-        x_api_key, settings.external_api_key
-    ):
+def require_api_key(
+    x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+) -> None:
+    """Accept either API key (X-API-Key) or service account token (Bearer)."""
+    if x_api_key is not None:
+        if settings.external_api_key and hmac.compare_digest(
+            x_api_key, settings.external_api_key
+        ):
+            return
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-API-Key",
+            detail="Invalid X-API-Key",
+        )
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing credentials",
+        )
+
+    try:
+        claims = id_token.verify_oauth2_token(
+            authorization.removeprefix("Bearer "),
+            google_requests.Request(),
+            audience=settings.api_audience,
+        )
+    except (ValueError, google_auth_exceptions.GoogleAuthError):
+        log.warning("Rejected request with invalid OIDC credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        ) from None
+
+    if claims.get("email") not in settings.allowed_service_accounts:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Service account not authorized",
         )
 
 

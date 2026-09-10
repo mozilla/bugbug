@@ -2770,6 +2770,7 @@ name = "hackbot-client"
 version = "0.1.0"
 source = { editable = "libs/hackbot-client" }
 dependencies = [
+    { name = "google-auth", extra = ["requests"] },
     { name = "httpx" },
     { name = "pydantic" },
 ]
@@ -2782,6 +2783,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "google-auth", extras = ["requests"], specifier = ">=2.25.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
