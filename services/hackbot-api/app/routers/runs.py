@@ -275,7 +275,8 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
 
     agent_spec = AGENT_REGISTRY.get(run.agent)
     if (
-        agent_spec is not None
+        new_status == RunStatus.succeeded
+        and agent_spec is not None
         and agent_spec.warn_on_unsubmitted_patch
         and _has_unsubmitted_patch(summary, artifacts)
     ):
