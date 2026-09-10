@@ -1,0 +1,20 @@
+services:
+  bugzilla-proxy:
+    build:
+      context: ../..
+      dockerfile: services/bugzilla-proxy/Dockerfile
+    # Inject config into the container (relative to this compose file = repo root .env).
+    env_file: ../../.env
+    environment:
+      # The public half of the keypair hackbot-api signs with locally. Generate
+      # one with the commands in this service's README and put both halves in
+      # the root .env, as BUGZILLA_PROXY_JWT_PUBLIC_KEY and BZ_TOKEN_PRIVATE_KEY.
+      BUGZILLA_PROXY_JWT_PUBLIC_KEY: ${BUGZILLA_PROXY_JWT_PUBLIC_KEY:?generate a dev keypair first}
+      BUGZILLA_PROXY_UPSTREAM_API_KEY: ${BUGZILLA_API_KEY:?error}
+      BUGZILLA_PROXY_UPSTREAM_URL: ${BUGZILLA_API_URL:-https://bugzilla.mozilla.org/rest}
+    # Live-edit the source without rebuilding (cwd takes precedence on sys.path).
+    volumes:
+      - ./bugzilla_proxy:/app/bugzilla_proxy
+    ports:
+      - "8766:8080"
+    command: python -m bugzilla_proxy.main

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from app.bz_token import BugzillaScope
 from app.schemas import (
     AutowebcompatDiagnosisInputs,
     AutowebcompatReproInputs,
@@ -28,6 +29,15 @@ class AgentSpec:
     # succeeds. Off by default: actions are still recorded and can always be
     # applied manually from the UI; only opted-in agents auto-apply.
     auto_apply_actions: bool = False
+    # The Bugzilla access this agent's runs get, minted per run as a capability
+    # token for `bugzilla-proxy` and handed to the broker container. None means
+    # the broker falls back to its own Bugzilla credential.
+    #
+    # No agent sets this yet, on purpose: the proxy is not deployed. Setting it
+    # is the last step of onboarding an agent, after the service is up and its
+    # broker knows how to present a token. See docs/hackbot/bugzilla-proxy.md;
+    # `bz_token.PUBLIC_READ_SCOPE` is the template the first one will use.
+    bugzilla_scope: BugzillaScope | None = None
     # Whether auto-apply additionally needs the run's own say-so: `findings.auto_apply`
     # must be True, or the actions are recorded and held. Set this for agents that
     # judge their results one run at a time, since only the agent knows how sure it

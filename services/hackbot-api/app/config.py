@@ -71,6 +71,21 @@ class Settings(BaseSettings):
     # API auth
     external_api_key: str = ""
 
+    # Per-run Bugzilla capability tokens (see app/bz_token.py). IAM signs as
+    # `bz_token_service_account`, this service's own identity, and the proxy
+    # verifies against the certificates Google publishes for it, so no key
+    # material is exchanged. Set the proxy's `token_issuer` to the same value.
+    # `bz_token_private_key` is a PEM standing in for local runs; with neither
+    # set, no token is minted and brokers keep their own Bugzilla credential.
+    #
+    # The audience and local issuer are constants in bz_token.py, not settings:
+    # an audience pointing at Google would mint an impersonation credential.
+    bz_token_service_account: str = ""
+    bz_token_private_key: str = ""
+    # How far past the job timeout the token stays valid. A run that outlives
+    # its token fails in a way that looks nothing like the cause.
+    bz_token_grace_seconds: int = 15 * 60
+
     phabricator: PhabricatorSettings
 
     # Inbound webhook receiver config, embedded as a nested model and populated
