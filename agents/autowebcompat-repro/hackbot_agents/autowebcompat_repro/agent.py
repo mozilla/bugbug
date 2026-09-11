@@ -420,6 +420,11 @@ class BugReproduction(Task):
      and re-check before concluding.
    - If you confirmed that the reported broken behaviour reproduces in both browsers,
    set `failure_reason` to `not_firefox_specific`.
+   - NOTE: Reports about the site steering users away from Firefox (a
+     "use Chrome" recommendation, an unsupported-browser warning, or a
+     user-agent-based block) are considered valid web compatibility issues even
+     if the same message displayed in Chrome. Seeing that message in Firefox
+     is the reproduction: set `reproduced` to true.
 4. If the issue reproduces, write and run a Puppeteer script that drives the real
    reported site in both browsers and demonstrates the difference: follow the spec in
    `{repro_reference}`, write your script to exactly `{self.script_path}`

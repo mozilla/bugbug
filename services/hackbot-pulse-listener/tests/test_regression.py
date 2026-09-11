@@ -112,6 +112,19 @@ def test_running_parent_is_waited_then_inherited():
     assert _run(_chain(running()), poll=[{"rev1": failed()}]) is False
 
 
+def test_a_build_does_not_look_past_a_running_parent():
+    # Unlike the test path: a build has no group dedupe, so deciding from the
+    # grandparent would run build-repair for both this push and, once it fails, the
+    # parent. The parent is waited for and, here, turns out to have failed.
+    assert (
+        _run(
+            _chain(running(), passed()),
+            poll=[{"rev1": failed(), "rev2": passed()}],
+        )
+        is False
+    )
+
+
 @pytest.mark.parametrize("result", ["retry", "exception", "unknown"])
 def test_unsettled_result_is_waited_not_skipped(result):
     # These may still change outcome, so the ancestor must be waited for. Asserting
