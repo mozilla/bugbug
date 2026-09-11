@@ -18,7 +18,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 ACTION_TYPE = "slack.post_message"
 HACKBOT_UI_URL = "https://hackbot.moz.tools"
@@ -78,7 +78,7 @@ async def post_message(
     Recorded into the run summary for human review -- does not post to Slack.
     """
     action = recorder.record(ACTION_TYPE, _params(channel, text), reasoning=reasoning)
-    return f"Recorded {ACTION_TYPE} (ID: {action['action_id']})."
+    return confirmation(action)
 
 
 def record_message(
