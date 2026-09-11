@@ -53,7 +53,13 @@ function extractLog(run: RunDoc): string | null {
   return null;
 }
 
-export function RunDetail({ runId }: { runId: string }) {
+export function RunDetail({
+  runId,
+  tracesUrl,
+}: {
+  runId: string;
+  tracesUrl: string;
+}) {
   const router = useRouter();
   const [run, setRun] = useState<RunDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +238,12 @@ export function RunDetail({ runId }: { runId: string }) {
               <dd>{run.execution_name}</dd>
             </>
           )}
+          <dt>Traces</dt>
+          <dd>
+            <a href={tracesUrl} target="_blank" rel="noreferrer">
+              Weave
+            </a>
+          </dd>
         </dl>
         <button
           type="button"
