@@ -19,9 +19,8 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
+from hackbot_runtime.action_types import ActionType
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
-
-ACTION_TYPE = "email.send"
 
 # Substituted with the run's patch when the mail is sent. The agent decides
 # whether the body mentions the patch at all, and how it is framed; this only
@@ -98,7 +97,7 @@ async def send(
     Recorded into the run summary for human review -- does not send any mail.
     """
     action = recorder.record(
-        ACTION_TYPE, _params(to, subject, body_markdown), reasoning=reasoning
+        ActionType.EMAIL_SEND, _params(to, subject, body_markdown), reasoning=reasoning
     )
     return confirmation(action)
 
@@ -123,7 +122,7 @@ def record_email(
     reads and the file they save cannot differ.
     """
     return recorder.record(
-        ACTION_TYPE,
+        ActionType.EMAIL_SEND,
         _params(to, subject, body_markdown, attach_patch),
     )
 

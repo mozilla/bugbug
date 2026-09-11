@@ -5,14 +5,13 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
+from hackbot_runtime.action_types import ActionType
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
-
-TRY_PUSH_ACTION_TYPE = "try_server.push"
 
 # Anything gated on "this run pushes to try" — today the patch-series artifact
 # built in ``context.publish_changes`` — keys off this set, for symmetry with
 # ``phabricator.PATCH_ACTION_TYPES``.
-TRY_ACTION_TYPES = frozenset({TRY_PUSH_ACTION_TYPE})
+TRY_ACTION_TYPES = frozenset({ActionType.TRY_SERVER_PUSH})
 
 # `mach try --rebuild` allows up to 20 (tools/tryselect/task_config.py), but
 # that is too many runs for an agent push.
@@ -159,7 +158,7 @@ async def push(
     if rebuild is not None and rebuild > 1:
         params["rebuild"] = rebuild
 
-    action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning)
+    action = recorder.record(ActionType.TRY_SERVER_PUSH, params, reasoning=reasoning)
     return confirmation(action)
 
 

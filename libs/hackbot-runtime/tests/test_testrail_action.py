@@ -1,7 +1,7 @@
 import pytest
 from agent_tools.registry import ToolError
+from hackbot_runtime.action_types import ActionType
 from hackbot_runtime.actions import ActionsRecorder, testrail
-from hackbot_runtime.actions.testrail import ACTION_TYPE
 
 
 def _cases():
@@ -32,7 +32,7 @@ async def test_submit_test_plan_tool_records_deferred_action():
         f"Recorded testrail.submit_test_plan "
         f"(ID: {recorder.list_actions()[0]['action_id']})."
     )
-    assert recorder.actions[0]["type"] == ACTION_TYPE
+    assert recorder.actions[0]["type"] == ActionType.TESTRAIL_SUBMIT_TEST_PLAN
     assert recorder.actions[0]["params"] == {
         "feature": "Feature",
         "generated_test_cases": [
