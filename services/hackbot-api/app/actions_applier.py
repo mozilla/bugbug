@@ -281,12 +281,11 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
 
     run_level_auto_apply = _auto_apply_blocker(spec, run) is None
     to_apply: list[tuple[RunAction, list[dict]]] = []
-    for row_with_attachments in rows:
-        row, _ = row_with_attachments
+    for action, attachments in rows:
         if _should_auto_apply(
-            spec, row.type, run_level_auto_apply=run_level_auto_apply
+            spec, action.type, run_level_auto_apply=run_level_auto_apply
         ):
-            to_apply.append(row_with_attachments)
+            to_apply.append((action, attachments))
 
     if to_apply:
         await _apply_pending_rows(db, run, to_apply)
