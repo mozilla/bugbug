@@ -91,7 +91,9 @@ async def test_send_records_the_action():
         body_markdown="  # Analysis  ",
         reasoning="the pusher has to back this out",
     )
-    assert "email.send (#0)" in confirmation
+    assert confirmation == (
+        f"Recorded email.send (ID: {rec.list_actions()[0]['action_id']})."
+    )
     assert rec.actions == [
         {
             "type": "email.send",

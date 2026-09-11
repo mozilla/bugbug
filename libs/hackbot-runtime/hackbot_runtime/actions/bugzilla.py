@@ -18,16 +18,12 @@ from typing import Annotated, Any
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 _COMMENT_FOOTER = (
     "If you'd like to provide feedback on this comment, please use the 👍 or 👎 "
     "reaction."
 )
-
-
-def _confirm(action: dict) -> str:
-    return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
 @tool
@@ -66,7 +62,7 @@ async def update_bug(
         {"bug_id": bug_id, "changes": changes},
         reasoning=reasoning,
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -96,7 +92,7 @@ async def add_comment(
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
         reasoning=reasoning,
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -187,7 +183,7 @@ async def add_attachment(
         reasoning=reasoning,
         attachments={"file": Path(file_path)},
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -231,7 +227,7 @@ async def create_bug(
         body.setdefault(k, v)
 
     action = recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
-    return _confirm(action)
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)

@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 ACTION_TYPE = "testrail.submit_test_plan"
 
@@ -121,10 +121,6 @@ class SubmitTestPlanInput(BaseModel):
         return self
 
 
-def _confirm(action: dict) -> str:
-    return f"Recorded {action['type']} (ID: {action['action_id']})."
-
-
 def _validated_params(
     feature: str,
     generated_test_cases: list[Any],
@@ -192,7 +188,7 @@ async def submit_test_plan(
         summary=summary,
     )
     action = recorder.record(ACTION_TYPE, params)
-    return _confirm(action)
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)
