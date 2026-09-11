@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, try_server_handler
-from hackbot_runtime.actions.handlers.registry import get_handler
+from hackbot_runtime.actions.handlers.registry import ActionType, get_handler
 from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
 from hackbot_runtime.changes import _git
 from lando_client import LandoClient
@@ -60,7 +60,9 @@ def submitted(monkeypatch):
 
 
 def test_handler_is_registered():
-    assert isinstance(get_handler("try_server.push"), try_server_handler.PushHandler)
+    assert isinstance(
+        get_handler(ActionType.TRY_SERVER_PUSH), try_server_handler.PushHandler
+    )
     # Every type the recording side can emit is registered.
     assert all(get_handler(t) is not None for t in TRY_ACTION_TYPES)
 

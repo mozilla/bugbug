@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from hackbot_runtime.actions.handlers.registry import ActionType
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BeforeValidator
 from sqlalchemy import select
@@ -295,7 +296,7 @@ def _has_unsubmitted_patch(
     """Whether a run produced source changes without a patch action."""
     has_patch_artifact = any(artifact.name == _PATCH_ARTIFACT for artifact in artifacts)
     has_patch_action = summary is not None and any(
-        action["type"] in PATCH_ACTION_TYPES for action in summary.actions
+        ActionType(action["type"]) in PATCH_ACTION_TYPES for action in summary.actions
     )
     return has_patch_artifact and not has_patch_action
 

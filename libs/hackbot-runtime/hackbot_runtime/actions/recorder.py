@@ -5,6 +5,7 @@ from pathlib import Path
 
 from agent_tools.registry import ToolError
 
+from hackbot_runtime.actions.handlers.registry import ActionType
 from hackbot_runtime.artifacts import publish_file
 from hackbot_runtime.uploader import SignedPolicyUploader
 
@@ -39,9 +40,9 @@ class ActionsRecorder:
         self,
         uploader: SignedPolicyUploader | None = None,
         artifacts_dir: Path | None = None,
-        hooks: Mapping[str, Sequence[ActionHook]] = {},
+        hooks: Mapping[ActionType, Sequence[ActionHook]] = {},
     ) -> None:
-        self._actions: dict[str, dict] = {}
+        self._actions: dict[ActionType, dict] = {}
         self._uploader = uploader
         self._artifacts_dir = artifacts_dir
         self._hooks = {
@@ -49,7 +50,7 @@ class ActionsRecorder:
             for action_type, action_hooks in hooks.items()
         }
 
-    def add_hook(self, action_type: str, hook: ActionHook) -> None:
+    def add_hook(self, action_type: ActionType, hook: ActionHook) -> None:
         """Append ``hook`` to the hooks run for ``action_type``.
 
         For wiring a hook after construction; it runs after any hook already
@@ -59,7 +60,7 @@ class ActionsRecorder:
 
     def record(
         self,
-        action_type: str,
+        action_type: ActionType,
         params: dict,
         *,
         reasoning: str | None = None,

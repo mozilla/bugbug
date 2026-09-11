@@ -15,19 +15,20 @@ from hackbot_agents.frontend_triage.hooks import (
 )
 from hackbot_runtime.actions import ActionsRecorder
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
+from hackbot_runtime.actions.handlers.registry import ActionType
 
 BUG = 2014702
 
 
 def _recorder():
     rec = ActionsRecorder()
-    rec.add_hook("bugzilla.add_comment", add_comment_hook(rec, BUG))
+    rec.add_hook(ActionType.BUGZILLA_ADD_COMMENT, add_comment_hook(rec, BUG))
     return rec
 
 
 def _comment(rec, bug_id=BUG, **params):
     return rec.record(
-        "bugzilla.add_comment",
+        ActionType.BUGZILLA_ADD_COMMENT,
         {"bug_id": bug_id, "text": "hi", **params},
         reasoning="rule X",
     )

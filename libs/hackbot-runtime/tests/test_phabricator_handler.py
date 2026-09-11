@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from hackbot_runtime.actions.handlers import ApplyContext, phabricator_handler
-from hackbot_runtime.actions.handlers.registry import get_handler
+from hackbot_runtime.actions.handlers.registry import ActionType, get_handler
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 
 
@@ -71,10 +71,12 @@ def _fake_conduit(responses):
 
 def test_each_patch_action_type_has_its_own_handler():
     assert isinstance(
-        get_handler("phabricator.submit_patch"), phabricator_handler.SubmitPatchHandler
+        get_handler(ActionType.PHABRICATOR_SUBMIT_PATCH),
+        phabricator_handler.SubmitPatchHandler,
     )
     assert isinstance(
-        get_handler("phabricator.update_patch"), phabricator_handler.UpdatePatchHandler
+        get_handler(ActionType.PHABRICATOR_UPDATE_PATCH),
+        phabricator_handler.UpdatePatchHandler,
     )
     # Every type the recording side can emit is registered.
     assert all(get_handler(t) is not None for t in PATCH_ACTION_TYPES)
