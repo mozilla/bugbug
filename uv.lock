@@ -2355,7 +2355,7 @@ wheels = [
 
 [[package]]
 name = "grizzly-framework"
-version = "1.2.1"
+version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aioquic" },
@@ -2373,9 +2373,9 @@ dependencies = [
     { name = "psutil" },
     { name = "six" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8d/2f/d9558e613bf22fb4221bd4bf41f5c800008d352a4a8db1e6fa9aba2715a3/grizzly_framework-1.2.1.tar.gz", hash = "sha256:92dc118f339dfa29460bd1083b26da2253deb3cfebf7f8d866add8309e9f09a8", size = 235943, upload-time = "2026-07-30T19:04:44.86Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/0f/6beb12833e4f472d81bf1e3f3b103e21e1e52da70e03e0192ec7df6527be/grizzly_framework-1.3.0.tar.gz", hash = "sha256:730383ed3627f6159c806cd66685c818160e45561763eab4cd886187b5f80d23", size = 236568, upload-time = "2026-08-20T15:29:18.591Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/ae/917aeb01afe0a07aed610c5e62815d1a5282ed217b9d7eb292b7df279c84/grizzly_framework-1.2.1-py3-none-any.whl", hash = "sha256:b8b8c4880c20c102cd3b2987695bfefad365eadfb999e3463010fb342367220f", size = 302115, upload-time = "2026-07-30T19:04:43.258Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/50/e19d31252b306ec497f72ff57b3962ed121f37d3ee06f48462fb6caf5db7/grizzly_framework-1.3.0-py3-none-any.whl", hash = "sha256:8061afd34262d017a3328ddbd4be9a2de18ad0228baa41ef0a237d8ecee0f2fe", size = 302879, upload-time = "2026-08-20T15:29:16.85Z" },
 ]
 
 [[package]]
