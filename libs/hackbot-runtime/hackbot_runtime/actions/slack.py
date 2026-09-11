@@ -18,9 +18,9 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
+from hackbot_runtime.actions.handlers.registry import ActionType
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
-ACTION_TYPE = "slack.post_message"
 HACKBOT_UI_URL = "https://hackbot.moz.tools"
 
 
@@ -77,8 +77,12 @@ async def post_message(
 
     Recorded into the run summary for human review -- does not post to Slack.
     """
-    action = recorder.record(ACTION_TYPE, _params(channel, text), reasoning=reasoning)
-    return f"Recorded {ACTION_TYPE} (ID: {action['action_id']})."
+    action = recorder.record(
+        ActionType.SLACK_POST_MESSAGE, _params(channel, text), reasoning=reasoning
+    )
+    return (
+        f"Recorded {ActionType.SLACK_POST_MESSAGE.value} (ID: {action['action_id']})."
+    )
 
 
 def record_message(
@@ -98,7 +102,9 @@ def record_message(
     ``unfurl`` turns Slack's previews back on, recorded as its link and media
     flags separately.
     """
-    return recorder.record(ACTION_TYPE, _params(channel, text, blocks, unfurl), ref=ref)
+    return recorder.record(
+        ActionType.SLACK_POST_MESSAGE, _params(channel, text, blocks, unfurl), ref=ref
+    )
 
 
 TOOLS = tools_in(__name__)

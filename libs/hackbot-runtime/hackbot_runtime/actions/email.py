@@ -21,9 +21,10 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
+from hackbot_runtime.actions.handlers.registry import ActionType
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
-ACTION_TYPE = "email.send"
+ACTION_TYPE = ActionType.EMAIL_SEND.value
 
 # Substituted with the run's patch when the mail is sent. The agent decides
 # whether the body mentions the patch at all, and how it is framed; this only

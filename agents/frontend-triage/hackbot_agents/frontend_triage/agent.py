@@ -33,6 +33,7 @@ from claude_agent_sdk import (
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
+from hackbot_runtime.actions.handlers.registry import ActionType
 from hackbot_runtime.claude import Reporter
 from hackbot_runtime.searchfox import (
     PLACEHOLDER as SEARCHFOX_PLACEHOLDER,
@@ -616,9 +617,9 @@ async def run_frontend_triage(
     # ahead of the hooks below so a refusal happens before the comment body is
     # rewritten.
     actions_recorder.add_hook(
-        "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
+        ActionType.BUGZILLA_ADD_COMMENT, add_comment_hook(actions_recorder, bug)
     )
-    actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
+    actions_recorder.add_hook(ActionType.BUGZILLA_ADD_COMMENT, severity_block_hook)
 
     # Whose guidance goes in the prompt. Falls back to every component when the bug's
     # component is unknown or the lookup failed, which is what the prompt carried before
@@ -637,13 +638,15 @@ async def run_frontend_triage(
     known_docs = registrations(source_repo.resolve())
 
     # Registered before `permalink_hook`, which rewrites the placeholders this reads.
-    actions_recorder.add_hook("bugzilla.add_comment", component_guidance_hook(loaded))
+    actions_recorder.add_hook(
+        ActionType.BUGZILLA_ADD_COMMENT, component_guidance_hook(loaded)
+    )
 
     actions_recorder.add_hook(
-        "bugzilla.add_comment",
+        ActionType.BUGZILLA_ADD_COMMENT,
         permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
     )
-    actions_recorder.add_hook("bugzilla.add_comment", feedback_tags_hook)
+    actions_recorder.add_hook(ActionType.BUGZILLA_ADD_COMMENT, feedback_tags_hook)
 
     # Shares `loaded` with the hook above, so a component the agent pulls mid-run stops
     # the hook refusing a comment that cites it.

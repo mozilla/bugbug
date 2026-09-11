@@ -19,6 +19,7 @@ from typing import Any
 
 from hackbot_runtime.actions.handlers import (
     ActionResult,
+    ActionType,
     ApplyContext,
     get_handler,
     merge_resolved,
@@ -141,7 +142,7 @@ async def ensure_action_rows(
 
 
 async def _dispatch(
-    run: Run, action_type: str, params: dict, attachments: list[dict]
+    run: Run, action_type: ActionType, params: dict, attachments: list[dict]
 ) -> ActionResult:
     """Run one handler call, converting failures into a failed `ActionResult`.
 
@@ -151,7 +152,7 @@ async def _dispatch(
     handler = get_handler(action_type)
     if handler is None:
         return ActionResult.failed(
-            f"No handler registered for action type '{action_type}'"
+            f"No handler registered for action type '{action_type.value}'"
         )
 
     ctx = ApplyContext(
@@ -222,12 +223,12 @@ async def _apply_pending_rows(
                 for member in member_rows
             ]
             outcome = await _dispatch(
-                run, "bugzilla.update_bug", merge_resolved(entries), []
+                run, ActionType.BUGZILLA_UPDATE_BUG, merge_resolved(entries), []
             )
         else:
             member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
-            outcome = await _dispatch(run, row.type, params, attachments)
+            outcome = await _dispatch(run, ActionType(row.type), params, attachments)
 
         # Only stamp applied_at on a real success, so a failed row isn't
         # mistaken for one that was applied.
