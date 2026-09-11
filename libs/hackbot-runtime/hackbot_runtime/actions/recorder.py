@@ -17,6 +17,11 @@ from hackbot_runtime.uploader import SignedPolicyUploader
 ActionHook = Callable[[dict], None]
 
 
+def confirmation(action: dict) -> str:
+    """Return the agent-facing confirmation for a recorded action."""
+    return f"Recorded {action['type']} (ID: {action['action_id']})."
+
+
 class ActionsRecorder:
     """Collects structured actions an agent decided to take.
 
