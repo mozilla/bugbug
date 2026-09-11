@@ -91,7 +91,7 @@ vcs = [
 [package.metadata]
 requires-dist = [
     { name = "bugsy", marker = "extra == 'bugzilla'" },
-    { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.2.30" },
+    { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "grizzly-framework", marker = "extra == 'firefox'" },
     { name = "httpx", marker = "extra == 'vcs'" },
     { name = "prefpicker", marker = "extra == 'firefox'" },
