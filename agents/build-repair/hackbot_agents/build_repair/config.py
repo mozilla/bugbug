@@ -37,6 +37,13 @@ FIREFOX_TOOLS = [
 # Optional try-server tool, wired only when run_try_push is enabled.
 TRY_PUSH_TOOL = "mcp__firefox__submit_try_push"
 
+# Recordable action types the agent may take, by dotted id. Submitting the fix
+# for review is the only one: the developer reviews the patch in the Hackbot UI
+# and then in Phabricator, so the agent posts nothing to the bug itself. Needs a
+# bug to file the revision against, so it is wired only when the run has a bug id
+# (see run_build_repair).
+ENABLED_ACTION_TYPES = ["phabricator.submit_patch"]
+
 # The agent always runs inside an isolated Docker container, so there is no
 # sandbox and tools run without per-command permission prompts (see
 # permission_mode="bypassPermissions" in agent.py). This is just the set of

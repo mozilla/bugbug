@@ -15,6 +15,8 @@ from hackbot_runtime.changes import (
     _synthetic_commit,
     build_phabricator_diff,
     build_try_push,
+    collect,
+    ensure_git_identity,
     has_changes,
 )
 
@@ -240,3 +242,48 @@ def test_has_changes_leaves_the_tree_and_index_alone(tmp_path):
 
     assert _git(tmp_path, "status", "--porcelain") == before
     assert _git(tmp_path, "rev-parse", "HEAD").strip() == base
+
+
+# --- ensure_git_identity ----------------------------------------------- #
+
+
+def test_agent_can_commit_after_identity_is_set(tmp_path):
+    """A prepared checkout lets the agent commit without passing an identity.
+
+    Agent containers have no global git identity, so this is what stands between
+    a patch that carries the agent's own message and one squashed into the
+    nameless wrap commit.
+    """
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "file.txt").write_text("one\n")
+    ensure_git_identity(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base commit")
+
+    assert _git(tmp_path, "log", "-1", "--format=%s").strip() == "base commit"
+
+
+def test_collect_keeps_the_agents_commit_message(tmp_path):
+    base = _init_repo(tmp_path)
+    _commit_change(tmp_path, "edited\n", message="Bug 1 - Fix the bustage")
+
+    change_set = collect(tmp_path, base, "https://example.com/repo.git")
+
+    assert change_set is not None
+    assert change_set.metadata["wrapped_uncommitted"] is False
+    assert [c["subject"] for c in change_set.metadata["commits"]] == [
+        "Bug 1 - Fix the bustage"
+    ]
+
+
+def test_collect_wraps_uncommitted_work_under_a_placeholder(tmp_path):
+    base = _init_repo(tmp_path)
+    (tmp_path / "file.txt").write_text("edited\n")
+
+    change_set = collect(tmp_path, base, "https://example.com/repo.git")
+
+    assert change_set is not None
+    assert change_set.metadata["wrapped_uncommitted"] is True
+    assert [c["subject"] for c in change_set.metadata["commits"]] == [
+        "Uncommitted agent changes"
+    ]

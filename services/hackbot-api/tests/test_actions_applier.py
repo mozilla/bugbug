@@ -684,3 +684,10 @@ async def test_comment_and_needinfo_clear_coalesce_into_one_update(monkeypatch):
     ]
     assert comment.status == "applied"
     assert clear.status == "applied"
+
+
+def test_build_repair_mails_unattended_but_holds_the_revision():
+    spec = AGENT_REGISTRY["build-repair"]
+    run = _run_with_findings()
+    assert _action_auto_applies(spec, run, "email.send")
+    assert not _action_auto_applies(spec, run, "phabricator.submit_patch")

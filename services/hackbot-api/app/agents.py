@@ -99,9 +99,11 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Analyze a Firefox build failure at a specific commit and produce a candidate fix patch.",
         job_name="hackbot-agent-build-repair",
         input_schema=BuildRepairInputs,
-        # Its only action is the failure-analysis email, which used to be sent
-        # unconditionally by the pulse listener.
+        # The failure-analysis email keeps going out on its own (it used to be
+        # sent unconditionally by the pulse listener), but the fix waits: a
+        # developer reads the patch in the UI before a revision is opened for it.
         auto_apply_actions=True,
+        never_apply_actions=frozenset({"phabricator.submit_patch"}),
     ),
     "frontend-triage": AgentSpec(
         name="frontend-triage",

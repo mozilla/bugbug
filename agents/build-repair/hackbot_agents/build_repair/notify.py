@@ -93,9 +93,14 @@ def build_email(
     task_id: str,
     run_id: str,
     has_patch: bool = False,
+    revision_pending: bool = False,
     blamed_author: str | None = None,
 ) -> tuple[str, str]:
-    """The subject and markdown body of the build-failure email."""
+    """The subject and markdown body of the build-failure email.
+
+    ``revision_pending`` means the run recorded a ``phabricator.submit_patch``
+    action that is waiting for approval, so the email says how to apply it.
+    """
     failure_commit = push.git_commits[0]
     subject = (
         f"[build-repair] Build failure analysis for "
@@ -162,6 +167,17 @@ def build_email(
             "## Verification",
             "",
             f"- Local build verified: {result.local_build_verified}",
+        ]
+    if revision_pending:
+        lines += [
+            "",
+            "## How to submit the fix to Phabricator",
+            "",
+            "1. Check the patch in the run's Patch panel: "
+            + RUN_URL.format(run_id=run_id),
+            "2. Press *Apply pending actions* there to open a WIP revision for "
+            + _link(BUG_URL.format(bug_id=result.bug_id), f"bug {result.bug_id}")
+            + ", where the revision appears; review and land it as usual.",
         ]
     if has_patch:
         # The diff itself is substituted for the placeholder when the mail is sent,

@@ -18,7 +18,11 @@ It also optionally bootstraps Firefox build if needed.
   reaches `CHECKOUT_DEPTH` commits back so the agent can find a culprit in an earlier
   push when the failing job did not run there.
 - `GIT_COMMIT` - Optional override for the failure commit (skips the hg->git lookup).
-- `BUG_ID` - Optional Bugzilla bug id.
+- `BUG_ID` - Optional override, normally unset. The bug is resolved from the push: the
+  pushlog lookup already returns each changeset's description, whose first line names it
+  (`Bug 123 - ...`). The failure commit's bug gives the analysis stage its Bugzilla
+  context; the fix is filed against the _blamed_ commit's bug, known once stage 1 picks
+  the culprit.
 
 ## Output
 
@@ -38,11 +42,31 @@ Second stage - fixing:
 
 The result reports `blamed_commit` so the caller can attribute the failure to a developer.
 
+## Submitting the fix
+
+Once a bug is known, the fix stage records a `phabricator.submit_patch` action in
+`summary.json` -- a new WIP revision carrying the fix, whose diff the runtime builds
+from the agent's own checkout into `changes/phabricator_diff.json`. Nothing is posted
+to the bug, and nothing reaches Phabricator during the run.
+
+The fix stage also commits its work, so the patch carries a real message rather than
+the runtime's nameless fallback. A developer reviews it in the Hackbot UI (the run's
+Patch panel renders `changes/changes.patch`, headed by that commit message) and
+applies the action from there; the full review then happens on the revision. Unlike
+the email below, this one waits for a human -- see `never_apply_actions` in
+[`agents.py`](../../services/hackbot-api/app/agents.py). Eval runs pass no actions
+recorder, so they never record it.
+
+A run whose blamed commit names no bug (a "No bug" commit, a backout) produces the fix
+and its commit but records no revision -- one has to be filed against a bug. The agent
+log says so when that happens.
+
 ## Email notification
 
 A run that produced a patch records an `email.send` action carrying the analysis, the
-blamed commit and the patch, addressed to that commit's author and to the developer who
-pushed the failing change (the hackbot team is copied apply-side). A run that proposed no
+blamed commit, the patch and -- when a revision is pending -- the steps to review and
+apply it, addressed to that commit's author and to the developer who pushed the failing
+change (the hackbot team is copied apply-side). A run that proposed no
 patch is a transient or not-to-blame failure and is not emailed -- see
 `NOTIFY_ONLY_WITH_PATCH` in [config.py](hackbot_agents/build_repair/config.py).
 
