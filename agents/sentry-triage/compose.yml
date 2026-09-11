@@ -1,0 +1,36 @@
+services:
+  sentry-triage-broker:
+    build:
+      context: ../..
+      dockerfile: agents/sentry-triage/Dockerfile
+      target: broker
+    environment:
+      - SENTRY_API_KEY=${SENTRY_API_KEY:?error}
+      - SENTRY_API_URL_BASE=${SENTRY_API_URL_BASE:?error}
+      - SENTRY_ORG_NAME=${SENTRY_ORG_NAME:?error}
+    expose:
+      - "8765"
+
+  sentry-triage-agent:
+    build:
+      context: ../..
+      dockerfile: agents/sentry-triage/Dockerfile
+      target: agent
+    environment:
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts so
+      # compose and direct runs land in the same user-scoped location.
+      - ARTIFACTS_DIR=/artifacts
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - RUN_ID
+      - SENTRY_ALERT_URL=${SENTRY_ALERT_URL:?error}
+      - SENTRY_MCP_URL=http://sentry-triage-broker:8765/mcp
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      sentry-triage-broker:
+        condition: service_started
+
+volumes:
+  workspace:
