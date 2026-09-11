@@ -134,4 +134,5 @@ async def apply_run_actions(
         log.warning("No run found for run_id %s", run_id)
         return
 
-    await on_run_completed(db, run)
+    # Forward the review choice to the action policy.
+    await on_run_completed(db, run, event.get("require_review"))

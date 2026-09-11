@@ -67,7 +67,9 @@ async def _publish_event(
         log.exception("Failed to publish %s event", event_type)
 
 
-async def publish_run_completed(run_id: str, agent: str, status: str) -> None:
+async def publish_run_completed(
+    run_id: str, agent: str, status: str, require_review: bool | None
+) -> None:
     """Publish a ``run.completed`` event to the run-domain topic.
 
     Topics follow a per-domain convention, ``<domain>-events`` (the GCP project
@@ -83,6 +85,11 @@ async def publish_run_completed(run_id: str, agent: str, status: str) -> None:
     await _publish_event(
         settings.run_events_topic,
         event_type="run.completed",
-        payload={"run_id": run_id, "agent": agent, "status": status},
+        payload={
+            "run_id": run_id,
+            "agent": agent,
+            "status": status,
+            "require_review": require_review,
+        },
         attributes={"agent": agent, "status": status},
     )
