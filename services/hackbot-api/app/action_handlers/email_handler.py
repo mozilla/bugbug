@@ -26,11 +26,15 @@ import logging
 import os
 from typing import Any
 
-from hackbot_runtime.actions.email import PATCH_PLACEHOLDER
-from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
-from hackbot_runtime.changes import PATCH_ARTIFACT
+from app.action_handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
+
+# Artifact containing a run's source-code patch.
+_PATCH_ARTIFACT = "changes/changes.patch"
+
+# Email-body token replaced with the source-code patch.
+PATCH_PLACEHOLDER = "{patch}"
 
 # A diff long enough to bury the rest of the mail is cut off; the attachment,
 # when the caller asked for one, still carries every line.
@@ -56,7 +60,7 @@ async def _patch(ctx: ApplyContext) -> bytes | None:
     recipient the patch, not the whole notification.
     """
     try:
-        return await ctx.download_artifact(PATCH_ARTIFACT)
+        return await ctx.download_artifact(_PATCH_ARTIFACT)
     except Exception:
         log.exception("Could not read the patch of run %s", ctx.run_id)
         return None
@@ -127,7 +131,7 @@ class SendEmailHandler:
             message.add_attachment(
                 Attachment(
                     FileContent(base64.b64encode(patch).decode()),
-                    FileName(PATCH_ARTIFACT.rsplit("/", 1)[-1]),
+                    FileName(_PATCH_ARTIFACT.rsplit("/", 1)[-1]),
                     disposition=Disposition("attachment"),
                 )
             )

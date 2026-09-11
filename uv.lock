@@ -2709,6 +2709,7 @@ version = "0.1.0"
 source = { editable = "services/hackbot-api" }
 dependencies = [
     { name = "alembic" },
+    { name = "async-lru" },
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "cloud-sql-python-connector", extra = ["asyncpg"] },
@@ -2718,15 +2719,19 @@ dependencies = [
     { name = "google-cloud-run" },
     { name = "google-cloud-storage" },
     { name = "hackbot-client" },
-    { name = "hackbot-runtime" },
     { name = "httpx" },
+    { name = "lando-client" },
+    { name = "markdown2" },
     { name = "phabricator-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "requests" },
+    { name = "sendgrid" },
     { name = "sentry-sdk" },
     { name = "slack-sdk" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "testrail-client" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -2740,6 +2745,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.13.1" },
+    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "cachetools", specifier = ">=5.3.0" },
     { name = "cloud-sql-python-connector", extras = ["asyncpg"], specifier = ">=1.5.0" },
@@ -2749,18 +2755,22 @@ requires-dist = [
     { name = "google-cloud-run", specifier = ">=0.10.0" },
     { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "hackbot-client", editable = "libs/hackbot-client" },
-    { name = "hackbot-runtime", editable = "libs/hackbot-runtime" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "lando-client", editable = "libs/lando-client" },
+    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "requests", specifier = ">=2.32.0" },
+    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.25" },
+    { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
 ]
 provides-extras = ["dev"]
@@ -2831,17 +2841,11 @@ version = "0.1.0"
 source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
-    { name = "async-lru" },
     { name = "google-auth" },
     { name = "httpx" },
-    { name = "lando-client" },
-    { name = "markdown2" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
-    { name = "sendgrid" },
-    { name = "slack-sdk" },
-    { name = "testrail-client" },
     { name = "weave" },
 ]
 
@@ -2858,19 +2862,13 @@ phabricator = [
 requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
-    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
-    { name = "lando-client", editable = "libs/lando-client" },
-    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "sendgrid", specifier = ">=6.12.5" },
-    { name = "slack-sdk", specifier = ">=3.27.0" },
-    { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "weave", specifier = ">=0.53.4" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]

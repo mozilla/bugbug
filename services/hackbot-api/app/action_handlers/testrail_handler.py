@@ -9,7 +9,7 @@ from typing import Any
 
 from testrail_client import TestRailClient
 
-from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
+from app.action_handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
 

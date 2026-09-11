@@ -5,7 +5,7 @@ routing, result parsing, error handling -- without touching a network.
 """
 
 import pytest
-from hackbot_runtime.actions.handlers import ApplyContext, slack_handler
+from app.action_handlers import ApplyContext, slack_handler
 from slack_sdk.errors import SlackApiError
 
 

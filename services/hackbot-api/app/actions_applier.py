@@ -5,7 +5,7 @@ upserted as `run_actions` rows (one per entry) so they're visible and
 manageable in the UI. Whether they're then applied *automatically* is decided by
 `_auto_apply_blocker` (see `app/agents.py`); either way they
 can be applied on demand (manual apply-all from the UI). Application runs each pending
-row through the handler registry in `hackbot_runtime.actions.handlers` and is
+row through the handler registry in `app.action_handlers` and is
 idempotent per action — an already-`applied` row is never re-applied, so Pub/Sub
 retries and repeated manual applies are safe.
 """
@@ -17,17 +17,17 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from hackbot_runtime.actions.handlers import (
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import gcs
+from app.action_handlers import (
     ActionResult,
     ApplyContext,
     get_handler,
     merge_resolved,
     plan_coalesced_groups,
 )
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app import gcs
 from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
