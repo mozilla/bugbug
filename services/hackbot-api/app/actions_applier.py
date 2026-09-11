@@ -6,9 +6,8 @@ manageable in the UI. Whether they're then applied *automatically* is decided by
 the agent's run-level policy and per-action overrides (see `app/agents.py`);
 either way they can be applied on demand (manual apply-all from the UI).
 Application runs each pending row through the handler registry in
-`hackbot_runtime.actions.handlers` and is idempotent per action — an
-already-`applied` row is never re-applied, so Pub/Sub retries and repeated
-manual applies are safe.
+`app.action_handlers` and is idempotent per action — an already-`applied` row is
+never re-applied, so Pub/Sub retries and repeated manual applies are safe.
 """
 
 from __future__ import annotations
@@ -18,17 +17,17 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from hackbot_runtime.actions.handlers import (
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import gcs
+from app.action_handlers import (
     ActionResult,
     ApplyContext,
     get_handler,
     merge_resolved,
     plan_coalesced_groups,
 )
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app import gcs
 from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
@@ -110,9 +109,11 @@ def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
 
 
 def _should_auto_apply(
-    spec: AgentSpec, action_type: str, *, run_level_auto_apply: bool
+    spec: AgentSpec | None, action_type: str, *, run_level_auto_apply: bool
 ) -> bool:
     """Apply per-action overrides, falling back to the run-level decision."""
+    if spec is None:
+        return False
     if action_type in spec.never_apply_actions:
         return False
     if action_type in spec.always_apply_actions:

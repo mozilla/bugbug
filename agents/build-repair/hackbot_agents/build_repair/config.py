@@ -8,6 +8,14 @@
 ANALYSIS_MODEL = "claude-opus-4-8"
 FIX_MODEL = "claude-opus-4-8"
 
+# A run that proposed no patch is a transient or not-to-blame failure; emailing the
+# developer about it is noise.
+NOTIFY_ONLY_WITH_PATCH = True
+
+# Commits the shallow checkout reaches back, so the agent can inspect the pushes
+# before the failing one when the job did not run on every push.
+CHECKOUT_DEPTH = 500
+
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",

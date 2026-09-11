@@ -19,7 +19,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
@@ -30,10 +30,6 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
     re.IGNORECASE | re.MULTILINE,
 )
-
-
-def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
 
 
 def _validate_summary(summary: str | None) -> None:
@@ -110,7 +106,7 @@ async def submit_patch(
     bug comment).
     """
     _validate_summary(summary)
-    recorder.record(
+    action = recorder.record(
         "phabricator.submit_patch",
         {
             "bug_id": bug_id,
@@ -121,7 +117,7 @@ async def submit_patch(
         reasoning=reasoning,
         ref=ref,
     )
-    return _confirm(recorder, "phabricator.submit_patch")
+    return confirmation(action)
 
 
 @tool
@@ -156,12 +152,12 @@ async def update_patch(
     Only the diff changes: the revision keeps its title, summary, and bug
     association exactly as they are.
     """
-    recorder.record(
+    action = recorder.record(
         "phabricator.update_patch",
         {"revision_id": revision_id},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "phabricator.update_patch")
+    return confirmation(action)
 
 
 @tool
@@ -182,12 +178,12 @@ async def add_comment(
     changes, use ``submit_patch`` instead. Recorded into the run summary for
     human review; nothing is posted to Phabricator during the run.
     """
-    recorder.record(
+    action = recorder.record(
         "phabricator.add_comment",
         {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "phabricator.add_comment")
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)

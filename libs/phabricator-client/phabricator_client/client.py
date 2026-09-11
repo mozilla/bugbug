@@ -35,6 +35,49 @@ def _is_full_commit(ref: str) -> bool:
     return len(ref) == _FULL_COMMIT_LEN and all(c in "0123456789abcdef" for c in ref)
 
 
+def _select_full_commit(ref: str, result: dict) -> str:
+    """Pick the one full commit hash matching ``ref`` in a Diffusion result.
+
+    ``result`` is a ``diffusion.querycommits`` response; kept apart from
+    :meth:`PhabricatorClient.resolve_commit` so the choosing rules can be read
+    without the Conduit call around them.
+
+    Raises :class:`UnresolvedCommitError` when no single full hash can be named.
+    """
+    if _is_full_commit(ref):
+        return ref
+    data = result.get("data") or {}
+    commit_phid = (result.get("identifierMap") or {}).get(ref)
+    if commit_phid in data:
+        commits = [data[commit_phid]]
+    else:
+        # ``identifierMap`` only maps unambiguous commits, and a firefox
+        # commit is mirrored to autoland, beta, release, etc. Thus, the same
+        # hash can appear in multiple repos with different PHIDs.
+        commits = data.values()
+
+    identifiers = {
+        commit["identifier"]
+        for commit in commits
+        if commit["identifier"].startswith(ref)
+        and _is_full_commit(commit["identifier"])
+    }
+
+    if len(identifiers) != 1:
+        if identifiers:
+            reason = f"it matches {len(identifiers)} commits"
+        else:
+            reason = (
+                "Diffusion does not know one; the commit may not be "
+                "imported, e.g. an unlanded parent of a stacked patch"
+            )
+        raise UnresolvedCommitError(
+            f"Cannot expand {ref} to a full commit hash: {reason}."
+        )
+
+    return identifiers.pop()
+
+
 class PhabricatorClient:
     def __init__(self, settings: PhabricatorSettings | None = None) -> None:
         self.settings = settings or PhabricatorSettings.from_env()
@@ -46,16 +89,30 @@ class PhabricatorClient:
     def revision_url(self, revision_id: int) -> str:
         return f"{self.base_url}/D{revision_id}"
 
-    async def conduit_request(self, method: str, **payload: Any) -> dict:
-        """Call a Conduit method, returning its ``result`` (raising on error)."""
-        payload["__conduit__"] = {"token": self.settings.api_key}
+    async def conduit_call(self, method: str, params: dict) -> dict:
+        """Call a Conduit method, returning its full response envelope.
+
+        The envelope (``{"result", "error_code", "error_info"}``) is returned
+        as-is, without raising on a Conduit-level error — for callers that need
+        to relay Conduit's own answer verbatim (e.g. the broker's read-only
+        Conduit proxy). Most callers want :meth:`conduit_request` instead.
+
+        Any ``__conduit__`` block in ``params`` is replaced with this client's
+        key, so a caller (or a proxied client) never gets to choose the
+        credentials the request is made with.
+        """
+        payload = {**params, "__conduit__": {"token": self.settings.api_key}}
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
             response = await client.post(
                 f"{self.base_url}/api/{method}",
                 data={"params": json.dumps(payload), "output": "json"},
             )
         response.raise_for_status()
-        data = response.json()
+        return response.json()
+
+    async def conduit_request(self, method: str, **payload: Any) -> dict:
+        """Call a Conduit method, returning its ``result`` (raising on error)."""
+        data = await self.conduit_call(method, payload)
         if data.get("error_code"):
             raise RuntimeError(
                 f"Conduit error {data['error_code']}: {data.get('error_info')}"
@@ -76,6 +133,21 @@ class PhabricatorClient:
         )
         data = result.get("data") or []
         return data[0] if data else None
+
+    async def search_revisions(self, revision_phids: list[str]) -> list[dict]:
+        """Return the Differential revisions for ``revision_phids``, in one call.
+
+        The bulk counterpart of :meth:`search_revision`, for callers holding a
+        set of PHIDs — e.g. the revisions in a stack. PHIDs Conduit does not
+        return (an unreadable revision, say) are simply absent from the result,
+        so callers must not assume the order or length matches the input.
+        """
+        if not revision_phids:
+            return []
+        result = await self.conduit_request(
+            "differential.revision.search", constraints={"phids": revision_phids}
+        )
+        return result.get("data") or []
 
     async def search_revision_by_id(
         self, revision_id: int, *, attachments: dict[str, bool] | None = None
@@ -163,33 +235,4 @@ class PhabricatorClient:
         if _is_full_commit(ref):
             return ref
         result = await self.conduit_request("diffusion.querycommits", names=[ref])
-        data = result.get("data")
-        commit_phid = result.get("identifierMap").get(ref)
-        if commit_phid in data:
-            commits = [data[commit_phid]]
-        else:
-            # ``identifierMap`` only maps unambiguous commits, and a firefox
-            # commit is mirrored to autoland, beta, release, etc. Thus, the same
-            # hash can appear in multiple repos with different PHIDs.
-            commits = data.values()
-
-        identifiers = {
-            commit["identifier"]
-            for commit in commits
-            if commit["identifier"].startswith(ref)
-            and _is_full_commit(commit["identifier"])
-        }
-
-        if len(identifiers) != 1:
-            if identifiers:
-                reason = f"it matches {len(identifiers)} commits"
-            else:
-                reason = (
-                    "Diffusion does not know one; the commit may not be "
-                    "imported, e.g. an unlanded parent of a stacked patch"
-                )
-            raise UnresolvedCommitError(
-                f"Cannot expand {ref} to a full commit hash: {reason}."
-            )
-
-        return identifiers.pop()
+        return _select_full_commit(ref, result)

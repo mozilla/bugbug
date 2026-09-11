@@ -3,20 +3,19 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""The Slack message a finished run sends to the channel.
+"""What a finished run reports, in Slack and by email.
 
-Recorded as a ``slack.post_message`` action rather than posted from the run: it is
-then visible in the hackbot UI before it lands, and the apply step delivers it at
-most once (see ``hackbot_runtime.actions.slack``).
+Both are recorded as actions rather than sent from the run: they are then visible
+in the hackbot UI before they land, and the apply step delivers each at most once
+(see ``hackbot_runtime.actions.slack`` / ``.email``).
 
-Only verdicts a sheriff acts on are posted -- see :func:`sheriff_action_required`.
+Only verdicts a sheriff acts on go to the channel -- see
+:func:`sheriff_action_required`. Every verdict is emailed, so the team can track
+what the agent decided either way.
 
-A few lines of context, then the verdict in full. Every identifier a sheriff would
-otherwise have to look up -- revisions, task, bug, run -- is a link, the way the
-pulse listener's email does it
-(``services/hackbot-pulse-listener/app/notify.py``); unlike the email this stays
-short enough to read in a channel, since the run holds the detail. The verdict is
-what a sheriff acts on, so it is never truncated.
+Every identifier a recipient would otherwise have to look up -- revisions, task,
+bug, run -- is a link. The Slack message stays short enough to read in a channel,
+since the run holds the detail; the email carries the full analysis.
 """
 
 from __future__ import annotations
@@ -24,6 +23,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from hackbot_runtime.actions.email import PATCH_PLACEHOLDER, demote_headings
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 
 from .agent import TestRepairResult
@@ -168,3 +168,121 @@ def build_message(
     if result.summary.strip():
         lines += ["", result.summary.strip()]
     return "\n".join(lines)
+
+
+def _md_link(url: str, label: str) -> str:
+    return f"[{label}]({url})"
+
+
+def _groups_label(investigation: Investigation) -> str:
+    """A one-line name for the run's failing groups, for the email subject."""
+    if not investigation.failing_groups:
+        return investigation.label or "unresolved tests"
+    first, *rest = [group.group for group in investigation.failing_groups]
+    return f"{first} (+{len(rest)} more)" if rest else first
+
+
+def _already_actioned_banner(classification: str | None) -> list[str]:
+    """Say up front that the tree has been dealt with, when it has."""
+    if not classification:
+        return []
+    return [
+        f"> **Already actioned by a sheriff.** Treeherder now classifies this job as "
+        f"_{classification}_, so the tree has been dealt with.",
+        "",
+    ]
+
+
+def _analysis_sections(result: TestRepairResult) -> list[str]:
+    lines: list[str] = []
+    for text, title in ((result.summary, "Summary"), (result.analysis, "Analysis")):
+        if text:
+            lines += ["", f"## {title}", "", demote_headings(text)]
+    return lines
+
+
+def build_email(
+    result: TestRepairResult,
+    investigation: Investigation,
+    *,
+    task_id: str,
+    run_id: str,
+    culprit_author: str | None = None,
+    already_actioned: str | None = None,
+) -> tuple[str, str]:
+    """The subject and markdown body of the verdict email."""
+    recommendation = _RECOMMENDATIONS.get(result.recommendation, result.recommendation)
+    # In the subject too, so it can be skipped from the inbox.
+    prefix = "[already actioned] " if already_actioned else ""
+    subject = (
+        f"[test-repair] {prefix}{recommendation} - "
+        f"{_groups_label(investigation)} ({investigation.project})"
+    )
+
+    groups = (
+        ", ".join(f"`{group.group}`" for group in investigation.failing_groups)
+        or "not resolved"
+    )
+    lines = [
+        *_already_actioned_banner(already_actioned),
+        "# Test failure analysis",
+        "",
+        f"- **Recommendation:** {recommendation}",
+        f"- **Failing tests:** {groups}",
+        f"- **Classification:** {result.classification}",
+        f"- **Confidence:** {result.confidence}",
+        f"- **Repository:** {investigation.project}",
+        "- **Revision (git):** "
+        + _md_link(
+            GIT_COMMIT_URL.format(sha=investigation.failure_commit),
+            f"`{investigation.failure_commit[:12]}`",
+        ),
+        "- **Revision (hg):** "
+        + _md_link(
+            HG_REV_URL.format(rev=investigation.hg_revision),
+            f"`{investigation.hg_revision[:12]}`",
+        ),
+        "- **Failed task:** "
+        + _md_link(TASK_URL.format(task_id=task_id), f"`{task_id}`"),
+        "- **Treeherder:** "
+        + _md_link(
+            TREEHERDER_JOB_URL.format(
+                project=investigation.project,
+                revision=investigation.hg_revision,
+                task_id=task_id,
+            ),
+            "jobs",
+        ),
+    ]
+
+    if result.culprit_commit:
+        by = f" by {culprit_author}" if culprit_author else ""
+        lines.append(
+            "- **Culprit commit:** "
+            + _md_link(
+                GIT_COMMIT_URL.format(sha=result.culprit_commit),
+                f"`{result.culprit_commit[:12]}`",
+            )
+            + by
+        )
+    bug = result.culprit_bug or result.intermittent_bug
+    if bug:
+        lines.append("- **Bug:** " + _md_link(BUG_URL.format(bug_id=bug), str(bug)))
+    lines.append("- **Run details:** " + RUN_URL.format(run_id=run_id))
+
+    lines += _analysis_sections(result)
+    if result.proposed_patch:
+        # The diff itself is substituted for the placeholder when the mail is sent,
+        # from the same artifact it attaches.
+        lines += [
+            "",
+            "## Proposed patch",
+            "",
+            "```diff",
+            PATCH_PLACEHOLDER,
+            "```",
+            "",
+            "_For the author: squash this into your existing patches and reland. It"
+            " is a suggestion, not a follow-up to land on its own._",
+        ]
+    return subject, "\n".join(lines)

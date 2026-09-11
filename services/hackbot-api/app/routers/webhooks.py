@@ -4,14 +4,15 @@ import logging
 
 from cachetools import TTLCache
 from fastapi import APIRouter, Depends, Request, status
+from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
 
 from app.auth import (
     require_bugzilla_webhook_secret,
     require_phabricator_signature,
 )
+from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
 from app.bugzilla_webhook import detect_needinfo_request
-from app.client import HackbotClient
 from app.config import settings
 from app.phabricator_authorization import (
     AUTHORIZED_GROUP_PHID,
@@ -34,7 +35,10 @@ def get_phabricator_client() -> PhabricatorClient:
 
 def get_hackbot_client() -> HackbotClient:
     """Dependency: a client for triggering runs over the public hackbot API."""
-    return HackbotClient(settings.hackbot_api_url, settings.external_api_key)
+    return HackbotClient(
+        base_url=settings.hackbot_api_url,
+        api_key=settings.external_api_key,
+    )
 
 
 def get_phabricator_authorizer(
@@ -46,6 +50,19 @@ def get_phabricator_authorizer(
     if authorizer is None:
         authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
         request.app.state.phabricator_authorizer = authorizer
+    return authorizer
+
+
+def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
+    """Dependency: lazily create the app-scoped authorizer and its user cache."""
+    authorizer = getattr(request.app.state, "bugzilla_authorizer", None)
+    if authorizer is None:
+        authorizer = BugzillaAuthorizer(
+            settings.bugzilla_api_url,
+            settings.bugzilla_api_key,
+            AUTHORIZED_GROUP_NAME,
+        )
+        request.app.state.bugzilla_authorizer = authorizer
     return authorizer
 
 
@@ -95,6 +112,11 @@ async def phabricator_webhook(
     # transaction, this is a retry of work already handled.
     fresh = [phid for phid in triggering if phid not in _seen_transactions]
     if not fresh:
+        log.info(
+            "Ignored duplicate Phabricator webhook for %s (transactions: %s)",
+            object_phid,
+            ", ".join(triggering),
+        )
         return {"status": "ignored", "reason": "duplicate delivery"}
 
     # Only consider this delivery's fresh transactions for the mention, so a
@@ -111,7 +133,7 @@ async def phabricator_webhook(
 
     comment, revision_id, bug_id = detected
 
-    run_id = await api_client.trigger_run(
+    run = await api_client.trigger_run(
         "bug-fix",
         {
             "bug_id": bug_id,
@@ -126,11 +148,11 @@ async def phabricator_webhook(
         _seen_transactions[phid] = True
     log.info(
         "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention",
-        run_id,
+        run.run_id,
         revision_id,
         bug_id,
     )
-    return {"status": "triggered", "run_id": run_id}
+    return {"status": "triggered", "run_id": run.run_id}
 
 
 @router.post(
@@ -141,6 +163,7 @@ async def phabricator_webhook(
 async def bugzilla_webhook(
     request: Request,
     api_client: HackbotClient = Depends(get_hackbot_client),
+    authorizer: BugzillaAuthorizer = Depends(get_bugzilla_authorizer),
 ) -> dict:
     """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
     payload = await request.json()
@@ -155,9 +178,22 @@ async def bugzilla_webhook(
         return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
     dedupe_key = f"ni{detected.flag_id}"
     if dedupe_key in _seen_bugzilla_events:
+        log.info(
+            "Ignored duplicate Bugzilla needinfo webhook for bug %s (flag: %s)",
+            detected.bug_id,
+            detected.flag_id,
+        )
         return {"status": "ignored", "reason": "duplicate delivery"}
 
-    run_id = await api_client.trigger_run(
+    if not await authorizer.is_authorized(detected.user_login):
+        log.info(
+            "Ignored Bugzilla needinfo webhook for bug %s: %s is not authorized",
+            detected.bug_id,
+            detected.user_login,
+        )
+        return {"status": "ignored", "reason": "unauthorized user"}
+
+    run = await api_client.trigger_run(
         "bug-fix",
         {
             "bug_id": detected.bug_id,
@@ -170,7 +206,7 @@ async def bugzilla_webhook(
     _seen_bugzilla_events[dedupe_key] = True
     log.info(
         "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request",
-        run_id,
+        run.run_id,
         detected.bug_id,
     )
-    return {"status": "triggered", "run_id": run_id}
+    return {"status": "triggered", "run_id": run.run_id}

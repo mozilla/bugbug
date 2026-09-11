@@ -3,13 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Resolve a Taskcluster build-failure task into the commits to repair.
+"""Resolve a Taskcluster build-failure task into the push to repair.
 
 Given a failing build task id, look up its push: the failure (head) commit the
 tree is checked out at, plus the other commits that landed in the same push so
 the agent can blame the one that broke the build. Uses the same public
 Taskcluster / lando / pushlog lookups the pulse listener does, so the agent
-derives the commits itself from a task id.
+derives everything it reports from a task id.
 """
 
 from __future__ import annotations
@@ -41,6 +41,18 @@ def _get_json(url: str) -> dict:
     resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
     resp.raise_for_status()
     return resp.json()
+
+
+def _task(task_id: str) -> dict:
+    return _get_json(_TC_TASK_URL.format(task_id=task_id))
+
+
+def _task_push(task: dict) -> tuple[str | None, str | None]:
+    tags = task.get("tags") or {}
+    return (
+        tags.get("project"),
+        (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV"),
+    )
 
 
 def _hg_to_git(rev: str) -> str:
@@ -83,16 +95,13 @@ class PushInfo:
     project: str | None
     hg_revision: str | None
     git_commits: list[str]
+    # ``createdForUser``: who pushed the change that failed to build.
+    developer_email: str | None = None
 
 
 def task_push(task_id: str) -> tuple[str | None, str | None]:
     """The ``(project, hg_revision)`` a task ran on; what Treeherder is keyed on."""
-    task = _get_json(_TC_TASK_URL.format(task_id=task_id))
-    tags = task.get("tags") or {}
-    return (
-        tags.get("project"),
-        (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV"),
-    )
+    return _task_push(_task(task_id))
 
 
 def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
@@ -102,7 +111,8 @@ def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
     task is still fetched for its revision. Raises on network errors or when the
     failure commit cannot be determined.
     """
-    project, hg_rev = task_push(task_id)
+    task = _task(task_id)
+    project, hg_rev = _task_push(task)
 
     push = _push_git_commits(project, hg_rev) if hg_rev and project else []
 
@@ -118,4 +128,5 @@ def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
         project=project,
         hg_revision=hg_rev,
         git_commits=[failure_commit] + [c for c in push if c != failure_commit],
+        developer_email=(task.get("tags") or {}).get("createdForUser"),
     )

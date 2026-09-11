@@ -3,7 +3,8 @@
 Covers HMAC signature verification, mention detection / loop prevention, the
 revision -> (revision_id, bug_id) resolution, and the route's ignore/trigger
 branches. Bugzilla coverage includes shared-secret auth, structured needinfo
-detection, self/private-event suppression, dedupe, and dispatch retry behavior.
+detection, self/private-event suppression, user authorization, dedupe, and
+dispatch retry behavior.
 """
 
 import hashlib
@@ -30,6 +31,7 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
+from hackbot_client import RunRef, RunStatus
 
 SECRET = "test-secret"
 BUGZILLA_SECRET = "test-bugzilla-secret"
@@ -479,6 +481,7 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
     assert detected is not None
     assert detected.bug_id == 2022889
     assert detected.flag_id == 2187233
+    assert detected.user_login == "gmierzwinski@mozilla.com"
     assert "gmierzwinski@mozilla.com" in detected.comment
     assert "2026-08-07T18:00:05" in detected.comment
 
@@ -532,16 +535,30 @@ class _FakeHackbotClient:
 
     async def trigger_run(self, agent_name, inputs):
         self.calls.append((agent_name, inputs))
-        return "run-abc"
+        return RunRef(
+            run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+            agent=agent_name,
+            status=RunStatus.pending,
+        )
 
 
 class _FakeAuthorizer:
-    async def is_authorized(self, author_phid):
-        return True
+    def __init__(self, allowed: bool = True):
+        self.allowed = allowed
+        self.checked = []
+
+    async def is_authorized(self, actor):
+        self.checked.append(actor)
+        return self.allowed
 
 
 @pytest.fixture
 def authorizer():
+    return _FakeAuthorizer()
+
+
+@pytest.fixture
+def bugzilla_authorizer():
     return _FakeAuthorizer()
 
 
@@ -551,7 +568,8 @@ def phab_client():
 
 
 @pytest.fixture
-def client(monkeypatch, authorizer, phab_client):
+def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
+    monkeypatch.setattr(settings, "external_api_key", "test-api-key")
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
@@ -560,6 +578,9 @@ def client(monkeypatch, authorizer, phab_client):
     webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
+    app.dependency_overrides[webhooks.get_bugzilla_authorizer] = lambda: (
+        bugzilla_authorizer
+    )
     try:
         yield TestClient(app)
     finally:
@@ -634,7 +655,10 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json() == {"status": "triggered", "run_id": "run-abc"}
+    assert resp.json() == {
+        "status": "triggered",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     assert detect.call_args.args[0] is phab_client
     assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
@@ -736,14 +760,17 @@ def test_bugzilla_route_ignores_non_matching_event(client):
     }
 
 
-def test_bugzilla_route_triggers_run(client):
+def test_bugzilla_route_triggers_run(client, bugzilla_authorizer):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
 
     response = _post_bugzilla(client, _bugzilla_payload())
 
     assert response.status_code == 202
-    assert response.json() == {"status": "triggered", "run_id": "run-abc"}
+    assert response.json() == {
+        "status": "triggered",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     expected_comment = (
         "Check whether Bugzilla user gmierzwinski@mozilla.com posted a comment "
         "at exactly 2026-08-07T18:00:05. If one exists, treat it as the "
@@ -760,6 +787,24 @@ def test_bugzilla_route_triggers_run(client):
             },
         )
     ]
+    assert bugzilla_authorizer.checked == ["gmierzwinski@mozilla.com"]
+
+
+def test_bugzilla_route_ignores_unauthorized_actor(client, bugzilla_authorizer):
+    bugzilla_authorizer.allowed = False
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    payload = _bugzilla_payload()
+    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
+
+    response = _post_bugzilla(client, payload)
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "ignored", "reason": "unauthorized user"}
+    assert fake_api.calls == []
+    # The event stays unconsumed: the same flag can still trigger a run once
+    # the actor is authorized.
+    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
 
 
 def test_bugzilla_route_dedupes_retry_but_not_later_event(client):

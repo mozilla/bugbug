@@ -9,9 +9,8 @@ from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, lando, regression, taskcluster, treeherder, worker
+from app import client, flakiness, lando, regression, taskcluster, treeherder
 from app.config import settings
-from app.models import RunContext
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +72,7 @@ def _is_test_task(tags: dict) -> bool:
     return tags.get("kind") in TEST_KINDS or bool(tags.get("test-suite"))
 
 
-def process(body: dict, executor: Executor) -> str | None:
+def process(body: dict) -> str | None:
     """Handle one Taskcluster failure message. Returns the triggered run id."""
     tags = (body.get("task") or {}).get("tags") or {}
 
@@ -84,9 +83,9 @@ def process(body: dict, executor: Executor) -> str | None:
 
     task_label = tags.get("label") or ""
     if "build" in task_label and "test" not in task_label:
-        return _process_build(body, tags, executor)
+        return _process_build(body, tags)
     if _is_test_task(tags):
-        return _process_test(body, tags, executor)
+        return _process_test(body, tags)
     logger.debug("Ignoring non-build, non-test task %s", task_label)
     return None
 
@@ -98,13 +97,12 @@ def _release(cache: TTLCache, lock: threading.Lock, keys) -> None:
             cache.pop(key, None)
 
 
-def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
+def _process_build(body: dict, tags: dict) -> str | None:
     """Build-failure path: trigger the build-repair agent."""
     project = tags.get("project")
     task_label = tags.get("label") or ""
     task_id = body["status"]["taskId"]
     task_name = tags.get("label") or task_id
-    developer_email = tags.get("createdForUser")
 
     task = taskcluster.get_task(task_id)
 
@@ -221,20 +219,10 @@ def _process_build(body: dict, tags: dict, executor: Executor) -> str | None:
         git_commit,
         job_link,
     )
-    if run_id is not None:
-        ctx = RunContext(
-            run_id=run_id,
-            repo=project,
-            git_commit=git_commit,
-            hg_revision=hg_revision,
-            task_id=task_id,
-            developer_email=developer_email,
-        )
-        executor.submit(worker.poll_and_notify, ctx)
     return run_id
 
 
-def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
+def _process_test(body: dict, tags: dict) -> str | None:
     """Test-failure path: filter, then trigger the test-repair agent for the task.
 
     One push emits many failing test tasks. We wait for Treeherder's verdict on this
@@ -246,7 +234,6 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     task_id = status.get("taskId")
     project = tags.get("project")
     label = tags.get("label") or task_id
-    developer_email = tags.get("createdForUser")
 
     task = taskcluster.get_task(task_id)
 
@@ -309,11 +296,12 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     # Cheapest gate first: it rules out intermittents and infra failures for every
     # harness before any group resolution or ancestor walking. Sheriffs classify a
     # minute or so after the job ends, so the verdict is waited for rather than read
-    # once. The same record carries the configuration the regression check compares
-    # against.
+    # once -- unless the failing tests' own history already rules an intermittent out.
+    # The same record carries the configuration the regression check compares against.
     job = treeherder.job_for_task(project, task_id)
 
-    # Populated at ingestion, so this needs no wait for a sheriff to star the job.
+    # Needs no sheriff, only the parsed log, which trails ingestion by a little.
+    treeherder.await_bug_suggestions(project, job)
     intermittent = treeherder.intermittent_match(project, job)
     if intermittent.known:
         logger.info(
@@ -325,7 +313,10 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
-    reason = treeherder.await_skip_reason(project, task_id, job)
+    tests = treeherder.failing_tests(project, job)
+    reason = _skip_reason(
+        project, task_id, job, tests, tags.get("test-suite") or "", label, job_link
+    )
     if reason:
         logger.info(
             "Treeherder classified task %s as %s; skipping -- %s",
@@ -339,7 +330,7 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
     def claimed_elsewhere() -> bool:
         return _push_claimed(hg_revision)
 
-    trigger = (project, hg_revision, task_id, label, developer_email, executor)
+    trigger = (project, hg_revision, task_id, label)
     whole_task = False
     try:
         groups = treeherder.failing_groups(project, hg_revision, task_id)
@@ -362,6 +353,26 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return _trigger_test_repair([], *trigger)
 
+    if not groups and not whole_task:
+        if not tests:
+            logger.info(
+                "Task %s reported no failing test groups; skipping -- %s",
+                task_id,
+                job_link,
+            )
+            return None
+        # The tests passed but the job did not -- a debug assertion count, a leak
+        # check -- so Treeherder records every manifest as green and there is no
+        # group to compare. In a dry run every such task was a genuine regression.
+        logger.info(
+            "Task %s failed %s test(s) but reports no failing group; comparing the "
+            "task as a whole -- %s",
+            task_id,
+            len(tests),
+            job_link,
+        )
+        whole_task = True
+
     try:
         if whole_task:
             if not regression.is_new_task_failure(
@@ -376,13 +387,6 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
                 return None
             fresh: list[str] = []
         else:
-            if not groups:
-                logger.info(
-                    "Task %s reported no failing test groups; skipping -- %s",
-                    task_id,
-                    job_link,
-                )
-                return None
             fresh = _fresh_groups(
                 groups, project, hg_revision, config, claimed_elsewhere
             )
@@ -403,9 +407,9 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         )
         return None
 
-    if _groups_claimed(project, fresh):
+    if _groups_claimed(project, _dedupe_units(fresh, label)):
         logger.info(
-            "Every failing group of task %s was already investigated on a recent "
+            "Everything failing in task %s was already investigated on a recent "
             "push; skipping -- %s",
             task_id,
             job_link,
@@ -427,6 +431,37 @@ def _process_test(body: dict, tags: dict, executor: Executor) -> str | None:
         return None
 
     return _trigger_test_repair(fresh, *trigger)
+
+
+def _skip_reason(
+    project: str,
+    task_id: str,
+    job: dict | None,
+    tests: list[str] | None,
+    suite: str,
+    label: str,
+    job_link: str,
+) -> str | None:
+    """Treeherder's reason not to investigate, waiting for one unless it is moot.
+
+    The wait exists to catch an intermittent before the ancestor walk, so it is worth
+    nothing on a task whose every failing test has weeks of CI runs behind it and next
+    to no failures among them: that is not a flaky test, and no verdict is coming that
+    would say otherwise. Skipping it takes ten minutes off the report for exactly the
+    failures the agent exists to explain.
+    """
+    reason = treeherder.skip_reason(job)
+    if job is None or reason:
+        return reason
+    if tests and flakiness.has_clean_history(tests, suite, label):
+        logger.info(
+            "Every test failing in task %s has a clean run history; not waiting for "
+            "a classification -- %s",
+            task_id,
+            job_link,
+        )
+        return None
+    return treeherder.await_skip_reason(project, task_id, job)
 
 
 def _build_claimed(hg_revision: str) -> bool:
@@ -456,8 +491,18 @@ def _claim_push(hg_revision: str) -> bool:
         return True
 
 
+def _dedupe_units(test_groups: list[str], label: str) -> list[str]:
+    """What a run covers, for the cross-push dedupe.
+
+    Its failing manifests, or, for a task compared as a whole, its label without the
+    chunk number: a whole-task failure stays broken on the following pushes just as a
+    manifest does, and without this each of them would get a near-identical run.
+    """
+    return test_groups or [regression.unchunked(label)]
+
+
 def _groups_claimed(project: str, groups: list[str]) -> bool:
-    """Whether a recent run already covered every one of these groups.
+    """Whether a recent run already covered every one of these groups (or the label).
 
     All, not any: a task that also broke an unanalysed manifest is still worth a run.
     """
@@ -543,8 +588,6 @@ def _trigger_test_repair(
     hg_revision: str,
     task_id: str,
     label: str,
-    developer_email: str | None,
-    executor: Executor,
 ) -> str | None:
     job_link = treeherder.job_url(project, hg_revision, task_id)
     if not _reserve_test_run():
@@ -567,7 +610,7 @@ def _trigger_test_repair(
         _release_test_run()
         return None
 
-    group_keys = _claim_groups(project, test_groups)
+    group_keys = _claim_groups(project, _dedupe_units(test_groups, label))
 
     try:
         run_id = client.trigger_run(
@@ -592,38 +635,13 @@ def _trigger_test_repair(
         hg_revision,
         job_link,
     )
-    if run_id is not None:
-        git_commit = lando.hg_to_git(hg_revision)
-        if not git_commit:
-            # Not fatal, unlike on the build path: the agent works from the task id
-            # alone, and a revision Lando has not mirrored yet is routine for a
-            # just-landed push. The notification omits the git revision instead of
-            # linking to an empty commit.
-            logger.warning(
-                "Could not map hg revision %s to git for task %s; "
-                "the notification will omit the git revision -- %s",
-                hg_revision,
-                task_id,
-                job_link,
-            )
-        ctx = RunContext(
-            run_id=run_id,
-            repo=project,
-            git_commit=git_commit or "",
-            hg_revision=hg_revision,
-            task_id=task_id,
-            developer_email=developer_email,
-            agent=settings.test_repair_agent_name,
-            test_groups=list(test_groups),
-        )
-        executor.submit(worker.poll_and_notify, ctx)
     return run_id
 
 
 def make_handler(executor: Executor):
     def run(body: dict) -> None:
         try:
-            process(body, executor)
+            process(body)
         except Exception:
             logger.exception("Error handling pulse message")
 

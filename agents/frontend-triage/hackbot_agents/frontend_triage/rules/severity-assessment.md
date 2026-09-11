@@ -1,7 +1,7 @@
 # Severity assessment
 
 Assess an appropriate Mozilla severity for the bug. Record it in **both** the
-`severity_assessment` structured-output object and the severity block at the end of your
+`severity_assessment` structured-output object and the closing severity sentence of your
 comment (see **Severity in the comment** in the system prompt). Base the judgment on
 **user impact and reach** as evidenced by the bug report and the code you investigated —
 how badly the user is affected, how many users hit it, and whether a workaround exists.
@@ -59,8 +59,8 @@ It decides whether the comment mentions severity at all:
 
 - **High** — impact is clear-cut (clearly cosmetic, or clearly a crash/data-loss).
 - **Medium** — the level is a reasonable read but the impact or reach is arguable.
-- **Low, or you could not assess it** — **omit the severity block from the comment
-  entirely**, horizontal rule included, and set `confidence` accordingly (or the whole
+- **Low, or you could not assess it** — **omit the severity sentence from the comment
+  entirely**, and set `confidence` accordingly (or the whole
   `severity_assessment` object to null). Say nothing rather than guess: a level you are
   unsure of still reads as a judgment an engineer may act on, and being wrong there costs
   trust in the rest of your comment.

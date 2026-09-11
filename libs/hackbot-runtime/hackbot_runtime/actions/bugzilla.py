@@ -18,16 +18,12 @@ from typing import Annotated, Any
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 _COMMENT_FOOTER = (
     "If you'd like to provide feedback on this comment, please use the 👍 or 👎 "
     "reaction."
 )
-
-
-def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
 
 
 @tool
@@ -61,12 +57,12 @@ async def update_bug(
 
     Recorded into the run summary for human review — does not modify Bugzilla.
     """
-    recorder.record(
+    action = recorder.record(
         "bugzilla.update_bug",
         {"bug_id": bug_id, "changes": changes},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "bugzilla.update_bug")
+    return confirmation(action)
 
 
 @tool
@@ -91,12 +87,12 @@ async def add_comment(
     summary for human review — does not post to Bugzilla.
     """
     text_with_footer = text.rstrip() + "\n\n---\n\n" + _COMMENT_FOOTER
-    recorder.record(
+    action = recorder.record(
         "bugzilla.add_comment",
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "bugzilla.add_comment")
+    return confirmation(action)
 
 
 @tool
@@ -181,13 +177,13 @@ async def add_attachment(
     if comment:
         params["comment"] = comment
 
-    recorder.record(
+    action = recorder.record(
         "bugzilla.add_attachment",
         params,
         reasoning=reasoning,
         attachments={"file": Path(file_path)},
     )
-    return _confirm(recorder, "bugzilla.add_attachment")
+    return confirmation(action)
 
 
 @tool
@@ -226,13 +222,12 @@ async def create_bug(
         "summary": summary,
         "version": version,
         "description": description,
-        "is_markdown": True,
     }
     for k, v in (extra or {}).items():
         body.setdefault(k, v)
 
-    recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
-    return _confirm(recorder, "bugzilla.create_bug")
+    action = recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)

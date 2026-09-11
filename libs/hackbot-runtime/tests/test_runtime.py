@@ -56,6 +56,35 @@ def test_summary_written_for_exception(tmp_path):
     assert "boom" in summary["error"]
 
 
+def test_removed_action_is_absent_from_summary(tmp_path):
+    ctx = _ctx(tmp_path)
+    inaccurate = ctx.actions.record(
+        "bugzilla.update_bug",
+        {"bug_id": 1, "changes": {"severity": "S2"}},
+        reasoning="inaccurate",
+    )
+    ctx.actions.record(
+        "bugzilla.add_comment",
+        {"bug_id": 1, "text": "Corrected assessment"},
+        reasoning="corrected",
+    )
+    ctx.actions.remove_action(inaccurate["action_id"])
+
+    code = _finish(ctx, HackbotAgentResult(num_turns=1))
+
+    assert code == 0
+    summary = json.loads(
+        (tmp_path / "artifacts" / "local-test" / "summary.json").read_text()
+    )
+    assert summary["actions"] == [
+        {
+            "type": "bugzilla.add_comment",
+            "params": {"bug_id": 1, "text": "Corrected assessment"},
+            "reasoning": "corrected",
+        }
+    ]
+
+
 def test_non_result_return_is_contract_error(tmp_path):
     ctx = _ctx(tmp_path)
     # A bare dict (or None) is no longer accepted — only a HackbotAgentResult.
