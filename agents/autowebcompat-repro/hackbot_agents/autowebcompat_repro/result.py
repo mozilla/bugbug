@@ -59,15 +59,16 @@ class TestPlanResult(BaseModel):
         ),
     ]
 
-    affects_channels: list[Literal["nightly"] | Literal["stable"] | Literal["esr"]] = (
+    affects_channels: Annotated[
+        list[Literal["nightly"] | Literal["stable"] | Literal["esr"]],
         Field(
             description="""List of channels affected
         - "esr" if the issue is reported as specific to ESR builds.
         - "stable" if the issue is reported as reproducing on stable builds, or there is no evidence for which channels are affected
         - "nightly" if the issue is reported as reproducing on nightly builds, or there is no evidence for which channels are affected
         """
-        )
-    )
+        ),
+    ]
 
 
 class ReproductionResult(BaseModel):

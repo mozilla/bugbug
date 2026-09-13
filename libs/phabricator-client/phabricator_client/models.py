@@ -22,11 +22,9 @@ class PhabricatorDiff(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     id: int
-    base_commit: Annotated[
-        str | None, Field(default=None, alias="sourceControlBaseRevision")
-    ]
-    author_name: Annotated[str | None, Field(default=None, alias="authorName")]
-    author_email: Annotated[str | None, Field(default=None, alias="authorEmail")]
+    base_commit: Annotated[str | None, Field(alias="sourceControlBaseRevision")] = None
+    author_name: Annotated[str | None, Field(alias="authorName")] = None
+    author_email: Annotated[str | None, Field(alias="authorEmail")] = None
 
     @property
     def author(self) -> str | None:

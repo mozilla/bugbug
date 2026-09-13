@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, Json
+from pydantic import BaseModel, Json
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class Message(BaseModel):
 class ActionValue(BaseModel):
     type: Literal["start_agent_run"]
     agent_name: str
-    params: Annotated[dict[str, Any], Field(default_factory=dict)]
+    params: Annotated[dict[str, Any]] = {}
 
 
 class Action(BaseModel):
@@ -67,6 +67,6 @@ class BlockActionsEvent(BaseModel):
     user: User
     channel: Channel | None = None
     message: Message | None = None
-    actions: Annotated[list[Action], Field(default_factory=list)]
+    actions: Annotated[list[Action]] = []
     response_url: str | None = None
     trigger_id: str

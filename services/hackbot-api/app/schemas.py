@@ -23,8 +23,8 @@ class ArtifactRef(BaseModel):
 class RunSummary(BaseModel):
     status: str
     error: str | None = None
-    findings: Annotated[dict[str, Any], Field(default_factory=dict)]
-    actions: Annotated[list[dict[str, Any]], Field(default_factory=list)]
+    findings: Annotated[dict[str, Any]] = {}
+    actions: Annotated[list[dict[str, Any]]] = []
 
 
 class RunActionDoc(BaseModel):
@@ -69,7 +69,7 @@ class RunDoc(BaseModel):
     execution_name: str | None = None
     results_prefix: str
     summary: RunSummary | None = None
-    artifacts: Annotated[list[ArtifactRef], Field(default_factory=list)]
+    artifacts: Annotated[list[ArtifactRef]] = []
     error: str | None = None
 
 
@@ -85,7 +85,7 @@ class BugFixInputs(BaseModel):
     comment: str | None = None
     # Set only by a Bugzilla flag.needinfo webhook. Its presence selects the
     # follow-up mode and lets the API clear that exact flag after the response.
-    bugzilla_needinfo_flag_id: Annotated[int | None, Field(default=None, gt=0)]
+    bugzilla_needinfo_flag_id: Annotated[int | None, Field(gt=0)] = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
