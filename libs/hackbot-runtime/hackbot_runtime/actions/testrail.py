@@ -23,10 +23,9 @@ class TestRailStepInput(BaseModel):
     expectation: Annotated[
         str | None,
         Field(
-            default=None,
             description=("Expected result for this step."),
         ),
-    ]
+    ] = None
 
 
 class TestRailCaseResultInput(BaseModel):
@@ -35,10 +34,9 @@ class TestRailCaseResultInput(BaseModel):
     failure_reason: Annotated[
         str | None,
         Field(
-            default=None,
             description="Required when status is failed or unsuitable.",
         ),
-    ]
+    ] = None
 
     @model_validator(mode="after")
     def failure_reason_required_for_non_passing_cases(
@@ -55,10 +53,9 @@ class TestRailCaseInput(BaseModel):
     preconditions: Annotated[
         str | None,
         Field(
-            default=None,
             description="Optional setup required before running this case.",
         ),
-    ]
+    ] = None
     steps: Annotated[
         list[TestRailStepInput],
         Field(
@@ -117,10 +114,9 @@ class SubmitTestPlanInput(BaseModel):
     summary: Annotated[
         str | None,
         Field(
-            default=None,
             description="Optional summary of the generated test-plan execution.",
         ),
-    ]
+    ] = None
 
     @field_validator("feature")
     @classmethod
