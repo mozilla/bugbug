@@ -153,7 +153,7 @@ def _download_artifact_bytes_sync(run_id: str, key: str) -> bytes:
 async def download_artifact_bytes(run_id: str, key: str) -> bytes:
     """Fetch the raw bytes of one artifact under a run's prefix.
 
-    Backs `hackbot_runtime.actions.handlers.base.ApplyContext.download_artifact`
+    Backs `app.action_handlers.base.ApplyContext.download_artifact`
     for the action-applier — handlers ask for an artifact by its recorded key
     (e.g. "attachments/0/file", "changes/changes.patch") without knowing GCS
     is behind it.

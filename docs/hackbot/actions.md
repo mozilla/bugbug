@@ -27,7 +27,8 @@ container.
 ### The catalog
 
 Each action type has a declaration the agent calls and a handler that applies it.
-[actions/handlers/registry.py](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/registry.py) is the authoritative type → handler map.
+Declarations live in the runtime; handlers live in hackbot-api.
+[app/action_handlers/registry.py](../../services/hackbot-api/app/action_handlers/registry.py) is the authoritative type → handler map.
 
 As with read tools, nothing is exposed by default: an agent lists the dotted types it may
 record in its `config.py` and passes them to `actions_server_for`, which builds a server
@@ -62,8 +63,8 @@ be turned back on for a recorded message by passing `unfurl=True` to `record_mes
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.
 
-Adding a type is a declaration in the domain module plus one line in the handler registry.
-The dispatch loop never changes.
+Adding a type is a declaration in the runtime's domain module plus one line in hackbot-api's
+handler registry. The dispatch loop never changes.
 
 ### The two patch actions
 
@@ -96,9 +97,9 @@ Triggered by the `run.completed` event, on a subscription filtered to **succeede
    runs, whether or not the agent auto-applies, so the UI can always show and apply them.
 2. **Apply, if opted in.** With `auto_apply_actions=True` on the agent's registry entry,
    pending rows are applied immediately. Otherwise they wait for a human to click apply.
-3. **Dispatch.** Each row's `type` selects a handler from the registry. The handler gets
-   the params and an `ApplyContext` — which can `download_artifact(key)` without knowing
-   GCS is behind it, keeping the runtime library free of a storage dependency.
+3. **Dispatch.** Each row's `type` selects a handler from hackbot-api's registry. The
+   handler gets the params and an `ApplyContext` — which can `download_artifact(key)`
+   without knowing GCS is behind it.
 4. **Stamp.** The row records `applied` or `failed`, its result, and its error. Only a real
    success sets `applied_at`.
 
@@ -141,9 +142,9 @@ result).
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Recording mechanics, hooks       | [libs/hackbot-runtime/hackbot_runtime/actions/recorder.py](../../libs/hackbot-runtime/hackbot_runtime/actions/recorder.py) |
 | Action declarations (per domain) | [hackbot_runtime/actions/](../../libs/hackbot-runtime/hackbot_runtime/actions/)                                            |
-| Apply-side handlers              | [libs/hackbot-runtime/hackbot_runtime/actions/handlers/](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/)     |
-| Type → handler map               | [actions/handlers/registry.py](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/registry.py)                    |
+| Apply-side handlers              | [services/hackbot-api/app/action_handlers/](../../services/hackbot-api/app/action_handlers/)                               |
+| Type → handler map               | [app/action_handlers/registry.py](../../services/hackbot-api/app/action_handlers/registry.py)                              |
 | Orchestration, refs, coalescing  | [services/hackbot-api/app/actions_applier.py](../../services/hackbot-api/app/actions_applier.py)                           |
 
-Record side and apply side deliberately live in the **same library**, so the set of
-actions an agent can request and the set the platform can apply cannot drift apart.
+Record side and apply side live in **different packages**: declarations ship in the agent
+container with `hackbot-runtime`, handlers run in hackbot-api.
