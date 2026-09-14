@@ -21,7 +21,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # the build log (see `silent` in next.config.mjs).
 ENV CI=true
 
-RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
+RUN --mount=type=secret,id=sentry_auth_token \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
     npm run build
 
 FROM node:26-slim AS runner
