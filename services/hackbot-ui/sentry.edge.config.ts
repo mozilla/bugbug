@@ -5,8 +5,11 @@
 
 import * as Sentry from "@sentry/nextjs";
 
+import { resolveEnvironment } from "./lib/environment";
+
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  environment: resolveEnvironment(process.env.BETTER_AUTH_URL),
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,

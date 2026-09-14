@@ -4,8 +4,11 @@
 
 import * as Sentry from "@sentry/nextjs";
 
+import { resolveEnvironment } from "./lib/environment";
+
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  environment: resolveEnvironment(window.location.hostname),
 
   // Add optional integrations for additional features
   integrations: [Sentry.replayIntegration()],
