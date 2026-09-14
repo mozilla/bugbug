@@ -9,8 +9,20 @@ FROM node:26-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+ARG SENTRY_DSN
+ARG SENTRY_RELEASE
+ENV NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN \
+    SENTRY_RELEASE=$SENTRY_RELEASE
+
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+
+# Un-silences the Sentry build plugin, so a failed source-map upload shows up in
+# the build log (see `silent` in next.config.mjs).
+ENV CI=true
+
+RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
+    npm run build
 
 FROM node:26-slim AS runner
 WORKDIR /app

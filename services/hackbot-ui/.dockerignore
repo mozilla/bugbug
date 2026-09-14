@@ -3,6 +3,7 @@ node_modules
 .git
 .env
 .env.local
+.env.sentry-build-plugin
 *.db
 *.db-shm
 *.db-wal
