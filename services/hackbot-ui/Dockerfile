@@ -11,14 +11,14 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ARG SENTRY_DSN
-ARG SENTRY_AUTH_TOKEN
 ARG SENTRY_RELEASE
 ENV NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN \
-    SENTRY_RELEASE=$SENTRY_RELEASE \
-    SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
+    SENTRY_RELEASE=$SENTRY_RELEASE
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+
+RUN --mount=type=secret,id=sentry_build_env,target=/app/.env.sentry-build-plugin \
+    npm run build
 
 FROM node:26-slim AS runner
 WORKDIR /app
