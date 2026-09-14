@@ -79,7 +79,7 @@ class _FakeRun:
     inputs: dict = field(default_factory=dict)
 
 
-def _spec(*, auto=True, consent=False):
+def _spec(*, auto=True, consent=False, always=frozenset(), never=frozenset()):
     """A real `AgentSpec` built with `replace` off a registry entry.
 
     Every field then takes its production default, so a field added later can't read
@@ -90,11 +90,20 @@ def _spec(*, auto=True, consent=False):
         AGENT_REGISTRY["bug-fix"],
         auto_apply_actions=auto,
         auto_apply_requires_consent=consent,
+        always_apply_actions=always,
+        never_apply_actions=never,
     )
 
 
 def _auto_applies(spec, run):
     return actions_applier._auto_apply_blocker(spec, run) is None
+
+
+def _action_auto_applies(spec, run, action_type):
+    run_level_auto_apply = actions_applier._auto_apply_blocker(spec, run) is None
+    return actions_applier._should_auto_apply(
+        spec, action_type, run_level_auto_apply=run_level_auto_apply
+    )
 
 
 def _run_with_findings(**findings):
@@ -122,6 +131,32 @@ def test_an_agent_that_needs_no_consent_applies_unconditionally():
     spec = _spec()
     assert _auto_applies(spec, _FakeRun(status=RunStatus.succeeded.value))
     assert _auto_applies(spec, _run_with_findings(auto_apply=False))
+
+
+def test_always_apply_action_overrides_agent_default():
+    action_type = "slack.post_message"
+    spec = _spec(auto=False, always=frozenset({action_type}))
+    assert _action_auto_applies(spec, _run_with_findings(), action_type)
+
+
+def test_always_apply_action_overrides_missing_consent():
+    action_type = "slack.post_message"
+    spec = _spec(auto=True, consent=True, always=frozenset({action_type}))
+    assert _action_auto_applies(spec, _run_with_findings(auto_apply=False), action_type)
+
+
+def test_never_apply_action_overrides_agent_default():
+    action_type = "slack.post_message"
+    spec = _spec(auto=True, never=frozenset({action_type}))
+    assert not _action_auto_applies(spec, _run_with_findings(), action_type)
+
+
+def test_action_without_override_uses_agent_default():
+    spec = _spec(
+        auto=False,
+        always=frozenset({"slack.post_message"}),
+    )
+    assert not _action_auto_applies(spec, _run_with_findings(), "bugzilla.add_comment")
 
 
 # --- the run's own verdict ----------------------------------------------- #
@@ -204,7 +239,7 @@ def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
 
     async def fake_ensure(db, run):
         calls["ensured"] = True
-        return [("row", [])]
+        return [(SimpleNamespace(type="bugzilla.add_comment"), [])]
 
     async def fake_apply(db, run, rows):
         calls["applied"] = True
@@ -256,6 +291,32 @@ async def test_succeeded_unvouched_run_records_but_does_not_apply(monkeypatch):
     # Recorded for the UI (and manual apply), but nothing reaches Bugzilla.
     await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=False))
     assert calls == {"ensured": True, "applied": False}
+
+
+async def test_succeeded_run_only_applies_eligible_action_types(monkeypatch):
+    rows = [
+        (SimpleNamespace(type="bugzilla.update_bug"), []),
+        (SimpleNamespace(type="bugzilla.add_comment"), []),
+    ]
+    applied_types = []
+
+    async def fake_ensure(db, run):
+        return rows
+
+    async def fake_apply(db, run, selected_rows):
+        applied_types.extend(row.type for row, _ in selected_rows)
+
+    spec = _spec(
+        auto=True,
+        never=frozenset({"bugzilla.add_comment"}),
+    )
+    monkeypatch.setattr(actions_applier, "ensure_action_rows", fake_ensure)
+    monkeypatch.setattr(actions_applier, "_apply_pending_rows", fake_apply)
+    monkeypatch.setattr(actions_applier, "AGENT_REGISTRY", {"bug-fix": spec})
+
+    await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value))
+
+    assert applied_types == ["bugzilla.update_bug"]
 
 
 async def test_other_agents_do_not_auto_apply():

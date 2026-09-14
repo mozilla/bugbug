@@ -19,7 +19,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
@@ -30,10 +30,6 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
     re.IGNORECASE | re.MULTILINE,
 )
-
-
-def _confirm(action: dict) -> str:
-    return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
 def _validate_summary(summary: str | None) -> None:
@@ -58,7 +54,9 @@ async def submit_patch(
         Field(
             description=(
                 "Title for the new revision: a single line describing the fix, "
-                "as you would write a commit message subject."
+                "as you would write a commit message subject. Do not include "
+                "reviewer annotations (r=... or r?...): reviewer selection is "
+                "handled on the Phabricator side."
             )
         ),
     ],
@@ -121,7 +119,7 @@ async def submit_patch(
         reasoning=reasoning,
         ref=ref,
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -161,7 +159,7 @@ async def update_patch(
         {"revision_id": revision_id},
         reasoning=reasoning,
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -187,7 +185,7 @@ async def add_comment(
         {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)
