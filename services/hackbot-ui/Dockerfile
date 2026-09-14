@@ -17,6 +17,10 @@ ENV NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN \
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Un-silences the Sentry build plugin, so a failed source-map upload shows up in
+# the build log (see `silent` in next.config.mjs).
+ENV CI=true
+
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
     npm run build
 
