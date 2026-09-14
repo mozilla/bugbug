@@ -65,7 +65,7 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(default=None, description="Revision test plan."),
+        Field(description="Revision test plan."),
     ] = None,
     summary: Annotated[
         str | None,
