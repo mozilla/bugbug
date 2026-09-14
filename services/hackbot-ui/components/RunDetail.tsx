@@ -19,9 +19,9 @@ import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
 // Proposed bugzilla.add_comment actions carry the comment body in params.text;
 // pull it out so we can preview what would be posted to the bug.
-function commentPreview(a: RunAction): string | null {
-  if (a.type !== "bugzilla.add_comment") return null;
-  const text = a.params?.text;
+function commentPreview(action: RunAction): string | null {
+  if (action.type !== "bugzilla.add_comment") return null;
+  const text = action.params?.text;
   return typeof text === "string" && text.trim() ? text : null;
 }
 
@@ -173,9 +173,9 @@ export function RunDetail({ runId }: { runId: string }) {
   // Both pending and failed actions are (re)applied by the apply endpoint — it
   // skips only already-applied ones — so one button covers applying and retry.
   const pendingActions =
-    actions?.filter((a) => a.status === "pending").length ?? 0;
+    actions?.filter((action) => action.status === "pending").length ?? 0;
   const failedActions =
-    actions?.filter((a) => a.status === "failed").length ?? 0;
+    actions?.filter((action) => action.status === "failed").length ?? 0;
   const applyLabel =
     pendingActions && failedActions
       ? "Apply pending & retry failed actions"
@@ -269,21 +269,27 @@ export function RunDetail({ runId }: { runId: string }) {
           <h2>Actions ({actions.length})</h2>
           {applyError && <div className="error-banner">{applyError}</div>}
           <ul className="action-list">
-            {actions.map((a) => {
-              const preview = commentPreview(a);
+            {actions.map((action) => {
+              const preview = commentPreview(action);
               const url =
-                typeof a.result?.url === "string" ? a.result.url : null;
+                typeof action.result?.url === "string"
+                  ? action.result.url
+                  : null;
               return (
-                <li key={a.idx}>
+                <li key={action.idx}>
                   <div className="action-row">
-                    <span className={`badge ${a.status}`}>{a.status}</span>
-                    <code>{a.type}</code>
+                    <span className={`badge ${action.status}`}>
+                      {action.status}
+                    </span>
+                    <code>{action.type}</code>
                     {url && (
                       <a href={url} target="_blank" rel="noreferrer">
                         Open
                       </a>
                     )}
-                    {a.error && <span className="muted">{a.error}</span>}
+                    {action.error && (
+                      <span className="muted">{action.error}</span>
+                    )}
                   </div>
                   {preview && (
                     <div className="action-preview">
