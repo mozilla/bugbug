@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getArtifactDownloadUrl, HackbotError } from "@/lib/hackbot";
+import { apiErrorResponse } from "@/lib/api-errors";
+import { getArtifactDownloadUrl } from "@/lib/hackbot";
 import { getAuthedEmail } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,6 @@ export async function GET(
     const { url } = await getArtifactDownloadUrl(runId, artifactName);
     return NextResponse.redirect(url, 302);
   } catch (err) {
-    const status = err instanceof HackbotError ? err.status : 500;
-    return NextResponse.json({ error: (err as Error).message }, { status });
+    return apiErrorResponse(err);
   }
 }
