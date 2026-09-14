@@ -17,7 +17,7 @@ ENV NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN \
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN --mount=type=secret,id=sentry_build_env,target=/app/.env.sentry-build-plugin \
+RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
     npm run build
 
 FROM node:26-slim AS runner
