@@ -65,15 +65,22 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(default=None, description="Revision test plan."),
+        Field(
+            default=None,
+            description=(
+                "Keep the revision test plan concise. Do not include detailed logs "
+                "or narrate the verification process."
+            ),
+        ),
     ] = None,
     summary: Annotated[
         str | None,
         Field(
             default=None,
             description=(
-                "Revision summary/description. Keep test and verification details "
-                "in test_plan instead."
+                "Keep the revision summary concise and useful for permanent history. "
+                "Do not restate the bug, narrate the investigation or implementation "
+                "process, or include test and verification details."
             ),
         ),
     ] = None,
