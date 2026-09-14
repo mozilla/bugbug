@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import "./globals.css";
+import { SentryUser } from "@/components/SentryUser";
 import { UserMenu } from "@/components/UserMenu";
 
 export const metadata: Metadata = {
@@ -31,6 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <SentryUser />
         <header className="topbar">
           <div className="inner">
             <h1>
