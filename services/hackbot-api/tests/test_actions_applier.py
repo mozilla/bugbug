@@ -204,7 +204,7 @@ def test_the_real_frontend_triage_spec_asks_for_consent():
 
 def test_which_agents_auto_apply_without_asking_for_consent():
     # `bug-fix`, `build-repair` and `test-repair` auto-apply whatever they record, and
-    # the apply step dispatches against the runtime's *global* handler registry —
+    # the apply step dispatches against hackbot-api's *global* handler registry —
     # creating bugs, attaching files, submitting Phabricator patches. All predate this
     # change, and bounding them is a decision about those agents, so this records the
     # gap rather than closing it. Failing here means a new agent opted in without

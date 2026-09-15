@@ -243,7 +243,7 @@ class HackbotContext(BaseSettings):
         """Whether this run will publish a patch, for a notification to gate on.
 
         Read-only: the patch itself belongs to the apply step, which reads the
-        published artifact (see ``actions/handlers/email_handler.py``).
+        published artifact (see hackbot-api's ``app/action_handlers/email_handler.py``).
         """
         if self._repo_path is None or self._source_base is None:
             return False

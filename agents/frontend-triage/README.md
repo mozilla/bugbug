@@ -266,7 +266,7 @@ so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is neve
 given the tool. Like every other action it is recorded rather than sent, so it
 shows up in the Hackbot UI before it lands and is delivered at most once. Delivery
 needs `SLACK_BOT_TOKEN` on hackbot-api and the app in the channel — see
-`libs/hackbot-runtime/hackbot_runtime/actions/handlers/slack_handler.py`. A failed
+`services/hackbot-api/app/action_handlers/slack_handler.py`. A failed
 Slack post does not affect the Bugzilla writes, and it does not go the other way
 either: the applier runs each action independently, so a rejected `PUT` still
 notifies. The run page shows the failed action.

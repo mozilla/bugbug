@@ -192,7 +192,7 @@ async def _apply_pending_rows(
     Same-bug Bugzilla field changes are coalesced with the closest comment into
     a single `PUT /bug/{id}` so Bugzilla applies them as one transaction (one
     bugmail, one history entry); any other comments on that bug still apply
-    separately. See `plan_coalesced_groups`/`merge_resolved` in the runtime lib.
+    separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`.
 
     Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
