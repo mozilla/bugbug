@@ -2,13 +2,13 @@
 
 FROM node:26-slim AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY services/hackbot-ui/package.json services/hackbot-ui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 FROM node:26-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY services/hackbot-ui/ .
 
 ARG SENTRY_DSN
 ARG SENTRY_RELEASE

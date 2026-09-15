@@ -84,8 +84,10 @@ to `@mozilla.com` accounts:
 
 ## Production build / container
 
+Run from the repository root; the Dockerfile builds from the root context.
+
 ```bash
-docker build -t hackbot-ui -f services/hackbot-ui/Dockerfile services/hackbot-ui
+docker build -t hackbot-ui -f services/hackbot-ui/Dockerfile .
 docker run -p 3000:3000 --env-file services/hackbot-ui/.env.local hackbot-ui
 ```
 
