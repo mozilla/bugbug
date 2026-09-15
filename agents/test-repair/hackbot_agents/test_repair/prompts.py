@@ -39,59 +39,85 @@ timeout on a tree this big.
    full logs stay under {scratch_out}/logs, where those line numbers apply, so read
    a window around one to get the assertion, stack or diff that follows:
    `sed -n '5890,5930p' {scratch_out}/logs/job_<id>/live_backing_log.log | cut -c1-200`
-   Never read or cat a whole log; they run to six figures of lines.
-   Clip the width as well as the line count: log lines run to thousands of
-   characters, so append `| cut -c1-200` to any grep or sed over a log -- 40 wpt
-   lines alone came to 38 KB without it.
+   Never read or cat a whole log; they run to six figures of lines. Clip the width
+   as well as the line count with `| cut -c1-200`; log lines run to thousands of
+   characters. Two windows are usually enough.
    Two things can stop that command finding the job, and both are recoverable:
    - Treeherder sometimes returns a malformed response ("error decoding response
      body"). Retry the same command once; it usually succeeds.
-   - "N passing jobs ... no failures found" almost always means
-     `--include-intermittent` was missing: a failure a sheriff has already
-     classified is hidden without it, and that covers most of them. Check the flag
-     is there and re-run.
+   - "filter matched no jobs on this push" means the label did not match: check it
+     with `--match-filter all --json`, which lists every job on the push. A match
+     with no failures usually means `--include-intermittent` was missing.
    Once the retry has also failed there is nothing to analyse. Write what you ran
    and what it reported to {scratch_out}/error.txt and stop: do not write the other
    documents, guess a culprit, or reason from the diffs alone. Do not fetch the
    artifact from Taskcluster yourself either: after a retry or rerun the latest
    artifact can be a passing run's log, so a wrong log is worse than none. The run
    is meant to fail here.
-
-   The same command answers the rest of the CI questions:
-   - `--lookback 50 --suspects` -- the push window each failure started in, with
-     the last push it passed on. Use it when the range above does not reach back to
-     a green run; it finds the first failing push even when this one is not the
-     culprit.
-   - `--similar-history <job id>` -- the job's recent pass rate. A low one means
-     intermittent; a job that passed consistently until now points at a regression.
-   - `--group-by test` -- whether these tests fail on other platforms or only here.
-   - `--compare <revision>` -- whether the failure is new relative to another push.
+2. Place the failure in CI history before reading any diff. The same command
+   answers every CI question; the revisions it prints are the ones to pass back.
+   - `--group-history <manifest> --lookback 150` for each failing manifest listed
+     above: one line per push with how many tasks passed or failed the manifest,
+     and a header naming the first failing and last passing push. Chunks are
+     scheduled per manifest, so a green job does not mean the manifest ran; this
+     is the only reliable timeline. `{commit_range}` is roughly the last 100
+     pushes. If the last pass is older than the oldest push it covers, or the
+     header says the failure predates the window, the culprit is not in this push:
+     "classification" is "regression", "culprit_commit" null, "candidate_commits"
+     empty, "recommendation" "do_not_backout", and summary.md names the push the
+     failure started in. Do not hunt for a culprit outside the range.
+   - `--similar-history <job id>` -- this job's recent pass rate, with revision,
+     date and classification per push. Passes and failures alternating across
+     pushes point at an intermittent; a run of passes ending at this push points
+     at a regression.
+   - `--lookback 20 --suspects --test '<test file>'` -- the push window the test
+     started failing in, and the commits in it.
+   - `--compare <revision>` -- whether the failure is new relative to a push that
+     `--group-history` or `--similar-history` printed. `--context <N>` lists the
+     pushes either side of this one.
    Every revision you pass has to be a real hg revision that treeherder-cli
-   printed. It rejects anything else with "No push found for revision" -- both git
-   shas and placeholders like `parent`. To compare against a neighbouring push, get
-   its revision from `--context 3` first, which lists the pushes either side of
-   this one, then pass that to `--compare`.
-   `--help` lists the rest. The default markdown output is the compact one -- only
-   add `--json` when you will parse it. To see more of a log widen `--pattern`.
-   Always pass `--filter` and pipe through `head`: unfiltered, one push can print
-   hundreds of megabytes straight into your context. Never pass `--watch` or
-   `--stream-failures` -- they block until CI finishes.
-2. Enumerate the candidates with `git log --oneline {commit_range}`. Path
-   filtering on the failing test and the source it exercises tells you what to
-   `git show` first, but never clears anyone: build config, shared headers,
-   toolchain bumps, manifest and harness changes, and changes that only shift
-   timing all break tests they do not touch. Work through the rest of the list
-   before concluding nothing explains the failure.
-3. Search Bugzilla for an intermittent bug tracking this failure -- the test name,
+   printed; it rejects git shas and placeholders with "No push found for
+   revision". Never query the Treeherder API, hg.mozilla.org or the pushlog
+   yourself, and do not read `--help`: if treeherder-cli cannot answer a question,
+   say so in analysis.md and move on. The default markdown output is the compact
+   one -- only add `--json` when you will parse it. Always pass `--filter` and
+   pipe through `head`: unfiltered, one push can print hundreds of megabytes
+   straight into your context. When output is cut off, redirect it to a file under
+   {scratch_out} and grep that rather than re-running with a bigger `head`. Never
+   pass `--watch` or `--stream-failures` -- they block until CI finishes.
+3. Only when step 2 puts the first failure inside this range, enumerate the
+   candidates with `git log --format='%h %ci %s' {commit_range}` once: the dates
+   line up with the push times treeherder-cli printed, which tells you which
+   commits landed in the candidate window. Path filtering on the failing test and
+   the source it exercises tells you what to `git show` first, but never clears
+   anyone: build config, shared headers, toolchain bumps, manifest and harness
+   changes, and changes that only shift timing all break tests they do not touch.
+   Read the diffs of the commits in the window before concluding nothing explains
+   the failure; do not read diffs of commits that landed before the last green
+   push.
+4. Search Bugzilla for an intermittent bug tracking this failure -- the test name,
    or its file name plus "intermittent", finds most, including per-test "single
-   tracking bug" entries. If one matches, the classification is "intermittent" and
-   its id goes in "intermittent_bug", however suspicious a commit looks. Search
-   for the bug the culprit landed under too, for "culprit_bug".
-4. Check whether the culprit sits in a stack: adjacent commits sharing a
+   tracking bug" entries. Search on the bare file name; a quicksearch on the full
+   path often returns nothing. If one matches, the classification is
+   "intermittent" and its id goes in "intermittent_bug", however suspicious a
+   commit looks. Search for the bug the culprit landed under too, for
+   "culprit_bug".
+5. Check whether the culprit sits in a stack: adjacent commits sharing a
    `Bug NNNNNN` subject are one stack. If commits sit on top of the culprit, the
    whole stack has to be backed out -- name it in summary.md, oldest sha first.
    "culprit_commit" stays the single commit that introduced the regression.
-5. Write to {scratch_out}:
+6. Stop as soon as one of these holds, and write the verdict without gathering
+   further confirmation:
+   - step 2 shows the failure predates this range;
+   - an intermittent bug matches and the job history alternates between pass and
+     fail with no related commit in between;
+   - a commit in the window changes the failing test, its manifest or the code the
+     failing assertion exercises, and the manifest passed on the push before it.
+   Budget: about 15 tool calls in total, and at most five treeherder-cli calls
+   after the first. Spending more means the evidence is not there; prefer "rerun"
+   over another round of searching.
+7. Write summary.md, analysis.md and verdict.json to {scratch_out} in one Bash
+   command, with a heredoc per file:
    - summary.md: 2-3 sentences of plain prose -- no headings, lists or code
      blocks. It is posted verbatim to Slack and has to answer "do I back this
      out?" at a glance. Open with the action -- back out <sha>, do not back out,
@@ -129,7 +155,7 @@ Do not edit any source files in this step.
 
 CANDIDATE_INTRO = """\
 `{commit_range}` is the {span} most recent commits. It is not known to reach back
-to a green run, so the culprit may predate it -- `--suspects` below settles that.
+to a green run, so the culprit may predate it -- `--group-history` below settles that.
 If nothing in it plausibly caused the failure, say so and leave "culprit_commit"
 null and "candidate_commits" empty rather than naming the least implausible
 commit."""
@@ -149,7 +175,7 @@ original patch, not a follow-up on top of it.
 
 The source tree is at {source_repo} (your working directory). Search it with
 `git grep`, never `grep -r`.
-Editing: use Edit on a file that already exists -- Write refuses until the file has
+Editing: Read a file before you Edit or Write it -- both refuse until the file has
 been read, which costs a turn. To see how the culprit handled comparable files,
 run `git show {culprit_commit} -- <dir>` rather than guessing a sibling's name.
 

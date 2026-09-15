@@ -344,8 +344,7 @@ def test_range_prompt_does_not_assert_the_culprit(tmp_path, monkeypatch):
     # prompt must not claim the culprit is inside it.
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
     assert "may predate" in calls[0]
-    assert "git log --oneline" in calls[0]
-    assert "HEAD~2..HEAD" in calls[0]
+    assert "git log --format='%h %ci %s' HEAD~2..HEAD" in calls[0]
 
 
 def test_assemble_defaults_on_empty_verdict(tmp_path):
@@ -541,7 +540,7 @@ def test_prompt_names_the_task_not_just_the_platform(tmp_path, monkeypatch):
 def test_prompt_treats_path_filtering_as_ordering_not_exclusion(tmp_path, monkeypatch):
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
     assert "never clears anyone" in _flat(calls[0])
-    assert "Work through the rest of the list" in _flat(calls[0])
+    assert "before concluding nothing explains the failure" in _flat(calls[0])
 
 
 def test_prompt_does_not_presume_intermittents_were_filtered_out(tmp_path, monkeypatch):
@@ -725,6 +724,15 @@ def test_analysis_prompt_offers_treeherder_cli(tmp_path, monkeypatch):
     assert "treeherder-cli hgrev --repo autoland" in prompt
     assert "--suspects" in prompt
     assert "--similar-history" in prompt
+    # The manifest timeline is the only reliable history; it also settles whether the
+    # failure predates the range, in which case no culprit is hunted.
+    assert "--group-history <manifest>" in prompt
+    assert "predates the window" in prompt
+    assert "Do not hunt for a culprit outside the range" in prompt
+    # Raw API calls and open-ended searching are what made runs take 40+ turns.
+    assert "Never query the Treeherder API" in prompt
+    assert "Stop as soon as one of these holds" in prompt
+    assert "in one Bash" in prompt
     # The two ways to waste a run: unbounded output and a blocking flag.
     assert "Always pass `--filter`" in prompt
     assert "Never pass `--watch`" in prompt
