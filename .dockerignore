@@ -102,5 +102,6 @@ data/
 # Node / Next.js build artifacts (absent on a fresh checkout, present locally)
 **/node_modules
 **/.next
+**/.env
 **/.env.local
 **/.env.sentry-build-plugin
