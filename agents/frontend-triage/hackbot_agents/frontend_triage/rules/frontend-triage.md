@@ -11,9 +11,10 @@ Desktop and Android bugs here are usually UI/UX papercuts, documented with a
 
 Screenshots you can look at: download one with `download_attachment` and `Read` the
 file. Screen recordings you cannot, because this agent's image has no ffmpeg to pull
-frames out of them, so downloading a video buys nothing here. When the only evidence
-is a recording, triage from the description, the steps to reproduce, and the code,
-and say plainly in your comment that you did not view the recording. Do not imply you
+frames out of them, so `download_attachment` refuses video, audio, and archive
+attachments rather than spend a large download on nothing. When the only evidence is
+a recording, triage from the description, the steps to reproduce, and the code, and
+say plainly in your comment that you did not view the recording. Do not imply you
 did.
 
 **Install and update bugs look different, and that is not a reason to skip them.**

@@ -671,6 +671,66 @@ TRIAGE_SCOPE = (
             "you looked."
         ),
     ),
+    # The three buckets, which are where a filing lands when the reporter could not pick
+    # a component. Grouped at the end rather than beside a related area because they are
+    # not an area: they route to one channel for the people who work the unowned queue.
+    #
+    # None of the three sets `owns`, which is deliberate and is the one thing to preserve
+    # if these entries are edited. `owns` is what `hooks.component_guidance_hook` refuses
+    # comments against and `owners_for_path` resolves longest-claim-wins, so claiming
+    # `browser/` for General would make every unclaimed file of desktop chrome General's
+    # and a Sidebar or Settings UI run -- which loads its own guidance and its `related`
+    # entries, not this one -- would have its comment refused for citing its own code. A
+    # `trees` this broad is only legal because nothing owns it.
+    ScopedComponent(
+        "Firefox",
+        "General",
+        "#fx-toolkit-general-triage-notifications",
+        trees=("browser/",),
+        notes=(
+            "**A holding component rather than an area, so the first useful output is "
+            "which component the bug belongs to**, not which file is at fault. The tree "
+            "above is the whole of desktop chrome and most of it belongs to some other "
+            "component, so a confident localization here is a re-componentization "
+            "suggestion: name the component that owns the code you found and say so "
+            "plainly, because the reporter picked this one for want of a better guess "
+            "rather than as a claim about where the code is. What legitimately stays "
+            "here is cross-component window, session and startup behavior that no single "
+            "team owns."
+        ),
+    ),
+    ScopedComponent(
+        "Toolkit",
+        "General",
+        "#fx-toolkit-general-triage-notifications",
+        trees=("toolkit/",),
+        notes=(
+            "The same holding-component caveat as `Firefox :: General`, with one "
+            "difference worth acting on: toolkit code is shared, so a bug filed here may "
+            "reproduce in Thunderbird and the other consumers as well as Firefox, and "
+            "the component that owns the code is as likely to be a `Core` one as a "
+            "`Toolkit` one. Establish which application the reporter was running before "
+            "localizing anything, since the same symptom in two consumers is usually two "
+            "different bugs."
+        ),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Untriaged",
+        "#fx-toolkit-general-triage-notifications",
+        trees=("browser/",),
+        notes=(
+            "**Not a component at all**: it is the default for a filing that named none, "
+            "so it says nothing about the area and everything on `Firefox :: General` "
+            "applies to it more strongly. One thing it adds is a race worth writing "
+            "around. bugbot's `component` rule moves low-confidence bugs out of here "
+            "into `Firefox :: General` hourly, and it runs in the same cron pass as the "
+            "rule that sends bugs here, so a bug may be reassigned between the run "
+            "starting and anyone reading the comment. Both components report to this "
+            "channel, so nothing is lost, but do not write a comment whose reasoning "
+            "depends on the bug still being Untriaged."
+        ),
+    ),
 )
 
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so

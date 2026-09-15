@@ -68,7 +68,7 @@ Two things those files do not tell you:
   `BUGZILLA_WEBHOOK_SECRET` → `bugzilla_webhook.secret`, `SLACK_SIGNING_SECRET` →
   `slack.signing_secret`.
 - **A prefix does not make a var a setting.** `SLACK_BOT_TOKEN` is not part of that nested
-  model: the apply-side handler in `hackbot-runtime` reads it straight from the environment.
+  model: the apply-side handler in hackbot-api reads it straight from the environment.
   The two sit side by side on hackbot-api and point opposite ways — the token posts
   messages, the signing secret verifies clicks coming back — so a deployment that posts fine
   can still reject every interaction.
