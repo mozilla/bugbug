@@ -1,5 +1,7 @@
 """Tests for the shared claude-agent-sdk Reporter (hackbot_runtime.claude)."""
 
+import re
+
 from hackbot_runtime.claude import Reporter, _truncate
 
 
@@ -27,6 +29,54 @@ def test_header_always_prints_even_when_not_verbose(capsys):
         reporter.header("bug 999")
     out = capsys.readouterr().out
     assert "# bug 999" in out
+
+
+def test_log_records_are_timestamped_and_done_carries_elapsed(tmp_path):
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ResultMessage,
+        TextBlock,
+        ToolUseBlock,
+        UserMessage,
+    )
+    from claude_agent_sdk.types import ToolResultBlock
+
+    log = tmp_path / "agent.log"
+    with Reporter(verbose=False, log_path=log) as reporter:
+        reporter.header("bug 1")
+        reporter.message(
+            AssistantMessage(
+                content=[
+                    TextBlock(text="looking"),
+                    ToolUseBlock(id="t1", name="Bash", input={"command": "ls"}),
+                ],
+                model="m",
+            )
+        )
+        reporter.message(
+            UserMessage(
+                content=[
+                    ToolResultBlock(tool_use_id="t1", content="out", is_error=False)
+                ]
+            )
+        )
+        reporter.message(
+            ResultMessage(
+                subtype="success",
+                duration_ms=1,
+                duration_api_ms=1,
+                is_error=False,
+                num_turns=1,
+                session_id="s1",
+            )
+        )
+    contents = log.read_text()
+    stamp = r"^\d\d:\d\d:\d\d\.\d{3} "
+    assert re.search(rf"{stamp}--- turn 1 ---$", contents, re.M)
+    assert re.search(rf"{stamp}\[tool←ok\]$", contents, re.M)
+    assert re.search(r"^# started \d\d:\d\d:\d\d\.\d{3} UTC$", contents, re.M)
+    assert not re.search(r"^\d\d:\d\d:\d\d\.\d{3} #", contents, re.M)
+    assert re.search(rf"{stamp}\[done\] turns=1 elapsed=\d+s$", contents, re.M)
 
 
 def test_no_log_file_when_path_is_none(tmp_path):
