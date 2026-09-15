@@ -70,6 +70,8 @@ class Settings(BaseSettings):
 
     # API auth
     external_api_key: str = ""
+    api_audience: str = ""
+    allowed_service_accounts: list[str] = []
 
     phabricator: PhabricatorSettings
 
