@@ -23,8 +23,8 @@ class ArtifactRef(BaseModel):
 class RunSummary(BaseModel):
     status: str
     error: str | None = None
-    findings: Annotated[dict[str, Any]] = {}
-    actions: Annotated[list[dict[str, Any]]] = []
+    findings: dict[str, Any] = {}
+    actions: list[dict[str, Any]] = []
 
 
 class RunActionDoc(BaseModel):
@@ -69,7 +69,7 @@ class RunDoc(BaseModel):
     execution_name: str | None = None
     results_prefix: str
     summary: RunSummary | None = None
-    artifacts: Annotated[list[ArtifactRef]] = []
+    artifacts: list[ArtifactRef] = []
     error: str | None = None
 
 
