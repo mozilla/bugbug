@@ -1,3 +1,5 @@
+@import "diff2html/bundles/css/diff2html.min.css";
+
 :root {
   --bg: #0f1117;
   --panel: #171a23;
@@ -394,21 +396,18 @@ dl.kv dd {
   margin-bottom: 4px;
 }
 
-.artifact-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.patch-revision {
+  margin: 0 0 12px;
+  font-size: 14px;
 }
-.artifact-list li {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+.patch-revision strong {
   font-family: var(--mono);
   font-size: 13px;
 }
-.artifact-list li:last-child {
-  border-bottom: none;
+.patch-revision p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  white-space: pre-wrap;
 }
 
 .toolbar {
