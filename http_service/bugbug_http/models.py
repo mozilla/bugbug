@@ -18,7 +18,11 @@ from redis import Redis
 from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
-from bugbug.models import testselect
+from bugbug.models import get_model_class, testselect
+from bugbug.models.perf_regression_predictor import (
+    MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
+)
+from bugbug.models.perf_regression_predictor import PatchCommitMessageExtractor
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -41,6 +45,7 @@ MODELS_NAMES = [
     "worksforme",
     "fenixcomponent",
 ]
+PERF_REGRESSION_LOG_PREFIX = "[perf-regression-predictor]"
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
@@ -53,8 +58,14 @@ redis = Redis(
     ssl_cert_reqs=None,
 )
 
+
+def load_model(model_name: str) -> Model:
+    """Load a model using the implementation registered for its name."""
+    return get_model_class(model_name).load(f"{model_name}model")
+
+
 MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
-    timedelta(hours=1), lambda m: Model.load(f"{m}model")
+    timedelta(hours=1), load_model
 )
 MODEL_CACHE.start_ttl_thread()
 
@@ -223,6 +234,122 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
         setkey(job.result_key, orjson.dumps(data), compress=True)
 
     return "OK"
+
+
+def classify_perf_regression(branch: str, rev: str) -> str:
+    """Predict performance-regression risk for a push.
+
+    Mirrors :func:`schedule_tests`: the push is resolved server-side against
+    the service's own local hg clone. Every commit in the push is scored
+    separately and the top-level ``risk_score`` is the maximum across commits.
+    """
+    from bugbug_http import REPO_DIR
+    from bugbug_http.app import JobInfo
+
+    job = JobInfo(classify_perf_regression, branch, rev)
+    LOGGER.info(
+        "%s Processing prediction for %s @ %s",
+        PERF_REGRESSION_LOG_PREFIX,
+        branch,
+        rev,
+    )
+
+    # Pull the revision to the local repository.
+    LOGGER.info(
+        "%s Pulling commits from the remote repository...",
+        PERF_REGRESSION_LOG_PREFIX,
+    )
+    repository.pull(REPO_DIR, branch, rev, update=False)
+
+    # Load the full stack of patches leading to that revision.
+    LOGGER.info(
+        "%s Loading commits to analyze using automationrelevance...",
+        PERF_REGRESSION_LOG_PREFIX,
+    )
+    try:
+        revs = get_hgmo_stack(branch, rev)
+    except requests.exceptions.RequestException:
+        LOGGER.warning(
+            "%s Push not found for %s @ %s!",
+            PERF_REGRESSION_LOG_PREFIX,
+            branch,
+            rev,
+        )
+        setkey(job.result_key, orjson.dumps({"available": False}))
+        return "OK"
+
+    if not revs:
+        LOGGER.warning(
+            "%s No commits to analyze for %s @ %s",
+            PERF_REGRESSION_LOG_PREFIX,
+            branch,
+            rev,
+        )
+        setkey(job.result_key, orjson.dumps({"available": False}))
+        return "OK"
+
+    # Export each commit as its own patch (commit message + diff) from the
+    # local clone.
+    patches = repository.get_commit_patches(REPO_DIR, revs)
+
+    model = MODEL_CACHE.get(PERF_REGRESSION_PREDICTOR)
+
+    # Score each commit separately. The service runs inference on CPU,
+    # so we classify one at a time to keep memory flat.
+    extract_commit_message = PatchCommitMessageExtractor()
+    commits = []
+    for rev_node, patch in zip(revs, patches):
+        patch_text = patch.decode("utf-8", "replace")
+        commit_probabilities = model.classify(
+            [
+                {
+                    "commit_message": extract_commit_message(patch_text) or "",
+                    "diff": patch_text,
+                }
+            ],
+            probabilities=True,
+        )[0]
+        commits.append(
+            {
+                "node": rev_node.decode("ascii"),
+                "prob": commit_probabilities.tolist(),
+                "class": int(commit_probabilities.argmax()),
+                "risk_score": float(commit_probabilities[1]),
+            }
+        )
+
+    risk_score = max(commit["risk_score"] for commit in commits)
+
+    data = {
+        "branch": branch,
+        "rev": rev,
+        "risk_score": risk_score,
+        "commits": commits,
+        "extra_data": {
+            **model.get_extra_data(),
+            "commit_count": len(commits),
+        },
+    }
+    setkey(job.result_key, orjson.dumps(data), compress=True)
+    LOGGER.info(
+        "%s Finished prediction for %s @ %s, commit_count=%d, risk_score=%f",
+        PERF_REGRESSION_LOG_PREFIX,
+        branch,
+        rev,
+        len(commits),
+        risk_score,
+    )
+    return "OK"
+
+
+# Models that classify a push (branch + revision) rather than a bug or an
+# issue, keyed by the model name accepted by the push prediction endpoint.
+PUSH_CLASSIFIERS = {
+    PERF_REGRESSION_PREDICTOR: classify_perf_regression,
+}
+
+# Every model served by an endpoint must be downloaded at startup.
+MODELS_TO_DOWNLOAD = [*MODELS_NAMES, *PUSH_CLASSIFIERS]
 
 
 @lru_cache(maxsize=None)

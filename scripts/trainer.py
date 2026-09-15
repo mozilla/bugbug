@@ -91,6 +91,9 @@ def parse_args(args):
     subparsers = main_parser.add_subparsers(title="model", dest="model", required=True)
 
     for model_name in MODELS:
+        if not getattr(get_model_class(model_name), "training_supported", True):
+            continue
+
         subparser = subparsers.add_parser(
             model_name, parents=[parser], help=f"Train {model_name} model"
         )

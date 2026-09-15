@@ -52,3 +52,4 @@ node_modules/
 
 # Local env files
 .env
+/http_service/docker-compose.override.yml
