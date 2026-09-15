@@ -4,15 +4,19 @@ import { html, parse } from "diff2html";
 import { ColorSchemeType } from "diff2html/lib/types";
 import { useEffect, useState } from "react";
 
+import type { RevisionMessage } from "@/lib/revision";
+
 // The artifact every agent that edits source publishes (see
 // HackbotContext.publish_changes).
 export const PATCH_ARTIFACT = "changes/changes.patch";
 
 export function PatchPanel({
   diff,
+  revision = null,
   truncated = false,
 }: {
   diff: string;
+  revision?: RevisionMessage | null;
   truncated?: boolean;
 }) {
   const files = parse(diff);
@@ -26,6 +30,12 @@ export function PatchPanel({
         <p className="muted">The patch contains no file changes.</p>
       ) : (
         <>
+          {revision && (
+            <div className="patch-revision">
+              <strong>{revision.title}</strong>
+              {revision.summary && <p>{revision.summary}</p>}
+            </div>
+          )}
           {truncated && (
             <p className="muted">
               Only the first part of the patch is shown; download the artifact
@@ -53,7 +63,13 @@ export function PatchPanel({
 // Enough of a preview for a developer to decide whether to submit the patch for
 // review; the review itself happens on the Phabricator revision, so this is
 // deliberately read-only rendering with no diff options or commenting.
-export function PatchView({ runId }: { runId: string }) {
+export function PatchView({
+  runId,
+  revision = null,
+}: {
+  runId: string;
+  revision?: RevisionMessage | null;
+}) {
   const [diff, setDiff] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,5 +116,5 @@ export function PatchView({ runId }: { runId: string }) {
       </div>
     );
   }
-  return <PatchPanel diff={diff} truncated={truncated} />;
+  return <PatchPanel diff={diff} revision={revision} truncated={truncated} />;
 }

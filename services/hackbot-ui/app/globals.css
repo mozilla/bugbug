@@ -396,6 +396,20 @@ dl.kv dd {
   margin-bottom: 4px;
 }
 
+.patch-revision {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.patch-revision strong {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.patch-revision p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;

@@ -14,6 +14,7 @@ import {
 } from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
+import { revisionMessage } from "@/lib/revision";
 import { PATCH_ARTIFACT, PatchView } from "./PatchView";
 import { StatusBadge } from "./StatusBadge";
 import { parseTestPlan, TestPlanView } from "./TestPlanView";
@@ -28,12 +29,6 @@ function actionPreview(a: RunAction): { label: string; text: string } | null {
   if (a.type === "bugzilla.add_comment") {
     const body = text(a.params?.text);
     return body ? { label: "Comment preview", text: body } : null;
-  }
-  if (a.type === "phabricator.submit_patch") {
-    const body = [text(a.params?.title), text(a.params?.summary)]
-      .filter(Boolean)
-      .join("\n\n");
-    return body ? { label: "Revision preview", text: body } : null;
   }
   return null;
 }
@@ -291,7 +286,9 @@ export function RunDetail({
         hasFindings && <FindingsView findings={findings} />
       )}
 
-      {hasPatch && <PatchView runId={run.run_id} />}
+      {hasPatch && (
+        <PatchView runId={run.run_id} revision={revisionMessage(actions)} />
+      )}
 
       {actions && actions.length > 0 && (
         <div className="panel">
