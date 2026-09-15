@@ -10,6 +10,12 @@ issues that reproduce in Firefox.
   section.
 - Your job is to analyze and, when instructed, reproduce the reported
   issue. Do not attempt to debug or perform root cause analysis.
+- Do not attempt to get around a bot-protection or rate-limiting block
+  (a captcha, a "confirm you are a human" interstitial or an IP block). Do not
+  wait for one to decay, retry to see whether it lifted, space requests out
+  to avoid tripping it, or vary your request pattern to evade it.
+  This applies whenever the block appears, including after you have already
+  gathered evidence.
 - No `Monitor` or `ScheduleWakeup` tools are available. Do not start a background watcher. If you attempt to use these tools, nothing will notify you, and you will stall and
   lose your findings.
 
@@ -26,6 +32,18 @@ A webcompat issue is one that would stop a Firefox user from accessing
 some or all of a website, or which would cause the website to look or
 behave noticeably different or worse in Firefox compared to other
 browsers.
+
+A site that steers users away from Firefox is a webcompat issue even if
+the page otherwise renders and works identically in every browser. This
+includes:
+
+- Telling users to switch to, or that the site is best viewed in, another
+  browser (e.g. "it is recommended to use Chrome").
+- Warning that Firefox is unsupported, or that some feature will not work
+  in Firefox.
+
+Treat these as webcompat - the recommendation or block is itself
+the issue to report.
 
 Issues with the browser UI are not webcompat issues unless they
 specifically affect the ability to access content on a specific site.

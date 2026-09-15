@@ -15,6 +15,7 @@ analysis artifacts.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 from collections.abc import Callable
@@ -43,6 +44,7 @@ from .config import (
     ANALYSIS_MODEL,
     BUGZILLA_READ_TOOLS,
     BUILD_TOOL,
+    CHECKOUT_DEPTH,
     FIREFOX_TOOLS,
     FIX_MODEL,
     TRY_PUSH_TOOL,
@@ -52,9 +54,11 @@ from .prompts import (
     BLAME_STEP,
     BUG_ANALYSIS_STEP,
     BUG_CONTEXT,
+    CHECKOUT_HISTORY,
     FIX_TEMPLATE,
     PUSH_COMMIT_LINE,
     PUSH_CONTEXT,
+    SINGLE_COMMIT_CONTEXT,
     TREEHERDER_STEP,
     TREEHERDER_STEP_NO_PUSH,
     TRY_PUSH_INSTRUCTIONS,
@@ -375,11 +379,18 @@ def _read_doc(
 
 
 def _push_context(git_commits: list[str]) -> str:
-    """List the push commits for the analysis prompt, or "" for a single commit."""
-    if len(git_commits) <= 1:
-        return ""
+    """Tell the agent exactly which commits make up the push.
+
+    Spelled out even for a single commit: without it the agent takes the parent
+    commit for a stacked one and blames it as part of the push.
+    """
+    history = CHECKOUT_HISTORY.format(depth=CHECKOUT_DEPTH)
+    if len(git_commits) == 1:
+        return SINGLE_COMMIT_CONTEXT.format(
+            commit=git_commits[0], checkout_history=history
+        )
     commit_lines = "\n".join(PUSH_COMMIT_LINE.format(commit=c) for c in git_commits)
-    return PUSH_CONTEXT.format(commit_lines=commit_lines)
+    return PUSH_CONTEXT.format(commit_lines=commit_lines, checkout_history=history)
 
 
 def _blame_step(git_commits: list[str], scratch_out: Path) -> str:
@@ -389,6 +400,9 @@ def _blame_step(git_commits: list[str], scratch_out: Path) -> str:
     that the lone commit is innocent and the bustage came from somewhere else.
     """
     return BLAME_STEP.format(scratch_out=scratch_out)
+
+
+_SHA_RE = re.compile(r"[0-9a-f]{7,40}$")
 
 
 def _match_commit(sha: str | None, git_commits: list[str]) -> str | None:
@@ -413,19 +427,20 @@ def _read_blame(scratch_out: Path) -> dict:
 
 
 def _resolve_blame(scratch_out: Path, git_commits: list[str]) -> str | None:
-    """The commit the agent blamed, or None when it cleared the whole push.
+    """The commit the agent blamed, or None when it blamed none.
 
-    An explicit null is a verdict and is kept; blaming a commit the agent just
-    cleared is worse than naming none. A missing or unparsable file is not a
-    verdict, so that still falls back to the failure commit.
+    An explicit null is a verdict and is kept, and so is a commit outside the
+    push: the agent traced the failure to an earlier push, and reporting the
+    checked-out commit instead would contradict its own analysis (bug 6788).
+    Only a missing or unparsable file is not a verdict and falls back to the
+    failure commit.
     """
     if not git_commits:
         return None
-    failure_commit = git_commits[0]
     blame = _read_blame(scratch_out)
     if "blamed_commit" not in blame:
-        return failure_commit
-    blamed = str(blame["blamed_commit"] or "").strip()
-    if not blamed:
+        return git_commits[0]
+    blamed = str(blame["blamed_commit"] or "").strip().lower()
+    if not _SHA_RE.match(blamed):
         return None
-    return _match_commit(blamed, git_commits) or failure_commit
+    return _match_commit(blamed, git_commits) or blamed

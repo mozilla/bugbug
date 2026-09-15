@@ -53,7 +53,13 @@ function extractLog(run: RunDoc): string | null {
   return null;
 }
 
-export function RunDetail({ runId }: { runId: string }) {
+export function RunDetail({
+  runId,
+  tracesUrl,
+}: {
+  runId: string;
+  tracesUrl: string;
+}) {
   const router = useRouter();
   const [run, setRun] = useState<RunDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +238,12 @@ export function RunDetail({ runId }: { runId: string }) {
               <dd>{run.execution_name}</dd>
             </>
           )}
+          <dt>Traces</dt>
+          <dd>
+            <a href={tracesUrl} target="_blank" rel="noreferrer">
+              Weave
+            </a>
+          </dd>
         </dl>
         <button
           type="button"
@@ -271,11 +283,18 @@ export function RunDetail({ runId }: { runId: string }) {
           <ul className="action-list">
             {actions.map((a) => {
               const preview = commentPreview(a);
+              const url =
+                typeof a.result?.url === "string" ? a.result.url : null;
               return (
                 <li key={a.idx}>
                   <div className="action-row">
                     <span className={`badge ${a.status}`}>{a.status}</span>
                     <code>{a.type}</code>
+                    {url && (
+                      <a href={url} target="_blank" rel="noreferrer">
+                        Open
+                      </a>
+                    )}
                     {a.error && <span className="muted">{a.error}</span>}
                   </div>
                   {preview && (

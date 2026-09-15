@@ -5,7 +5,7 @@ from hackbot_runtime.actions.email import record_email
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import BuildRepairResult, run_build_repair
-from .config import NOTIFY_ONLY_WITH_PATCH
+from .config import CHECKOUT_DEPTH, NOTIFY_ONLY_WITH_PATCH
 from .notify import build_email, recipients, resolve_author_email
 from .resolve import PushInfo, resolve_push
 
@@ -43,8 +43,10 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
     git_commits = push.git_commits
 
     # Pin the checkout to the failure commit and fetch deep enough to include the
-    # whole push, so the agent can `git show` every commit in it.
-    await ctx.prepare_repo(ref=push.git_commits[0], depth=len(push.git_commits) + 1)
+    # whole push and the pushes before it.
+    await ctx.prepare_repo(
+        ref=push.git_commits[0], depth=max(len(push.git_commits) + 1, CHECKOUT_DEPTH)
+    )
 
     result = await run_build_repair(
         bugzilla_mcp_server={

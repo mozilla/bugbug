@@ -129,6 +129,9 @@ def build_email(
 
     if result.blamed_commit:
         by = f" by {blamed_author}" if blamed_author else ""
+        where = (
+            "" if result.blamed_commit in push.git_commits else ", from an earlier push"
+        )
         lines.append(
             "- **Likely culprit:** "
             + _link(
@@ -136,6 +139,7 @@ def build_email(
                 f"`{result.blamed_commit[:12]}`",
             )
             + by
+            + where
         )
     else:
         lines.append(

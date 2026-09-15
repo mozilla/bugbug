@@ -71,6 +71,24 @@ async def test_conduit_request_raises_on_error_code(monkeypatch):
         await _client().conduit_request("some.method")
 
 
+async def test_conduit_call_returns_the_envelope_without_raising(monkeypatch):
+    # The broker's read-only proxy relays Conduit's own answer, errors included.
+    envelope = {"result": None, "error_code": "ERR-CONDUIT", "error_info": "nope"}
+    _capture_post(monkeypatch, envelope)
+    assert await _client().conduit_call("some.method", {}) == envelope
+
+
+async def test_conduit_call_overrides_a_caller_supplied_token(monkeypatch):
+    # A proxied caller must not be able to choose the credentials the request
+    # is made with, only the method and its arguments.
+    captured = _capture_post(monkeypatch, {"result": {}})
+    await _client().conduit_call(
+        "some.method", {"foo": "bar", "__conduit__": {"token": "api-not-mine"}}
+    )
+    assert captured["params"]["__conduit__"] == {"token": VALID_TOKEN}
+    assert captured["params"]["foo"] == "bar"
+
+
 def test_valid_api_key_accepted():
     assert PhabricatorSettings(api_key=VALID_TOKEN).api_key == VALID_TOKEN
 
@@ -141,6 +159,23 @@ async def test_search_revision_by_id_passes_attachments(monkeypatch):
 async def test_search_revision_by_id_missing(monkeypatch):
     _capture_post(monkeypatch, {"result": {"data": []}})
     assert await _client().search_revision_by_id(42) is None
+
+
+async def test_search_revisions_fetches_many_in_one_call(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": [{"id": 1}, {"id": 2}]}})
+
+    revisions = await _client().search_revisions(["PHID-A", "PHID-B"])
+
+    assert [r["id"] for r in revisions] == [1, 2]
+    assert captured["params"]["constraints"] == {"phids": ["PHID-A", "PHID-B"]}
+    assert captured["url"].endswith("/api/differential.revision.search")
+
+
+async def test_search_revisions_skips_the_call_when_nothing_to_look_up(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": []}})
+
+    assert await _client().search_revisions([]) == []
+    assert captured == {}
 
 
 async def test_search_users_maps_phids_to_names(monkeypatch):
@@ -216,6 +251,39 @@ async def test_query_latest_diff_picks_highest_id(monkeypatch):
     diff = await _client().query_latest_diff(42)
     assert diff.id == 9
     assert diff.base_commit == "base9"
+
+
+async def test_query_latest_diff_carries_the_author(monkeypatch):
+    # Used to attribute a replayed revision to whoever wrote it, rather than to
+    # hackbot (see revision.checkout_revision).
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "9": {
+                    "id": "9",
+                    "sourceControlBaseRevision": "base9",
+                    "authorName": "Ada Lovelace",
+                    "authorEmail": "ada@example.com",
+                }
+            }
+        },
+    )
+    diff = await _client().query_latest_diff(42)
+    assert diff.author == "Ada Lovelace <ada@example.com>"
+
+
+async def test_query_latest_diff_has_no_author_when_phabricator_gives_none(
+    monkeypatch,
+):
+    # A diff uploaded through the web UI has no commit to take an author from;
+    # a half-known author is no author, since git needs both parts.
+    _capture_post(
+        monkeypatch,
+        {"result": {"9": {"id": "9", "authorName": "Ada Lovelace"}}},
+    )
+    diff = await _client().query_latest_diff(42)
+    assert diff.author is None
 
 
 async def test_query_latest_diff_none_when_no_diffs(monkeypatch):

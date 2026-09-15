@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
+from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
@@ -275,7 +275,8 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
 
     agent_spec = AGENT_REGISTRY.get(run.agent)
     if (
-        agent_spec is not None
+        new_status == RunStatus.succeeded
+        and agent_spec is not None
         and agent_spec.warn_on_unsubmitted_patch
         and _has_unsubmitted_patch(summary, artifacts)
     ):

@@ -10,7 +10,6 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
-from pydantic import Field
 
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
@@ -34,9 +33,7 @@ def get_code_review_tool():
 
 
 @mcp.prompt()
-async def patch_review(
-    patch_url: str = Field(description="URL to the Phabricator patch to review."),
-) -> str:
+async def patch_review(patch_url: str) -> str:
     """Review a code patch from Phabricator."""
     parsed_url = urlparse(patch_url)
     if (

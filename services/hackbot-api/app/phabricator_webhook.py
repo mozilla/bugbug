@@ -25,6 +25,15 @@ log = logging.getLogger(__name__)
 _COMMENT_TYPES = frozenset({"comment", "inline"})
 
 
+def _strip_quoted_lines(text: str) -> str:
+    """Return ``text`` with every line that starts with ``>`` removed.
+
+    Phabricator uses these lines for quoted replies. Excluding them prevents a
+    mention copied from an earlier comment from being treated as a new request.
+    """
+    return "\n".join(line for line in text.splitlines() if not line.startswith(">"))
+
+
 @dataclass(frozen=True)
 class HackbotMention:
     comment: str
@@ -71,7 +80,7 @@ def find_hackbot_mentions(
 
         for comment in transaction.get("comments") or []:
             comment_text = comment["content"]["raw"]
-            if token not in comment_text:
+            if token not in _strip_quoted_lines(comment_text):
                 continue
 
             diff_id = (

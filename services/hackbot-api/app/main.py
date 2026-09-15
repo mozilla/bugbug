@@ -19,7 +19,6 @@ if settings.sentry_dsn:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.environment,
-        release=f"hackbot-api@{__version__}",
         send_default_pii=True,
     )
 

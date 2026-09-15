@@ -140,6 +140,41 @@ def test_nothing_recorded_yet_still_waits():
     assert _run([GROUP], jobs, {}, poll=poll) == {GROUP}
 
 
+def test_an_unsettled_parent_is_stepped_over_to_a_green_grandparent():
+    # The parent is still running -- on autoland it nearly always is -- but the
+    # grandparent ran the group and passed, so the failure is new within the last
+    # two pushes. Decided at once, without spending the wait (max_wait=0).
+    jobs = {
+        "rev1": {CONFIG: [_job(task_id="T1", state="running")]},
+        "rev2": {CONFIG: [_job(task_id="T2")]},
+    }
+    results = {"rev2": {"T2": {GROUP: True}}}
+    assert _run([GROUP], jobs, results, depth=2, max_wait=0) == {GROUP}
+
+
+def test_an_unsettled_parent_is_stepped_over_to_a_failing_grandparent():
+    jobs = {
+        "rev1": {CONFIG: [_job(task_id="T1", state="running")]},
+        "rev2": {CONFIG: [_job(task_id="T2")]},
+    }
+    results = {"rev2": {"T2": {GROUP: False}}}
+    assert _run([GROUP], jobs, results, depth=2, max_wait=0) == set()
+
+
+def test_unsettled_all_the_way_back_still_waits():
+    jobs = {
+        "rev1": {CONFIG: [_job(task_id="T1", state="running")]},
+        "rev2": {CONFIG: [_job(task_id="T2", state="running")]},
+    }
+    poll = [
+        (
+            {"rev1": {CONFIG: [_job(task_id="T1")]}, "rev2": jobs["rev2"]},
+            {"rev1": {"T1": {GROUP: True}}},
+        )
+    ]
+    assert _run([GROUP], jobs, {}, depth=2, poll=poll) == {GROUP}
+
+
 def test_ancestor_that_never_ran_the_group_is_skipped():
     # Coalesced, or the manifest was chunked into another task: non-decisive.
     jobs = {

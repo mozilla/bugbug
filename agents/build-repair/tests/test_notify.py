@@ -85,6 +85,23 @@ def test_the_culprit_and_its_author_are_named():
     assert "**author@mozilla.com** authored" in body
 
 
+def test_a_culprit_from_an_earlier_push_is_marked_as_such():
+    earlier = "91b3a385edd8f0e3c2b1a09d8c7e6f5a4b3c2d1e"
+    _, body = _email(
+        result=_result(blamed_commit=earlier), blamed_author="author@mozilla.com"
+    )
+    assert (
+        f"**Likely culprit:** [`{earlier[:12]}`]"
+        f"(https://github.com/mozilla-firefox/firefox/commit/{earlier})"
+        " by author@mozilla.com, from an earlier push" in body
+    )
+
+
+def test_a_culprit_in_the_push_is_not_marked_as_earlier():
+    _, body = _email(blamed_author="author@mozilla.com")
+    assert "earlier push" not in body
+
+
 def test_a_push_the_agent_cleared_says_so():
     _, body = _email(result=_result(blamed_commit=None))
     assert "Not caused by this push" in body

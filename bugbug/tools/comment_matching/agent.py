@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
 from langchain.chat_models import BaseChatModel, init_chat_model
@@ -9,20 +11,25 @@ from bugbug.tools.core.llms import DEFAULT_OPENAI_MODEL
 
 
 class MatchingComment(BaseModel):
-    id: int = Field(description="Unique identifier for the comment")
-    content: str = Field(description="Content of the code review comment")
-    file: str = Field(description="File path of the comment")
+    id: Annotated[int, Field(description="Unique identifier for the comment")]
+    content: Annotated[str, Field(description="Content of the code review comment")]
+    file: Annotated[str, Field(description="File path of the comment")]
 
 
 class CommentMatch(BaseModel):
-    old_comment_id: int = Field(description="ID of the comment from the old set")
-    new_comment_id: int = Field(description="ID of the comment from the new set")
+    old_comment_id: Annotated[
+        int, Field(description="ID of the comment from the old set")
+    ]
+    new_comment_id: Annotated[
+        int, Field(description="ID of the comment from the new set")
+    ]
 
 
 class AgentResponse(BaseModel):
-    matches: list[CommentMatch] = Field(
-        description="List of matched comment pairs between old and new comments"
-    )
+    matches: Annotated[
+        list[CommentMatch],
+        Field(description="List of matched comment pairs between old and new comments"),
+    ]
 
 
 class CommentMatchingTool:

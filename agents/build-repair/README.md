@@ -14,7 +14,9 @@ It also optionally bootstraps Firefox build if needed.
 
 - `FAILURE_TASKS` - a dictionary of failed Taskcluster tasks {task_name: taskcluster_task_id}.
   The agent resolves the push from them: the failure commit (checked out) plus the other
-  commits in the push, and blames the one that introduced the failure.
+  commits in the push, and blames the one that introduced the failure. The checkout
+  reaches `CHECKOUT_DEPTH` commits back so the agent can find a culprit in an earlier
+  push when the failing job did not run there.
 - `GIT_COMMIT` - Optional override for the failure commit (skips the hg->git lookup).
 - `BUG_ID` - Optional Bugzilla bug id.
 
@@ -26,8 +28,9 @@ First stage - analysis:
   the fix
 - `analysis.md` - verdict, error, cause and fix, under a page
 - `planning.md` - intermediate file that outlines fixing steps for the second stage
-- `blame.json` - the commit that introduced the failure (`blamed_commit`, `reason`), null
-  when no commit in the push is to blame
+- `blame.json` - the commit that introduced the failure (`blamed_commit`, `reason`), from
+  this push or an earlier one when the job did not run there; null when no commit is to
+  blame
 
 Second stage - fixing:
 

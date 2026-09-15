@@ -76,15 +76,26 @@ _FEEDBACK_TAGS = (
     "ai-triage-out-of-scope, ai-triage-wrong-fix, ai-triage-shallow-fix."
 )
 
+# Repeats the `bugzilla_webhook.bot_login` default in hackbot-api, which this agent
+# does not import; docs/hackbot/triggers.md covers what the needinfo starts.
+_PATCH_REQUEST = (
+    "Needinfo hackbot@mozilla.tld to have a patch generated for this bug, "
+    "include any questions or directions as needed in your comment."
+)
+
 
 def feedback_tags_hook(action: dict) -> None:
-    """Offer the triage-specific feedback tags below the runtime's footer."""
+    """Offer the feedback tags and the patch request below the runtime's footer.
+
+    The patch request takes a blank line: the comment is Markdown, where a lone
+    newline would fold it onto the end of the tag list.
+    """
     params = action.get("params")
     if not isinstance(params, dict):
         return
     text = params.get("text")
     if isinstance(text, str):
-        params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}"
+        params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}\n\n{_PATCH_REQUEST}"
 
 
 class SeverityAssessment(BaseModel):
@@ -145,14 +156,18 @@ SEARCHFOX_LINKS_PROMPT = (
     f"Markdown link built from the `{SEARCHFOX_PLACEHOLDER}` placeholder, which "
     "is expanded into a revision-pinned Searchfox URL when your comment is "
     "recorded:\n\n"
-    f"    [{_EXAMPLE_PATH}]({SEARCHFOX_PLACEHOLDER}/{_EXAMPLE_PATH})\n\n"
+    f"    [tabgroup.js]({SEARCHFOX_PLACEHOLDER}/{_EXAMPLE_PATH})\n\n"
     "- Write the placeholder **literally**. Do not put a revision, `tip` or "
     "`HEAD` in it, and do not write a searchfox.org URL yourself — you do not "
     "know which revision is being linked.\n"
     "- After it, give the repo-relative path, plus a line anchor when you know "
     "the line: `#1234`, or `#1234-1250` for a range. No `L` prefix.\n"
-    "- Use the path as the link text, without backticks — backticked text does "
-    "not render as a link.\n"
+    "- **Use the file name alone as the link text**, not the full path: the "
+    "path is already in the URL, and repeating it inline is most of what makes "
+    "these comments hard to read. Keep the full repo-relative path in the URL. "
+    "When two files you cite share a name, add just enough parent directory to "
+    "tell them apart (`Crossword/Crossword.jsx`). No backticks around the link "
+    "text — backticked text does not render as a link.\n"
     "- Leave the paths in the trailing ```json plan block as **bare paths** — "
     "that block is parsed by a downstream tool, and a link there would corrupt "
     "it.\n"
