@@ -26,11 +26,19 @@ class HackbotClient:
         inputs: Mapping[str, Any],
         *,
         on_behalf_of: str | None = None,
+        dedupe_key: str | None = None,
     ) -> RunRef:
-        """Create an agent run and return the API's typed run reference."""
+        """Create an agent run and return the API's typed run reference.
+
+        `dedupe_key` names the work the run does, and the name belongs to one
+        run for good: repeated triggers for the key will be no-ops, and the same
+        run reference will be returned.
+        """
         headers = {"X-API-Key": self._api_key}
         if on_behalf_of is not None:
             headers["X-On-Behalf-Of"] = on_behalf_of
+        if dedupe_key is not None:
+            headers["X-Dedupe-Key"] = dedupe_key
 
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.post(

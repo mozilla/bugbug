@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BeforeValidator
+from fastapi.responses import Response
+from pydantic import BeforeValidator, StringConstraints
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
@@ -44,6 +46,20 @@ def _normalize_identity(email: str | None) -> str | None:
 
 UserEmail = Annotated[str | None, BeforeValidator(_normalize_identity)]
 
+DedupeKey = (
+    Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=200,
+            to_lower=True,
+            ascii_only=True,
+        ),
+    ]
+    | None
+)
+
 
 def _lookup_agent(name: str) -> AgentSpec:
     agent = AGENT_REGISTRY.get(name)
@@ -78,8 +94,19 @@ async def create_run(
             description="Email of the user this run is requested for.",
         ),
     ] = None,
+    dedupe_key: Annotated[
+        DedupeKey,
+        Header(
+            alias="X-Dedupe-Key",
+            description=(
+                "A key to deduplicate runs for the same work. If a run already "
+                "exists for this key, it will be returned instead of creating "
+                "a new one."
+            ),
+        ),
+    ] = None,
     db: AsyncSession = Depends(get_db),
-) -> RunRef:
+) -> RunRef | Response:
     agent = _lookup_agent(agent_name)
     try:
         inputs = agent.input_schema.model_validate(payload)
@@ -89,33 +116,57 @@ async def create_run(
     run_id = uuid.uuid4()
     results_prefix = gcs.run_prefix(str(run_id))
 
-    policy = await gcs.generate_results_policy(str(run_id))
-
     run = Run(
         run_id=run_id,
         agent=agent.name,
         status=RunStatus.pending.value,
         inputs=inputs.model_dump(mode="json"),
         requested_by=on_behalf_of,
+        dedupe_key=dedupe_key,
         results_prefix=results_prefix,
         artifacts=[],
     )
     db.add(run)
-    await db.flush()
-
-    env_overrides: dict[str, str] = {
-        "RUN_ID": str(run_id),
-        "RESULTS_BUCKET": settings.results_bucket,
-        "RESULTS_PREFIX": results_prefix,
-        "RESULTS_POLICY_URL": policy["url"],
-        "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
-        **(agent.build_env or model_to_env)(inputs),
-    }
 
     try:
+        await db.commit()
+    except IntegrityError:
+        if dedupe_key is None:
+            # No key means no name to lose, so this is a real constraint fault.
+            raise
+
+        await db.rollback()
+        result = await db.execute(
+            select(Run).where(Run.agent == agent.name, Run.dedupe_key == dedupe_key)
+        )
+        run = result.scalar_one()
+        log.info(
+            "Deduplicated %s request for key %r onto run %s (%s)",
+            run.agent,
+            run.dedupe_key,
+            run.run_id,
+            run.status,
+        )
+
+        return Response(
+            content=RunRef.model_validate(run).model_dump_json(),
+            media_type="application/json",
+            status_code=status.HTTP_200_OK,
+        )
+
+    try:
+        policy = await gcs.generate_results_policy(str(run_id))
+        env_overrides: dict[str, str] = {
+            "RUN_ID": str(run_id),
+            "RESULTS_BUCKET": settings.results_bucket,
+            "RESULTS_PREFIX": results_prefix,
+            "RESULTS_POLICY_URL": policy["url"],
+            "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
+            **(agent.build_env or model_to_env)(inputs),
+        }
         execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
     except Exception as exc:
-        log.exception("Failed to trigger Cloud Run Job for run %s", run_id)
+        log.exception("Failed to start execution for run %s", run_id)
         run.status = RunStatus.failed.value
         run.error = f"Failed to start execution: {exc}"
         await db.commit()
@@ -141,6 +192,10 @@ async def list_runs(
         UserEmail,
         Query(description="Only return runs requested by this user."),
     ] = None,
+    dedupe_key: Annotated[
+        DedupeKey,
+        Query(description="Only return runs carrying this dedupe key."),
+    ] = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
     stmt = select(Run)
@@ -150,6 +205,10 @@ async def list_runs(
         stmt = stmt.where(Run.status == status_filter.value)
     if requested_by is not None:
         stmt = stmt.where(Run.requested_by == requested_by)
+    if dedupe_key is not None:
+        # The trigger's own handle on its run: a caller that named the work can
+        # find it again without having stored the run id.
+        stmt = stmt.where(Run.dedupe_key == dedupe_key)
     # created_at is the sort key; run_id is a deterministic tiebreaker so offset
     # paging is stable when timestamps collide. (agent/status/requested_by and
     # created_at are all indexed, so filtering + ordering stay index-backed.)
