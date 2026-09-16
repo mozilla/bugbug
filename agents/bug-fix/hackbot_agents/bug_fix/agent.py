@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from shlex import quote
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
@@ -124,14 +123,19 @@ def make_investigator() -> AgentDefinition:
 
 
 def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
-    """Write a normal optimized browser config, preserving any existing config."""
+    """Write a debug browser config, preserving any existing config.
+
+    ``--enable-debug`` turns on assertions that catch a whole class of mistakes
+    during development, and ``--enable-clang-plugin`` adds Mozilla's own static
+    analysis on top. The objdir location is left to mach's default.
+    """
     if fx_ctx.mozconfig.exists():
         return
     fx_ctx.mozconfig.write_text(
         "ac_add_options --enable-application=browser\n"
-        "ac_add_options --disable-debug\n"
+        "ac_add_options --enable-debug\n"
         "ac_add_options --enable-optimize\n"
-        f"mk_add_options MOZ_OBJDIR={quote(str(fx_ctx.objdir))}\n"
+        "ac_add_options --enable-clang-plugin\n"
     )
 
 
