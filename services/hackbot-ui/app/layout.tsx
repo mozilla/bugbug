@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import "diff2html/bundles/css/diff2html.min.css";
+
 import "./globals.css";
 import { SentryUser } from "@/components/SentryUser";
 import { UserMenu } from "@/components/UserMenu";
