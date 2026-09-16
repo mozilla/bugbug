@@ -110,8 +110,7 @@ async def create_run(
     ] = None,
     dedupe_key: Annotated[
         DedupeKey,
-        Header(
-            alias="X-Dedupe-Key",
+        Query(
             description=(
                 "A key to deduplicate runs for the same work. If a run already "
                 "exists for this key, it will be returned instead of creating "

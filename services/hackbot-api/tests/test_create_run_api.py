@@ -74,7 +74,7 @@ def _create_keyed(client, key="push:autoland:abc"):
     return client.post(
         "/agents/bug-fix/runs",
         json={"bug_id": 1889001},
-        headers={"X-Dedupe-Key": key},
+        params={"dedupe_key": key},
     )
 
 
@@ -94,7 +94,7 @@ def _lose_the_key(db, winner):
 
 def test_keyed_request_records_the_key_on_the_new_run(client, db):
     # Stripped, so the same name spelled with stray whitespace is the same name.
-    _create(client, {"X-Dedupe-Key": "  push:autoland:abc  "})
+    assert _create_keyed(client, key="  push:autoland:abc  ").status_code == 201
     assert db.added.dedupe_key == "push:autoland:abc"
 
 

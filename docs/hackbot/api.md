@@ -20,8 +20,8 @@ component that knows the agent catalog, and the only writer of run state.
 
 `POST /agents/{agent}/runs` accepts an `X-On-Behalf-Of` header carrying the requesting
 user's email, stored as `requested_by` — the caller is a trusted service (the UI), so this
-is attribution, not authentication. It also accepts `X-Dedupe-Key`, which decides
-whether the request starts a run at all (see [Deduplication](#deduplication)).
+is attribution, not authentication. It also takes a `dedupe_key` query parameter, which
+decides whether the request starts a run at all (see [Deduplication](#deduplication)).
 
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.
@@ -90,7 +90,7 @@ leaves a pending run with no execution, which the stale-run sweep finalizes.
 ## Deduplication
 
 External triggers fan out: 20 build tasks fail on one push, Phabricator retries a delivery,
-a Slack button gets clicked twice. A caller **names the work** with `X-Dedupe-Key`, scoped to
+a Slack button gets clicked twice. A caller **names the work** with `?dedupe_key=`, scoped to
 the agent, and the rule is the whole design:
 
 > a key names one run, for good.

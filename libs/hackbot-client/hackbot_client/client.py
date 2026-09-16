@@ -37,14 +37,15 @@ class HackbotClient:
         headers = {"X-API-Key": self._api_key}
         if on_behalf_of is not None:
             headers["X-On-Behalf-Of"] = on_behalf_of
-        if dedupe_key is not None:
-            headers["X-Dedupe-Key"] = dedupe_key
+
+        params = {} if dedupe_key is None else {"dedupe_key": dedupe_key}
 
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.post(
                 f"{self._base_url}/agents/{agent_name}/runs",
                 json=dict(inputs),
                 headers=headers,
+                params=params,
             )
 
         response.raise_for_status()
