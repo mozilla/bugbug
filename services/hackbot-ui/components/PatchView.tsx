@@ -33,7 +33,7 @@ export function PatchPanel({
           {truncated && (
             <p className="muted">
               Only the first part of the patch is shown; download the artifact
-              below for the rest.
+              from the Artifacts list for the rest.
             </p>
           )}
           {/* diff2html only emits markup for the diff it was given and escapes
