@@ -33,9 +33,9 @@ def _truncate(s: str, n: int = 500) -> str:
 def _stamp() -> str:
     """UTC wall clock, HH:MM:SS.mmm, prefixed to every log-file record."""
     now = time.time()
-    return (
-        time.strftime("%H:%M:%S", time.gmtime(now)) + f".{int(now * 1000) % 1000:03d}"
-    )
+    clock = time.strftime("%H:%M:%S", time.gmtime(now))
+    millis = int(now * 1000) % 1000
+    return f"{clock}.{millis:03d}"
 
 
 class Reporter:
