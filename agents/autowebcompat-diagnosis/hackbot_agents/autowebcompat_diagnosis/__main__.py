@@ -36,6 +36,8 @@ class AgentInputs(BaseSettings):
         | None
     ) = None
 
+    headless: bool = False
+
     model_config = SettingsConfigDict(extra="ignore")
 
     @property
@@ -66,6 +68,7 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
             effort=inputs.effort,
             log=ctx.log_path,
             verbose=True,
+            headless=inputs.headless,
         ),
         tracker,
         input_data,
