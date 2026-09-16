@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from shlex import quote
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
@@ -127,7 +128,7 @@ def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
 
     ``--enable-debug`` turns on assertions that catch a whole class of mistakes
     during development, and ``--enable-clang-plugin`` adds Mozilla's own static
-    analysis on top. The objdir location is left to mach's default.
+    analysis on top.
     """
     if fx_ctx.mozconfig.exists():
         return
@@ -136,6 +137,7 @@ def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
         "ac_add_options --enable-debug\n"
         "ac_add_options --enable-optimize\n"
         "ac_add_options --enable-clang-plugin\n"
+        f"mk_add_options MOZ_OBJDIR={quote(str(fx_ctx.objdir))}\n"
     )
 
 
