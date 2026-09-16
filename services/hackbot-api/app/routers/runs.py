@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BeforeValidator, StringConstraints
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
@@ -129,27 +129,26 @@ async def create_run(
     run_id = uuid.uuid4()
     results_prefix = gcs.run_prefix(str(run_id))
 
-    run = Run(
-        run_id=run_id,
-        agent=agent.name,
-        status=RunStatus.pending.value,
-        inputs=inputs.model_dump(mode="json"),
-        requested_by=on_behalf_of,
-        dedupe_key=dedupe_key,
-        results_prefix=results_prefix,
-        artifacts=[],
+    claim = (
+        pg_insert(Run)
+        .values(
+            run_id=run_id,
+            agent=agent.name,
+            status=RunStatus.pending.value,
+            inputs=inputs.model_dump(mode="json"),
+            requested_by=on_behalf_of,
+            dedupe_key=dedupe_key,
+            results_prefix=results_prefix,
+            artifacts=[],
+        )
+        .on_conflict_do_nothing(index_elements=["dedupe_key", "agent"])
+        .returning(Run)
     )
-    db.add(run)
+    run = await db.scalar(claim)
 
-    try:
-        await db.commit()
-    except IntegrityError:
-        if dedupe_key is None:
-            # Without a key there is no duplicate to read this as, so it is a
-            # real constraint fault.
-            raise
-
-        await db.rollback()
+    if run is None:
+        # RETURNING only yields rows it inserted, so nothing came back: the
+        # index turned this insert away, which only a supplied key can cause.
         result = await db.execute(
             select(Run).where(Run.agent == agent.name, Run.dedupe_key == dedupe_key)
         )
@@ -167,6 +166,10 @@ async def create_run(
             media_type="application/json",
             status_code=status.HTTP_200_OK,
         )
+
+    # Publishes the claim to the other API instances before this request does
+    # anything slow.
+    await db.commit()
 
     try:
         policy = await gcs.generate_results_policy(str(run_id))

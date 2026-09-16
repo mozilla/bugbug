@@ -19,11 +19,31 @@ from app.database.connection import get_db  # noqa: E402
 from app.database.models import Run  # noqa: E402
 from app.main import app  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import Insert, Update  # noqa: E402
+from sqlalchemy.dialects import postgresql  # noqa: E402
 from sqlalchemy.exc import (  # noqa: E402
+    IntegrityError,
     MultipleResultsFound,
     NoResultFound,
-    PendingRollbackError,
 )
+
+
+def _statement_values(stmt) -> dict:
+    """The column values a statement would write, as a plain dict.
+
+    Compiled params also carry the WHERE clause's binds, which SQLAlchemy names
+    with a suffix (`run_id_1`), so matching column names exactly keeps only the
+    values being written.
+    """
+    params = stmt.compile(dialect=postgresql.dialect()).params
+    columns = {column.name for column in Run.__table__.columns}
+    return {name: value for name, value in params.items() if name in columns}
+
+
+def _skips_conflicts(stmt) -> bool:
+    """Whether the INSERT asked Postgres to skip a unique-index conflict."""
+    sql = str(stmt.compile(dialect=postgresql.dialect()))
+    return "ON CONFLICT" in sql and "DO NOTHING" in sql
 
 
 class _Scalars:
@@ -57,60 +77,59 @@ class FakeSession:
 
     Statements are kept so a test can assert on the SQL a handler built, and
     `matches` is what any query against `runs` returns -- which is how a test
-    sets up "a run already holds this dedupe key" without a Postgres. Set
-    `on_commit` to a callable to interpose on the next commit, which is how a
-    test provokes the unique-index conflict the dedupe path is built around.
+    sets up "a run already holds this dedupe key" without a Postgres.
 
-    A failed commit poisons the session until it is rolled back, as a real one
-    does, so a handler that reads after a rejected insert without rolling back
-    fails here rather than only against Postgres.
+    An INSERT ... RETURNING answers with the row it would have written, kept as
+    `added` so a test can assert on what the handler built and on what it does
+    to the row afterwards. Set `conflict` to have the unique index turn that
+    insert away: it returns nothing if the statement asked for DO NOTHING, and
+    raises IntegrityError if it did not, which is what Postgres would do.
     """
 
     def __init__(self, matches: list | None = None):
         self.matches = matches or []
         self.added = None
+        self.conflict = False
         self.statements: list = []
         self.commits = 0
         self.rollbacks = 0
-        self.on_commit = None
-        self.needs_rollback = False
 
     @property
     def stmt(self):
         """The last statement executed, for tests that assert on one query."""
         return self.statements[-1] if self.statements else None
 
-    async def execute(self, stmt):
-        if self.needs_rollback:
-            raise PendingRollbackError(
-                "This Session's transaction has been rolled back due to a "
-                "previous exception during flush."
-            )
+    async def scalar(self, stmt):
+        return (await self.execute(stmt)).scalars().first()
 
+    async def execute(self, stmt):
         self.statements.append(stmt)
+
+        if isinstance(stmt, Update):
+            for column, value in _statement_values(stmt).items():
+                setattr(self.added, column, value)
+            return _Result([])
+
+        if isinstance(stmt, Insert):
+            if self.conflict:
+                if not _skips_conflicts(stmt):
+                    raise IntegrityError(
+                        "INSERT INTO runs", {}, Exception("uq_runs_dedupe_key")
+                    )
+                return _Result([])
+            self.added = Run(**_statement_values(stmt))
+            return _Result([self.added])
+
         # Only queries over `runs` return rows; anything else a handler runs
         # for effect gets an empty result.
         if Run.__table__ in stmt.get_final_froms():
             return _Result(self.matches)
         return _Result([])
 
-    def add(self, obj):
-        self.added = obj
-
     async def commit(self):
-        if self.on_commit is not None:
-            # One-shot, so a test can fail the claiming commit and still let the
-            # handler's later commits through.
-            hook, self.on_commit = self.on_commit, None
-            try:
-                hook()
-            except Exception:
-                self.needs_rollback = True
-                raise
         self.commits += 1
 
     async def rollback(self):
-        self.needs_rollback = False
         self.rollbacks += 1
 
     async def get(self, model, key):

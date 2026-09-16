@@ -14,7 +14,6 @@ from types import SimpleNamespace
 import pytest
 from app import gcs, jobs
 from app.schemas import RunStatus
-from sqlalchemy.exc import IntegrityError
 
 
 @pytest.fixture(autouse=True)
@@ -79,17 +78,14 @@ def _create_keyed(client, key="push:autoland:abc"):
 
 
 def _lose_the_key(db, winner):
-    """Make the next insert lose the name to `winner`, as the index would.
+    """Make the next insert lose the key to `winner`, as the index would.
 
-    `uq_runs_dedupe_key` rejects the insert and the run that won the name is
-    there to be read afterwards, which is the only way a request collapses.
+    ON CONFLICT DO NOTHING writes nothing and returns nothing, and the run that
+    won the key is there to be read afterwards, which is the only way a request
+    collapses.
     """
-
-    def lose():
-        db.matches = [winner]
-        raise IntegrityError("INSERT INTO runs", {}, Exception("uq_runs_dedupe_key"))
-
-    db.on_commit = lose
+    db.conflict = True
+    db.matches = [winner]
 
 
 def test_keyed_request_records_the_key_on_the_new_run(client, db):
@@ -107,8 +103,15 @@ def test_keyed_request_is_answered_with_the_run_holding_the_key(client, db):
     # 200, not 201: this request created nothing.
     assert resp.status_code == 200, resp.text
     assert resp.json()["run_id"] == str(winner.run_id)
-    # Ours was given back rather than left in a broken transaction.
-    assert db.rollbacks == 1
+    # Nothing of ours was written, and skipping the conflict rather than raising
+    # it leaves the transaction usable, so there is nothing to roll back either.
+    assert db.commits == 0
+    assert db.rollbacks == 0
+    # The run handed back is looked up by agent as well as by key: two agents
+    # may hold the same key, and the other one's run is a different answer.
+    lookup = str(db.stmt.compile(compile_kwargs={"literal_binds": True}))
+    assert "runs.agent = 'bug-fix'" in lookup
+    assert "runs.dedupe_key = 'push:autoland:abc'" in lookup
 
 
 @pytest.mark.parametrize(
