@@ -90,14 +90,14 @@ leaves a pending run with no execution, which the stale-run sweep finalizes.
 ## Deduplication
 
 External triggers fan out: 20 build tasks fail on one push, Phabricator retries a delivery,
-a Slack button gets clicked twice. A caller **names the work** with `?dedupe_key=`, scoped to
-the agent, and the rule is the whole design:
+a Slack button gets clicked twice. A caller **gives the work a key** with `?dedupe_key=`,
+scoped to the agent, and the rule is the whole design:
 
-> a key names one run, for good.
+> a key belongs to one run, for good.
 
-A new run answers `201`. A request whose name another run already holds answers `200` with
+A new run answers `201`. A request whose key another run already holds answers `200` with
 that run, which is not an error and needs no handling; `GET /runs?dedupe_key=…` finds it
-again later. The name is coalescing rather than a request fingerprint: requests sharing one
+again later. The key is coalescing rather than a request fingerprint: requests sharing one
 may carry different inputs, and the first to arrive is the one that runs.
 
 Recurrence lives in the key, since only the caller knows whether the work may happen again:
@@ -107,11 +107,11 @@ Recurrence lives in the key, since only the caller knows whether the work may ha
 | Investigate this push exactly once | `push:<project>:<revision>`              |
 | ...but let tomorrow try again      | `push:<project>:<revision>:<YYYY-MM-DD>` |
 | Handle this delivery exactly once  | `phab-txn:<phid>`, `ni:<flag-id>`        |
-| Always run                         | (omit the header)                        |
+| Always run                         | (omit the parameter)                     |
 
-A run keeps its name whatever becomes of it, a failed dispatch included, so a repeated
-trigger gets the failure rather than a silent retry. A transient error therefore spends the
-key: name the work differently, or run unkeyed.
+A run keeps its key whatever becomes of it, a failed dispatch included, so a repeated
+trigger gets the failure rather than a silent retry. A transient error therefore spends that
+key: key the work differently, or run unkeyed.
 
 ## Run states
 

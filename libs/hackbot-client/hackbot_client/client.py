@@ -30,9 +30,9 @@ class HackbotClient:
     ) -> RunRef:
         """Create an agent run and return the API's typed run reference.
 
-        `dedupe_key` names the work the run does, and the name belongs to one
-        run for good: repeated triggers for the key will be no-ops, and the same
-        run reference will be returned.
+        `dedupe_key` keys the work the run does, and a key belongs to one run
+        for good: repeated triggers carrying it are no-ops, answered with the
+        same run reference.
         """
         headers = {"X-API-Key": self._api_key}
         if on_behalf_of is not None:

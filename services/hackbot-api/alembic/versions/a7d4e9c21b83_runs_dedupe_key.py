@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     op.add_column("runs", sa.Column("dedupe_key", sa.String(), nullable=True))
-    # Unique, because a key names one run for good: the constraint is what
+    # Unique, because a key belongs to one run for good: the constraint is what
     # decides a duplicate trigger, not just a check on one. `dedupe_key` leads
     # so the index also serves the `?dedupe_key=` listing filter, which carries
     # no agent. Existing rows all have a NULL key, and NULLs do not collide, so

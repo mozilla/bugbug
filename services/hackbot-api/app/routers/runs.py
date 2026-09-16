@@ -145,7 +145,8 @@ async def create_run(
         await db.commit()
     except IntegrityError:
         if dedupe_key is None:
-            # No key means no name to lose, so this is a real constraint fault.
+            # Without a key there is no duplicate to read this as, so it is a
+            # real constraint fault.
             raise
 
         await db.rollback()
@@ -219,7 +220,7 @@ async def list_runs(
     if requested_by is not None:
         stmt = stmt.where(Run.requested_by == requested_by)
     if dedupe_key is not None:
-        # The trigger's own handle on its run: a caller that named the work can
+        # The trigger's own handle on its run: a caller that keyed the work can
         # find it again without having stored the run id.
         stmt = stmt.where(Run.dedupe_key == dedupe_key)
     # created_at is the sort key; run_id is a deterministic tiebreaker so offset
