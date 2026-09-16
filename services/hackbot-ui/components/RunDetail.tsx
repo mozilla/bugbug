@@ -291,8 +291,6 @@ export function RunDetail({
         hasFindings && <FindingsView findings={findings} />
       )}
 
-      {hasPatch && <PatchView runId={run.run_id} />}
-
       {actions && actions.length > 0 && (
         <div className="panel">
           <h2>Actions ({actions.length})</h2>
@@ -357,6 +355,8 @@ export function RunDetail({
           </ul>
         )}
       </div>
+
+      {hasPatch && <PatchView runId={run.run_id} />}
     </>
   );
 }
