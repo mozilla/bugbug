@@ -83,7 +83,21 @@ async def list_agents() -> list[AgentDescriptor]:
     ]
 
 
-@router.post("/agents/{agent_name}/runs", response_model=RunRef, status_code=201)
+@router.post(
+    "/agents/{agent_name}/runs",
+    response_model=RunRef,
+    status_code=201,
+    response_description="A new run, started by this request.",
+    responses={
+        status.HTTP_200_OK: {
+            "model": RunRef,
+            "description": (
+                "A run already exists for this agent and dedupe key, so it is "
+                "returned instead of creating a new one."
+            ),
+        },
+    },
+)
 async def create_run(
     agent_name: str,
     payload: dict,
