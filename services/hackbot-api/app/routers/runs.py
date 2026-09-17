@@ -10,7 +10,7 @@ from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import gcs, jobs, pubsub
+from app import gcs, jobs, notifications, pubsub
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
@@ -234,7 +234,7 @@ async def apply_run_actions(
 
 
 async def finalize_run(db: AsyncSession, run: Run) -> None:
-    """Bring `run` to its terminal state and publish RunCompleted, once.
+    """Bring `run` to its terminal state, publish RunCompleted and mail the requester, once.
 
     Invoked from the Eventarc-triggered agent-run-finished route instead
     of from a client request. Idempotent via `finalized_at`, since Eventarc's
@@ -287,6 +287,7 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
             run.agent,
         )
     await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
+    await notifications.notify_requester(run)
 
 
 def _has_unsubmitted_patch(
