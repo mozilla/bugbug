@@ -106,7 +106,7 @@ class Settings(BaseSettings):
 
     # Run-completion email to the requester (see app/notifications.py). The
     # override replaces the recipient so a dev deployment never mails real people.
-    ui_base_url: str = "http://localhost:3000"
+    hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str = ""
     notification_sender: str = ""
     notification_override_email: str = ""

@@ -32,7 +32,7 @@ _HTML_TEMPLATE = Template((_TEMPLATES / "run_completed.html").read_text())
 
 
 def run_url(run_id: str) -> str:
-    return f"{settings.ui_base_url.rstrip('/')}/runs/{run_id}"
+    return f"{settings.hackbot_ui_url.rstrip('/')}/runs/{run_id}"
 
 
 def build_message(run: Run) -> tuple[str, str]:

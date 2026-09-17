@@ -36,7 +36,7 @@ def sent(monkeypatch):
 
 
 def test_build_message_links_to_run_page(monkeypatch):
-    monkeypatch.setattr(settings, "ui_base_url", "https://ui.example/")
+    monkeypatch.setattr(settings, "hackbot_ui_url", "https://ui.example/")
     run = _FakeRun(status=RunStatus.timed_out.value)
     subject, html_body = build_message(run)
     url = f"https://ui.example/runs/{run.run_id}"
