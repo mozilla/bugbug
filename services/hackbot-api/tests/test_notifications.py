@@ -24,8 +24,8 @@ def sent(monkeypatch):
     """Capture outgoing mail instead of hitting SendGrid."""
     calls = []
 
-    def fake_send(recipient, subject, body_md):
-        calls.append((recipient, subject, body_md))
+    def fake_send(recipient, subject, html_body):
+        calls.append((recipient, subject, html_body))
         return 202
 
     monkeypatch.setattr(notifications, "_send_sync", fake_send)
@@ -38,10 +38,12 @@ def sent(monkeypatch):
 def test_build_message_links_to_run_page(monkeypatch):
     monkeypatch.setattr(settings, "ui_base_url", "https://ui.example/")
     run = _FakeRun(status=RunStatus.timed_out.value)
-    subject, body = build_message(run)
+    subject, html_body = build_message(run)
+    url = f"https://ui.example/runs/{run.run_id}"
     assert subject == f"[Hackbot] bug-fix run {str(run.run_id)[:8]} timed out"
-    assert f"bug-fix run {str(run.run_id)[:8]}" in body
-    assert f"https://ui.example/runs/{run.run_id}" in body
+    assert f"bug-fix run {str(run.run_id)[:8]}" in html_body
+    assert f'<a href="{url}">' in html_body
+    assert "<strong>timed out</strong>" in html_body
 
 
 async def test_sends_to_requester(sent):
@@ -58,9 +60,9 @@ def test_build_message_includes_bug_id():
         run_id=uuid.UUID("ab603010-c278-4d55-bc29-f89463f78906"),
         inputs={"bug_id": 123456},
     )
-    subject, body = build_message(run)
+    subject, html_body = build_message(run)
     assert subject == "[Hackbot] bug-fix run ab603010 for bug 123456 succeeded"
-    assert "bug-fix run ab603010 for bug 123456" in body
+    assert "bug-fix run ab603010 for bug 123456" in html_body
 
 
 async def test_skips_runs_without_requester(sent):

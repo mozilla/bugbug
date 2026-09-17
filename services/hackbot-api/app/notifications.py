@@ -13,18 +13,22 @@ is a personal ping, not a report.
 
 import asyncio
 import logging
+from pathlib import Path
+from string import Template
 
-import markdown2
 import sendgrid
-from sendgrid.helpers.mail import Content, From, HtmlContent, Mail, Subject, To
+from sendgrid.helpers.mail import From, HtmlContent, Mail, Subject, To
 
 from app.config import settings
 from app.database.models import Run
 
 log = logging.getLogger(__name__)
 
-# A a SendGrid call must not hold finalization open.
+# A stalled SendGrid call must not hold finalization open.
 _SEND_TIMEOUT_SECONDS = 10
+
+_TEMPLATES = Path(__file__).parent / "templates"
+_HTML_TEMPLATE = Template((_TEMPLATES / "run_completed.html").read_text())
 
 
 def run_url(run_id: str) -> str:
@@ -32,7 +36,7 @@ def run_url(run_id: str) -> str:
 
 
 def build_message(run: Run) -> tuple[str, str]:
-    """Compose the subject and Markdown body of the notice for ``run``."""
+    """Compose the subject and HTML body of the notice for ``run``."""
     outcome = run.status.replace("_", " ")
     label = f"{run.agent} run {str(run.run_id)[:8]}"
     bug_id = run.inputs.get("bug_id")
@@ -40,27 +44,21 @@ def build_message(run: Run) -> tuple[str, str]:
         label += f" for bug {bug_id}"
     subject = f"[Hackbot] {label} {outcome}"
 
-    body = "\n".join(
-        [
-            f"Your **{label}** has **{outcome}**.",
-            "",
-            f"Open the run: {run_url(str(run.run_id))}",
-        ]
-    )
-    return subject, body
+    values = {"label": label, "outcome": outcome, "url": run_url(str(run.run_id))}
+    html_body = _HTML_TEMPLATE.substitute(values)
+    return subject, html_body
 
 
 def _recipient(run: Run) -> str:
     return settings.notification_override_email.strip() or run.requested_by
 
 
-def _send_sync(recipient: str, subject: str, body_md: str) -> int:
+def _send_sync(recipient: str, subject: str, html_body: str) -> int:
     message = Mail(
         From(settings.notification_sender),
         To(recipient),
         Subject(subject),
-        Content("text/plain", body_md),
-        HtmlContent(markdown2.markdown(body_md, extras=["fenced-code-blocks"])),
+        html_content=HtmlContent(html_body),
     )
     client = sendgrid.SendGridAPIClient(api_key=settings.sendgrid_api_key)
     # The SendGrid wrapper has no timeout option; its HTTP client does.
@@ -78,9 +76,9 @@ async def notify_requester(run: Run) -> bool:
         return False
 
     recipient = _recipient(run)
-    subject, body = build_message(run)
+    subject, html_body = build_message(run)
     try:
-        status_code = await asyncio.to_thread(_send_sync, recipient, subject, body)
+        status_code = await asyncio.to_thread(_send_sync, recipient, subject, html_body)
     except Exception:
         log.exception("Failed to notify %s about run %s", recipient, run.run_id)
         return False
