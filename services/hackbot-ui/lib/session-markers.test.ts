@@ -39,6 +39,8 @@ function emptyProfile(startTime: number): Profile {
     shared: { stringArray: ["Activity"] },
     threads: [
       {
+        name: "",
+        processName: "",
         markers: {
           length: 0,
           name: [],

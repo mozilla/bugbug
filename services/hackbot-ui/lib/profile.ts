@@ -44,5 +44,9 @@ export async function buildProfile(run: RunDoc): Promise<object> {
     agents
   ) as Profile;
   addSessionMarkers(profile, sessionSpans(parsed));
+  // claude-profiler titles the track after the last session; the track is the
+  // whole run, so label it as such.
+  profile.threads[0].name = run.agent;
+  profile.threads[0].processName = run.run_id;
   return profile;
 }

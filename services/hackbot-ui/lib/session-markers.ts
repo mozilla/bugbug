@@ -9,6 +9,8 @@ export interface Profile {
   };
   shared: { stringArray: string[] };
   threads: {
+    name: string;
+    processName: string;
     markers: {
       length: number;
       name: number[];
