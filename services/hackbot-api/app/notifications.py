@@ -45,16 +45,13 @@ def build_message(run: Run) -> tuple[str, str]:
     return subject, body
 
 
-def _recipient(run: Run) -> str | None:
-    override = settings.notification_override_email.strip()
-    if override:
-        return override
-    return run.requested_by or None
+def _recipient(run: Run) -> str:
+    return settings.notification_override_email.strip() or run.requested_by
 
 
-def _send_sync(sender: str, recipient: str, subject: str, body_md: str) -> int:
+def _send_sync(recipient: str, subject: str, body_md: str) -> int:
     message = Mail(
-        From(sender),
+        From(settings.notification_sender),
         To(recipient),
         Subject(subject),
         Content("text/plain", body_md),
@@ -68,31 +65,15 @@ def _send_sync(sender: str, recipient: str, subject: str, body_md: str) -> int:
 async def notify_requester(run: Run) -> bool:
     """Mail the run's requester about its terminal state. Returns whether it sent.
 
-    No requester or no SendGrid config is a quiet no-op; a delivery failure is
-    logged and swallowed.
+    No requester is a quiet no-op; a delivery failure is logged and swallowed.
     """
     if not run.requested_by:
         return False
 
-    sender = settings.notification_sender.strip()
-    if not (settings.sendgrid_api_key and sender):
-        log.warning(
-            "sendgrid_api_key / notification_sender not configured; "
-            "not notifying %s about run %s",
-            run.requested_by,
-            run.run_id,
-        )
-        return False
-
     recipient = _recipient(run)
-    if not recipient:
-        return False
-
     subject, body = build_message(run)
     try:
-        status_code = await asyncio.to_thread(
-            _send_sync, sender, recipient, subject, body
-        )
+        status_code = await asyncio.to_thread(_send_sync, recipient, subject, body)
     except Exception:
         log.exception("Failed to notify %s about run %s", recipient, run.run_id)
         return False
