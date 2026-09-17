@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
+from functools import partial
 
 import jsone
 import jsonschema
@@ -11,26 +12,50 @@ import pytest
 import requests
 import responses
 import yaml
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT202012
+from referencing.retrieval import to_cached_resource
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
+
+SESSION = requests.Session()
+SESSION.mount(
+    "https://community-tc.services.mozilla.com/",
+    HTTPAdapter(
+        max_retries=Retry(total=3, backoff_factor=0.5, status_forcelist=(503,))
+    ),
+)
+
+
+@to_cached_resource(
+    from_contents=partial(
+        Resource.from_contents,
+        default_specification=DRAFT202012,
+    )
+)
+def retrieve_schema(uri):
+    response = SESSION.get(uri)
+    response.raise_for_status()
+    return response.text
+
+
+SCHEMA_REGISTRY = Registry(retrieve=retrieve_schema)
 
 
 @pytest.fixture(scope="session")
 def task_schema():
     responses.add_passthru("https://community-tc.services.mozilla.com/")
-    r = requests.get(
+    return retrieve_schema(
         "https://community-tc.services.mozilla.com/schemas/queue/v1/create-task-request.json"
-    )
-    r.raise_for_status()
-    return r.json()
+    ).contents
 
 
 @pytest.fixture(scope="session")
 def payload_schema():
     responses.add_passthru("https://community-tc.services.mozilla.com/")
-    r = requests.get(
+    return retrieve_schema(
         "https://community-tc.services.mozilla.com/schemas/docker-worker/v1/payload.json"
-    )
-    r.raise_for_status()
-    return r.json()
+    ).contents
 
 
 @pytest.mark.parametrize(
@@ -68,6 +93,10 @@ def test_jsone_validates(pipeline_file, task_schema, payload_schema):
         if "dependencies" in task:
             del task["dependencies"]
 
-        jsonschema.validate(instance=task, schema=task_schema)
+        jsonschema.validate(instance=task, schema=task_schema, registry=SCHEMA_REGISTRY)
 
-        jsonschema.validate(instance=task["payload"], schema=payload_schema)
+        jsonschema.validate(
+            instance=task["payload"],
+            schema=payload_schema,
+            registry=SCHEMA_REGISTRY,
+        )
