@@ -11,8 +11,6 @@ failed send is logged, never raised. Only the requester is addressed; this
 is a personal ping, not a report.
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 
