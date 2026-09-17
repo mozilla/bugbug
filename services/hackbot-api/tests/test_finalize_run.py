@@ -242,10 +242,14 @@ async def test_run_without_execution_name_is_failed_not_asserted(monkeypatch):
     run = _FakeRun(execution_name=None)
     db = _FakeDB()
 
-    async def fail(*_a, **_k):
+    def fail(*_a, **_k):
         raise AssertionError("should not check status without an execution name")
 
-    monkeypatch.setattr(jobs, "get_execution_status", fail)
+    # The no-execution case is answered by `get_execution_status` itself, so it
+    # is the call to Cloud Run underneath that must not happen.
+    monkeypatch.setattr(jobs, "_execution_status_sync", fail)
+    monkeypatch.setattr(gcs, "read_summary", _async(None))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
 
     await finalize_run(db, run)
 

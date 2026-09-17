@@ -8,14 +8,8 @@ dependencies = [
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
     "google-auth>=2.0.0",
-    "async-lru>=2.0.0",
     "agent-tools",
-    "lando-client",
     "phabricator-client",
-    "testrail-client",
-    "slack-sdk>=3.27.0",
-    "sendgrid>=6.12.5",
-    "markdown2>=2.4.0",
     "weave>=0.53.4"
 ]
 
@@ -28,9 +22,7 @@ phabricator = ["MozPhab==2.15.3"]
 
 [tool.uv.sources]
 agent-tools = { workspace = true }
-lando-client = { workspace = true }
 phabricator-client = { workspace = true }
-testrail-client = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

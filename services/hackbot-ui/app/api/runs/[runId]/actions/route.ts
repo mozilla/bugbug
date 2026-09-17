@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { applyRunActions, HackbotError, listRunActions } from "@/lib/hackbot";
+import { apiErrorResponse } from "@/lib/api-errors";
+import { applyRunActions, listRunActions } from "@/lib/hackbot";
 import { getAuthedEmail } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,7 @@ export async function GET(
   try {
     return NextResponse.json(await listRunActions(runId));
   } catch (err) {
-    const status = err instanceof HackbotError ? err.status : 500;
-    return NextResponse.json({ error: (err as Error).message }, { status });
+    return apiErrorResponse(err);
   }
 }
 
@@ -36,7 +36,6 @@ export async function POST(
   try {
     return NextResponse.json(await applyRunActions(runId));
   } catch (err) {
-    const status = err instanceof HackbotError ? err.status : 500;
-    return NextResponse.json({ error: (err as Error).message }, { status });
+    return apiErrorResponse(err);
   }
 }

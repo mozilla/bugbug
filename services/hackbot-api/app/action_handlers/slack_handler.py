@@ -13,10 +13,11 @@ from typing import Any
 
 from slack_sdk import WebClient
 
-from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
-from hackbot_runtime.actions.slack import HACKBOT_UI_URL
+from app.action_handlers.base import ActionResult, ApplyContext
 
 log = logging.getLogger(__name__)
+
+_HACKBOT_UI_URL = "https://hackbot.moz.tools"
 
 _TIMEOUT_SECONDS = 30
 
@@ -40,7 +41,7 @@ class PostMessageHandler:
                 "notification_type": "info",
                 "source": {
                     "ref_id": ctx.run_id,
-                    "ref_url": f"{HACKBOT_UI_URL}/runs/{ctx.run_id}",
+                    "ref_url": f"{_HACKBOT_UI_URL}/runs/{ctx.run_id}",
                 },
                 "context": {
                     "agent": ctx.agent,

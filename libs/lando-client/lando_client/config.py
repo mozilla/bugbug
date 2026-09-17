@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, model_validator
@@ -27,7 +28,7 @@ class LandoSettings(BaseModel):
     mode), and the try repository's permissions are checked against that user.
     """
 
-    access_token: str = Field(min_length=1)
+    access_token: Annotated[str, Field(min_length=1)]
     url: str = "https://lando.moz.tools"
     instance_id: str | None = None
     timeout_seconds: int = 60

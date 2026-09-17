@@ -10,3 +10,6 @@
 *.tsbuildinfo
 next-env.d.ts.bak
 .DS_Store
+
+# Sentry Config File
+.env.sentry-build-plugin

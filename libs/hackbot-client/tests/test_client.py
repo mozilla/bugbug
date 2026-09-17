@@ -33,8 +33,8 @@ def _capture_post(monkeypatch, response: httpx.Response) -> dict:
         async def __aexit__(self, *exc):
             return False
 
-        async def post(self, url, json=None, headers=None):
-            captured.update(url=url, json=json, headers=headers)
+        async def post(self, url, json=None, headers=None, params=None):
+            captured.update(url=url, json=json, headers=headers, params=params)
             response.request = httpx.Request("POST", url)
             return response
 
@@ -66,6 +66,8 @@ async def test_trigger_run_posts_inputs_and_returns_typed_reference(monkeypatch)
             "X-API-Key": "secret",
             "X-On-Behalf-Of": "user@example.com",
         },
+        # No key means no client-assigned id on the create call.
+        "params": {},
     }
 
 

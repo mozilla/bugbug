@@ -7,20 +7,21 @@ component that knows the agent catalog, and the only writer of run state.
 
 ### Public — `X-API-Key`
 
-| Method | Path                              | Does                                                   |
-| ------ | --------------------------------- | ------------------------------------------------------ |
-| GET    | `/agents`                         | The catalog, each with its input JSON schema           |
-| POST   | `/agents/{agent}/runs`            | Validate inputs, create a run, start an execution      |
-| GET    | `/runs`                           | List runs; filter by `agent`, `status`, `requested_by` |
-| GET    | `/runs/{run_id}`                  | One run: status, inputs, summary, artifacts            |
-| GET    | `/runs/{run_id}/artifacts/{path}` | A short-lived signed GCS download URL                  |
-| GET    | `/runs/{run_id}/actions`          | Recorded actions and their apply state                 |
-| POST   | `/runs/{run_id}/actions/apply`    | Apply all pending actions (idempotent)                 |
-| GET    | `/health`                         | Health check                                           |
+| Method | Path                              | Does                                                                 |
+| ------ | --------------------------------- | -------------------------------------------------------------------- |
+| GET    | `/agents`                         | The catalog, each with its input JSON schema                         |
+| POST   | `/agents/{agent}/runs`            | Validate inputs, create a run, start an execution                    |
+| GET    | `/runs`                           | List runs; filter by `agent`, `status`, `requested_by`, `dedupe_key` |
+| GET    | `/runs/{run_id}`                  | One run: status, inputs, summary, artifacts                          |
+| GET    | `/runs/{run_id}/artifacts/{path}` | A short-lived signed GCS download URL                                |
+| GET    | `/runs/{run_id}/actions`          | Recorded actions and their apply state                               |
+| POST   | `/runs/{run_id}/actions/apply`    | Apply all pending actions (idempotent)                               |
+| GET    | `/health`                         | Health check                                                         |
 
 `POST /agents/{agent}/runs` accepts an `X-On-Behalf-Of` header carrying the requesting
 user's email, stored as `requested_by` — the caller is a trusted service (the UI), so this
-is attribution, not authentication.
+is attribution, not authentication. It also takes a `dedupe_key` query parameter, which
+decides whether the request starts a run at all (see [Deduplication](#deduplication)).
 
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.
@@ -68,15 +69,49 @@ To turn it on: **Interactivity & Shortcuts → Request URL** =
 
 ```
 validate payload against the agent's input schema  ── 422 on mismatch
+insert Run(status=pending) and commit              ── the key is now claimed
+   ...unless the unique index rejects it           ── 200 + the run that won
 mint a V4 signed POST policy scoped to runs/<run_id>/
-insert Run(status=pending)
 trigger a Cloud Run Job execution with env overrides on the `agent` container
 store execution_name
 ```
 
 Env overrides are the run id, the results bucket/prefix/policy, and the inputs mapped from
-the schema. If the trigger fails the run is marked `failed` with the reason and the caller
-gets a 502 — a run row always exists, so a failed dispatch is visible rather than lost.
+the schema. If the policy or the trigger fails the run is marked `failed` with the reason and
+the caller gets a 502 — a run row always exists, so a failed start is visible rather than
+lost.
+
+The insert comes **first**, so a duplicate is turned away before anything is prepared for
+it, and it **commits** before the dispatch, so no transaction is held open across a call to
+Cloud Run (the pool is 5 plus 5 overflow) and the row survives a crash mid-dispatch. Neither
+is what makes deduplication correct, the unique index is. The cost is that a crash in between
+leaves a pending run with no execution, which the stale-run sweep finalizes.
+
+## Deduplication
+
+External triggers fan out: 20 build tasks fail on one push, Phabricator retries a delivery,
+a Slack button gets clicked twice. A caller **gives the work a key** with `?dedupe_key=`,
+scoped to the agent, and the rule is the whole design:
+
+> a key belongs to one run, for good.
+
+A new run answers `201`. A request whose key another run already holds answers `200` with
+that run, which is not an error and needs no handling; `GET /runs?dedupe_key=…` finds it
+again later. The key is coalescing rather than a request fingerprint: requests sharing one
+may carry different inputs, and the first to arrive is the one that runs.
+
+Recurrence lives in the key, since only the caller knows whether the work may happen again:
+
+| Intent                             | Key                                      |
+| ---------------------------------- | ---------------------------------------- |
+| Investigate this push exactly once | `push:<project>:<revision>`              |
+| ...but let tomorrow try again      | `push:<project>:<revision>:<YYYY-MM-DD>` |
+| Handle this delivery exactly once  | `phab-txn:<phid>`, `ni:<flag-id>`        |
+| Always run                         | (omit the parameter)                     |
+
+A run keeps its key whatever becomes of it, a failed dispatch included, so a repeated
+trigger gets the failure rather than a silent retry. A transient error therefore spends that
+key: key the work differently, or run unkeyed.
 
 ## Run states
 
@@ -144,6 +179,14 @@ Two tables, defined in [app/database/models.py](../../services/hackbot-api/app/d
 **`runs`** is the system of record for a run — its inputs, execution name, summary,
 artifacts and terminal state. Listing orders by `created_at desc, run_id desc` rather than
 timestamp alone, so offset paging stays stable when two runs share a timestamp.
+`dedupe_key` carries one index, `uq_runs_dedupe_key` over `(dedupe_key, agent)`, **unique**:
+
+- **Unique**, because a key names one run for good, so the index is the decision about a
+  duplicate trigger rather than a check on one. Runs without a key are unconstrained, since
+  Postgres treats each NULL as distinct.
+- **`dedupe_key` first**, so the same index answers `GET /runs?dedupe_key=…`, which carries
+  no agent. The reverse order would constrain exactly the same thing but only serve lookups
+  that name the agent.
 
 **`run_actions`** holds one row per entry in a run's `summary.json` actions, unique on
 `(run_id, idx)`, carrying that action's apply state. That uniqueness is what makes replays

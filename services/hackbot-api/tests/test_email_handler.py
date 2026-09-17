@@ -8,7 +8,7 @@ import base64
 import json
 
 import pytest
-from hackbot_runtime.actions.handlers import email_handler
+from app.action_handlers import email_handler
 
 
 def _ctx(artifacts=None):
@@ -17,7 +17,7 @@ def _ctx(artifacts=None):
             raise FileNotFoundError(key)
         return artifacts[key]
 
-    from hackbot_runtime.actions.handlers import ApplyContext
+    from app.action_handlers import ApplyContext
 
     return ApplyContext(
         run_id="run-1", agent="build-repair", download_artifact=download
@@ -121,7 +121,7 @@ async def test_the_patch_is_read_once_for_both_uses():
         reads.append(key)
         return b"+fix\n"
 
-    from hackbot_runtime.actions.handlers import ApplyContext
+    from app.action_handlers import ApplyContext
 
     ctx = ApplyContext(run_id="r", agent="a", download_artifact=download)
     await email_handler.SendEmailHandler().apply(
