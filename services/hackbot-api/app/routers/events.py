@@ -153,4 +153,5 @@ async def notify_requester(
         log.warning("No run found for run_id %s", run_id)
         return
 
-    await notifications.notify_requester(run)
+    if run.requested_by:
+        await notifications.notify_requester(run)

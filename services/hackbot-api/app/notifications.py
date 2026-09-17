@@ -68,13 +68,7 @@ def _send_sync(recipient: str, subject: str, html_body: str) -> int:
 
 
 async def notify_requester(run: Run) -> bool:
-    """Mail the run's requester about its terminal state. Returns whether it sent.
-
-    No requester is a quiet no-op; a delivery failure is logged and swallowed.
-    """
-    if not run.requested_by:
-        return False
-
+    """Mail the run's requester about its terminal state. Returns whether it sent."""
     recipient = _recipient(run)
     subject, html_body = build_message(run)
     try:

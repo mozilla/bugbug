@@ -83,7 +83,9 @@ def test_execution_name_missing():
 
 @pytest.mark.parametrize("status", ["succeeded", "failed", "timed_out"])
 def test_notify_requester_consumes_completed_event(client, db, monkeypatch, status):
-    run = SimpleNamespace(run_id=uuid.uuid4(), status=status)
+    run = SimpleNamespace(
+        run_id=uuid.uuid4(), status=status, requested_by="someone@mozilla.com"
+    )
     notified = []
 
     async def get(model, key):
@@ -115,5 +117,24 @@ def test_notify_requester_skips_missing_run(client, monkeypatch):
     response = client.post(
         "/internal/events/notify-requester",
         json=_push_envelope({"run_id": str(uuid.uuid4())}),
+    )
+    assert response.status_code == 204
+
+
+def test_notify_requester_skips_run_without_requester(client, db, monkeypatch):
+    run = SimpleNamespace(run_id=uuid.uuid4(), requested_by=None)
+
+    async def get(model, key):
+        return run
+
+    async def notify(value):
+        pytest.fail("No email should be sent without a requester")
+
+    monkeypatch.setattr(db, "get", get)
+    monkeypatch.setattr(notifications, "notify_requester", notify)
+    client.app.dependency_overrides[require_push_auth] = lambda: None
+    response = client.post(
+        "/internal/events/notify-requester",
+        json=_push_envelope({"run_id": str(run.run_id)}),
     )
     assert response.status_code == 204

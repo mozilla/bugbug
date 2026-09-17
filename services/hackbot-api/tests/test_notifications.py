@@ -65,11 +65,6 @@ def test_build_message_includes_bug_id():
     assert "bug-fix run ab603010 for bug 123456" in html_body
 
 
-async def test_skips_runs_without_requester(sent):
-    assert await notify_requester(_FakeRun(requested_by=None)) is False
-    assert sent == []
-
-
 async def test_override_email_replaces_recipient(sent, monkeypatch):
     monkeypatch.setattr(settings, "notification_override_email", "dev@example.com")
     assert await notify_requester(_FakeRun()) is True
