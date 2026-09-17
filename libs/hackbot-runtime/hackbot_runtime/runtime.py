@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import logging
+import os
 import sys
 import traceback
 from collections.abc import Awaitable, Callable
@@ -32,6 +33,11 @@ ConfigArg = Path | HackbotConfig | None
 _CONFIG_NAME = "hackbot.toml"
 _SUMMARY_NAME = "summary.json"
 _AGENT_LOG_KEY = "logs/agent.log"
+_TRANSCRIPTS_PREFIX = "transcripts/"
+_TRANSCRIPT_CONTENT_TYPES = {
+    ".jsonl": "application/x-ndjson",
+    ".json": "application/json",
+}
 
 
 def _configure_auth() -> None:
@@ -135,6 +141,35 @@ def _publish_log(ctx: HackbotContext) -> None:
         ctx.publish_file(_AGENT_LOG_KEY, ctx.log_path, "text/plain; charset=utf-8")
 
 
+def _claude_projects_dir() -> Path:
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    return (Path(config_dir) if config_dir else Path.home() / ".claude") / "projects"
+
+
+def _publish_transcripts(ctx: HackbotContext) -> None:
+    """Publish the Claude Code session transcripts written during the run.
+
+    The CLI the SDK spawns keeps every session under ``~/.claude/projects``, with
+    subagent transcripts beside it in ``<session>/subagents/``. The container is
+    fresh per execution, so all of them belong to this run.
+    """
+    projects = _claude_projects_dir()
+    if not projects.is_dir():
+        return
+    for session_file in sorted(projects.glob("*/*.jsonl")):
+        session = session_file.stem
+        _publish_transcript(ctx, f"{_TRANSCRIPTS_PREFIX}{session}.jsonl", session_file)
+        subagents = session_file.with_suffix("") / "subagents"
+        for path in sorted(subagents.glob("*")) if subagents.is_dir() else ():
+            if path.is_file():
+                key = f"{_TRANSCRIPTS_PREFIX}{session}/subagents/{path.name}"
+                _publish_transcript(ctx, key, path)
+
+
+def _publish_transcript(ctx: HackbotContext, key: str, path: Path) -> None:
+    ctx.publish_file(key, path, _TRANSCRIPT_CONTENT_TYPES.get(path.suffix))
+
+
 def _finish(ctx: HackbotContext, outcome: object) -> int:
     """Write summary.json from the agent's outcome and return the exit code.
 
@@ -162,6 +197,11 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
         _publish_log(ctx)
     except Exception:
         log.exception("Failed to publish agent log")
+
+    try:
+        _publish_transcripts(ctx)
+    except Exception:
+        log.exception("Failed to publish Claude Code transcripts")
 
     try:
         ctx.publish_changes()
