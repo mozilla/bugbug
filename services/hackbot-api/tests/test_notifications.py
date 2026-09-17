@@ -16,6 +16,7 @@ class _FakeRun:
     agent: str = "bug-fix"
     status: str = RunStatus.succeeded.value
     requested_by: str | None = "someone@mozilla.com"
+    inputs: dict = field(default_factory=dict)
 
 
 @pytest.fixture
@@ -38,7 +39,8 @@ def test_build_message_links_to_run_page(monkeypatch):
     monkeypatch.setattr(settings, "ui_base_url", "https://ui.example/")
     run = _FakeRun(status=RunStatus.timed_out.value)
     subject, body = build_message(run)
-    assert subject == "[Hackbot] bug-fix run timed out"
+    assert subject == f"[Hackbot] bug-fix run {str(run.run_id)[:8]} timed out"
+    assert f"bug-fix run {str(run.run_id)[:8]}" in body
     assert f"https://ui.example/runs/{run.run_id}" in body
 
 
@@ -48,7 +50,17 @@ async def test_sends_to_requester(sent):
     assert len(sent) == 1
     recipient, subject, _ = sent[0]
     assert recipient == "someone@mozilla.com"
-    assert subject == "[Hackbot] bug-fix run succeeded"
+    assert subject == f"[Hackbot] bug-fix run {str(run.run_id)[:8]} succeeded"
+
+
+def test_build_message_includes_bug_id():
+    run = _FakeRun(
+        run_id=uuid.UUID("ab603010-c278-4d55-bc29-f89463f78906"),
+        inputs={"bug_id": 123456},
+    )
+    subject, body = build_message(run)
+    assert subject == "[Hackbot] bug-fix run ab603010 for bug 123456 succeeded"
+    assert "bug-fix run ab603010 for bug 123456" in body
 
 
 async def test_skips_runs_without_requester(sent):
