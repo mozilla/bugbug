@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 import pytest
 from app import notifications
+from app.config import settings
 from app.notifications import build_message, notify_requester
 from app.schemas import RunStatus
 
@@ -27,14 +28,14 @@ def sent(monkeypatch):
         return 202
 
     monkeypatch.setattr(notifications, "_send_sync", fake_send)
-    monkeypatch.setenv("SENDGRID_API_KEY", "sg-test")
-    monkeypatch.setenv("NOTIFICATION_SENDER", "hackbot@mozilla.com")
-    monkeypatch.delenv("NOTIFICATION_OVERRIDE_EMAIL", raising=False)
+    monkeypatch.setattr(settings, "sendgrid_api_key", "sg-test")
+    monkeypatch.setattr(settings, "notification_sender", "hackbot@mozilla.com")
+    monkeypatch.setattr(settings, "notification_override_email", "")
     return calls
 
 
 def test_build_message_links_to_run_page(monkeypatch):
-    monkeypatch.setattr(notifications.settings, "ui_base_url", "https://ui.example/")
+    monkeypatch.setattr(settings, "ui_base_url", "https://ui.example/")
     run = _FakeRun(status=RunStatus.timed_out.value)
     subject, body = build_message(run)
     assert subject == "[Hackbot] bug-fix run timed out"
@@ -57,21 +58,21 @@ async def test_skips_runs_without_requester(sent):
 
 
 async def test_override_email_replaces_recipient(sent, monkeypatch):
-    monkeypatch.setenv("NOTIFICATION_OVERRIDE_EMAIL", "dev@example.com")
+    monkeypatch.setattr(settings, "notification_override_email", "dev@example.com")
     assert await notify_requester(_FakeRun()) is True
     assert sent[0][1] == "dev@example.com"
 
 
 async def test_unconfigured_sendgrid_is_a_quiet_noop(sent, monkeypatch, caplog):
-    monkeypatch.delenv("SENDGRID_API_KEY")
+    monkeypatch.setattr(settings, "sendgrid_api_key", "")
     assert await notify_requester(_FakeRun()) is False
     assert sent == []
     assert "not configured" in caplog.text
 
 
 async def test_send_failure_is_logged_not_raised(monkeypatch, caplog):
-    monkeypatch.setenv("SENDGRID_API_KEY", "sg-test")
-    monkeypatch.setenv("NOTIFICATION_SENDER", "hackbot@mozilla.com")
+    monkeypatch.setattr(settings, "sendgrid_api_key", "sg-test")
+    monkeypatch.setattr(settings, "notification_sender", "hackbot@mozilla.com")
 
     def boom(*_a):
         raise RuntimeError("sendgrid down")

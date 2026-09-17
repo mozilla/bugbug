@@ -1,33 +1,20 @@
 """Email the person who requested a run when it reaches a terminal state.
 
-A run launched from the UI carries its requester's email; once the run has
-succeeded, failed or timed out, that one address gets a short note with the
-outcome and a link to the run page, so nobody has to keep a tab open to watch
-progress. Runs with no requester (those triggered by webhooks) are skipped:
-their results already land where they were asked for.
+A run launched from the UI carries its requester's email. Once the run has
+succeeded, failed or timed out, that address gets a short note with the
+outcome and a link to the run page, so nobody has to keep a tab open. Runs
+with no requester (triggered by webhooks) are skipped.
 
-This module owns only the message and its delivery. It keeps no state and
-makes no guarantee of its own about how often it is called; the caller is
-responsible for invoking it once per run. Delivery is best-effort: a failure
-to send is logged, never raised.
-
-Configured entirely by environment:
-
-``SENDGRID_API_KEY`` / ``NOTIFICATION_SENDER``
-    Required; without both, nothing is sent.
-``NOTIFICATION_OVERRIDE_EMAIL``
-    Replaces the recipient. Keeps a development deployment from mailing real
-    people.
-
-The recipient alone is addressed -- no team copy -- since this is a personal
-"your run is done" ping rather than a report.
+This module only composes and delivers the message. It keeps no state, so
+calling it once per run is the caller's job. Delivery is best-effort: a
+failed send is logged, never raised. Only the requester is addressed; this
+is a personal ping, not a report.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 import markdown2
 import sendgrid
@@ -44,7 +31,7 @@ def run_url(run_id: str) -> str:
 
 
 def build_message(run: Run) -> tuple[str, str]:
-    """(subject, markdown body) for a completion notice about ``run``."""
+    """Compose the subject and Markdown body of the notice for ``run``."""
     outcome = run.status.replace("_", " ")
     subject = f"[Hackbot] {run.agent} run {outcome}"
 
@@ -59,7 +46,7 @@ def build_message(run: Run) -> tuple[str, str]:
 
 
 def _recipient(run: Run) -> str | None:
-    override = os.environ.get("NOTIFICATION_OVERRIDE_EMAIL", "").strip()
+    override = settings.notification_override_email.strip()
     if override:
         return override
     return run.requested_by or None
@@ -73,24 +60,24 @@ def _send_sync(sender: str, recipient: str, subject: str, body_md: str) -> int:
         Content("text/plain", body_md),
         HtmlContent(markdown2.markdown(body_md, extras=["fenced-code-blocks"])),
     )
-    api_key = os.environ["SENDGRID_API_KEY"]
-    response = sendgrid.SendGridAPIClient(api_key=api_key).send(message=message)
+    client = sendgrid.SendGridAPIClient(api_key=settings.sendgrid_api_key)
+    response = client.send(message=message)
     return response.status_code
 
 
 async def notify_requester(run: Run) -> bool:
     """Mail the run's requester about its terminal state. Returns whether it sent.
 
-    A run with no requester or missing SendGrid config is a quiet no-op; a
-    delivery failure is logged and swallowed (see module docstring).
+    No requester or no SendGrid config is a quiet no-op; a delivery failure is
+    logged and swallowed.
     """
     if not run.requested_by:
         return False
 
-    sender = os.environ.get("NOTIFICATION_SENDER", "").strip()
-    if not (os.environ.get("SENDGRID_API_KEY") and sender):
+    sender = settings.notification_sender.strip()
+    if not (settings.sendgrid_api_key and sender):
         log.warning(
-            "SENDGRID_API_KEY / NOTIFICATION_SENDER not configured; "
+            "sendgrid_api_key / notification_sender not configured; "
             "not notifying %s about run %s",
             run.requested_by,
             run.run_id,

@@ -104,11 +104,12 @@ class Settings(BaseSettings):
     push_auth_audience: str = ""
     push_auth_service_account: str = ""
 
-    # Where the UI serves a run's page; completion emails link to
-    # `<ui_base_url>/runs/<run_id>`. The mail itself is configured by the
-    # SENDGRID_API_KEY / NOTIFICATION_SENDER / NOTIFICATION_OVERRIDE_EMAIL env
-    # vars shared with hackbot-runtime's email handler (see app/notifications.py).
+    # Run-completion email to the requester (see app/notifications.py). The
+    # override replaces the recipient so a dev deployment never mails real people.
     ui_base_url: str = "http://localhost:3000"
+    sendgrid_api_key: str = ""
+    notification_sender: str = ""
+    notification_override_email: str = ""
 
     # Server
     port: int = 8080
