@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 import pytest
 from app import notifications
-from app.notifications import build_message, notify_requester, run_label
+from app.notifications import build_message, notify_requester
 from app.schemas import RunStatus
 
 
@@ -14,9 +14,7 @@ class _FakeRun:
     run_id: uuid.UUID = field(default_factory=uuid.uuid4)
     agent: str = "bug-fix"
     status: str = RunStatus.succeeded.value
-    inputs: dict = field(default_factory=lambda: {"bug_id": 1234567})
     requested_by: str | None = "someone@mozilla.com"
-    error: str | None = None
 
 
 @pytest.fixture
@@ -35,27 +33,12 @@ def sent(monkeypatch):
     return calls
 
 
-def test_run_label_mirrors_ui():
-    assert run_label({"bug_id": 42}) == "bug 42"
-    assert run_label({"git_commit": "abcdef0123456789"}) == "commit abcdef012345"
-    assert run_label({"feature_name": " Tab groups "}) == "Tab groups"
-    assert run_label({}) == ""
-
-
 def test_build_message_links_to_run_page(monkeypatch):
     monkeypatch.setattr(notifications.settings, "ui_base_url", "https://ui.example/")
     run = _FakeRun(status=RunStatus.timed_out.value)
     subject, body = build_message(run)
-    assert subject == "[Hackbot] bug-fix on bug 1234567 timed out"
+    assert subject == "[Hackbot] bug-fix run timed out"
     assert f"https://ui.example/runs/{run.run_id}" in body
-    assert "```" not in body
-
-
-def test_build_message_includes_error():
-    run = _FakeRun(status=RunStatus.failed.value, error="boom")
-    _, body = build_message(run)
-    assert "failed" in body
-    assert "boom" in body
 
 
 async def test_sends_to_requester(sent):
@@ -65,7 +48,7 @@ async def test_sends_to_requester(sent):
     sender, recipient, subject, _ = sent[0]
     assert sender == "hackbot@mozilla.com"
     assert recipient == "someone@mozilla.com"
-    assert subject.startswith("[Hackbot] bug-fix on bug 1234567")
+    assert subject == "[Hackbot] bug-fix run succeeded"
 
 
 async def test_skips_runs_without_requester(sent):

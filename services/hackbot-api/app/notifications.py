@@ -39,20 +39,6 @@ from app.database.models import Run
 log = logging.getLogger(__name__)
 
 
-def run_label(inputs: dict) -> str:
-    """Human-readable summary of a run's inputs, mirroring the UI's run list."""
-    bug_id = inputs.get("bug_id")
-    if isinstance(bug_id, int):
-        return f"bug {bug_id}"
-    commit = inputs.get("git_commit")
-    if isinstance(commit, str) and commit.strip():
-        return f"commit {commit.strip()[:12]}"
-    feature = inputs.get("feature_name")
-    if isinstance(feature, str) and feature.strip():
-        return feature.strip()
-    return ""
-
-
 def run_url(run_id: str) -> str:
     return f"{settings.ui_base_url.rstrip('/')}/runs/{run_id}"
 
@@ -60,19 +46,16 @@ def run_url(run_id: str) -> str:
 def build_message(run: Run) -> tuple[str, str]:
     """(subject, markdown body) for a completion notice about ``run``."""
     outcome = run.status.replace("_", " ")
-    label = run_label(run.inputs or {})
-    what = f"{run.agent} on {label}" if label else run.agent
-    subject = f"[Hackbot] {what} {outcome}"
+    subject = f"[Hackbot] {run.agent} run {outcome}"
 
-    lines = [
-        f"Your Hackbot run **{what}** has **{outcome}**.",
-        "",
-        f"Open the run: {run_url(str(run.run_id))}",
-    ]
-    if run.error:
-        lines += ["", "Error:", "", "```", run.error, "```"]
-    lines += ["", "-- Hackbot"]
-    return subject, "\n".join(lines)
+    body = "\n".join(
+        [
+            f"Your **{run.agent}** run has **{outcome}**.",
+            "",
+            f"Open the run: {run_url(str(run.run_id))}",
+        ]
+    )
+    return subject, body
 
 
 def _recipient(run: Run) -> str | None:
