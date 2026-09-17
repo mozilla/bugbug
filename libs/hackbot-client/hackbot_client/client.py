@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from hackbot_client.models import RunRef
+from hackbot_client.models import TriggeredRun
 
 
 class HackbotClient:
@@ -27,12 +27,12 @@ class HackbotClient:
         *,
         on_behalf_of: str | None = None,
         dedupe_key: str | None = None,
-    ) -> RunRef:
+    ) -> TriggeredRun:
         """Create an agent run and return the API's typed run reference.
 
         `dedupe_key` keys the work the run does, and a key belongs to one run
         for good: repeated triggers carrying it are no-ops, answered with the
-        same run reference.
+        same run reference and `is_new=False`.
         """
         headers = {"X-API-Key": self._api_key}
         if on_behalf_of is not None:
@@ -49,4 +49,8 @@ class HackbotClient:
             )
 
         response.raise_for_status()
-        return RunRef.model_validate(response.json())
+        # The API distinguishes the two outcomes only by status code: `201` for the
+        # run this request started, `200` for one a `dedupe_key` collapsed onto.
+        return TriggeredRun.model_validate(
+            {**response.json(), "is_new": response.status_code == 201}
+        )
