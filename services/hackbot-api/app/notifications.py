@@ -25,6 +25,9 @@ from app.database.models import Run
 
 log = logging.getLogger(__name__)
 
+# A a SendGrid call must not hold finalization open.
+_SEND_TIMEOUT_SECONDS = 10
+
 
 def run_url(run_id: str) -> str:
     return f"{settings.ui_base_url.rstrip('/')}/runs/{run_id}"
@@ -58,6 +61,8 @@ def _send_sync(recipient: str, subject: str, body_md: str) -> int:
         HtmlContent(markdown2.markdown(body_md, extras=["fenced-code-blocks"])),
     )
     client = sendgrid.SendGridAPIClient(api_key=settings.sendgrid_api_key)
+    # The SendGrid wrapper has no timeout option; its HTTP client does.
+    client.client.timeout = _SEND_TIMEOUT_SECONDS
     response = client.send(message=message)
     return response.status_code
 
