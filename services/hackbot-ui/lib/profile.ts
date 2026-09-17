@@ -3,6 +3,11 @@ import "server-only";
 import { createFirefoxProfile } from "claude-profiler";
 
 import { getArtifactDownloadUrl, HackbotError } from "./hackbot";
+import {
+  addSessionMarkers,
+  type Profile,
+  sessionSpans,
+} from "./session-markers";
 import { mergeSessions, parseJsonl, transcriptArtifacts } from "./transcripts";
 import type { RunDoc } from "./types";
 
@@ -33,5 +38,11 @@ export async function buildProfile(run: RunDoc): Promise<object> {
       }))
     ),
   ]);
-  return createFirefoxProfile(mergeSessions(texts.map(parseJsonl)), agents);
+  const parsed = texts.map(parseJsonl);
+  const profile = createFirefoxProfile(
+    mergeSessions(parsed),
+    agents
+  ) as Profile;
+  addSessionMarkers(profile, sessionSpans(parsed));
+  return profile;
 }
