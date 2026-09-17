@@ -35,15 +35,8 @@ from sendgrid.helpers.mail import Content, From, HtmlContent, Mail, Subject, To
 
 from app.config import settings
 from app.database.models import Run
-from app.schemas import RunStatus
 
 log = logging.getLogger(__name__)
-
-_STATUS_WORDING = {
-    RunStatus.succeeded.value: "succeeded",
-    RunStatus.failed.value: "failed",
-    RunStatus.timed_out.value: "timed out",
-}
 
 
 def run_label(inputs: dict) -> str:
@@ -66,7 +59,7 @@ def run_url(run_id: str) -> str:
 
 def build_message(run: Run) -> tuple[str, str]:
     """(subject, markdown body) for a completion notice about ``run``."""
-    outcome = _STATUS_WORDING.get(run.status, run.status)
+    outcome = run.status.replace("_", " ")
     label = run_label(run.inputs or {})
     what = f"{run.agent} on {label}" if label else run.agent
     subject = f"[Hackbot] {what} {outcome}"
