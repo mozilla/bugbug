@@ -135,6 +135,40 @@ def test_finish_skips_log_when_none_written(tmp_path):
     assert not (tmp_path / "artifacts" / "local-test" / "logs" / "agent.log").exists()
 
 
+def test_finish_publishes_claude_transcripts(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    project = tmp_path / "claude" / "projects" / "-tmp-repo"
+    subagents = project / "sess-1" / "subagents"
+    subagents.mkdir(parents=True)
+    (project / "sess-1.jsonl").write_text('{"type":"user"}\n')
+    (project / "sess-2.jsonl").write_text('{"type":"assistant"}\n')
+    (subagents / "agent-abc.jsonl").write_text('{"type":"user"}\n')
+    (subagents / "agent-abc.meta.json").write_text('{"agentType":"Explore"}')
+    ctx = _ctx(tmp_path)
+
+    _finish(ctx, HackbotAgentResult(num_turns=1))
+
+    transcripts = tmp_path / "artifacts" / "local-test" / "transcripts"
+    assert sorted(
+        str(p.relative_to(transcripts)) for p in transcripts.rglob("*") if p.is_file()
+    ) == [
+        "sess-1.jsonl",
+        "sess-1/subagents/agent-abc.jsonl",
+        "sess-1/subagents/agent-abc.meta.json",
+        "sess-2.jsonl",
+    ]
+    assert (transcripts / "sess-2.jsonl").read_text() == '{"type":"assistant"}\n'
+
+
+def test_finish_skips_transcripts_without_projects_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    ctx = _ctx(tmp_path)
+
+    _finish(ctx, HackbotAgentResult(num_turns=1))
+
+    assert not (tmp_path / "artifacts" / "local-test" / "transcripts").exists()
+
+
 def test_runs_are_namespaced_by_run_id(tmp_path):
     ctx_a = _ctx(tmp_path, run_id="run-a")
     ctx_b = _ctx(tmp_path, run_id="run-b")
