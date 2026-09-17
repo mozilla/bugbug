@@ -49,6 +49,8 @@ class AgentDescriptor(BaseModel):
 
 
 class RunRef(BaseModel):
+    """The API's answer to "start this run": which run is doing the work."""
+
     model_config = ConfigDict(from_attributes=True)
 
     run_id: UUID
@@ -64,6 +66,7 @@ class RunDoc(BaseModel):
     status: RunStatus
     inputs: dict[str, Any]
     requested_by: str | None = None
+    dedupe_key: str | None = None
     created_at: datetime
     updated_at: datetime
     execution_name: str | None = None
