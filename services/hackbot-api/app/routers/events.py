@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import notifications
 from app.actions_applier import on_run_completed
 from app.auth import require_push_auth
 from app.database.connection import get_db
@@ -24,9 +25,8 @@ router = APIRouter(
 def _decode_pubsub_push_body(body: dict) -> dict:
     """Decode a standard Pub/Sub push envelope's `message.data` as JSON.
 
-    Both the completion-log push subscription feeding agent-run-finished and the
-    `agent-run-events` action-applier subscription deliver via this same
-    envelope shape.
+    The completion-log, action-applier and requester-notification subscriptions
+    deliver via this same envelope shape.
     """
     message = body.get("message") or {}
     data = message.get("data")
@@ -135,3 +135,22 @@ async def apply_run_actions(
         return
 
     await on_run_completed(db, run)
+
+
+@router.post("/notify-requester", status_code=204)
+async def notify_requester(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> None:
+    """Consumer of `run.completed`: email the run's requester.
+
+    Its own subscription includes all terminal outcomes.
+    """
+    event = _decode_pubsub_push_body(await request.json())
+    run_id = event["run_id"]
+
+    run = await db.get(Run, uuid.UUID(run_id))
+    if run is None:
+        log.warning("No run found for run_id %s", run_id)
+        return
+
+    await notifications.notify_requester(run)

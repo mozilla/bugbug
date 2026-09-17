@@ -6,7 +6,13 @@ a Cloud Run Jobs `system_event` completion LogEntry (routed via a logging sink).
 
 import base64
 import json
+import uuid
+from types import SimpleNamespace
 
+import pytest
+from app import notifications
+from app.auth import require_push_auth
+from app.database.models import Run
 from app.routers.events import (
     _decode_pubsub_push_body,
     _execution_name_from_completion_log,
@@ -73,3 +79,41 @@ def test_execution_name_falls_back_to_labels():
 def test_execution_name_missing():
     assert _execution_name_from_completion_log({"protoPayload": {}}) is None
     assert _execution_name_from_completion_log({}) is None
+
+
+@pytest.mark.parametrize("status", ["succeeded", "failed", "timed_out"])
+def test_notify_requester_consumes_completed_event(client, db, monkeypatch, status):
+    run = SimpleNamespace(run_id=uuid.uuid4(), status=status)
+    notified = []
+
+    async def get(model, key):
+        assert model is Run
+        assert key == run.run_id
+        return run
+
+    async def notify(value):
+        notified.append(value)
+        return True
+
+    monkeypatch.setattr(db, "get", get)
+    monkeypatch.setattr(notifications, "notify_requester", notify)
+    client.app.dependency_overrides[require_push_auth] = lambda: None
+    response = client.post(
+        "/internal/events/notify-requester",
+        json=_push_envelope({"run_id": str(run.run_id), "status": status}),
+    )
+    assert response.status_code == 204
+    assert notified == [run]
+
+
+def test_notify_requester_skips_missing_run(client, monkeypatch):
+    async def notify(run):
+        pytest.fail("No email should be sent without a run")
+
+    monkeypatch.setattr(notifications, "notify_requester", notify)
+    client.app.dependency_overrides[require_push_auth] = lambda: None
+    response = client.post(
+        "/internal/events/notify-requester",
+        json=_push_envelope({"run_id": str(uuid.uuid4())}),
+    )
+    assert response.status_code == 204
