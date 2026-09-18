@@ -209,6 +209,13 @@ def search(commit_hash, symbol_name):
                         definitions.append(value)
 
     paths = list(set(definition["path"] for definition in definitions))
+    if len(paths) > 10:
+        logger.warning(
+            "Too many paths found for symbol %s: %d paths. Skipping this symbol.",
+            symbol_name,
+            len(paths),
+        )
+        return []
 
     return sum((get_functions(commit_hash, path, symbol_name) for path in paths), [])
 
