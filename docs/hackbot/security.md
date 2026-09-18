@@ -25,13 +25,17 @@ exposes them as capabilities over loopback (`BROKER_URL`, e.g. `http://127.0.0.1
 - `/{bugzilla,phabricator}/mcp` — read-only MCP tool servers, live during the run.
 - `GET /phabricator/revision/{id}/patch` — a revision's base commit and raw diff, so a
   follow-up run can reproduce the revision's tree without a Conduit key.
+- `/phabricator/api` — a Conduit proxy allow-listing a few read methods and substituting
+  the real key, for agent code that has to call Conduit directly (`uplift` fetches each
+  source's raw diff this way before rendering its prompt).
 
 It exposes only what a run legitimately needs, and only reads — every write goes through the
 recorded-actions path instead. **Per-execution env overrides target the `agent` container by
 name**, which is what stops a run's inputs from reaching or altering the broker's
 environment.
 
-Today `bug-fix`, `build-repair`, `frontend-triage` and `autowebcompat-repro` run a broker.
+Today `bug-fix`, `build-repair`, `frontend-triage`, `autowebcompat-repro`,
+`autowebcompat-diagnosis` and `uplift-merge-conflict-resolver` run a broker.
 `test-repair` reaches an MCP server via an injected `BUGZILLA_MCP_URL` instead, and
 `test-plan-generator` needs no credentialed reads at all. The invariant holds in every case:
 **the key is never in the agent container.**
