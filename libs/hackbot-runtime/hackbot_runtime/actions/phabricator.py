@@ -70,7 +70,6 @@ async def submit_patch(
     summary: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
                 "Revision summary/description. Keep test and verification details "
                 "in test_plan instead."
@@ -80,7 +79,6 @@ async def submit_patch(
     ref: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
                 "Optional label for this action so a later action (e.g. a "
                 "bugzilla.add_comment in the same run) can reference its "
