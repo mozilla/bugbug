@@ -1,0 +1,60 @@
+services:
+  # The bugbug MCP server, run as a sidecar so the agent reaches the originating
+  # bug and Phabricator revision over HTTP. It holds the Bugzilla/Phabricator
+  # credentials; the agent container binds none. In production the agent points
+  # at the deployed bugbug MCP instead via BUGBUG_MCP_URL.
+  uplift-bugbug-mcp:
+    build:
+      context: ../..
+      dockerfile: services/mcp/Dockerfile
+      target: base
+    environment:
+      PORT: "8080"
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY:-}
+      BUGZILLA_URL: ${BUGZILLA_URL:-https://bugzilla.mozilla.org}
+      PHABRICATOR_API_KEY: ${PHABRICATOR_API_KEY:-}
+      PHABRICATOR_URL: ${PHABRICATOR_URL:-https://phabricator.services.mozilla.com}
+    expose:
+      - "8080"
+
+  # Holds the Phabricator key so the agent can fetch each source's raw diff
+  # over the read-only Conduit proxy without binding a credential itself.
+  uplift-broker:
+    build:
+      context: ../..
+      dockerfile: agents/uplift/Dockerfile
+      target: broker
+    environment:
+      PHABRICATOR_URL: ${PHABRICATOR_URL:-https://phabricator.services.mozilla.com}
+      PHABRICATOR_API_KEY: ${PHABRICATOR_API_KEY:-}
+    expose:
+      - "8765"
+
+  uplift-merge-conflict-resolver:
+    build:
+      context: ../..
+      dockerfile: agents/uplift/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - TARGET_BRANCH=${TARGET_BRANCH:-}
+      - SOURCES=${SOURCES:-}
+      - BUG_ID=${BUG_ID:-}
+      - BUGBUG_MCP_URL=http://uplift-bugbug-mcp:8080/mcp
+      - BROKER_URL=http://uplift-broker:8765
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/artifacts are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      uplift-bugbug-mcp:
+        condition: service_started
+      uplift-broker:
+        condition: service_started
+
+volumes:
+  workspace:

@@ -1,0 +1,41 @@
+[project]
+name = "hackbot-agent-uplift"
+version = "0.1.0"
+description = "Cloud Run Job image that runs the uplift conflict-resolution agent for hackbot-api"
+requires-python = ">=3.12"
+dependencies = [
+    "hackbot-runtime[claude-sdk]",
+    "agent-tools[searchfox,vcs]",
+    "claude-agent-sdk>=0.1.30",
+    "mcp>=1.0.0",
+    "phabricator-client",
+    "phabricator-proxy",
+    "pydantic-settings",
+    "starlette",
+    "uvicorn",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.uv.sources]
+hackbot-runtime = { workspace = true }
+agent-tools = { workspace = true }
+phabricator-client = { workspace = true }
+phabricator-proxy = { workspace = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# `hackbot_agents` is a PEP 420 namespace package, shared with the other
+# agents. Hatchling ships everything under it, prompts included.
+[tool.hatch.build.targets.wheel]
+packages = ["hackbot_agents"]
