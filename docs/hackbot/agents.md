@@ -58,6 +58,7 @@ or code.
 | `frontend-triage`     | Read-only root-cause analysis and fix plan for a desktop frontend bug.                                                                                                      |  yes   |      no       |          no          |
 | `autowebcompat-repro` | Reproduce a web-compatibility report in headless Firefox via DevTools MCP.                                                                                                  |   no   |      no       |          no          |
 | `test-plan-generator` | Generate Firefox QA test cases, run them through DevTools MCP, report results.                                                                                              |   no   |      no       |          no          |
+| `uplift-merge-conflict-resolver` | Resolve the merge conflicts from cherry-picking patches onto a stable uplift branch, and return the resolved patch with a confidence level. |  yes   |      no       |          no          |
 
 Two shapes recur. **Source agents** (`bug-fix`, `test-repair`, `build-repair`) check out
 Firefox, often build it, edit the tree, and let the runtime capture the diff. **Browser

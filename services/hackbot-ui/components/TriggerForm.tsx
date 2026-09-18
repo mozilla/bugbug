@@ -7,6 +7,7 @@ import { AGENTS, type AgentValue } from "@/lib/agents";
 import { parseBugId } from "@/lib/bugzilla";
 import { saveRun } from "@/lib/store";
 import type { RunRef } from "@/lib/types";
+import { parseUpliftSources } from "@/lib/uplift";
 
 function parseAgent(value: string | null): AgentValue {
   return AGENTS.some((a) => a.value === value)
@@ -40,6 +41,12 @@ export function TriggerForm() {
   const [testScope, setTestScope] = useState(
     () => params.get("test_scope") ?? ""
   );
+  const [targetBranch, setTargetBranch] = useState(
+    () => params.get("target_branch") ?? ""
+  );
+  const [upliftSources, setUpliftSources] = useState(
+    () => params.get("sources") ?? ""
+  );
   const [model, setModel] = useState(() => params.get("model") ?? "");
   const [maxTurns, setMaxTurns] = useState(() => params.get("max_turns") ?? "");
   const [effort, setEffort] = useState(() => params.get("effort") ?? "");
@@ -50,6 +57,7 @@ export function TriggerForm() {
   const isBuildRepairAgent = agent === "build-repair";
   const isTestRepairAgent = agent === "test-repair";
   const isTestPlanAgent = agent === "test-plan-generator";
+  const isUpliftAgent = agent === "uplift-merge-conflict-resolver";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {
@@ -112,6 +120,19 @@ export function TriggerForm() {
       inputs.feature_name = featureName.trim();
       inputs.feature_description = featureDescription.trim();
       inputs.test_scope = testScope.trim();
+    } else if (isUpliftAgent) {
+      if (!targetBranch.trim()) {
+        setError("Enter the target uplift branch.");
+        return;
+      }
+      const parsed = parseUpliftSources(upliftSources);
+      if (parsed.error) {
+        setError(parsed.error);
+        return;
+      }
+      inputs.target_branch = targetBranch.trim();
+      inputs.sources = parsed.sources;
+      if (hasBugId) inputs.bug_id = parsedBugId;
     } else if (!isReproAgent) {
       if (!hasBugId) {
         setError("Enter a valid Bugzilla bug ID or bug URL.");
@@ -155,9 +176,11 @@ export function TriggerForm() {
             "test failure"
           : isTestPlanAgent
             ? featureName.trim()
-            : hasBugId
-              ? `bug ${parsedBugId}`
-              : "inline report";
+            : isUpliftAgent
+              ? `uplift to ${targetBranch.trim()}`
+              : hasBugId
+                ? `bug ${parsedBugId}`
+                : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -194,7 +217,7 @@ export function TriggerForm() {
         </select>
       </div>
 
-      {!needsFailureTasks && !isTestPlanAgent && (
+      {!needsFailureTasks && !isTestPlanAgent && !isUpliftAgent && (
         <div className="field">
           <label htmlFor="bugId">
             {isReproAgent
@@ -282,6 +305,48 @@ export function TriggerForm() {
             Run try push after fix
           </label>
         </div>
+      )}
+
+      {isUpliftAgent && (
+        <>
+          <div className="field">
+            <label htmlFor="targetBranch">Target uplift branch *</label>
+            <input
+              id="targetBranch"
+              placeholder="e.g. release, beta, esr128"
+              value={targetBranch}
+              onChange={(e) => setTargetBranch(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="upliftSources">
+              Sources * (JSON list, applied in order)
+            </label>
+            <textarea
+              id="upliftSources"
+              placeholder={
+                '[{"kind": "git", "commit": "abc123"},\n' +
+                ' {"kind": "phabricator", "revision_id": 12345}]'
+              }
+              rows={4}
+              value={upliftSources}
+              onChange={(e) => setUpliftSources(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="bugId">Bugzilla bug ID or URL (optional)</label>
+            <input
+              id="bugId"
+              placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
+              value={bugId}
+              onChange={(e) => setBugId(e.target.value)}
+            />
+          </div>
+        </>
       )}
 
       {isTestPlanAgent && (
