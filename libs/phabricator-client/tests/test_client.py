@@ -273,6 +273,28 @@ async def test_query_latest_diff_carries_the_author(monkeypatch):
     assert diff.author == "Ada Lovelace <ada@example.com>"
 
 
+async def test_query_latest_diff_carries_first_public_parent(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        {
+            "result": {
+                "9": {
+                    "id": "9",
+                    "sourceControlBaseRevision": "unlanded",
+                    "properties": {
+                        "local:commits": {
+                            "empty-node": {},
+                            "local-node": {"firstPublicParent": "public-parent"},
+                        }
+                    },
+                }
+            }
+        },
+    )
+    diff = await _client().query_latest_diff(42)
+    assert diff.first_public_parent == "public-parent"
+
+
 async def test_query_latest_diff_has_no_author_when_phabricator_gives_none(
     monkeypatch,
 ):

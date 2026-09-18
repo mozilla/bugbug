@@ -25,10 +25,21 @@ class PhabricatorDiff(BaseModel):
     base_commit: Annotated[str | None, Field(alias="sourceControlBaseRevision")] = None
     author_name: Annotated[str | None, Field(alias="authorName")] = None
     author_email: Annotated[str | None, Field(alias="authorEmail")] = None
+    properties: dict = Field(default_factory=dict)
 
     @property
     def author(self) -> str | None:
         """The author as git wants it, ``Name <email>``, or ``None`` if unknown."""
         if self.author_name and self.author_email:
             return f"{self.author_name} <{self.author_email}>"
+        return None
+
+    @property
+    def first_public_parent(self) -> str | None:
+        """The first landed parent recorded by mozphab, if present."""
+        local_commits = self.properties.get("local:commits") or {}
+        for commit in local_commits.values():
+            first_public_parent = commit.get("firstPublicParent")
+            if first_public_parent:
+                return first_public_parent
         return None
