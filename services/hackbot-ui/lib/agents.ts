@@ -8,6 +8,10 @@ export const AGENTS = [
   { value: "frontend-triage", label: "frontend-triage" },
   { value: "test-repair", label: "test-repair" },
   { value: "test-plan-generator", label: "test-plan-generator" },
+  {
+    value: "uplift-merge-conflict-resolver",
+    label: "uplift-merge-conflict-resolver",
+  },
 ] as const;
 
 export type AgentValue = (typeof AGENTS)[number]["value"];
