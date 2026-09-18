@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import pytest
-from app import gcs, jobs, pubsub
+from app import gcs, jobs, notifications, pubsub
 from app.jobs import ExecutionStatus
 from app.routers import runs as runs_module
 from app.routers.runs import finalize_run
@@ -46,6 +46,18 @@ def _no_publish(monkeypatch):
 
     monkeypatch.setattr(pubsub, "publish_run_completed", fake_publish)
     return published
+
+
+@pytest.fixture(autouse=True)
+def _no_notify(monkeypatch):
+    notified = []
+
+    async def fake_notify(run):
+        notified.append(run)
+        return True
+
+    monkeypatch.setattr(notifications, "notify_requester", fake_notify)
+    return notified
 
 
 async def test_noop_when_already_finalized(monkeypatch):
