@@ -172,7 +172,7 @@ fixing the root cause you identified in {scratch_out}/analysis.md.
 The recommendation stays "backout". The patch is advice for the commit's author to
 squash into their existing patches and reland, so write it as a change to the
 original patch, not a follow-up on top of it.
-
+{tree_note}
 The source tree is at {source_repo} (your working directory). Search it with
 `git grep`, never `grep -r`.
 Editing: Read a file before you Edit or Write it -- both refuse until the file has
@@ -195,6 +195,24 @@ count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB
 5. Update {scratch_out}/verdict.json in place, preserving its existing keys: set
    "proposed_patch" to true if you made a fix, and leave "recommendation" as
    "backout".
+{report}"""
+
+TREE_AT_CULPRIT = """
+The tree is checked out at {culprit_commit} itself, so the diff you leave stacks
+directly on that commit.
+"""
+
+PARENT_REVISION_ARG = (
+    " parent_revision={revision} (the culprit's own revision, D{revision}),"
+)
+
+REPORT_INSTRUCTIONS = """
+6. Submit the patch with the `phabricator_submit_patch` action: bug_id={bug_id},{parent}
+   a title of the form "Bug {bug_id} - <what the fix does>", a summary naming the
+   culprit commit and the failing test(s) and saying the patch is meant to be
+   squashed into the culprit and relanded, and a test_plan stating how it was
+   verified. If you are not confident in the patch, record nothing and say so in
+   your final message.
 """
 
 VERIFY_LOCAL = """\
