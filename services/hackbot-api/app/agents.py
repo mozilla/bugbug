@@ -125,7 +125,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
-        auto_apply_actions=True,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send", "slack.post_message"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",

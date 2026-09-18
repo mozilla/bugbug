@@ -2686,7 +2686,7 @@ source = { editable = "agents/test-repair" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
     { name = "claude-agent-sdk" },
-    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
     { name = "mozci" },
     { name = "requests" },
@@ -2697,7 +2697,7 @@ dependencies = [
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
-    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "mozci", specifier = "~=2.4.8" },
     { name = "requests" },

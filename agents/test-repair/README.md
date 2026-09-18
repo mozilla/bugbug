@@ -63,6 +63,24 @@ Stage 2:
 
 - A patch in Hackbot format
 
+## Submitting the patch
+
+The fix stage runs on a checkout of the culprit commit itself, so the patch is a
+change to that commit. When the culprit's bug is known -- `culprit_bug` from the
+verdict, else the bug named in the culprit's commit subject -- it records a
+`phabricator.submit_patch` action in `summary.json`: a WIP revision carrying the
+patch, stacked as a child of the culprit's own revision when its commit footer names
+one (`parent_revision`). Nothing reaches Phabricator during the run, and nothing is
+posted to the bug.
+
+A regression is always backed out, so the revision is not meant to land: the author
+applies the action from the Hackbot UI, pulls their revision and the child with
+`moz-phab patch`, squashes the fix in, resubmits and relands -- the email spells out
+the steps. Unlike the notifications below, the action waits for a human -- see
+`always_apply_actions` in [`agents.py`](../../services/hackbot-api/app/agents.py).
+Runs without an actions recorder, or whose culprit names no bug, produce the patch
+but record no revision.
+
 ## Notifications
 
 A run whose verdict a sheriff has to act on records a `slack.post_message` action
@@ -74,14 +92,17 @@ majority verdict, so it would be noise. An intermittent recommending `rerun` is 
 posted, since the retrigger is the sheriff's to run.
 
 Every verdict also records an `email.send` action carrying the full analysis and the
-proposed patch, for the hackbot team to track what the agent decided -- unfiltered, and
-never addressed to the developer the agent happens to blame. Treeherder is re-read just
-before it is recorded, so a failure a sheriff dealt with while the run worked says so in
-the subject.
+proposed patch, for the hackbot team to track what the agent decided -- unfiltered. When
+the run proposed a patch, the culprit commit's author is addressed too, so they can
+squash it into their patches and reland (see `recipients` in
+[notify.py](hackbot_agents/test_repair/notify.py)); the team is copied apply-side.
+Treeherder is re-read just before it is recorded, so a failure a sheriff dealt with while
+the run worked says so in the subject.
 
 Both are delivered by the apply step, not from the run, so they are visible in the
-hackbot UI before they land and are delivered at most once. `test-repair` opts into
-auto-apply, so a succeeded run reports without waiting for a human.
+hackbot UI before they land and are delivered at most once. Both always apply, so a
+succeeded run reports without waiting for a human; when a revision is pending, the
+email says how to apply it.
 
 ## Test the agent
 
