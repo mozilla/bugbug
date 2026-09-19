@@ -1083,6 +1083,36 @@ support-files = ""
     (tmp_path / "mach").touch()
     assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["mach"]) == set()
 
+    # A file close to too many manifests (e.g. dom/moz.build) must not
+    # schedule all of them.
+    (tmp_path / "hub" / "moz.build").parent.mkdir(parents=True)
+    (tmp_path / "hub" / "moz.build").touch()
+    for i in range(test_scheduling.MAX_SIBLING_MANIFESTS):
+        (tmp_path / "hub" / f"component{i}" / "test").mkdir(parents=True)
+        (tmp_path / "hub" / f"component{i}" / "test" / "mochitest.toml").touch()
+
+    assert (
+        len(test_scheduling.find_manifests_for_paths(str(tmp_path), ["hub/moz.build"]))
+        == test_scheduling.MAX_SIBLING_MANIFESTS
+    )
+
+    (tmp_path / "hub" / "one_more" / "test").mkdir(parents=True)
+    (tmp_path / "hub" / "one_more" / "test" / "mochitest.toml").touch()
+
+    assert (
+        test_scheduling.find_manifests_for_paths(str(tmp_path), ["hub/moz.build"])
+        == set()
+    )
+
+    # The cap applies per path, so a narrow file is still scheduled when
+    # modified together with a broad one.
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["hub/moz.build", "dom/battery/BatteryManager.cpp"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+    }
+
     assert test_scheduling.find_manifests_for_paths(
         str(tmp_path), ["test/test_resolve_uris_ipc.js"]
     ) == {
