@@ -131,9 +131,9 @@ Guards, each closing a specific failure mode:
 - **Private bugs are never processed** — the check is `is_private is not False`, so a
   missing or non-boolean value fails closed.
 - **Dedupe** — retried deliveries are deduped by the **needinfo flag id**, which is globally
-  unique, so a later needinfo on the same bug gets a new id and still triggers. As on the
-  Phabricator side, the key is claimed **only after a successful trigger**, keeping a
-  transient failure retryable by BMO.
+  unique, so a later needinfo on the same bug gets a new id and still triggers. The flag id
+  is used as the run's database dedupe key, so retries reuse the existing run even after a
+  service restart.
 - **Latest flag wins** — BMO orders flags by id, so the last matching one is the newly
   requested one.
 
