@@ -7,7 +7,7 @@ import argparse
 import collections
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Collection, Iterable
 
 import dateutil.parser
@@ -51,8 +51,9 @@ class TestingPolicyStatsGenerator(object):
     def get_landed_since(
         self, days_start: int, days_end: int
     ) -> Collection[repository.CommitDict]:
-        since = datetime.utcnow() - timedelta(days=days_start)
-        until = datetime.utcnow() - timedelta(days=days_end)
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=days_start)
+        until = now - timedelta(days=days_end)
 
         return [
             commit
