@@ -1009,7 +1009,9 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
         # If a manifest, a test, or a support file is modified, run the manifest that includes it.
         if path in manifest_by_path:
             manifests.update(manifest_by_path[path])
-        else:
+        # Skip root-level files, otherwise we'd walk the whole repository and
+        # schedule every manifest.
+        elif (repo_dir / path).parent != repo_dir:
             # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
             for sibling in (repo_dir / path).parent.rglob("*"):
                 if sibling.is_dir() and repository.is_test(f"{str(sibling)}/"):
@@ -1101,6 +1103,10 @@ def find_tasks_for_paths(
     # Any file in a folder close to a gtest folder is modified (e.g. dom/media/CubebUtils.cpp and we have dom/media/gtest/).
     if not select_gtest:
         for path in paths:
+            # Skip root-level files, otherwise we'd walk the whole repository.
+            if (repo_dir / path).parent == repo_dir:
+                continue
+
             for sibling in (repo_dir / path).parent.rglob("*"):
                 if sibling.is_dir() and any(
                     part in _GTEST_FOLDERS for part in sibling.parts

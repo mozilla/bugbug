@@ -1078,6 +1078,11 @@ support-files = ""
         "test/chrome.toml"
     }
 
+    # A root-level file that is not referenced by any manifest must not
+    # schedule every manifest in the repository.
+    (tmp_path / "mach").touch()
+    assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["mach"]) == set()
+
     assert test_scheduling.find_manifests_for_paths(
         str(tmp_path), ["test/test_resolve_uris_ipc.js"]
     ) == {
