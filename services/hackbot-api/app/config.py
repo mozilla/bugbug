@@ -49,6 +49,7 @@ class SlackSettings(BaseModel):
     # Slack's app-level signing secret, verifying the HMAC on every interaction
     # delivery.
     signing_secret: HmacSecret
+    bot_token: str
 
 
 class Settings(BaseSettings):

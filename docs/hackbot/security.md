@@ -76,15 +76,8 @@ Four distinct schemes, one per class of caller:
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | UI, pulse listener, scripts | `X-API-Key`, compared in constant time                                                 |
 | Phabricator                 | HMAC-SHA256 over the raw body, constant-time compared                                  |
-| Slack                       | HMAC-SHA256 over `v0:{timestamp}:{raw body}`, plus a 5-minute timestamp window         |
+| Slack                       | HMAC-SHA256 over `v0:{timestamp}:{raw body}`, plus a 5-minute timestamp window (Bolt)  |
 | Eventarc / Pub/Sub push     | Google-signed OIDC bearer token, verified for audience **and** issuing service account |
-
-The two HMAC schemes are not interchangeable: Slack's base string includes the delivery's
-timestamp and that timestamp is checked against the clock, so a captured delivery cannot be
-replayed. Phabricator's covers the body alone, which is why the Slack receiver has its own
-verifier ([auth.py](../../services/hackbot-api/app/auth.py)). Neither key is optional, and
-the Slack one must also be non-blank, so a deployment without a usable key fails to start
-rather than quietly rejecting every delivery.
 
 The push-token check is not redundant with platform IAM. The service allows unauthenticated
 invocations — that is how API-key callers reach it at all — so IAM on the subscription does

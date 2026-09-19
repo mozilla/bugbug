@@ -3,9 +3,10 @@
 import logging
 
 from cachetools import TTLCache
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
+from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
 
 from app.auth import (
     require_bugzilla_webhook_secret,
@@ -22,6 +23,7 @@ from app.phabricator_webhook import (
     detect_mention_and_revision,
     triggering_transaction_phids,
 )
+from app.slack.app import build_request_handler
 
 log = logging.getLogger(__name__)
 
@@ -33,11 +35,32 @@ def get_phabricator_client() -> PhabricatorClient:
     return PhabricatorClient(settings.phabricator)
 
 
+def get_slack_handler(request: Request) -> AsyncSlackRequestHandler:
+    """Dependency: lazily create the app-scoped Bolt handler."""
+    handler = getattr(request.app.state, "slack_handler", None)
+    if handler is None:
+        handler = build_request_handler()
+        request.app.state.slack_handler = handler
+    return handler
+
+
 def get_hackbot_client() -> HackbotClient:
     """Dependency: a client for triggering runs over the public hackbot API."""
     return HackbotClient(
         base_url=settings.hackbot_api_url,
         api_key=settings.external_api_key,
+    )
+
+
+@router.post("/slack")
+async def slack_webhook(
+    request: Request,
+    slack_handler: AsyncSlackRequestHandler = Depends(get_slack_handler),
+    api_client: HackbotClient = Depends(get_hackbot_client),
+) -> Response:
+    """Every interaction Slack sends this app, whatever kind it is."""
+    return await slack_handler.handle(
+        request, addition_context_properties={"hackbot_client": api_client}
     )
 
 
