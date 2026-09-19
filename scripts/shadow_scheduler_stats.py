@@ -8,7 +8,7 @@ import concurrent.futures
 import logging
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -66,7 +66,7 @@ def go(months: int) -> None:
         "Already gathered statistics for %d pushes...", len(known_scheduler_stats)
     )
 
-    to_date = datetime.utcnow() - relativedelta(days=3)
+    to_date = datetime.now(timezone.utc) - relativedelta(days=3)
     from_date = to_date - relativedelta(months=months)
     pushes = mozci.push.make_push_objects(
         from_date=from_date.strftime("%Y-%m-%d"),

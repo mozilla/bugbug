@@ -249,7 +249,7 @@ def test_hg_log(fake_hg_repo):
     add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
     revision1 = commit(hg, date=datetime(1991, 4, 16, tzinfo=timezone.utc))
 
-    first_push_date = datetime.utcnow()
+    first_push_date = datetime.now(timezone.utc)
     hg.push(dest=bytes(remote, "ascii"))
 
     add_file(hg, local, "file2", "1\n2\n3\n4\n5\n6\n7\n")
@@ -278,7 +278,7 @@ def test_hg_log(fake_hg_repo):
     # Wait one second, to have a different pushdate.
     time.sleep(1)
 
-    second_push_date = datetime.utcnow()
+    second_push_date = datetime.now(timezone.utc)
     hg.push(dest=bytes(remote, "ascii"))
 
     add_file(hg, local, "file3", "1\n2\n3\n4\n5\n6\n7\n")
@@ -291,7 +291,7 @@ def test_hg_log(fake_hg_repo):
     # Wait one second, to have a different pushdate.
     time.sleep(1)
 
-    hg_log_date = datetime.utcnow()
+    hg_log_date = datetime.now(timezone.utc)
 
     commits = repository.hg_log(hg, revs)
     assert len(commits) == 6, "hg log should return six commits"
