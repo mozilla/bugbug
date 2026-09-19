@@ -532,9 +532,11 @@ class _FakeHackbotClient:
 
     def __init__(self):
         self.calls = []
+        self.dedupe_keys = []
 
-    async def trigger_run(self, agent_name, inputs):
+    async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
         self.calls.append((agent_name, inputs))
+        self.dedupe_keys.append(dedupe_key)
         return RunRef(
             run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
             agent=agent_name,
@@ -575,7 +577,6 @@ def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
     monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
     # Fresh dedupe cache per test.
     webhooks._seen_transactions.clear()
-    webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
     app.dependency_overrides[webhooks.get_bugzilla_authorizer] = lambda: (
@@ -795,47 +796,37 @@ def test_bugzilla_route_ignores_unauthorized_actor(client, bugzilla_authorizer):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
-    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
 
     response = _post_bugzilla(client, payload)
 
     assert response.status_code == 202
     assert response.json() == {"status": "ignored", "reason": "unauthorized user"}
     assert fake_api.calls == []
-    # The event stays unconsumed: the same flag can still trigger a run once
-    # the actor is authorized.
-    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
 
 
-def test_bugzilla_route_dedupes_retry_but_not_later_event(client):
+def test_bugzilla_route_keys_retry_same_but_later_event_differently(client):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
 
     first = _post_bugzilla(client, payload)
-    duplicate = _post_bugzilla(client, payload)
+    _post_bugzilla(client, payload)
     later = _post_bugzilla(
         client,
         _bugzilla_payload(flag_id=2187234, event_time="2026-08-07T19:00:05"),
     )
 
     assert first.json()["status"] == "triggered"
-    assert duplicate.json()["reason"] == "duplicate delivery"
     assert later.json()["status"] == "triggered"
-    assert len(fake_api.calls) == 2
+    assert fake_api.dedupe_keys == ["ni2187233", "ni2187233", "ni2187234"]
 
 
-def test_bugzilla_route_does_not_dedupe_failed_dispatch(client):
+def test_bugzilla_route_surfaces_failed_dispatch(client):
     class _FailingClient:
-        async def trigger_run(self, agent_name, inputs):
+        async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
             raise RuntimeError("run creation failed")
 
-    payload = _bugzilla_payload()
-    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
-    assert detected is not None
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
 
     with pytest.raises(RuntimeError, match="run creation failed"):
-        _post_bugzilla(client, payload)
-
-    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
+        _post_bugzilla(client, _bugzilla_payload())
