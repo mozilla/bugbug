@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.auth import require_slack_signature
 from app.routers.webhooks import get_hackbot_client
-from app.slack_webhook import BlockActionsEvent
+from app.slack_webhook import BlockActionsEvent, Container
 
 log = logging.getLogger(__name__)
 
@@ -47,11 +47,29 @@ async def slack_interactions(request: Request) -> Response:
     match action.value.type:
         case "start_agent_run":
             client = get_hackbot_client()
-            await client.trigger_run(
+            run = await client.trigger_run(
                 action.value.agent_name,
                 action.value.params,
+                dedupe_key=button_dedupe_key(event.container),
+            )
+            log.info(
+                "Slack action by %s on %s/%s -> run %s (%s)",
+                event.user.id,
+                event.container.channel_id,
+                event.container.message_ts,
+                run.run_id,
+                run.status,
             )
         case _:
             raise ValueError("Unsupported action type: %s" % action.value.type)
 
     return Response(status_code=status.HTTP_200_OK)
+
+
+def button_dedupe_key(container: Container) -> str:
+    """Key a run on the message the button sits on, so the button works once.
+
+    Channel plus ``ts`` is how Slack identifies a message; ``ts`` alone is only
+    unique within a channel.
+    """
+    return f"slack:{container.channel_id}:{container.message_ts}"

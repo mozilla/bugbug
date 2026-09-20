@@ -37,6 +37,13 @@ class Message(BaseModel):
     ts: str
 
 
+class Container(BaseModel):
+    """The message the clicked element is on, identified by channel and ``ts``."""
+
+    channel_id: str
+    message_ts: str
+
+
 class ActionValue(BaseModel):
     type: Literal["start_agent_run"]
     agent_name: str
@@ -65,6 +72,7 @@ class BlockActionsEvent(BaseModel):
 
     type: Literal["block_actions"]
     user: User
+    container: Container
     channel: Channel | None = None
     message: Message | None = None
     actions: list[Action] = []
