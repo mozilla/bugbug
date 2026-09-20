@@ -32,9 +32,21 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
 )
 
 
+_HTML_TAG_RE = re.compile(r"<[A-Za-z/!?][^<>]*>")
+
+
 def _validate_summary(summary: str | None) -> None:
     if not summary:
         return
+
+    match = _HTML_TAG_RE.search(summary)
+    if match:
+        raise ToolError(
+            f'Invalid Phabricator summary: "{match.group()}" looks like an HTML '
+            "tag and may trigger Phabricator's firewall (making the whole request "
+            "fail with 406 Not Acceptable). Rephrase the text and call "
+            "submit_patch again."
+        )
 
     match = _PHABRICATOR_TEST_PLAN_HEADER_RE.search(summary)
     if match:
@@ -73,7 +85,8 @@ async def submit_patch(
             default=None,
             description=(
                 "Revision summary/description. Keep test and verification details "
-                "in test_plan instead."
+                "in test_plan instead. Do not include HTML-looking tags because "
+                "they may trigger Phabricator's firewall."
             ),
         ),
     ] = None,
