@@ -99,11 +99,7 @@ project. [triggers.md](triggers.md) covers that check and the other guards on th
 ## Authorizing Slack clicks
 
 The same split applies, and the second half is not built yet: a valid signature proves the
-delivery came from the Slack app, not _who_ clicked, and a Slack user id is not an identity
-this platform trusts. Resolving one to a `@mozilla.com` address (`users.info`, needing the
-`users:read` and `users:read.email` scopes) and checking the workspace is what a click needs
-before it can cause anything. Until then the receiver is inert by design, so no interactive
-element exists ahead of the check that guards it.
+delivery came from the Slack app, not _who_ clicked.
 
 ## Recorded actions as a review gate
 

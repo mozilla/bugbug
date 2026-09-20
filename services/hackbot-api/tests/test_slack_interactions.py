@@ -23,6 +23,7 @@ from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
 SIGNING_SECRET = "test-signing-secret"
 RUN_ID = "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6"
+DEDUPE_KEY = "frontend-triage-run:11111111-2222-3333-4444-555555555555"
 
 
 class _FakeHackbotClient:
@@ -105,7 +106,11 @@ def _payload(
                 "type": "button",
                 "action_id": action_id,
                 "value": json.dumps(
-                    {"agent_name": "bug-fix", "params": {"bug_id": 1234}}
+                    {
+                        "agent_name": "bug-fix",
+                        "params": {"bug_id": 1234},
+                        "dedupe_key": DEDUPE_KEY,
+                    }
                     if value is None
                     else value
                 ),
