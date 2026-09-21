@@ -161,7 +161,7 @@ async def detect_mention_and_revision(
     Returns ``None`` when there is no qualifying ``@hackbot`` mention, the
     revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
-    transactions = await client.search_transactions(object_phid)
+    transactions = await client.search_transactions(object_phid, triggering_phids)
     mentions = find_hackbot_mentions(
         transactions,
         set(triggering_phids),
