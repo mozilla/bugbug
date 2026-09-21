@@ -58,6 +58,8 @@ async def test_trigger_run_posts_inputs_and_returns_typed_reference(monkeypatch)
     assert run.run_id == UUID(RUN_ID)
     assert run.agent == "bug-fix"
     assert run.status is RunStatus.pending
+    # `201`: this request is what started it.
+    assert run.is_new is True
     assert captured == {
         "timeout": 30.0,
         "url": "https://hackbot.example/agents/bug-fix/runs",
@@ -97,3 +99,38 @@ async def test_trigger_run_rejects_an_invalid_success_response(monkeypatch):
 
     with pytest.raises(ValidationError):
         await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_reports_a_deduplicated_run_as_not_new(monkeypatch):
+    # `200` rather than `201`: the key already belonged to this run, so the
+    # request that got this answer started nothing.
+    _capture_post(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "running"},
+        ),
+    )
+
+    run = await _client().trigger_run(
+        "bug-fix", {"bug_id": 1234}, dedupe_key="push:autoland:abc123"
+    )
+
+    assert run.run_id == UUID(RUN_ID)
+    assert run.is_new is False
+
+
+async def test_trigger_run_sends_the_dedupe_key_as_a_query_parameter(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        httpx.Response(
+            201,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
+        ),
+    )
+
+    await _client().trigger_run(
+        "bug-fix", {"bug_id": 1234}, dedupe_key="push:autoland:abc123"
+    )
+
+    assert captured["params"] == {"dedupe_key": "push:autoland:abc123"}
