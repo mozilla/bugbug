@@ -40,6 +40,7 @@ class HackbotMention:
     author_phid: str
     comment_id: int
     comment_type: Literal["regular", "inline"]
+    transaction_phid: str
     diff_id: int | None = None
 
 
@@ -96,11 +97,25 @@ def find_hackbot_mentions(
                     comment_type=(
                         "inline" if transaction["type"] == "inline" else "regular"
                     ),
+                    transaction_phid=transaction["phid"],
                     diff_id=diff_id,
                 )
             )
             break
     return matches
+
+
+def anchor_transaction_phid(mentions: list[HackbotMention]) -> str:
+    """The transaction PHID that identifies this submission.
+
+    Phabricator's edit path adds at most one general ``comment`` transaction
+    per submission, so it is the natural handle; a submission made of inline
+    comments only has none, in which case the first mention stands in.
+    """
+    for mention in mentions:
+        if mention.comment_type == "regular":
+            return mention.transaction_phid
+    return mentions[0].transaction_phid
 
 
 def _format_comment(mention: HackbotMention) -> str:
@@ -150,14 +165,16 @@ async def detect_mention_and_revision(
     triggering_phids: list[str],
     *,
     authorizer: PhabricatorAuthorizer,
-) -> tuple[str, int, int] | None:
-    """Read Conduit and return ``(comment, revision_id, bug_id)`` or None.
+) -> tuple[str, int, int, str] | None:
+    """Read Conduit and return ``(comment, revision_id, bug_id, anchor_phid)``.
 
     ``comment`` is the raw text of the triggering ``@hackbot`` comment(s), passed
     through as data — the agent frames it (identity, scope, how to respond). When
     a delivery carries several qualifying comments (e.g. inline comments in one
     review) they are combined so the agent addresses each. The Conduit ``client``
     is injected (built by the route's dependency) rather than constructed here.
+    ``anchor_phid`` is the transaction PHID identifying the submission (see
+    :func:`anchor_transaction_phid`), for callers that key work on it.
     Returns ``None`` when there is no qualifying ``@hackbot`` mention, the
     revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
@@ -203,4 +220,4 @@ async def detect_mention_and_revision(
         )
         return None
 
-    return comment, revision_id, bug_id
+    return comment, revision_id, bug_id, anchor_transaction_phid(authorized_mentions)

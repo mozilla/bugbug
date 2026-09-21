@@ -24,6 +24,7 @@ from app.phabricator_authorization import (
 from app.phabricator_webhook import (
     HackbotMention,
     _format_comment,
+    anchor_transaction_phid,
     detect_mention_and_revision,
     find_hackbot_mentions,
     resolve_revision,
@@ -91,7 +92,11 @@ def test_find_mention_matches():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "hey @hackbot please fix")]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a", 1, "regular")]
+    ) == [
+        HackbotMention(
+            "hey @hackbot please fix", "PHID-USER-a", 1, "regular", "PHID-XACT-1"
+        )
+    ]
 
 
 def test_find_mention_no_token():
@@ -157,6 +162,7 @@ def test_find_mention_matches_inline_comment():
             "PHID-USER-a",
             1,
             "inline",
+            "PHID-XACT-1",
             diff_id=456,
         )
     ]
@@ -202,6 +208,7 @@ def test_find_mention_collects_all_inline_matches():
             "PHID-USER-a",
             1,
             "inline",
+            "PHID-XACT-1",
             diff_id=1,
         ),
         HackbotMention(
@@ -209,6 +216,7 @@ def test_find_mention_collects_all_inline_matches():
             "PHID-USER-a",
             3,
             "inline",
+            "PHID-XACT-3",
             diff_id=3,
         ),
     ]
@@ -235,13 +243,33 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
             "PHID-USER-a",
             456,
             "inline",
+            "PHID-XACT-1",
             diff_id=456,
         )
     ]
 
 
+def test_anchor_prefers_general_comment_over_inline_mention():
+    # The general comment identifies the submission even when the @hackbot
+    # request itself sits in an inline comment.
+    mentions = [
+        HackbotMention("@hackbot fix", "PHID-USER-a", 2, "inline", "PHID-XACT-in"),
+        HackbotMention("see inline", "PHID-USER-a", 1, "regular", "PHID-XACT-gen"),
+    ]
+    assert anchor_transaction_phid(mentions) == "PHID-XACT-gen"
+
+
+def test_anchor_falls_back_to_first_inline_mention():
+    # An inline-only submission has no general-comment transaction.
+    mentions = [
+        HackbotMention("@hackbot a", "PHID-USER-a", 1, "inline", "PHID-XACT-1"),
+        HackbotMention("@hackbot b", "PHID-USER-a", 2, "inline", "PHID-XACT-2"),
+    ]
+    assert anchor_transaction_phid(mentions) == "PHID-XACT-1"
+
+
 def test_format_comment_renders_regular_comment_as_xml():
-    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular")
+    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular", "PHID-XACT-1")
     assert _format_comment(mention) == (
         '  <comment comment_id="123" type="regular">\n    only one\n  </comment>'
     )
@@ -253,6 +281,7 @@ def test_format_comment_renders_inline_comment_as_xml():
         "PHID-USER-a",
         456,
         "inline",
+        "PHID-XACT-1",
         diff_id=456,
     )
     assert _format_comment(mention) == (
@@ -264,12 +293,13 @@ def test_format_comment_renders_inline_comment_as_xml():
 
 def test_format_comments_renders_mixed_comments_in_order():
     mentions = [
-        HackbotMention("first", "PHID-USER-a", 1, "regular"),
+        HackbotMention("first", "PHID-USER-a", 1, "regular", "PHID-XACT-1"),
         HackbotMention(
             "second",
             "PHID-USER-a",
             2,
             "inline",
+            "PHID-XACT-2",
             diff_id=456,
         ),
     ]
@@ -283,7 +313,9 @@ def test_format_comments_renders_mixed_comments_in_order():
 
 
 def test_format_comment_escapes_comment_body():
-    mention = HackbotMention("@hackbot <fix> & explain", "PHID-USER-a", 1, "regular")
+    mention = HackbotMention(
+        "@hackbot <fix> & explain", "PHID-USER-a", 1, "regular", "PHID-XACT-1"
+    )
     assert _format_comment(mention) == (
         '  <comment comment_id="1" type="regular">\n'
         "    @hackbot &lt;fix&gt; &amp; explain\n"
@@ -376,6 +408,7 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         "  </comment>",
         42,
         12345,
+        "PHID-XACT-1",
     )
     # Only this delivery's transactions are fetched, not the whole history.
     client.search_transactions.assert_awaited_once_with(
@@ -420,6 +453,7 @@ async def test_detect_mention_enriches_inline_anchor(monkeypatch):
         "  </comment>",
         42,
         12345,
+        "PHID-XACT-1",
     )
 
 
@@ -645,7 +679,7 @@ def test_route_ignores_no_mention(client, monkeypatch):
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1"))
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
@@ -677,7 +711,7 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
 
 
 def test_route_dedupes_retried_delivery(client, monkeypatch):
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1"))
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
 
@@ -696,7 +730,7 @@ def test_route_dedupes_retried_delivery(client, monkeypatch):
 def test_route_detects_only_fresh_transactions(client, monkeypatch):
     # A delivery mixing an already-seen PHID with a new one must consider only
     # the fresh transaction for mention detection.
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1"))
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
     webhooks._seen_transactions["PHID-XACT-OLD"] = True
@@ -717,7 +751,7 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
     monkeypatch.setattr(
         webhooks,
         "detect_mention_and_revision",
-        AsyncMock(return_value=("@hackbot please fix", 42, 12345)),
+        AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1")),
     )
 
     class _FailingClient:
