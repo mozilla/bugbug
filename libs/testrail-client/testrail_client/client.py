@@ -2,11 +2,33 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
+from pydantic import BaseModel, TypeAdapter
 
 from testrail_client.config import TestRailSettings
+from testrail_client.models import (
+    TestRailCase,
+    TestRailCaseType,
+    TestRailResult,
+    TestRailRun,
+    TestRailSection,
+    TestRailStatus,
+    TestRailSuite,
+    TestRailTemplate,
+)
+
+TestRailResource = TypeVar("TestRailResource", bound=BaseModel)
+
+
+def _validate_list(
+    response: dict[str, Any] | list[Any],
+    key: str,
+    model: type[TestRailResource],
+) -> list[TestRailResource]:
+    values = response.get(key, []) if isinstance(response, dict) else response
+    return TypeAdapter(list[model]).validate_python(values)
 
 
 class TestRailClient:
@@ -42,46 +64,54 @@ class TestRailClient:
             raise RuntimeError("TestRail returned an unexpected response")
         return result
 
-    async def get_case_types(self) -> dict[str, Any] | list[Any]:
-        return await self.request("GET", "get_case_types")
+    async def get_case_types(self) -> list[TestRailCaseType]:
+        response = await self.request("GET", "get_case_types")
+        return _validate_list(response, "case_types", TestRailCaseType)
 
-    async def get_templates(self) -> dict[str, Any] | list[Any]:
-        return await self.request("GET", f"get_templates/{self.settings.project_id}")
+    async def get_templates(self) -> list[TestRailTemplate]:
+        response = await self.request(
+            "GET", f"get_templates/{self.settings.project_id}"
+        )
+        return _validate_list(response, "templates", TestRailTemplate)
 
-    async def get_statuses(self) -> dict[str, Any] | list[Any]:
-        return await self.request("GET", "get_statuses")
+    async def get_statuses(self) -> list[TestRailStatus]:
+        response = await self.request("GET", "get_statuses")
+        return _validate_list(response, "statuses", TestRailStatus)
 
-    async def add_suite(self, name: str) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    async def add_suite(self, name: str) -> TestRailSuite:
+        response = await self.request(
             "POST",
             f"add_suite/{self.settings.project_id}",
             {"name": name},
         )
+        return TestRailSuite.model_validate(response)
 
-    async def add_section(self, suite_id: int, name: str) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    async def add_section(self, suite_id: int, name: str) -> TestRailSection:
+        response = await self.request(
             "POST",
             f"add_section/{self.settings.project_id}",
             {"suite_id": suite_id, "name": name},
         )
+        return TestRailSection.model_validate(response)
 
-    async def add_case(
-        self, section_id: int, payload: dict[str, Any]
-    ) -> dict[str, Any] | list[Any]:
-        return await self.request("POST", f"add_case/{section_id}", payload)
+    async def add_case(self, section_id: int, payload: dict[str, Any]) -> TestRailCase:
+        response = await self.request("POST", f"add_case/{section_id}", payload)
+        return TestRailCase.model_validate(response)
 
-    async def add_run(self, payload: dict[str, Any]) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    async def add_run(self, payload: dict[str, Any]) -> TestRailRun:
+        response = await self.request(
             "POST",
             f"add_run/{self.settings.project_id}",
             payload,
         )
+        return TestRailRun.model_validate(response)
 
     async def add_results_for_cases(
         self, run_id: int, results: list[dict[str, Any]]
-    ) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    ) -> list[TestRailResult]:
+        response = await self.request(
             "POST",
             f"add_results_for_cases/{run_id}",
             {"results": results},
         )
+        return _validate_list(response, "results", TestRailResult)
