@@ -49,6 +49,7 @@ class SlackSettings(BaseModel):
     # Slack's app-level signing secret, verifying the HMAC on every interaction
     # delivery.
     signing_secret: HmacSecret
+    bot_token: str
 
 
 class Settings(BaseSettings):
@@ -94,6 +95,7 @@ class Settings(BaseSettings):
     # is just a matter of repointing this at the remote API. While co-located,
     # this is a loopback call to the same service, authed with external_api_key.
     hackbot_api_url: str = "http://localhost:8080"
+    hackbot_ui_url: str = "https://hackbot.moz.tools"
 
     # Internal event routes (Eventarc / Pub/Sub push targets).
     # Event topics follow a per-domain convention, `<domain>-events` (the GCP

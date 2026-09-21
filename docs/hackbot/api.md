@@ -28,42 +28,11 @@ the download to that run's prefix and prevents probing unrelated objects.
 
 ### Inbound webhooks — their own authentication
 
-| Method | Path                           | Does                                                    |
-| ------ | ------------------------------ | ------------------------------------------------------- |
-| POST   | `/webhooks/phabricator`        | `@hackbot` mention on a revision triggers a bug-fix run |
-| POST   | `/webhooks/bugzilla`           | `needinfo?` on the bot account triggers a bug-fix run   |
-| POST   | `/webhooks/slack/interactions` | A click on an interactive element of a hackbot message  |
-
-None of them uses the API key, so each sits on its own router without that dependency:
-these senders cannot send an `X-API-Key`. Phabricator and Slack are authenticated by their
-own HMAC signature over the raw body; Bugzilla by a shared secret in
-`X-Bugzilla-Webhook-Secret`. Phabricator and Bugzilla answer `202` with
-`{"status": "ignored", ...}` for a well-authenticated delivery that doesn't qualify, so BMO
-and Phabricator don't retry it. Both are covered in [triggers.md](triggers.md).
-
-**Slack interactions.** Slack posts every click to the one Request URL configured for
-Interactivity, so the receiver demultiplexes on the element's `action_id`. The path names
-the feature because Slack configures a URL per feature: Event Subscriptions and Slash
-Commands would get their own routes beside this one.
-
-Two things about the delivery drive the design in
-[routers/slack.py](../../services/hackbot-api/app/routers/slack.py): the body is
-form-encoded rather than JSON, with the payload in one field, and Slack expects a response
-within **3 seconds**, so real work belongs off the request. Nothing posts a button yet, so
-the route only verifies, parses and logs; the payload model and why an unreadable delivery
-fails loudly are in
-[slack_webhook.py](../../services/hackbot-api/app/slack_webhook.py).
-
-| Delivery                                  | Status |
-| ----------------------------------------- | ------ |
-| A click this app can read                 | `200`  |
-| A signature header is absent              | `422`  |
-| Signature or freshness fails              | `401`  |
-| Signed, but not a click this app can read | `500`  |
-
-To turn it on: **Interactivity & Shortcuts → Request URL** =
-`https://<hackbot-api-host>/webhooks/slack/interactions`, plus `SLACK_SIGNING_SECRET` from
-**Basic Information → App Credentials**. No new OAuth scopes, so no workspace reinstall.
+| Method | Path                    | Does                                                    |
+| ------ | ----------------------- | ------------------------------------------------------- |
+| POST   | `/webhooks/phabricator` | `@hackbot` mention on a revision triggers a bug-fix run |
+| POST   | `/webhooks/bugzilla`    | `needinfo?` on the bot account triggers a bug-fix run   |
+| POST   | `/webhooks/slack`       | Every event Slack sends this app                        |
 
 ## Creating a run
 
@@ -107,6 +76,7 @@ Recurrence lives in the key, since only the caller knows whether the work may ha
 | Investigate this push exactly once | `push:<project>:<revision>`              |
 | ...but let tomorrow try again      | `push:<project>:<revision>:<YYYY-MM-DD>` |
 | Handle this delivery exactly once  | `phab-txn:<phid>`, `ni:<flag-id>`        |
+| Let this button be pressed once    | `frontend-triage-run:<run-id>`           |
 | Always run                         | (omit the parameter)                     |
 
 A run keeps its key whatever becomes of it, a failed dispatch included, so a repeated

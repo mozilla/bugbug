@@ -2708,6 +2708,7 @@ name = "hackbot-api"
 version = "0.1.0"
 source = { editable = "services/hackbot-api" }
 dependencies = [
+    { name = "aiohttp" },
     { name = "alembic" },
     { name = "async-lru" },
     { name = "asyncpg" },
@@ -2729,6 +2730,7 @@ dependencies = [
     { name = "requests" },
     { name = "sendgrid" },
     { name = "sentry-sdk" },
+    { name = "slack-bolt" },
     { name = "slack-sdk" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "testrail-client" },
@@ -2744,6 +2746,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "alembic", specifier = ">=1.13.1" },
     { name = "async-lru", specifier = ">=2.0.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
@@ -2768,6 +2771,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.0" },
     { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
+    { name = "slack-bolt", specifier = ">=1.30.0" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.25" },
     { name = "testrail-client", editable = "libs/testrail-client" },
@@ -2846,6 +2850,7 @@ dependencies = [
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
+    { name = "slack-sdk" },
     { name = "weave" },
 ]
 
@@ -2869,6 +2874,7 @@ requires-dist = [
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
+    { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "weave", specifier = ">=0.53.4" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
@@ -6916,6 +6922,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bf/7e/302cb51f8735bad67f5ce088d027a1e299789d8555967c9642656fa36da0/sklearn_compat-0.1.6.tar.gz", hash = "sha256:8fd4731b4f709b66641b8f49c954dafec7e3b60afc48f2cfd298356c713277c6", size = 178018, upload-time = "2026-06-07T19:00:28.409Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/20/47a7e947757008be1b77f1c6a6861d26a84ef4b4ea3e6ebf4eff24f24d5d/sklearn_compat-0.1.6-py3-none-any.whl", hash = "sha256:b555db6c09d21eb50ee4a767dc08478a865f33f0e42b3ff8fc33f33c616bd7c1", size = 22868, upload-time = "2026-06-07T19:00:27.242Z" },
+]
+
+[[package]]
+name = "slack-bolt"
+version = "1.30.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "slack-sdk" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e3/4f/5ba15533d66da2e7174334cc0e2805142e5390c9f4c5f31633df78b17006/slack_bolt-1.30.0.tar.gz", hash = "sha256:af38258d41f801ad9c74503090e0f39accd66c49f667f7e55c97fcdb0e51b886", size = 131180, upload-time = "2026-07-15T20:47:33.679Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/ee/1a7a286cf98fa3f4eeffaabc090e82f58f058ab4812aa1d7421d92c2637a/slack_bolt-1.30.0-py2.py3-none-any.whl", hash = "sha256:81f5bc46e79516d23d5e2a31dded6304dd1b8b6b72c0083f2f31d5d801e262c4", size = 235341, upload-time = "2026-07-15T20:47:32.113Z" },
 ]
 
 [[package]]
