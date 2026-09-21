@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, RootModel
@@ -47,8 +48,10 @@ class RunAction(BaseModel):
 
     idx: int
     type: str
-    status: str
+    params: dict[str, Any]
     ref: str | None = None
+    status: str
+    result: dict[str, Any] | None = None
     error: str | None = None
     applied_at: datetime | None = None
 
