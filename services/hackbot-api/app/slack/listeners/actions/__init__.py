@@ -8,9 +8,6 @@ from app.slack.listeners.actions.start_agent_run import start_agent_run_callback
 
 
 def register(app: AsyncApp) -> None:
-    app.action(
-        {
-            "type": "block_actions",
-            "action_id": re.compile(r"^start_agent_run:"),
-        }
-    )(start_agent_run_callback)
+    start_agent_run_prefix = re.compile(r"^start_agent_run:")
+
+    app.action(start_agent_run_prefix)(start_agent_run_callback)
