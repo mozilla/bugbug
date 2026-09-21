@@ -2850,6 +2850,7 @@ dependencies = [
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
+    { name = "slack-sdk" },
     { name = "weave" },
 ]
 
@@ -2873,6 +2874,7 @@ requires-dist = [
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
+    { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "weave", specifier = ">=0.53.4" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
