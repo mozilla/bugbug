@@ -3,6 +3,7 @@
 import argparse
 import os
 from logging import INFO, basicConfig, getLogger
+from typing import Sequence
 
 import numpy as np
 import requests
@@ -15,7 +16,9 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def classify_comments(model_name: str, comment_id: int) -> None:
+def classify_comments(
+    model_name: str, comment_ids: Sequence[int] | None = None
+) -> None:
     model_file_name = f"{model_name}model"
 
     if not os.path.exists(model_file_name):
@@ -31,34 +34,33 @@ def classify_comments(model_name: str, comment_id: int) -> None:
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
 
-    if comment_id:
-        # Get a comment by its id
-        comments = list(bugzilla.get_comment(comment_id).values())
-        assert comments, f"A comment with a comment id of {comment_id} was not found"
+    if comment_ids:
+        comments = bugzilla.get_comments(comment_ids)
+        for comment_id in set(comment_ids).difference(comments):
+            logger.warning("Comment %d is unavailable", comment_id)
+        items = (item for item in comments.values())
     else:
         assert db.download(bugzilla.BUGS_DB)
-        bugs = bugzilla.get_bugs()
-        comments = [
-            {**comment, "bug_id": bug["id"]}
-            for bug in bugs
-            for comment in bug["comments"]
-        ]
+        items = (
+            (bug, comment) for bug in bugzilla.get_bugs() for comment in bug["comments"]
+        )
 
-    for comment in comments:
+    for item in items:
+        bug, comment = item
         print(
-            f"https://bugzilla.mozilla.org/show_bug.cgi?id={comment['bug_id']}#c{comment['count']}"
+            f"https://bugzilla.mozilla.org/show_bug.cgi?id={bug['id']}#c{comment['count']}"
         )
 
         if model.calculate_importance:
             probas, importance = model.classify(
-                comment, probabilities=True, importances=True
+                item, probabilities=True, importances=True
             )
 
             model.print_feature_importances(
                 importance["importances"], class_probabilities=probas
             )
         else:
-            probas = model.classify(comment, probabilities=True, importances=False)
+            probas = model.classify(item, probabilities=True, importances=False)
 
         probability = probas[0]
         pred_index = np.argmax(probability)
@@ -75,11 +77,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("model", help="Which model to use for evaluation")
-    parser.add_argument("--comment-id", help="Classify the given comment id", type=int)
+    parser.add_argument(
+        "--comment-id",
+        dest="comment_ids",
+        help="Classify the given comment IDs",
+        type=int,
+        nargs="+",
+    )
 
     args = parser.parse_args()
 
-    classify_comments(args.model, args.comment_id)
+    classify_comments(args.model, args.comment_ids)
 
 
 if __name__ == "__main__":

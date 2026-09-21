@@ -827,7 +827,7 @@ class CommentModel(Model):
         for bug in bugzilla.get_bugs():
             for comment in bug["comments"]:
                 comment_id = comment["id"]
-                if comment["id"] not in classes:
+                if comment_id not in classes:
                     continue
 
-            yield (bug, comment), classes[comment_id]
+                yield (bug, comment), classes[comment_id]
