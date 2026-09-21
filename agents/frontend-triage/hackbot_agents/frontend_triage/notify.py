@@ -23,6 +23,8 @@ import logging
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL, record_message
+from hackbot_runtime.slack_kit import create_start_agent_run_button
+from slack_sdk.models.blocks import ConfirmObject
 
 from .agent import FrontendTriageResult
 from .config import REPORTABLE_SEVERITY_CONFIDENCES, SLACK_CHANNELS
@@ -35,6 +37,12 @@ RUN_URL = HACKBOT_UI_URL.rstrip("/") + "/runs/{run_id}"
 # The severity that gets a marker. S2-S4 are ordinary triage outcomes; an S1 is
 # somebody's afternoon.
 URGENT_SEVERITY = "S1"
+
+
+HELD_NOTE = (
+    ":hourglass: *Held for review.* This analysis is recorded but not on the bug. "
+    "Starting the fix posts it first."
+)
 
 
 def _link(url: str, label: str) -> str:
@@ -89,12 +97,11 @@ def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
     if _is_urgent(result):
         headline = f":red_circle: {headline} (suggested {URGENT_SEVERITY})"
 
-    return "\n".join(
-        [
-            headline,
-            _link(RUN_URL.format(run_id=run_id), "frontend-triage run details"),
-        ]
-    )
+    lines = [headline]
+    if not result.auto_apply:
+        lines.append(HELD_NOTE)
+    lines.append(_link(RUN_URL.format(run_id=run_id), "frontend-triage run details"))
+    return "\n".join(lines)
 
 
 def _severity_field(result: FrontendTriageResult) -> str | None:
@@ -119,6 +126,41 @@ def _component_field(result: FrontendTriageResult) -> str | None:
     if not result.product or not result.component:
         return None
     return f"*Component*\n{result.product.strip()} :: {result.component.strip()}"
+
+
+def _bug_fix_button(result: FrontendTriageResult, *, run_id: str) -> dict:
+    """The one-press offer to go fix the bug this run just analyzed.
+
+    A dict, not the SDK model: `summary.json` is written with `default=str`, so a
+    model recorded unconverted is stored as the string "<slack_sdk.ButtonElement>"
+    rather than failing, and only shows up when Slack rejects the message.
+    """
+    label = "Fix this bug" if result.auto_apply else "Post analysis & fix"
+    confirm_text = (
+        "This "
+        if result.auto_apply
+        else f"This posts the triage analysis to bug {result.bug_id}, then "
+    ) + (
+        "starts the `bug-fix` agent, which will comment on Bugzilla or submit "
+        "a revision to Phabricator on its own."
+    )
+
+    return create_start_agent_run_button(
+        label,
+        agent_name="bug-fix",
+        params={"bug_id": result.bug_id},
+        dedupe_key=f"frontend-triage-run:{run_id}",
+        apply_run_id=run_id,
+        confirm=ConfirmObject(
+            title=f"Start a fix for bug {result.bug_id}?",
+            text=confirm_text,
+            # Slack's defaults are a bare Yes/No, which reads as generic next to
+            # a button that writes to Bugzilla.
+            confirm="Yes, go ahead",
+            deny="Cancel",
+        ),
+        style="primary",
+    ).to_dict()
 
 
 def build_blocks(result: FrontendTriageResult, *, run_id: str) -> list[dict]:
@@ -148,6 +190,17 @@ def build_blocks(result: FrontendTriageResult, *, run_id: str) -> list[dict]:
             }
         )
 
+    if not result.auto_apply:
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": HELD_NOTE}}
+        )
+
+    blocks.append(
+        {
+            "type": "actions",
+            "elements": [_bug_fix_button(result, run_id=run_id)],
+        }
+    )
     blocks.append(
         {
             "type": "context",
