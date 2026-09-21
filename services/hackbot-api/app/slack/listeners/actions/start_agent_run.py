@@ -21,6 +21,8 @@ class StartAgentRunValue(BaseModel):
     agent_name: str
     params: dict[str, Any] = {}
     dedupe_key: str = Field(min_length=1)
+    # A run whose pending actions will be applied before the new run starts.
+    apply_run_id: UUID | None = None
 
 
 def _run_url(run_id: UUID) -> str:
@@ -44,6 +46,26 @@ async def start_agent_run_callback(
     client: HackbotClient = context["hackbot_client"]
     user = (body.get("user") or {}).get("id")
     value = StartAgentRunValue.model_validate_json(action["value"])
+
+    if value.apply_run_id:
+        actions = await client.apply_actions(value.apply_run_id)
+        if not actions.all_applied:
+            logger.error(
+                "Slack click by '%s' failed to apply run %s's actions: %s",
+                user,
+                value.apply_run_id,
+                actions.failure_summary,
+            )
+            await respond(
+                text=(
+                    ":warning: Could not apply the actions of the run that was "
+                    "supposed to be approved by this click. No new agent run was started."
+                ),
+                response_type="ephemeral",
+                replace_original=False,
+            )
+            await ack()
+            return
 
     run = await client.trigger_run(
         value.agent_name, value.params, dedupe_key=value.dedupe_key
