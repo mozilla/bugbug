@@ -76,6 +76,7 @@ Recurrence lives in the key, since only the caller knows whether the work may ha
 | Investigate this push exactly once | `push:<project>:<revision>`              |
 | ...but let tomorrow try again      | `push:<project>:<revision>:<YYYY-MM-DD>` |
 | Handle this delivery exactly once  | `phab-txn:<phid>`, `ni:<flag-id>`        |
+| Let this button be pressed once    | `frontend-triage-run:<run-id>`           |
 | Always run                         | (omit the parameter)                     |
 
 A run keeps its key whatever becomes of it, a failed dispatch included, so a repeated
