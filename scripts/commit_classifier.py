@@ -9,6 +9,7 @@ import os
 import pickle
 import re
 import subprocess
+from collections import deque
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import cast
@@ -252,12 +253,11 @@ class CommitClassifier(object):
 
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
-        for commit in repository.get_commits():
-            pass
+        latest_commit = deque(repository.get_commits(), maxlen=1).pop()
 
         repository.download_commits(
             self.repo_dir,
-            rev_start="children({})".format(commit["node"]),
+            rev_start="children({})".format(latest_commit),
         )
 
     def has_revision(self, hg, revision):

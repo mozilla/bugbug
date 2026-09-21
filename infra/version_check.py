@@ -18,7 +18,7 @@ except subprocess.CalledProcessError as e:
     print(e.stdout)
     print("stderr:")
     print(e.stderr)
-    raise RuntimeError("Failure while getting latest tag")
+    raise RuntimeError("Failure while getting latest tag") from e
 
 cur_tag = p.stdout.decode("utf-8")[1:].rstrip()
 

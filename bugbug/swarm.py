@@ -78,7 +78,7 @@ def get(
     AUTH,
     rev_ids: Collection[int] | None = None,
     modified_start: datetime | None = None,
-    version_l=[0, 1],
+    version_l=(0, 1),
 ):
     data = []
     instance = AUTH["instance"]

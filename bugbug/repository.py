@@ -1176,7 +1176,7 @@ def calculate_experiences(
                 for i in range(len(items)):
                     exp_queues[i][day] = all_commit_lists[i] + (commit.node,)
 
-    for i, commit in enumerate(tqdm(commits)):
+    for commit in tqdm(commits):
         # The push date is unreliable, e.g. 4d0e3037210dd03bdb21964a6a8c2e201c45794b was pushed after
         # 06b578dfadc9db8b683090e0e110ba75b84fb766, but it has an earlier push date.
         # We accept the unreliability as it is small enough.

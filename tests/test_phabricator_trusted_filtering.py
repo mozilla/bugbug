@@ -792,7 +792,7 @@ def test_get_users_info_batch_mixed_trust():
     users_info = _get_users_info_batch(set(phids_by_username.values()))
 
     # Verify structure
-    for phid, info in users_info.items():
+    for info in users_info.values():
         assert "email" in info
         assert "is_trusted" in info
         assert "real_name" in info

@@ -54,7 +54,11 @@ class HasCrashSignature(SingleBugFeature):
 
 
 class Keywords(SingleBugFeature):
-    def __init__(self, to_ignore=set(), prefixes_to_ignore=set()):
+    def __init__(self, to_ignore=None, prefixes_to_ignore=None):
+        if prefixes_to_ignore is None:
+            prefixes_to_ignore = set()
+        if to_ignore is None:
+            to_ignore = set()
         self.to_ignore = to_ignore
         self.prefixes_to_ignore = prefixes_to_ignore
 

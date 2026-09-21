@@ -80,7 +80,7 @@ class StructuredColumnTransformer(ColumnTransformer):
 
         transformer_names = (name for name, transformer, column in self.transformers_)
         types = []
-        for i, (f, transformer_name) in enumerate(zip(Xs, transformer_names)):
+        for _i, (f, transformer_name) in enumerate(zip(Xs, transformer_names)):
             types.append((transformer_name, result.dtype, (f.shape[1],)))
 
         return result.view(np.dtype(types))
@@ -350,7 +350,7 @@ def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
                 with tarfile.open(mode="r|", fileobj=reader) as tar:
                     yield tar
     else:
-        assert False, f"Unexpected mode: {mode}"
+        raise AssertionError(f"Unexpected mode: {mode}")
 
 
 # Using tar directly is twice as fast than through Python!
@@ -392,7 +392,7 @@ def extract_file(path: str) -> None:
     elif str(path).endswith(".zst"):
         zstd_decompress(inner_path)
     else:
-        assert False, f"Unexpected compression type for {path}"
+        raise AssertionError(f"Unexpected compression type for {path}")
 
 
 class CustomJsonEncoder(json.JSONEncoder):
@@ -457,7 +457,7 @@ class ExpQueue:
 
             self.list.append(value)
         else:
-            assert False, "Can't insert in the past"
+            raise AssertionError("Can't insert in the past")
 
         assert day == self.last_day
 
@@ -495,7 +495,7 @@ class LMDBDict:
 
     def keys(self):
         cursor = self.txn.cursor()
-        for key, value in cursor:
+        for key, _value in cursor:
             yield key.tobytes()
 
 

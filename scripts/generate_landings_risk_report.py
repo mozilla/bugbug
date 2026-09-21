@@ -141,12 +141,12 @@ class LandingsRiskReportGenerator(object):
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         logger.info("Updating commits DB...")
-        for commit in repository.get_commits():
-            pass
+
+        latest_commit = collections.deque(repository.get_commits(), maxlen=1).pop()
 
         repository.download_commits(
             repo_dir,
-            rev_start="children({})".format(commit["node"]),
+            rev_start="children({})".format(latest_commit),
         )
 
         # Some commits that were already in the DB from the previous run might need
@@ -1795,6 +1795,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
             def calculate_maintenance_effectiveness(
                 period: relativedelta,
+                team: str = team,
             ) -> dict[str, dict]:
                 start_date = datetime.utcnow() - period
                 if team in super_teams:
@@ -1876,7 +1877,7 @@ Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https
             failure = True
 
     if failure:
-        assert False, "There was at least one failure"
+        raise AssertionError("There was at least one failure")
 
 
 def main() -> None:
