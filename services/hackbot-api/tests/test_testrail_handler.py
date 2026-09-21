@@ -2,6 +2,7 @@
 
 from app.action_handlers import ApplyContext, get_handler, testrail_handler
 from app.action_handlers.testrail_handler import SubmitTestPlanHandler
+from testrail_client import models as testrail_models
 
 
 def _ctx():
@@ -90,35 +91,48 @@ class _FakeClient:
 
     async def get_case_types(self):
         self.calls.append(("get_case_types",))
-        return self._next()
+        return [
+            testrail_models.TestRailCaseType.model_validate(value)
+            for value in self._next()
+        ]
 
     async def get_templates(self):
         self.calls.append(("get_templates",))
-        return self._next()
+        return [
+            testrail_models.TestRailTemplate.model_validate(value)
+            for value in self._next()
+        ]
 
     async def get_statuses(self):
         self.calls.append(("get_statuses",))
-        return self._next()
+        return [
+            testrail_models.TestRailStatus.model_validate(value)
+            for value in self._next()
+        ]
 
     async def add_suite(self, name):
         self.calls.append(("add_suite", name))
-        return self._next()
+        return testrail_models.TestRailSuite.model_validate(self._next())
 
     async def add_section(self, suite_id, name):
         self.calls.append(("add_section", suite_id, name))
-        return self._next()
+        return testrail_models.TestRailSection.model_validate(self._next())
 
     async def add_case(self, section_id, payload):
         self.calls.append(("add_case", section_id, payload))
-        return self._next()
+        return testrail_models.TestRailCase.model_validate(self._next())
 
     async def add_run(self, payload):
         self.calls.append(("add_run", payload))
-        return self._next()
+        return testrail_models.TestRailRun.model_validate(self._next())
 
     async def add_results_for_cases(self, run_id, results):
         self.calls.append(("add_results_for_cases", run_id, results))
-        return self._next()
+        response = self._next()
+        return [
+            testrail_models.TestRailResult.model_validate(value)
+            for value in response["results"]
+        ]
 
     def suite_url(self, suite_id):
         return f"https://testrail.example/index.php?/suites/view/{suite_id}"
