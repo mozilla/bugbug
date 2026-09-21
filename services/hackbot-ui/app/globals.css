@@ -811,3 +811,32 @@ ul.chips li.chip {
 .test-plan-summary {
   margin-top: 24px;
 }
+.patch-file {
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+.patch-file:last-child {
+  margin-bottom: 0;
+}
+.patch-file-header {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.patch-diff {
+  --diff-background-color: var(--bg);
+  --diff-text-color: var(--text);
+  --diff-selection-background-color: rgba(74, 122, 240, 0.3);
+  --diff-gutter-insert-background-color: rgba(46, 160, 67, 0.18);
+  --diff-gutter-delete-background-color: rgba(229, 83, 75, 0.18);
+  --diff-code-insert-background-color: rgba(46, 160, 67, 0.1);
+  --diff-code-delete-background-color: rgba(229, 83, 75, 0.1);
+}
