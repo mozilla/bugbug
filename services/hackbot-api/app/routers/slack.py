@@ -47,7 +47,10 @@ async def slack_interactions(request: Request) -> Response:
     match action.value.type:
         case "start_agent_run":
             client = get_hackbot_client()
-            client.trigger_run(action.value.agent_name, action.value.inputs)
+            await client.trigger_run(
+                action.value.agent_name,
+                action.value.params,
+            )
         case _:
             raise ValueError("Unsupported action type: %s" % action.value.type)
 
