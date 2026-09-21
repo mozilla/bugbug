@@ -89,13 +89,6 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
     return authorizer
 
 
-# Best-effort dedupe of retried deliveries, keyed by triggering transaction PHID.
-# Per-instance and reset on restart; a durable dedupe (using the DB) can replace
-# this if needed. Sized well above the number of mentions expected in a window.
-_seen_transactions: TTLCache = TTLCache(
-    maxsize=4096, ttl=settings.webhook.dedupe_ttl_seconds
-)
-
 # Best-effort dedupe of retried BMO deliveries, keyed by the globally unique
 # needinfo flag ID. A later needinfo on the same bug receives a new flag ID.
 # TODO: Replace with DB-level deduplication (#6716).
@@ -131,29 +124,18 @@ async def phabricator_webhook(
     if not object_phid or not triggering:
         return {"status": "ignored", "reason": "no revision or transactions"}
 
-    # Dedupe retried deliveries: if we've already seen every triggering
-    # transaction, this is a retry of work already handled.
-    fresh = [phid for phid in triggering if phid not in _seen_transactions]
-    if not fresh:
-        log.info(
-            "Ignored duplicate Phabricator webhook for %s (transactions: %s)",
-            object_phid,
-            ", ".join(triggering),
-        )
-        return {"status": "ignored", "reason": "duplicate delivery"}
-
-    # Only consider this delivery's fresh transactions for the mention, so a
-    # payload mixing new and already-seen PHIDs can't re-trigger on an older one.
     detected = await detect_mention_and_revision(
         phab_client,
         settings.webhook,
         object_phid,
-        fresh,
+        triggering,
         authorizer=authorizer,
     )
     if detected is None:
         return {"status": "ignored", "reason": "no actionable @hackbot mention"}
 
+    # The anchor transaction identifies the submission, so a retried delivery
+    # is answered with the run the first delivery created, on any instance.
     run = await api_client.trigger_run(
         "bug-fix",
         {
@@ -161,17 +143,14 @@ async def phabricator_webhook(
             "revision_id": detected.revision_id,
             "comment": detected.comment,
         },
+        dedupe_key=f"phab-txn:{detected.anchor_phid}",
     )
-    # Mark seen only after a successful trigger: if detection or the trigger call
-    # raises (transient Conduit/API failure), the delivery 500s and Phabricator's
-    # retry must be reprocessed rather than dropped as a duplicate.
-    for phid in fresh:
-        _seen_transactions[phid] = True
     log.info(
-        "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention",
+        "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention (%s)",
         run.run_id,
         detected.revision_id,
         detected.bug_id,
+        detected.anchor_phid,
     )
     return {"status": "triggered", "run_id": run.run_id}
 
