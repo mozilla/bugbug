@@ -58,7 +58,7 @@ async def start_agent_run_callback(
         )
         await respond(
             text=(
-                f"A {value.agent_name} run is already underway for this "
+                f"A {value.agent_name} run is already triggered for this "
                 f"({run.status.value}): {_run_url(run.run_id)}"
             ),
             response_type="ephemeral",
