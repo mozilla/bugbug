@@ -299,7 +299,7 @@ class _FakeClient:
         self._revision = revision
         self._members = frozenset(members)
 
-    async def search_transactions(self, phid, phids=None):
+    async def search_transactions(self, object_identifier, constraints=None):
         return []
 
     async def search_revision(self, phid):
@@ -378,7 +378,9 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         12345,
     )
     # Only this delivery's transactions are fetched, not the whole history.
-    client.search_transactions.assert_awaited_once_with("PHID-DREV-x", ["PHID-XACT-1"])
+    client.search_transactions.assert_awaited_once_with(
+        "PHID-DREV-x", constraints={"phids": ["PHID-XACT-1"]}
+    )
 
 
 async def test_detect_mention_enriches_inline_anchor(monkeypatch):
