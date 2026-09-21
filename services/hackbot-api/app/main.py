@@ -11,7 +11,6 @@ from app.routers import (
     events_router,
     maintenance_router,
     runs_router,
-    slack_router,
     webhooks_router,
 )
 
@@ -47,7 +46,6 @@ app = FastAPI(
 app.include_router(runs_router)
 app.include_router(events_router)
 app.include_router(webhooks_router)
-app.include_router(slack_router)
 app.include_router(maintenance_router)
 
 
