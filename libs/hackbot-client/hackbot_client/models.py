@@ -1,9 +1,11 @@
 """Typed models for the public Hackbot API contract."""
 
+from datetime import datetime
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 
 # Duplicated in services/hackbot-api/app/schemas.py; keep these models in sync.
 
@@ -33,3 +35,52 @@ class TriggeredRun(RunRef):
     """
 
     is_new: bool
+
+
+class RunAction(BaseModel):
+    """One recorded action of a run, and whether it has landed.
+
+    Mirrors the API's `RunActionDoc`. `status` is `"applied"` or `"failed"`:
+    the apply endpoint answers `200` for a pass that ran, not for a pass whose
+    every action succeeded, so a caller that needs the actions to have *landed*
+    has to read this rather than the status code.
+    """
+
+    idx: int
+    type: str
+    params: dict[str, Any]
+    ref: str | None = None
+    status: str
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    applied_at: datetime | None = None
+
+    @property
+    def is_applied(self) -> bool:
+        return self.status == "applied"
+
+    def __str__(self) -> str:
+        return self.type if self.is_applied else f"{self.type} ({self.error})"
+
+
+class ApplyActionsResponse(RootModel[list[RunAction]]):
+    """A run's actions and their apply state, as the API returns them."""
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __len__(self) -> int:
+        return len(self.root)
+
+    @property
+    def unapplied(self) -> list[RunAction]:
+        return [action for action in self.root if not action.is_applied]
+
+    @property
+    def all_applied(self) -> bool:
+        return not self.unapplied
+
+    @property
+    def failure_summary(self) -> str:
+        """The actions that did not land, with the reason each gave."""
+        return "; ".join(str(action) for action in self.unapplied)

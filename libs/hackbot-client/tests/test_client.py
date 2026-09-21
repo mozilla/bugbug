@@ -134,3 +134,76 @@ async def test_trigger_run_sends_the_dedupe_key_as_a_query_parameter(monkeypatch
     )
 
     assert captured["params"] == {"dedupe_key": "push:autoland:abc123"}
+
+
+async def test_apply_actions_posts_to_the_runs_apply_endpoint(monkeypatch):
+    captured = _capture_post(monkeypatch, httpx.Response(200, json=[]))
+
+    await _client(base_url="https://hackbot.example/").apply_actions(RUN_ID)
+
+    assert captured["url"] == f"https://hackbot.example/runs/{RUN_ID}/actions/apply"
+    assert captured["headers"] == {"X-API-Key": "secret"}
+
+
+async def test_apply_actions_returns_each_action_with_its_state(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json=[
+                {"idx": 0, "type": "bugzilla.add_comment", "status": "applied"},
+                {
+                    "idx": 1,
+                    "type": "slack.post_message",
+                    "status": "failed",
+                    "error": "channel_not_found",
+                },
+            ],
+        ),
+    )
+
+    actions = await _client().apply_actions(RUN_ID)
+
+    # The response type, not a list the caller has to interrogate: whether the
+    # actions landed is the one thing the `200` does not say.
+    assert len(actions) == 2
+    assert [a.type for a in actions] == ["bugzilla.add_comment", "slack.post_message"]
+    assert actions.all_applied is False
+    assert [a.type for a in actions.unapplied] == ["slack.post_message"]
+    assert actions.failure_summary == "slack.post_message (channel_not_found)"
+
+
+async def test_apply_actions_reports_a_clean_pass_as_all_applied(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json=[
+                {"idx": 0, "type": "bugzilla.add_comment", "status": "applied"},
+                {"idx": 1, "type": "slack.post_message", "status": "applied"},
+            ],
+        ),
+    )
+
+    actions = await _client().apply_actions(RUN_ID)
+
+    assert actions.all_applied is True
+    assert actions.unapplied == []
+    assert actions.failure_summary == ""
+
+
+async def test_apply_actions_on_a_run_with_no_actions_is_all_applied(monkeypatch):
+    # Vacuously true, and the caller should read it that way: nothing failed.
+    _capture_post(monkeypatch, httpx.Response(200, json=[]))
+
+    actions = await _client().apply_actions(RUN_ID)
+
+    assert len(actions) == 0
+    assert actions.all_applied is True
+
+
+async def test_apply_actions_raises_for_http_errors(monkeypatch):
+    _capture_post(monkeypatch, httpx.Response(404, json={"detail": "Run not found"}))
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await _client().apply_actions(RUN_ID)
