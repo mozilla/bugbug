@@ -128,7 +128,7 @@ class TestStartAgentRun:
 
         self.fake_respond.assert_awaited_once()
         reply = self.fake_respond.await_args.kwargs
-        assert "already underway" in reply["text"]
+        assert "already triggered" in reply["text"]
         assert RUN_ID in reply["text"]
         assert reply["response_type"] == "ephemeral"
         # The channel keeps the button and its context; only the clicker is told.
