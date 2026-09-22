@@ -154,15 +154,12 @@ async def phabricator_webhook(
     if detected is None:
         return {"status": "ignored", "reason": "no actionable @hackbot mention"}
 
-    # The anchor PHID identifies the submission
-    comment, revision_id, bug_id, _anchor_phid = detected
-
     run = await api_client.trigger_run(
         "bug-fix",
         {
-            "bug_id": bug_id,
-            "revision_id": revision_id,
-            "comment": comment,
+            "bug_id": detected.bug_id,
+            "revision_id": detected.revision_id,
+            "comment": detected.comment,
         },
     )
     # Mark seen only after a successful trigger: if detection or the trigger call
@@ -173,8 +170,8 @@ async def phabricator_webhook(
     log.info(
         "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention",
         run.run_id,
-        revision_id,
-        bug_id,
+        detected.revision_id,
+        detected.bug_id,
     )
     return {"status": "triggered", "run_id": run.run_id}
 

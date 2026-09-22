@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NamedTuple
 from xml.sax.saxutils import escape
 
 if TYPE_CHECKING:
@@ -42,6 +42,16 @@ class HackbotMention:
     comment_type: Literal["regular", "inline"]
     transaction_phid: str
     diff_id: int | None = None
+
+
+class DetectedMention(NamedTuple):
+    """An actionable ``@hackbot`` mention, resolved and ready to trigger a run."""
+
+    comment: str
+    revision_id: int
+    bug_id: int
+    # Identifies the submission across webhook retries.
+    anchor_phid: str
 
 
 def triggering_transaction_phids(payload: dict) -> list[str]:
@@ -157,15 +167,14 @@ async def detect_mention_and_revision(
     triggering_phids: list[str],
     *,
     authorizer: PhabricatorAuthorizer,
-) -> tuple[str, int, int, str] | None:
-    """Read Conduit and return ``(comment, revision_id, bug_id, anchor_phid)``.
+) -> DetectedMention | None:
+    """Read Conduit and return the :class:`DetectedMention`, or ``None``.
 
     ``comment`` is the raw text of the triggering ``@hackbot`` comment(s), passed
     through as data — the agent frames it (identity, scope, how to respond). When
     a delivery carries several qualifying comments (e.g. inline comments in one
     review) they are combined so the agent addresses each. The Conduit ``client``
     is injected (built by the route's dependency) rather than constructed here.
-    ``anchor_phid`` identifies the submission (see ``anchor_transaction_phid``).
     Returns ``None`` when there is no qualifying ``@hackbot`` mention, the
     revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
@@ -211,4 +220,9 @@ async def detect_mention_and_revision(
         )
         return None
 
-    return comment, revision_id, bug_id, anchor_transaction_phid(authorized_mentions)
+    return DetectedMention(
+        comment=comment,
+        revision_id=revision_id,
+        bug_id=bug_id,
+        anchor_phid=anchor_transaction_phid(authorized_mentions),
+    )

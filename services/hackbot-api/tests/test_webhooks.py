@@ -22,6 +22,7 @@ from app.phabricator_authorization import (
     PhabricatorAuthorizer,
 )
 from app.phabricator_webhook import (
+    DetectedMention,
     HackbotMention,
     _format_comment,
     anchor_transaction_phid,
@@ -395,13 +396,15 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         ["PHID-XACT-1"],
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
-    assert result == (
-        '  <comment comment_id="1" type="regular">\n'
-        "    @hackbot please fix\n"
-        "  </comment>",
-        42,
-        12345,
-        "PHID-XACT-1",
+    assert result == DetectedMention(
+        comment=(
+            '  <comment comment_id="1" type="regular">\n'
+            "    @hackbot please fix\n"
+            "  </comment>"
+        ),
+        revision_id=42,
+        bug_id=12345,
+        anchor_phid="PHID-XACT-1",
     )
     # Only this delivery's transactions are fetched, not the whole history.
     client.search_transactions.assert_awaited_once_with(
@@ -440,13 +443,15 @@ async def test_detect_mention_enriches_inline_anchor(monkeypatch):
         ["PHID-XACT-1"],
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
-    assert result == (
-        '  <comment comment_id="1" type="inline" diff_id="456">\n'
-        "    @hackbot please fix\n"
-        "  </comment>",
-        42,
-        12345,
-        "PHID-XACT-1",
+    assert result == DetectedMention(
+        comment=(
+            '  <comment comment_id="1" type="inline" diff_id="456">\n'
+            "    @hackbot please fix\n"
+            "  </comment>"
+        ),
+        revision_id=42,
+        bug_id=12345,
+        anchor_phid="PHID-XACT-1",
     )
 
 
@@ -617,6 +622,14 @@ def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
         app.dependency_overrides.clear()
 
 
+_DETECTED = DetectedMention(
+    comment="@hackbot please fix",
+    revision_id=42,
+    bug_id=12345,
+    anchor_phid="PHID-XACT-1",
+)
+
+
 def _post(client, payload: dict):
     body = json.dumps(payload).encode()
     return client.post(
@@ -672,7 +685,7 @@ def test_route_ignores_no_mention(client, monkeypatch):
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1"))
+    detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
@@ -704,7 +717,7 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
 
 
 def test_route_dedupes_retried_delivery(client, monkeypatch):
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1"))
+    detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
 
@@ -723,7 +736,7 @@ def test_route_dedupes_retried_delivery(client, monkeypatch):
 def test_route_detects_only_fresh_transactions(client, monkeypatch):
     # A delivery mixing an already-seen PHID with a new one must consider only
     # the fresh transaction for mention detection.
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1"))
+    detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
     webhooks._seen_transactions["PHID-XACT-OLD"] = True
@@ -744,7 +757,7 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
     monkeypatch.setattr(
         webhooks,
         "detect_mention_and_revision",
-        AsyncMock(return_value=("@hackbot please fix", 42, 12345, "PHID-XACT-1")),
+        AsyncMock(return_value=_DETECTED),
     )
 
     class _FailingClient:
