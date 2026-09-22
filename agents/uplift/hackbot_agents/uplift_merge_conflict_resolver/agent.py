@@ -396,7 +396,7 @@ def read_agent_report(
     """Parse the report the agent wrote, publishing it as it wrote it.
 
     Published as ``report.unverified.json``, since its `resolved` is the
-    agent's claim and the checks may overrule it. A missing or unparseable
+    agent's claim and the checks may overrule it. A missing or unparsable
     report is an unresolved run rather than a crash; the patch is collected
     separately and is worth surfacing either way.
     """

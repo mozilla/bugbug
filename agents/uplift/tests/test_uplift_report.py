@@ -70,7 +70,7 @@ def test_a_report_that_cannot_be_parsed_is_still_published(tmp_path, publisher):
 
     result = read_agent_report(tmp_path, publisher)
 
-    assert result == Report(), "An unparseable report should fall back."
+    assert result == Report(), "An unparsable report should fall back."
     assert publisher.bodies["report.unverified.json"] == "{broken", (
         "The raw report is still published, verbatim, so a human can inspect it."
     )
