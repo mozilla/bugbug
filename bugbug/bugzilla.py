@@ -79,6 +79,7 @@ ATTACHMENT_INCLUDE_FIELDS = [
 ]
 
 COMMENT_INCLUDE_FIELDS = [
+    "_collapsed_comments",
     "id",
     "count",
     "text",
@@ -465,6 +466,56 @@ def get_groups_users(group_names: list[str]) -> list[str]:
         for group in r.json()["groups"]
         for member in group["membership"]
     ]
+
+
+def fetch_comments(comment_ids: list[int]) -> dict[int, dict]:
+    if not comment_ids:
+        return {}
+
+    response = utils.get_session("bugzilla").get(
+        f"https://bugzilla.mozilla.org/rest/bug/comment/{comment_ids[0]}",
+        params={"comment_ids": comment_ids[1:]},
+        headers={
+            "X-Bugzilla-API-Key": Bugzilla.TOKEN,
+            "User-Agent": utils.get_user_agent(),
+        },
+    )
+
+    if response.status_code == 400 and len(comment_ids) > 1:
+        midpoint = len(comment_ids) // 2
+        return {
+            **fetch_comments(comment_ids[:midpoint]),
+            **fetch_comments(comment_ids[midpoint:]),
+        }
+
+    if response.status_code == 400 and response.json().get("code") in (110, 111):
+        return {}
+
+    response.raise_for_status()
+    return {
+        int(comment_id): comment
+        for comment_id, comment in response.json()["comments"].items()
+    }
+
+
+def get_comments(comment_ids: Iterable[int]) -> dict[int, tuple[BugDict, dict]]:
+    normalized_ids = list(dict.fromkeys(map(int, comment_ids)))
+    comments = {
+        comment_id: comment
+        for comment_ids_batch in itertools.batched(normalized_ids, 100)
+        for comment_id, comment in fetch_comments(list(comment_ids_batch)).items()
+    }
+    bugs = get({comment["bug_id"] for comment in comments.values()})
+
+    return {
+        comment_id: (bugs[comment["bug_id"]], comment)
+        for comment_id, comment in comments.items()
+        if comment["bug_id"] in bugs
+    }
+
+
+def get_comment(comment_id: int) -> dict[int, tuple[BugDict, dict]]:
+    return get_comments([comment_id])
 
 
 def get_revision_ids(bug: BugDict) -> list[int]:
