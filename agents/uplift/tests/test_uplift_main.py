@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from hackbot_agents.uplift_merge_conflict_resolver import __main__ as entrypoint
-from hackbot_agents.uplift_merge_conflict_resolver.config import (
+from hackbot_agents.uplift_merge_conflict_resolver.models import (
     GitSource,
     PhabricatorSource,
 )

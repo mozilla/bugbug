@@ -28,7 +28,7 @@ from hackbot_runtime.claude import Reporter
 from phabricator_client import PhabricatorClient, PhabricatorSettings
 from searchfox import AsyncSearchfoxClient
 
-from .config import (
+from .models import (
     MODEL,
     ConflictReport,
     FetchedDiff,

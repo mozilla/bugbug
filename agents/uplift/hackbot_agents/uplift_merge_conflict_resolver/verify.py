@@ -8,7 +8,7 @@ agent's own judgment; none of these are.
 import subprocess
 from pathlib import Path
 
-from .config import Report
+from .models import Report
 
 
 def git_output(repo: Path, *args: str) -> str:

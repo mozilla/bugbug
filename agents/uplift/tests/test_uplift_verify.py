@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hackbot_agents.uplift_merge_conflict_resolver.config import Report
+from hackbot_agents.uplift_merge_conflict_resolver.models import Report
 from hackbot_agents.uplift_merge_conflict_resolver.verify import verify_uplift
 
 RESOLVED = Report(resolved=True, confidence="high", summary="done")

@@ -12,7 +12,7 @@ from hackbot_agents.uplift_merge_conflict_resolver.agent import (
     describe_requested,
     fetch_source_diffs,
 )
-from hackbot_agents.uplift_merge_conflict_resolver.config import (
+from hackbot_agents.uplift_merge_conflict_resolver.models import (
     GitSource,
     PhabricatorSource,
 )

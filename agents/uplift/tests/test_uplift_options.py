@@ -14,7 +14,7 @@ from hackbot_agents.uplift_merge_conflict_resolver.agent import (
     build_options,
     check_result,
 )
-from hackbot_agents.uplift_merge_conflict_resolver.config import MODEL
+from hackbot_agents.uplift_merge_conflict_resolver.models import MODEL
 
 MCP_SERVERS = {"bugbug": {"type": "http", "url": "http://localhost:8080/mcp"}}
 

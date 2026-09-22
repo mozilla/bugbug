@@ -17,7 +17,7 @@ from hackbot_agents.uplift_merge_conflict_resolver.agent import (
     render_bug_block,
     render_sources,
 )
-from hackbot_agents.uplift_merge_conflict_resolver.config import (
+from hackbot_agents.uplift_merge_conflict_resolver.models import (
     FetchedDiff,
     GitSource,
     PhabricatorSource,

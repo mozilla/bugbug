@@ -14,7 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from hackbot_agents.uplift_merge_conflict_resolver import agent
-from hackbot_agents.uplift_merge_conflict_resolver.config import GitSource
+from hackbot_agents.uplift_merge_conflict_resolver.models import GitSource
 from hackbot_runtime import changes
 
 AUTHOR = "Original Author <original@example.com>"

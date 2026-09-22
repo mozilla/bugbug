@@ -4,7 +4,7 @@ from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import UpliftResult, run_uplift
-from .config import UpliftSource
+from .models import UpliftSource
 
 logger = logging.getLogger(__name__)
 

@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from hackbot_agents.uplift_merge_conflict_resolver import agent
-from hackbot_agents.uplift_merge_conflict_resolver.config import GitSource
+from hackbot_agents.uplift_merge_conflict_resolver.models import GitSource
 from hackbot_runtime import AgentError
 
 BUGBUG_MCP = {"type": "http", "url": "http://localhost:8080/mcp"}

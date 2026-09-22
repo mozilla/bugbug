@@ -11,7 +11,7 @@ import json
 
 import pytest
 from hackbot_agents.uplift_merge_conflict_resolver.agent import read_agent_report
-from hackbot_agents.uplift_merge_conflict_resolver.config import Report
+from hackbot_agents.uplift_merge_conflict_resolver.models import Report
 
 REPORT = {
     "resolved": True,
