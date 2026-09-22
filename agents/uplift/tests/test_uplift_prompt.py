@@ -121,6 +121,10 @@ def test_the_system_prompt_holds_no_per_run_detail():
     assert "How to apply each patch" in prompt, (
         "How to apply a source is guidance, not a detail of one run."
     )
+    assert "get_phabricator_revision" in prompt, (
+        "A raw diff carries no commit message, so the agent is told where to "
+        "read the revision's own rather than inventing one."
+    )
 
 
 def test_the_task_prompt_holds_the_run(tmp_path):

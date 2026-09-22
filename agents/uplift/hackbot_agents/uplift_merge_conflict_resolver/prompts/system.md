@@ -27,7 +27,10 @@ For a **Phabricator** source (a revision id):
    leaving you no conflict markers at all.
 3. Apply it with a three-way merge so conflicts surface as markers:
    `git apply --3way <diff-file>`
-4. Resolve any conflicts and commit the fixed patch.
+4. Resolve any conflicts and commit the fixed patch. A raw diff carries no
+   commit message, so do not write one yourself: read the revision's title and
+   summary with `get_phabricator_revision` and commit under those, ending the
+   message with a `Differential Revision: <the revision's URI>` line.
 
 If no base commit is listed, Phabricator never recorded one. Try the apply
 anyway; should it fail with no markers, find the base yourself (the revision or
