@@ -7,8 +7,12 @@ export type ParsedSources =
   | { sources?: undefined; error: string };
 
 const SHAPE_HINT =
-  'each source must be {"kind": "git", "commit": "<sha>"} or ' +
+  'each source must be {"kind": "git", "commit": "<full sha>"} or ' +
   '{"kind": "phabricator", "revision_id": 12345}';
+
+// The agent fetches each commit straight from the remote, which will not
+// resolve an abbreviated object id, so the API requires the full 40 characters.
+const FULL_SHA = /^[0-9a-f]{40}$/;
 
 function positiveInteger(value: unknown): boolean {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
@@ -22,9 +26,12 @@ function validateSource(entry: unknown, index: number): string | null {
   const source = entry as Record<string, unknown>;
 
   if (source.kind === "git") {
-    return typeof source.commit === "string" && source.commit.trim().length > 0
+    if (typeof source.commit !== "string" || !source.commit.trim()) {
+      return `${position} needs a "commit" SHA.`;
+    }
+    return FULL_SHA.test(source.commit.trim())
       ? null
-      : `${position} needs a "commit" SHA.`;
+      : `${position} needs the full 40-character "commit" SHA, not an abbreviation.`;
   }
 
   if (source.kind === "phabricator") {

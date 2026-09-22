@@ -327,7 +327,7 @@ export function TriggerForm() {
             <textarea
               id="upliftSources"
               placeholder={
-                '[{"kind": "git", "commit": "abc123"},\n' +
+                '[{"kind": "git", "commit": "9f4a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a"},\n' +
                 ' {"kind": "phabricator", "revision_id": 12345}]'
               }
               rows={4}

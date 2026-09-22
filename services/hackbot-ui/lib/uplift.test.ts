@@ -3,9 +3,12 @@ import { test } from "node:test";
 
 import { parseUpliftSources } from "./uplift.ts";
 
+const SHA = "9f4a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a";
+const OTHER_SHA = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
 test("accepts a git source", () => {
-  const result = parseUpliftSources('[{"kind": "git", "commit": "abc123"}]');
-  assert.deepEqual(result.sources, [{ kind: "git", commit: "abc123" }]);
+  const result = parseUpliftSources(`[{"kind": "git", "commit": "${SHA}"}]`);
+  assert.deepEqual(result.sources, [{ kind: "git", commit: SHA }]);
 });
 
 test("accepts a phabricator source with and without a pinned diff", () => {
@@ -21,9 +24,9 @@ test("accepts a phabricator source with and without a pinned diff", () => {
 
 test("keeps a mixed stack in the order given", () => {
   const result = parseUpliftSources(
-    '[{"kind": "git", "commit": "aaa"},' +
+    `[{"kind": "git", "commit": "${SHA}"},` +
       ' {"kind": "phabricator", "revision_id": 9},' +
-      ' {"kind": "git", "commit": "bbb"}]'
+      ` {"kind": "git", "commit": "${OTHER_SHA}"}]`
   );
   assert.deepEqual(result.sources?.map((source) => source.kind), [
     "git",
@@ -40,7 +43,7 @@ test("rejects input that is not a non-empty JSON list", () => {
     );
   }
   assert.match(
-    parseUpliftSources('{"kind": "git", "commit": "abc"}').error ?? "",
+    parseUpliftSources(`{"kind": "git", "commit": "${SHA}"}`).error ?? "",
     /JSON list/,
     "a bare object should be reported as needing a list"
   );
@@ -57,6 +60,20 @@ test("rejects a git source with no usable commit", () => {
       parseUpliftSources(value).error ?? "",
       /commit/,
       `expected a commit error for ${value}`
+    );
+  }
+});
+
+test("rejects an abbreviated commit", () => {
+  for (const value of [
+    '[{"kind": "git", "commit": "abc1234"}]',
+    `[{"kind": "git", "commit": "${SHA.toUpperCase()}"}]`,
+    `[{"kind": "git", "commit": "${SHA}z"}]`,
+  ]) {
+    assert.match(
+      parseUpliftSources(value).error ?? "",
+      /40-character/,
+      `expected a full-SHA error for ${value}`
     );
   }
 });
@@ -93,7 +110,7 @@ test("rejects an unknown source kind", () => {
 
 test("names the offending source by position", () => {
   assert.match(
-    parseUpliftSources('[{"kind": "git", "commit": "aaa"}, {"kind": "git"}]')
+    parseUpliftSources(`[{"kind": "git", "commit": "${SHA}"}, {"kind": "git"}]`)
       .error ?? "",
     /source 2/,
     "the message should point at the entry that is wrong"
