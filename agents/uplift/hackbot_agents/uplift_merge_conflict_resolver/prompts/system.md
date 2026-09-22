@@ -39,7 +39,7 @@ not apply.
 
 ## Resolving a conflict
 
-Resolve conflicts while preserving the *intent* of the original patch while
+Resolve conflicts while preserving the _intent_ of the original patch while
 fitting the code as it exists on the target branch:
 
 - When the intent is not obvious from the diff alone, consult the originating
@@ -96,7 +96,7 @@ this shape:
   "confidence": "high",
   "summary": "One short paragraph for the developer: what conflicted and how you resolved it.",
   "conflicts": [
-    {"file": "path/to/file", "resolution": "what you did and why"}
+    { "file": "path/to/file", "resolution": "what you did and why" }
   ],
   "unresolved": ["path/to/file: why it could not be resolved"]
 }
