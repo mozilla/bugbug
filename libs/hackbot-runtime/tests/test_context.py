@@ -122,6 +122,37 @@ async def test_prepare_repo_conflicting_ref_raises(tmp_path, monkeypatch):
         await hb.prepare_repo(ref="base9")
 
 
+async def test_checkout_moves_the_base_the_diff_is_taken_against(tmp_path, monkeypatch):
+    monkeypatch.delenv("SOURCE_REF", raising=False)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.ensure_source_repo", lambda *a, **k: None
+    )
+    checked_out = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.checkout_commit",
+        lambda path, ref: checked_out.append(ref),
+    )
+    heads = iter(["headcommit", "earliercommit"])
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.base_commit", lambda path: next(heads)
+    )
+    cfg = HackbotConfig(source=SourceConfig(repo_url="r", checkout_path=Path("/x")))
+    hb = _hb(tmp_path, cfg)
+    await hb.prepare_repo()
+    assert hb._source_base == "headcommit"
+
+    assert hb.checkout("earlier") == "earliercommit"
+    assert checked_out == ["earlier"]
+    # Both bases move: the diff and any try push are taken against the new one.
+    assert hb._source_base == hb._published_base == "earliercommit"
+
+
+def test_checkout_needs_a_prepared_repo(tmp_path):
+    hb = _hb(tmp_path, HackbotConfig())
+    with pytest.raises(RuntimeError, match="not prepared"):
+        hb.checkout("earlier")
+
+
 def test_results_plumbing(tmp_path):
     hb = _hb(tmp_path, HackbotConfig())
 

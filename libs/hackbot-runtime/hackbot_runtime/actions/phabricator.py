@@ -87,6 +87,17 @@ async def submit_patch(
             ),
         ),
     ] = None,
+    parent_revision: Annotated[
+        int | None,
+        Field(
+            description=(
+                "Id of the revision this patch stacks on (the number after D), "
+                "when it belongs on top of an existing revision rather than on "
+                "its own. A child revision's diff is taken against its parent, so "
+                "the working tree must be checked out at that revision's commit."
+            ),
+        ),
+    ] = None,
 ) -> str:
     """Submit your fix for review as a new Phabricator revision.
 
@@ -106,16 +117,16 @@ async def submit_patch(
     bug comment).
     """
     _validate_summary(summary)
+    params: dict = {
+        "bug_id": bug_id,
+        "title": title,
+        "summary": summary,
+        "test_plan": test_plan,
+    }
+    if parent_revision is not None:
+        params["parent_revision"] = parent_revision
     action = recorder.record(
-        "phabricator.submit_patch",
-        {
-            "bug_id": bug_id,
-            "title": title,
-            "summary": summary,
-            "test_plan": test_plan,
-        },
-        reasoning=reasoning,
-        ref=ref,
+        "phabricator.submit_patch", params, reasoning=reasoning, ref=ref
     )
     return confirmation(action)
 

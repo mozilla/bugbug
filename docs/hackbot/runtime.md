@@ -29,12 +29,13 @@ the orchestrator); its capabilities come from `hackbot.toml`.
 
 ### Capabilities
 
-| Member                             | Gives you                                                      |
-| ---------------------------------- | -------------------------------------------------------------- |
-| `await prepare_repo(ref=, depth=)` | The source checkout, cloned or refreshed. Call once, up front. |
-| `repo_path`                        | The prepared checkout (raises if `prepare_repo` hasn't run)    |
-| `firefox`                          | `FirefoxContext` — build paths derived from the checkout       |
-| `anthropic.api_key`                | Model credentials, validated on access                         |
+| Member                             | Gives you                                                          |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| `await prepare_repo(ref=, depth=)` | The source checkout, cloned or refreshed. Call once, up front.     |
+| `repo_path`                        | The prepared checkout (raises if `prepare_repo` hasn't run)        |
+| `checkout(ref)`                    | Move the checkout to `ref`; the published diff is taken from there |
+| `firefox`                          | `FirefoxContext` — build paths derived from the checkout           |
+| `anthropic.api_key`                | Model credentials, validated on access                             |
 
 `prepare_repo` resolves its ref from the argument, then `SOURCE_REF`, then
 `[source].ref`. Preparing twice at conflicting refs raises rather than silently editing

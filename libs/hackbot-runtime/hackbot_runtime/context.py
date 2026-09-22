@@ -30,7 +30,7 @@ from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
-from hackbot_runtime.source import ensure_source_repo
+from hackbot_runtime.source import checkout_commit, ensure_source_repo
 from hackbot_runtime.uploader import SignedPolicyUploader
 
 if TYPE_CHECKING:
@@ -160,6 +160,18 @@ class HackbotContext(BaseSettings):
         :meth:`publish_changes` collects only what the agent itself did.
         """
         self._source_base = changes.base_commit(self.repo_path)
+
+    def checkout(self, ref: str) -> str:
+        """Move the prepared checkout to ``ref`` and start the agent's edits there.
+
+        For work that belongs on a different commit than the one the source was
+        prepared at. What the run publishes -- its patch, its Phabricator diff, its
+        try push -- is then taken against ``ref``, so a revision built from it
+        stacks on that commit. Returns the full sha. The tree must be clean.
+        """
+        checkout_commit(self.repo_path, ref)
+        self._source_base = self._published_base = changes.base_commit(self.repo_path)
+        return self._source_base
 
     @property
     def repo_path(self) -> Path:

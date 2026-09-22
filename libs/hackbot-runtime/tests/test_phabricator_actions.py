@@ -26,6 +26,16 @@ async def test_submit_records_test_plan():
     assert "ref" not in action
 
 
+async def test_submit_records_the_parent_revision_only_when_stacked():
+    rec = ActionsRecorder()
+    await phabricator.submit_patch(
+        rec, bug_id=1, title="Fix", reasoning="r", parent_revision=325120
+    )
+    await phabricator.submit_patch(rec, bug_id=1, title="Fix", reasoning="r")
+    assert rec.actions[0]["params"]["parent_revision"] == 325120
+    assert "parent_revision" not in rec.actions[1]["params"]
+
+
 @pytest.mark.parametrize(
     "header",
     ["Tests", "tests", "Test Plan", "Testplan", "Tested"],
