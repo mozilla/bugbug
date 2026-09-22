@@ -6,6 +6,7 @@ records anything at all, since the alternative is posting into a channel that di
 ask for it.
 """
 
+import json
 import re
 
 import pytest
@@ -15,6 +16,7 @@ from hackbot_agents.frontend_triage.agent import (
 )
 from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE
 from hackbot_agents.frontend_triage.notify import (
+    HELD_NOTE,
     build_blocks,
     build_message,
     channel_for,
@@ -185,8 +187,13 @@ def _block_of(kind: str, **overrides) -> dict | None:
     return next((b for b in _blocks(**overrides) if b["type"] == kind), None)
 
 
-def test_the_layout_reads_bug_then_facts_then_run():
-    assert [b["type"] for b in _blocks()] == ["section", "section", "context"]
+def test_the_layout_reads_bug_then_facts_then_button_then_run():
+    assert [b["type"] for b in _blocks()] == [
+        "section",
+        "section",
+        "actions",
+        "context",
+    ]
 
 
 def test_the_headline_links_the_bug_and_puts_the_summary_under_it():
@@ -258,9 +265,10 @@ def test_a_severity_below_the_threshold_is_not_reported():
 def test_a_field_with_nothing_to_say_is_dropped():
     fields = _blocks(severity_assessment=None)[1]["fields"]
     assert [f["text"] for f in fields] == ["*Component*\nFirefox :: New Tab Page"]
-    # And with neither, the grid itself goes rather than rendering empty.
+    # And with none of them, the grid itself goes rather than rendering empty.
     assert [b["type"] for b in _blocks(severity_assessment=None, product=None)] == [
         "section",
+        "actions",
         "context",
     ]
 
@@ -273,10 +281,25 @@ def test_the_run_sits_in_the_context_line():
     )
 
 
-def test_the_notification_asks_for_nothing_yet():
-    # The layout is the whole change: no interactive element is posted until the
-    # buttons land, so nothing here can be clicked.
-    assert _block_of("actions") is None
+# --- the button (#6739) ---
+
+
+def _button_value(**overrides) -> dict:
+    return json.loads(_block_of("actions", **overrides)["elements"][0]["value"])
+
+
+def test_the_button_carries_what_the_receiver_needs_to_start_the_run():
+    # The one thing here worth pinning: this value crosses a process boundary and
+    # is parsed by hackbot-api, so a wrong `dedupe_key` silently buys a second run
+    # per click and a wrong `apply_run_id` starts the agent on an unanalysed bug.
+    # Neither shows up anywhere else, and neither moves when this file is
+    # rearranged.
+    assert _button_value() == {
+        "agent_name": "bug-fix",
+        "params": {"bug_id": BUG_ID},
+        "dedupe_key": f"frontend-triage-run:{RUN_ID}",
+        "apply_run_id": RUN_ID,
+    }
 
 
 # --- the two renderings say the same things ---
@@ -350,16 +373,48 @@ def test_the_blocks_say_everything_the_fallback_text_says(overrides):
     assert _urls(text) <= _urls(blocks)
 
 
-def test_a_run_that_was_not_auto_applied_reports_nothing():
-    # Medium and low results wrote nothing to the bug, so there is nothing to report.
+def test_a_held_run_reports_too_because_its_reader_needs_the_button():
+    # It used to report nothing. The button is why that changed: a result the agent
+    # would not let apply itself is exactly the one a human has to decide on, and
+    # nobody would find it without being told it exists.
+    recorder = ActionsRecorder()
+    action = record_notification(
+        recorder, _result(auto_apply=False, confidence="medium"), run_id=RUN_ID
+    )
+
+    assert action is not None
+    blocks = action["params"]["blocks"]
+    assert any(b["type"] == "actions" for b in blocks)
+    # And it says the analysis is not on the bug, in both renderings.
+    assert HELD_NOTE in action["params"]["text"]
+    assert any(HELD_NOTE == b.get("text", {}).get("text") for b in blocks)
+
+
+def test_a_run_with_nothing_to_fix_reports_nothing():
+    # No fix to offer, so a button would be an offer to act on a bug this agent
+    # just called out of scope, and the channel would have nothing to do with it.
     recorder = ActionsRecorder()
     assert (
         record_notification(
-            recorder, _result(auto_apply=False, confidence="medium"), run_id=RUN_ID
+            recorder,
+            _result(actionable=False, auto_apply=False, confidence="low"),
+            run_id=RUN_ID,
         )
         is None
     )
     assert recorder.actions == []
+
+
+def test_a_run_that_reported_no_verdict_still_reports():
+    # `is not False`, matching `may_apply_unattended`: a plan that did not parse is
+    # treated as having something to fix rather than as out of scope.
+    recorder = ActionsRecorder()
+    assert (
+        record_notification(
+            recorder, _result(actionable=None, auto_apply=False), run_id=RUN_ID
+        )
+        is not None
+    )
 
 
 def test_a_run_in_an_unowned_component_reports_nothing():

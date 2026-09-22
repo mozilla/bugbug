@@ -76,7 +76,6 @@ async def add_comment(
     is_private: Annotated[
         bool,
         Field(
-            default=False,
             description="Mark the comment private (security group only).",
         ),
     ] = False,
@@ -115,14 +114,12 @@ async def add_attachment(
     summary: Annotated[
         str | None,
         Field(
-            default=None,
             description="Short description of the attachment. Defaults to the filename.",
         ),
     ] = None,
     content_type: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
                 "MIME type. Guessed from extension if omitted. Ignored "
                 "when is_patch=true."
@@ -132,7 +129,6 @@ async def add_attachment(
     is_patch: Annotated[
         bool,
         Field(
-            default=False,
             description=(
                 "Mark as a patch (Bugzilla forces text/plain and enables diff view)."
             ),
@@ -141,7 +137,6 @@ async def add_attachment(
     comment: Annotated[
         str | None,
         Field(
-            default=None,
             description="Optional comment to record alongside the attachment.",
         ),
     ] = None,
@@ -200,7 +195,6 @@ async def create_bug(
     extra: Annotated[
         dict[str, Any] | None,
         Field(
-            default=None,
             description=(
                 "Optional additional fields accepted by Bugzilla's POST /bug "
                 "endpoint (severity, priority, keywords, whiteboard, blocks, "

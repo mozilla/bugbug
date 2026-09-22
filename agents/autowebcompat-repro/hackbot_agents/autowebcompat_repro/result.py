@@ -75,14 +75,13 @@ class ReproductionResult(BaseModel):
     confirmed_by_script: Annotated[
         bool,
         Field(
-            default=False,
             description=(
                 "true if a Puppeteer script demonstrated the difference for this "
                 "Firefox build, false if you could not get one to pass or did not "
                 "run one."
             ),
         ),
-    ]
+    ] = False
 
     reproduced: Annotated[
         bool,

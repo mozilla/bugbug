@@ -12,6 +12,9 @@ os.environ.setdefault("BUGZILLA_WEBHOOK_SECRET", "test-bugzilla-webhook-secret")
 os.environ.setdefault("BUGZILLA_WEBHOOK_BOT_LOGIN", "hackbot@mozilla.tld")
 os.environ.setdefault("BUGZILLA_API_KEY", "test-bugzilla-api-key")
 os.environ.setdefault("SLACK_SIGNING_SECRET", "test-signing-secret")
+# Not a setting, so not validated above, but Bolt refuses to build an app without
+# one and every test that reaches the Slack receiver builds one.
+os.environ.setdefault("SLACK_BOT_TOKEN", "xoxb-test-token")
 
 import pytest  # noqa: E402
 from app.auth import require_api_key  # noqa: E402
