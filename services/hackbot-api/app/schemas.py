@@ -230,7 +230,7 @@ class UpliftInputs(BaseModel):
 
     # The exact commit to uplift onto. Branch names move, so a caller
     # reproducing a specific uplift should pin it; otherwise the tip is used.
-    target_commit: str | None = Field(default=None, pattern=FULL_SHA_PATTERN)
+    target_commit: Annotated[str | None, Field(pattern=FULL_SHA_PATTERN)] = None
 
     # Ordered patches to apply onto the branch; applied in this sequence.
     sources: list[UpliftSource]

@@ -1,4 +1,5 @@
 import logging
+from typing import Annotated
 
 from hackbot_runtime import HackbotContext, run_async
 from pydantic import Field
@@ -23,7 +24,7 @@ class AgentInputs(BaseSettings):
 
     # The exact commit to uplift onto. A branch name moves, so a caller
     # reproducing a specific uplift should pin it; otherwise the tip is used.
-    target_commit: str | None = Field(default=None, pattern=FULL_SHA_PATTERN)
+    target_commit: Annotated[str | None, Field(pattern=FULL_SHA_PATTERN)] = None
 
     # The patches to apply onto the branch, in this order; a stack is several.
     sources: list[UpliftSource]
