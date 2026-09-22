@@ -148,7 +148,7 @@ def _bug_fix_button(result: FrontendTriageResult, *, run_id: str) -> dict:
     return create_start_agent_run_button(
         label,
         agent_name="bug-fix",
-        params={"bug_id": result.bug_id},
+        inputs={"bug_id": result.bug_id},
         dedupe_key=f"frontend-triage-run:{run_id}",
         apply_run_id=run_id,
         confirm=ConfirmObject(
