@@ -44,16 +44,19 @@ The result reports `blamed_commit` so the caller can attribute the failure to a 
 
 ## Submitting the fix
 
-Once a bug is known, the fix stage records a `phabricator.submit_patch` action in
-`summary.json` -- a new WIP revision carrying the fix, whose diff the runtime builds
-from the agent's own checkout into `changes/phabricator_diff.json`. Nothing is posted
-to the bug, and nothing reaches Phabricator during the run.
+The fix stage runs on a checkout of the blamed commit itself, so the fix is a change
+to that commit. Once a bug is known, it records a `phabricator.submit_patch` action in
+`summary.json` -- a WIP revision carrying the fix, whose diff the runtime builds from
+the agent's own checkout into `changes/phabricator_diff.json`, stacked as a child of
+the blamed commit's own revision when its footer names one (`parent_revision`).
+Nothing is posted to the bug, and nothing reaches Phabricator during the run.
 
-A developer reviews the patch (`changes/changes.patch`) in the Hackbot UI and applies
-the action from there; the full review then happens on the revision. Unlike the email
-below, this one waits for a human -- only `email.send` auto-applies, see
-[`agents.py`](../../services/hackbot-api/app/agents.py). Eval runs pass no actions
-recorder, so they never record it.
+Bustage is backed out, so the revision is not meant to land on its own: the developer
+applies the action from the Hackbot UI, pulls their revision and the child with
+`moz-phab patch`, squashes the fix in, resubmits and relands -- the email spells out
+the steps. Unlike the email, the action waits for a human -- only `email.send`
+auto-applies, see [`agents.py`](../../services/hackbot-api/app/agents.py). Eval runs
+pass no actions recorder and no checkout, so they never record it.
 
 A run whose blamed commit names no bug (a "No bug" commit, a backout) produces the fix
 but records no revision -- one has to be filed against a bug. The agent log says so

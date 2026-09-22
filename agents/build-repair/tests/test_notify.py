@@ -140,16 +140,42 @@ def test_no_patch_section_without_a_patch():
     assert "{patch}" not in body
 
 
-def test_a_pending_revision_comes_with_submit_instructions():
-    _, body = _email(_result(bug_id=2063979), has_patch=True, revision_pending=True)
-    assert "## How to submit the fix to Phabricator" in body
-    assert "run page: https://hackbot.moz.tools/runs/1218e630-78c8" in body
-    assert "*Apply pending actions*" in body
-    assert "[bug 2063979](https://bugzilla.mozilla.org/show_bug.cgi?id=2063979)" in body
+def test_a_stacked_revision_comes_with_the_reland_recipe():
+    _, body = _email(
+        _result(bug_id=2063979),
+        has_patch=True,
+        revision_pending=True,
+        parent_revision=325120,
+    )
+    assert "## Relanding with the fix" in body
+    assert (
+        "*Apply pending actions* on the "
+        "[run page](https://hackbot.moz.tools/runs/1218e630-78c8) files this patch as"
+        " a child revision of D325120. To reland:" in body
+    )
+    assert "moz-phab patch D325120\nmoz-phab patch D<new> --apply-to @\n" in body
+    assert "git rebase -i @~1" in body
+    assert "--skip-dependencies" in body
     # Instructions come before the diff, which can run long.
-    assert body.index("How to submit") < body.index("## Proposed patch")
+    assert body.index("Relanding with the fix") < body.index("## Proposed patch")
 
 
-def test_no_submit_instructions_without_a_pending_revision():
+def test_an_unstacked_revision_says_how_to_pull_it_onto_the_patch():
+    _, body = _email(_result(bug_id=2063979), has_patch=True, revision_pending=True)
+    assert (
+        "files this patch as a WIP revision on "
+        "[bug 2063979](https://bugzilla.mozilla.org/show_bug.cgi?id=2063979)." in body
+    )
+    assert "To reland:" not in body
+
+
+def test_no_reland_section_without_a_pending_revision():
     _, body = _email(has_patch=True)
-    assert "How to submit" not in body
+    assert "Relanding with the fix" not in body
+
+
+def test_the_author_is_told_the_patch_is_for_the_reland():
+    _, body = _email(blamed_author="author@mozilla.com", has_patch=True)
+    assert "fold into it and reland, not to land on its own" in body
+    _, body = _email(blamed_author="author@mozilla.com")
+    assert "fold into it" not in body
