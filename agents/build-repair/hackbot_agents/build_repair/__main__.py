@@ -69,6 +69,7 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
         verbose=True,
         publish_file=ctx.publish_file,
         actions_recorder=ctx.actions,
+        checkout=ctx.checkout,
     )
 
     try:
@@ -88,8 +89,8 @@ def _record_analysis_email(
         return
 
     blamed_author = resolve_author_email(ctx.repo_path, result.blamed_commit)
-    revision_pending = any(
-        action["type"] in PATCH_ACTION_TYPES for action in ctx.actions.actions
+    pending = next(
+        (a for a in ctx.actions.actions if a["type"] in PATCH_ACTION_TYPES), None
     )
     subject, body = build_email(
         result,
@@ -97,7 +98,8 @@ def _record_analysis_email(
         task_id=task_id,
         run_id=ctx.run_id,
         has_patch=has_patch,
-        revision_pending=revision_pending,
+        revision_pending=pending is not None,
+        parent_revision=(pending or {}).get("params", {}).get("parent_revision"),
         blamed_author=blamed_author,
     )
     record_email(
