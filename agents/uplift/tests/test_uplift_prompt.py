@@ -139,6 +139,12 @@ def test_the_task_prompt_holds_the_run(tmp_path):
         "Both sources should reach the task, which is what the agent works from."
     )
     assert "bug 42" in prompt, "The originating bug belongs with the task."
+    assert "\n\n## Originating bug\n\n" in prompt, (
+        "The bug section stands on its own, with a blank line on either side."
+    )
+    assert "\n\n\n" not in prompt, (
+        "And no doubled blank line where the section was spliced in."
+    )
     assert f"{tmp_path}/report.json" in prompt, (
         "The task names where to write the report, since the path is per-run."
     )

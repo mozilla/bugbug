@@ -318,13 +318,18 @@ def render_sources(
 
 
 def render_bug_block(bug_id: int | None) -> str:
-    """The optional originating-bug section of the prompt; empty when no bug."""
+    """The optional originating-bug section of the prompt; empty when no bug.
+
+    Carries its own surrounding blank lines, so the template can hold the
+    placeholder on a line of its own without leaving one behind when there is
+    no bug.
+    """
     if bug_id is None:
         return ""
     return (
-        f"## Originating bug\n\n"
+        f"\n## Originating bug\n\n"
         f"These patches belong to bug {bug_id}. Consult it with `get_bugzilla_bug` "
-        f"when a conflict's intent is unclear.\n\n"
+        f"when a conflict's intent is unclear.\n"
     )
 
 
