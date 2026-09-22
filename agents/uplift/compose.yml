@@ -38,6 +38,7 @@ services:
     environment:
       - RUN_ID
       - TARGET_BRANCH=${TARGET_BRANCH:-}
+      - TARGET_COMMIT=${TARGET_COMMIT:-}
       - SOURCES=${SOURCES:-}
       - BUG_ID=${BUG_ID:-}
       - BUGBUG_MCP_URL=http://uplift-bugbug-mcp:8080/mcp
