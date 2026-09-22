@@ -19,10 +19,10 @@ pushes or lands anything, and it does not build Firefox.
 Set per run (see `UpliftInputs` in hackbot-api for the full schema):
 
 - `TARGET_BRANCH` — branch to uplift onto, e.g. `beta`, `esr128`.
-- `TARGET_COMMIT` — optional commit on that branch, for reproducing a specific
-  failed uplift. Branch names move; without one the tip is used.
+- `TARGET_COMMIT` — optional full-SHA commit on that branch, for reproducing a
+  specific failed uplift. Branch names move; without one the tip is used.
 - `SOURCES` — JSON list, applied in order; a stack is several entries. Each is
-  `{"kind": "git", "commit": "<sha>"}` or
+  `{"kind": "git", "commit": "<full sha>"}` or
   `{"kind": "phabricator", "revision_id": 12345, "diff_id": 67890}`, where
   `diff_id` is optional and defaults to the revision's latest.
 - `BUG_ID` — optional Bugzilla bug for context.

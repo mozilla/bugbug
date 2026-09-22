@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 MODEL = "claude-opus-5"
 
+# Mirrors `FULL_SHA_PATTERN` in hackbot-api: git will not fetch an abbreviated
+# object id from a remote, and every commit here is fetched from one.
+FULL_SHA_PATTERN = r"^[0-9a-f]{40}$"
+
 
 @dataclass(frozen=True)
 class FetchedDiff:
@@ -49,7 +53,9 @@ class GitSource(BaseModel):
     """A patch to uplift, identified by a git commit in the Firefox repo."""
 
     kind: Literal["git"] = "git"
-    commit: str = Field(description="Full git commit SHA to cherry-pick.")
+    commit: str = Field(
+        pattern=FULL_SHA_PATTERN, description="Full git commit SHA to cherry-pick."
+    )
 
     async def fetch_diff(
         self, client: PhabricatorClient, scratch_out: Path

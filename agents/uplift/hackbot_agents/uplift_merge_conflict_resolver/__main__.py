@@ -1,10 +1,11 @@
 import logging
 
 from hackbot_runtime import HackbotContext, run_async
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import UpliftResult, run_uplift
-from .models import UpliftSource
+from .models import FULL_SHA_PATTERN, UpliftSource
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class AgentInputs(BaseSettings):
 
     # The exact commit to uplift onto. A branch name moves, so a caller
     # reproducing a specific uplift should pin it; otherwise the tip is used.
-    target_commit: str | None = None
+    target_commit: str | None = Field(default=None, pattern=FULL_SHA_PATTERN)
 
     # The patches to apply onto the branch, in this order; a stack is several.
     sources: list[UpliftSource]

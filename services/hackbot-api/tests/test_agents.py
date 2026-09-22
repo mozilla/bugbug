@@ -198,6 +198,25 @@ def test_uplift_env_serialization():
     ], "`sources` should be JSON-encoded in order, since it travels as one env var."
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sources": [{"kind": "git", "commit": "abc1234"}]},
+        {"target_commit": "abc1234"},
+    ],
+)
+def test_uplift_inputs_reject_an_abbreviated_commit(overrides):
+    """The agent fetches each commit from the remote, which needs a full SHA."""
+    kwargs = {
+        "target_branch": "beta",
+        "sources": [{"kind": "git", "commit": "b" * 40}],
+    }
+    kwargs.update(overrides)
+
+    with pytest.raises(ValidationError):
+        UpliftInputs(**kwargs)
+
+
 def test_uplift_pinned_target_commit_reaches_the_agent():
     env = model_to_env(
         UpliftInputs(
@@ -218,7 +237,7 @@ def test_uplift_inputs_keep_a_mixed_stack_discriminated():
         target_branch="esr128",
         sources=[
             {"kind": "phabricator", "revision_id": 9},
-            {"kind": "git", "commit": "abc123"},
+            {"kind": "git", "commit": "a" * 40},
         ],
     )
 

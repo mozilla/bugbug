@@ -177,6 +177,12 @@ class TestPlanGeneratorInputs(BaseModel):
     effort: str | None = None
 
 
+# Git will not fetch an abbreviated object id from a remote, and the uplift
+# agent fetches every commit it is given straight from one, so an abbreviation
+# is rejected here rather than at the `git fetch` in the middle of a run.
+FULL_SHA_PATTERN = r"^[0-9a-f]{40}$"
+
+
 class GitUpliftSource(BaseModel):
     """A patch to uplift, identified by a commit already in the Firefox repo."""
 
@@ -184,7 +190,9 @@ class GitUpliftSource(BaseModel):
     kind: Literal["git"] = "git"
 
     # Full git commit SHA the agent fetches and cherry-picks onto the branch.
-    commit: str = Field(description="Full git commit SHA to cherry-pick.")
+    commit: str = Field(
+        pattern=FULL_SHA_PATTERN, description="Full git commit SHA to cherry-pick."
+    )
 
 
 class PhabricatorUpliftSource(BaseModel):
@@ -222,7 +230,7 @@ class UpliftInputs(BaseModel):
 
     # The exact commit to uplift onto. Branch names move, so a caller
     # reproducing a specific uplift should pin it; otherwise the tip is used.
-    target_commit: str | None = None
+    target_commit: str | None = Field(default=None, pattern=FULL_SHA_PATTERN)
 
     # Ordered patches to apply onto the branch; applied in this sequence.
     sources: list[UpliftSource]

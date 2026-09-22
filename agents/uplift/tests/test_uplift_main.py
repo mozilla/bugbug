@@ -14,6 +14,7 @@ from hackbot_agents.uplift_merge_conflict_resolver.models import (
     GitSource,
     PhabricatorSource,
 )
+from pydantic import ValidationError
 
 REPO_PATH = Path("/workspace/firefox")
 
@@ -115,11 +116,26 @@ async def test_inputs_treat_compose_empty_strings_as_absent(monkeypatch, agent_e
     ), "An empty env var should fall back to the default, not fail validation."
 
 
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("SOURCES", '[{"kind": "git", "commit": "abc1234"}]'),
+        ("TARGET_COMMIT", "abc1234"),
+    ],
+)
+def test_inputs_reject_an_abbreviated_commit(monkeypatch, agent_env, name, value):
+    """Git will not fetch an abbreviation from a remote, so the run stops here."""
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError, match="pattern"):
+        entrypoint.AgentInputs()
+
+
 async def test_inputs_parse_mixed_sources_from_the_environment(monkeypatch, agent_env):
     """The real input path: one env var holding a JSON list of mixed sources."""
     monkeypatch.setenv(
         "SOURCES",
-        '[{"kind": "git", "commit": "abc"}, '
+        '[{"kind": "git", "commit": "' + "a" * 40 + '"}, '
         '{"kind": "phabricator", "revision_id": 99, "diff_id": 500}]',
     )
     monkeypatch.setenv("BUG_ID", "1234567")

@@ -25,7 +25,8 @@ from hackbot_agents.uplift_merge_conflict_resolver.models import (
 from hackbot_runtime import AgentError
 
 SCRATCH = Path("/scratch/out")
-BASE = "bbb2222"
+COMMIT = "a" * 40
+BASE = "b" * 40
 
 
 def fetched_for(
@@ -52,14 +53,14 @@ def fetched_for(
 def test_render_sources_describes_a_mixed_stack():
     """One work item per source, in order, each with what its kind needs."""
     sources = [
-        GitSource(commit="aaa1111"),
+        GitSource(commit=COMMIT),
         PhabricatorSource(revision_id=88, diff_id=500),
     ]
 
     git_line, phab_line = render_sources(sources, fetched_for(*sources)).splitlines()
 
     assert git_line.startswith("1."), "Work items are numbered in the order applied."
-    assert "`aaa1111`" in git_line, "A git source names the commit to pick."
+    assert f"`{COMMIT}`" in git_line, "A git source names the commit to pick."
     assert "cherry-pick" in git_line, "A git source is applied as a cherry-pick."
 
     assert phab_line.startswith("2."), "Numbering follows input order."
@@ -128,7 +129,7 @@ def test_the_system_prompt_holds_no_per_run_detail():
 
 
 def test_the_task_prompt_holds_the_run(tmp_path):
-    sources = [GitSource(commit="abc1234"), PhabricatorSource(revision_id=77)]
+    sources = [GitSource(commit=COMMIT), PhabricatorSource(revision_id=77)]
 
     prompt = build_user_prompt(
         target_branch="release",
@@ -139,7 +140,7 @@ def test_the_task_prompt_holds_the_run(tmp_path):
     )
 
     assert "release" in prompt, "The task should name the branch to uplift onto."
-    assert "`abc1234`" in prompt and "D77" in prompt, (
+    assert f"`{COMMIT}`" in prompt and "D77" in prompt, (
         "Both sources should reach the task, which is what the agent works from."
     )
     assert "bug 42" in prompt, "The originating bug belongs with the task."
@@ -156,7 +157,7 @@ def test_the_task_prompt_holds_the_run(tmp_path):
 
 
 def test_the_task_prompt_omits_the_bug_section_without_a_bug(tmp_path):
-    sources = [GitSource(commit="abc1234")]
+    sources = [GitSource(commit=COMMIT)]
 
     prompt = build_user_prompt(
         target_branch="beta",

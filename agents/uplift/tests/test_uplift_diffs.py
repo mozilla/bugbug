@@ -183,14 +183,14 @@ async def test_an_unexpandable_base_commit_is_reported_as_none(tmp_path):
 async def test_requested_sources_record_what_each_input_resolved_to(tmp_path):
     """An unpinned input does not say which diff ran, so the result records it."""
     client = StubConduit(diffs={9: [317, 400]})
-    sources = [GitSource(commit="abc"), PhabricatorSource(revision_id=9)]
+    sources = [GitSource(commit="a" * 40), PhabricatorSource(revision_id=9)]
 
     requested = describe_requested(
         sources, await fetch_source_diffs(client, sources, tmp_path)
     )
 
     assert [entry.source for entry in requested] == [
-        {"kind": "git", "commit": "abc"},
+        {"kind": "git", "commit": "a" * 40},
         {"kind": "phabricator", "revision_id": 9, "diff_id": None},
     ], "Each source should be recorded as the caller gave it."
     assert requested[1].diff_id == 400, (
@@ -210,7 +210,9 @@ async def test_requested_sources_record_what_each_input_resolved_to(tmp_path):
 async def test_git_sources_fetch_nothing(tmp_path):
     client = StubConduit()
 
-    fetched = await fetch_source_diffs(client, [GitSource(commit="abc")], tmp_path)
+    sources = [GitSource(commit="a" * 40)]
+
+    fetched = await fetch_source_diffs(client, sources, tmp_path)
 
     assert fetched == [None], (
         "A git source is cherry-picked, so it holds a slot but fetches nothing."
@@ -221,7 +223,7 @@ async def test_git_sources_fetch_nothing(tmp_path):
 async def test_a_stack_is_fetched_in_order(tmp_path):
     client = StubConduit(diffs={1: [10], 2: [88, 99]})
     sources = [
-        GitSource(commit="aaa"),
+        GitSource(commit="a" * 40),
         PhabricatorSource(revision_id=1),
         PhabricatorSource(revision_id=2, diff_id=88),
     ]
