@@ -1,15 +1,15 @@
 # Uplift Agents
 
-Home for the backport/uplift sub-agents that help land patches on Firefox's
+Home for the backport/uplift agents that help land patches on Firefox's
 stable branches (release/beta/esr). One Cloud Run image
-(`hackbot-agent-uplift`); each sub-agent is a module under `hackbot_agents/`
+(`hackbot-agent-uplift`); each agent is a module under `hackbot_agents/`
 with its own entrypoint, job and registry entry. Module names are prefixed
 `uplift_` because the runtime traces under the directory holding `__main__.py`,
 which has to match the registry name.
 
 ## Merge-conflict resolver
 
-`hackbot_agents/uplift_merge_conflict_resolver/` — the first sub-agent. It
+`hackbot_agents/uplift_merge_conflict_resolver/` — the first of them. It
 reproduces a failed uplift cherry-pick on the target branch, resolves the
 conflicts, and returns the patch with a confidence level for review. It never
 pushes or lands anything, and it does not build Firefox.
