@@ -31,8 +31,9 @@ class FetchedDiff:
 
     path: Path
 
-    # ``"Name <email>"``, or ``None`` when Phabricator recorded none. The
-    # uplift commit must keep it: Lando refuses a patch authored by hackbot.
+    # ``"Name <email>"``, or ``None`` when Phabricator recorded none.
+    # Reported with the run for the reviewer; Lando re-attributes the patch
+    # itself when it re-creates the revisions.
     author: str | None
 
     # The commit the diff was built on. Until it is fetched the blobs the diff
@@ -58,10 +59,7 @@ class GitSource(BaseModel):
 
     def render_work_item(self, index: int, fetched: FetchedDiff | None) -> str:
         """Describe this source as a numbered work item for the prompt."""
-        return (
-            f"{index}. git commit `{self.commit}` — cherry-pick it, which keeps "
-            f"the original author."
-        )
+        return f"{index}. git commit `{self.commit}` — cherry-pick it."
 
 
 class PhabricatorSource(BaseModel):
@@ -161,8 +159,8 @@ class PhabricatorSource(BaseModel):
             )
         return (
             f"{index}. Phabricator revision D{self.revision_id} — the diff is at "
-            f"`{fetched.path}`, {self.render_base(fetched)}. Commit it "
-            f"{self.render_author(fetched)}."
+            f"`{fetched.path}`, {self.render_base(fetched)}. Commit it on "
+            f"its own."
         )
 
     def render_base(self, fetched: FetchedDiff) -> str:
@@ -170,20 +168,6 @@ class PhabricatorSource(BaseModel):
         if fetched.base_commit is None:
             return "and Phabricator recorded no base commit for it"
         return f"built on base commit `{fetched.base_commit}`"
-
-    def render_author(self, fetched: FetchedDiff) -> str:
-        """How the agent must attribute this source's commit.
-
-        Phabricator records no author for a diff uploaded through the web UI.
-        Say so, rather than let the agent commit as the container.
-        """
-        if fetched.author is None:
-            return (
-                "with `--author` set to the revision's author, which Phabricator "
-                "did not record — read it off the originating bug or revision, "
-                "and say so in your report if you cannot"
-            )
-        return f'with `--author="{fetched.author}"`'
 
 
 # Sources are applied in order, and a run may mix the two kinds.

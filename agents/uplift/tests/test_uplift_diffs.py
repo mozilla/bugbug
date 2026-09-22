@@ -147,7 +147,7 @@ async def test_author_travels_with_the_diff(tmp_path):
     )
 
     assert fetched[0].author == "Author 400 <author400@example.com>", (
-        "The uplift commit needs the original author, as `Name <email>`."
+        "The fetch records the revision's author as `Name <email>`."
     )
 
 

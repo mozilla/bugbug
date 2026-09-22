@@ -79,9 +79,10 @@ A wrong uplift on a stable branch is expensive. Be conservative:
 
 ## When you are done
 
-Leave all resolved patches committed in the working tree (the platform collects
-them as the output patch). Commit everything: uncommitted work is swept into a
-synthetic commit authored by this container, which loses the original author.
+Leave all resolved patches committed in the working tree, one commit per source
+(the platform collects them as the output patch). Commit everything: the
+revisions are re-created downstream one per commit, and uncommitted work is
+swept into a single synthetic commit that collapses the stack into one patch.
 
 Then write `report.json`, in the output directory your task names, with exactly
 this shape:

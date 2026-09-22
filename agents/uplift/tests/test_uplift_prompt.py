@@ -61,9 +61,6 @@ def test_render_sources_describes_a_mixed_stack():
     assert git_line.startswith("1."), "Work items are numbered in the order applied."
     assert "`aaa1111`" in git_line, "A git source names the commit to pick."
     assert "cherry-pick" in git_line, "A git source is applied as a cherry-pick."
-    assert "--author" not in git_line, (
-        "`git cherry-pick` carries the author across, so no override is needed."
-    )
 
     assert phab_line.startswith("2."), "Numbering follows input order."
     assert "D88" in phab_line, "A Phabricator source names its revision."
@@ -74,24 +71,21 @@ def test_render_sources_describes_a_mixed_stack():
         "It names the base commit, which `git apply --3way` needs fetched to "
         "find the blobs the diff was built from."
     )
-    assert '--author="Dev <dev@example.com>"' in phab_line, (
-        "It names the author to commit as, which the uplift has to keep."
+    assert "Commit it on its own" in phab_line, (
+        "A diff carries no commit of its own, so the agent is told to make one "
+        "per source -- the stack is re-created from those commits."
     )
 
 
 def test_render_sources_says_what_phabricator_did_not_record():
-    """Neither field is guaranteed, and guessing either one lands a bad patch."""
+    """A base commit is not guaranteed, and guessing one lands a bad patch."""
     sources = [PhabricatorSource(revision_id=88)]
 
-    text = render_sources(sources, fetched_for(*sources, author=None, base_commit=None))
+    text = render_sources(sources, fetched_for(*sources, base_commit=None))
 
     assert "no base commit" in text, (
         "Without a base commit the agent is told, not left to wonder why the "
         "three-way merge found nothing."
-    )
-    assert "--author" in text and "did not record" in text, (
-        "Without an author the agent is still told to set one, rather than "
-        "committing as the container."
     )
 
 

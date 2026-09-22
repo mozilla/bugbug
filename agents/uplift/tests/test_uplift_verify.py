@@ -96,8 +96,8 @@ def test_uncommitted_work_fails(repo, git_in):
     problems = verify_uplift(repo, base, RESOLVED)
 
     assert any("uncommitted" in problem for problem in problems), (
-        "The runtime sweeps uncommitted work into a commit owned by the "
-        "container, which loses the author and is refused at landing time."
+        "The runtime sweeps uncommitted work into one synthetic commit, "
+        "collapsing the stack the sources were applied as."
     )
 
 

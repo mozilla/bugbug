@@ -147,7 +147,7 @@ async def test_run_uplift_refuses_to_call_a_dirty_tree_resolved(
     result = await run(monkeypatch, session, repo)
 
     assert result.resolved is False, (
-        "Uncommitted work loses the patch's author, so the claim is overruled."
+        "Uncommitted work collapses the stack, so the claim is overruled."
     )
     assert any("uncommitted" in failure for failure in result.verification_failures), (
         "The reason for overruling the claim should be recorded on the result."

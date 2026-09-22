@@ -1,10 +1,10 @@
 """End-to-end check that a resolved uplift survives being turned into a patch.
 
 Everything downstream consumes `changes.patch`, not the checkout, so the run is
-only useful if that patch reapplies to a clean target and keeps the original
-author -- Lando refuses a patch authored by hackbot. Driven against real
-repositories: a genuine conflict, a committed resolution, then `collect` and
-`git am` onto a fresh clone.
+only useful if that patch reapplies to a clean target, one commit per source,
+with each commit's own metadata intact. Driven against real repositories: a
+genuine conflict, a committed resolution, then `collect` and `git am` onto a
+fresh clone.
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ def test_a_resolved_uplift_reapplies_to_a_clean_target(tmp_path, git_in):
         "The setup should leave a real conflict, or this proves nothing."
     )
 
-    # The session's work: resolve, then finish the pick, which keeps the author.
+    # The session's work: resolve, then finish the pick.
     (checkout / "f.txt").write_text(RESOLVED)
     git_in(checkout, "add", "-A")
     git_in(checkout, "-c", "core.editor=true", "cherry-pick", "--continue")
@@ -97,13 +97,12 @@ def test_a_resolved_uplift_reapplies_to_a_clean_target(tmp_path, git_in):
         "Reapplying the collected patch should reproduce the resolution."
     )
     assert git_in(target, "log", "-1", "--format=%an <%ae>") == AUTHOR, (
-        "The uplift has to keep the original author: Lando refuses a patch "
-        "authored by hackbot."
+        "A cherry-picked commit carries its author, and the mbox should keep it."
     )
 
 
 def test_an_uncommitted_resolution_is_flagged_as_wrapped(tmp_path, git_in):
-    """What the prompt warns about: uncommitted work loses the original author."""
+    """What the prompt warns about: uncommitted work is squashed into one commit."""
     upstream = tmp_path / "upstream"
     to_uplift = build_upstream(git_in, upstream)
     checkout = clone_stable(git_in, upstream, tmp_path / "checkout")
@@ -117,8 +116,8 @@ def test_an_uncommitted_resolution_is_flagged_as_wrapped(tmp_path, git_in):
 
     assert change_set is not None, "There is still work to collect."
     assert change_set.metadata["wrapped_uncommitted"] is True, (
-        "Left uncommitted, the resolution is swept into a container-authored "
-        "commit -- which is why the run refuses to call this resolved."
+        "Left uncommitted, the resolution is swept into one synthetic commit -- "
+        "which is why the run refuses to call this resolved."
     )
 
 
@@ -194,5 +193,5 @@ async def test_a_run_uplift_resolution_reapplies(
         "The run's patch should reproduce its resolution on a clean target."
     )
     assert git_in(target, "log", "-1", "--format=%an <%ae>") == AUTHOR, (
-        "And keep the original author, which Lando refuses a patch without."
+        "And carry the picked commit's author through to the target."
     )

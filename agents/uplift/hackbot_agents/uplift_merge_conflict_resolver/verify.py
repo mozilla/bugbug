@@ -55,8 +55,8 @@ def verify_uplift(repo: Path, base_commit: str, report: Report) -> list[str]:
             problems.append(f"{operation} left unfinished in the checkout")
             break
 
-    # Uncommitted work is swept into a container-authored commit, losing the
-    # original author.
+    # Uncommitted work is swept into one synthetic commit, which collapses the
+    # stack the sources were applied as into a single patch.
     dirty = git_output(repo, "status", "--porcelain")
     if dirty:
         problems.append(f"{len(dirty.splitlines())} path(s) left uncommitted")
