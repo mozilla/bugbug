@@ -33,7 +33,7 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
-from hackbot_client import RunRef, RunStatus
+from hackbot_client import RunStatus, TriggeredRun
 
 SECRET = "test-secret"
 BUGZILLA_SECRET = "test-bugzilla-secret"
@@ -571,11 +571,15 @@ class _FakeHackbotClient:
 
     async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
         self.calls.append((agent_name, inputs))
+        # Like the API's unique index: a key seen before resolves to the
+        # existing run and is not new to this request.
+        is_new = dedupe_key is None or dedupe_key not in self.dedupe_keys
         self.dedupe_keys.append(dedupe_key)
-        return RunRef(
+        return TriggeredRun(
             run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
             agent=agent_name,
             status=RunStatus.pending,
+            is_new=is_new,
         )
 
 
@@ -737,9 +741,9 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
         "object": {"type": "DREV", "phid": "PHID-DREV-1"},
         "transactions": [{"phid": "PHID-XACT-1"}],
     }
-    _post(client, payload)
-    _post(client, payload)
-    _post(
+    first = _post(client, payload)
+    retry = _post(client, payload)
+    later = _post(
         client,
         {
             "object": {"type": "DREV", "phid": "PHID-DREV-1"},
@@ -753,6 +757,14 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
         "phab-txn:PHID-XACT-1",
         "phab-txn:PHID-XACT-2",
     ]
+    assert first.json()["status"] == "triggered"
+    # The retry is answered with the existing run rather than claimed as new.
+    assert retry.json() == {
+        "status": "ignored",
+        "reason": "duplicate delivery",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
+    assert later.json()["status"] == "triggered"
 
 
 def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):

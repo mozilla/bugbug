@@ -145,6 +145,18 @@ async def phabricator_webhook(
         },
         dedupe_key=f"phab-txn:{detected.anchor_phid}",
     )
+    if not run.is_new:
+        log.info(
+            "Duplicate Phabricator delivery for D%s (%s) resolved to run %s",
+            detected.revision_id,
+            detected.anchor_phid,
+            run.run_id,
+        )
+        return {
+            "status": "ignored",
+            "reason": "duplicate delivery",
+            "run_id": run.run_id,
+        }
     log.info(
         "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention (%s)",
         run.run_id,
