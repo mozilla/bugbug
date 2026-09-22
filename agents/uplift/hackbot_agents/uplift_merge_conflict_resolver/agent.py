@@ -9,6 +9,7 @@ happened for human review.
 
 import json
 import logging
+import re
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -293,12 +294,16 @@ def build_user_prompt(
 ) -> str:
     """The run's own task: what to uplift, onto what, and where to report it."""
     template = (HERE / "prompts" / "task.md").read_text()
-    return template.format(
+    rendered = template.format(
         target_branch=target_branch,
         sources_block=render_sources(sources, fetched),
         bug_block=render_bug_block(bug_id),
         scratch_out=str(scratch_out),
     )
+
+    # The template spaces its placeholders out as markdown wants them, so an
+    # empty one leaves a run of blank lines behind.
+    return re.sub(r"\n{3,}", "\n\n", rendered)
 
 
 def render_sources(
@@ -318,18 +323,13 @@ def render_sources(
 
 
 def render_bug_block(bug_id: int | None) -> str:
-    """The optional originating-bug section of the prompt; empty when no bug.
-
-    Carries its own surrounding blank lines, so the template can hold the
-    placeholder on a line of its own without leaving one behind when there is
-    no bug.
-    """
+    """The optional originating-bug section of the prompt; empty when no bug."""
     if bug_id is None:
         return ""
     return (
-        f"\n## Originating bug\n\n"
+        f"## Originating bug\n\n"
         f"These patches belong to bug {bug_id}. Consult it with `get_bugzilla_bug` "
-        f"when a conflict's intent is unclear.\n"
+        f"when a conflict's intent is unclear."
     )
 
 
