@@ -249,23 +249,16 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
     ]
 
 
-def test_anchor_prefers_general_comment_over_inline_mention():
-    # The general comment identifies the submission even when the @hackbot
-    # request itself sits in an inline comment.
+def test_anchor_is_smallest_mention_phid_regardless_of_order():
+    # A retry carries the same transactions, possibly in another order; the
+    # anchor must not depend on the order Conduit returned them.
     mentions = [
-        HackbotMention("@hackbot fix", "PHID-USER-a", 2, "inline", "PHID-XACT-in"),
-        HackbotMention("see inline", "PHID-USER-a", 1, "regular", "PHID-XACT-gen"),
+        HackbotMention("@hackbot fix", "PHID-USER-a", 2, "inline", "PHID-XACT-b"),
+        HackbotMention("see inline", "PHID-USER-a", 1, "regular", "PHID-XACT-c"),
+        HackbotMention("@hackbot too", "PHID-USER-a", 3, "inline", "PHID-XACT-a"),
     ]
-    assert anchor_transaction_phid(mentions) == "PHID-XACT-gen"
-
-
-def test_anchor_falls_back_to_first_inline_mention():
-    # An inline-only submission has no general-comment transaction.
-    mentions = [
-        HackbotMention("@hackbot a", "PHID-USER-a", 1, "inline", "PHID-XACT-1"),
-        HackbotMention("@hackbot b", "PHID-USER-a", 2, "inline", "PHID-XACT-2"),
-    ]
-    assert anchor_transaction_phid(mentions) == "PHID-XACT-1"
+    assert anchor_transaction_phid(mentions) == "PHID-XACT-a"
+    assert anchor_transaction_phid(mentions[::-1]) == "PHID-XACT-a"
 
 
 def test_format_comment_renders_regular_comment_as_xml():

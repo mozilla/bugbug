@@ -106,16 +106,8 @@ def find_hackbot_mentions(
 
 
 def anchor_transaction_phid(mentions: list[HackbotMention]) -> str:
-    """The transaction PHID that identifies this submission.
-
-    Phabricator's edit path adds at most one general ``comment`` transaction
-    per submission, so it is the natural handle; a submission made of inline
-    comments only has none, in which case the first mention stands in.
-    """
-    for mention in mentions:
-        if mention.comment_type == "regular":
-            return mention.transaction_phid
-    return mentions[0].transaction_phid
+    """Return a stable transaction PHID independent of mention order."""
+    return min(mention.transaction_phid for mention in mentions)
 
 
 def _format_comment(mention: HackbotMention) -> str:
@@ -173,8 +165,7 @@ async def detect_mention_and_revision(
     a delivery carries several qualifying comments (e.g. inline comments in one
     review) they are combined so the agent addresses each. The Conduit ``client``
     is injected (built by the route's dependency) rather than constructed here.
-    ``anchor_phid`` is the transaction PHID identifying the submission (see
-    :func:`anchor_transaction_phid`), for callers that key work on it.
+    ``anchor_phid`` identifies the submission (see ``anchor_transaction_phid``).
     Returns ``None`` when there is no qualifying ``@hackbot`` mention, the
     revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
