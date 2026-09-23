@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import logging
+import os
 import sys
 import traceback
 from collections.abc import Awaitable, Callable
@@ -45,6 +46,11 @@ def _configure_auth() -> None:
         log.info("Configured Anthropic WIF authentication")
     if wandb_wif.configure():
         log.info("Configured W&B WIF authentication")
+
+
+def _configure_sdk_env() -> None:
+    """Disable Claude background tasks unless explicitly configured otherwise."""
+    os.environ.setdefault("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "1")
 
 
 def _configure_logging() -> None:
@@ -187,6 +193,7 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
 
 def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
     _configure_logging()
+    _configure_sdk_env()
     ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
         raise SystemExit(2)
@@ -204,6 +211,7 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
 
 def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
     _configure_logging()
+    _configure_sdk_env()
     ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
         raise SystemExit(2)
