@@ -220,14 +220,36 @@ def test_which_agents_auto_apply_without_asking_for_consent():
 class _FakeDB:
     def __init__(self):
         self.commits = 0
+        self.refreshed = []
 
     async def commit(self):
         self.commits += 1
+
+    async def refresh(self, row, *, with_for_update=False):
+        assert with_for_update is True
+        self.refreshed.append(row.id)
 
     async def execute(self, *a, **k):
         raise AssertionError(
             "ensure_action_rows should be monkeypatched in these tests"
         )
+
+
+async def test_lock_unapplied_refreshes_in_id_order_with_for_update():
+    first = SimpleNamespace(id=1, status="pending")
+    second = SimpleNamespace(id=2, status="pending")
+    db = _FakeDB()
+
+    assert await actions_applier._lock_unapplied(db, [second, first]) is True
+    assert db.refreshed == [1, 2]
+
+
+async def test_lock_unapplied_skips_a_concurrently_applied_row():
+    row = SimpleNamespace(id=1, status="applied")
+    db = _FakeDB()
+
+    assert await actions_applier._lock_unapplied(db, [row]) is False
+    assert db.commits == 1
 
 
 def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
@@ -364,6 +386,7 @@ def _row(
     applied_at=None,
 ):
     return SimpleNamespace(
+        id=idx + 1,
         idx=idx,
         type=action_type,
         params=params if params is not None else {},
@@ -373,6 +396,45 @@ def _row(
         error=error,
         applied_at=applied_at,
     )
+
+
+async def test_concurrent_apply_keeps_the_skipped_rows_result_for_later_refs(
+    monkeypatch,
+):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"ok": 1}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    created = _row(
+        0,
+        "pending",
+        action_type="bugzilla.create_bug",
+        ref="created",
+    )
+    comment = _row(
+        1,
+        "pending",
+        params={"text": "Created at {{actions.created.url}}"},
+    )
+
+    async def lock_rows(db, member_rows):
+        if member_rows == [created]:
+            # Simulate another request committing while this caller waited.
+            created.status = "applied"
+            created.result = {"url": "https://bugzilla.example/1"}
+            return False
+        return True
+
+    monkeypatch.setattr(actions_applier, "_lock_unapplied", lock_rows)
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(created, []), (comment, [])],
+    )
+
+    assert handler.calls == [{"text": "Created at https://bugzilla.example/1"}]
 
 
 async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
