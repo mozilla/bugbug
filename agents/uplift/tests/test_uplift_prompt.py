@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from hackbot_agents.uplift_merge_conflict_resolver.agent import (
     build_user_prompt,
-    load_system_prompt,
+    load_workflow,
     render_bug_block,
     render_sources,
 )
@@ -107,14 +107,14 @@ def test_render_bug_block_is_present_only_when_there_is_a_bug():
     assert "get_bugzilla_bug" in block, "The bug block should point at the MCP tool."
 
 
-def test_the_system_prompt_holds_no_per_run_detail():
+def test_the_workflow_holds_no_per_run_detail():
     """Identical every run, which is what prompt caching reuses."""
-    prompt = load_system_prompt()
+    prompt = load_workflow()
 
     assert re.search(r"\{[a-z_]+\}", prompt) is None, (
         "An unrendered placeholder means per-run detail leaked into the prefix."
     )
-    assert prompt == load_system_prompt(), "The system prompt should not vary."
+    assert prompt == load_workflow(), "The workflow should not vary."
     assert '"resolved": true' in prompt, (
         "The report shape is stable guidance, so it belongs here -- and with "
         "nothing to `.format`, its braces need no escaping."
@@ -139,6 +139,9 @@ def test_the_task_prompt_holds_the_run(tmp_path):
         fetched=fetched_for(*sources),
     )
 
+    assert prompt.startswith(load_workflow()), (
+        "The workflow leads the prompt, so the cacheable prefix comes first."
+    )
     assert "release" in prompt, "The task should name the branch to uplift onto."
     assert f"`{COMMIT}`" in prompt and "D77" in prompt, (
         "Both sources should reach the task, which is what the agent works from."

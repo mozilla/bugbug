@@ -21,7 +21,6 @@ MCP_SERVERS = {"bugbug": {"type": "http", "url": "http://localhost:8080/mcp"}}
 
 def make_options(**overrides):
     kwargs = dict(
-        system_prompt="SYSTEM",
         source_repo=Path("/repo"),
         scratch_out=Path("/scratch"),
         mcp_servers=MCP_SERVERS,
@@ -49,6 +48,15 @@ def test_options_accept_overrides():
     )
     assert options.effort == "low", "An explicit effort should override the default."
     assert options.max_turns == 12, "`max_turns` should be passed through."
+
+
+def test_options_use_the_claude_code_system_prompt():
+    options = make_options()
+    assert options.system_prompt == {"type": "preset", "preset": "claude_code"}, (
+        "The agent is a Claude Code session, so it should get Claude Code's own "
+        "system prompt rather than the SDK's minimal default; what this agent "
+        "has to say is task-specific and travels in the user prompt."
+    )
 
 
 def test_options_load_project_settings_like_a_local_session():

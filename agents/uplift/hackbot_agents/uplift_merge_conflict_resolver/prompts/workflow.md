@@ -1,3 +1,5 @@
+# How to uplift
+
 You are a Firefox engineer who is working to uplift code to a release train.
 
 The source checkout is already on the target uplift branch. Your job is to apply
@@ -87,7 +89,7 @@ Leave all resolved patches committed in the working tree, one commit per source
 revisions are re-created downstream one per commit, and uncommitted work is
 swept into a single synthetic commit that collapses the stack into one patch.
 
-Then write `report.json`, in the output directory your task names, with exactly
+Then write `report.json`, in the output directory named below, with exactly
 this shape:
 
 ```json
@@ -111,3 +113,5 @@ after you stop, and a `resolved` that disagrees with it is overruled.
 
 Also write a short, human-readable `summary.md` beside the report, covering the
 same ground for the reviewer.
+
+The run this applies to follows.

@@ -47,6 +47,11 @@ HERE = Path(__file__).resolve().parent
 # Where the broker mounts its read-only Conduit proxy.
 PROXY_MOUNT = "/phabricator"
 
+# The agent runs as a Claude Code session, so it gets Claude Code's own system
+# prompt. Everything this agent has to say is about the task at hand, which is
+# what the user prompt is for.
+SYSTEM_PROMPT = {"type": "preset", "preset": "claude_code"}
+
 # Not a secret: the proxy discards it and substitutes the real Conduit key.
 # Sized to the 32 characters `PhabricatorSettings` requires.
 PROXY_API_TOKEN = "hackbot-broker-proxy-placeholder"
@@ -145,7 +150,6 @@ async def run_uplift(
         fetched=fetched,
     )
     options = build_options(
-        system_prompt=load_system_prompt(),
         source_repo=source_repo,
         scratch_out=scratch_out,
         mcp_servers=build_mcp_servers(bugbug_mcp_server),
@@ -244,7 +248,6 @@ def build_mcp_servers(
 
 def build_options(
     *,
-    system_prompt: str,
     source_repo: Path,
     scratch_out: Path,
     mcp_servers: dict[str, McpServerConfig],
@@ -254,13 +257,15 @@ def build_options(
 ) -> ClaudeAgentOptions:
     """Assemble the agent's SDK options to mirror a local Claude Code session.
 
-    The container is the sandbox, so the agent runs unattended with every
-    built-in tool; only `AskUserQuestion` goes, since nobody can answer.
+    Down to the system prompt: the SDK's own default is neither Claude Code's
+    nor ours, so the preset is named explicitly. The container is the sandbox,
+    so the agent runs unattended with every built-in tool; only
+    `AskUserQuestion` goes, since nobody can answer.
     `setting_sources` loads `project` for the checkout's own `CLAUDE.md` and
     in-tree skills, but not `local`, which a fresh clone cannot have.
     """
     return ClaudeAgentOptions(
-        system_prompt=system_prompt,
+        system_prompt=SYSTEM_PROMPT,
         model=model or MODEL,
         cwd=str(source_repo),
         add_dirs=[str(scratch_out)],
@@ -275,13 +280,13 @@ def build_options(
     )
 
 
-def load_system_prompt() -> str:
+def load_workflow() -> str:
     """How to resolve an uplift, which is the same for every run.
 
-    Deliberately free of per-run detail: that belongs in the task, and it keeps
-    this an identical prefix across runs for prompt caching to reuse.
+    Deliberately free of per-run detail, so that it stays an identical prefix
+    across runs for prompt caching to reuse.
     """
-    return (HERE / "prompts" / "system.md").read_text()
+    return (HERE / "prompts" / "workflow.md").read_text()
 
 
 def build_user_prompt(
@@ -292,7 +297,11 @@ def build_user_prompt(
     scratch_out: Path,
     fetched: list[FetchedDiff | None],
 ) -> str:
-    """The run's own task: what to uplift, onto what, and where to report it."""
+    """The workflow to follow, then what to uplift, onto what, and where.
+
+    The workflow leads because it never varies, which is what prompt caching
+    reuses; the run's own detail follows it.
+    """
     template = (HERE / "prompts" / "task.md").read_text()
     rendered = template.format(
         target_branch=target_branch,
@@ -303,7 +312,8 @@ def build_user_prompt(
 
     # The template spaces its placeholders out as markdown wants them, so an
     # empty one leaves a run of blank lines behind.
-    return re.sub(r"\n{3,}", "\n\n", rendered)
+    task = re.sub(r"\n{3,}", "\n\n", rendered)
+    return f"{load_workflow()}\n{task}"
 
 
 def render_sources(

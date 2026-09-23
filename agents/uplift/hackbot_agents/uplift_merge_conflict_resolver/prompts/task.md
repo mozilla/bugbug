@@ -1,5 +1,5 @@
-Uplift the patches below onto `{target_branch}` and resolve every conflict.
-Follow the workflow in your instructions.
+Uplift the patches below onto `{target_branch}` and resolve every conflict,
+following the workflow above.
 
 ## The patches to uplift (apply in this exact order)
 
