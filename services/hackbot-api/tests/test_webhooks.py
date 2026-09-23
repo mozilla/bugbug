@@ -33,7 +33,7 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
-from hackbot_client import RunRef, RunStatus
+from hackbot_client import RunStatus, TriggeredRun
 
 SECRET = "test-secret"
 BUGZILLA_SECRET = "test-bugzilla-secret"
@@ -567,13 +567,19 @@ class _FakeHackbotClient:
 
     def __init__(self):
         self.calls = []
+        self.dedupe_keys = []
 
-    async def trigger_run(self, agent_name, inputs):
+    async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
         self.calls.append((agent_name, inputs))
-        return RunRef(
+        # Like the API's unique index: a key seen before resolves to the
+        # existing run and is not new to this request.
+        is_new = dedupe_key is None or dedupe_key not in self.dedupe_keys
+        self.dedupe_keys.append(dedupe_key)
+        return TriggeredRun(
             run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
             agent=agent_name,
             status=RunStatus.pending,
+            is_new=is_new,
         )
 
 
@@ -609,7 +615,6 @@ def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
     monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
     # Fresh dedupe cache per test.
-    webhooks._seen_transactions.clear()
     webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
@@ -714,46 +719,72 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
             },
         )
     ]
+    assert fake_api.dedupe_keys == ["phab-txn:PHID-XACT-1"]
 
 
-def test_route_dedupes_retried_delivery(client, monkeypatch):
-    detect = AsyncMock(return_value=_DETECTED)
+def test_route_keys_retry_same_but_later_submission_differently(client, monkeypatch):
+    # A retried delivery carries the same anchor and so the same key; a later
+    # submission on the same revision has a new anchor and a new key. The DB
+    # decides which is a duplicate, so the route calls detection every time.
+    detect = AsyncMock(
+        side_effect=[
+            _DETECTED,
+            _DETECTED,
+            _DETECTED._replace(comment="@hackbot also this", anchor_phid="PHID-XACT-2"),
+        ]
+    )
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
 
     payload = {
         "object": {"type": "DREV", "phid": "PHID-DREV-1"},
         "transactions": [{"phid": "PHID-XACT-1"}],
     }
     first = _post(client, payload)
-    second = _post(client, payload)
+    retry = _post(client, payload)
+    later = _post(
+        client,
+        {
+            "object": {"type": "DREV", "phid": "PHID-DREV-1"},
+            "transactions": [{"phid": "PHID-XACT-2"}],
+        },
+    )
 
+    assert detect.call_count == 3
+    assert fake_api.dedupe_keys == [
+        "phab-txn:PHID-XACT-1",
+        "phab-txn:PHID-XACT-1",
+        "phab-txn:PHID-XACT-2",
+    ]
     assert first.json()["status"] == "triggered"
-    assert second.json()["reason"] == "duplicate delivery"
-    assert detect.call_count == 1
+    # The retry is answered with the existing run rather than claimed as new.
+    assert retry.json() == {
+        "status": "ignored",
+        "reason": "duplicate delivery",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
+    assert later.json()["status"] == "triggered"
 
 
-def test_route_detects_only_fresh_transactions(client, monkeypatch):
-    # A delivery mixing an already-seen PHID with a new one must consider only
-    # the fresh transaction for mention detection.
+def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):
     detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
-    webhooks._seen_transactions["PHID-XACT-OLD"] = True
 
     _post(
         client,
         {
             "object": {"type": "DREV", "phid": "PHID-DREV-1"},
-            "transactions": [{"phid": "PHID-XACT-OLD"}, {"phid": "PHID-XACT-NEW"}],
+            "transactions": [{"phid": "PHID-XACT-1"}, {"phid": "PHID-XACT-2"}],
         },
     )
-    assert detect.call_args.args[3] == ["PHID-XACT-NEW"]
+    assert detect.call_args.args[3] == ["PHID-XACT-1", "PHID-XACT-2"]
 
 
-def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
-    # A transient failure must not consume the delivery: the transaction stays
-    # unseen so Phabricator's retry is reprocessed rather than deduped away.
+def test_route_surfaces_trigger_failure(client, monkeypatch):
+    # A failure before the run exists leaves nothing behind: no key is spent,
+    # so Phabricator's retry is processed rather than deduped away.
     monkeypatch.setattr(
         webhooks,
         "detect_mention_and_revision",
@@ -761,12 +792,12 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
     )
 
     class _FailingClient:
-        async def trigger_run(self, agent_name, inputs):
+        async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
             raise RuntimeError("conduit down")
 
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="conduit down"):
         _post(
             client,
             {
@@ -774,7 +805,6 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
                 "transactions": [{"phid": "PHID-XACT-1"}],
             },
         )
-    assert "PHID-XACT-1" not in webhooks._seen_transactions
 
 
 def test_bugzilla_route_ignores_non_object_payload(client):
