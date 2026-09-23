@@ -121,7 +121,7 @@ def test_agent_prose_nests_under_the_email_headings():
 
 def test_the_local_build_verification_is_reported_when_known():
     _, body = _email(result=_result(local_build_verified=True))
-    assert "- Local build verified: True" in body
+    assert "- Local build on Linux only: passed" in body
 
 
 def test_no_verification_section_without_a_verdict():
