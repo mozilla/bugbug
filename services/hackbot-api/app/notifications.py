@@ -50,7 +50,8 @@ def build_message(run: Run) -> tuple[str, str]:
 
 
 def _recipient(run: Run) -> str:
-    return settings.override_recipient_email.strip() or run.requested_by
+    override = (settings.override_recipient_email or "").strip()
+    return override or run.requested_by
 
 
 def _send_sync(recipient: str, subject: str, html_body: str) -> int:
