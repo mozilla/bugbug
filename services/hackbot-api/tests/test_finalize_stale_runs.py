@@ -25,6 +25,7 @@ class _FakeRun:
     )
     execution_name: str | None = "projects/p/locations/l/jobs/j/executions/e"
     finalized_at: datetime | None = None
+    requested_by: str | None = None
 
 
 class _FakeResult:
@@ -57,7 +58,7 @@ def _finalizer(monkeypatch):
     def install(behaviour):
         async def fake_finalize(_db, run):
             calls.append(run.run_id)
-            behaviour(run)
+            return behaviour(run)
 
         monkeypatch.setattr(maintenance, "finalize_run", fake_finalize)
         return calls
@@ -68,6 +69,7 @@ def _finalizer(monkeypatch):
 def _finalizes(run):
     run.status = RunStatus.succeeded.value
     run.finalized_at = datetime.now(timezone.utc)
+    return True
 
 
 async def test_finalizes_stale_runs(_finalizer):
@@ -81,6 +83,23 @@ async def test_finalizes_stale_runs(_finalizer):
     assert result.finalized == [run.run_id for run in runs]
     assert result.still_running == []
     assert result.errored == []
+
+
+async def test_notifies_requester_after_finalizing(monkeypatch, _finalizer):
+    run = _FakeRun(requested_by="someone@mozilla.com")
+    db = _FakeDB([run])
+    _finalizer(_finalizes)
+    notified = []
+
+    async def notify(value):
+        notified.append(value)
+        return True
+
+    monkeypatch.setattr(maintenance.notifications, "notify_requester", notify)
+
+    await finalize_stale_runs(min_age_minutes=120, limit=100, db=db)
+
+    assert notified == [run]
 
 
 async def test_dry_run_touches_nothing(_finalizer):
@@ -117,6 +136,7 @@ async def test_one_failure_does_not_abort_the_sweep(monkeypatch):
         if run.run_id == bad.run_id:
             raise RuntimeError("boom")
         _finalizes(run)
+        return True
 
     monkeypatch.setattr(maintenance, "finalize_run", fake_finalize)
 

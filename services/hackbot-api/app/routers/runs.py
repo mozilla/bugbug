@@ -309,15 +309,17 @@ async def apply_run_actions(
     return await _list_actions(db, run_id)
 
 
-async def finalize_run(db: AsyncSession, run: Run) -> None:
+async def finalize_run(db: AsyncSession, run: Run) -> bool:
     """Bring `run` to its terminal state and publish RunCompleted, once.
 
     Invoked from the Eventarc-triggered agent-run-finished route instead
     of from a client request. Idempotent via `finalized_at`, since Eventarc's
     at-least-once delivery can call this more than once for the same run.
+    Returns whether this call finalized the run, so callers can react to the
+    transition exactly once (e.g. notify the requester).
     """
     if run.finalized_at is not None:
-        return
+        return False
 
     try:
         exec_status = await jobs.get_execution_status(run.execution_name)
@@ -332,7 +334,7 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
         ):
             run.status = RunStatus.running.value
             await db.commit()
-        return
+        return False
 
     summary = await gcs.read_summary(str(run.run_id))
     artifacts = await gcs.list_artifacts(str(run.run_id))
@@ -363,6 +365,7 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
             run.agent,
         )
     await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
+    return True
 
 
 def _has_unsubmitted_patch(

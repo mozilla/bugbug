@@ -23,11 +23,7 @@ router = APIRouter(
 
 
 def _decode_pubsub_push_body(body: dict) -> dict:
-    """Decode a standard Pub/Sub push envelope's `message.data` as JSON.
-
-    The completion-log, action-applier and requester-notification subscriptions
-    deliver via this same envelope shape.
-    """
+    """Decode a Pub/Sub push envelope's `message.data` as JSON."""
     message = body.get("message") or {}
     data = message.get("data")
     if not data:
@@ -108,7 +104,8 @@ async def agent_run_finished(
         log.warning("No run found for execution %s", execution_name)
         return
 
-    await finalize_run(db, run)
+    if await finalize_run(db, run) and run.requested_by:
+        await notifications.notify_requester(run)
 
 
 @router.post("/apply-run-actions", status_code=204)
@@ -117,10 +114,8 @@ async def apply_run_actions(
 ) -> None:
     """Consumer of `run.completed`: record the run's actions, auto-apply if opted in.
 
-    Named for what it does, not the event it consumes, because the same
-    `run.completed` event will feed other consumers later (notifications,
-    webhooks) — each its own route named after its own job. The subscription
-    feeding this one is filtered to succeeded runs (see deploy-events.sh).
+    Named for what it does, not the event it consumes. The subscription feeding
+    this route is filtered to succeeded runs (see deploy-events.sh).
     """
     body = await request.json()
     event = _decode_pubsub_push_body(body)
@@ -135,23 +130,3 @@ async def apply_run_actions(
         return
 
     await on_run_completed(db, run)
-
-
-@router.post("/notify-requester", status_code=204)
-async def notify_requester(
-    request: Request, db: AsyncSession = Depends(get_db)
-) -> None:
-    """Consumer of `run.completed`: email the run's requester.
-
-    Its own subscription includes all terminal outcomes.
-    """
-    event = _decode_pubsub_push_body(await request.json())
-    run_id = event["run_id"]
-
-    run = await db.get(Run, uuid.UUID(run_id))
-    if run is None:
-        log.warning("No run found for run_id %s", run_id)
-        return
-
-    if run.requested_by:
-        await notifications.notify_requester(run)
