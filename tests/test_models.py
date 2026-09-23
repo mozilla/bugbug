@@ -32,3 +32,15 @@ def test_component_is_bugmodel():
 def test_backout_is_commitmodel():
     model_class = get_model_class("backout")
     assert issubclass(model_class, model.CommitModel)
+
+
+def test_comment_model_items_gen(monkeypatch):
+    bugs = [
+        {"id": 1, "comments": [{"id": 11}, {"id": 12}]},
+        {"id": 2, "comments": []},
+    ]
+    monkeypatch.setattr(model.bugzilla, "get_bugs", lambda: iter(bugs))
+
+    assert list(model.CommentModel().items_gen({11: "spam"})) == [
+        ((bugs[0], bugs[0]["comments"][0]), "spam")
+    ]
