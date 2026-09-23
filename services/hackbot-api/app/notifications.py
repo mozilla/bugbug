@@ -50,7 +50,7 @@ def build_message(run: Run) -> tuple[str, str]:
 
 
 def _recipient(run: Run) -> str:
-    return settings.notification_override_email.strip() or run.requested_by
+    return settings.override_recipient_email.strip() or run.requested_by
 
 
 def _send_sync(recipient: str, subject: str, html_body: str) -> int:

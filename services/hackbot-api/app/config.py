@@ -106,12 +106,12 @@ class Settings(BaseSettings):
     push_auth_audience: str = ""
     push_auth_service_account: str = ""
 
-    # Run-completion email to the requester (see app/notifications.py). The
-    # override replaces the recipient so a dev deployment never mails real people.
+    # Run-completion email to the requester (see app/notifications.py).
     hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str = ""
     notification_sender: str = ""
-    notification_override_email: str = ""
+    # Redirect every requester notification to this address for testing.
+    override_recipient_email: str = ""
 
     # Server
     port: int = 8080
