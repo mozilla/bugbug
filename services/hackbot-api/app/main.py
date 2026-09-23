@@ -11,7 +11,6 @@ from app.routers import (
     events_router,
     maintenance_router,
     runs_router,
-    slack_router,
     webhooks_router,
 )
 
@@ -19,7 +18,6 @@ if settings.sentry_dsn:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.environment,
-        release=f"hackbot-api@{__version__}",
         send_default_pii=True,
     )
 
@@ -48,7 +46,6 @@ app = FastAPI(
 app.include_router(runs_router)
 app.include_router(events_router)
 app.include_router(webhooks_router)
-app.include_router(slack_router)
 app.include_router(maintenance_router)
 
 

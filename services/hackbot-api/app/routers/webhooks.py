@@ -3,9 +3,10 @@
 import logging
 
 from cachetools import TTLCache
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
+from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
 
 from app.auth import (
     require_bugzilla_webhook_secret,
@@ -22,6 +23,7 @@ from app.phabricator_webhook import (
     detect_mention_and_revision,
     triggering_transaction_phids,
 )
+from app.slack.app import build_request_handler
 
 log = logging.getLogger(__name__)
 
@@ -33,11 +35,32 @@ def get_phabricator_client() -> PhabricatorClient:
     return PhabricatorClient(settings.phabricator)
 
 
+def get_slack_handler(request: Request) -> AsyncSlackRequestHandler:
+    """Dependency: lazily create the app-scoped Bolt handler."""
+    handler = getattr(request.app.state, "slack_handler", None)
+    if handler is None:
+        handler = build_request_handler()
+        request.app.state.slack_handler = handler
+    return handler
+
+
 def get_hackbot_client() -> HackbotClient:
     """Dependency: a client for triggering runs over the public hackbot API."""
     return HackbotClient(
         base_url=settings.hackbot_api_url,
         api_key=settings.external_api_key,
+    )
+
+
+@router.post("/slack")
+async def slack_webhook(
+    request: Request,
+    slack_handler: AsyncSlackRequestHandler = Depends(get_slack_handler),
+    api_client: HackbotClient = Depends(get_hackbot_client),
+) -> Response:
+    """Every interaction Slack sends this app, whatever kind it is."""
+    return await slack_handler.handle(
+        request, addition_context_properties={"hackbot_client": api_client}
     )
 
 
@@ -65,13 +88,6 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
         request.app.state.bugzilla_authorizer = authorizer
     return authorizer
 
-
-# Best-effort dedupe of retried deliveries, keyed by triggering transaction PHID.
-# Per-instance and reset on restart; a durable dedupe (using the DB) can replace
-# this if needed. Sized well above the number of mentions expected in a window.
-_seen_transactions: TTLCache = TTLCache(
-    maxsize=4096, ttl=settings.webhook.dedupe_ttl_seconds
-)
 
 # Best-effort dedupe of retried BMO deliveries, keyed by the globally unique
 # needinfo flag ID. A later needinfo on the same bug receives a new flag ID.
@@ -108,49 +124,45 @@ async def phabricator_webhook(
     if not object_phid or not triggering:
         return {"status": "ignored", "reason": "no revision or transactions"}
 
-    # Dedupe retried deliveries: if we've already seen every triggering
-    # transaction, this is a retry of work already handled.
-    fresh = [phid for phid in triggering if phid not in _seen_transactions]
-    if not fresh:
-        log.info(
-            "Ignored duplicate Phabricator webhook for %s (transactions: %s)",
-            object_phid,
-            ", ".join(triggering),
-        )
-        return {"status": "ignored", "reason": "duplicate delivery"}
-
-    # Only consider this delivery's fresh transactions for the mention, so a
-    # payload mixing new and already-seen PHIDs can't re-trigger on an older one.
     detected = await detect_mention_and_revision(
         phab_client,
         settings.webhook,
         object_phid,
-        fresh,
+        triggering,
         authorizer=authorizer,
     )
     if detected is None:
         return {"status": "ignored", "reason": "no actionable @hackbot mention"}
 
-    comment, revision_id, bug_id = detected
-
+    # The anchor transaction identifies the submission, so a retried delivery
+    # is answered with the run the first delivery created, on any instance.
     run = await api_client.trigger_run(
         "bug-fix",
         {
-            "bug_id": bug_id,
-            "revision_id": revision_id,
-            "comment": comment,
+            "bug_id": detected.bug_id,
+            "revision_id": detected.revision_id,
+            "comment": detected.comment,
         },
+        dedupe_key=f"phab-txn:{detected.anchor_phid}",
     )
-    # Mark seen only after a successful trigger: if detection or the trigger call
-    # raises (transient Conduit/API failure), the delivery 500s and Phabricator's
-    # retry must be reprocessed rather than dropped as a duplicate.
-    for phid in fresh:
-        _seen_transactions[phid] = True
+    if not run.is_new:
+        log.info(
+            "Duplicate Phabricator delivery for D%s (%s) resolved to run %s",
+            detected.revision_id,
+            detected.anchor_phid,
+            run.run_id,
+        )
+        return {
+            "status": "ignored",
+            "reason": "duplicate delivery",
+            "run_id": run.run_id,
+        }
     log.info(
-        "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention",
+        "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention (%s)",
         run.run_id,
-        revision_id,
-        bug_id,
+        detected.revision_id,
+        detected.bug_id,
+        detected.anchor_phid,
     )
     return {"status": "triggered", "run_id": run.run_id}
 

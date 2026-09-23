@@ -2593,7 +2593,7 @@ dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
     { name = "bugsy" },
     { name = "claude-agent-sdk" },
-    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
     { name = "requests" },
     { name = "starlette" },
@@ -2612,7 +2612,7 @@ requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
     { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
-    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "requests" },
     { name = "starlette", specifier = ">=0.36.0" },
@@ -2708,7 +2708,9 @@ name = "hackbot-api"
 version = "0.1.0"
 source = { editable = "services/hackbot-api" }
 dependencies = [
+    { name = "aiohttp" },
     { name = "alembic" },
+    { name = "async-lru" },
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "cloud-sql-python-connector", extra = ["asyncpg"] },
@@ -2718,15 +2720,20 @@ dependencies = [
     { name = "google-cloud-run" },
     { name = "google-cloud-storage" },
     { name = "hackbot-client" },
-    { name = "hackbot-runtime" },
     { name = "httpx" },
+    { name = "lando-client" },
+    { name = "markdown2" },
     { name = "phabricator-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "requests" },
+    { name = "sendgrid" },
     { name = "sentry-sdk" },
+    { name = "slack-bolt" },
     { name = "slack-sdk" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "testrail-client" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -2739,7 +2746,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "alembic", specifier = ">=1.13.1" },
+    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "cachetools", specifier = ">=5.3.0" },
     { name = "cloud-sql-python-connector", extras = ["asyncpg"], specifier = ">=1.5.0" },
@@ -2749,18 +2758,23 @@ requires-dist = [
     { name = "google-cloud-run", specifier = ">=0.10.0" },
     { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "hackbot-client", editable = "libs/hackbot-client" },
-    { name = "hackbot-runtime", editable = "libs/hackbot-runtime" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "lando-client", editable = "libs/lando-client" },
+    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
-    { name = "pydantic", specifier = ">=2.6.0" },
-    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pydantic", specifier = ">=2.13.0" },
+    { name = "pydantic-settings", specifier = ">=2.13.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "requests", specifier = ">=2.32.0" },
+    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
+    { name = "slack-bolt", specifier = ">=1.30.0" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.25" },
+    { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
 ]
 provides-extras = ["dev"]
@@ -2831,17 +2845,12 @@ version = "0.1.0"
 source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
-    { name = "async-lru" },
     { name = "google-auth" },
     { name = "httpx" },
-    { name = "lando-client" },
-    { name = "markdown2" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
-    { name = "sendgrid" },
     { name = "slack-sdk" },
-    { name = "testrail-client" },
     { name = "weave" },
 ]
 
@@ -2858,19 +2867,14 @@ phabricator = [
 requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
-    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
-    { name = "lando-client", editable = "libs/lando-client" },
-    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
-    { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "weave", specifier = ">=0.53.4" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
@@ -4691,9 +4695,9 @@ resolution-markers = [
     "python_full_version < '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "llvmlite", version = "0.36.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "numpy" },
-    { name = "setuptools" },
+    { name = "llvmlite", version = "0.36.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "setuptools", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e3/7d/3d61160836e49f40913741c464f119551c15ed371c1d91ea50308495b93b/numba-0.53.1.tar.gz", hash = "sha256:9cd4e5216acdc66c4e9dab2dfd22ddb5bef151185c070d4a3cd8e78638aff5b0", size = 2213956, upload-time = "2021-03-26T09:15:50.402Z" }
 
@@ -4713,8 +4717,8 @@ resolution-markers = [
     "(python_full_version < '3.13' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.13' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')",
 ]
 dependencies = [
-    { name = "llvmlite", version = "0.48.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "numpy" },
+    { name = "llvmlite", version = "0.48.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
+    { name = "numpy", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/a0/570e3dc53e5602b49108f62a13e529f1eec8bfc7ef37d49c825924dcf546/numba-0.66.0.tar.gz", hash = "sha256:b900e63a0e26c05ea9a6d5a3a5a0a177cb64c5011887bf43edb8c3ed2c38d363", size = 2806181, upload-time = "2026-07-01T23:12:46.36Z" }
 wheels = [
@@ -5144,7 +5148,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -6778,8 +6782,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "(platform_machine != 'x86_64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "jeepney", marker = "(platform_machine != 'x86_64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -6918,6 +6922,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bf/7e/302cb51f8735bad67f5ce088d027a1e299789d8555967c9642656fa36da0/sklearn_compat-0.1.6.tar.gz", hash = "sha256:8fd4731b4f709b66641b8f49c954dafec7e3b60afc48f2cfd298356c713277c6", size = 178018, upload-time = "2026-06-07T19:00:28.409Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/20/47a7e947757008be1b77f1c6a6861d26a84ef4b4ea3e6ebf4eff24f24d5d/sklearn_compat-0.1.6-py3-none-any.whl", hash = "sha256:b555db6c09d21eb50ee4a767dc08478a865f33f0e42b3ff8fc33f33c616bd7c1", size = 22868, upload-time = "2026-06-07T19:00:27.242Z" },
+]
+
+[[package]]
+name = "slack-bolt"
+version = "1.30.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "slack-sdk" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e3/4f/5ba15533d66da2e7174334cc0e2805142e5390c9f4c5f31633df78b17006/slack_bolt-1.30.0.tar.gz", hash = "sha256:af38258d41f801ad9c74503090e0f39accd66c49f667f7e55c97fcdb0e51b886", size = 131180, upload-time = "2026-07-15T20:47:33.679Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/ee/1a7a286cf98fa3f4eeffaabc090e82f58f058ab4812aa1d7421d92c2637a/slack_bolt-1.30.0-py2.py3-none-any.whl", hash = "sha256:81f5bc46e79516d23d5e2a31dded6304dd1b8b6b72c0083f2f31d5d801e262c4", size = 235341, upload-time = "2026-07-15T20:47:32.113Z" },
 ]
 
 [[package]]

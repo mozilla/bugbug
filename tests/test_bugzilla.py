@@ -136,3 +136,82 @@ def test_get_component_team_mapping(
         "Core": {"Graphics": "GFX"},
         "JSS": {"Library": "Crypto", "Tests": "Crypto"},
     }
+
+
+def test_get_comments(responses: Any, monkeypatch: Any) -> None:
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/comment/11?comment_ids=12",
+        status=200,
+        json={
+            "comments": {
+                "11": {"id": 11, "bug_id": 101, "count": 1},
+                "12": {"id": 12, "bug_id": 102, "count": 2},
+            }
+        },
+    )
+    bugs = {101: {"id": 101}, 102: {"id": 102}}
+    monkeypatch.setattr(bugzilla, "get", lambda bug_ids: bugs)
+
+    assert bugzilla.get_comments([11, 12, 11]) == {
+        11: (bugs[101], {"id": 11, "bug_id": 101, "count": 1}),
+        12: (bugs[102], {"id": 12, "bug_id": 102, "count": 2}),
+    }
+
+
+def test_get_comments_isolates_invalid_ids(responses: Any, monkeypatch: Any) -> None:
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/comment/11?comment_ids=999",
+        status=400,
+        json={"code": 111, "message": "Invalid comment ID"},
+    )
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/comment/11",
+        status=200,
+        json={"comments": {"11": {"id": 11, "bug_id": 101, "count": 1}}},
+    )
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/comment/999",
+        status=400,
+        json={"code": 111, "message": "Invalid comment ID"},
+    )
+    bug = {"id": 101}
+    monkeypatch.setattr(bugzilla, "get", lambda bug_ids: {101: bug})
+
+    assert bugzilla.get_comments([11, 999]) == {
+        11: (bug, {"id": 11, "bug_id": 101, "count": 1})
+    }
+
+
+def test_get_comments_omits_private_comments(responses: Any, monkeypatch: Any) -> None:
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/comment/11?comment_ids=12",
+        status=400,
+        json={"code": 110, "message": "Comment is private"},
+    )
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/comment/11",
+        status=200,
+        json={"comments": {"11": {"id": 11, "bug_id": 101, "count": 1}}},
+    )
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/comment/12",
+        status=400,
+        json={"code": 110, "message": "Comment is private"},
+    )
+    bug = {"id": 101}
+    monkeypatch.setattr(bugzilla, "get", lambda bug_ids: {101: bug})
+
+    assert bugzilla.get_comments([11, 12]) == {
+        11: (bug, {"id": 11, "bug_id": 101, "count": 1})
+    }
+
+
+def test_comment_downloads_include_collapsed_comments() -> None:
+    assert "_collapsed_comments" in bugzilla.COMMENT_INCLUDE_FIELDS

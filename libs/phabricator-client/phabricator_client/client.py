@@ -119,10 +119,14 @@ class PhabricatorClient:
             )
         return data["result"]
 
-    async def search_transactions(self, object_phid: str) -> list[dict]:
+    async def search_transactions(
+        self, object_identifier: str, constraints: dict | None = None
+    ) -> list[dict]:
         """Return the transactions (comments, status changes, ...) on an object."""
         result = await self.conduit_request(
-            "transaction.search", objectIdentifier=object_phid
+            "transaction.search",
+            objectIdentifier=object_identifier,
+            constraints=constraints or {},
         )
         return result.get("data") or []
 

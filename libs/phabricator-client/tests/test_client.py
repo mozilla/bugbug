@@ -126,10 +126,24 @@ def test_api_key_wrong_length_rejected():
 
 
 async def test_search_transactions(monkeypatch):
-    _capture_post(monkeypatch, {"result": {"data": [{"phid": "PHID-XACT-1"}]}})
+    captured = _capture_post(
+        monkeypatch, {"result": {"data": [{"phid": "PHID-XACT-1"}]}}
+    )
     assert await _client().search_transactions("PHID-DREV-1") == [
         {"phid": "PHID-XACT-1"}
     ]
+    assert captured["params"]["objectIdentifier"] == "PHID-DREV-1"
+    assert captured["params"]["constraints"] == {}
+
+
+async def test_search_transactions_passes_constraints(monkeypatch):
+    captured = _capture_post(monkeypatch, {"result": {"data": []}})
+    await _client().search_transactions(
+        "PHID-DREV-1", constraints={"phids": ["PHID-XACT-1", "PHID-XACT-2"]}
+    )
+    assert captured["params"]["constraints"] == {
+        "phids": ["PHID-XACT-1", "PHID-XACT-2"]
+    }
 
 
 async def test_search_revision_found(monkeypatch):

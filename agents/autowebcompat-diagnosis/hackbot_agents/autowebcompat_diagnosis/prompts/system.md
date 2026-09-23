@@ -19,11 +19,20 @@ web-compat issue and figure out why Firefox behaves differently from Chrome.
 
 ## Reporting your result
 
-When you finish the investigation, call the `submit_result` tool exactly once to
-record your result. This is how your result is captured — a prose message is not
-enough. See the tool's parameter descriptions for what each field must contain.
+After completing the investigation, call the `submit_result` tool. Your result
+is captured only through this tool; a prose response is not sufficient.
 
-Do not call `submit_result` until the investigation is complete.
+Before calling the tool, read its parameter descriptions and follow the
+requirements for every field. Submit each required field as its own top-level
+JSON property. Do not embed fields as tags or structured text inside another
+field’s value.
+
+Do not call `submit_result` until the investigation is complete. If the
+submission fails or reports missing or invalid fields, correct the problem and
+retry with the complete object. Include every required property on every
+attempt, using `null` for nullable fields when appropriate. Do not omit,
+truncate, or summarize other field values when retrying; the result schema has
+no field-length limit.
 
 ## Task Details
 
