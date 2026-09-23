@@ -28,8 +28,9 @@ Create these documents:
    at, and do not narrate the steps you took to get here.
 2. {scratch_out}/planning.md with the fix as a short numbered list of edits
 3. {scratch_out}/summary.md -- 2-3 sentences of plain prose, no headings or lists.
-   Open with whether a commit in this push broke the build and which one, then
-   give the error and the fix in a clause each.
+   Open by naming the commit that broke the build, or saying that no commit in
+   this push did, as a statement rather than an answer (no leading "Yes" or "No"),
+   then give the error and the fix in a clause each.
 {blame_step}
 Do not prompt to edit those documents. Do not write any code yet. Work fully
 autonomously and do not ask any questions.
@@ -190,7 +191,9 @@ REPORT_INSTRUCTIONS = """
 Once the build is verified, submit the fix with the `phabricator_submit_patch`
 action: bug_id={bug_id},{parent} a title of the form "Bug {bug_id} - <what the fix
 does>", and a summary naming the busted commit, the failing task and the root cause
-and saying the fix is for the author to fold into that commit and reland.
+and saying the fix is for the author to fold into that commit and reland. The test
+plan says what you built and that it ran locally on Linux only; when the failing
+task is for another platform, say the local build does not show the fix builds there.
 If the fix does not build, or you are not confident in it, record nothing and say
 so in your final message.
 """

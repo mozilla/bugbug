@@ -201,7 +201,7 @@ def build_email(
             "",
             "## Verification",
             "",
-            f"- Local build verified: {result.local_build_verified}",
+            f"- Local build on Linux only: {'passed' if result.local_build_verified else 'failed'}",
         ]
     if revision_pending:
         lines += [
