@@ -185,7 +185,10 @@ files and the output runs to tens of MB. Logs already fetched sit under
 {scratch_out}/logs; when you grep or sed one, cap the width as well as the line
 count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB.
 
-1. Make the smallest change that addresses the root cause.
+1. Make the smallest change that addresses the root cause. Do not add code
+   comments explaining the fix or what it replaced: the revision summary carries
+   that, and the patch is squashed into the author's own. Add a comment only where
+   the code would be unclear without it, as the surrounding code would.
 {verify_step}
 3. Append a "## Patch" section to {scratch_out}/analysis.md, under 10 lines: the
    files it touches, the root cause it addresses, and whether it was verified.
