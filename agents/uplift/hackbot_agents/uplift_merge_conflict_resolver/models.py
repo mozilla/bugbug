@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-opus-5"
+MODEL = "claude-opus-5-5"
 
 # Mirrors `FULL_SHA_PATTERN` in hackbot-api: git will not fetch an abbreviated
 # object id from a remote, and every commit here is fetched from one.

@@ -34,10 +34,11 @@ def test_options_default_model():
     assert options.model == MODEL, "Without an override, the configured model is used."
 
 
-def test_options_leave_effort_to_the_api_default():
+def test_options_leave_effort_to_the_model_default():
     options = make_options()
     assert options.effort is None, (
-        "Without an override, `effort` is omitted so the API's own default applies."
+        "Without an override, `effort` is omitted so the model's own default "
+        "applies; a run that needs more can pass one."
     )
 
 
