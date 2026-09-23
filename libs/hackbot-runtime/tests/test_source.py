@@ -63,9 +63,7 @@ def test_prepared_checkout_can_commit_without_an_ambient_identity(
     ensure_source_repo(dest, f"file://{remote}")
 
     (dest / "README.md").write_text("edited by the agent")
-    subprocess.run(
-        ["git", "-C", str(dest), "commit", "-aqm", "agent edit"], check=True
-    )
+    subprocess.run(["git", "-C", str(dest), "commit", "-aqm", "agent edit"], check=True)
     committer = subprocess.run(
         ["git", "-C", str(dest), "log", "-1", "--format=%cn <%ce>"],
         check=True,
