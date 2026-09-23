@@ -71,9 +71,9 @@ async def submit_patch(
         str | None,
         Field(
             description=(
-                "Keep the revision summary concise and useful for permanent history. "
-                "Do not restate the bug, narrate the investigation or implementation "
-                "process, or include test and verification details."
+                "Revision summary/description. Keep it concise and useful for permanent "
+                "history. Do not restate the bug, narrate the investigation or "
+                "implementation process, or include test and verification details."
             ),
         ),
     ] = None,
