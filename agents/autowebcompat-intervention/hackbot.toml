@@ -1,0 +1,14 @@
+# The agent needs the Firefox tree: 400+ existing interventions to copy from,
+# intervention_schema.json to validate against, and an artifact build to run.
+#
+# objdir-ff-artifact (not the default objdir-ff-asan) is paired with the
+# mozconfig the agent writes at startup; see agent.py::write_mozconfig. The
+# mozconfig's MOZ_OBJDIR is what actually decides where the build lands, so the
+# two names must stay in sync or ctx.firefox.binary points at nothing.
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+
+[firefox]
+enabled = true
+objdir = "objdir-ff-artifact"
