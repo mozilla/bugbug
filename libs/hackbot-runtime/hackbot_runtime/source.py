@@ -9,6 +9,11 @@ from pathlib import Path
 
 log = logging.getLogger("hackbot_runtime.source")
 
+# Who a commit made in a prepared checkout is committed by. Agent images
+# configure no git identity, and `git commit` refuses to run without one.
+COMMITTER_NAME = "Hackbot"
+COMMITTER_EMAIL = "hackbot@mozilla.tld"
+
 
 def ensure_source_repo(
     source_repo: Path, repo_url: str, ref: str | None = None, depth: int | None = None
@@ -24,6 +29,29 @@ def ensure_source_repo(
     for agents that must operate on a specific historical commit (e.g. a build
     failure commit) rather than the tip of the default branch.
     """
+    checkout_source_repo(source_repo, repo_url, ref, depth)
+    configure_git_identity(source_repo)
+
+
+def configure_git_identity(source_repo: Path) -> None:
+    """Give the checkout an identity, so an agent's own `git commit` works.
+
+    Local to the checkout, which is ephemeral, and the committer only: a
+    cherry-pick or an `--author` override keeps the author it replays.
+    """
+    for key, value in (("user.name", COMMITTER_NAME), ("user.email", COMMITTER_EMAIL)):
+        subprocess.run(
+            ["git", "-C", str(source_repo), "config", key, value],
+            check=True,
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+        )
+
+
+def checkout_source_repo(
+    source_repo: Path, repo_url: str, ref: str | None = None, depth: int | None = None
+) -> None:
+    """Clone or update the checkout itself; see :func:`ensure_source_repo`."""
     # Both the recovery path and the fresh clone converge on a shallow fetch of
     # this ref so a pinned commit is fetchable even when it is not on HEAD.
     fetch_target = ref if ref else "HEAD"

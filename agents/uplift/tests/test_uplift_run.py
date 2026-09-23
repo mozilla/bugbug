@@ -115,43 +115,6 @@ async def test_run_uplift_reports_what_the_session_resolved(
     )
 
 
-async def test_run_uplift_gives_the_checkout_a_git_identity(
-    monkeypatch, tmp_path, git_in
-):
-    """The agent is told to commit, and the image configures no identity.
-
-    The checkout is built with per-command identities, so it stores none --
-    like the prepared one -- and the session's own `git commit` would fail.
-    """
-    checkout = tmp_path / "no-identity"
-    checkout.mkdir()
-    git_in(checkout, "init", "-q")
-    (checkout / "f.txt").write_text("line1\nline2\nline3\n")
-    git_in(checkout, "add", "-A")
-    git_in(
-        checkout,
-        "-c",
-        "user.name=Nobody",
-        "-c",
-        "user.email=nobody@example.com",
-        "commit",
-        "-qm",
-        "base",
-    )
-
-    session, _ = fake_session(git_in, REPORT)
-
-    result = await run(monkeypatch, session, checkout)
-
-    assert (result.resolved, result.verification_failures) == (True, []), (
-        "The session's own commit should succeed, which it cannot unless the "
-        "run configured an identity in the checkout."
-    )
-    assert git_in(checkout, "log", "-1", "--format=%cn") == agent.COMMITTER_NAME, (
-        "The committer is hackbot; a cherry-pick keeps the author it replays."
-    )
-
-
 async def test_run_uplift_refuses_a_checkout_that_is_not_the_pinned_commit(
     monkeypatch, repo, git_in
 ):

@@ -24,13 +24,16 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import NamedTuple
 
+from hackbot_runtime.source import COMMITTER_EMAIL, COMMITTER_NAME
+
 log = logging.getLogger("hackbot_runtime.changes")
 
 _FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 
-# Author stamped on the synthetic commit that wraps any uncommitted remainder.
-_WIP_NAME = "Hackbot"
-_WIP_EMAIL = "hackbot@mozilla.tld"
+# Author stamped on the synthetic commit that wraps any uncommitted remainder,
+# which is the identity a prepared checkout already carries.
+_WIP_NAME = COMMITTER_NAME
+_WIP_EMAIL = COMMITTER_EMAIL
 _WIP_MESSAGE = "Uncommitted agent changes"
 
 # Record separator for parsing ``git log`` output (NUL avoids clashing with

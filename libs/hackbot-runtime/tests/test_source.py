@@ -1,9 +1,11 @@
 """Tests for ensure_source_repo (shallow git checkout helper)."""
 
+import os
 import subprocess
 from pathlib import Path
 
 from hackbot_runtime import ensure_source_repo
+from hackbot_runtime.source import COMMITTER_EMAIL, COMMITTER_NAME
 
 
 def _commit(path: Path, message: str) -> str:
@@ -46,6 +48,33 @@ def test_clones_when_absent(tmp_path):
     ensure_source_repo(dest, f"file://{remote}")
     assert (dest / ".git").is_dir()
     assert (dest / "README.md").read_text() == "hello"
+
+
+def test_prepared_checkout_can_commit_without_an_ambient_identity(
+    tmp_path, monkeypatch
+):
+    """Agent images configure none, and `git commit` refuses to run without one."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", os.devnull)
+    remote = tmp_path / "remote"
+    _make_remote(remote)
+    dest = tmp_path / "dest"
+
+    ensure_source_repo(dest, f"file://{remote}")
+
+    (dest / "README.md").write_text("edited by the agent")
+    subprocess.run(
+        ["git", "-C", str(dest), "commit", "-aqm", "agent edit"], check=True
+    )
+    committer = subprocess.run(
+        ["git", "-C", str(dest), "log", "-1", "--format=%cn <%ce>"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert committer == f"{COMMITTER_NAME} <{COMMITTER_EMAIL}>", (
+        "The identity the runtime configures is what an agent commits under."
+    )
 
 
 def test_idempotent_update_when_present(tmp_path):

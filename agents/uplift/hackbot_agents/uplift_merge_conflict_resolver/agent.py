@@ -10,7 +10,6 @@ happened for human review.
 import json
 import logging
 import re
-import subprocess
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -55,12 +54,6 @@ SYSTEM_PROMPT = {"type": "preset", "preset": "claude_code"}
 # Not a secret: the proxy discards it and substitutes the real Conduit key.
 # Sized to the 32 characters `PhabricatorSettings` requires.
 PROXY_API_TOKEN = "hackbot-broker-proxy-placeholder"
-
-# Who the agent's own commits are committed by. Matches what the runtime uses
-# when it has to commit for an agent, and is only the committer: a cherry-pick
-# keeps the author it replays.
-COMMITTER_NAME = "Hackbot"
-COMMITTER_EMAIL = "hackbot@mozilla.tld"
 
 
 class UpliftResult(HackbotAgentResult):
@@ -125,8 +118,6 @@ async def run_uplift(
 
     logger.info("resolving uplift of %d source(s) onto %s", len(sources), target_branch)
 
-    configure_git_identity(source_repo)
-
     # Where the agent starts: what the checks compare against afterwards.
     base_commit = head_commit(source_repo)
     if target_commit and base_commit != target_commit:
@@ -189,21 +180,6 @@ async def run_uplift(
     )
     publish_verified_report(scratch_out, publish_file, result)
     return result
-
-
-def configure_git_identity(repo: Path) -> None:
-    """Give the checkout a committer identity, which the image carries none of.
-
-    The agent commits each source itself, and `git commit` refuses to run
-    without one. Local to the checkout, which is ephemeral.
-    """
-    logger.debug("configuring the checkout's git identity")
-    for key, value in (("user.name", COMMITTER_NAME), ("user.email", COMMITTER_EMAIL)):
-        subprocess.run(
-            ["git", "-C", str(repo), "config", key, value],
-            check=True,
-            capture_output=True,
-        )
 
 
 def describe_requested(
