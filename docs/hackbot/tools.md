@@ -10,9 +10,7 @@ A tool is an `async` handler whose **first parameter is a context object**:
 
 ```python
 @tool
-async def get_bugs(
-    ctx: BugzillaContext, bug_ids: Annotated[list[int], Field(description=...)]
-) -> dict:
+async def get_bugs(ctx: BugzillaContext, bug_ids: Annotated[list[int], Field(description=...)]) -> dict:
     """Fetch one or more bugs by ID in a single bulk request."""
 ```
 

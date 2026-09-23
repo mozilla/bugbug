@@ -34,7 +34,7 @@ class TestingPolicyStatsGenerator(object):
 
         repository.download_commits(
             repo_dir,
-            rev_start="children({})".format(latest_commit),
+            rev_start="children({})".format(latest_commit["node"]),
         )
 
         logger.info("Downloading revisions database...")

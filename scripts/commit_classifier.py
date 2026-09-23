@@ -257,7 +257,7 @@ class CommitClassifier(object):
 
         repository.download_commits(
             self.repo_dir,
-            rev_start="children({})".format(latest_commit),
+            rev_start="children({})".format(latest_commit["node"]),
         )
 
     def has_revision(self, hg, revision):

@@ -80,7 +80,7 @@ class StructuredColumnTransformer(ColumnTransformer):
 
         transformer_names = (name for name, transformer, column in self.transformers_)
         types = []
-        for _i, (f, transformer_name) in enumerate(zip(Xs, transformer_names)):
+        for f, transformer_name in zip(Xs, transformer_names):
             types.append((transformer_name, result.dtype, (f.shape[1],)))
 
         return result.view(np.dtype(types))

@@ -10,14 +10,13 @@ An agent is a Python package started as `python -m hackbot_agents.<name>`. It ow
 platform three things:
 
 ```python
-class AgentInputs(BaseSettings):  # per-run inputs, read from env (bug_id <- BUG_ID)
+class AgentInputs(BaseSettings):        # per-run inputs, read from env (bug_id <- BUG_ID)
     bug_id: int
 
+async def main(ctx: HackbotContext) -> BugFixResult:
+    ...
 
-async def main(ctx: HackbotContext) -> BugFixResult: ...
-
-
-run_async(main)  # runtime takes over: config, auth, summary, exit
+run_async(main)                          # runtime takes over: config, auth, summary, exit
 ```
 
 - **Success** is returning a `HackbotAgentResult` subclass. It lands in

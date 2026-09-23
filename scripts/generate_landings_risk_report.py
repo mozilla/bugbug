@@ -146,7 +146,7 @@ class LandingsRiskReportGenerator(object):
 
         repository.download_commits(
             repo_dir,
-            rev_start="children({})".format(latest_commit),
+            rev_start="children({})".format(latest_commit["node"]),
         )
 
         # Some commits that were already in the DB from the previous run might need
