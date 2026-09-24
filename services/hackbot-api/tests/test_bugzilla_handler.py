@@ -7,7 +7,7 @@ error handling — without touching a network.
 
 import base64
 
-from hackbot_runtime.actions.handlers import ApplyContext, bugzilla_handler
+from app.action_handlers import ApplyContext, bugzilla_handler
 
 
 def _ctx(attachments=None, artifacts=None, agent="test-agent"):

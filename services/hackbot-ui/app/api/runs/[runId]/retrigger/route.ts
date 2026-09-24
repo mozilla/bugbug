@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createRun, getRun, HackbotError } from "@/lib/hackbot";
+import { apiErrorResponse } from "@/lib/api-errors";
+import { createRun, getRun } from "@/lib/hackbot";
 import { getAuthedEmail } from "@/lib/session";
 import { isFailed } from "@/lib/types";
 
@@ -33,7 +34,6 @@ export async function POST(
     const run = await createRun(doc.agent, doc.inputs, email);
     return NextResponse.json(run, { status: 201 });
   } catch (err) {
-    const status = err instanceof HackbotError ? err.status : 500;
-    return NextResponse.json({ error: (err as Error).message }, { status });
+    return apiErrorResponse(err);
   }
 }

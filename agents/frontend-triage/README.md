@@ -213,11 +213,15 @@ Two further hooks shape the comment text as it is recorded:
   `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-wrong-fix`,
   `ai-triage-shallow-fix`. The last two are about the fix plan rather than the
   diagnosis: one for a fix that would not work, one for a fix that patches the
-  symptom instead of the cause the comment just named.
+  symptom instead of the cause the comment just named. The same hook closes the
+  comment by asking for a `needinfo?` on `hackbot@mozilla.tld`, which triggers a
+  `bug-fix` run ([triggers.md](../../docs/hackbot/triggers.md)).
 
 The tags go under the runtime's shared footer inviting a 👍 or 👎 reaction, which
 `bugzilla.add_comment` has already appended by the time the hook runs. Those
-reactions and tags are the feedback channel — the agent does not request needinfo.
+reactions and tags are the feedback channel; the needinfo is for the patch, and
+only from a requester in Bugzilla's `editbugs` group, which is what the webhook
+authorizes.
 
 ## Slack notification
 
@@ -262,7 +266,7 @@ so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is neve
 given the tool. Like every other action it is recorded rather than sent, so it
 shows up in the Hackbot UI before it lands and is delivered at most once. Delivery
 needs `SLACK_BOT_TOKEN` on hackbot-api and the app in the channel — see
-`libs/hackbot-runtime/hackbot_runtime/actions/handlers/slack_handler.py`. A failed
+`services/hackbot-api/app/action_handlers/slack_handler.py`. A failed
 Slack post does not affect the Bugzilla writes, and it does not go the other way
 either: the applier runs each action independently, so a rejected `PUT` still
 notifies. The run page shows the failed action.

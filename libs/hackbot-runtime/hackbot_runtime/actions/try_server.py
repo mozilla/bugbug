@@ -7,7 +7,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 TRY_PUSH_ACTION_TYPE = "try_server.push"
 
@@ -58,7 +58,6 @@ async def push(
     tasks: Annotated[
         list[str] | None,
         Field(
-            default=None,
             description=(
                 "Treeherder task labels, e.g. ['build-linux64/opt']. Only tasks "
                 "that exercise your change; each costs machine time. Not with "
@@ -69,7 +68,6 @@ async def push(
     auto: Annotated[
         bool,
         Field(
-            default=False,
             description=(
                 "Let CI pick the tasks for the files you changed (`mach try "
                 "auto`). Prefer this when unsure. Not with `tasks`."
@@ -79,7 +77,6 @@ async def push(
     tests: Annotated[
         dict[str, list[str]] | None,
         Field(
-            default=None,
             description=(
                 "Narrow the selection to specific tests: {suite: [repo-relative "
                 "paths]}, e.g. {'mochitest-browser-chrome': "
@@ -92,7 +89,6 @@ async def push(
     title: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
                 "One-line commit message shown on Treeherder, e.g. 'Bug 123 - "
                 "verify the fix on Linux'."
@@ -102,7 +98,6 @@ async def push(
     ref: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
                 "Label for this action so a later one can use "
                 "{{actions.<ref>.url}} to link this push."
@@ -155,7 +150,7 @@ async def push(
         params["test_paths"] = validate_test_paths(tests)
 
     action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning, ref=ref)
-    return f"Recorded {TRY_PUSH_ACTION_TYPE} (ID: {action['action_id']})."
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)
