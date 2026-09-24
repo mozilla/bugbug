@@ -1,6 +1,7 @@
 """Inbound webhooks that trigger Hackbot runs."""
 
 import logging
+from typing import Annotated
 
 from cachetools import TTLCache
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -55,8 +56,8 @@ def get_hackbot_client() -> HackbotClient:
 @router.post("/slack")
 async def slack_webhook(
     request: Request,
-    slack_handler: AsyncSlackRequestHandler = Depends(get_slack_handler),
-    api_client: HackbotClient = Depends(get_hackbot_client),
+    slack_handler: Annotated[AsyncSlackRequestHandler, Depends(get_slack_handler)],
+    api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> Response:
     """Every interaction Slack sends this app, whatever kind it is."""
     return await slack_handler.handle(
@@ -104,9 +105,9 @@ _seen_bugzilla_events: TTLCache = TTLCache(
 )
 async def phabricator_webhook(
     request: Request,
-    phab_client: PhabricatorClient = Depends(get_phabricator_client),
-    authorizer: PhabricatorAuthorizer = Depends(get_phabricator_authorizer),
-    api_client: HackbotClient = Depends(get_hackbot_client),
+    phab_client: Annotated[PhabricatorClient, Depends(get_phabricator_client)],
+    authorizer: Annotated[PhabricatorAuthorizer, Depends(get_phabricator_authorizer)],
+    api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> dict:
     payload = await request.json()
 
@@ -174,8 +175,8 @@ async def phabricator_webhook(
 )
 async def bugzilla_webhook(
     request: Request,
-    api_client: HackbotClient = Depends(get_hackbot_client),
-    authorizer: BugzillaAuthorizer = Depends(get_bugzilla_authorizer),
+    api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
+    authorizer: Annotated[BugzillaAuthorizer, Depends(get_bugzilla_authorizer)],
 ) -> dict:
     """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
     payload = await request.json()
