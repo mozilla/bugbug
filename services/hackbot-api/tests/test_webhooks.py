@@ -880,13 +880,19 @@ def test_bugzilla_route_keys_retry_same_but_later_event_differently(client):
     payload = _bugzilla_payload()
 
     first = _post_bugzilla(client, payload)
-    _post_bugzilla(client, payload)
+    retry = _post_bugzilla(client, payload)
     later = _post_bugzilla(
         client,
         _bugzilla_payload(flag_id=2187234, event_time="2026-08-07T19:00:05"),
     )
 
     assert first.json()["status"] == "triggered"
+    # The retry is answered with the existing run rather than claimed as new.
+    assert retry.json() == {
+        "status": "ignored",
+        "reason": "duplicate delivery",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     assert later.json()["status"] == "triggered"
     assert fake_api.dedupe_keys == ["ni2187233", "ni2187233", "ni2187234"]
 

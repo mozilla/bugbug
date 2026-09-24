@@ -197,6 +197,18 @@ async def bugzilla_webhook(
         },
         dedupe_key=f"ni{detected.flag_id}",
     )
+    if not run.is_new:
+        log.info(
+            "Duplicate Bugzilla delivery for bug %s (flag: %s) resolved to run %s",
+            detected.bug_id,
+            detected.flag_id,
+            run.run_id,
+        )
+        return {
+            "status": "ignored",
+            "reason": "duplicate delivery",
+            "run_id": run.run_id,
+        }
     log.info(
         "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request (flag: %s)",
         run.run_id,
