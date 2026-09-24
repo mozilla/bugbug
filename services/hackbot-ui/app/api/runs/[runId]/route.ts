@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getRun, HackbotError } from "@/lib/hackbot";
+import { apiErrorResponse } from "@/lib/api-errors";
+import { getRun } from "@/lib/hackbot";
 import { getAuthedEmail } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,6 @@ export async function GET(
     const run = await getRun(runId);
     return NextResponse.json(run);
   } catch (err) {
-    const status = err instanceof HackbotError ? err.status : 500;
-    return NextResponse.json({ error: (err as Error).message }, { status });
+    return apiErrorResponse(err);
   }
 }

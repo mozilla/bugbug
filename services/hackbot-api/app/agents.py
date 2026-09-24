@@ -34,6 +34,9 @@ class AgentSpec:
     # was; this is where that verdict is honored. Fails closed, so a run that reports
     # no verdict never qualifies.
     auto_apply_requires_consent: bool = False
+    # Per-action overrides for the agent-level auto-apply policy.
+    always_apply_actions: frozenset[str] = frozenset()
+    never_apply_actions: frozenset[str] = frozenset()
     # Whether a run that produced source changes is expected to submit those changes
     # to Phabricator. Agents without Phabricator submission tools may legitimately
     # leave a patch artifact behind, so they must not trigger the warning.
@@ -96,9 +99,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Analyze a Firefox build failure at a specific commit and produce a candidate fix patch.",
         job_name="hackbot-agent-build-repair",
         input_schema=BuildRepairInputs,
-        # Its only action is the failure-analysis email, which used to be sent
-        # unconditionally by the pulse listener.
-        auto_apply_actions=True,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send"}),
     ),
     "frontend-triage": AgentSpec(
         name="frontend-triage",

@@ -85,6 +85,23 @@ def test_the_culprit_and_its_author_are_named():
     assert "**author@mozilla.com** authored" in body
 
 
+def test_a_culprit_from_an_earlier_push_is_marked_as_such():
+    earlier = "91b3a385edd8f0e3c2b1a09d8c7e6f5a4b3c2d1e"
+    _, body = _email(
+        result=_result(blamed_commit=earlier), blamed_author="author@mozilla.com"
+    )
+    assert (
+        f"**Likely culprit:** [`{earlier[:12]}`]"
+        f"(https://github.com/mozilla-firefox/firefox/commit/{earlier})"
+        " by author@mozilla.com, from an earlier push" in body
+    )
+
+
+def test_a_culprit_in_the_push_is_not_marked_as_earlier():
+    _, body = _email(blamed_author="author@mozilla.com")
+    assert "earlier push" not in body
+
+
 def test_a_push_the_agent_cleared_says_so():
     _, body = _email(result=_result(blamed_commit=None))
     assert "Not caused by this push" in body
@@ -121,3 +138,18 @@ def test_no_patch_section_without_a_patch():
     _, body = _email()
     assert "Proposed patch" not in body
     assert "{patch}" not in body
+
+
+def test_a_pending_revision_comes_with_submit_instructions():
+    _, body = _email(_result(bug_id=2063979), has_patch=True, revision_pending=True)
+    assert "## How to submit the fix to Phabricator" in body
+    assert "run page: https://hackbot.moz.tools/runs/1218e630-78c8" in body
+    assert "*Apply pending actions*" in body
+    assert "[bug 2063979](https://bugzilla.mozilla.org/show_bug.cgi?id=2063979)" in body
+    # Instructions come before the diff, which can run long.
+    assert body.index("How to submit") < body.index("## Proposed patch")
+
+
+def test_no_submit_instructions_without_a_pending_revision():
+    _, body = _email(has_patch=True)
+    assert "How to submit" not in body

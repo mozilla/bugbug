@@ -35,6 +35,7 @@ members = [
     "hackbot-runtime",
     "lando-client",
     "phabricator-client",
+    "phabricator-proxy",
     "reviewhelper-api",
     "testrail-client",
 ]
@@ -90,7 +91,7 @@ vcs = [
 [package.metadata]
 requires-dist = [
     { name = "bugsy", marker = "extra == 'bugzilla'" },
-    { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.2.30" },
+    { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "grizzly-framework", marker = "extra == 'firefox'" },
     { name = "httpx", marker = "extra == 'vcs'" },
     { name = "prefpicker", marker = "extra == 'firefox'" },
@@ -1114,7 +1115,7 @@ wheels = [
 
 [[package]]
 name = "claude-agent-sdk"
-version = "0.2.147"
+version = "0.2.158"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1122,13 +1123,13 @@ dependencies = [
     { name = "mcp" },
     { name = "sniffio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/86/84/f4b1c0991c83d74953984ab97ab09c1dca4847ee2b073df29ebc693ec30b/claude_agent_sdk-0.2.147.tar.gz", hash = "sha256:080f85055826a8bef60b10890d9e4e51e7065848fddc5fcbbd410db54d330ee5", size = 344709, upload-time = "2026-08-28T01:02:27.315Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0e/5c/1d348e677fb199978d2b559fb5822fc58d77927f0988d1eb2acc18d5a0bb/claude_agent_sdk-0.2.158.tar.gz", hash = "sha256:672ddb19df334e9cb80bb264a6ddf00870c8d4e170b3fd0a3cf0ce354f634e7f", size = 354570, upload-time = "2026-09-23T01:39:14.77Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/d5/8276068f70105d19911a932eb56e6f92417686590e00bb101cfb06d6c6b2/claude_agent_sdk-0.2.147-py3-none-macosx_11_0_arm64.whl", hash = "sha256:c8ab79a6f8f69aee1a081e2d3cf2ba61b176230df5c575c6999b6b81ec3ad874", size = 84091031, upload-time = "2026-08-28T01:02:34.118Z" },
-    { url = "https://files.pythonhosted.org/packages/51/87/c1de399186653fb7923bc78c12b085b0e7b8589bd39b3a5a0ce9ef88d2f2/claude_agent_sdk-0.2.147-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:ed1f0d2eacae5fc8edd871e461f907abbb4f65d20514d36d8756759497548e1c", size = 88571964, upload-time = "2026-08-28T01:02:41.361Z" },
-    { url = "https://files.pythonhosted.org/packages/ec/b6/e91d2874b1b21bbfad983303e4c96ea013de15c0c81b1eaff72dec19c196/claude_agent_sdk-0.2.147-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:9722cd49f2b2d5b615ec3ac10e631cd4bfd7ce3b1188a28560199934060d5a6e", size = 94197625, upload-time = "2026-08-28T01:02:48.525Z" },
-    { url = "https://files.pythonhosted.org/packages/92/4a/0c955221341a309879f41ed96c536c3662b1f6d602c87de66ff2f8c0e945/claude_agent_sdk-0.2.147-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:d549c0fc720b3b86f77ea15060d8581878854f6d41716d72daf8ba730ee6d211", size = 94391129, upload-time = "2026-08-28T01:02:57.894Z" },
-    { url = "https://files.pythonhosted.org/packages/51/aa/4917e072bd8b1fec05a4c38e8bebce72f9580d5367a869f222e015fcb376/claude_agent_sdk-0.2.147-py3-none-win_amd64.whl", hash = "sha256:3859a746d4c8e3ec2d0626792ace4f194d6caa3e7782ef5de8e57a4f8f4f38fa", size = 97051929, upload-time = "2026-08-28T01:03:07.462Z" },
+    { url = "https://files.pythonhosted.org/packages/89/ad/37559b5a12170699eb6d4c5e1c66f491c4a3d7366f8f300a8dba0fc40aec/claude_agent_sdk-0.2.158-py3-none-macosx_11_0_arm64.whl", hash = "sha256:d124bd374dfbbcbdb4326e922f30d436251ae469df9cae545ef8ff6839d76e47", size = 90406616, upload-time = "2026-09-23T01:39:18.829Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/52/21968fc645ee206bb260f18b26ae8ae035fc5af820a7820b01e308496510/claude_agent_sdk-0.2.158-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:beb963aa66eac715ff005e44ff02065fd5d855a10a47bc802097a31a522e6be3", size = 94751713, upload-time = "2026-09-23T01:39:22.591Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/4b/b42ab1a7ba32cea66184dedf8da158d49d00d6af753bd48998dab6e7a1d6/claude_agent_sdk-0.2.158-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:12f432273c3f0da103ea8dc921c3ce96e802c044e1f3f2535cf98b7d59777aa7", size = 99897552, upload-time = "2026-09-23T01:39:26.933Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/eb/1b34083c59a09a1a380c211eacd1cb185de4adc4bdb1170997e37f53f6ca/claude_agent_sdk-0.2.158-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:1f46ddac2cb51f16b2ca064a0dbeeab7db712f34e72454cc7776713e0f0f663c", size = 100257803, upload-time = "2026-09-23T01:39:31.501Z" },
+    { url = "https://files.pythonhosted.org/packages/15/0d/11ab53934b04176180099a79bb186036e304e1fe1310bdecf21df599f1d3/claude_agent_sdk-0.2.158-py3-none-win_amd64.whl", hash = "sha256:b1e7f6b9d048c2c44e5228d6a0eeb19ae3aafb643c1115c456ea9937e0439aef", size = 102853711, upload-time = "2026-09-23T01:39:36.133Z" },
 ]
 
 [[package]]
@@ -2558,6 +2559,7 @@ dependencies = [
     { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
     { name = "phabricator-client" },
+    { name = "phabricator-proxy" },
     { name = "starlette" },
     { name = "uvicorn" },
 ]
@@ -2576,6 +2578,7 @@ requires-dist = [
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
+    { name = "phabricator-proxy", editable = "libs/phabricator-proxy" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "starlette", specifier = ">=0.36.0" },
@@ -2591,7 +2594,7 @@ dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
     { name = "bugsy" },
     { name = "claude-agent-sdk" },
-    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
     { name = "requests" },
     { name = "starlette" },
@@ -2610,7 +2613,7 @@ requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
     { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
-    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "requests" },
     { name = "starlette", specifier = ">=0.36.0" },
@@ -2706,7 +2709,9 @@ name = "hackbot-api"
 version = "0.1.0"
 source = { editable = "services/hackbot-api" }
 dependencies = [
+    { name = "aiohttp" },
     { name = "alembic" },
+    { name = "async-lru" },
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "cloud-sql-python-connector", extra = ["asyncpg"] },
@@ -2716,14 +2721,20 @@ dependencies = [
     { name = "google-cloud-run" },
     { name = "google-cloud-storage" },
     { name = "hackbot-client" },
-    { name = "hackbot-runtime" },
+    { name = "httpx" },
+    { name = "lando-client" },
+    { name = "markdown2" },
     { name = "phabricator-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "requests" },
+    { name = "sendgrid" },
     { name = "sentry-sdk" },
+    { name = "slack-bolt" },
     { name = "slack-sdk" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "testrail-client" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -2736,7 +2747,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "alembic", specifier = ">=1.13.1" },
+    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "cachetools", specifier = ">=5.3.0" },
     { name = "cloud-sql-python-connector", extras = ["asyncpg"], specifier = ">=1.5.0" },
@@ -2746,17 +2759,23 @@ requires-dist = [
     { name = "google-cloud-run", specifier = ">=0.10.0" },
     { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "hackbot-client", editable = "libs/hackbot-client" },
-    { name = "hackbot-runtime", editable = "libs/hackbot-runtime" },
+    { name = "httpx", specifier = ">=0.26.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "lando-client", editable = "libs/lando-client" },
+    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
-    { name = "pydantic", specifier = ">=2.6.0" },
-    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pydantic", specifier = ">=2.13.0" },
+    { name = "pydantic-settings", specifier = ">=2.13.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "requests", specifier = ">=2.32.0" },
+    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
+    { name = "slack-bolt", specifier = ">=1.30.0" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.25" },
+    { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
 ]
 provides-extras = ["dev"]
@@ -2829,17 +2848,12 @@ version = "0.1.0"
 source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
-    { name = "async-lru" },
     { name = "google-auth" },
     { name = "httpx" },
-    { name = "lando-client" },
-    { name = "markdown2" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
     { name = "requests" },
-    { name = "sendgrid" },
     { name = "slack-sdk" },
-    { name = "testrail-client" },
     { name = "weave" },
 ]
 
@@ -2856,19 +2870,14 @@ phabricator = [
 requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
-    { name = "async-lru", specifier = ">=2.0.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
-    { name = "lando-client", editable = "libs/lando-client" },
-    { name = "markdown2", specifier = ">=2.4.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "sendgrid", specifier = ">=6.12.5" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
-    { name = "testrail-client", editable = "libs/testrail-client" },
     { name = "weave", specifier = ">=0.53.4" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
@@ -4689,9 +4698,9 @@ resolution-markers = [
     "python_full_version < '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "llvmlite", version = "0.36.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "numpy" },
-    { name = "setuptools" },
+    { name = "llvmlite", version = "0.36.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "setuptools", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e3/7d/3d61160836e49f40913741c464f119551c15ed371c1d91ea50308495b93b/numba-0.53.1.tar.gz", hash = "sha256:9cd4e5216acdc66c4e9dab2dfd22ddb5bef151185c070d4a3cd8e78638aff5b0", size = 2213956, upload-time = "2021-03-26T09:15:50.402Z" }
 
@@ -4711,8 +4720,8 @@ resolution-markers = [
     "(python_full_version < '3.13' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.13' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')",
 ]
 dependencies = [
-    { name = "llvmlite", version = "0.48.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "numpy" },
+    { name = "llvmlite", version = "0.48.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
+    { name = "numpy", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/a0/570e3dc53e5602b49108f62a13e529f1eec8bfc7ef37d49c825924dcf546/numba-0.66.0.tar.gz", hash = "sha256:b900e63a0e26c05ea9a6d5a3a5a0a177cb64c5011887bf43edb8c3ed2c38d363", size = 2806181, upload-time = "2026-07-01T23:12:46.36Z" }
 wheels = [
@@ -5142,7 +5151,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -5168,6 +5177,32 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "phabricator-proxy"
+version = "0.1.0"
+source = { editable = "libs/phabricator-proxy" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "phabricator-client" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
 ]
@@ -6750,8 +6785,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "(platform_machine != 'x86_64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "jeepney", marker = "(platform_machine != 'x86_64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -6890,6 +6925,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bf/7e/302cb51f8735bad67f5ce088d027a1e299789d8555967c9642656fa36da0/sklearn_compat-0.1.6.tar.gz", hash = "sha256:8fd4731b4f709b66641b8f49c954dafec7e3b60afc48f2cfd298356c713277c6", size = 178018, upload-time = "2026-06-07T19:00:28.409Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/20/47a7e947757008be1b77f1c6a6861d26a84ef4b4ea3e6ebf4eff24f24d5d/sklearn_compat-0.1.6-py3-none-any.whl", hash = "sha256:b555db6c09d21eb50ee4a767dc08478a865f33f0e42b3ff8fc33f33c616bd7c1", size = 22868, upload-time = "2026-06-07T19:00:27.242Z" },
+]
+
+[[package]]
+name = "slack-bolt"
+version = "1.30.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "slack-sdk" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e3/4f/5ba15533d66da2e7174334cc0e2805142e5390c9f4c5f31633df78b17006/slack_bolt-1.30.0.tar.gz", hash = "sha256:af38258d41f801ad9c74503090e0f39accd66c49f667f7e55c97fcdb0e51b886", size = 131180, upload-time = "2026-07-15T20:47:33.679Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/ee/1a7a286cf98fa3f4eeffaabc090e82f58f058ab4812aa1d7421d92c2637a/slack_bolt-1.30.0-py2.py3-none-any.whl", hash = "sha256:81f5bc46e79516d23d5e2a31dded6304dd1b8b6b72c0083f2f31d5d801e262c4", size = 235341, upload-time = "2026-07-15T20:47:32.113Z" },
 ]
 
 [[package]]

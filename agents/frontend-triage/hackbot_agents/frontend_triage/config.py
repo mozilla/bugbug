@@ -511,6 +511,121 @@ TRIAGE_SCOPE = (
             "retitle or re-scope it to match."
         ),
     ),
+    # Three components, one team, one channel, and their trees interleave: a chat-UI bug
+    # filed under `Frontend` routinely localizes into `models/`. So all three name each
+    # other in `related`, or `component_guidance_hook` refuses the comment for citing a
+    # file the same team owns.
+    ScopedComponent(
+        "Core",
+        "Machine Learning: Frontend",
+        "#smart-window-bug-triage",
+        trees=("browser/components/genai/", "browser/components/aiwindow/ui/"),
+        owns=("browser/components/genai/", "browser/components/aiwindow/ui/"),
+        related=(
+            "Core :: Machine Learning: Models",
+            "Core :: Machine Learning: General",
+        ),
+        notes=(
+            "**Two unrelated UIs share this component, and almost nothing about them is "
+            "the same.** `browser/components/genai/` is the third-party chatbot sidebar: "
+            "`GenAI.sys.mjs` picks a provider and `chat.html` loads that provider's own "
+            "web page into a browser element, so ChatGPT, Gemini, Le Chat and "
+            "HuggingChat are remote documents we host rather than markup we wrote. "
+            "**That is the single most common misfiling here.** A report that a button "
+            "inside the ChatGPT panel is unlabelled, invisible in High Contrast, or in "
+            "the wrong tab order is usually the provider's page, not our code, and the "
+            "correct triage says so and stops -- do not go looking for the element in "
+            "`browser/components/genai/` and do not propose a fix to a page we do not "
+            "ship. What is ours in that tree is the frame around it: the provider list "
+            "and prompts in `GenAI.sys.mjs`, the context-menu and shortcut entry points "
+            "in `GenAIChild.sys.mjs`, and the separate Link Preview "
+            "(`LinkPreview.sys.mjs`) and Page Assist (`PageAssist.sys.mjs`) features "
+            "that happen to live beside it.\n\n"
+            "`browser/components/aiwindow/ui/` is Smart Window, and it **is** ours all "
+            "the way down -- lit custom elements under `browser/components/aiwindow/ui/"
+            "components/`, actors under `browser/components/aiwindow/ui/actors/`, and "
+            "the window and tab state in `browser/components/aiwindow/ui/modules/`. Work "
+            "out which of the two the reporter was in before reading either; the two "
+            "have no files in common.\n\n"
+            "Note also that the chatbot renders inside the sidebar's frame, so the "
+            "panel chrome around it -- resizing, the launcher, where the panel is "
+            "docked -- is `Firefox :: Sidebar` and not this component. Coverage is good "
+            "in both trees (`browser/components/genai/tests/` and "
+            "`browser/components/aiwindow/ui/test/`, each with `browser/` and "
+            "`xpcshell/` subdirectories), so an empty `relevant_tests` is usually wrong."
+        ),
+    ),
+    ScopedComponent(
+        "Core",
+        "Machine Learning: Models",
+        "#smart-window-bug-triage",
+        trees=("browser/components/aiwindow/models/",),
+        # `moz.build` assigns this directory to `Machine Learning: General`, and the bugs
+        # filed against it arrive under this component. Both claim the same string rather
+        # than one of them winning, so either team's guidance satisfies the citation hook.
+        owns=("browser/components/aiwindow/models/",),
+        related=(
+            "Core :: Machine Learning: General",
+            "Core :: Machine Learning: Frontend",
+        ),
+        notes=(
+            "The prompt, tool and routing layer under "
+            "`browser/components/aiwindow/models/`: `Chat.sys.mjs` drives a conversation, "
+            "`Tools.sys.mjs` declares the tools a model may call, `PromptLoader.sys.mjs` "
+            "and `PromptOptimizer.sys.mjs` assemble what is sent, and "
+            "`SearchBrowsingHistory.sys.mjs` and `WCSMerinoClient.sys.mjs` are the "
+            "retrieval side. `browser/components/aiwindow/models/memories/` is a separate "
+            "subsystem on the same code path -- extraction, scheduling and storage of "
+            "what the browser remembers about a user -- and a bug about what the model "
+            "recalled is usually there rather than in the chat modules above it.\n\n"
+            "**Most of what a bug here describes has no code in this tree.** Which model "
+            "answered, what a provider returned, whether a search result was relevant, "
+            "how good a response was: that is served remotely, and the in-tree half is "
+            "only the request that provoked it. Say the behavior is not localizable in "
+            "the checkout when it is not, rather than picking the nearest file that "
+            "mentions the feature -- a plausible wrong file costs more than an honest "
+            '"this is server-side".\n\n'
+            "One trap when looking for tests: "
+            "`browser/components/aiwindow/models/tests/browser_eval/` is a **model-quality "
+            "evaluation harness**, one file per model behind its own `eval.toml`, not a "
+            "regression suite, and it does not run in CI as one. The regression tests are "
+            "`browser/components/aiwindow/models/tests/browser/` and "
+            "`browser/components/aiwindow/models/tests/xpcshell/`; cite those."
+        ),
+    ),
+    ScopedComponent(
+        "Core",
+        "Machine Learning: General",
+        "#smart-window-bug-triage",
+        trees=("browser/components/aiwindow/", "dom/modelcontext/"),
+        owns=(
+            "browser/components/aiwindow/",
+            "browser/components/aiwindow/models/",
+            "dom/modelcontext/",
+        ),
+        related=(
+            "Core :: Machine Learning: Frontend",
+            "Core :: Machine Learning: Models",
+        ),
+        notes=(
+            "The catch-all of the three, and it spans two eras of the same product. Old "
+            "chatbot-sidebar reports still arrive here rather than under `Machine "
+            "Learning: Frontend` -- the two components were used interchangeably for that "
+            "UI for a year -- so the component name does not tell you which tree, and a "
+            "2024 or 2025 bug about a provider panel is `browser/components/genai/` even "
+            "though nothing here points at it. Newer bugs are the Smart Window plumbing "
+            "that is neither the UI nor the model layer: what sits at the root of "
+            "`browser/components/aiwindow/`, and the Model Context Protocol surface in "
+            "`dom/modelcontext/`.\n\n"
+            "Two neighbors this is regularly confused with, neither of them triaged here. "
+            "The on-device inference runtime -- model download, the WASM engine, the model "
+            "cache -- is `toolkit/components/ml/`, filed as `Machine Learning: On Device`. "
+            "The prompt and tool layer is `Machine Learning: Models`, which owns "
+            "`browser/components/aiwindow/models/` alongside this component. Triage the "
+            "bug under the component it was filed in and say where the code turned out to "
+            "be; do not retitle or re-scope it to match."
+        ),
+    ),
     # The installer and the updater are triaged by the same team, so two components
     # share a channel. Keying by product-and-component rather than by channel is what
     # lets them, without either one having to know about the other.
@@ -554,6 +669,66 @@ TRIAGE_SCOPE = (
             "So for most Installer bugs an empty `relevant_tests` is the correct answer; "
             "say the area is uncovered rather than leaving the reader to wonder whether "
             "you looked."
+        ),
+    ),
+    # The three buckets, which are where a filing lands when the reporter could not pick
+    # a component. Grouped at the end rather than beside a related area because they are
+    # not an area: they route to one channel for the people who work the unowned queue.
+    #
+    # None of the three sets `owns`, which is deliberate and is the one thing to preserve
+    # if these entries are edited. `owns` is what `hooks.component_guidance_hook` refuses
+    # comments against and `owners_for_path` resolves longest-claim-wins, so claiming
+    # `browser/` for General would make every unclaimed file of desktop chrome General's
+    # and a Sidebar or Settings UI run -- which loads its own guidance and its `related`
+    # entries, not this one -- would have its comment refused for citing its own code. A
+    # `trees` this broad is only legal because nothing owns it.
+    ScopedComponent(
+        "Firefox",
+        "General",
+        "#fx-toolkit-general-triage-notifications",
+        trees=("browser/",),
+        notes=(
+            "**A holding component rather than an area, so the first useful output is "
+            "which component the bug belongs to**, not which file is at fault. The tree "
+            "above is the whole of desktop chrome and most of it belongs to some other "
+            "component, so a confident localization here is a re-componentization "
+            "suggestion: name the component that owns the code you found and say so "
+            "plainly, because the reporter picked this one for want of a better guess "
+            "rather than as a claim about where the code is. What legitimately stays "
+            "here is cross-component window, session and startup behavior that no single "
+            "team owns."
+        ),
+    ),
+    ScopedComponent(
+        "Toolkit",
+        "General",
+        "#fx-toolkit-general-triage-notifications",
+        trees=("toolkit/",),
+        notes=(
+            "The same holding-component caveat as `Firefox :: General`, with one "
+            "difference worth acting on: toolkit code is shared, so a bug filed here may "
+            "reproduce in Thunderbird and the other consumers as well as Firefox, and "
+            "the component that owns the code is as likely to be a `Core` one as a "
+            "`Toolkit` one. Establish which application the reporter was running before "
+            "localizing anything, since the same symptom in two consumers is usually two "
+            "different bugs."
+        ),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Untriaged",
+        "#fx-toolkit-general-triage-notifications",
+        trees=("browser/",),
+        notes=(
+            "**Not a component at all**: it is the default for a filing that named none, "
+            "so it says nothing about the area and everything on `Firefox :: General` "
+            "applies to it more strongly. One thing it adds is a race worth writing "
+            "around. bugbot's `component` rule moves low-confidence bugs out of here "
+            "into `Firefox :: General` hourly, and it runs in the same cron pass as the "
+            "rule that sends bugs here, so a bug may be reassigned between the run "
+            "starting and anyone reading the comment. Both components report to this "
+            "channel, so nothing is lost, but do not write a comment whose reasoning "
+            "depends on the bug still being Untriaged."
         ),
     ),
 )

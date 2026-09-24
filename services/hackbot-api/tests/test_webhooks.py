@@ -3,7 +3,8 @@
 Covers HMAC signature verification, mention detection / loop prevention, the
 revision -> (revision_id, bug_id) resolution, and the route's ignore/trigger
 branches. Bugzilla coverage includes shared-secret auth, structured needinfo
-detection, self/private-event suppression, dedupe, and dispatch retry behavior.
+detection, self/private-event suppression, user authorization, dedupe, and
+dispatch retry behavior.
 """
 
 import hashlib
@@ -21,8 +22,10 @@ from app.phabricator_authorization import (
     PhabricatorAuthorizer,
 )
 from app.phabricator_webhook import (
+    DetectedMention,
     HackbotMention,
     _format_comment,
+    anchor_transaction_phid,
     detect_mention_and_revision,
     find_hackbot_mentions,
     resolve_revision,
@@ -30,7 +33,7 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
-from hackbot_client import RunRef, RunStatus
+from hackbot_client import RunStatus, TriggeredRun
 
 SECRET = "test-secret"
 BUGZILLA_SECRET = "test-bugzilla-secret"
@@ -90,7 +93,11 @@ def test_find_mention_matches():
     txns = [_comment_txn("PHID-XACT-1", "PHID-USER-a", "hey @hackbot please fix")]
     assert find_hackbot_mentions(
         txns, {"PHID-XACT-1"}, bot_phid="PHID-USER-bot", token="@hackbot"
-    ) == [HackbotMention("hey @hackbot please fix", "PHID-USER-a", 1, "regular")]
+    ) == [
+        HackbotMention(
+            "hey @hackbot please fix", "PHID-USER-a", 1, "regular", "PHID-XACT-1"
+        )
+    ]
 
 
 def test_find_mention_no_token():
@@ -156,6 +163,7 @@ def test_find_mention_matches_inline_comment():
             "PHID-USER-a",
             1,
             "inline",
+            "PHID-XACT-1",
             diff_id=456,
         )
     ]
@@ -201,6 +209,7 @@ def test_find_mention_collects_all_inline_matches():
             "PHID-USER-a",
             1,
             "inline",
+            "PHID-XACT-1",
             diff_id=1,
         ),
         HackbotMention(
@@ -208,6 +217,7 @@ def test_find_mention_collects_all_inline_matches():
             "PHID-USER-a",
             3,
             "inline",
+            "PHID-XACT-3",
             diff_id=3,
         ),
     ]
@@ -234,13 +244,26 @@ def test_find_mention_one_per_transaction_ignores_comment_versions():
             "PHID-USER-a",
             456,
             "inline",
+            "PHID-XACT-1",
             diff_id=456,
         )
     ]
 
 
+def test_anchor_is_smallest_mention_phid_regardless_of_order():
+    # A retry carries the same transactions, possibly in another order; the
+    # anchor must not depend on the order Conduit returned them.
+    mentions = [
+        HackbotMention("@hackbot fix", "PHID-USER-a", 2, "inline", "PHID-XACT-b"),
+        HackbotMention("see inline", "PHID-USER-a", 1, "regular", "PHID-XACT-c"),
+        HackbotMention("@hackbot too", "PHID-USER-a", 3, "inline", "PHID-XACT-a"),
+    ]
+    assert anchor_transaction_phid(mentions) == "PHID-XACT-a"
+    assert anchor_transaction_phid(mentions[::-1]) == "PHID-XACT-a"
+
+
 def test_format_comment_renders_regular_comment_as_xml():
-    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular")
+    mention = HackbotMention("only one", "PHID-USER-a", 123, "regular", "PHID-XACT-1")
     assert _format_comment(mention) == (
         '  <comment comment_id="123" type="regular">\n    only one\n  </comment>'
     )
@@ -252,6 +275,7 @@ def test_format_comment_renders_inline_comment_as_xml():
         "PHID-USER-a",
         456,
         "inline",
+        "PHID-XACT-1",
         diff_id=456,
     )
     assert _format_comment(mention) == (
@@ -263,12 +287,13 @@ def test_format_comment_renders_inline_comment_as_xml():
 
 def test_format_comments_renders_mixed_comments_in_order():
     mentions = [
-        HackbotMention("first", "PHID-USER-a", 1, "regular"),
+        HackbotMention("first", "PHID-USER-a", 1, "regular", "PHID-XACT-1"),
         HackbotMention(
             "second",
             "PHID-USER-a",
             2,
             "inline",
+            "PHID-XACT-2",
             diff_id=456,
         ),
     ]
@@ -282,7 +307,9 @@ def test_format_comments_renders_mixed_comments_in_order():
 
 
 def test_format_comment_escapes_comment_body():
-    mention = HackbotMention("@hackbot <fix> & explain", "PHID-USER-a", 1, "regular")
+    mention = HackbotMention(
+        "@hackbot <fix> & explain", "PHID-USER-a", 1, "regular", "PHID-XACT-1"
+    )
     assert _format_comment(mention) == (
         '  <comment comment_id="1" type="regular">\n'
         "    @hackbot &lt;fix&gt; &amp; explain\n"
@@ -298,7 +325,7 @@ class _FakeClient:
         self._revision = revision
         self._members = frozenset(members)
 
-    async def search_transactions(self, phid):
+    async def search_transactions(self, object_identifier, constraints=None):
         return []
 
     async def search_revision(self, phid):
@@ -369,14 +396,20 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         ["PHID-XACT-1"],
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
-    assert result == (
-        '  <comment comment_id="1" type="regular">\n'
-        "    @hackbot please fix\n"
-        "  </comment>",
-        42,
-        12345,
+    assert result == DetectedMention(
+        comment=(
+            '  <comment comment_id="1" type="regular">\n'
+            "    @hackbot please fix\n"
+            "  </comment>"
+        ),
+        revision_id=42,
+        bug_id=12345,
+        anchor_phid="PHID-XACT-1",
     )
-    client.search_transactions.assert_awaited_once_with("PHID-DREV-x")
+    # Only this delivery's transactions are fetched, not the whole history.
+    client.search_transactions.assert_awaited_once_with(
+        "PHID-DREV-x", constraints={"phids": ["PHID-XACT-1"]}
+    )
 
 
 async def test_detect_mention_enriches_inline_anchor(monkeypatch):
@@ -410,12 +443,15 @@ async def test_detect_mention_enriches_inline_anchor(monkeypatch):
         ["PHID-XACT-1"],
         authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
     )
-    assert result == (
-        '  <comment comment_id="1" type="inline" diff_id="456">\n'
-        "    @hackbot please fix\n"
-        "  </comment>",
-        42,
-        12345,
+    assert result == DetectedMention(
+        comment=(
+            '  <comment comment_id="1" type="inline" diff_id="456">\n'
+            "    @hackbot please fix\n"
+            "  </comment>"
+        ),
+        revision_id=42,
+        bug_id=12345,
+        anchor_phid="PHID-XACT-1",
     )
 
 
@@ -480,6 +516,7 @@ def test_detect_bugzilla_needinfo_from_captured_payload_shape():
     assert detected is not None
     assert detected.bug_id == 2022889
     assert detected.flag_id == 2187233
+    assert detected.user_login == "gmierzwinski@mozilla.com"
     assert "gmierzwinski@mozilla.com" in detected.comment
     assert "2026-08-07T18:00:05" in detected.comment
 
@@ -530,23 +567,39 @@ class _FakeHackbotClient:
 
     def __init__(self):
         self.calls = []
+        self.dedupe_keys = []
 
-    async def trigger_run(self, agent_name, inputs):
+    async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
         self.calls.append((agent_name, inputs))
-        return RunRef(
+        # Like the API's unique index: a key seen before resolves to the
+        # existing run and is not new to this request.
+        is_new = dedupe_key is None or dedupe_key not in self.dedupe_keys
+        self.dedupe_keys.append(dedupe_key)
+        return TriggeredRun(
             run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
             agent=agent_name,
             status=RunStatus.pending,
+            is_new=is_new,
         )
 
 
 class _FakeAuthorizer:
-    async def is_authorized(self, author_phid):
-        return True
+    def __init__(self, allowed: bool = True):
+        self.allowed = allowed
+        self.checked = []
+
+    async def is_authorized(self, actor):
+        self.checked.append(actor)
+        return self.allowed
 
 
 @pytest.fixture
 def authorizer():
+    return _FakeAuthorizer()
+
+
+@pytest.fixture
+def bugzilla_authorizer():
     return _FakeAuthorizer()
 
 
@@ -556,20 +609,30 @@ def phab_client():
 
 
 @pytest.fixture
-def client(monkeypatch, authorizer, phab_client):
+def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
     monkeypatch.setattr(settings, "external_api_key", "test-api-key")
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
     # Fresh dedupe cache per test.
-    webhooks._seen_transactions.clear()
     webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
+    app.dependency_overrides[webhooks.get_bugzilla_authorizer] = lambda: (
+        bugzilla_authorizer
+    )
     try:
         yield TestClient(app)
     finally:
         app.dependency_overrides.clear()
+
+
+_DETECTED = DetectedMention(
+    comment="@hackbot please fix",
+    revision_id=42,
+    bug_id=12345,
+    anchor_phid="PHID-XACT-1",
+)
 
 
 def _post(client, payload: dict):
@@ -627,7 +690,7 @@ def test_route_ignores_no_mention(client, monkeypatch):
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+    detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
@@ -656,59 +719,85 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
             },
         )
     ]
+    assert fake_api.dedupe_keys == ["phab-txn:PHID-XACT-1"]
 
 
-def test_route_dedupes_retried_delivery(client, monkeypatch):
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+def test_route_keys_retry_same_but_later_submission_differently(client, monkeypatch):
+    # A retried delivery carries the same anchor and so the same key; a later
+    # submission on the same revision has a new anchor and a new key. The DB
+    # decides which is a duplicate, so the route calls detection every time.
+    detect = AsyncMock(
+        side_effect=[
+            _DETECTED,
+            _DETECTED,
+            _DETECTED._replace(comment="@hackbot also this", anchor_phid="PHID-XACT-2"),
+        ]
+    )
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
 
     payload = {
         "object": {"type": "DREV", "phid": "PHID-DREV-1"},
         "transactions": [{"phid": "PHID-XACT-1"}],
     }
     first = _post(client, payload)
-    second = _post(client, payload)
+    retry = _post(client, payload)
+    later = _post(
+        client,
+        {
+            "object": {"type": "DREV", "phid": "PHID-DREV-1"},
+            "transactions": [{"phid": "PHID-XACT-2"}],
+        },
+    )
 
+    assert detect.call_count == 3
+    assert fake_api.dedupe_keys == [
+        "phab-txn:PHID-XACT-1",
+        "phab-txn:PHID-XACT-1",
+        "phab-txn:PHID-XACT-2",
+    ]
     assert first.json()["status"] == "triggered"
-    assert second.json()["reason"] == "duplicate delivery"
-    assert detect.call_count == 1
+    # The retry is answered with the existing run rather than claimed as new.
+    assert retry.json() == {
+        "status": "ignored",
+        "reason": "duplicate delivery",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
+    assert later.json()["status"] == "triggered"
 
 
-def test_route_detects_only_fresh_transactions(client, monkeypatch):
-    # A delivery mixing an already-seen PHID with a new one must consider only
-    # the fresh transaction for mention detection.
-    detect = AsyncMock(return_value=("@hackbot please fix", 42, 12345))
+def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):
+    detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
-    webhooks._seen_transactions["PHID-XACT-OLD"] = True
 
     _post(
         client,
         {
             "object": {"type": "DREV", "phid": "PHID-DREV-1"},
-            "transactions": [{"phid": "PHID-XACT-OLD"}, {"phid": "PHID-XACT-NEW"}],
+            "transactions": [{"phid": "PHID-XACT-1"}, {"phid": "PHID-XACT-2"}],
         },
     )
-    assert detect.call_args.args[3] == ["PHID-XACT-NEW"]
+    assert detect.call_args.args[3] == ["PHID-XACT-1", "PHID-XACT-2"]
 
 
-def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
-    # A transient failure must not consume the delivery: the transaction stays
-    # unseen so Phabricator's retry is reprocessed rather than deduped away.
+def test_route_surfaces_trigger_failure(client, monkeypatch):
+    # A failure before the run exists leaves nothing behind: no key is spent,
+    # so Phabricator's retry is processed rather than deduped away.
     monkeypatch.setattr(
         webhooks,
         "detect_mention_and_revision",
-        AsyncMock(return_value=("@hackbot please fix", 42, 12345)),
+        AsyncMock(return_value=_DETECTED),
     )
 
     class _FailingClient:
-        async def trigger_run(self, agent_name, inputs):
+        async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
             raise RuntimeError("conduit down")
 
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="conduit down"):
         _post(
             client,
             {
@@ -716,7 +805,6 @@ def test_route_does_not_mark_seen_on_trigger_failure(client, monkeypatch):
                 "transactions": [{"phid": "PHID-XACT-1"}],
             },
         )
-    assert "PHID-XACT-1" not in webhooks._seen_transactions
 
 
 def test_bugzilla_route_ignores_non_object_payload(client):
@@ -745,7 +833,7 @@ def test_bugzilla_route_ignores_non_matching_event(client):
     }
 
 
-def test_bugzilla_route_triggers_run(client):
+def test_bugzilla_route_triggers_run(client, bugzilla_authorizer):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
 
@@ -772,6 +860,24 @@ def test_bugzilla_route_triggers_run(client):
             },
         )
     ]
+    assert bugzilla_authorizer.checked == ["gmierzwinski@mozilla.com"]
+
+
+def test_bugzilla_route_ignores_unauthorized_actor(client, bugzilla_authorizer):
+    bugzilla_authorizer.allowed = False
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    payload = _bugzilla_payload()
+    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
+
+    response = _post_bugzilla(client, payload)
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "ignored", "reason": "unauthorized user"}
+    assert fake_api.calls == []
+    # The event stays unconsumed: the same flag can still trigger a run once
+    # the actor is authorized.
+    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
 
 
 def test_bugzilla_route_dedupes_retry_but_not_later_event(client):

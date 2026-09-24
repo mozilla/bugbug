@@ -1,91 +1,18 @@
-"""Tests for the broker's Phabricator patch route and MCP mounts."""
+"""Tests for the broker's route wiring and inputs.
 
-from unittest.mock import AsyncMock
+The Conduit proxy itself is tested in `phabricator-proxy`; what matters here is
+that the broker mounts it where the agent expects to find it.
+"""
 
 import pytest
 from hackbot_agents.bug_fix import broker
-from phabricator_client import (
-    PhabricatorDiff,
-    PhabricatorSettings,
-    UnresolvedCommitError,
-)
+from phabricator_client import PhabricatorSettings
 from pydantic import ValidationError
 from starlette.applications import Starlette
-from starlette.routing import Mount, Route
+from starlette.routing import Mount
 from starlette.testclient import TestClient
 
 VALID_TOKEN = "api-" + "a" * 28
-
-
-def _client(fake) -> TestClient:
-    route = Route(
-        "/phabricator/revision/{revision_id:int}/patch", broker._patch_endpoint(fake)
-    )
-    return TestClient(Starlette(routes=[route]))
-
-
-def test_patch_route_returns_base_and_diff():
-    fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(
-        return_value=PhabricatorDiff(id=9, base_commit="base9")
-    )
-    fake.get_raw_diff = AsyncMock(return_value="diff --git a/f b/f\n")
-    # The abbreviated base is expanded to a full, fetchable hash.
-    fake.resolve_commit = AsyncMock(return_value="base9full")
-
-    resp = _client(fake).get("/phabricator/revision/42/patch")
-
-    assert resp.status_code == 200
-    assert resp.json() == {
-        "base_commit": "base9full",
-        "raw_diff": "diff --git a/f b/f\n",
-    }
-    fake.get_raw_diff.assert_awaited_once_with(9)
-    fake.resolve_commit.assert_awaited_once_with("base9")
-
-
-def test_patch_route_422_when_base_cannot_be_expanded(caplog):
-    # Serving the abbreviation would only fail later in `git fetch`, which
-    # reports an exit status and not a reason, so fail here and say why.
-    fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(
-        return_value=PhabricatorDiff(id=9, base_commit="base9")
-    )
-    fake.get_raw_diff = AsyncMock(return_value="diff --git a/f b/f\n")
-    fake.resolve_commit = AsyncMock(
-        side_effect=UnresolvedCommitError("Cannot expand base9: not imported")
-    )
-
-    with caplog.at_level("WARNING", logger=broker.log.name):
-        resp = _client(fake).get("/phabricator/revision/42/patch")
-
-    # 422, not 404: the revision and its base exist, they are just unusable.
-    assert resp.status_code == 422
-    # The reason reaches the agent, which puts the response body in the error
-    # it raises, as well as the broker's own log.
-    assert resp.json()["error"] == "Cannot expand base9: not imported"
-    assert "D42" in caplog.text
-    assert "Cannot expand base9: not imported" in caplog.text
-
-
-def test_patch_route_404_when_no_diff():
-    fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(return_value=None)
-
-    resp = _client(fake).get("/phabricator/revision/42/patch")
-
-    assert resp.status_code == 404
-
-
-def test_patch_route_404_when_no_base_commit():
-    fake = AsyncMock()
-    fake.query_latest_diff = AsyncMock(
-        return_value=PhabricatorDiff(id=9, base_commit=None)
-    )
-
-    resp = _client(fake).get("/phabricator/revision/42/patch")
-
-    assert resp.status_code == 404
 
 
 def _app() -> Starlette:
@@ -130,12 +57,19 @@ def test_inputs_require_phabricator_config(monkeypatch):
         broker.BrokerInputs()
 
 
-def test_app_serves_both_mcp_endpoints():
-    # One MCP server per domain, both wired here so no token leaves the broker.
+def test_app_mounts_every_endpoint_the_agent_uses():
+    # One MCP server per domain plus the Conduit proxy, all wired here so no
+    # token leaves the broker. The proxy path is a contract with the agent:
+    # `revision._PROXY_PATH` points moz-phab's Conduit client at it.
     mounts = {r.path for r in _app().routes if isinstance(r, Mount)}
-    assert mounts == {"/bugzilla/mcp", "/phabricator/mcp"}
+    assert mounts == {"/bugzilla/mcp", "/phabricator/mcp", "/phabricator/api"}
 
 
-def test_app_serves_the_patch_route():
-    paths = {r.path for r in _app().routes if isinstance(r, Route)}
-    assert "/phabricator/revision/{revision_id:int}/patch" in paths
+def test_conduit_proxy_answers_where_the_agent_looks_for_it():
+    # Mounted, so the method name lands under the mount path rather than
+    # needing a route of its own. Refused rather than 404: the proxy is
+    # reachable here, it just will not forward a write.
+    resp = TestClient(_app()).post("/phabricator/api/differential.revision.edit")
+
+    assert resp.status_code == 403
+    assert resp.json()["error_code"] == "ERR-CONDUIT-METHOD-NOT-ALLOWED"

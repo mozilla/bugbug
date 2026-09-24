@@ -1,7 +1,15 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncAttrs
@@ -15,12 +23,14 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 class Run(Base):
     __tablename__ = "runs"
+    __table_args__ = (Index("uq_runs_dedupe_key", "dedupe_key", "agent", unique=True),)
 
     run_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
     agent: Mapped[str] = mapped_column(String, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, index=True)
     inputs: Mapped[dict] = mapped_column(JSONB, nullable=False)
     requested_by: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

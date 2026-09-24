@@ -67,6 +67,7 @@ export interface RunDoc {
   status: RunStatus;
   inputs: Record<string, unknown>;
   requested_by: string | null;
+  dedupe_key: string | null;
   created_at: string;
   updated_at: string;
   execution_name: string | null;

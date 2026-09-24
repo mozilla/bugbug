@@ -87,11 +87,8 @@ Guards, each closing a specific failure mode:
   project. Membership is cached with a short TTL; an unknown author triggers one refresh so
   new members take effect promptly, then a cooldown so unauthorized deliveries don't cause a
   Conduit call each.
-- **Dedupe** — retried deliveries are deduped by triggering transaction PHID, and a
-  transaction is marked seen **only after a successful trigger**. A transient Conduit
-  failure therefore 500s and gets reprocessed on retry rather than dropped as a duplicate.
-- **Fresh transactions only** — a payload mixing new and already-seen PHIDs can't
-  re-trigger on an old one.
+- **Dedupe** — one delivery is one submission. Its smallest mentioning comment transaction
+  PHID is the run's database dedupe key, making the key independent of transaction order.
 
 One review can leave several inline comments, each its own transaction; all qualifying ones
 are combined and passed to the agent as XML-tagged `<comment>` elements carrying the comment
@@ -137,10 +134,10 @@ Guards, each closing a specific failure mode:
 - **Latest flag wins** — BMO orders flags by id, so the last matching one is the newly
   requested one.
 
-Authorization is Bugzilla's own: anyone who can set a needinfo on the bot can ask it for
-something. There is no separate group check like the Phabricator trigger's
-`bmo-editbugs-team`, because a private bug is already excluded and the flag itself is the
-request.
+Only requesters in Bugzilla's `editbugs` group are authorized (all Mozilla Corporation
+members belong to this group) — see
+[bugzilla_authorization.py](../../services/hackbot-api/app/bugzilla_authorization.py).
+Membership is checked per login through Bugzilla's REST API.
 
 The receiver passes the requester's login and the change timestamp to the agent as context
 for locating the accompanying comment — a needinfo may be filed without one, in which case
@@ -153,7 +150,3 @@ existing one. The needinfo flag is cleared automatically as a recorded
 `bugzilla.update_bug` action once the run produces at least one other action, coalesced with
 the reply comment into a single Bugzilla transaction (see [actions.md](actions.md)). A run
 that records nothing leaves the flag standing.
-
-Configuration is three env vars — `BUGZILLA_WEBHOOK_SECRET` (required, no default),
-`BUGZILLA_WEBHOOK_BOT_LOGIN` and `BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS`; see
-[deployment.md](deployment.md).
