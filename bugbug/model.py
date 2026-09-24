@@ -816,3 +816,18 @@ class IssueModel(Model):
                 continue
 
             yield issue, classes[issue_number]
+
+
+class CommentModel(Model):
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
+        self.training_dbs = [bugzilla.BUGS_DB]
+
+    def items_gen(self, classes):
+        for bug in bugzilla.get_bugs():
+            for comment in bug["comments"]:
+                comment_id = comment["id"]
+                if comment_id not in classes:
+                    continue
+
+                yield (bug, comment), classes[comment_id]

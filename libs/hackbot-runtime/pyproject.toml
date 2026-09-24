@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
     "google-auth>=2.0.0",
+    "slack-sdk>=3.27.0",
     "agent-tools",
     "phabricator-client",
     "weave>=0.53.4"
