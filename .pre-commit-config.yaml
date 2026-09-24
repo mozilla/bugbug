@@ -9,6 +9,10 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
+      - id: ruff-check
+        name: ruff-check-fastapi
+        args: [--select, FAST]
+        files: ^services/(hackbot-api|reviewhelper-api)/
       - id: ruff-format
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
