@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import notifications
 from app.auth import require_push_auth
 from app.database.connection import get_db
 from app.database.models import Run
@@ -68,8 +67,6 @@ async def finalize_stale_runs(
             continue
         if did_finalize:
             finalized.append(run.run_id)
-            if run.requested_by:
-                await notifications.notify_requester(run)
         else:
             still_running.append(run.run_id)
 
