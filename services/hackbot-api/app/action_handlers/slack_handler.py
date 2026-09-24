@@ -13,8 +13,8 @@ from typing import Any
 
 from slack_sdk import WebClient
 
-from hackbot_runtime.actions.handlers.base import ActionResult, ApplyContext
-from hackbot_runtime.actions.slack import HACKBOT_UI_URL
+from app.action_handlers.base import ActionResult, ApplyContext
+from app.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class PostMessageHandler:
                 "notification_type": "info",
                 "source": {
                     "ref_id": ctx.run_id,
-                    "ref_url": f"{HACKBOT_UI_URL}/runs/{ctx.run_id}",
+                    "ref_url": f"{settings.hackbot_ui_url}/runs/{ctx.run_id}",
                 },
                 "context": {
                     "agent": ctx.agent,

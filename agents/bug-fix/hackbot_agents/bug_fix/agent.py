@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from shlex import quote
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
@@ -122,6 +123,24 @@ def make_investigator() -> AgentDefinition:
     )
 
 
+def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
+    """Write a debug browser config, preserving any existing config.
+
+    ``--enable-debug`` turns on assertions that catch a whole class of mistakes
+    during development, and ``--enable-clang-plugin`` adds Mozilla's own static
+    analysis on top.
+    """
+    if fx_ctx.mozconfig.exists():
+        return
+    fx_ctx.mozconfig.write_text(
+        "ac_add_options --enable-application=browser\n"
+        "ac_add_options --enable-debug\n"
+        "ac_add_options --enable-optimize\n"
+        "ac_add_options --enable-clang-plugin\n"
+        f"mk_add_options MOZ_OBJDIR={quote(str(fx_ctx.objdir))}\n"
+    )
+
+
 async def run_bug_fix(
     *,
     bugzilla_mcp_server: McpServerConfig,
@@ -152,7 +171,8 @@ async def run_bug_fix(
 
     # Firefox build/eval MCP server (in-process; no tokens). The runtime
     # derives fx_ctx from the prepared source checkout and the agent's
-    # hackbot.toml; here we only wrap its tools as an MCP server.
+    # hackbot.toml. Provision the config before the session can call build tools.
+    _write_mozconfig(fx_ctx)
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
     action_types, user_prompt = select_workflow(

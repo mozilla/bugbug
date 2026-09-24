@@ -63,15 +63,22 @@ Do not enable any of these features.
 
 ## Reporting your result
 
-When you finish the investigation, call the `submit_result` tool exactly once to
-record your result. This is how your result is captured — a prose message is not
-enough. See the tool's parameter descriptions for what each field must contain.
+After completing the investigation, call the `submit_result` tool. Your result
+is captured only through this tool; a prose response is not sufficient.
+
+Before calling the tool, read its parameter descriptions and follow the
+requirements for every field. Submit each required field as its own top-level
+JSON property. Do not embed fields as tags or structured text inside another
+field’s value.
+
+Do not call `submit_result` until the investigation is complete. If the
+submission fails or reports missing or invalid fields, correct the problem and
+retry with the complete object. Include every required property on every
+attempt, using `null` for nullable fields when appropriate.
 
 Keep responses focused, brief, and concise. Summaries state conclusions, not the
 investigation that produced them: report what breaks, and leave measurements,
 script results, and file paths to the dedicated result fields.
-
-Do not call `submit_result` until the investigation is complete.
 
 ## Task Details
 

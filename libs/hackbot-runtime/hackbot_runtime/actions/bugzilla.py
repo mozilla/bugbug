@@ -18,16 +18,12 @@ from typing import Annotated, Any
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 _COMMENT_FOOTER = (
     "If you'd like to provide feedback on this comment, please use the 👍 or 👎 "
     "reaction."
 )
-
-
-def _confirm(action: dict) -> str:
-    return f"Recorded {action['type']} (ID: {action['action_id']})."
 
 
 @tool
@@ -66,7 +62,7 @@ async def update_bug(
         {"bug_id": bug_id, "changes": changes},
         reasoning=reasoning,
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -80,7 +76,6 @@ async def add_comment(
     is_private: Annotated[
         bool,
         Field(
-            default=False,
             description="Mark the comment private (security group only).",
         ),
     ] = False,
@@ -96,7 +91,7 @@ async def add_comment(
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
         reasoning=reasoning,
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -119,14 +114,12 @@ async def add_attachment(
     summary: Annotated[
         str | None,
         Field(
-            default=None,
             description="Short description of the attachment. Defaults to the filename.",
         ),
     ] = None,
     content_type: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
                 "MIME type. Guessed from extension if omitted. Ignored "
                 "when is_patch=true."
@@ -136,7 +129,6 @@ async def add_attachment(
     is_patch: Annotated[
         bool,
         Field(
-            default=False,
             description=(
                 "Mark as a patch (Bugzilla forces text/plain and enables diff view)."
             ),
@@ -145,7 +137,6 @@ async def add_attachment(
     comment: Annotated[
         str | None,
         Field(
-            default=None,
             description="Optional comment to record alongside the attachment.",
         ),
     ] = None,
@@ -187,7 +178,7 @@ async def add_attachment(
         reasoning=reasoning,
         attachments={"file": Path(file_path)},
     )
-    return _confirm(action)
+    return confirmation(action)
 
 
 @tool
@@ -204,7 +195,6 @@ async def create_bug(
     extra: Annotated[
         dict[str, Any] | None,
         Field(
-            default=None,
             description=(
                 "Optional additional fields accepted by Bugzilla's POST /bug "
                 "endpoint (severity, priority, keywords, whiteboard, blocks, "
@@ -231,7 +221,7 @@ async def create_bug(
         body.setdefault(k, v)
 
     action = recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
-    return _confirm(action)
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)

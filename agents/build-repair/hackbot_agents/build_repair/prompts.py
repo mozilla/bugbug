@@ -163,7 +163,7 @@ fast, focused build -- prefer this over a full tree build. If the build reports 
 missing toolchain (e.g. rustc or clang), run the bootstrap_firefox tool once and
 then build again. Verify via the build_firefox tool rather than a raw `./mach
 build` so the build result is recorded.
-{try_push}
+{try_push}{report}
 
 Do not prompt to edit files. Work fully autonomously, do not ask any questions.
 Use all allowed tools without prompting.
@@ -172,4 +172,12 @@ Use all allowed tools without prompting.
 TRY_PUSH_INSTRUCTIONS = """
 Once the fix builds locally, validate it on CI: call the submit_try_push tool with the
 failing task name ('{task_name}') to push to the try server and report the build result.
+"""
+
+REPORT_INSTRUCTIONS = """
+Once the build is verified, submit the fix with the `phabricator_submit_patch`
+action: bug_id={bug_id}, a title of the form "Bug {bug_id} - <what the fix does>",
+and a summary naming the busted commit, the failing task and the root cause.
+If the fix does not build, or you are not confident in it, record nothing and say
+so in your final message.
 """

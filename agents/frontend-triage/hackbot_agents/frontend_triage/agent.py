@@ -76,15 +76,26 @@ _FEEDBACK_TAGS = (
     "ai-triage-out-of-scope, ai-triage-wrong-fix, ai-triage-shallow-fix."
 )
 
+# Repeats the `bugzilla_webhook.bot_login` default in hackbot-api, which this agent
+# does not import; docs/hackbot/triggers.md covers what the needinfo starts.
+_PATCH_REQUEST = (
+    "Needinfo hackbot@mozilla.tld to have a patch generated for this bug, "
+    "include any questions or directions as needed in your comment."
+)
+
 
 def feedback_tags_hook(action: dict) -> None:
-    """Offer the triage-specific feedback tags below the runtime's footer."""
+    """Offer the feedback tags and the patch request below the runtime's footer.
+
+    The patch request takes a blank line: the comment is Markdown, where a lone
+    newline would fold it onto the end of the tag list.
+    """
     params = action.get("params")
     if not isinstance(params, dict):
         return
     text = params.get("text")
     if isinstance(text, str):
-        params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}"
+        params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}\n\n{_PATCH_REQUEST}"
 
 
 class SeverityAssessment(BaseModel):
