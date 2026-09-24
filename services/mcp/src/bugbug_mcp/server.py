@@ -10,6 +10,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.resources import FileResource
+from mcp.types import ToolAnnotations
 
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.core.platforms.bugzilla import SanitizedBug
@@ -19,6 +20,8 @@ from bugbug.tools.core.platforms.phabricator import (
 )
 
 mcp = FastMCP("Firefox Development MCP Server")
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True)
 
 # Temporarily disabled due to https://github.com/mozilla/bugbug/issues/5890.
 # Once that issue is resolved, we should re-enable the Bugzilla search tool.
@@ -66,13 +69,13 @@ def handle_bug_view_resource(bug_id: int) -> str:
     return SanitizedBug.get(bug_id).to_md()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_bugzilla_bug(bug_id: int) -> str:
     """Retrieve a bug from Bugzilla alongside its change history and comments."""
     return SanitizedBug.get(bug_id).to_md()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def bugzilla_quick_search(
     search_query: Annotated[
         str,
@@ -159,7 +162,7 @@ def handle_revision_view_resource(revision_id: int) -> str:
     return _get_revision_md(revision_id)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
     return _get_revision_md(revision_id)
@@ -175,7 +178,7 @@ llms_txt = FileResource(
 mcp.add_resource(llms_txt)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def read_fx_doc_section(
     doc_path: Annotated[
         str,
