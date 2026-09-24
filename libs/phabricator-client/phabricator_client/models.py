@@ -37,7 +37,10 @@ class PhabricatorDiff(BaseModel):
     @property
     def first_public_parent(self) -> str | None:
         """The first landed parent recorded by mozphab, if present."""
-        local_commits = self.properties.get("local:commits") or {}
+        local_commits = self.properties.get("local:commits")
+        if not local_commits:
+            log.warning("The diff has no commit metadata")
+            return None
         for commit in local_commits.values():
             first_public_parent = commit.get("firstPublicParent")
             if first_public_parent:
