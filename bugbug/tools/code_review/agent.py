@@ -185,6 +185,7 @@ class CodeReviewTool(GenerativeModelTool):
                 max_tokens=40_000,
                 temperature=None,
                 thinking={"type": "adaptive"},
+                effort="high",
             )
 
         if "patch_summarizer" not in kwargs:
