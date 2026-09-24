@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
+
+log = logging.getLogger(__name__)
 
 
 class PhabricatorDiff(BaseModel):
