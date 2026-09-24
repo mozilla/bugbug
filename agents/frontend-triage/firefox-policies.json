@@ -1,0 +1,28 @@
+{
+  "policies": {
+    "Proxy": {
+      "Mode": "manual",
+      "Locked": true,
+      "SOCKSProxy": "127.0.0.1:1",
+      "SOCKSVersion": 5,
+      "UseProxyForDNS": true,
+      "Passthrough": ""
+    },
+    "DNSOverHTTPS": {
+      "Enabled": false,
+      "Locked": true
+    },
+    "DisableAppUpdate": true,
+    "DisableTelemetry": true,
+    "Preferences": {
+      "network.proxy.failover_direct": { "Value": false, "Status": "locked" },
+      "network.http.http3.enable": { "Value": false, "Status": "locked" },
+      "network.dns.disablePrefetch": { "Value": true, "Status": "locked" },
+      "network.http.speculative-parallel-limit": {
+        "Value": 0,
+        "Status": "locked"
+      },
+      "media.peerconnection.enabled": { "Value": false, "Status": "locked" }
+    }
+  }
+}

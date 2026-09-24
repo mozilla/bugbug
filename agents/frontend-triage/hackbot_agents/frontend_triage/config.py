@@ -50,6 +50,19 @@ ENABLED_ACTION_TYPES = [
     "bugzilla.add_comment",
 ]
 
+# mozregression bisection tool (in-process MCP server "mozregression"). Only the
+# `bisector` subagent calls it, and only when the run has bisection on.
+MOZREGRESSION_TOOLS = [
+    "mcp__mozregression__run_mozregression",
+]
+
+# Added to `ENABLED_ACTION_TYPES` only when bisection is on, so a run that cannot find a
+# range cannot record a field change either. `update_bug_hook` limits it to the three
+# regression-range fields. It brings back the `editbugs` requirement described above.
+BISECT_ACTION_TYPES = [
+    "bugzilla.update_bug",
+]
+
 
 class ScopedComponent(NamedTuple):
     """A Bugzilla component sent here for triage, and where a finished run reports it."""

@@ -8,6 +8,7 @@ You are given a bug ID. Your job is to triage it and produce a **proposed fix pl
 2. **Read the relevant triage rules** from `{rules_dir}` — Glob the directory and Read only the rulesets that apply to this bug. Do not assume all rules apply to all bugs.
 3. **Assess** what the rules say should happen, and whether the bug has open questions in its comments.
 4. **Check for a duplicate** — spawn the `duplicate_hunter` subagent (see below). Its answer is reported, never acted on: it does not stop you triaging.
+   If the bug is a regression without a known range, also spawn the `bisector` (see **Finding a regression range**).
 5. **Investigate** the source tree (read-only) to localize the cause — delegate deep searches to the `investigator` subagent (see below).
 6. **Assess severity** — determine an appropriate Mozilla severity (S1–S4) from the user impact (see the `severity-assessment` rules). You do **not** set it on the bug; it goes at the end of your comment as a suggestion.
 7. **Produce a fix plan**: the likely root cause, the specific files to change, and the approach. Record it as a brief Bugzilla comment.
@@ -87,6 +88,10 @@ It matters most when your explanation depends on something being **absent** — 
 
 Use these to raise your confidence and precision — but you still cannot build or run, so do not claim the fix is verified.
 
+# Finding a regression range
+
+{bisection}
+
 # Delegating to the investigator subagent
 
 You have one generic subagent type: `investigator`. It has the same read-only tools you do (source repo + bugzilla read tools). **You write its full instructions dynamically** each time you spawn it — there is no fixed investigator behavior.
@@ -140,7 +145,7 @@ Before calling any action tool, state in your response:
 - **What** action you are recording and **why** (cite the specific rule)
 - **Your confidence**: high / medium / low
 
-Record exactly one `bugzilla_add_comment` with your fix plan, ending with the severity sentence described below. That comment is the **only** thing you can write to a bug — you have no tool that changes a field, so a severity, keyword, status or resolution can only be _suggested_ in the comment for a human to apply.
+Record exactly one `bugzilla_add_comment` with your fix plan, ending with the severity sentence described below. That comment is the **only** thing you can write to a bug, apart from the regression-range fields described under **Finding a regression range** — so a severity, status, resolution or any other field change can only be _suggested_ in the comment for a human to apply.
 
 The tool is deliberately narrow, and a call outside what it accepts is refused with the reason (fix it and retry — a refused call records nothing, so it costs you nothing but the turn):
 
@@ -191,6 +196,13 @@ After recording your comment, end your final message with a fenced ```json block
     "duplicate_of": 1998432,
     "confidence": "high | medium | low",
     "rationale": "why it is or is not the same defect"
+  }},
+  "regression_range": {{
+    "status": "range_found | inconclusive | not_automatable | not_a_regression",
+    "pushlog_url": "https://hg.mozilla.org/...",
+    "last_good": "changeset",
+    "first_bad": "changeset",
+    "prompt_used": "the good/bad directive mozregression ran"
   }}
 }}
 ```
@@ -204,6 +216,8 @@ Field guidance for the handoff:
 - **`severity_assessment`** — the severity you judged appropriate (per the `severity-assessment` rules), with `confidence` and a `rationale`. `suggested` and `rationale` must match what your comment says. `confidence` is what decides whether the comment carries the block at all, so rate it honestly rather than defaulting to high. Set the whole object to null only if you could not assess severity.
 
 - **`duplicate_assessment`** — what the `duplicate_hunter` concluded. Set `duplicate_of` to the bug id when it named one and to `null` when it answered `NEW`, with a `rationale` either way. Fill this in **both** cases: a run that looked and found nothing has to be distinguishable from one that never looked, which is what tells us whether the hunt is worth keeping. Set the whole object to null only if the subagent failed to answer.
+
+- **`regression_range`** — what the `bisector` reported; null when you did not spawn it.
 
 If you could not localize a root cause, set `root_cause` to null, keep `confidence` low, set `actionable` accordingly, and have your comment ask the specific open questions that block triage.
 

@@ -2,7 +2,8 @@
 
 Once a run marks itself high-confidence its actions are applied to Bugzilla with no
 human in between, and an action's params are model output. These hooks bound that:
-one public comment on the bug being triaged, and nothing else.
+one public comment on the bug being triaged and, when a bisection found a range, one
+update to that bug's regression-range fields.
 
 They run at record time rather than at apply time for two reasons. The refusal
 reaches the agent as a tool error it can correct in the same run, and the
@@ -10,11 +11,11 @@ out-of-bounds action never reaches ``summary.json``. ``ActionsRecorder`` runs ho
 before appending, so raising here aborts the recording (see
 :data:`hackbot_runtime.actions.ActionHook`).
 
-The action **type** needs no check, and there is no field-change hook.
-``ENABLED_ACTION_TYPES`` filters the tools the actions server exposes, so this agent
-has no way to record a ``bugzilla.update_bug``, a ``bugzilla.create_bug`` or a
-Phabricator action in the first place -- ``severity`` is a suggestion in the comment
-now, which is what left that tool with no caller.
+The action **type** needs no check. ``ENABLED_ACTION_TYPES`` filters the tools the
+actions server exposes, so this agent has no way to record a ``bugzilla.create_bug`` or
+a Phabricator action in the first place, and ``bugzilla.update_bug`` is only exposed
+when bisection is on (``BISECT_ACTION_TYPES``). ``update_bug_hook`` bounds what that
+one may change.
 """
 
 from __future__ import annotations
@@ -139,5 +140,60 @@ def add_comment_hook(recorder: ActionsRecorder, bug_id: int) -> ActionHook:
             raise ToolError(
                 "record the comment publicly: everyone on the bug needs to read it"
             )
+
+    return hook
+
+
+# The only field changes a found regression range justifies, each in the one shape that
+# says it. ``severity`` and the rest stay suggestions in the comment.
+_RANGE_KEYWORD = "regressionwindow-wanted"
+
+
+def _check_range_changes(changes: object) -> None:
+    if not isinstance(changes, dict) or not changes:
+        raise ToolError("`changes` must be a non-empty object")
+
+    for field, value in changes.items():
+        if field == "cf_has_regression_range":
+            ok = value == "yes"
+        elif field == "regressed_by":
+            ids = value.get("add") if isinstance(value, dict) else None
+            ok = (
+                isinstance(value, dict)
+                and set(value) == {"add"}
+                and isinstance(ids, list)
+                and bool(ids)
+                and all(type(i) is int and i > 0 for i in ids)
+            )
+        elif field == "keywords":
+            ok = value == {"remove": [_RANGE_KEYWORD]}
+        else:
+            ok = False
+        if not ok:
+            raise ToolError(
+                'a field change may only set cf_has_regression_range to "yes", '
+                'add to regressed_by ({"add": [bug ids]}) or remove the '
+                f'{_RANGE_KEYWORD} keyword ({{"remove": ["{_RANGE_KEYWORD}"]}}); '
+                f"{field!r} as given is not one of those. Suggest anything else in "
+                "your comment"
+            )
+
+
+def update_bug_hook(recorder: ActionsRecorder, bug_id: int) -> ActionHook:
+    """Refuse a ``bugzilla.update_bug`` beyond recording a found regression range.
+
+    One update per run, on the bug being triaged, touching only the regression-range
+    fields. The prompt asks for it only after a high-confidence bisection, but at
+    ``confidence: high`` it is applied unreviewed, so the shape is enforced here.
+    """
+
+    def hook(action: dict) -> None:
+        params = action.get("params") or {}
+        if any(a["type"] == "bugzilla.update_bug" for a in recorder.actions):
+            raise ToolError(
+                "you have already recorded a field change; record one per run"
+            )
+        _check_target_bug(params, bug_id)
+        _check_range_changes(params.get("changes"))
 
     return hook
