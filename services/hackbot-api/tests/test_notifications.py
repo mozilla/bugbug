@@ -31,7 +31,6 @@ def sent(monkeypatch):
     monkeypatch.setattr(notifications, "_send_sync", fake_send)
     monkeypatch.setattr(settings, "sendgrid_api_key", "sg-test")
     monkeypatch.setattr(settings, "notification_sender", "hackbot@mozilla.com")
-    monkeypatch.setattr(settings, "override_recipient_email", None)
     return calls
 
 
@@ -63,18 +62,6 @@ def test_build_message_includes_bug_id():
     subject, html_body = build_message(run)
     assert subject == "[Hackbot] bug-fix run ab603010 for bug 123456 succeeded"
     assert "bug-fix run ab603010 for bug 123456" in html_body
-
-
-async def test_override_recipient_email_replaces_recipient(sent, monkeypatch):
-    monkeypatch.setattr(settings, "override_recipient_email", "dev@example.com")
-    assert await notify_requester(_FakeRun()) is True
-    assert sent[0][0] == "dev@example.com"
-
-
-async def test_whitespace_override_uses_requester(sent, monkeypatch):
-    monkeypatch.setattr(settings, "override_recipient_email", "   ")
-    assert await notify_requester(_FakeRun()) is True
-    assert sent[0][0] == "someone@mozilla.com"
 
 
 async def test_send_failure_is_logged_not_raised(monkeypatch, caplog):

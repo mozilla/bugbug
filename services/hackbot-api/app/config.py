@@ -108,8 +108,6 @@ class Settings(BaseSettings):
     hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str
     notification_sender: str
-    # Redirect every requester notification to this address for testing.
-    override_recipient_email: str | None = None
 
     # Server
     port: int = 8080

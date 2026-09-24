@@ -49,11 +49,6 @@ def build_message(run: Run) -> tuple[str, str]:
     return subject, html_body
 
 
-def _recipient(run: Run) -> str:
-    override = (settings.override_recipient_email or "").strip()
-    return override or run.requested_by
-
-
 def _send_sync(recipient: str, subject: str, html_body: str) -> int:
     message = Mail(
         From(settings.notification_sender),
@@ -70,7 +65,7 @@ def _send_sync(recipient: str, subject: str, html_body: str) -> int:
 
 async def notify_requester(run: Run) -> bool:
     """Mail the run's requester about its terminal state. Returns whether it sent."""
-    recipient = _recipient(run)
+    recipient = run.requested_by
     subject, html_body = build_message(run)
     try:
         status_code = await asyncio.to_thread(_send_sync, recipient, subject, html_body)
