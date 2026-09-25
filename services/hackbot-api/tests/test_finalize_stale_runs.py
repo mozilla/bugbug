@@ -57,7 +57,7 @@ def _finalizer(monkeypatch):
     def install(behaviour):
         async def fake_finalize(_db, run):
             calls.append(run.run_id)
-            behaviour(run)
+            return behaviour(run)
 
         monkeypatch.setattr(maintenance, "finalize_run", fake_finalize)
         return calls
@@ -68,6 +68,7 @@ def _finalizer(monkeypatch):
 def _finalizes(run):
     run.status = RunStatus.succeeded.value
     run.finalized_at = datetime.now(timezone.utc)
+    return True
 
 
 async def test_finalizes_stale_runs(_finalizer):
@@ -117,6 +118,7 @@ async def test_one_failure_does_not_abort_the_sweep(monkeypatch):
         if run.run_id == bad.run_id:
             raise RuntimeError("boom")
         _finalizes(run)
+        return True
 
     monkeypatch.setattr(maintenance, "finalize_run", fake_finalize)
 

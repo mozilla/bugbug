@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import notifications
 from app.actions_applier import on_run_completed
 from app.auth import require_push_auth
 from app.database.connection import get_db
@@ -23,12 +24,7 @@ router = APIRouter(
 
 
 def _decode_pubsub_push_body(body: dict) -> dict:
-    """Decode a standard Pub/Sub push envelope's `message.data` as JSON.
-
-    Both the completion-log push subscription feeding agent-run-finished and the
-    `agent-run-events` action-applier subscription deliver via this same
-    envelope shape.
-    """
+    """Decode a Pub/Sub push envelope's `message.data` as JSON."""
     message = body.get("message") or {}
     data = message.get("data")
     if not data:
@@ -109,7 +105,8 @@ async def agent_run_finished(
         log.warning("No run found for execution %s", execution_name)
         return
 
-    await finalize_run(db, run)
+    if await finalize_run(db, run) and run.requested_by:
+        await notifications.notify_requester(run)
 
 
 @router.post("/apply-run-actions", status_code=204)
@@ -118,10 +115,8 @@ async def apply_run_actions(
 ) -> None:
     """Consumer of `run.completed`: record the run's actions, auto-apply if opted in.
 
-    Named for what it does, not the event it consumes, because the same
-    `run.completed` event will feed other consumers later (notifications,
-    webhooks) — each its own route named after its own job. The subscription
-    feeding this one is filtered to succeeded runs (see deploy-events.sh).
+    Named for what it does, not the event it consumes. The subscription feeding
+    this route is filtered to succeeded runs (see deploy-events.sh).
     """
     body = await request.json()
     event = _decode_pubsub_push_body(body)
