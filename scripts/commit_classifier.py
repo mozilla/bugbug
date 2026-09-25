@@ -9,7 +9,7 @@ import os
 import pickle
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from logging import INFO, basicConfig, getLogger
 from typing import cast
 
@@ -719,7 +719,7 @@ class CommitClassifier(object):
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.
         stop_hash = None
-        four_months_ago = datetime.utcnow() - relativedelta(months=4)
+        four_months_ago = datetime.now(timezone.utc) - relativedelta(months=4)
         for commit in repository.get_commits():
             if dateutil.parser.parse(commit["pushdate"]) >= four_months_ago:
                 stop_hash = tuple(
