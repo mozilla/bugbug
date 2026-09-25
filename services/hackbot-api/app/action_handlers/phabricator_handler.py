@@ -28,6 +28,7 @@ from async_lru import alru_cache
 from phabricator_client import PhabricatorClient
 
 from app.action_handlers.base import ActionResult, ApplyContext
+from app.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ _DIFF_ARTIFACT_KEY = "changes/phabricator_diff.json"
 
 @lru_cache(maxsize=1)
 def _client() -> PhabricatorClient:
-    return PhabricatorClient()
+    return PhabricatorClient(settings.phabricator)
 
 
 async def _conduit_request(method: str, **payload: Any) -> dict:
