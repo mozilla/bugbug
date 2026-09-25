@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 import pytest
 from app.action_handlers import ApplyContext, try_server_handler
-from app.action_handlers.registry import get_handler
+from app.action_handlers.registry import ActionType, get_handler
 from lando_client import LandoClient
 
 # Actions that submit source changes to the Try server.
@@ -73,7 +73,9 @@ def submitted(monkeypatch):
 
 
 def test_handler_is_registered():
-    assert isinstance(get_handler("try_server.push"), try_server_handler.PushHandler)
+    assert isinstance(
+        get_handler(ActionType.TRY_SERVER_PUSH), try_server_handler.PushHandler
+    )
     # Every type the recording side can emit is registered.
     assert all(get_handler(t) is not None for t in TRY_ACTION_TYPES)
 

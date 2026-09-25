@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
-from app.action_handlers.registry import PATCH_ACTION_TYPES
+from app.action_handlers.registry import ActionType, PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
@@ -372,7 +372,7 @@ def _has_unsubmitted_patch(
     """Whether a run produced source changes without a patch action."""
     has_patch_artifact = any(artifact.name == _PATCH_ARTIFACT for artifact in artifacts)
     has_patch_action = summary is not None and any(
-        action["type"] in PATCH_ACTION_TYPES for action in summary.actions
+        ActionType(action["type"]) in PATCH_ACTION_TYPES for action in summary.actions
     )
     return has_patch_artifact and not has_patch_action
 
