@@ -160,7 +160,6 @@ async def phabricator_webhook(
         detected.bug_id,
         detected.anchor_phid,
     )
-    return
 
 
 @router.post(
