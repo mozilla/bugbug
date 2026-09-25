@@ -914,6 +914,11 @@ def get_test_info(date: datetime) -> dict[str, Any]:
 
 manifest_by_path: dict[str, set[str]] | None = None
 
+# If a modified file is close to more manifests than this, it is too broad
+# (e.g. dom/moz.build) for the sibling heuristic to be informative, so we
+# don't schedule any of them and leave the decision to the model.
+MAX_SIBLING_MANIFESTS = 42
+
 
 def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
     global manifest_by_path
@@ -1009,15 +1014,21 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
         # If a manifest, a test, or a support file is modified, run the manifest that includes it.
         if path in manifest_by_path:
             manifests.update(manifest_by_path[path])
-        else:
+        # Skip root-level files, otherwise we'd walk the whole repository and
+        # schedule every manifest.
+        elif (repo_dir / path).parent != repo_dir:
             # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
+            sibling_manifests: set[str] = set()
             for sibling in (repo_dir / path).parent.rglob("*"):
                 if sibling.is_dir() and repository.is_test(f"{str(sibling)}/"):
-                    manifests.update(
+                    sibling_manifests.update(
                         str(f.relative_to(repo_dir))
                         for f in sibling.rglob("*.toml")
                         if f.is_file()
                     )
+
+            if len(sibling_manifests) <= MAX_SIBLING_MANIFESTS:
+                manifests.update(sibling_manifests)
 
         # If a web-platform test or meta is modified, run the relevant web-platform folder.
         if not any(path.endswith(ignore) for ignore in ("/META.yml", "/README.md")):
@@ -1101,6 +1112,10 @@ def find_tasks_for_paths(
     # Any file in a folder close to a gtest folder is modified (e.g. dom/media/CubebUtils.cpp and we have dom/media/gtest/).
     if not select_gtest:
         for path in paths:
+            # Skip root-level files, otherwise we'd walk the whole repository.
+            if (repo_dir / path).parent == repo_dir:
+                continue
+
             for sibling in (repo_dir / path).parent.rglob("*"):
                 if sibling.is_dir() and any(
                     part in _GTEST_FOLDERS for part in sibling.parts
