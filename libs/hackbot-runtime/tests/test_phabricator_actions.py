@@ -71,6 +71,51 @@ async def test_submit_accepts_safe_summary(summary):
     assert rec.actions[0]["params"]["summary"] == summary
 
 
+async def test_submit_rejects_html_tags_in_summary():
+    rec = ActionsRecorder()
+
+    with pytest.raises(ToolError) as exc:
+        await phabricator.submit_patch(
+            rec,
+            bug_id=1,
+            title="Fix",
+            summary='Drops the preview `<link rel="localization">`.',
+            reasoning="r",
+        )
+
+    assert "summary" in str(exc.value)
+    assert "HTML" in str(exc.value)
+    assert "submit_patch again" in str(exc.value)
+    assert rec.actions == []
+
+
+@pytest.mark.parametrize(
+    "summary",
+    ["x<y and a < b", "i <3 fluent", "the `link` element", "a < link> b"],
+)
+async def test_submit_accepts_angle_brackets_that_are_not_tags(summary):
+    rec = ActionsRecorder()
+    await phabricator.submit_patch(
+        rec, bug_id=1, title="Fix", reasoning="r", summary=summary
+    )
+    assert rec.actions[0]["params"]["summary"] == summary
+
+
+async def test_html_tag_validation_is_limited_to_summary():
+    rec = ActionsRecorder()
+    await phabricator.submit_patch(
+        rec,
+        bug_id=1,
+        title="Remove the <link> element",
+        test_plan="Check for <script> errors.",
+        reasoning="r",
+    )
+    await phabricator.add_comment(
+        rec, revision_id=42, text="The <link> is gone.", reasoning="r"
+    )
+    assert len(rec.actions) == 2
+
+
 async def test_submit_requires_title():
     rec = ActionsRecorder()
     with pytest.raises(TypeError):
