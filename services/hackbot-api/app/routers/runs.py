@@ -71,7 +71,7 @@ def _lookup_agent(name: str) -> AgentSpec:
     return agent
 
 
-@router.get("/agents", response_model=list[AgentDescriptor])
+@router.get("/agents")
 async def list_agents() -> list[AgentDescriptor]:
     return [
         AgentDescriptor(
@@ -101,6 +101,7 @@ async def list_agents() -> list[AgentDescriptor]:
 async def create_run(
     agent_name: str,
     payload: dict,
+    db: Annotated[AsyncSession, Depends(get_db)],
     on_behalf_of: Annotated[
         UserEmail,
         Header(
@@ -118,7 +119,6 @@ async def create_run(
             ),
         ),
     ] = None,
-    db: AsyncSession = Depends(get_db),
 ) -> RunRef | Response:
     agent = _lookup_agent(agent_name)
     try:
@@ -198,13 +198,14 @@ async def create_run(
     return RunRef.model_validate(run)
 
 
-@router.get("/runs", response_model=list[RunDoc])
+@router.get("/runs")
 async def list_runs(
-    limit: int = Query(default=50, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    agent: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    agent: Annotated[str | None, Query()] = None,
     # Aliased so the query param is `status` without shadowing fastapi.status.
-    status_filter: RunStatus | None = Query(default=None, alias="status"),
+    status_filter: Annotated[RunStatus | None, Query(alias="status")] = None,
     requested_by: Annotated[
         UserEmail,
         Query(description="Only return runs requested by this user."),
@@ -213,7 +214,6 @@ async def list_runs(
         DedupeKey,
         Query(description="Only return runs carrying this dedupe key."),
     ] = None,
-    db: AsyncSession = Depends(get_db),
 ) -> list[RunDoc]:
     stmt = select(Run)
     if agent is not None:
@@ -238,8 +238,10 @@ async def list_runs(
     return [RunDoc.model_validate(r) for r in result.scalars()]
 
 
-@router.get("/runs/{run_id}", response_model=RunDoc)
-async def get_run(run_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> RunDoc:
+@router.get("/runs/{run_id}")
+async def get_run(
+    run_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]
+) -> RunDoc:
     # A plain DB read: completion is detected out-of-band by finalize_run,
     # invoked from the Eventarc-triggered /internal/events/agent-run-finished
     # route (see app/routers/events.py), not from this request.
@@ -253,7 +255,7 @@ async def get_run(run_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> RunD
 async def get_artifact_download_url(
     run_id: uuid.UUID,
     artifact_path: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
     """Return a short-lived signed URL to download one artifact.
 
@@ -283,9 +285,9 @@ async def _list_actions(db: AsyncSession, run_id: uuid.UUID) -> list[RunActionDo
     return [RunActionDoc.model_validate(r) for r in result.scalars()]
 
 
-@router.get("/runs/{run_id}/actions", response_model=list[RunActionDoc])
+@router.get("/runs/{run_id}/actions")
 async def list_run_actions(
-    run_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    run_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> list[RunActionDoc]:
     run = await db.get(Run, run_id)
     if run is None:
@@ -293,9 +295,9 @@ async def list_run_actions(
     return await _list_actions(db, run_id)
 
 
-@router.post("/runs/{run_id}/actions/apply", response_model=list[RunActionDoc])
+@router.post("/runs/{run_id}/actions/apply")
 async def apply_run_actions(
-    run_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    run_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> list[RunActionDoc]:
     """Manually apply all of a run's pending actions (apply-all).
 
