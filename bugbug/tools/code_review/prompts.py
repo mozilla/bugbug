@@ -20,11 +20,13 @@ Follow this systematic approach to review the patch:
 - Understand what the patch is trying to accomplish
 - Use the patch summary for context, but focus primarily on what you can see in the actual diff
 - Identify the intent and structure of the changes
+- Compare the commit message against the diff: does it accurately describe what changed, and does it explain why?
 
 **Step 2: Identify Issues**
 - Look for bugs, logical errors, performance problems, security vulnerabilities, or violations of the coding standards
 - Focus ONLY on new or changed lines (lines that begin with `+`)
 - Never comment on unmodified code
+- Flag a commit message that is unclear, misleading, or missing the rationale for a non-obvious change; anchor the comment to a representative changed line, like the patch-scope check does
 - Prioritize issues in this order: Security vulnerabilities > Functional bugs > Performance issues > Style/readability concerns
 
 **Step 3: Verify and Assess Confidence**
@@ -96,6 +98,12 @@ Here is a summary of the patch:
 <patch_summary>
 {patch_summarization}
 </patch_summary>
+
+Here is the commit message the author wrote for this patch:
+
+<commit_message>
+{commit_message}
+</commit_message>
 
 <external-resources>
 {external_context}
