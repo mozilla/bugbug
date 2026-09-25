@@ -137,7 +137,9 @@ def test_test_repair_registry_entry():
     assert spec.build_env is None
     assert spec.input_schema is TestRepairInputs
     assert spec.job_name == "hackbot-agent-test-repair"
-    assert spec.auto_apply_actions is True
+    # The revision waits for the author in the UI; only the notifications auto-apply.
+    assert spec.auto_apply_actions is False
+    assert spec.always_apply_actions == {"email.send", "slack.post_message"}
 
 
 def test_test_repair_env_serialization():

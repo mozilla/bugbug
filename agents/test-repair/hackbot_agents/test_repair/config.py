@@ -15,6 +15,12 @@ SKIP_FIREFOX_BUILD = True
 # Where the verdict is reported.
 SLACK_CHANNEL = "#sheriff-notifications"
 
+# Recordable action types the fix stage may take, by dotted id. Submitting the
+# patch for review is the only one: the author reviews it in the Hackbot UI and
+# then in Phabricator. It needs a bug to file the revision against, so it is
+# wired only when the culprit's bug is known (see run_test_repair).
+ENABLED_ACTION_TYPES = ["phabricator.submit_patch"]
+
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",

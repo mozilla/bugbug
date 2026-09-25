@@ -12,7 +12,9 @@ from hackbot_agents.test_repair.resolve import (
     FailingGroup,
     Investigation,
 )
-from hackbot_runtime import AgentError
+from hackbot_runtime import ActionsRecorder, AgentError
+
+ACTION_TOOLS = {"mcp__actions__phabricator_submit_patch"}
 
 
 def _result_msg(is_error=False):
@@ -98,6 +100,8 @@ def _run(
     known_intermittent_bugs=None,
     skip_firefox_build=SKIP_FIREFOX_BUILD,
     options_out=None,
+    actions_recorder=None,
+    checkout=None,
 ):
     repo = tmp_path / "src"
     repo.mkdir()
@@ -158,9 +162,226 @@ def _run(
             skip_firefox_build=skip_firefox_build,
             verbose=False,
             log=None,
+            actions_recorder=actions_recorder,
+            checkout=checkout,
         )
     )
     return result, calls, head
+
+
+# --- the fix stage works on the culprit itself ------------------------------ #
+
+
+def test_the_tree_moves_to_the_culprit_before_the_fix_stage(tmp_path, monkeypatch):
+    checked_out = []
+    _, calls, head = _run(
+        tmp_path, _blamed(), monkeypatch, checkout=lambda sha: checked_out.append(sha)
+    )
+    assert checked_out == [head]
+    assert f"The tree is checked out at {head} itself" in _flat(calls[1])
+    assert f"checked out at {head} itself" not in _flat(calls[0])
+
+
+def test_no_checkout_without_a_culprit(tmp_path, monkeypatch):
+    checked_out = []
+    _run(
+        tmp_path,
+        [{"classification": "intermittent", "culprit_commit": None}],
+        monkeypatch,
+        checkout=lambda sha: checked_out.append(sha),
+    )
+    assert checked_out == []
+
+
+def test_the_prompt_does_not_claim_a_checkout_that_did_not_happen(
+    tmp_path, monkeypatch
+):
+    _, calls, _ = _run(tmp_path, _blamed(), monkeypatch)
+    assert "checked out at" not in calls[1]
+
+
+def test_the_revision_stacks_on_the_culprits_own(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
+    _, calls, _ = _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        actions_recorder=ActionsRecorder(),
+        checkout=lambda sha: sha,
+    )
+    assert "parent_revision=325120 (the culprit's own revision, D325120)" in calls[1]
+
+
+def test_no_stacking_unless_the_tree_moved_to_the_culprit(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
+    _, calls, _ = _run(
+        tmp_path, _blamed(), monkeypatch, actions_recorder=ActionsRecorder()
+    )
+    assert "D325120" not in calls[1]
+
+
+def test_a_failed_checkout_costs_the_stacking_not_the_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
+
+    def failing_checkout(sha):
+        raise RuntimeError("dirty tree")
+
+    result, calls, head = _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        actions_recorder=ActionsRecorder(),
+        checkout=failing_checkout,
+    )
+    assert result.culprit_commit == head
+    assert "D325120" not in calls[1]
+    assert "checked out at" not in calls[1]
+
+
+def test_no_stacking_when_the_culprit_names_no_revision(tmp_path, monkeypatch):
+    # The scratch path lands in the prompt, so the test name must not carry the
+    # word this asserts on.
+    _, calls, _ = _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        actions_recorder=ActionsRecorder(),
+        checkout=lambda sha: sha,
+    )
+    assert "parent_revision" not in calls[1]
+
+
+def test_the_revision_is_read_off_the_commit_footer(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "user.email", "t@example.com"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "T"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "Bug 555 - a fix r=me\n\nDifferential Revision: "
+            "https://phabricator.services.mozilla.com/D325120",
+        ],
+        check=True,
+    )
+    assert agent._revision_from_commit(tmp_path, "HEAD") == 325120
+    assert agent._bug_from_commit(tmp_path, "HEAD") == 555
+
+
+def test_no_revision_from_a_commit_without_a_footer(tmp_path):
+    assert agent._revision_from_commit(tmp_path, "HEAD") is None
+
+
+# --- submitting the patch for review ------------------------------------- #
+
+
+def _blamed(bug=1234567):
+    verdict = {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.9}
+    if bug is not None:
+        verdict["culprit_bug"] = bug
+    return [verdict, {**verdict, "proposed_patch": True}]
+
+
+def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
+    options = []
+    _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        options_out=options,
+        actions_recorder=ActionsRecorder(),
+    )
+    analysis_opts, fix_opts = options
+
+    assert not ACTION_TOOLS & set(analysis_opts.allowed_tools)
+    assert "actions" not in analysis_opts.mcp_servers
+
+    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert "actions" in fix_opts.mcp_servers
+
+
+def test_fix_prompt_asks_for_a_revision_against_the_culprits_bug(tmp_path, monkeypatch):
+    _, calls, _ = _run(
+        tmp_path, _blamed(), monkeypatch, actions_recorder=ActionsRecorder()
+    )
+    assert "phabricator_submit_patch" not in calls[0]
+    assert "phabricator_submit_patch" in calls[1]
+    assert "bug_id=1234567" in calls[1]
+    assert '"Bug 1234567 - ' in calls[1]
+    assert "squashed into the culprit" in _flat(calls[1])
+
+
+@pytest.mark.parametrize(
+    ("bug", "recorder"),
+    [(1234567, None), (None, ActionsRecorder())],
+    ids=["no-recorder", "no-bug-anywhere"],
+)
+def test_reporting_is_skipped_without_a_recorder_and_a_bug(
+    tmp_path, monkeypatch, bug, recorder
+):
+    options = []
+    _, calls, _ = _run(
+        tmp_path,
+        _blamed(bug),
+        monkeypatch,
+        options_out=options,
+        actions_recorder=recorder,
+    )
+    for opts in options:
+        assert not ACTION_TOOLS & set(opts.allowed_tools)
+        assert "actions" not in opts.mcp_servers
+    assert "phabricator_submit_patch" not in calls[1]
+
+
+def test_the_culprits_subject_stands_in_for_a_missing_verdict_bug(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(agent, "_bug_from_commit", lambda repo, sha: 555)
+    options = []
+    _, calls, _ = _run(
+        tmp_path,
+        _blamed(None),
+        monkeypatch,
+        options_out=options,
+        actions_recorder=ActionsRecorder(),
+    )
+    assert ACTION_TOOLS <= set(options[1].allowed_tools)
+    assert "bug_id=555" in calls[1]
+
+
+def test_bug_is_read_off_the_local_commit_subject(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "user.email", "t@example.com"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "T"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "Bug 555 - an earlier fix r=me",
+        ],
+        check=True,
+    )
+    assert agent._bug_from_commit(tmp_path, "HEAD") == 555
+
+
+def test_no_bug_from_a_commit_git_cannot_read(tmp_path):
+    assert agent._bug_from_commit(tmp_path, "HEAD") is None
 
 
 def test_unsure_culprit_runs_fix_stage(tmp_path, monkeypatch):
