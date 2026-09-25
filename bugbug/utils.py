@@ -284,21 +284,46 @@ def get_last_modified(url: str) -> datetime | None:
     return dateutil.parser.parse(r.headers["Last-Modified"])
 
 
-def download_model(model_name: str) -> str:
-    version = os.getenv("TAG")
-    if not version:
-        try:
-            version = f"v{get_bugbug_version()}"
-        except PackageNotFoundError:
-            version = "latest"
+def _model_artifact_url(model_name: str) -> str | None:
+    """Return the model's `artifact_url` if published outside the Taskcluster index."""
+    # Imported here to avoid a circular import (model modules import utils).
+    from bugbug.models import get_model_class
 
+    try:
+        model_class = get_model_class(model_name)
+    except ValueError:
+        # Models missing from the registry may still exist in the Taskcluster
+        # index, so let download_model() try the index.
+        return None
+
+    return getattr(model_class, "artifact_url", None)
+
+
+def download_model(model_name: str) -> str:
+    """Download a model and unpack it to a `{model_name}model` directory.
+
+    Models are fetched from the Taskcluster index, unless the registered model
+    class declares an `artifact_url`, in which case that URL is used instead.
+    """
     path = f"{model_name}model"
-    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.tar.zst"
+    archive = f"{path}.tar.zst"
+
+    url = _model_artifact_url(model_name)
+    if url is None:
+        version = os.getenv("TAG")
+        if not version:
+            try:
+                version = f"v{get_bugbug_version()}"
+            except PackageNotFoundError:
+                version = "latest"
+        url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{archive}"
+
     logger.info("Downloading %s...", url)
-    updated = download_check_etag(url)
+    # Save it under our own name; the URL can end in anything.
+    updated = download_check_etag(url, archive)
     if updated:
-        extract_tar_zst(f"{path}.tar.zst")
-        os.remove(f"{path}.tar.zst")
+        extract_tar_zst(archive)
+        os.remove(archive)
     assert os.path.exists(path), "Decompressed directory exists"
     return path
 

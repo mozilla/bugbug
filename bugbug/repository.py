@@ -1597,6 +1597,16 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
     trigger_pull()
 
 
+def get_commit_patches(repo_dir: str, revs: list[bytes]) -> list[bytes]:
+    """Export each revision as its own git-formatted patch.
+
+    Each patch is a full ``hg export`` payload, i.e. it carries the commit
+    message header followed by the diff.
+    """
+    with hglib.open(repo_dir) as hg:
+        return [hg.export(revs=[rev], git=True) for rev in revs]
+
+
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
     """Import commits from a git format-patch style patches into a Mercurial repository."""
     with hglib.open(repo_dir) as hg:
