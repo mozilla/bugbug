@@ -103,6 +103,8 @@ class PhabricatorClient:
         """
         payload = {**params, "__conduit__": {"token": self.settings.api_key}}
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
+            if self.settings.edge_key:
+                client.headers["Mozilla-Edge-Key"] = self.settings.edge_key
             response = await client.post(
                 f"{self.base_url}/api/{method}",
                 data={"params": json.dumps(payload), "output": "json"},
