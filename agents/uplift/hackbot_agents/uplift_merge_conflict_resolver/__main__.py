@@ -6,7 +6,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import UpliftResult, run_uplift
-from .models import FULL_SHA_PATTERN, UpliftSource
+from .models import EFFORT, FULL_SHA_PATTERN, MODEL, UpliftSource
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,14 @@ class AgentInputs(BaseSettings):
     # The originating bug, for context when a conflict's intent is unclear.
     bug_id: int | None = None
 
-    # Overrides; `None` leaves the SDK's or the API's own default in place.
-    model: str | None = None
+    # Named here rather than left to the SDK or the API: either default can
+    # move, and a run resolves conflicts differently when it does, so the pin
+    # is what makes a redeploy something we choose and retest.
+    model: str = MODEL
+    effort: str = EFFORT
+
+    # No pin: the run is bounded by what it has to apply, not by a turn count.
     max_turns: int | None = None
-    effort: str | None = None
 
     # Compose passes unset inputs as empty strings (``${BUG_ID:-}``).
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)

@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 from hackbot_agents.uplift_merge_conflict_resolver import __main__ as entrypoint
 from hackbot_agents.uplift_merge_conflict_resolver.models import (
+    EFFORT,
+    MODEL,
     GitSource,
     PhabricatorSource,
 )
@@ -84,6 +86,30 @@ async def test_the_handoff_to_the_agent(agent_env, recorded_run):
     )
 
 
+async def test_the_model_and_effort_reach_the_agent_pinned(agent_env, recorded_run):
+    """A platform default that moves must not change how an uplift is resolved."""
+    await entrypoint.main(StubContext())
+
+    assert (recorded_run["model"], recorded_run["effort"]) == (MODEL, EFFORT), (
+        "With nothing set per run, the agent's own pins are what it runs under."
+    )
+
+
+async def test_an_explicit_model_and_effort_still_win(
+    monkeypatch, agent_env, recorded_run
+):
+    """The pin is a default, not a lock: a caller comparing runs overrides it."""
+    monkeypatch.setenv("MODEL", "claude-opus-5")
+    monkeypatch.setenv("EFFORT", "high")
+
+    await entrypoint.main(StubContext())
+
+    assert (recorded_run["model"], recorded_run["effort"]) == (
+        "claude-opus-5",
+        "high",
+    ), "An explicitly requested model and effort should reach the agent."
+
+
 async def test_a_pinned_target_commit_is_what_gets_checked_out(
     monkeypatch, agent_env, recorded_run
 ):
@@ -108,12 +134,12 @@ async def test_inputs_treat_compose_empty_strings_as_absent(monkeypatch, agent_e
 
     inputs = entrypoint.AgentInputs()
 
-    assert (inputs.bug_id, inputs.model, inputs.max_turns, inputs.effort) == (
-        None,
-        None,
-        None,
-        None,
-    ), "An empty env var should fall back to the default, not fail validation."
+    assert (inputs.bug_id, inputs.max_turns) == (None, None), (
+        "An empty env var should fall back to the default, not fail validation."
+    )
+    assert (inputs.model, inputs.effort) == (MODEL, EFFORT), (
+        "And for a pinned input, that default is the pin."
+    )
 
 
 @pytest.mark.parametrize(
