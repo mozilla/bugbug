@@ -1,6 +1,7 @@
 """Inbound webhooks that trigger Hackbot runs."""
 
 import logging
+from typing import Annotated
 
 from cachetools import TTLCache
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -55,8 +56,8 @@ def get_hackbot_client() -> HackbotClient:
 @router.post("/slack")
 async def slack_webhook(
     request: Request,
-    slack_handler: AsyncSlackRequestHandler = Depends(get_slack_handler),
-    api_client: HackbotClient = Depends(get_hackbot_client),
+    slack_handler: Annotated[AsyncSlackRequestHandler, Depends(get_slack_handler)],
+    api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> Response:
     """Every interaction Slack sends this app, whatever kind it is."""
     return await slack_handler.handle(
@@ -169,8 +170,8 @@ async def phabricator_webhook(
 )
 async def bugzilla_webhook(
     request: Request,
-    api_client: HackbotClient = Depends(get_hackbot_client),
-    authorizer: BugzillaAuthorizer = Depends(get_bugzilla_authorizer),
+    api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
+    authorizer: Annotated[BugzillaAuthorizer, Depends(get_bugzilla_authorizer)],
 ) -> dict:
     """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
     payload = await request.json()

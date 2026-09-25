@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
@@ -84,7 +85,7 @@ async def _find_run_for_execution(db: AsyncSession, execution_name: str) -> Run 
 
 @router.post("/agent-run-finished", status_code=204)
 async def agent_run_finished(
-    request: Request, db: AsyncSession = Depends(get_db)
+    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> None:
     """Ingress for 'an agent run's underlying execution reached a terminal state'.
 
@@ -113,7 +114,7 @@ async def agent_run_finished(
 
 @router.post("/apply-run-actions", status_code=204)
 async def apply_run_actions(
-    request: Request, db: AsyncSession = Depends(get_db)
+    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> None:
     """Consumer of `run.completed`: record the run's actions, auto-apply if opted in.
 
