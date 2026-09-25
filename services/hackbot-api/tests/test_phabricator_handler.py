@@ -131,6 +131,53 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     assert transactions["testPlan"] == "uv run pytest (passed)"
 
 
+async def test_submit_patch_stacks_on_the_parent_revision(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "differential.revision.edit": {"object": {"id": 555, "phid": "PHID-REV-1"}},
+            "differential.revision.search": {"data": [{"phid": "PHID-REV-PARENT"}]},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 1, "title": "Fix", "parent_revision": 325120}, _ctx()
+    )
+
+    assert result.status == "applied"
+    search_call = next(c for c in calls if c[0] == "differential.revision.search")
+    assert search_call[1]["constraints"] == {"ids": [325120]}
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
+    assert transactions["parents.set"] == ["PHID-REV-PARENT"]
+
+
+async def test_submit_patch_files_unstacked_when_the_parent_is_unknown(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "differential.revision.edit": {"object": {"id": 555, "phid": "PHID-REV-1"}},
+            "differential.revision.search": {"data": []},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 1, "title": "Fix", "parent_revision": 999999}, _ctx()
+    )
+
+    assert result.status == "applied"
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    assert "parents.set" not in {t["type"] for t in edit_call[1]["transactions"]}
+
+
 async def test_submit_patch_accepts_legacy_action_without_test_plan(monkeypatch):
     fake, calls = _fake_conduit(
         {
