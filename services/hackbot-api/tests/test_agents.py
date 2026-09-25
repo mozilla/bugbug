@@ -8,6 +8,7 @@ from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
     TestRepairInputs,
+    UpliftInputs,
 )
 from app.schemas import (
     TestPlanGeneratorInputs as PlanGeneratorInputs,
@@ -156,3 +157,103 @@ def test_test_repair_env_serialization():
 def test_test_repair_inputs_require_failure_tasks():
     with pytest.raises(ValidationError):
         TestRepairInputs(model="claude-opus-4-8")
+
+
+def test_uplift_registry_entry():
+    spec = AGENT_REGISTRY["uplift-merge-conflict-resolver"]
+    assert spec.build_env is None, (
+        "The uplift agent's inputs need no hand-written env serializer."
+    )
+    assert spec.input_schema is UpliftInputs, (
+        "The registry should validate uplift runs against `UpliftInputs`."
+    )
+    assert spec.job_name == "hackbot-agent-uplift-merge-conflict-resolver", (
+        "The job name should match the deployed Cloud Run Job."
+    )
+    assert spec.auto_apply_actions is False, (
+        "The uplift agent records no actions: its output is a patch for review."
+    )
+
+
+def test_uplift_env_serialization():
+    env = model_to_env(
+        UpliftInputs(
+            target_branch="beta",
+            sources=[
+                {"kind": "git", "commit": "a" * 40},
+                {"kind": "phabricator", "revision_id": 12345, "diff_id": 500},
+            ],
+            bug_id=1846789,
+        )
+    )
+
+    assert env["TARGET_BRANCH"] == "beta", "`target_branch` should map to its env var."
+    assert "TARGET_COMMIT" not in env, (
+        "An unpinned target commit should not leak as an empty env var."
+    )
+    assert env["BUG_ID"] == "1846789", "`bug_id` should map to its env var."
+    assert json.loads(env["SOURCES"]) == [
+        {"kind": "git", "commit": "a" * 40},
+        {"kind": "phabricator", "revision_id": 12345, "diff_id": 500},
+    ], "`sources` should be JSON-encoded in order, since it travels as one env var."
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sources": [{"kind": "git", "commit": "abc1234"}]},
+        {"target_commit": "abc1234"},
+    ],
+)
+def test_uplift_inputs_reject_an_abbreviated_commit(overrides):
+    """The agent fetches each commit from the remote, which needs a full SHA."""
+    kwargs = {
+        "target_branch": "beta",
+        "sources": [{"kind": "git", "commit": "b" * 40}],
+    }
+    kwargs.update(overrides)
+
+    with pytest.raises(ValidationError):
+        UpliftInputs(**kwargs)
+
+
+def test_uplift_pinned_target_commit_reaches_the_agent():
+    env = model_to_env(
+        UpliftInputs(
+            target_branch="beta",
+            target_commit="a" * 40,
+            sources=[{"kind": "git", "commit": "b" * 40}],
+        )
+    )
+
+    assert env["TARGET_COMMIT"] == "a" * 40, (
+        "A caller reproducing a specific uplift pins the commit, since the "
+        "branch name it sat on moves."
+    )
+
+
+def test_uplift_inputs_keep_a_mixed_stack_discriminated():
+    inputs = UpliftInputs(
+        target_branch="esr128",
+        sources=[
+            {"kind": "phabricator", "revision_id": 9},
+            {"kind": "git", "commit": "a" * 40},
+        ],
+    )
+
+    assert [source.kind for source in inputs.sources] == ["phabricator", "git"], (
+        "`kind` should discriminate the union so one run can mix both kinds."
+    )
+    assert inputs.sources[0].diff_id is None, (
+        "An unpinned `diff_id` should default to `None`, meaning the latest diff."
+    )
+
+
+def test_uplift_inputs_require_at_least_one_source():
+    with pytest.raises(ValidationError, match="at least one source"):
+        UpliftInputs(target_branch="beta", sources=[])
+
+
+def test_uplift_inputs_reject_an_unknown_source_kind():
+    with pytest.raises(ValidationError):
+        UpliftInputs(target_branch="beta", sources=[{"kind": "hg", "rev": "abc"}])

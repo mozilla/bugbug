@@ -10,6 +10,7 @@ include:
   - path: agents/test-repair/compose.yml
   - path: agents/frontend-triage/compose.yml
   - path: agents/test-plan-generator/compose.yml
+  - path: agents/uplift/compose.yml
 
 services:
   bugbug-base:

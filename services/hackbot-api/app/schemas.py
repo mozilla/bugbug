@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -175,3 +175,80 @@ class TestPlanGeneratorInputs(BaseModel):
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
+
+
+# Git will not fetch an abbreviated object id from a remote, and the uplift
+# agent fetches every commit it is given straight from one, so an abbreviation
+# is rejected here rather than at the `git fetch` in the middle of a run.
+FULL_SHA_PATTERN = r"^[0-9a-f]{40}$"
+
+
+class GitUpliftSource(BaseModel):
+    """A patch to uplift, identified by a commit already in the Firefox repo."""
+
+    # Discriminator tag selecting this variant in the `UpliftSource` union.
+    kind: Literal["git"] = "git"
+
+    # Full git commit SHA the agent fetches and cherry-picks onto the branch.
+    commit: str = Field(
+        pattern=FULL_SHA_PATTERN, description="Full git commit SHA to cherry-pick."
+    )
+
+
+class PhabricatorUpliftSource(BaseModel):
+    """A patch to uplift, identified by a Phabricator revision.
+
+    The agent fetches the diff through its broker; inputs reach the job as
+    environment variables, which a raw diff would not fit.
+    """
+
+    # Discriminator tag selecting this variant in the `UpliftSource` union.
+    kind: Literal["phabricator"] = "phabricator"
+
+    # Phabricator revision to uplift, used for context and commit text.
+    revision_id: int = Field(description="Phabricator revision id (the D-number).")
+
+    # Pin the exact diff. Without one, a revision updated since the request
+    # resolves to different code.
+    diff_id: int | None = Field(
+        default=None,
+        description="Diff to uplift; defaults to the revision's latest.",
+    )
+
+
+# `kind` discriminates the two, so one run can mix both.
+UpliftSource = Annotated[
+    Union[GitUpliftSource, PhabricatorUpliftSource], Field(discriminator="kind")
+]
+
+
+class UpliftInputs(BaseModel):
+    """Inputs for the uplift conflict-resolution agent."""
+
+    # The stable branch ref to uplift onto, e.g. `release`, `beta`, `esr128`.
+    target_branch: str
+
+    # The exact commit to uplift onto. Branch names move, so a caller
+    # reproducing a specific uplift should pin it; otherwise the tip is used.
+    target_commit: Annotated[str | None, Field(pattern=FULL_SHA_PATTERN)] = None
+
+    # Ordered patches to apply onto the branch; applied in this sequence.
+    sources: list[UpliftSource]
+
+    # Originating Bugzilla bug, supplied as extra context for the agent.
+    bug_id: int | None = None
+
+    # Override the agent's default Claude model id.
+    model: str | None = None
+
+    # Cap on agent turns; `None` leaves the agent's own default in place.
+    max_turns: int | None = None
+
+    # Override the agent's default reasoning effort (e.g. `high`).
+    effort: str | None = None
+
+    @model_validator(mode="after")
+    def require_sources(self) -> "UpliftInputs":
+        if not self.sources:
+            raise ValueError("provide at least one source to uplift")
+        return self

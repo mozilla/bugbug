@@ -29,6 +29,7 @@ members = [
     "hackbot-agent-frontend-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
+    "hackbot-agent-uplift",
     "hackbot-api",
     "hackbot-client",
     "hackbot-pulse-listener",
@@ -2703,6 +2704,44 @@ requires-dist = [
     { name = "requests" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
+
+[[package]]
+name = "hackbot-agent-uplift"
+version = "0.1.0"
+source = { editable = "agents/uplift" }
+dependencies = [
+    { name = "agent-tools", extra = ["searchfox", "vcs"] },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
+    { name = "phabricator-client" },
+    { name = "phabricator-proxy" },
+    { name = "pydantic-settings" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["searchfox", "vcs"], editable = "libs/agent-tools" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
+    { name = "phabricator-proxy", editable = "libs/phabricator-proxy" },
+    { name = "pydantic-settings" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23.0" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "hackbot-api"
