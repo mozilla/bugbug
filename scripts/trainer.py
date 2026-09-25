@@ -32,6 +32,9 @@ class Trainer(object):
             for required_db in model_obj.training_dbs:
                 assert db.download(required_db)
 
+            for extra_download in model_obj.training_extra_downloads:
+                extra_download()
+
             if args.download_eval:
                 model_obj.download_eval_dbs()
         else:

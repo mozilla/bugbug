@@ -620,6 +620,54 @@ def get_author_ids():
     return author_ids
 
 
+PATH_RE = re.compile(r"(?:[\w.-]+/)+[\w.-]+\.[a-zA-Z0-9]+")
+
+
+def find_component(path, component_mapping):
+    # A path mentioned in a comment might not match a repository path exactly
+    # (e.g. it could have extra leading directories, like a local checkout
+    # path), so try the path itself and then progressively shorter suffixes
+    # of it, keeping the longest one that matches.
+    parts = path.split(b"/")
+    for i in range(len(parts)):
+        candidate = b"/".join(parts[i:])
+        if candidate in component_mapping:
+            return component_mapping[candidate].tobytes().decode("utf-8")
+
+    return None
+
+
+def extract_path_components(comments):
+    paths = [
+        match.group().encode("utf-8")
+        for comment in comments
+        for match in PATH_RE.finditer(comment["text"])
+    ]
+    component_mapping = repository.get_component_mapping()
+    components = (find_component(path, component_mapping) for path in paths)
+    return [component for component in components if component is not None]
+
+
+# Components of paths mentioned in bug comments.
+# In case of stack traces, the position is important (e.g. component of the first path is more indicative than component of the last path,
+# which tends to be a "main"-like entry point common to most stack traces). We weight each mention by the reciprocal of its rank among all
+# paths mentioned in the comments, and sum the weights of repeated mentions of the same component.
+
+
+class CommentFirstPathComponent(SingleBugFeature):
+    def __call__(self, bug, **kwargs):
+        components = extract_path_components(bug["comments"])
+        return components[0] if components else None
+
+
+class CommentPathsComponents(SingleBugFeature):
+    def __call__(self, bug, **kwargs):
+        weights = {}
+        for i, component in enumerate(extract_path_components(bug["comments"])):
+            weights[component] = weights.get(component, 0) + 1 / (i + 1)
+        return weights
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(
         self,
@@ -678,6 +726,11 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 if isinstance(res, (list, set)):
                     for item in res:
                         data[sys.intern(f"{item} in {feature_extractor_name}")] = True
+                    continue
+
+                if isinstance(res, dict):
+                    for item, weight in res.items():
+                        data[sys.intern(f"{item} in {feature_extractor_name}")] = weight
                     continue
 
                 data[feature_extractor_name] = res
