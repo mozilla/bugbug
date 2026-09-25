@@ -22,7 +22,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
+# Pinned rather than left to the SDK or the API: a platform default that
+# moves would change how an uplift is resolved without anyone retesting it.
 MODEL = "claude-opus-5-5"
+EFFORT = "medium"
 
 # Mirrors `FULL_SHA_PATTERN` in hackbot-api: git will not fetch an abbreviated
 # object id from a remote, and every commit here is fetched from one.

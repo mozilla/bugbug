@@ -30,6 +30,7 @@ from phabricator_client import PhabricatorClient, PhabricatorSettings
 from searchfox import AsyncSearchfoxClient
 
 from .models import (
+    EFFORT,
     MODEL,
     ConflictReport,
     FetchedDiff,
@@ -250,10 +251,7 @@ def build_options(
         permission_mode="bypassPermissions",
         max_turns=max_turns,
         setting_sources=["project"],
-        # Omitted rather than defaulted, as in `bug-fix`: the model's own
-        # default effort (`medium` on `claude-opus-5-5`) is what a run wants
-        # until a real uplift shows it needs more.
-        **({"effort": effort} if effort else {}),
+        effort=effort or EFFORT,
     )
 
 

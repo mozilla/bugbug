@@ -14,7 +14,7 @@ from hackbot_agents.uplift_merge_conflict_resolver.agent import (
     build_options,
     check_result,
 )
-from hackbot_agents.uplift_merge_conflict_resolver.models import MODEL
+from hackbot_agents.uplift_merge_conflict_resolver.models import EFFORT, MODEL
 
 MCP_SERVERS = {"bugbug": {"type": "http", "url": "http://localhost:8080/mcp"}}
 
@@ -34,11 +34,11 @@ def test_options_default_model():
     assert options.model == MODEL, "Without an override, the configured model is used."
 
 
-def test_options_leave_effort_to_the_model_default():
+def test_options_pin_the_effort_rather_than_inherit_one():
     options = make_options()
-    assert options.effort is None, (
-        "Without an override, `effort` is omitted so the model's own default "
-        "applies; a run that needs more can pass one."
+    assert (options.effort, EFFORT) == ("medium", "medium"), (
+        "The effort is pinned here, so a change to the platform's own default "
+        "cannot alter how an uplift is resolved without a retest."
     )
 
 
