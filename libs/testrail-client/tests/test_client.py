@@ -3,8 +3,10 @@
 import httpx
 import pytest
 from pydantic import ValidationError
+from testrail_client import TestRailCaseType as CaseType
 from testrail_client import TestRailClient as Client
 from testrail_client import TestRailSettings as Settings
+from testrail_client import TestRailSuite as Suite
 from testrail_client import client as client_module
 
 
@@ -97,6 +99,30 @@ async def test_request_requires_json_object_or_array(monkeypatch):
 
     with pytest.raises(RuntimeError, match="unexpected response"):
         await _client().request("GET", "get_projects")
+
+
+async def test_endpoint_response_is_typed(monkeypatch):
+    _capture_request(
+        monkeypatch,
+        {"case_types": [{"id": "6", "name": "Functional", "future": True}]},
+    )
+
+    result = await _client().get_case_types()
+
+    assert result == [CaseType(id=6, name="Functional")]
+
+
+async def test_single_resource_response_is_typed(monkeypatch):
+    _capture_request(monkeypatch, {"id": "10", "name": "Suite"})
+
+    assert await _client().add_suite("Suite") == Suite(id=10)
+
+
+async def test_endpoint_response_is_validated(monkeypatch):
+    _capture_request(monkeypatch, [{"name": "Functional"}])
+
+    with pytest.raises(ValidationError):
+        await _client().get_case_types()
 
 
 async def test_endpoint_wrappers(monkeypatch):
