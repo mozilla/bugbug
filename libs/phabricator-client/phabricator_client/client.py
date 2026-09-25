@@ -79,13 +79,8 @@ def _select_full_commit(ref: str, result: dict) -> str:
 
 
 class PhabricatorClient:
-    def __init__(
-        self,
-        settings: PhabricatorSettings | None = None,
-        edge_key: str | None = None,
-    ) -> None:
+    def __init__(self, settings: PhabricatorSettings | None = None) -> None:
         self.settings = settings or PhabricatorSettings.from_env()
-        self.edge_key = edge_key
 
     @property
     def base_url(self) -> str:
@@ -108,8 +103,8 @@ class PhabricatorClient:
         """
         payload = {**params, "__conduit__": {"token": self.settings.api_key}}
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
-            if self.edge_key:
-                client.headers["Mozilla-Edge-Key"] = self.edge_key
+            if self.settings.edge_key:
+                client.headers["Mozilla-Edge-Key"] = self.settings.edge_key
             response = await client.post(
                 f"{self.base_url}/api/{method}",
                 data={"params": json.dumps(payload), "output": "json"},
