@@ -184,6 +184,23 @@ async def _dispatch(
         return ActionResult.failed(str(exc))
 
 
+async def _lock_unapplied(db: AsyncSession, member_rows: list[RunAction]) -> bool:
+    """Lock an action group and return whether it still needs dispatch.
+
+    Refreshing with ``FOR UPDATE`` both locks each row and replaces its stale
+    in-memory state. Locks are taken in primary-key order to avoid deadlocks and
+    remain held until the caller commits the handler result.
+    """
+    for row in sorted(member_rows, key=lambda row: row.id):
+        await db.refresh(row, with_for_update=True)
+
+    if all(row.status != "applied" for row in member_rows):
+        return True
+
+    await db.commit()
+    return False
+
+
 async def _apply_pending_rows(
     db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
 ) -> None:
@@ -228,8 +245,26 @@ async def _apply_pending_rows(
         if anchor is not None and pos != anchor:
             continue  # non-anchor member: applied together with its anchor
 
+        member_rows = (
+            [pending[i][0] for i in group_at[anchor]] if anchor is not None else [row]
+        )
+
+        # The pending list above is only a snapshot. Lock and refresh the exact
+        # rows immediately before dispatch so a concurrent caller either goes
+        # first or observes the committed result and skips it.
+        if not await _lock_unapplied(db, member_rows):
+            # Preserve results revealed by the refresh so later action
+            # placeholders can still reference work done by the other caller.
+            for member in member_rows:
+                if (
+                    member.ref
+                    and member.status == "applied"
+                    and member.result is not None
+                ):
+                    results_by_ref[member.ref] = member.result
+            continue
+
         if anchor is not None:
-            member_rows = [pending[i][0] for i in group_at[anchor]]
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
@@ -238,7 +273,6 @@ async def _apply_pending_rows(
                 run, "bugzilla.update_bug", merge_resolved(entries), []
             )
         else:
-            member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
             outcome = await _dispatch(run, row.type, params, attachments)
 
