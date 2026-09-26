@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { injectProfile, PROFILER_INJECT_URL } from "@/lib/profiler";
 import { updateRunStatus } from "@/lib/store";
+import { hasTranscripts } from "@/lib/transcripts";
 import {
   isFailed,
   isTerminal,
@@ -84,6 +86,8 @@ export function RunDetail({
   const [applyError, setApplyError] = useState<string | null>(null);
   const [retriggering, setRetriggering] = useState(false);
   const [retriggerError, setRetriggerError] = useState<string | null>(null);
+  const [profiling, setProfiling] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchRun = useCallback(async () => {
@@ -174,6 +178,28 @@ export function RunDetail({
     }
   }, [runId, router]);
 
+  const openProfile = useCallback(async () => {
+    setProfiling(true);
+    setProfileError(null);
+    // Opened from the click itself so popup blockers treat it as user-initiated;
+    // the profile is handed over once it is built.
+    const popup = window.open(PROFILER_INJECT_URL, "_blank");
+    try {
+      if (!popup) throw new Error("the browser blocked the profiler window");
+      const res = await fetch(`/api/runs/${runId}/profile`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? `Request failed (${res.status})`);
+      }
+      await injectProfile(popup, await res.json());
+    } catch (err) {
+      popup?.close();
+      setProfileError((err as Error).message);
+    } finally {
+      setProfiling(false);
+    }
+  }, [runId]);
+
   if (!run && error) {
     return <div className="error-banner">{error}</div>;
   }
@@ -235,6 +261,11 @@ export function RunDetail({
       {retriggerError && (
         <div className="error-banner">Retrigger failed: {retriggerError}</div>
       )}
+      {profileError && (
+        <div className="error-banner">
+          Could not open the profile: {profileError}
+        </div>
+      )}
 
       <div className="panel">
         <h2>Run</h2>
@@ -260,6 +291,19 @@ export function RunDetail({
             <a href={tracesUrl} target="_blank" rel="noreferrer">
               Weave
             </a>
+            {hasTranscripts(run.artifacts) && (
+              <>
+                {", "}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={openProfile}
+                  disabled={profiling}
+                >
+                  {profiling ? "Firefox Profiler…" : "Firefox Profiler"}
+                </button>
+              </>
+            )}
           </dd>
         </dl>
         <button
