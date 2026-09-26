@@ -29,7 +29,7 @@ def classify_issues(
             logger.error(
                 "A pre-trained model is not available, you will need to train it yourself using the trainer script"
             )
-            raise SystemExit(1)
+            raise SystemExit(1) from None
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)

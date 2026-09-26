@@ -539,7 +539,7 @@ def rollback(bug, when=None, do_assert=False):
     def assert_or_log(msg):
         msg = f"{msg}, in bug {bug['id']}"
         if do_assert:
-            assert False, msg
+            raise AssertionError(msg)
         else:
             logger.error(msg)
 

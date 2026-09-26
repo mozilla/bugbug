@@ -248,7 +248,7 @@ class RegressorModel(CommitModel):
             if start <= risk <= end:
                 return name
 
-        assert False
+        raise AssertionError()
 
     def evaluation(self) -> None:
         bug_regressors = set(

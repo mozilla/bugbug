@@ -96,7 +96,7 @@ def classification_report_imbalanced_values(
 
     result = {"targets": {}}
 
-    for i, label in enumerate(labels):
+    for i in range(len(labels)):
         result["targets"][target_names[i]] = {
             "precision": precision[i],
             "recall": recall[i],
@@ -345,7 +345,7 @@ class Model:
         feature_report = {"classes": {}, "average": {}}
         top_feature_names = []
 
-        for importance, index, is_pos in important_features["average"]:
+        for importance, index, _is_pos in important_features["average"]:
             feature_name = feature_names[int(index)]
 
             top_feature_names.append(feature_name)
