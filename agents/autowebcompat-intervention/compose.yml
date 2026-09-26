@@ -1,0 +1,41 @@
+services:
+  autowebcompat-intervention-broker:
+    build:
+      context: ../..
+      dockerfile: agents/autowebcompat-intervention/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+      PHABRICATOR_URL: ${PHABRICATOR_URL}
+      PHABRICATOR_API_KEY: ${PHABRICATOR_API_KEY}
+    expose:
+      - "8765"
+
+  autowebcompat-intervention-agent:
+    build:
+      context: ../..
+      dockerfile: agents/autowebcompat-intervention/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID
+      - BUG_DATA
+      - MODEL
+      - EFFORT
+      - BROKER_URL=http://autowebcompat-intervention-broker:8765
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
+      # The Firefox checkout and its objdir are large and slow to recreate;
+      # persisting them across runs turns a cold artifact build into a warm one.
+      - autowebcompat-intervention-workspace:/workspace
+    depends_on:
+      autowebcompat-intervention-broker:
+        condition: service_started
+
+volumes:
+  autowebcompat-intervention-workspace:
