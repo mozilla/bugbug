@@ -261,7 +261,7 @@ class Retriever(object):
                 i,
                 (
                     revisions,
-                    fix_revision,
+                    _fix_revision,
                     push_runnables,
                     possible_regressions,
                     likely_regressions,

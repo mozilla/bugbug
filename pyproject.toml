@@ -145,9 +145,14 @@ agent-tools = { workspace = true }
 extend-exclude = ["data"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "T10", "CPY", "G", "D", "FAST"]
+select = ["E4", "E7", "E9", "F", "I", "T10", "CPY", "G", "D", "B", "FAST"]
 # Ignore warnings about missing docstrings.
-ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107"]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107",
+    # B905: zip() without explicit strict= needs case-by-case review to pick the right value (usually strict=True); tracked in #6916.
+    "B905",
+    # B008 conflicts with FastAPI's Depends()/Query() dependency-injection pattern
+    "B008"
+]
 
 [tool.ruff.lint.per-file-ignores]
 "http_service/**" = ["D"]

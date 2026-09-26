@@ -326,7 +326,9 @@ class PastFailures:
         elif granularity == "group":
             past_failures_db = os.path.join("data", PAST_FAILURES_GROUP_DB)
         elif granularity == "config_group":
-            assert False, "config_group granularity not supported for past failures"
+            raise AssertionError(
+                "config_group granularity not supported for past failures"
+            )
         else:
             raise UnexpectedGranularityError(granularity)
         self.granularity = granularity
@@ -452,7 +454,7 @@ def generate_failing_together_probabilities(
 
     for (
         revisions,
-        fix_revision,
+        _fix_revision,
         tasks,
         likely_regressions,
         candidate_regressions,
@@ -471,7 +473,7 @@ def generate_failing_together_probabilities(
             groups = itertools.groupby(
                 sorted(all_tasks, key=lambda x: x[1]), key=lambda x: x[1]
             )
-            for manifest, group_tasks in groups:
+            for _manifest, group_tasks in groups:
                 count_runs_and_failures(group_tasks)
         else:
             all_available_configs |= all_tasks_set
@@ -964,7 +966,7 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                 ].add(str(toml_rel))
 
             # Collect support files.
-            def collect_support_files(value):
+            def collect_support_files(value, toml_dir=toml_dir, toml_rel=toml_rel):
                 support_files = value.get("support-files", [])
                 if isinstance(support_files, str):
                     support_files = [support_files]
