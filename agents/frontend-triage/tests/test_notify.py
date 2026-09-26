@@ -390,19 +390,19 @@ def test_a_held_run_reports_too_because_its_reader_needs_the_button():
     assert any(HELD_NOTE == b.get("text", {}).get("text") for b in blocks)
 
 
-def test_a_run_with_nothing_to_fix_reports_nothing():
-    # No fix to offer, so a button would be an offer to act on a bug this agent
-    # just called out of scope, and the channel would have nothing to do with it.
+def test_a_run_with_nothing_to_fix_still_reports():
+    # Every run reports, so the owning team sees an out-of-scope verdict too rather
+    # than the run disappearing without a trace.
     recorder = ActionsRecorder()
-    assert (
-        record_notification(
-            recorder,
-            _result(actionable=False, auto_apply=False, confidence="low"),
-            run_id=RUN_ID,
-        )
-        is None
+    action = record_notification(
+        recorder,
+        _result(actionable=False, auto_apply=False, confidence="low"),
+        run_id=RUN_ID,
     )
-    assert recorder.actions == []
+
+    assert action is not None
+    assert [a["type"] for a in recorder.actions] == ["slack.post_message"]
+    assert HELD_NOTE in action["params"]["text"]
 
 
 def test_a_run_that_reported_no_verdict_still_reports():
