@@ -28,9 +28,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 FROM base AS agent
 
+# Install Xvfb so evaluate_testcase can run Firefox in grizzly's xvfb display mode.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
+        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
