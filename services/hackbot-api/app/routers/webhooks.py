@@ -3,7 +3,6 @@
 import logging
 from typing import Annotated
 
-from cachetools import TTLCache
 from fastapi import APIRouter, Depends, Request, Response, status
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
@@ -88,14 +87,6 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
         )
         request.app.state.bugzilla_authorizer = authorizer
     return authorizer
-
-
-# Best-effort dedupe of retried BMO deliveries, keyed by the globally unique
-# needinfo flag ID. A later needinfo on the same bug receives a new flag ID.
-# TODO: Replace with DB-level deduplication (#6716).
-_seen_bugzilla_events: TTLCache = TTLCache(
-    maxsize=4096, ttl=settings.bugzilla_webhook.dedupe_ttl_seconds
-)
 
 
 @router.post(
@@ -189,14 +180,6 @@ async def bugzilla_webhook(
     )
     if detected is None:
         return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
-    dedupe_key = f"ni{detected.flag_id}"
-    if dedupe_key in _seen_bugzilla_events:
-        log.info(
-            "Ignored duplicate Bugzilla needinfo webhook for bug %s (flag: %s)",
-            detected.bug_id,
-            detected.flag_id,
-        )
-        return {"status": "ignored", "reason": "duplicate delivery"}
 
     if not await authorizer.is_authorized(detected.user_login):
         log.info(
@@ -213,13 +196,24 @@ async def bugzilla_webhook(
             "bugzilla_needinfo_flag_id": detected.flag_id,
             "comment": detected.comment,
         },
+        dedupe_key=f"ni{detected.flag_id}",
     )
-    # Do not consume an event until run creation succeeds; a transient failure
-    # must remain retryable by Bugzilla.
-    _seen_bugzilla_events[dedupe_key] = True
+    if not run.is_new:
+        log.info(
+            "Duplicate Bugzilla delivery for bug %s (flag: %s) resolved to run %s",
+            detected.bug_id,
+            detected.flag_id,
+            run.run_id,
+        )
+        return {
+            "status": "ignored",
+            "reason": "duplicate delivery",
+            "run_id": run.run_id,
+        }
     log.info(
-        "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request",
+        "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request (flag: %s)",
         run.run_id,
         detected.bug_id,
+        detected.flag_id,
     )
     return {"status": "triggered", "run_id": run.run_id}
