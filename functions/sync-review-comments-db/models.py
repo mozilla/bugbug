@@ -84,15 +84,13 @@ class ReviewRequest(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
         server_default=func.now(),
         server_onupdate=func.now(),
     )
 
     @property
     def is_recently_created(self):
-        return (datetime.now(timezone.utc) - self.created_at) < timedelta(minutes=4)
+        return datetime.now(timezone.utc) - self.created_at < timedelta(minutes=4)
 
     def has_evaluation(self, session: Session) -> bool:
         if self.status == DiffStatus.IGNORED:

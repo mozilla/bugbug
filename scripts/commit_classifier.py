@@ -11,7 +11,6 @@ import re
 import subprocess
 from collections import deque
 from datetime import datetime, timezone
-
 from logging import INFO, basicConfig, getLogger
 from typing import cast
 

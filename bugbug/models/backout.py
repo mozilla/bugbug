@@ -6,9 +6,7 @@
 import logging
 from datetime import datetime, timezone
 
-import dateutil.parser
 import xgboost
-from dateutil import tz
 from dateutil.relativedelta import relativedelta
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
@@ -122,11 +120,9 @@ class BackoutModel(CommitModel):
         )
 
         for commit_data in repository.get_commits():
-            pushdate = dateutil.parser.parse(commit_data["pushdate"])
+            pushdate = datetime.fromisoformat(commit_data["pushdate"])
             if pushdate.tzinfo is None:
-                pushdate = pushdate.replace(tzinfo=tz.UTC)
-            else:
-                pushdate = pushdate.astimezone(tz.UTC)
+                pushdate = pushdate.replace(tzinfo=timezone.utc)
 
             if pushdate < two_years_and_six_months_ago:
                 continue
