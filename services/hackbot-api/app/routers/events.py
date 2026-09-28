@@ -104,7 +104,9 @@ async def agent_run_finished(
         log.warning("No run found for execution %s", execution_name)
         return
 
-    if await finalize_run(db, run) and run.requested_by:
+    notification_candidate = not run.finalized_at and run.requested_by
+    await finalize_run(db, run)
+    if notification_candidate and run.finalized_at is not None:
         await notifications.notify_requester(run)
 
 
