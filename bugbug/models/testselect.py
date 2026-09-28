@@ -964,7 +964,8 @@ def eval_apply_transforms(
 
     if cap is not None and len(selected) > cap:
         selected = set(
-            sorted(
+            name
+            for name, _ in sorted(
                 (
                     (name, confidence)
                     for name, confidence in push["all_possibly_selected"].items()
