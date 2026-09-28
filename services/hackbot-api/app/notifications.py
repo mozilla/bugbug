@@ -38,7 +38,7 @@ def run_url(run_id: str) -> str:
 def build_message(run: Run) -> tuple[str, str]:
     """Compose the subject and HTML body of the notice for ``run``."""
     outcome = run.status.replace("_", " ")
-    label = f"{run.agent} run {str(run.run_id)[:8]}"
+    label = f"{run.agent} run {run.run_id.hex[:8]}"
     bug_id = run.inputs.get("bug_id")
     if bug_id is not None:
         label += f" for bug {bug_id}"
