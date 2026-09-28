@@ -85,6 +85,7 @@ class Settings(BaseSettings):
 
     bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
     bugzilla_api_key: str
+    bugzilla_edge_key: str | None = None
 
     slack: SlackSettings
 
