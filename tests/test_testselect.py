@@ -793,3 +793,11 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert len(result) == 2
     assert set(result["group1"]) == all_configs
     assert set(result["group2"]) == {"linux2404-64/opt", "linux2404-64/debug"}
+
+
+def test_eval_apply_transforms_cap() -> None:
+    push = {"all_possibly_selected": {"a": 0.9, "b": 0.8, "c": 0.7, "d": 0.4}}
+    selected, _ = testselect.eval_apply_transforms("group", push, 0.5, None, 2, None)
+    assert selected == {"a", "b"}
+    selected, _ = testselect.eval_apply_transforms("group", push, 0.5, None, None, 4)
+    assert selected == {"a", "b", "c", "d"}
