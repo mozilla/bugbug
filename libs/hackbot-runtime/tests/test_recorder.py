@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder
+from hackbot_runtime.actions.handlers.registry import ActionType
 
 
 class _StubUploader:
@@ -18,7 +19,7 @@ class _StubUploader:
 def test_record_basic_shape():
     rec = ActionsRecorder()
     returned = rec.record(
-        "bugzilla.update_bug",
+        ActionType.BUGZILLA_UPDATE_BUG,
         {"bug_id": 1, "changes": {"severity": "S2"}},
         reasoning="rule X",
     )
@@ -26,7 +27,7 @@ def test_record_basic_shape():
     assert returned == rec.actions[0]
     assert rec.actions == [
         {
-            "type": "bugzilla.update_bug",
+            "type": ActionType.BUGZILLA_UPDATE_BUG,
             "params": {"bug_id": 1, "changes": {"severity": "S2"}},
             "reasoning": "rule X",
         }
@@ -111,8 +112,10 @@ def test_hooks_run_in_order_and_mutations_are_recorded():
         # Sees the previous hook's mutation, and the built action.
         action["params"]["seen"] = action["params"]["priority"]
 
-    rec = ActionsRecorder(hooks={"bugzilla.update_bug": [first, second]})
-    returned = rec.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="rule X")
+    rec = ActionsRecorder(hooks={ActionType.BUGZILLA_UPDATE_BUG: [first, second]})
+    returned = rec.record(
+        ActionType.BUGZILLA_UPDATE_BUG, {"bug_id": 1}, reasoning="rule X"
+    )
 
     assert calls == ["first", "second"]
     assert returned["params"] == {"bug_id": 1, "priority": "P1", "seen": "P1"}
@@ -120,16 +123,20 @@ def test_hooks_run_in_order_and_mutations_are_recorded():
 
 
 def test_hooks_only_run_for_their_action_type():
-    seen: list[str] = []
+    seen: list[ActionType] = []
     rec = ActionsRecorder(
-        hooks={"phabricator.submit_patch": [lambda action: seen.append(action["type"])]}
+        hooks={
+            ActionType.PHABRICATOR_SUBMIT_PATCH: [
+                lambda action: seen.append(action["type"])
+            ]
+        }
     )
 
-    rec.record("bugzilla.add_comment", {"bug_id": 1})
+    rec.record(ActionType.BUGZILLA_ADD_COMMENT, {"bug_id": 1})
     assert seen == []
 
-    rec.record("phabricator.submit_patch", {"bug_id": 1})
-    assert seen == ["phabricator.submit_patch"]
+    rec.record(ActionType.PHABRICATOR_SUBMIT_PATCH, {"bug_id": 1})
+    assert seen == [ActionType.PHABRICATOR_SUBMIT_PATCH]
 
 
 def test_hook_sees_ref_but_runs_before_attachments_are_published(tmp_path):
@@ -142,10 +149,10 @@ def test_hook_sees_ref_but_runs_before_attachments_are_published(tmp_path):
 
     rec = ActionsRecorder(
         artifacts_dir=tmp_path / "a",
-        hooks={"bugzilla.add_attachment": [capture]},
+        hooks={ActionType.BUGZILLA_ADD_ATTACHMENT: [capture]},
     )
     recorded = rec.record(
-        "bugzilla.add_attachment",
+        ActionType.BUGZILLA_ADD_ATTACHMENT,
         {"bug_id": 1},
         ref="patch",
         attachments={"file": src},
@@ -169,10 +176,10 @@ def test_raising_hook_aborts_the_recording():
     def never(action):  # pragma: no cover - must not run
         raise AssertionError("later hook ran after an earlier one raised")
 
-    rec = ActionsRecorder(hooks={"bugzilla.update_bug": [reject, never]})
+    rec = ActionsRecorder(hooks={ActionType.BUGZILLA_UPDATE_BUG: [reject, never]})
 
     with pytest.raises(ValueError, match="no"):
-        rec.record("bugzilla.update_bug", {"bug_id": 1})
+        rec.record(ActionType.BUGZILLA_UPDATE_BUG, {"bug_id": 1})
 
     assert rec.actions == []
 
@@ -189,11 +196,13 @@ def test_raising_hook_publishes_no_attachment(tmp_path):
     rec = ActionsRecorder(
         uploader=uploader,
         artifacts_dir=artifacts,
-        hooks={"bugzilla.add_attachment": [reject]},
+        hooks={ActionType.BUGZILLA_ADD_ATTACHMENT: [reject]},
     )
 
     with pytest.raises(ValueError, match="no"):
-        rec.record("bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": src})
+        rec.record(
+            ActionType.BUGZILLA_ADD_ATTACHMENT, {"bug_id": 1}, attachments={"file": src}
+        )
 
     # Nothing uploaded or copied: an aborted recording leaves no orphaned file
     # at a key the next recorded action would reuse.
@@ -202,8 +211,8 @@ def test_raising_hook_publishes_no_attachment(tmp_path):
 
     # The next successful record still owns attachments/0, with no leftover
     # from the rejected action sitting at that key.
-    rec.record("bugzilla.update_bug", {"bug_id": 1})
-    assert [a["type"] for a in rec.actions] == ["bugzilla.update_bug"]
+    rec.record(ActionType.BUGZILLA_UPDATE_BUG, {"bug_id": 1})
+    assert [a["type"] for a in rec.actions] == [ActionType.BUGZILLA_UPDATE_BUG]
 
 
 def test_add_hook_appends_after_constructor_hooks():
@@ -211,35 +220,37 @@ def test_add_hook_appends_after_constructor_hooks():
     rec = ActionsRecorder(
         hooks={"bugzilla.update_bug": [lambda action: calls.append("ctor")]}
     )
-    rec.add_hook("bugzilla.update_bug", lambda action: calls.append("added"))
-    rec.add_hook("bugzilla.add_comment", lambda action: calls.append("other-type"))
+    rec.add_hook(ActionType.BUGZILLA_UPDATA_BUG, lambda action: calls.append("added"))
+    rec.add_hook(
+        ActionType.BUGZILLA_ADD_COMMENT, lambda action: calls.append("other-type")
+    )
 
-    rec.record("bugzilla.update_bug", {"bug_id": 1})
+    rec.record(ActionType.BUGZILLA_UPDATE_BUG, {"bug_id": 1})
 
     assert calls == ["ctor", "added"]
 
 
 def test_constructor_hooks_are_copied():
-    hooks: dict[str, list] = {"bugzilla.update_bug": []}
+    hooks: dict[str, list] = {ActionType.BUGZILLA_UPDATE_BUG: []}
     rec = ActionsRecorder(hooks=hooks)
-    hooks["bugzilla.update_bug"].append(
+    hooks[ActionType.BUGZILLA_UPDATE_BUG].append(
         lambda action: pytest.fail("mutating the caller's mapping must not register")
     )
 
-    rec.record("bugzilla.update_bug", {"bug_id": 1})
+    rec.record(ActionType.BUGZILLA_UPDATE_BUG, {"bug_id": 1})
     assert len(rec.actions) == 1
 
 
 def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
     rec = ActionsRecorder()
     patch = rec.record(
-        "phabricator.submit_patch",
+        ActionType.PHABRICATOR_SUBMIT_PATCH,
         {"bug_id": 1, "title": "Fix"},
         reasoning="verified fix",
         ref="patch",
     )
     comment = rec.record(
-        "bugzilla.add_comment",
+        ActionType.BUGZILLA_ADD_COMMENT,
         {"bug_id": 1, "text": "See {{actions.patch.url}}"},
         reasoning="announce the patch",
     )
@@ -252,7 +263,7 @@ def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
     ]
     assert listed[0] == {
         "action_id": patch["action_id"],
-        "type": "phabricator.submit_patch",
+        "type": ActionType.PHABRICATOR_SUBMIT_PATCH,
         "params": {"bug_id": 1, "title": "Fix"},
         "reasoning": "verified fix",
         "ref": "patch",
@@ -265,8 +276,10 @@ def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
 
 def test_remove_action_deletes_only_the_requested_action():
     rec = ActionsRecorder()
-    first = rec.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="first")
-    second = rec.record("bugzilla.add_comment", {"bug_id": 1}, reasoning="second")
+    first = rec.record(ActionType.BUGZILLA_UPDATE_BUG, {"bug_id": 1}, reasoning="first")
+    second = rec.record(
+        ActionType.BUGZILLA_ADD_COMMENT, {"bug_id": 1}, reasoning="second"
+    )
 
     removed = rec.remove_action(first["action_id"])
 
@@ -278,7 +291,7 @@ def test_remove_action_deletes_only_the_requested_action():
 
 def test_remove_action_rejects_unknown_or_already_removed_id():
     rec = ActionsRecorder()
-    action_id = rec.record("bugzilla.update_bug", {"bug_id": 1})["action_id"]
+    action_id = rec.record(ActionType.BUGZILLA_UPDATE_BUG, {"bug_id": 1})["action_id"]
     rec.remove_action(action_id)
 
     with pytest.raises(ToolError, match="No recorded action"):
@@ -293,11 +306,11 @@ def test_removed_action_id_and_attachment_key_are_not_reused(tmp_path):
     rec = ActionsRecorder(artifacts_dir=tmp_path / "artifacts")
 
     removed_id = rec.record(
-        "bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": first}
+        ActionType.BUGZILLA_ADD_ATTACHMENT, {"bug_id": 1}, attachments={"file": first}
     )["action_id"]
     rec.remove_action(removed_id)
     kept_id = rec.record(
-        "bugzilla.add_attachment", {"bug_id": 1}, attachments={"file": second}
+        ActionType.BUGZILLA_ADD_ATTACHMENT, {"bug_id": 1}, attachments={"file": second}
     )["action_id"]
 
     assert kept_id != removed_id
