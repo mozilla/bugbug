@@ -19,7 +19,7 @@ class StartAgentRunValue(BaseModel):
     """What a button that starts an agent run carries."""
 
     agent_name: str
-    params: dict[str, Any] = {}
+    inputs: dict[str, Any] = {}
     dedupe_key: str = Field(min_length=1)
     # A run whose pending actions will be applied before the new run starts.
     apply_run_id: UUID | None = None
@@ -68,7 +68,7 @@ async def start_agent_run_callback(
             return
 
     run = await client.trigger_run(
-        value.agent_name, value.params, dedupe_key=value.dedupe_key
+        value.agent_name, value.inputs, dedupe_key=value.dedupe_key
     )
 
     if not run.is_new:
