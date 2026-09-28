@@ -1003,6 +1003,23 @@ def test_generate_data(granularity: str) -> None:
     assert data[1] == obj
 
 
+def test_filter_runnables_ignores_jstests() -> None:
+    jstests = Group("tests/jsreftest/tests/js/src/tests/jstests.list")
+    mochitest = Group("dom/base/test/mochitest.toml")
+    groups = (jstests, mochitest)
+    assert test_scheduling.filter_runnables(groups, set(groups), "group") == (
+        mochitest,
+    )
+
+    config_groups = (
+        ConfigGroup(("test-linux1804-64/opt-*", jstests)),
+        ConfigGroup(("test-linux1804-64/opt-*", mochitest)),
+    )
+    assert test_scheduling.filter_runnables(
+        config_groups, set(config_groups), "config_group"
+    ) == (config_groups[1],)
+
+
 def test_fallback_on_ini() -> None:
     past_failures = test_scheduling.PastFailures("group", False)
 

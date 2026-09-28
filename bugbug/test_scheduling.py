@@ -127,6 +127,16 @@ JOBS_TO_IGNORE = (
 )
 
 
+# Manifests of suites which are scheduled as whole tasks rather than by manifest
+# (e.g. jsreftest, whose tasks are in JOBS_TO_IGNORE).
+GROUPS_TO_IGNORE = ("jstests.list",)
+
+
+def is_ignored_group(runnable: Runnable) -> bool:
+    group = runnable[1] if isinstance(runnable, tuple) else runnable
+    return os.path.basename(group) in GROUPS_TO_IGNORE
+
+
 class UnexpectedGranularityError(ValueError):
     def __init__(self, granularity):
         message = f"Unexpected {granularity} granularity"
@@ -146,7 +156,11 @@ def filter_runnables(
             and not any(j in task for j in JOBS_TO_IGNORE)
         )
     else:
-        return tuple(runnable for runnable in runnables if runnable in all_runnables)
+        return tuple(
+            runnable
+            for runnable in runnables
+            if runnable in all_runnables and not is_ignored_group(runnable)
+        )
 
 
 def rename_task(task: str) -> str:
