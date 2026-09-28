@@ -5,6 +5,7 @@ this instead of a client's GET /runs/{run_id} triggering it (see
 app/routers/runs.py).
 """
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -123,6 +124,21 @@ def test_has_unsubmitted_patch(actions, artifacts, expected):
     artifact_refs = [ArtifactRef(name=artifact, size=10) for artifact in artifacts]
 
     assert runs_module._has_unsubmitted_patch(summary, artifact_refs) is expected
+
+
+async def test_logs_error_when_succeeded_run_records_no_actions(monkeypatch, caplog):
+    run = _FakeRun()
+    db = _FakeDB()
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.succeeded))
+    monkeypatch.setattr(gcs, "read_summary", _async(RunSummary(status="ok")))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    with caplog.at_level(logging.ERROR):
+        await finalize_run(db, run)
+
+    assert run.status == RunStatus.succeeded.value
+    assert "without recording any action" in caplog.text
+    assert str(run.run_id) in caplog.text
 
 
 async def test_finalizes_as_failed_when_summary_missing(monkeypatch):
