@@ -193,6 +193,7 @@ def _get_equivalence_sets(min_redundancy_confidence: float):
 
             def load_failing_together(
                 config: str,
+                failing_together_stats: dict = failing_together_stats,  # bind loop value
             ) -> dict[str, tuple[float, float]]:
                 return failing_together_stats[config]
 
@@ -653,8 +654,8 @@ class TestSelectModel(Model):
         if self.granularity == "group":
             for (
                 revisions,
-                fix_revision,
-                push_runnables,
+                _fix_revision,
+                _push_runnables,
                 possible_regressions,
                 likely_regressions,
             ) in tqdm(push_data_iter(), total=push_data_count):

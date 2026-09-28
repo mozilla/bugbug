@@ -108,7 +108,7 @@ def _payload(
                 "value": json.dumps(
                     {
                         "agent_name": "bug-fix",
-                        "params": {"bug_id": 1234},
+                        "inputs": {"bug_id": 1234},
                         "dedupe_key": DEDUPE_KEY,
                     }
                     if value is None
@@ -207,7 +207,7 @@ def test_the_client_reaches_the_listener_through_the_request(client, hackbot_cli
 def test_a_button_value_that_is_not_the_expected_shape_is_refused(
     client, hackbot_client
 ):
-    resp = _post(client, _payload(value={"params": {"bug_id": 1234}}))
+    resp = _post(client, _payload(value={"inputs": {"bug_id": 1234}}))
 
     assert resp.status_code == 500
     assert hackbot_client.calls == []

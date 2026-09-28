@@ -85,6 +85,7 @@ class Settings(BaseSettings):
 
     bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
     bugzilla_api_key: str
+    bugzilla_edge_key: str | None = None
 
     slack: SlackSettings
 
@@ -103,6 +104,11 @@ class Settings(BaseSettings):
     run_events_topic: str = "agent-run-events"
     push_auth_audience: str = ""
     push_auth_service_account: str = ""
+
+    # Run-completion email settings (see app/notifications.py).
+    hackbot_ui_url: str = "http://localhost:3000"
+    sendgrid_api_key: str
+    notification_sender: str
 
     # Server
     port: int = 8080

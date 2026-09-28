@@ -355,15 +355,22 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     if (
         new_status == RunStatus.succeeded
         and agent_spec is not None
-        and agent_spec.warn_on_unsubmitted_patch
-        and _has_unsubmitted_patch(summary, artifacts)
+        and agent_spec.expects_actions
     ):
-        log.error(
-            "Agent run produced code changes without submitting a patch "
-            "(run_id=%s, agent=%s)",
-            run.run_id,
-            run.agent,
-        )
+        if _has_unsubmitted_patch(summary, artifacts):
+            log.error(
+                "Agent run produced code changes without submitting a patch "
+                "(run_id=%s, agent=%s)",
+                run.run_id,
+                run.agent,
+            )
+        elif not summary.actions:
+            log.error(
+                "Agent run succeeded without recording any action "
+                "(run_id=%s, agent=%s)",
+                run.run_id,
+                run.agent,
+            )
     await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
 
 

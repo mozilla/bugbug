@@ -7,7 +7,7 @@ import argparse
 import collections
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Collection, Iterable
 
 import dateutil.parser
@@ -30,12 +30,11 @@ class TestingPolicyStatsGenerator(object):
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         logger.info("Updating commits DB...")
-        for commit in repository.get_commits():
-            pass
+        latest_commit = collections.deque(repository.get_commits(), maxlen=1).pop()
 
         repository.download_commits(
             repo_dir,
-            rev_start="children({})".format(commit["node"]),
+            rev_start="children({})".format(latest_commit["node"]),
         )
 
         logger.info("Downloading revisions database...")
@@ -51,8 +50,9 @@ class TestingPolicyStatsGenerator(object):
     def get_landed_since(
         self, days_start: int, days_end: int
     ) -> Collection[repository.CommitDict]:
-        since = datetime.utcnow() - timedelta(days=days_start)
-        until = datetime.utcnow() - timedelta(days=days_end)
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=days_start)
+        until = now - timedelta(days=days_end)
 
         return [
             commit

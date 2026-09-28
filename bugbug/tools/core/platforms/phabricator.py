@@ -528,7 +528,7 @@ class PhabricatorPatch(Patch):
         )
         pushes = r.json()["pushes"]
         closest_push = None
-        for push_id, push in pushes.items():
+        for push in pushes.values():
             if diff["dateCreated"] - push["date"] < 0:
                 continue
 

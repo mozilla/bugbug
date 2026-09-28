@@ -24,7 +24,7 @@ async def test_source_repo_without_declaration_raises(tmp_path):
 def test_firefox_without_declaration_raises(tmp_path):
     hb = _hb(tmp_path, HackbotConfig())
     with pytest.raises(RuntimeError, match="\\[firefox\\]"):
-        hb.firefox
+        _ = hb.firefox
 
 
 def test_firefox_disabled_raises(tmp_path):
@@ -33,7 +33,7 @@ def test_firefox_disabled_raises(tmp_path):
     )
     hb = _hb(tmp_path, cfg)
     with pytest.raises(RuntimeError, match="\\[firefox\\]"):
-        hb.firefox
+        _ = hb.firefox
 
 
 async def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):

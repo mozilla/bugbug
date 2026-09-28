@@ -125,7 +125,7 @@ def test_apply_patched_file_removed_file_raises():
     ps = PatchSet.from_string("--- a/f.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\n")
     try:
         apply_patched_file("a\nb\n", ps[0])
-        assert False, "expected FileNotFoundError"
+        raise AssertionError("expected FileNotFoundError")
     except FileNotFoundError:
         pass
 
@@ -193,7 +193,7 @@ def test_get_file_after_stack_raises_for_deleted_file():
                 patch.patch_stack, "f.txt", make_fetch({"f.txt": "a\nb\n"})
             )
         )
-        assert False, "expected FileNotFoundError"
+        raise AssertionError("expected FileNotFoundError")
     except FileNotFoundError:
         pass
 
@@ -242,8 +242,8 @@ def test_patch_stack_bails_on_nonlinear_graph():
 
     fake = FakePatch()
     try:
-        fake.patch_stack
-        assert False, "expected ValueError"
+        _ = fake.patch_stack
+        raise AssertionError("expected ValueError")
     except ValueError as e:
         assert "not linear" in str(e)
 

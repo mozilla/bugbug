@@ -67,7 +67,7 @@ async def slack_webhook(
 
 def get_phabricator_authorizer(
     request: Request,
-    phab_client: PhabricatorClient = Depends(get_phabricator_client),
+    phab_client: Annotated[PhabricatorClient, Depends(get_phabricator_client)],
 ) -> PhabricatorAuthorizer:
     """Dependency: lazily create the app-scoped authorizer and its member cache."""
     authorizer = getattr(request.app.state, "phabricator_authorizer", None)
