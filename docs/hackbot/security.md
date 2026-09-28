@@ -26,7 +26,7 @@ exposes them as capabilities over loopback (`BROKER_URL`, e.g. `http://127.0.0.1
 - `GET /phabricator/revision/{id}/patch` — a revision's base commit and raw diff, so a
   follow-up run can reproduce the revision's tree without a Conduit key.
 - `/phabricator/api` — a Conduit proxy allow-listing a few read methods and substituting
-  the real key, for agent code that has to call Conduit directly (`uplift` fetches each
+  the real key, for agent code that has to call Conduit directly (`uplift-resolve` fetches each
   source's raw diff this way before rendering its prompt).
 
 It exposes only what a run legitimately needs, and only reads — every write goes through the
