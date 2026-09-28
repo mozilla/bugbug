@@ -1020,6 +1020,27 @@ def test_filter_runnables_ignores_jstests() -> None:
     ) == (config_groups[1],)
 
 
+def test_get_runnable_dirs() -> None:
+    assert test_scheduling.get_runnable_dirs("dom/base/test/mochitest.toml") == (
+        "dom/base/test",
+    )
+    assert test_scheduling.get_runnable_dirs("layout/reftests/bugs/reftest.list") == (
+        "layout/reftests/bugs",
+    )
+    assert test_scheduling.get_runnable_dirs(
+        "testing/web-platform/tests/css/css-grid"
+    ) == (
+        "testing/web-platform/tests/css/css-grid",
+        "testing/web-platform/meta/css/css-grid",
+    )
+    assert test_scheduling.get_runnable_dirs(
+        "testing/web-platform/mozilla/tests/webgpu"
+    ) == (
+        "testing/web-platform/mozilla/tests/webgpu",
+        "testing/web-platform/mozilla/meta/webgpu",
+    )
+
+
 def test_fallback_on_ini() -> None:
     past_failures = test_scheduling.PastFailures("group", False)
 
