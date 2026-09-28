@@ -250,7 +250,7 @@ def test_uplift_inputs_keep_a_mixed_stack_discriminated():
 
 
 def test_uplift_inputs_require_at_least_one_source():
-    with pytest.raises(ValidationError, match="at least one source"):
+    with pytest.raises(ValidationError, match="at least 1 item"):
         UpliftInputs(target_branch="beta", sources=[])
 
 

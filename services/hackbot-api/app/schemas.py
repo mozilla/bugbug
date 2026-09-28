@@ -233,7 +233,7 @@ class UpliftInputs(BaseModel):
     target_commit: Annotated[str | None, Field(pattern=FULL_SHA_PATTERN)] = None
 
     # Ordered patches to apply onto the branch; applied in this sequence.
-    sources: list[UpliftSource]
+    sources: Annotated[list[UpliftSource], Field(min_length=1)]
 
     # Originating Bugzilla bug, supplied as extra context for the agent.
     bug_id: int | None = None
@@ -246,9 +246,3 @@ class UpliftInputs(BaseModel):
 
     # Override the agent's default reasoning effort (e.g. `high`).
     effort: str | None = None
-
-    @model_validator(mode="after")
-    def require_sources(self) -> "UpliftInputs":
-        if not self.sources:
-            raise ValueError("provide at least one source to uplift")
-        return self
