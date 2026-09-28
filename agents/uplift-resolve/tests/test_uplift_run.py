@@ -14,8 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from hackbot_agents.uplift_merge_conflict_resolver import agent
-from hackbot_agents.uplift_merge_conflict_resolver.models import GitSource
+from hackbot_agents.uplift_resolve import agent
+from hackbot_agents.uplift_resolve.models import GitSource
 from hackbot_runtime import AgentError
 
 BUGBUG_MCP = {"type": "http", "url": "http://localhost:8080/mcp"}
@@ -68,7 +68,7 @@ def fake_session(
 async def run(monkeypatch, session, repo, **overrides):
     kwargs = dict(
         bugbug_mcp_server=BUGBUG_MCP,
-        broker_url="http://uplift-broker:8765",
+        broker_url="http://uplift-resolve-broker:8765",
         source_repo=repo,
         target_branch="beta",
         sources=[GitSource(commit="a" * 40)],

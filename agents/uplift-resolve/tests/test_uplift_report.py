@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from hackbot_agents.uplift_merge_conflict_resolver.agent import read_agent_report
-from hackbot_agents.uplift_merge_conflict_resolver.models import Report
+from hackbot_agents.uplift_resolve.agent import read_agent_report
+from hackbot_agents.uplift_resolve.models import Report
 
 REPORT = {
     "resolved": True,

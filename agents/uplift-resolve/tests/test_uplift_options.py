@@ -10,11 +10,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from hackbot_agents.uplift_merge_conflict_resolver.agent import (
+from hackbot_agents.uplift_resolve.agent import (
     build_options,
     check_result,
 )
-from hackbot_agents.uplift_merge_conflict_resolver.models import EFFORT, MODEL
+from hackbot_agents.uplift_resolve.models import EFFORT, MODEL
 
 MCP_SERVERS = {"bugbug": {"type": "http", "url": "http://localhost:8080/mcp"}}
 

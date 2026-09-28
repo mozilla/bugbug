@@ -9,8 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from hackbot_agents.uplift_merge_conflict_resolver import __main__ as entrypoint
-from hackbot_agents.uplift_merge_conflict_resolver.models import (
+from hackbot_agents.uplift_resolve import __main__ as entrypoint
+from hackbot_agents.uplift_resolve.models import (
     EFFORT,
     MODEL,
     GitSource,

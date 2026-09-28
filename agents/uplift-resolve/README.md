@@ -1,20 +1,11 @@
-# Uplift Agents
+# uplift-resolve
 
-Home for the backport/uplift agents that help land patches on Firefox's
-stable branches (release/beta/esr). One Cloud Run image
-(`hackbot-agent-uplift`); each agent is a module under `hackbot_agents/`
-with its own entrypoint, job and registry entry. Module names are prefixed
-`uplift_` because the runtime traces under the directory holding `__main__.py`,
-which has to match the registry name.
+The `uplift-resolve` agent reproduces a failed uplift cherry-pick on a Firefox
+stable branch (release/beta/esr), resolves the conflicts, and returns the patch
+with a confidence level for review. It never pushes or lands anything, and it
+does not build Firefox.
 
-## Merge-conflict resolver
-
-`hackbot_agents/uplift_merge_conflict_resolver/` — the first of them. It
-reproduces a failed uplift cherry-pick on the target branch, resolves the
-conflicts, and returns the patch with a confidence level for review. It never
-pushes or lands anything, and it does not build Firefox.
-
-### Input
+## Input
 
 Set per run (see `UpliftInputs` in hackbot-api for the full schema):
 
@@ -30,7 +21,7 @@ Set per run (see `UpliftInputs` in hackbot-api for the full schema):
 `BUGBUG_MCP_URL` and `BROKER_URL` are deploy-time constants: the bugbug MCP
 server, and the sidecar holding the Conduit key the agent fetches diffs through.
 
-### Output
+## Output
 
 - `changes/changes.patch` — the resolved uplift, as an mbox preserving each
   commit's message and author. This is what a caller consumes.
@@ -46,7 +37,7 @@ server, and the sidecar holding the Conduit key the agent fetches diffs through.
 The run summary also records `base_commit` (what the patches were applied onto)
 and `requested_sources` (what was asked for and what each source resolved to).
 
-### Run locally
+## Run locally
 
 With `ANTHROPIC_API_KEY`, `BUGZILLA_API_KEY` and `PHABRICATOR_API_KEY` in a
 repo-root `.env`, from the repo root:
@@ -54,14 +45,14 @@ repo-root `.env`, from the repo root:
 ```sh
 TARGET_BRANCH=beta \
 SOURCES='[{"kind":"git","commit":"<sha>"}]' \
-  docker compose up uplift-merge-conflict-resolver --build
+  docker compose up uplift-resolve-agent --build
 ```
 
 Artifacts land in `~/hackbot/artifacts/<run_id>`; apply the patch with
 `git am changes/changes.patch`.
 
-### Tests
+## Tests
 
 ```sh
-uv run --package hackbot-agent-uplift --extra test pytest agents/uplift/tests
+uv run --package hackbot-agent-uplift-resolve --extra test pytest agents/uplift-resolve/tests
 ```

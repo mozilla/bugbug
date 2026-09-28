@@ -11,13 +11,13 @@ import re
 from pathlib import Path
 
 import pytest
-from hackbot_agents.uplift_merge_conflict_resolver.agent import (
+from hackbot_agents.uplift_resolve.agent import (
     build_user_prompt,
     load_workflow,
     render_bug_block,
     render_sources,
 )
-from hackbot_agents.uplift_merge_conflict_resolver.models import (
+from hackbot_agents.uplift_resolve.models import (
     FetchedDiff,
     GitSource,
     PhabricatorSource,

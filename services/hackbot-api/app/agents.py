@@ -137,15 +137,14 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-test-plan-generator",
         input_schema=TestPlanGeneratorInputs,
     ),
-    # The first of the uplift/backport agents; more may join under this area.
-    "uplift-merge-conflict-resolver": AgentSpec(
-        name="uplift-merge-conflict-resolver",
+    "uplift-resolve": AgentSpec(
+        name="uplift-resolve",
         description=(
             "Resolve the merge conflicts from cherry-picking patches (git commits "
             "and/or Phabricator revisions) onto a stable uplift branch, and return "
             "the resolved patch with a confidence level for human review."
         ),
-        job_name="hackbot-agent-uplift-merge-conflict-resolver",
+        job_name="hackbot-agent-uplift-resolve",
         input_schema=UpliftInputs,
     ),
 }

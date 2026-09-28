@@ -29,7 +29,7 @@ members = [
     "hackbot-agent-frontend-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
-    "hackbot-agent-uplift",
+    "hackbot-agent-uplift-resolve",
     "hackbot-api",
     "hackbot-client",
     "hackbot-pulse-listener",
@@ -2706,9 +2706,9 @@ requires-dist = [
 ]
 
 [[package]]
-name = "hackbot-agent-uplift"
+name = "hackbot-agent-uplift-resolve"
 version = "0.1.0"
-source = { editable = "agents/uplift" }
+source = { editable = "agents/uplift-resolve" }
 dependencies = [
     { name = "agent-tools", extra = ["searchfox", "vcs"] },
     { name = "claude-agent-sdk" },

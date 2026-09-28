@@ -7,12 +7,12 @@ asked for and where it lands, not HTTP.
 from __future__ import annotations
 
 import pytest
-from hackbot_agents.uplift_merge_conflict_resolver.agent import (
+from hackbot_agents.uplift_resolve.agent import (
     build_phabricator_client,
     describe_requested,
     fetch_source_diffs,
 )
-from hackbot_agents.uplift_merge_conflict_resolver.models import (
+from hackbot_agents.uplift_resolve.models import (
     GitSource,
     PhabricatorSource,
 )
@@ -239,8 +239,8 @@ async def test_a_stack_is_fetched_in_order(tmp_path):
 
 
 def test_client_points_at_the_brokers_proxy_mount():
-    client = build_phabricator_client("http://uplift-broker:8765/")
+    client = build_phabricator_client("http://uplift-resolve-broker:8765/")
 
-    assert client.base_url == "http://uplift-broker:8765/phabricator", (
+    assert client.base_url == "http://uplift-resolve-broker:8765/phabricator", (
         "The client should target the broker's proxy mount, with no double slash."
     )

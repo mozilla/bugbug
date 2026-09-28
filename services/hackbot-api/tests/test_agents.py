@@ -160,14 +160,14 @@ def test_test_repair_inputs_require_failure_tasks():
 
 
 def test_uplift_registry_entry():
-    spec = AGENT_REGISTRY["uplift-merge-conflict-resolver"]
+    spec = AGENT_REGISTRY["uplift-resolve"]
     assert spec.build_env is None, (
         "The uplift agent's inputs need no hand-written env serializer."
     )
     assert spec.input_schema is UpliftInputs, (
         "The registry should validate uplift runs against `UpliftInputs`."
     )
-    assert spec.job_name == "hackbot-agent-uplift-merge-conflict-resolver", (
+    assert spec.job_name == "hackbot-agent-uplift-resolve", (
         "The job name should match the deployed Cloud Run Job."
     )
     assert spec.auto_apply_actions is False, (

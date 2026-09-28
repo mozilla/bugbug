@@ -57,7 +57,7 @@ export function TriggerForm() {
   const isBuildRepairAgent = agent === "build-repair";
   const isTestRepairAgent = agent === "test-repair";
   const isTestPlanAgent = agent === "test-plan-generator";
-  const isUpliftAgent = agent === "uplift-merge-conflict-resolver";
+  const isUpliftAgent = agent === "uplift-resolve";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {

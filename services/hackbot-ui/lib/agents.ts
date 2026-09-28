@@ -9,8 +9,8 @@ export const AGENTS = [
   { value: "test-repair", label: "test-repair" },
   { value: "test-plan-generator", label: "test-plan-generator" },
   {
-    value: "uplift-merge-conflict-resolver",
-    label: "uplift-merge-conflict-resolver",
+    value: "uplift-resolve",
+    label: "uplift-resolve",
   },
 ] as const;
 

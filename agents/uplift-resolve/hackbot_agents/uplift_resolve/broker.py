@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
 from starlette.routing import Mount
 
-log = logging.getLogger("uplift-broker")
+log = logging.getLogger("uplift-resolve-broker")
 
 
 class BrokerInputs(BaseSettings):

@@ -35,7 +35,7 @@ name**, which is what stops a run's inputs from reaching or altering the broker'
 environment.
 
 Today `bug-fix`, `build-repair`, `frontend-triage`, `autowebcompat-repro`,
-`autowebcompat-diagnosis` and `uplift-merge-conflict-resolver` run a broker.
+`autowebcompat-diagnosis` and `uplift-resolve` run a broker.
 `test-repair` reaches an MCP server via an injected `BUGZILLA_MCP_URL` instead, and
 `test-plan-generator` needs no credentialed reads at all. The invariant holds in every case:
 **the key is never in the agent container.**

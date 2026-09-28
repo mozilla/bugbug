@@ -11,11 +11,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=VERSION,target=VERSION \
-    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-uplift
+    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-uplift-resolve
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
-    uv sync --locked --no-dev --no-editable --package hackbot-agent-uplift
+    uv sync --locked --no-dev --no-editable --package hackbot-agent-uplift-resolve
 
 FROM python:3.12 AS base
 
@@ -33,7 +33,7 @@ FROM base AS agent
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
-COPY agents/uplift/hackbot.toml /app/hackbot.toml
+COPY agents/uplift-resolve/hackbot.toml /app/hackbot.toml
 
 RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
@@ -41,7 +41,7 @@ RUN useradd --create-home --shell /bin/bash agent \
 
 USER agent
 
-CMD ["python", "-m", "hackbot_agents.uplift_merge_conflict_resolver"]
+CMD ["python", "-m", "hackbot_agents.uplift_resolve"]
 
 FROM base AS broker
 
@@ -51,4 +51,4 @@ USER broker
 
 EXPOSE 8765
 
-CMD ["python", "-m", "hackbot_agents.uplift_merge_conflict_resolver.broker"]
+CMD ["python", "-m", "hackbot_agents.uplift_resolve.broker"]

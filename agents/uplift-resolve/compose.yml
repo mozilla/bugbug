@@ -3,7 +3,7 @@ services:
   # bug and Phabricator revision over HTTP. It holds the Bugzilla/Phabricator
   # credentials; the agent container binds none. In production the agent points
   # at the deployed bugbug MCP instead via BUGBUG_MCP_URL.
-  uplift-bugbug-mcp:
+  uplift-resolve-bugbug-mcp:
     build:
       context: ../..
       dockerfile: services/mcp/Dockerfile
@@ -19,10 +19,10 @@ services:
 
   # Holds the Phabricator key so the agent can fetch each source's raw diff
   # over the read-only Conduit proxy without binding a credential itself.
-  uplift-broker:
+  uplift-resolve-broker:
     build:
       context: ../..
-      dockerfile: agents/uplift/Dockerfile
+      dockerfile: agents/uplift-resolve/Dockerfile
       target: broker
     environment:
       PHABRICATOR_URL: ${PHABRICATOR_URL:-https://phabricator.services.mozilla.com}
@@ -30,10 +30,10 @@ services:
     expose:
       - "8765"
 
-  uplift-merge-conflict-resolver:
+  uplift-resolve-agent:
     build:
       context: ../..
-      dockerfile: agents/uplift/Dockerfile
+      dockerfile: agents/uplift-resolve/Dockerfile
       target: agent
     environment:
       - RUN_ID
@@ -41,8 +41,8 @@ services:
       - TARGET_COMMIT=${TARGET_COMMIT:-}
       - SOURCES=${SOURCES:-}
       - BUG_ID=${BUG_ID:-}
-      - BUGBUG_MCP_URL=http://uplift-bugbug-mcp:8080/mcp
-      - BROKER_URL=http://uplift-broker:8765
+      - BUGBUG_MCP_URL=http://uplift-resolve-bugbug-mcp:8080/mcp
+      - BROKER_URL=http://uplift-resolve-broker:8765
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
       # No uploader locally: summary/logs/artifacts are written under
@@ -52,9 +52,9 @@ services:
       - workspace:/workspace
       - ${HOME}/hackbot/artifacts:/artifacts
     depends_on:
-      uplift-bugbug-mcp:
+      uplift-resolve-bugbug-mcp:
         condition: service_started
-      uplift-broker:
+      uplift-resolve-broker:
         condition: service_started
 
 volumes:
