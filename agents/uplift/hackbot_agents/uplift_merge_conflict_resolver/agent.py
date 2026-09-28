@@ -52,6 +52,15 @@ PROXY_MOUNT = "/phabricator"
 # what the user prompt is for.
 SYSTEM_PROMPT = {"type": "preset", "preset": "claude_code"}
 
+# Agent images configure no git identity, and `git commit` refuses to run
+# without one. A cherry-pick still keeps the author of the commit it replays.
+GIT_IDENTITY_ENV = {
+    "GIT_AUTHOR_NAME": "Hackbot",
+    "GIT_AUTHOR_EMAIL": "hackbot@mozilla.tld",
+    "GIT_COMMITTER_NAME": "Hackbot",
+    "GIT_COMMITTER_EMAIL": "hackbot@mozilla.tld",
+}
+
 # Not a secret: the proxy discards it and substitutes the real Conduit key.
 # Sized to the 32 characters `PhabricatorSettings` requires.
 PROXY_API_TOKEN = "hackbot-broker-proxy-placeholder"
@@ -252,6 +261,7 @@ def build_options(
         max_turns=max_turns,
         setting_sources=["project"],
         effort=effort or EFFORT,
+        env=GIT_IDENTITY_ENV,
     )
 
 

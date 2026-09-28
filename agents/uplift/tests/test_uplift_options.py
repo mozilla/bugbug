@@ -81,6 +81,17 @@ def test_options_run_unattended_with_every_tool_but_questions():
     )
 
 
+def test_options_give_the_session_a_git_identity():
+    options = make_options()
+    assert options.env["GIT_COMMITTER_NAME"] == "Hackbot", (
+        "The agent commits each resolved patch, which needs a git identity the "
+        "image does not configure."
+    )
+    assert options.env["GIT_AUTHOR_EMAIL"] == "hackbot@mozilla.tld", (
+        "The author identity should be set alongside the committer."
+    )
+
+
 def test_check_result_raises_when_no_result():
     with pytest.raises(Exception) as excinfo:
         check_result(None, "beta")
