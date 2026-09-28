@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy import (
-    DateTime,
     ForeignKey,
     ScalarResult,
     UniqueConstraint,
@@ -80,9 +79,7 @@ class ReviewRequest(Base):
     sequence: Mapped[int]
 
     # pylint:disable=not-callable
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(),
         server_onupdate=func.now(),
