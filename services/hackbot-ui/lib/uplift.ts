@@ -51,7 +51,8 @@ function validateSource(entry: unknown, index: number): string | null {
  * Parse the uplift sources textarea into the list the API expects.
  *
  * Validated here so a malformed stack is a message next to the field rather
- * than a 422. The shapes mirror hackbot-api's `UpliftSource` union.
+ * than a 422. The shapes mirror hackbot-api's `UpliftSource` union; drop this
+ * once the UI validates against the API's own schema (#6455).
  */
 export function parseUpliftSources(value: string): ParsedSources {
   const trimmed = value.trim();
