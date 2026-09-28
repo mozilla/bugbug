@@ -58,14 +58,14 @@ async def finalize_stale_runs(
     errored: list[uuid.UUID] = []
     for run in runs:
         try:
-            did_finalize = await finalize_run(db, run)
+            await finalize_run(db, run)
         except Exception:
             # One unfinalizable run must not abort the sweep for the rest.
             log.exception("Stale-run sweep could not finalize run %s", run.run_id)
             await db.rollback()
             errored.append(run.run_id)
             continue
-        if did_finalize:
+        if run.finalized_at is not None:
             finalized.append(run.run_id)
         else:
             still_running.append(run.run_id)
