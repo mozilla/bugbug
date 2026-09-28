@@ -18,6 +18,7 @@ from typing import Any
 import requests
 
 from app.action_handlers.base import ActionResult, ApplyContext
+from app.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +40,11 @@ def _headers() -> dict[str, str]:
     api_key = os.environ.get("BUGZILLA_API_KEY", "")
     if not api_key:
         raise RuntimeError("BUGZILLA_API_KEY is not configured")
-    return {"X-Bugzilla-API-Key": api_key, "Content-Type": "application/json"}
+    headers = {"X-Bugzilla-API-Key": api_key, "Content-Type": "application/json"}
+    edge_key = settings.bugzilla_edge_key
+    if edge_key:
+        headers["Mozilla-Edge-Key"] = edge_key
+    return headers
 
 
 def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any]:

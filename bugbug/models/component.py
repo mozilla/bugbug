@@ -359,7 +359,7 @@ class ComponentModel(BugModel):
                     continue
 
                 if count > 0:
-                    for i in range(count):
+                    for _ in range(count):
                         yield (product, component)
 
         meaningful_product_components = self.get_meaningful_product_components(

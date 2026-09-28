@@ -17,7 +17,7 @@ from slack_sdk.models.blocks import ConfirmObject
 def _button(**overrides) -> dict:
     kwargs = {
         "agent_name": "bug-fix",
-        "params": {"bug_id": 1968342},
+        "inputs": {"bug_id": 1968342},
         "dedupe_key": "frontend-triage-run:abc",
     }
     return create_start_agent_run_button(
@@ -39,7 +39,7 @@ def test_the_button_is_a_block_kit_button_with_its_label():
 def test_the_value_names_the_agent_the_inputs_and_the_key():
     assert _value() == {
         "agent_name": "bug-fix",
-        "params": {"bug_id": 1968342},
+        "inputs": {"bug_id": 1968342},
         "dedupe_key": "frontend-triage-run:abc",
     }
 
@@ -54,7 +54,7 @@ def test_the_key_is_required():
     # There is no un-rendering a button, so a caller has to name what the button is
     # one-shot about rather than leave it to be inferred.
     with pytest.raises(TypeError):
-        create_start_agent_run_button("Go", agent_name="bug-fix", params={})
+        create_start_agent_run_button("Go", agent_name="bug-fix", inputs={})
 
 
 def test_a_run_to_apply_first_is_carried_only_when_there_is_one():
@@ -92,7 +92,7 @@ def test_a_value_past_slacks_limit_is_refused_here():
     # models, that is caught where the button is made rather than by the API at
     # apply time, on a run that has already finished.
     with pytest.raises(SlackObjectFormationError):
-        _button(params={"blob": "x" * 2100})
+        _button(inputs={"blob": "x" * 2100})
 
 
 def test_a_label_past_slacks_limit_is_refused_here():
@@ -100,7 +100,7 @@ def test_a_label_past_slacks_limit_is_refused_here():
         create_start_agent_run_button(
             "x" * 80,
             agent_name="bug-fix",
-            params={},
+            inputs={},
             dedupe_key="k",
         ).to_dict()
 

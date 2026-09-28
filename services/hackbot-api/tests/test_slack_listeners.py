@@ -27,11 +27,11 @@ TRIAGE_RUN_ID = "11111111-2222-3333-4444-555555555555"
 
 
 def _applied(action_type: str, idx: int = 0) -> RunAction:
-    return RunAction(idx=idx, type=action_type, status="applied")
+    return RunAction(idx=idx, type=action_type, params={}, status="applied")
 
 
 def _failed(action_type: str, error: str, idx: int = 0) -> RunAction:
-    return RunAction(idx=idx, type=action_type, status="failed", error=error)
+    return RunAction(idx=idx, type=action_type, params={}, status="failed", error=error)
 
 
 def _actions(*actions: RunAction) -> ApplyActionsResponse:
@@ -41,14 +41,14 @@ def _actions(*actions: RunAction) -> ApplyActionsResponse:
 
 def _action(
     agent_name: str = "bug-fix",
-    params: dict | None = None,
+    inputs: dict | None = None,
     dedupe_key: str = DEDUPE_KEY,
     apply_run_id: str | None = None,
 ) -> dict:
     """A clicked button, as Bolt hands it over."""
     value = {
         "agent_name": agent_name,
-        "params": {"bug_id": 1234} if params is None else params,
+        "inputs": {"bug_id": 1234} if inputs is None else inputs,
         "dedupe_key": dedupe_key,
     }
     if apply_run_id is not None:
@@ -110,7 +110,7 @@ class TestStartAgentRun:
         )
 
     async def test_the_agent_and_inputs_come_from_the_buttons_value(self):
-        await self._call(_action(agent_name="test-repair", params={"task_id": "abc"}))
+        await self._call(_action(agent_name="test-repair", inputs={"task_id": "abc"}))
 
         self.fake_client.trigger_run.assert_awaited_once_with(
             "test-repair", {"task_id": "abc"}, dedupe_key=DEDUPE_KEY
@@ -277,7 +277,7 @@ class TestStartAgentRun:
     async def test_a_value_missing_the_agent_is_refused_before_anything_starts(self):
         action = _action()
         action["value"] = json.dumps(
-            {"params": {"bug_id": 1234}, "dedupe_key": DEDUPE_KEY}
+            {"inputs": {"bug_id": 1234}, "dedupe_key": DEDUPE_KEY}
         )
 
         with pytest.raises(ValidationError):
@@ -290,7 +290,7 @@ class TestStartAgentRun:
         # is the failure the key exists to prevent.
         action = _action()
         action["value"] = json.dumps(
-            {"agent_name": "bug-fix", "params": {"bug_id": 1234}}
+            {"agent_name": "bug-fix", "inputs": {"bug_id": 1234}}
         )
 
         with pytest.raises(ValidationError):
@@ -315,11 +315,11 @@ class TestStartAgentRun:
 
 
 class TestStartAgentRunValue:
-    def test_params_default_to_empty(self):
+    def test_inputs_default_to_empty(self):
         value = StartAgentRunValue.model_validate(
             {"agent_name": "bug-fix", "dedupe_key": DEDUPE_KEY}
         )
-        assert value.params == {}
+        assert value.inputs == {}
 
     def test_a_run_to_apply_first_is_optional(self):
         value = StartAgentRunValue.model_validate(

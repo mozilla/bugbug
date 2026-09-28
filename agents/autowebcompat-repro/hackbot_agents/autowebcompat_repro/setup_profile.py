@@ -135,13 +135,12 @@ def warm_launch(
     except subprocess.TimeoutExpired:
         pass
     finally:
-        if proc.poll() is not None:
-            return
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
 
 def verify_registered(profile_dir: Path, ext_id: str) -> bool:

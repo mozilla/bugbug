@@ -24,7 +24,7 @@ class PatchSummarizationTool(GenerativeModelTool):
         component will be created and used.
         """
         if "llm" not in kwargs:
-            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL)
+            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL, effort="high")
 
         return cls(**kwargs)
 

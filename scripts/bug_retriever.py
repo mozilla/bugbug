@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from logging import getLogger
 
 import dateutil.parser
@@ -61,7 +61,7 @@ class Retriever(object):
         changed_ids |= deleted_component_ids
 
         # Get IDs of bugs between (two years and six months ago) and now.
-        two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
+        two_years_and_six_months_ago = datetime.now(timezone.utc) - relativedelta(
             years=2, months=6
         )
         logger.info("Retrieving bug IDs since %s", two_years_and_six_months_ago)
@@ -121,7 +121,7 @@ class Retriever(object):
         test_failure_bug_ids = [
             item["bug_id"]
             for item in test_scheduling.get_failure_bugs(
-                two_years_and_six_months_ago, datetime.utcnow()
+                two_years_and_six_months_ago, datetime.now(timezone.utc)
             )
             if item["bug_id"] is not None
         ]
@@ -147,7 +147,7 @@ class Retriever(object):
         new_bugs = bugzilla.download_bugs(all_ids)
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
-        for i in range(7):
+        for _ in range(7):
             regression_related_ids = list(
                 set(
                     sum(
@@ -177,7 +177,7 @@ class Retriever(object):
             include_invalid=True,
             include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
         )
-        for i in range(2):
+        for _ in range(2):
             # We look for inconsistencies in all bugs first, then, on following passes,
             # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
             inconsistent_bugs = bug_snapshot.get_inconsistencies(inconsistent_bugs)
@@ -190,7 +190,7 @@ class Retriever(object):
                 "Re-downloading %d bugs, as they were inconsistent",
                 len(inconsistent_bug_ids),
             )
-            bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
+            bugzilla.delete_bugs(lambda bug, ids=inconsistent_bug_ids: bug["id"] in ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
         # TODO: Figure out why we have missing fields in the first place.
