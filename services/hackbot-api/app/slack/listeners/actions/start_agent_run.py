@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from hackbot_client import HackbotClient
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
 from slack_bolt.context.respond.async_respond import AsyncRespond
@@ -19,7 +19,13 @@ class StartAgentRunValue(BaseModel):
     """What a button that starts an agent run carries."""
 
     agent_name: str
-    inputs: dict[str, Any] = {}
+    # A message keeps its buttons clickable, so the values posted
+    # before the key was renamed from `params` are still out there.
+    # FIXME: This alias can be removed after a few months, when we know
+    # all messages are old enough. Target date: 2027-02-01.
+    inputs: dict[str, Any] = Field(
+        default={}, validation_alias=AliasChoices("inputs", "params")
+    )
     dedupe_key: str = Field(min_length=1)
     # A run whose pending actions will be applied before the new run starts.
     apply_run_id: UUID | None = None
