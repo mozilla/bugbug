@@ -296,7 +296,7 @@ def test_the_button_carries_what_the_receiver_needs_to_start_the_run():
     # rearranged.
     assert _button_value() == {
         "agent_name": "bug-fix",
-        "params": {"bug_id": BUG_ID},
+        "inputs": {"bug_id": BUG_ID},
         "dedupe_key": f"frontend-triage-run:{RUN_ID}",
         "apply_run_id": RUN_ID,
     }
