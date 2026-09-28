@@ -4,10 +4,16 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import enum
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from sqlalchemy import ForeignKey, ScalarResult, UniqueConstraint, func, select
+from sqlalchemy import (
+    ForeignKey,
+    ScalarResult,
+    UniqueConstraint,
+    func,
+    select,
+)
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -75,12 +81,13 @@ class ReviewRequest(Base):
     # pylint:disable=not-callable
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), server_onupdate=func.now()
+        server_default=func.now(),
+        server_onupdate=func.now(),
     )
 
     @property
     def is_recently_created(self):
-        return (datetime.utcnow() - self.created_at).total_seconds() < 240
+        return datetime.now(timezone.utc) - self.created_at < timedelta(minutes=4)
 
     def has_evaluation(self, session: Session) -> bool:
         if self.status == DiffStatus.IGNORED:

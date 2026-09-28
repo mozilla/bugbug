@@ -8,7 +8,7 @@ import csv
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from logging import INFO, basicConfig, getLogger
 
 basicConfig(level=INFO)
@@ -88,7 +88,7 @@ def run_untriaged(untriaged_bugs):
 
         os.makedirs("sheets", exist_ok=True)
         class_name = model.__class__.__name__
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         sheet_name = f"{class_name}-{timestamp}-labels.csv"
         with open(os.path.join("sheets", sheet_name), "w") as f:
             writer = csv.writer(f)

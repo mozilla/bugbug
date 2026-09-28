@@ -8,7 +8,7 @@ import csv
 import itertools
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from logging import INFO, basicConfig, getLogger
 from typing import Iterable, Iterator, NewType
 from urllib.parse import urlencode
@@ -361,7 +361,7 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
         `{product}::{component}`) and the value of the number of bugs for the
         given full components. Full component with 0 bugs are returned.
     """
-    since = datetime.utcnow() - relativedelta(months=months)
+    since = datetime.now(timezone.utc) - relativedelta(months=months)
 
     # Base params
     params = {

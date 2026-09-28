@@ -20,7 +20,7 @@ import shelve
 import subprocess
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Collection, Iterable, Iterator, NewType, Set, Union
 
@@ -903,9 +903,9 @@ def hg_log(
         assert b" " in rev[6]
         pushdate_timestamp = rev[6].split(b" ", 1)[0]
         if pushdate_timestamp != b"0":
-            pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
+            pushdate = datetime.fromtimestamp(float(pushdate_timestamp), timezone.utc)
         else:
-            pushdate = datetime.utcnow()
+            pushdate = datetime.now(timezone.utc)
 
         bug_id = int(rev[3].decode("ascii")) if rev[3] else None
 
