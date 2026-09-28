@@ -898,6 +898,19 @@ def test_group_model_sample_weights() -> None:
     assert list(model.get_sample_weights(y)) == [0.5, 0.5, 1.0, 0.5, 0.5, 0.5]
 
 
+def test_group_model_uses_manifest_suite() -> None:
+    from bugbug import test_scheduling_features
+
+    extractors = (
+        testselect.TestGroupSelectModel()
+        .extraction_pipeline.steps[0][1]
+        .feature_extractors
+    )
+    assert any(
+        isinstance(fe, test_scheduling_features.ManifestSuite) for fe in extractors
+    )
+
+
 def test_compute_confidence_thresholds() -> None:
     push_confidences = [
         [0.9, 0.75, 0.5, 0.2],

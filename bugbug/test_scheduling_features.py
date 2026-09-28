@@ -241,7 +241,18 @@ class ManifestSuite(object):
             return "jstest"
         elif "xpcshell" in base:
             return "xpcshell"
-        elif "reftest" in base:
+        elif "crashtest" in base:
+            return "crashtest"
+        elif "reftest" in base or base.endswith(".list"):
             return "reftest"
+
+        # Manifests with non-standard names (e.g. devtools' split browser
+        # manifests) can be identified by the directory they live in.
+        if base.endswith(".toml"):
+            parent = os.path.basename(os.path.dirname(manifest))
+            if parent == "xpcshell":
+                return "xpcshell"
+            elif parent in ("browser", "mochitest"):
+                return "mochitest"
 
         return None

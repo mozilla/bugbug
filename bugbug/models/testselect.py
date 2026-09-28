@@ -561,6 +561,12 @@ class TestSelectModel(Model):
                 test_scheduling_features.TouchedTogether(),
             ]
 
+        # Suites fail at different rates and depend on different signals (e.g. wpt tests rarely change
+        # together with Gecko code). Only useful once positives are weighted by push size: otherwise the
+        # learned per-suite priors are those of the few pushes breaking many groups.
+        if granularity == "group":
+            feature_extractors.append(test_scheduling_features.ManifestSuite())
+
         self.extraction_pipeline = Pipeline(
             [
                 (

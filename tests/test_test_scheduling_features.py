@@ -62,3 +62,40 @@ def test_path_distance():
         )
         == 4
     )
+
+
+def test_manifest_suite_classification():
+    suite = test_scheduling_features.ManifestSuite()
+    assert (
+        suite({"name": "testing/web-platform/tests/css/css-grid"}, commit={}) == "WPT"
+    )
+    assert (
+        suite({"name": "testing/web-platform/mozilla/tests/webgpu"}, commit={}) == "WPT"
+    )
+    assert (
+        suite({"name": "dom/base/crashtests/crashtests.list"}, commit={}) == "crashtest"
+    )
+    assert (
+        suite({"name": "layout/reftests/reftest-sanity/scripttests.list"}, commit={})
+        == "reftest"
+    )
+    assert (
+        suite(
+            {"name": "devtools/client/webconsole/test/browser/_webconsole.toml"},
+            commit={},
+        )
+        == "mochitest"
+    )
+    assert (
+        suite(
+            {
+                "name": "toolkit/components/extensions/test/xpcshell/native_messaging.toml"
+            },
+            commit={},
+        )
+        == "xpcshell"
+    )
+    assert suite({"name": "js/src/tests/non262/Array/jstests.list"}, commit={}) == (
+        "jstest"
+    )
+    assert suite({"name": "gfx/tests/something.toml"}, commit={}) is None
