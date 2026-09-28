@@ -912,6 +912,9 @@ def test_group_model_uses_manifest_suite() -> None:
     assert any(
         isinstance(fe, test_scheduling_features.ManifestSuite) for fe in extractors
     )
+    assert any(
+        isinstance(fe, test_scheduling_features.TouchedGroupDirs) for fe in extractors
+    )
 
 
 def test_recency_weights() -> None:

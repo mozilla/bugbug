@@ -575,6 +575,7 @@ class TestSelectModel(Model):
         # learned per-suite priors are those of the few pushes breaking many groups.
         if granularity == "group":
             feature_extractors.append(test_scheduling_features.ManifestSuite())
+            feature_extractors.append(test_scheduling_features.TouchedGroupDirs())
 
         self.extraction_pipeline = Pipeline(
             [

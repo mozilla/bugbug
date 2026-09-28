@@ -99,3 +99,22 @@ def test_manifest_suite_classification():
         "jstest"
     )
     assert suite({"name": "gfx/tests/something.toml"}, commit={}) is None
+
+
+def test_touched_group_dirs():
+    touched = test_scheduling_features.TouchedGroupDirs()
+    commit = {
+        "files": [
+            "dom/base/test/test_foo.html",
+            "dom/base/nsDocument.cpp",
+            "testing/web-platform/meta/css/css-grid/grid-1.html.ini",
+        ]
+    }
+    assert touched({"name": "dom/base/test/mochitest.toml"}, commit) == {
+        "touch_group_dirs": 1,
+        "touch_parent_dir": 2,
+    }
+    assert touched({"name": "testing/web-platform/tests/css/css-grid"}, commit) == {
+        "touch_group_dirs": 1,
+        "touch_parent_dir": 0,
+    }

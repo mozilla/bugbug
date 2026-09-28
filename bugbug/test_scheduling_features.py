@@ -5,7 +5,7 @@
 
 import os
 
-from bugbug import repository
+from bugbug import repository, test_scheduling
 
 
 class Name(object):
@@ -256,3 +256,22 @@ class ManifestSuite(object):
                 return "mochitest"
 
         return None
+
+
+class TouchedGroupDirs(object):
+    """Number of modified files in the group's directories, and in their parent directory.
+
+    This mostly overlaps with the rule that always schedules the manifests including the modified
+    tests (test_scheduling.find_manifests_for_paths), but also covers nearby changes.
+    """
+
+    def __call__(self, test_job, commit, **kwargs):
+        dirs = test_scheduling.get_runnable_dirs(get_manifest(test_job["name"]))
+        prefixes = tuple(f"{d}/" for d in dirs)
+        parent = f"{os.path.dirname(dirs[0])}/"
+        return {
+            "touch_group_dirs": sum(
+                1 for f in commit["files"] if f.startswith(prefixes)
+            ),
+            "touch_parent_dir": sum(1 for f in commit["files"] if f.startswith(parent)),
+        }
