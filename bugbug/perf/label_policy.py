@@ -83,7 +83,10 @@ APPLICATIONS = (
     "focus",
 )
 FIREFOX_APPLICATIONS = frozenset(("firefox", "fenix", "geckoview", "refbrow", "focus"))
-EXCLUDED_FRAMEWORKS = frozenset(("build_metrics",))
+# build_metrics measures builds, not tests. js-bench is the SpiderMonkey shell
+# benchmarks, run from source-test tasks the JS team schedules; two regressions
+# in six months and a separate label shape make them not worth modeling yet.
+EXCLUDED_FRAMEWORKS = frozenset(("build_metrics", "js-bench"))
 EXCLUDED_TEST_MARKERS = ("regression-tests",)
 # Diagnostic flavours of a test, as detected by task_labels.split_test_name.
 EXCLUDED_VARIANTS = ("profiling",)

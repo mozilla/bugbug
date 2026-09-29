@@ -396,7 +396,9 @@ Runnables out of scope for Firefox perf test selection are dropped before
 labeling, and a summary made only of excluded runnables is not a regression:
 
 - summaries tagged `infra`, since infrastructure changes are not in any push;
-- the `build_metrics` framework, which measures builds rather than tests;
+- the `build_metrics` framework, which measures builds rather than tests, and
+  the `js-bench` framework, the SpiderMonkey shell benchmarks run from
+  `source-test-jsshell-bench-*` tasks outside the perf harnesses;
 - tasks running a non-Firefox application (Chrome, Chromium, Safari), which a
   Firefox change cannot regress;
 - profiling variants (`-profiling`, `-native-profiling`), which are
