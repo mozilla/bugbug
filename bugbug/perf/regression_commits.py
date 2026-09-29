@@ -64,9 +64,12 @@ def select_export_commits(
     come from the push status rows. Negatives are drawn from
     :func:`bugbug.perf.push_status.iter_clean_commits`, ``negative_ratio`` times the
     number of positives, using ``seed`` over a sorted candidate list so the
-    sample does not depend on file order.
+    sample does not depend on file order. A commit that is a culprit of any
+    regression is never a negative, and a commit listed by several pushes,
+    as merges do, is a candidate once.
     """
     statuses = list(statuses)
+    regressions = list(regressions)
     by_push = {status["push_id"]: status for status in statuses}
 
     positives: dict[str, dict[str, Any]] = {}
@@ -95,9 +98,18 @@ def select_export_commits(
                 }
             record["summary_ids"].append(regression["summary_id"])
 
-    candidates = sorted(
+    excluded = set(positives) | {
+        node for regression in regressions for node in regression["culprit_commits"]
+    }
+    seen: set[str] = set()
+    candidates = []
+    for status, commit in sorted(
         iter_clean_commits(statuses), key=lambda sc: (sc[0]["push_time"], sc[1]["node"])
-    )
+    ):
+        if commit["node"] in excluded or commit["node"] in seen:
+            continue
+        seen.add(commit["node"])
+        candidates.append((status, commit))
     rng = random.Random(seed)
     sample_size = min(len(candidates), int(len(positives) * negative_ratio))
     negatives = [
@@ -143,10 +155,11 @@ def attach_commit_patches(
     """Attach commit message and diff from the local clone to each record.
 
     Commits are exported ``chunk_size`` at a time. A failing chunk is retried
-    one commit at a time, and revisions missing from the clone are dropped
-    with a warning.
+    one commit at a time. Revisions missing from the clone and commits with
+    an empty diff, such as merges, are dropped with a warning.
     """
     missing = 0
+    empty = 0
     for start in range(0, len(records), chunk_size):
         chunk = records[start : start + chunk_size]
         revs = [record["node"].encode("ascii") for record in chunk]
@@ -166,6 +179,9 @@ def attach_commit_patches(
                 missing += 1
                 continue
             message, diff = parse_hg_export(patch)
+            if not diff:
+                empty += 1
+                continue
             yield {
                 **record,
                 "commit_message": message,
@@ -175,3 +191,5 @@ def attach_commit_patches(
 
     if missing:
         logger.warning("%d commits were not found in %s", missing, repo_dir)
+    if empty:
+        logger.warning("%d commits with an empty diff were skipped", empty)

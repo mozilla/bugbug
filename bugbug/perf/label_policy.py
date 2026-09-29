@@ -12,7 +12,10 @@ tables live in ``task_labels`` and ``regression_labeling``.
 
 import re
 
-REPOSITORIES = ("autoland", "mozilla-central")
+# Sheriffs attribute regressions to autoland pushes, and a mozilla-central push
+# is a merge whose commit list repeats the autoland commits it merged, so
+# including it only duplicates commits. Re-add it with --repository if needed.
+REPOSITORIES = ("autoland",)
 
 # Bump whenever any table in this file changes: they all change what a label means.
 POLICY_VERSION = 1

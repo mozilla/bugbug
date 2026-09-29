@@ -40,6 +40,12 @@ both, `push_status` builds on `regression_labeling`, and `selection_pairs` and
 | Bugzilla                            | REST API, optional token          | The regression bug of each summary and the canonical bugs its duplicates point at, with `regressed_by` to pin the culprit commit and the resolution to decide the outcome |
 | Mercurial clone (`mozilla-central`) | `hg export`                       | Commit messages and diffs for the regression predictor dataset                                                                                                            |
 
+Only autoland is retrieved by default (`REPOSITORIES` in `label_policy.py`,
+overridable with `--repository`). Sheriffs attribute regressions to autoland
+pushes, and a mozilla-central push is a merge whose commit list repeats every
+autoland commit it merged, so including it produced no positives and turned
+culprit commits into negatives through their merge push.
+
 The Redash key is read from `REDASH_API_KEY`, or from the `REDASH_API_KEY`
 entry of the Taskcluster secret when running in the pipeline. An optional
 `BUGBUG_BUGZILLA_TOKEN` lifts Bugzilla rate limits.
@@ -63,7 +69,7 @@ run stay unmapped.
   currently belongs to (reassigned alerts follow `related_summary_id`), with
   summary, signature, platform, push and task label fields. Refetched whole
   and merged into the previous snapshot, see Sources.
-- `data/perf_pushes.json`: one row per push for autoland and mozilla-central,
+- `data/perf_pushes.json`: one row per autoland push,
   with its commits (revision, first line, bug id, backout flag) and the
   performance jobs that ran on it (label, tier, total duration, and one entry
   per run with task id, retry id, result and duration).
@@ -119,7 +125,8 @@ the Mercurial clone and writes
 `diff`, `label`, `landing_id`, `landing_size`, `pinned_by`, `summary_ids` and a
 time based `split`. Negatives are sampled at `--negative-ratio` times the number of
 positives from the clean settled commits in `perf_push_status.json`, the same
-rule the selection pairs use.
+rule the selection pairs use, never a commit that is a culprit elsewhere.
+Commits whose diff is empty, such as merges, are skipped.
 
 Flag defaults are the `DEFAULT_*` constants at the top of
 `scripts/perf_alerts_retriever.py`; the pipeline tasks pass no flags, so those
@@ -170,7 +177,7 @@ reassigned alert carries its new summary's fields.
 | `original_push_id`, `original_prev_push_id`        | int             | the same pair as first detected, before any sheriff edit                                                                     |
 | `revision`, `push_time`                            | str, ts         | culprit push as changeset hash and timestamp                                                                                 |
 | `prev_push_revision`, `prev_push_time`             | str?, ts?       | previous push; null for a series' first datapoint                                                                            |
-| `repository`                                       | str             | `autoland` or `mozilla-central`                                                                                              |
+| `repository`                                       | str             | `autoland` (see `--repository`)                                                                                              |
 | `framework`                                        | str             | `browsertime`, `talos`, `awsy`, `mozperftest`, `build_metrics`, ...                                                          |
 | `signature_id`, `signature_hash`                   | int, str        | Perfherder series id and its stable identity hash                                                                            |
 | `suite`, `test`                                    | str             | e.g. `amazon` and `fcp`; `test` is empty for a suite summary                                                                 |
@@ -192,7 +199,7 @@ reassigned alert carries its new summary's fields.
 | Field                | Type | Meaning                                                                                                       |
 | -------------------- | ---- | ------------------------------------------------------------------------------------------------------------- |
 | `push_id`            | int  | Treeherder push id                                                                                            |
-| `repository`         | str  | `autoland` or `mozilla-central`                                                                               |
+| `repository`         | str  | `autoland` (see `--repository`)                                                                               |
 | `revision`           | str  | head changeset hash                                                                                           |
 | `time`               | ts   | when the push landed                                                                                          |
 | `author`             | str? | who pushed                                                                                                    |
@@ -230,7 +237,7 @@ reading.
 | ----------------- | ------ | -------------------------------------------------------------------------------------------------------- |
 | `task_id`         | str    | Taskcluster task id; joins to `task_ids` in the alerts and to `perf_jobs[].runs[].task_id` in the pushes |
 | `label`           | str    | task label, e.g. `test-linux2404-64-shippable/opt-talos-g1`                                              |
-| `project`         | str    | `autoland` or `mozilla-central`                                                                          |
+| `project`         | str    | `autoland` (see `--repository`)                                                                          |
 | `task_queue_id`   | str    | worker pool, e.g. `releng-hardware/gecko-t-linux-talos-2404`; also names the machine type                |
 | `submission_date` | str    | day the task was created, `YYYY-MM-DD`                                                                   |
 | `runs`            | int?   | runs that started and finished, retries included                                                         |
@@ -414,6 +421,14 @@ android), because most regressions are platform specific. Datasets are keyed
 on the test identity; family and category are attached as features so rare
 tests borrow strength from their siblings. `split_test_name` also exposes the
 `application` and the diagnostic `variant`.
+
+Mozperftest labels do not follow the `test-<platform>/<build>-<test>` shape:
+the platform comes first and, on Linux, again at the end, as in
+`perftest-android-hw-a55-aarch64-shippable-startup-fenix-cold-main-first-frame`
+or `perftest-linux-service-worker-linux2404-64-shippable/opt`.
+`split_perftest_label` strips the platform tokens so the identity is
+`perftest-startup-fenix-cold-main-first-frame` or `perftest-service-worker`,
+comparable across platforms like every other test.
 
 ### Glossary
 

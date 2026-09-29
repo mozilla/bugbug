@@ -25,14 +25,60 @@ from bugbug.perf.label_policy import (
 )
 
 LABEL_RE = re.compile(r"^test-(?P<platform>[^/]+)/(?P<build>[^-]+)-(?P<test>.+)$")
+PERFTEST_PREFIX = "perftest-"
+PERFTEST_OS_RE = re.compile(r"^(linux|macosx|windows|android)")
+# Tokens that continue a mozperftest platform: device names (a55, p6, s24),
+# OS versions (24h2), numbers (64, 14, 0) and the fixed qualifiers.
+PERFTEST_PLATFORM_TOKEN_RE = re.compile(
+    r"^(emulator|hw|aarch64|shippable|ref|[aps]\d+|\d+h\d+|\d+)$"
+)
 
 
-def split_task_label(label: str) -> tuple[str, str, str] | None:
-    """Split a test task label into (platform, build type, test name)."""
+def split_task_label(label: str) -> tuple[str, str | None, str] | None:
+    """Split a test task label into (platform, build type, test name).
+
+    Handles ``test-<platform>/<build>-<test>`` labels and, through
+    ``split_perftest_label``, mozperftest labels. Returns None for anything
+    else, such as build tasks.
+    """
     match = LABEL_RE.match(label)
-    if match is None:
+    if match is not None:
+        return match.group("platform"), match.group("build"), match.group("test")
+    if label.startswith(PERFTEST_PREFIX):
+        return split_perftest_label(label)
+    return None
+
+
+def split_perftest_label(label: str) -> tuple[str, str | None, str] | None:
+    """Split a mozperftest label, which puts the platform first and sometimes again last.
+
+    ``perftest-android-hw-a55-aarch64-shippable-startup-fenix-cold-main-first-frame``
+    yields platform ``android-hw-a55-aarch64-shippable`` and test
+    ``perftest-startup-fenix-cold-main-first-frame``;
+    ``perftest-linux-service-worker-linux2404-64-shippable/opt`` yields the
+    trailing, more specific platform, build ``opt`` and
+    ``perftest-service-worker``. The build type is None when absent.
+    """
+    body, _, build = label[len(PERFTEST_PREFIX) :].partition("/")
+    tokens = body.split("-")
+    if not tokens or not PERFTEST_OS_RE.match(tokens[0]):
         return None
-    return match.group("platform"), match.group("build"), match.group("test")
+    end = 1
+    while end < len(tokens) and PERFTEST_PLATFORM_TOKEN_RE.match(tokens[end]):
+        end += 1
+    platform, rest = "-".join(tokens[:end]), tokens[end:]
+    for i in range(len(rest) - 1, 0, -1):
+        if PERFTEST_OS_RE.match(rest[i]) and all(
+            PERFTEST_PLATFORM_TOKEN_RE.match(token) for token in rest[i + 1 :]
+        ):
+            platform, rest = "-".join(rest[i:]), rest[:i]
+            break
+    if not rest:
+        return None
+    test = "-".join(rest)
+    if not test.startswith("perftest"):
+        test = f"perftest-{test}"
+    return platform, build or None, test
 
 
 def normalize_platform(platform: str) -> str:
@@ -56,6 +102,8 @@ def normalize_task_label(label: str) -> str:
     if parts is None:
         return label
     platform, build, test = parts
+    if label.startswith(PERFTEST_PREFIX):
+        return label.replace(platform, normalize_platform(platform), 1)
     return f"test-{normalize_platform(platform)}/{build}-{test}"
 
 
@@ -162,7 +210,7 @@ def get_runnable_identity(label: str) -> dict[str, str | None]:
     grouping = split_test_name(test)
     return {
         "label": normalized,
-        "platform": f"{platform}/{build}" if platform else None,
+        "platform": f"{platform}/{build}" if platform and build else platform,
         "build_type": build,
         "platform_family": family_of_platform,
         "test_name": test,

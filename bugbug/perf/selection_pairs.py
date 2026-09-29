@@ -96,8 +96,9 @@ def iter_labeled_pairs(
     """Yield positive pairs and inferred negatives at commit granularity.
 
     Negatives are every candidate identity for every commit from
-    :func:`bugbug.perf.push_status.iter_clean_commits`; pending and rejected pushes
-    yield nothing. ``candidates`` defaults to every identity that ran.
+    :func:`bugbug.perf.push_status.iter_clean_commits`, except commits that are
+    positives in any repository; pending and rejected pushes yield nothing.
+    ``candidates`` defaults to every identity that ran.
     """
     statuses = read_push_status(repository)
     if candidates is None:
@@ -106,7 +107,9 @@ def iter_labeled_pairs(
         }
 
     positives: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
+    positive_nodes: set[str] = set()
     for pair in db.read(PERF_PAIRS_DB):
+        positive_nodes.add(pair["node"])
         if pair["repository"] == repository:
             positives[pair["push_id"]].append(pair)
 
@@ -115,6 +118,8 @@ def iter_labeled_pairs(
             yield from positives[status["push_id"]]
             continue
         for _, commit in iter_clean_commits([status]):
+            if commit["node"] in positive_nodes:
+                continue
             for identity in sorted(candidates):
                 yield {
                     "repository": repository,

@@ -36,6 +36,109 @@ def test_split_and_normalize_label() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "label, platform, build, test_name, family, application, platform_family",
+    [
+        (
+            "perftest-android-hw-a55-aarch64-shippable-startup-fenix-cold-main-first-frame",
+            "android-hw-a55-aarch64-shippable",
+            None,
+            "perftest-startup-fenix-cold-main-first-frame",
+            "perftest-startup",
+            "fenix",
+            "android",
+        ),
+        (
+            "perftest-android-hw-p6-aarch64-shippable-startup-chrome-m-homeview-startup",
+            "android-hw-p6-aarch64-shippable",
+            None,
+            "perftest-startup-chrome-m-homeview-startup",
+            "perftest-startup",
+            "chrome-m",
+            "android",
+        ),
+        (
+            "perftest-android-hw-a55-background-resource-fenix",
+            "android-hw-a55",
+            None,
+            "perftest-background-resource-fenix",
+            "perftest",
+            "fenix",
+            "android",
+        ),
+        (
+            "perftest-android-emulator-shippable-first-frame-startup",
+            "android-emulator-shippable",
+            None,
+            "perftest-first-frame-startup",
+            "perftest-startup",
+            "firefox",
+            "android",
+        ),
+        (
+            "perftest-linux-service-worker-linux2404-64-shippable/opt",
+            "linux2404-64-shippable",
+            "opt",
+            "perftest-service-worker",
+            "perftest",
+            "firefox",
+            "linux",
+        ),
+        (
+            "perftest-linux-perftest-accessibility-linux2404-64-shippable/opt",
+            "linux2404-64-shippable",
+            "opt",
+            "perftest-accessibility",
+            "perftest",
+            "firefox",
+            "linux",
+        ),
+        (
+            "perftest-windows11-24h2-ref-perftest-accessibility",
+            "windows11-24h2-ref",
+            None,
+            "perftest-accessibility",
+            "perftest",
+            "firefox",
+            "windows",
+        ),
+        (
+            "perftest-macosx-perftest-accessibility",
+            "macosx",
+            None,
+            "perftest-accessibility",
+            "perftest",
+            "firefox",
+            "macosx",
+        ),
+    ],
+)
+def test_perftest_labels(
+    label, platform, build, test_name, family, application, platform_family
+) -> None:
+    assert perf.split_task_label(label) == (platform, build, test_name)
+    identity = perf.get_runnable_identity(label)
+    assert identity["test_name"] == test_name
+    assert identity["family"] == family
+    assert identity["application"] == application
+    assert identity["platform_family"] == platform_family
+    assert identity["build_type"] == build
+    assert identity["platform"] == (f"{platform}/{build}" if build else platform)
+
+
+def test_perftest_label_normalization_and_exclusion() -> None:
+    old = "perftest-linux-ml-summarizer-perf-linux1804-64-shippable/opt"
+    assert (
+        perf.normalize_task_label(old)
+        == "perftest-linux-ml-summarizer-perf-linux2404-64-shippable/opt"
+    )
+    chrome = "perftest-android-hw-a55-background-resource-chrome"
+    assert perf.get_exclusion_reason(chrome) == "application"
+    fenix = "perftest-android-hw-a55-background-resource-fenix"
+    assert perf.get_exclusion_reason(fenix) is None
+    assert perf.split_task_label("perftest-unknown") is None
+
+
 def test_runnable_identity() -> None:
     identity = perf.get_runnable_identity(
         "test-android-hw-a55-14-0-aarch64-shippable/opt-browsertime-tp6m-fenix-amazon"
@@ -237,7 +340,7 @@ def test_push_cost_summary() -> None:
 
 def test_sql_queries_are_parameterized() -> None:
     query = perf.build_alerts_query(
-        ("autoland", "mozilla-central"),
+        ("autoland", "mozilla-central"),  # explicit list, independent of the default
         datetime(2026, 1, 2).date(),
         datetime(2026, 2, 1).date(),
     )
@@ -791,6 +894,60 @@ def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
     assert exported[-1]["commit_message"] == "Bug 3 - culprit\n\nMore text"
     assert exported[-1]["diff"].startswith("diff --git a/f b/f")
     assert exported[-1]["policy_version"] == perf.POLICY_VERSION
+
+
+def test_export_never_samples_culprits_or_duplicates() -> None:
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(
+        perf.generate_regressions([_alert()], push_index, _bugs(), SETTLED)
+    )
+    statuses = list(
+        perf.generate_push_status(push_index, regressions, "autoland", SETTLED)
+    )
+    # A merge push on another repository lists the culprit and a clean commit again.
+    merge = _push(
+        40,
+        [("c" * 40, "Bug 3 - culprit", 3, False), ("a" * 40, "Bug 1 - x", 1, False)],
+        [],
+        repository="mozilla-central",
+        time="2026-06-02T00:00:00",
+    )
+    statuses += list(
+        perf.generate_push_status(
+            perf.PushIndex([merge]), [], "mozilla-central", SETTLED
+        )
+    )
+    selected = perf.select_export_commits(
+        regressions, statuses, negative_ratio=10, seed=0
+    )
+    negatives = [r for r in selected if r["label"] == 0]
+    assert "c" * 40 not in {n["node"] for n in negatives}
+    assert len([n for n in negatives if n["node"] == "a" * 40]) == 1
+
+    db.write(
+        perf.PERF_PAIRS_DB,
+        list(perf.generate_scheduling_pairs(regressions, push_index, "autoland")),
+    )
+    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
+    rows = list(perf.iter_labeled_pairs({"talos-g1"}, repository="mozilla-central"))
+    assert all(r["node"] != "c" * 40 for r in rows)
+
+
+def test_attach_commit_patches_skips_empty_diffs(monkeypatch) -> None:
+    records = [{"node": "1" * 40}, {"node": "2" * 40}]
+
+    def fake_patches(repo_dir, revs):
+        header = b"# HG changeset patch\n# Node ID "
+        return [
+            header + rev + b"\nMerge a to b\n"
+            if rev.startswith(b"1")
+            else header + rev + b"\nBug 1 - x\n\ndiff --git a/f b/f\n+x\n"
+            for rev in revs
+        ]
+
+    monkeypatch.setattr(regression_commits, "export_hg_patches", fake_patches)
+    exported = list(perf.attach_commit_patches(records, "/nonexistent"))
+    assert [e["node"][0] for e in exported] == ["2"]
 
 
 def test_revert_is_pinned_through_the_summary_bug() -> None:
