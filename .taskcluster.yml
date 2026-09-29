@@ -155,11 +155,69 @@ tasks:
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=phabricator_proxy --cov-append tests/ &&
                     cd ../lando-client &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=lando_client --cov-append tests/ &&
+                    cd ../hackbot-client &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_client --cov-append tests/ &&
+                    cd ../testrail-client &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=testrail_client --cov-append tests/ &&
                     cd ../.. &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug libs tests
                 description: bugbug libs tests
+
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("services_tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-cx"
+                  - "git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    export COVERAGE_FILE=$(pwd)/.coverage &&
+                    cd services/hackbot-api &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
+                    cd ../hackbot-pulse-listener &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
+                    cd ../mcp &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --with pytest-mock==3.15.1 pytest --cov=bugbug_mcp --cov-append tests/ &&
+                    cd ../.. &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug services tests
+                description: bugbug services tests
+
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("agents_tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-cx"
+                  - "git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    export COVERAGE_FILE=$(pwd)/.coverage &&
+                    cd agents/bug-fix &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../build-repair &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../frontend-triage &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../test-repair &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../.. &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug agents tests
+                description: bugbug agents tests
 
         - $mergeDeep:
             - { $eval: default_task_definition }
@@ -296,6 +354,8 @@ tasks:
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
                   - { $eval: as_slugid("libs_tests_task") }
+                  - { $eval: as_slugid("services_tests_task") }
+                  - { $eval: as_slugid("agents_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("hackbot_ui_tests_task") }
                   - { $eval: as_slugid("packaging_test_task") }
@@ -329,6 +389,8 @@ tasks:
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
                   - { $eval: as_slugid("libs_tests_task") }
+                  - { $eval: as_slugid("services_tests_task") }
+                  - { $eval: as_slugid("agents_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("hackbot_ui_tests_task") }
                   - { $eval: as_slugid("packaging_test_task") }
