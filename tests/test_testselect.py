@@ -844,9 +844,11 @@ def test_group_model_balances_with_weights() -> None:
     X = pd.DataFrame(
         {"data": [{"total": float(label * 3 + rng.random())} for label in y]}
     )
+    model.row_push_failures = list(rng.integers(1, 20, size=len(y)))
     model.fit_classifier(X, y)
     probs = model.clf.predict_proba(X)[:, 1]
     assert probs[y == 1].mean() > 0.5 > probs[y == 0].mean()
+    assert "row_push_failures" not in model.__getstate__()
 
 
 def test_items_gen_samples_negatives(monkeypatch) -> None:
@@ -875,6 +877,25 @@ def test_items_gen_samples_negatives(monkeypatch) -> None:
     assert 50 < len(labels) < 250
     # The same rows are generated every time.
     assert labels == [label for _, label in model.items_gen(classes)]
+
+
+def test_positive_weights() -> None:
+    y = np.array([1, 1, 0, 1])
+    push_failures = np.array([1, 10, 10, 5])
+    assert list(testselect.positive_weights(y, push_failures, 5)) == [
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+    ]
+
+
+def test_group_model_sample_weights() -> None:
+    model = testselect.TestGroupSelectModel()
+    assert model.positive_weight_k == 5
+    y = np.array([1, 0, 1, 0, 0, 0])
+    model.row_push_failures = [10, 10, 1, 1, 1, 1]
+    assert list(model.get_sample_weights(y)) == [0.5, 0.5, 1.0, 0.5, 0.5, 0.5]
 
 
 def test_compute_confidence_thresholds() -> None:
