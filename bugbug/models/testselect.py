@@ -409,6 +409,11 @@ def select_configs(
     return configs_by_group
 
 
+# More, shallower trees with a lower learning rate than the XGBoost defaults: mostly improves the share
+# of each push's failures caught.
+TUNED_XGBOOST_PARAMS = {"n_estimators": 400, "learning_rate": 0.03, "max_depth": 4}
+
+
 # Number of runnables per push that the model should select at each confidence level used by the
 # Firefox taskgraph (e.g. bugbug-*-low/medium/high): roughly what the models selected at the fixed
 # 0.7/0.8/0.9 thresholds before the sample weighting and tuning changed their scale.
@@ -456,7 +461,13 @@ def share_caught(pushes: Iterable[dict[str, Any]], threshold: float) -> float | 
 
 
 class TestSelectModel(Model):
-    def __init__(self, lemmatization=False, granularity="label", failures_skip=None):
+    def __init__(
+        self,
+        lemmatization=False,
+        granularity="label",
+        failures_skip=None,
+        xgboost_params=None,
+    ):
         Model.__init__(self, lemmatization)
 
         self.granularity = granularity
@@ -530,7 +541,10 @@ class TestSelectModel(Model):
                 ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    xgboost.XGBClassifier(
+                        n_jobs=utils.get_physical_cpu_count(),
+                        **(xgboost_params or {}),
+                    ),
                 ),
             ]
         )
@@ -1038,7 +1052,9 @@ class TestLabelSelectModel(TestSelectModel):
 
 class TestGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
-        TestSelectModel.__init__(self, lemmatization, "group")
+        TestSelectModel.__init__(
+            self, lemmatization, "group", xgboost_params=TUNED_XGBOOST_PARAMS
+        )
 
 
 class TestConfigGroupSelectModel(TestSelectModel):

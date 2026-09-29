@@ -803,6 +803,17 @@ def test_eval_apply_transforms_cap() -> None:
     assert selected == {"a", "b", "c", "d"}
 
 
+def test_group_model_xgboost_params() -> None:
+    params = testselect.TestGroupSelectModel().clf.named_steps["estimator"].get_params()
+    assert (params["n_estimators"], params["learning_rate"], params["max_depth"]) == (
+        400,
+        0.03,
+        4,
+    )
+    default = testselect.TestLabelSelectModel().clf.named_steps["estimator"]
+    assert default.get_params()["n_estimators"] is None
+
+
 def test_compute_confidence_thresholds() -> None:
     push_confidences = [
         [0.9, 0.75, 0.5, 0.2],
