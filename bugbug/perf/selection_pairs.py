@@ -71,6 +71,7 @@ def generate_scheduling_pairs(
                         "test_name": runnable["test_name"],
                         "family": runnable["family"],
                         "category": runnable["category"],
+                        "categories": runnable["categories"],
                         "framework": runnable["framework"],
                         "application": runnable["application"],
                         "label": 1,

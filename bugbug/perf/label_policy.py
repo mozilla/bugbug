@@ -87,44 +87,79 @@ FIREFOX_APPLICATIONS = frozenset(("firefox", "fenix", "geckoview", "refbrow", "f
 # benchmarks, run from source-test tasks the JS team schedules; two regressions
 # in six months and a separate label shape make them not worth modeling yet.
 EXCLUDED_FRAMEWORKS = frozenset(("build_metrics", "js-bench"))
-EXCLUDED_TEST_MARKERS = ("regression-tests",)
+# Synthetic canaries and the harness sample tests.
+EXCLUDED_TEST_MARKERS = (
+    "regression-tests",
+    "browsertime-sample",
+    "sample-python-support",
+)
 # Diagnostic flavours of a test, as detected by task_labels.split_test_name.
 EXCLUDED_VARIANTS = ("profiling",)
 
-# Ordered: the first matching rule wins.
+# What a test measures. Every matching rule applies, so a test can carry
+# several categories (a YouTube power test is media and power); the first match
+# is its primary category, so rules are ordered from specific to general.
+# Patterns run against the platform-independent test name.
 CATEGORY_RULES = (
     (
-        re.compile(r"youtube-playback|video-playback|media-seek|webcodecs|-power"),
-        "media",
+        re.compile(
+            r"(^|-)ml-|-ml$|tr8ns|mlsuggest|semantichistory|smarttabgrouping"
+            r"|smartwindow|linkpreview|speech-recognition"
+        ),
+        "ml",
     ),
-    (re.compile(r"network-bench|-upload|trr-performance|hev3|http3"), "network"),
-    (re.compile(r"indexeddb"), "storage"),
-    (re.compile(r"^awsy"), "memory"),
     (re.compile(r"^talos-damp"), "devtools"),
+    (re.compile(r"accessib|a11y"), "accessibility"),
     (
         re.compile(
-            r"startup|talos-other|sessionrestore|realworld-webextensions|talos-xperf|first-install"
+            r"youtube-playback|video-playback|media-seek|media-playback|webcodecs"
+            r"|media-capabilities|webaudio"
+        ),
+        "media",
+    ),
+    (
+        re.compile(r"-power-|media-playback|background-resource|foreground-resource"),
+        "power",
+    ),
+    (re.compile(r"^awsy|-dmd|background-resource|foreground-resource"), "memory"),
+    (re.compile(r"indexeddb|perftest-places|service-worker"), "storage"),
+    (
+        re.compile(
+            r"tp6|tp7|tp5|pageload|speculat|throttled|browsertime-custom"
+            r"|process-switch|^talos-xperf|^talos-g5"
+        ),
+        "page-load",
+    ),
+    (
+        re.compile(
+            r"startup|sessionrestore|first-install|realworld-webextensions"
+            r"|^talos-other|^talos-g5|^talos-xperf"
         ),
         "startup",
     ),
     (
         re.compile(
-            r"motionmark|webgl|talos-g1|talos-g4|talos-svgr|talos-bcv|pdfpaint|perf-reftest|unity"
+            r"motionmark|webgl|unity|twitch-animation|pdfpaint|perf-reftest"
+            r"|^talos-g1|^talos-g4|^talos-svgr|^talos-bcv"
         ),
         "graphics",
     ),
-    (re.compile(r"pageload-benchmark|tp6-bench"), "page-load"),
+    (
+        re.compile(r"responsiveness|tabswitch|nav-bench|^talos-chrome|^talos-other"),
+        "responsiveness",
+    ),
     (
         re.compile(
-            r"speedometer|jetstream|ares6|sunspider|matrix-react|stylebench|assorted-dom"
-            r"|benchmark|dromaeo|talos-g3|talos-g5|kraken|wasm"
+            r"network-bench|-upload|trr-performance|busy-trr|hev3|http3|speculat"
+        ),
+        "network",
+    ),
+    (
+        re.compile(
+            r"benchmark|speedometer|jetstream|ares6|sunspider|matrix-react|stylebench"
+            r"|assorted-dom|dromaeo|kraken|^talos-g3|wasm-godot|wasm-misc"
+            r"|motionmark|unity|twitch-animation|media-capabilities|webaudio"
         ),
         "benchmark",
     ),
-    (re.compile(r"responsiveness|tabswitch|talos-chrome|nav-bench"), "responsiveness"),
-    (
-        re.compile(r"tp6|tp7|talos-tp5o|speculat|throttled|browsertime-custom"),
-        "page-load",
-    ),
-    (re.compile(r"ml-|tr8ns"), "ml"),
 )

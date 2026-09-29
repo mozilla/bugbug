@@ -295,6 +295,7 @@ def generate_regressions(
                     "test_name": identity["test_name"] if identity else None,
                     "family": identity["family"] if identity else None,
                     "category": identity["category"] if identity else None,
+                    "categories": identity["categories"] if identity else [],
                     "platform_family": (
                         identity["platform_family"]
                         if identity

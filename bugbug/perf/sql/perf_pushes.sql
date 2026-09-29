@@ -19,11 +19,13 @@
 WITH perf_job_types AS (
   SELECT id, name
   FROM job_type
-  WHERE name LIKE '%-browsertime-%'
+  WHERE (name LIKE '%-browsertime-%'
      OR name LIKE '%-talos-%'
      OR name LIKE '%-awsy%'
      OR name LIKE '%-raptor-%'
-     OR name LIKE 'perftest-%'
+     OR name LIKE 'perftest-%')
+    AND name NOT LIKE 'source-test-%'
+    AND name NOT LIKE 'toolchain-%'
 )
 SELECT
   p.id AS push_id,

@@ -12,6 +12,7 @@ platform is a separate axis.
 """
 
 import re
+from typing import Any
 
 from bugbug.perf.label_policy import (
     APPLICATIONS,
@@ -118,8 +119,16 @@ def get_platform_family(platform: str) -> str:
 
 
 def is_perf_task_label(label: str) -> bool:
-    """Whether a task label belongs to one of the performance harnesses."""
-    return any(marker in label for marker in PERF_LABEL_MARKERS)
+    """Whether a task label is a performance test task.
+
+    The label must carry a harness marker and parse as a test label, which
+    rules out the harnesses' own unit tests (``source-test-python-raptor-*``)
+    and toolchain fetches (``toolchain-*-talos-pdfs``).
+    """
+    return (
+        any(marker in label for marker in PERF_LABEL_MARKERS)
+        and split_task_label(label) is not None
+    )
 
 
 def split_test_name(test_name: str) -> dict[str, str | None]:
@@ -185,19 +194,29 @@ def split_test_name(test_name: str) -> dict[str, str | None]:
     }
 
 
-def get_test_category(test_name: str) -> str:
-    """What the test measures: the first matching :data:`CATEGORY_RULES` entry, else other."""
+def get_test_categories(test_name: str) -> list[str]:
+    """Everything the test measures: all matching :data:`CATEGORY_RULES`, primary first.
+
+    Returns ``["other"]`` when nothing matches.
+    """
+    categories = []
     for pattern, category in CATEGORY_RULES:
-        if pattern.search(test_name):
-            return category
-    return "other"
+        if pattern.search(test_name) and category not in categories:
+            categories.append(category)
+    return categories or ["other"]
 
 
-def get_runnable_identity(label: str) -> dict[str, str | None]:
+def get_test_category(test_name: str) -> str:
+    """The primary category of a test: the first matching :data:`CATEGORY_RULES` entry."""
+    return get_test_categories(test_name)[0]
+
+
+def get_runnable_identity(label: str) -> dict[str, Any]:
     """Describe a normalized perf task label at every level models score at.
 
     ``test_name`` is the platform-independent identity, ``family`` the kind
-    entry, ``category`` what the test measures, and ``get_platform_family`` the OS.
+    entry, ``category`` the primary of ``categories`` (what the test measures),
+    and ``platform_family`` the OS.
     """
     normalized = normalize_task_label(label)
     parts = split_task_label(normalized)
@@ -208,6 +227,7 @@ def get_runnable_identity(label: str) -> dict[str, str | None]:
         platform, build, test = parts
         family_of_platform = get_platform_family(platform)
     grouping = split_test_name(test)
+    categories = get_test_categories(test)
     return {
         "label": normalized,
         "platform": f"{platform}/{build}" if platform and build else platform,
@@ -215,7 +235,8 @@ def get_runnable_identity(label: str) -> dict[str, str | None]:
         "platform_family": family_of_platform,
         "test_name": test,
         "family": grouping["family"],
-        "category": get_test_category(test),
+        "category": categories[0],
+        "categories": categories,
         "application": grouping["application"],
         "variant": grouping["variant"],
     }
@@ -224,9 +245,15 @@ def get_runnable_identity(label: str) -> dict[str, str | None]:
 def get_exclusion_reason(
     label: str, framework: str | None = None, application: str | None = None
 ) -> str | None:
-    """Why a runnable is out of scope for Firefox perf test selection, or None."""
+    """Why a runnable is out of scope for Firefox perf test selection, or None.
+
+    Reasons: ``framework``, ``unparsed`` (not a test task label), ``variant``,
+    ``canary`` and ``application``.
+    """
     if framework in EXCLUDED_FRAMEWORKS:
         return "framework"
+    if split_task_label(label) is None:
+        return "unparsed"
     identity = get_runnable_identity(label)
     if identity["variant"] in EXCLUDED_VARIANTS:
         return "variant"

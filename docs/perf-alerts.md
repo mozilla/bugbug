@@ -282,6 +282,7 @@ signature and task label:
 | `amount_pct`, `t_value`, `noise_profile`   | float, float, str | size and confidence of the shift, and series noisiness                 |
 | `label`                                    | str?              | normalized task label that produced the datapoints; null when unmapped |
 | `test_name`, `family`, `category`          | str?              | grouping levels from the label; null when unmapped                     |
+| `categories`                               | list[str]         | every category the test measures, primary first; empty when unmapped   |
 | `platform_family`                          | str               | OS family, from the label when mapped, else from `platform`            |
 
 ### `perf_scheduling_pairs.json` (one record per culprit commit and test identity)
@@ -294,6 +295,7 @@ signature and task label:
 | `pinned_by`                                      | str?            | how the commit was pinned; null when the whole push was labeled                    |
 | `test_name`                                      | str             | platform-independent test identity, e.g. `browsertime-tp6-firefox-amazon`          |
 | `family`, `category`                             | str             | grouping levels, e.g. `browsertime-tp6` and `page-load`                            |
+| `categories`                                     | list[str]       | every category of the test, primary first                                          |
 | `framework`, `application`                       | str             | harness and browser under test                                                     |
 | `label`                                          | int             | always 1; negatives are inferred, see `perf_push_status.json`                      |
 | `platform_families`                              | list[str]       | platform families that regressed, e.g. `["linux", "windows"]`                      |
@@ -403,7 +405,10 @@ labeling, and a summary made only of excluded runnables is not a regression:
   Firefox change cannot regress;
 - profiling variants (`-profiling`, `-native-profiling`), which are
   diagnostics, listed in `EXCLUDED_VARIANTS`;
-- the synthetic `regression-tests` canaries.
+- the synthetic `regression-tests` canaries and the harness sample tests;
+- labels that do not parse as test tasks although they carry a harness
+  marker: the harnesses' own unit tests (`source-test-python-raptor-*`) and
+  toolchain fetches (`toolchain-*-talos-pdfs`).
 
 `get_exclusion_reason(label, framework, application)` returns which rule applied.
 
@@ -411,18 +416,42 @@ labeling, and a summary made only of excluded runnables is not a regression:
 
 Every perf task label is described at four levels by `get_runnable_identity`:
 
-| Level                       | Example                                                          | Derived by                                                           |
-| --------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
-| task label                  | `test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon` | normalization                                                        |
-| test identity (`test_name`) | `browsertime-tp6-firefox-amazon`                                 | label minus platform and build type                                  |
-| family                      | `browsertime-tp6`                                                | the kind-file entry: harness plus test, before the application token |
-| category                    | `page-load`                                                      | ordered keyword rules in `CATEGORY_RULES`                            |
+| Level                       | Example                                                          | Derived by                                                                                 |
+| --------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| task label                  | `test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon` | normalization                                                                              |
+| test identity (`test_name`) | `browsertime-tp6-firefox-amazon`                                 | label minus platform and build type                                                        |
+| family                      | `browsertime-tp6`                                                | the kind-file entry: harness plus test, before the application token                       |
+| category                    | `page-load`                                                      | keyword rules in `CATEGORY_RULES`; `categories` lists every match, `category` is the first |
 
 The platform is a separate axis, `platform_family` (linux, windows, macosx,
 android), because most regressions are platform specific. Datasets are keyed
 on the test identity; family and category are attached as features so rare
 tests borrow strength from their siblings. `split_test_name` also exposes the
 `application` and the diagnostic `variant`.
+
+A test can measure more than one thing, so every matching rule applies and
+`categories` holds them all, primary first: a YouTube power test is `media`
+and `power`, `awsy-tp6` is `memory` and `page-load`, MotionMark is `graphics`
+and `benchmark`. The categories are:
+
+| Category         | Measures                                   | Examples                                                       |
+| ---------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| `page-load`      | loading pages                              | tp6, tp6m, tp5o, speculation rules, process switch             |
+| `startup`        | starting the browser or restoring sessions | mozperftest startup, sessionrestore, ts_paint in talos-other   |
+| `responsiveness` | reacting to input and UI actions           | browsertime-responsiveness, nav-bench, tabswitch, talos-chrome |
+| `graphics`       | painting, scrolling, WebGL, PDF rendering  | MotionMark, talos-g1, svgr, pdfpaint, perf-reftest             |
+| `media`          | audio and video playback, codecs           | youtube-playback, webcodecs, video-playback-latency            |
+| `power`          | energy and resource use                    | browsertime-power, media-playback, Android background-resource |
+| `network`        | transfer and DNS                           | network-bench, upload, TRR, hev3                               |
+| `storage`        | on-disk stores                             | IndexedDB, Places, service worker caching                      |
+| `memory`         | memory footprint                           | awsy, Android resource tests                                   |
+| `benchmark`      | synthetic JS, DOM and CSS workloads        | Speedometer, JetStream, dromaeo, wasm                          |
+| `ml`             | on-device machine learning                 | mozperftest ML and translations tests                          |
+| `devtools`       | developer tools                            | talos-damp                                                     |
+| `accessibility`  | accessibility tree maintenance             | mozperftest accessibility                                      |
+
+`other` is reserved for tests no rule recognises; none of the tests running
+on autoland in the six months to September 2026 falls into it.
 
 Mozperftest labels do not follow the `test-<platform>/<build>-<test>` shape:
 the platform comes first and, on Linux, again at the end, as in

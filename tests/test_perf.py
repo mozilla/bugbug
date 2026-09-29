@@ -544,6 +544,85 @@ def test_grouping_hierarchy(test_name, family, application, category) -> None:
     assert perf.get_test_category(test_name) == category
 
 
+@pytest.mark.parametrize(
+    "test_name, categories",
+    [
+        ("browsertime-power-firefox-youtube-playback-h264-1080p30", ["media", "power"]),
+        ("browsertime-media-playback-firefox-mp-idle", ["media", "power"]),
+        ("perftest-background-resource-fenix", ["power", "memory"]),
+        ("awsy-tp6", ["memory", "page-load"]),
+        ("browsertime-benchmark-firefox-motionmark-1-3", ["graphics", "benchmark"]),
+        ("browsertime-benchmark-firefox-webaudio", ["media", "benchmark"]),
+        ("browsertime-speculation-rules-firefox-prefetch", ["page-load", "network"]),
+        ("talos-other", ["startup", "responsiveness"]),
+        ("talos-g5", ["page-load", "startup"]),
+        ("perftest-ml-perf-wasm", ["ml"]),
+        ("perftest-formautofill-ml-perf-native", ["ml"]),
+        ("perftest-speech-recognition-perf", ["ml"]),
+        ("perftest-busy-trr", ["network"]),
+        ("perftest-places", ["storage"]),
+        ("perftest-service-worker", ["storage"]),
+        ("perftest-accessibility", ["accessibility"]),
+        ("talos-bcv", ["graphics"]),
+        ("browsertime-benchmark-firefox-speedometer3", ["benchmark"]),
+        ("perftest-linux-domcount", ["other"]),
+    ],
+)
+def test_test_categories(test_name, categories) -> None:
+    assert perf.get_test_categories(test_name) == categories
+    assert perf.get_test_category(test_name) == categories[0]
+
+
+def test_every_known_test_has_a_category() -> None:
+    # One identity per family seen on autoland over six months.
+    identities = """
+        browsertime-custom-firefox-process-switch browsertime-pageload-benchmark-firefox-tp6-bench
+        browsertime-speculative-firefox-connect browsertime-tp6-firefox-buzzfeed
+        browsertime-tp6-bytecode-firefox-amazon browsertime-tp6-essential-firefox-cnn
+        browsertime-tp6-live-sheriffed-firefox-cnn browsertime-tp6-webextensions-firefox-amazon
+        browsertime-tp6m-fenix-amazon-nofis browsertime-tp6m-essential-geckoview-google
+        talos-tp5o talos-tp5o-swr browsertime-media-seek-firefox-media-seek
+        browsertime-video-playback-latency-firefox-vpl-av1 browsertime-webcodecs-firefox-ve-h264-rt
+        browsertime-mobile-fenix-youtube-playback-hfr browsertime-hev3-connection-m-fenix-he3on-doh
+        browsertime-network-bench-firefox-h3-download-1M_400ms-0 browsertime-trr-performance-firefox-trr-cira
+        browsertime-upload-firefox-upload-h3 browsertime-benchmark-firefox-ares6
+        browsertime-benchmark-firefox-assorted-dom browsertime-benchmark-firefox-jetstream3
+        browsertime-benchmark-firefox-matrix-react-bench browsertime-benchmark-firefox-media-capabilities
+        browsertime-benchmark-firefox-stylebench browsertime-benchmark-firefox-sunspider
+        browsertime-benchmark-firefox-twitch-animation browsertime-benchmark-firefox-unity-webgl
+        browsertime-benchmark-jetstream2-fenix browsertime-benchmark-speedometer3-mobile-geckoview
+        browsertime-benchmark-wasm-firefox-wasm-godot-baseline browsertime-benchmark-unity-webgl-mobile-fenix
+        talos-dromaeojs talos-g3 talos-g1 talos-g4 talos-pdfpaint-7 talos-perf-reftest-singletons
+        talos-svgr talos-webgl talos-bcv perftest-ml-llama-summarizer-perf-hwinference
+        perftest-tr8ns-perf-basememory perftest-mlsuggest-perf-native perftest-semantichistory-perf
+        perftest-smarttabgrouping-perf-native perftest-smartwindow-perf perftest-linkpreview-perf
+        browsertime-first-install-firefox-welcome perftest-newssite-applink-startup
+        perftest-startup-geckoview-cold-view-nav-start talos-other-nv talos-realworld-webextensions
+        talos-sessionrestore-many-windows-no-nv talos-xperf browsertime-indexeddb-firefox-idbCurNext
+        browsertime-nav-bench-firefox-nav-bench browsertime-responsiveness-firefox-reddit-billgates-ama
+        talos-chrome-nv talos-tabswitch awsy-base-dmd awsy-tp6 talos-damp-webconsole
+        perftest-foreground-resource-fenix perftest-accessibility perftest-service-worker perftest-places
+        perftest-busy-trr
+    """.split()
+    uncategorized = [t for t in identities if perf.get_test_category(t) == "other"]
+    assert uncategorized == []
+
+
+def test_non_test_labels_are_excluded() -> None:
+    for label in (
+        "source-test-python-raptor-linux2404-64/opt",
+        "toolchain-linux64-talos-pdfs",
+    ):
+        assert not perf.is_perf_task_label(label)
+        assert perf.get_exclusion_reason(label) == "unparsed"
+    assert perf.is_perf_task_label("test-linux2404-64-shippable/opt-talos-g1")
+    assert perf.is_perf_task_label("perftest-linux-busy-trr-linux2404-64-shippable/opt")
+    sample = (
+        "test-linux2404-64-shippable/opt-browsertime-custom-firefox-browsertime-sample"
+    )
+    assert perf.get_exclusion_reason(sample) == "canary"
+
+
 def test_runnable_identity_levels() -> None:
     identity = perf.get_runnable_identity(
         "test-windows11-64-24h2-shippable/opt-browsertime-tp6-firefox-amazon"
@@ -551,6 +630,7 @@ def test_runnable_identity_levels() -> None:
     assert identity["test_name"] == "browsertime-tp6-firefox-amazon"
     assert identity["family"] == "browsertime-tp6"
     assert identity["category"] == "page-load"
+    assert identity["categories"] == ["page-load"]
     assert identity["application"] == "firefox"
     assert identity["platform_family"] == "windows"
     assert identity["variant"] is None
