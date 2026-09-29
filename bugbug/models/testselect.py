@@ -10,6 +10,7 @@ import logging
 import math
 import multiprocessing as mp
 import pickle
+import random
 import statistics
 from functools import reduce
 from typing import Any, Callable, Collection, Iterable, Sequence, Set
@@ -460,6 +461,21 @@ def share_caught(pushes: Iterable[dict[str, Any]], threshold: float) -> float | 
     return sum(caught) / len(caught) if caught else None
 
 
+def class_balance_weights(
+    y: np.ndarray, counted: np.ndarray | None = None
+) -> np.ndarray:
+    """Weight negatives by the ratio of positives to negatives (counting the `counted` samples).
+
+    The classes get the same total weight as when undersampling the negatives to 1:1 (so predicted
+    probabilities stay comparable), but the model is trained on all of them.
+    """
+    if counted is None:
+        counted = np.ones(len(y), dtype=bool)
+    positives = np.count_nonzero(y[counted] == 1)
+    negatives = np.count_nonzero(y[counted] == 0)
+    return np.where(y == 1, 1.0, positives / max(negatives, 1))
+
+
 class TestSelectModel(Model):
     def __init__(
         self,
@@ -467,11 +483,15 @@ class TestSelectModel(Model):
         granularity="label",
         failures_skip=None,
         xgboost_params=None,
+        balance_with_weights=False,
+        negative_sample_rate=None,
     ):
         Model.__init__(self, lemmatization)
 
         self.granularity = granularity
         self.failures_skip = failures_skip
+        self.balance_with_weights = balance_with_weights
+        self.negative_sample_rate = negative_sample_rate
 
         self.training_dbs = [repository.COMMITS_DB]
         self.eval_dbs[repository.COMMITS_DB] = (
@@ -535,19 +555,28 @@ class TestSelectModel(Model):
             ]
         )
 
-        self.clf = ImblearnPipeline(
-            [
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
-                ("sampler", RandomUnderSampler(random_state=0)),
-                (
-                    "estimator",
-                    xgboost.XGBClassifier(
-                        n_jobs=utils.get_physical_cpu_count(),
-                        **(xgboost_params or {}),
-                    ),
+        steps: list[tuple[str, Any]] = [
+            ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+        ]
+        # Either undersample the negatives, or train on all of them with sample weights balancing
+        # the classes (see get_sample_weights).
+        if not balance_with_weights:
+            steps.append(("sampler", RandomUnderSampler(random_state=0)))
+        steps.append(
+            (
+                "estimator",
+                xgboost.XGBClassifier(
+                    n_jobs=utils.get_physical_cpu_count(), **(xgboost_params or {})
                 ),
-            ]
+            )
         )
+        self.clf = ImblearnPipeline(steps)
+
+    def get_sample_weights(self, y):
+        if not self.balance_with_weights:
+            return None
+
+        return class_balance_weights(y)
 
     def get_pushes(
         self, apply_filters: bool = False
@@ -602,6 +631,10 @@ class TestSelectModel(Model):
     def items_gen(self, classes):
         commit_map = get_commit_map()
 
+        # With negative_sample_rate, keep all failures but only a random (fixed, as the rows can be
+        # generated more than once) fraction of the passes.
+        rng = random.Random(0)
+
         for revs, test_datas in test_scheduling.get_test_scheduling_history(
             self.granularity
         ):
@@ -614,6 +647,13 @@ class TestSelectModel(Model):
                 name = test_data["name"]
 
                 if (revs[0], name) not in classes:
+                    continue
+
+                if (
+                    self.negative_sample_rate is not None
+                    and classes[(revs[0], name)] == 0
+                    and rng.random() >= self.negative_sample_rate
+                ):
                     continue
 
                 commit_data = commit_features.merge_commits(commits)
@@ -1053,7 +1093,14 @@ class TestLabelSelectModel(TestSelectModel):
 class TestGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
         TestSelectModel.__init__(
-            self, lemmatization, "group", xgboost_params=TUNED_XGBOOST_PARAMS
+            self,
+            lemmatization,
+            "group",
+            xgboost_params=TUNED_XGBOOST_PARAMS,
+            # Train on more negatives than 1:1 undersampling would keep (~15 per positive), with
+            # sample weights balancing the classes.
+            balance_with_weights=True,
+            negative_sample_rate=0.02,
         )
 
 

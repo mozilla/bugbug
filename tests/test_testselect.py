@@ -10,6 +10,7 @@ from typing import Iterator
 
 import hypothesis
 import hypothesis.strategies as st
+import numpy as np
 import pytest
 from igraph import Graph
 
@@ -812,6 +813,68 @@ def test_group_model_xgboost_params() -> None:
     )
     default = testselect.TestLabelSelectModel().clf.named_steps["estimator"]
     assert default.get_params()["n_estimators"] is None
+
+
+def test_class_balance_weights() -> None:
+    y = np.array([1, 0, 0, 0, 1, 0])
+    assert list(testselect.class_balance_weights(y)) == [1.0, 0.5, 0.5, 0.5, 1.0, 0.5]
+    counted = np.array([True, True, True, False, True, False])
+    assert list(testselect.class_balance_weights(y, counted)) == [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+    ]
+
+
+def test_group_model_balances_with_weights() -> None:
+    import pandas as pd
+
+    model = testselect.TestGroupSelectModel()
+    assert "sampler" not in model.clf.named_steps
+    assert "sampler" in testselect.TestLabelSelectModel().clf.named_steps
+    assert (
+        testselect.TestLabelSelectModel().get_sample_weights(np.array([1, 0])) is None
+    )
+
+    rng = np.random.default_rng(0)
+    y = (rng.random(200) < 0.2).astype(int)
+    X = pd.DataFrame(
+        {"data": [{"total": float(label * 3 + rng.random())} for label in y]}
+    )
+    model.fit_classifier(X, y)
+    probs = model.clf.predict_proba(X)[:, 1]
+    assert probs[y == 1].mean() > 0.5 > probs[y == 0].mean()
+
+
+def test_items_gen_samples_negatives(monkeypatch) -> None:
+    history = [
+        ((f"rev{i}",), [{"name": f"group{j}"} for j in range(100)]) for i in range(50)
+    ]
+    classes = {
+        (revs[0], test_data["name"]): int(test_data["name"] == "group0")
+        for revs, test_datas in history
+        for test_data in test_datas
+    }
+    monkeypatch.setattr(
+        testselect.test_scheduling,
+        "get_test_scheduling_history",
+        lambda granularity: iter(history),
+    )
+    monkeypatch.setattr(
+        testselect, "get_commit_map", lambda: {f"rev{i}": {} for i in range(50)}
+    )
+    monkeypatch.setattr(testselect.commit_features, "merge_commits", lambda commits: {})
+
+    model = testselect.TestGroupSelectModel()
+    labels = [label for _, label in model.items_gen(classes)]
+    # All the positives, and about 2% of the negatives.
+    assert sum(labels) == 50
+    assert 50 < len(labels) < 250
+    # The same rows are generated every time.
+    assert labels == [label for _, label in model.items_gen(classes)]
 
 
 def test_compute_confidence_thresholds() -> None:
