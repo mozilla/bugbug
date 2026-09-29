@@ -801,3 +801,43 @@ def test_eval_apply_transforms_cap() -> None:
     assert selected == {"a", "b"}
     selected, _ = testselect.eval_apply_transforms("group", push, 0.5, None, None, 4)
     assert selected == {"a", "b", "c", "d"}
+
+
+def test_compute_confidence_thresholds() -> None:
+    push_confidences = [
+        [0.9, 0.75, 0.5, 0.2],
+        [0.8, 0.6, 0.3],
+        [0.95, 0.4],
+    ]
+    # 1 runnable per push on average: the 3 highest confidences are 0.95, 0.9, 0.8.
+    assert testselect.compute_confidence_thresholds(
+        push_confidences, {"high": 1, "low": 2}
+    ) == {"high": 0.8, "low": 0.5}
+    # Thresholds are rounded down to two decimals, like the confidences.
+    assert testselect.compute_confidence_thresholds([[0.456]], {"high": 1}) == {
+        "high": 0.45
+    }
+    # Targets larger than the number of runnables use the lowest confidence.
+    assert testselect.compute_confidence_thresholds([[0.7, 0.3]], {"low": 5}) == {
+        "low": 0.3
+    }
+
+
+def test_confidence_thresholds_default() -> None:
+    assert testselect.TestGroupSelectModel().confidence_thresholds is None
+    assert set(testselect.CONFIDENCE_LEVEL_TARGETS) == {"label", "group"}
+
+
+def test_share_caught() -> None:
+    pushes = [
+        {"failures": ["a"], "all_possibly_selected": {"a": 0.6, "b": 0.9}},
+        {"failures": ["c", "d"], "all_possibly_selected": {"d": 0.4}},
+        {"failures": ["e"], "all_possibly_selected": {}},
+        {"failures": [], "all_possibly_selected": {"f": 0.9}},
+    ]
+    assert testselect.share_caught(pushes, 0.5) == 1 / 3
+    assert testselect.share_caught(pushes, 0.3) == 2 / 3
+    assert testselect.share_caught(pushes[3:], 0.5) is None
+    assert set(testselect.CONFIDENCE_LEVEL_MIN_CAUGHT) == set(
+        testselect.CONFIDENCE_LEVEL_TARGETS
+    )
