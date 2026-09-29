@@ -1176,7 +1176,13 @@ class TestSelectModel(Model):
 
 class TestLabelSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
-        TestSelectModel.__init__(self, lemmatization, "label", failures_skip=60)
+        TestSelectModel.__init__(
+            self,
+            lemmatization,
+            "label",
+            failures_skip=60,
+            xgboost_params=TUNED_XGBOOST_PARAMS,
+        )
 
 
 class TestGroupSelectModel(TestSelectModel):
