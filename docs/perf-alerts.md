@@ -63,7 +63,7 @@ run stay unmapped.
 
 ## Operations
 
-`retrieve` snapshots the sources into three raw databases:
+`retrieve` snapshots the sources into four raw databases:
 
 - `data/perf_alerts.json`: one row per alert, attached to the summary it
   currently belongs to (reassigned alerts follow `related_summary_id`), with
@@ -72,7 +72,9 @@ run stay unmapped.
 - `data/perf_pushes.json`: one row per autoland push,
   with its commits (revision, first line, bug id, backout flag) and the
   performance jobs that ran on it (label, tier, total duration, and one entry
-  per run with task id, retry id, result and duration).
+  per run with task id, retry id, result and duration). Jobs are picked by
+  harness name markers; the harnesses' own unit tests and toolchain fetches
+  that share those markers are filtered out in the query.
   Pushes are retrieved incrementally in short windows and start three weeks
   before the alerts window, since Perfherder raises alerts up to two weeks
   after the culprit push; those lead pushes can be culprits but are never
@@ -387,7 +389,8 @@ record as `policy_version`. Bump it when they change.
   is clean for every sheriffed test, because the backstop runs every
   performance test and any regression would have been detected and attributed.
   This inference only holds while the backstop keeps running the full
-  performance suite.
+  performance suite. A commit that is a culprit anywhere is never a negative,
+  even when another push, such as a merge, lists it again.
 
 Task labels are normalized by dropping the `-qr` platform suffix and folding
 retired platforms into their successors through `PLATFORM_RENAMES`.
@@ -450,8 +453,13 @@ and `benchmark`. The categories are:
 | `devtools`       | developer tools                            | talos-damp                                                     |
 | `accessibility`  | accessibility tree maintenance             | mozperftest accessibility                                      |
 
-`other` is reserved for tests no rule recognises; none of the tests running
-on autoland in the six months to September 2026 falls into it.
+`other` is the fallback for a test no rule recognises, which is where a newly
+added test lands until a rule covers it. None of the tests running on autoland
+in the six months to September 2026 falls into it;
+`test_every_known_test_has_a_category` in `tests/test_perf.py` lists one
+identity per family and fails if a known family loses its category. To check
+a fresh snapshot, group `identities_ran` from `perf_push_status.json` by
+`get_test_category` and look at the `other` bucket.
 
 Mozperftest labels do not follow the `test-<platform>/<build>-<test>` shape:
 the platform comes first and, on Linux, again at the end, as in
@@ -469,19 +477,19 @@ where tests are defined, say harness, kind entry, app, variant. Our identity
 fields are parsed from task labels, so they follow the task graph where the two
 differ. For `test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon`:
 
-| Our field                          | Example                          | Perfherder                           | Task graph / harness                                    |
-| ---------------------------------- | -------------------------------- | ------------------------------------ | ------------------------------------------------------- |
-| `framework` (from the alert)       | `browsertime`                    | framework                            | harness; Raptor and Browsertime report as one framework |
-| `test_name`                        | `browsertime-tp6-firefox-amazon` | none: one task feeds many signatures | the label minus its platform                            |
-| `family`                           | `browsertime-tp6`                | none                                 | the kind-file entry; roughly Raptor's test type         |
-| `category`                         | `page-load`                      | none                                 | none; ours, for the fallback                            |
-| `subtest` (`split_test_name` only) | `amazon`                         | suite: the page or benchmark         | app-specific tail of the test name                      |
-| `application`                      | `firefox`                        | application                          | app                                                     |
-| `variant`                          | null (`swr`, `profiling`)        | inside `extra_options`               | test variant from `variants.yml`                        |
-| `platform`                         | `linux2404-64-shippable/opt`     | platform + option collection         | test platform                                           |
-| `build_type`                       | `opt`                            | option collection                    | build type                                              |
-| `platform_family`                  | `linux`                          | none                                 | none; ours                                              |
-| none                               | `fcp`, `loadtime`                | test: one metric inside a suite      | below the task; kept on runnables as `suite` and `test` |
+| Our field                          | Example                          | Perfherder                           | Task graph / harness                                         |
+| ---------------------------------- | -------------------------------- | ------------------------------------ | ------------------------------------------------------------ |
+| `framework` (from the alert)       | `browsertime`                    | framework                            | harness; Raptor and Browsertime report as one framework      |
+| `test_name`                        | `browsertime-tp6-firefox-amazon` | none: one task feeds many signatures | the label minus its platform                                 |
+| `family`                           | `browsertime-tp6`                | none                                 | the kind-file entry; roughly Raptor's test type              |
+| `category`, `categories`           | `page-load`                      | none                                 | none; ours, for the fallback; `categories` lists every match |
+| `subtest` (`split_test_name` only) | `amazon`                         | suite: the page or benchmark         | app-specific tail of the test name                           |
+| `application`                      | `firefox`                        | application                          | app                                                          |
+| `variant`                          | null (`swr`, `profiling`)        | inside `extra_options`               | test variant from `variants.yml`                             |
+| `platform`                         | `linux2404-64-shippable/opt`     | platform + option collection         | test platform                                                |
+| `build_type`                       | `opt`                            | option collection                    | build type                                                   |
+| `platform_family`                  | `linux`                          | none                                 | none; ours                                                   |
+| none                               | `fcp`, `loadtime`                | test: one metric inside a suite      | below the task; kept on runnables as `suite` and `test`      |
 
 Signature names cannot be turned into labels: the Talos suite `glterrain` runs
 in the task `talos-webgl`, and the AWSY suite `Heap Unclassified` in
