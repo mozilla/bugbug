@@ -476,6 +476,11 @@ def class_balance_weights(
     return np.where(y == 1, 1.0, positives / max(negatives, 1))
 
 
+def recency_weights(push_index: np.ndarray, half_life: int) -> np.ndarray:
+    """Halve the weight of a sample every `half_life` pushes before the most recent one."""
+    return 0.5 ** ((push_index.max() - push_index) / half_life)
+
+
 def positive_weights(y: np.ndarray, push_failures: np.ndarray, k: int) -> np.ndarray:
     """Weight each failing runnable by k / max(k, number of failing runnables in its push).
 
@@ -495,18 +500,22 @@ class TestSelectModel(Model):
         balance_with_weights=False,
         negative_sample_rate=None,
         positive_weight_k=None,
+        recency_half_life=None,
     ):
         Model.__init__(self, lemmatization)
 
         # Sample weights require the classes to be balanced with weights too (a sampler step would
         # drop samples without their weights).
-        assert balance_with_weights or positive_weight_k is None
+        assert balance_with_weights or (
+            positive_weight_k is None and recency_half_life is None
+        )
 
         self.granularity = granularity
         self.failures_skip = failures_skip
         self.balance_with_weights = balance_with_weights
         self.negative_sample_rate = negative_sample_rate
         self.positive_weight_k = positive_weight_k
+        self.recency_half_life = recency_half_life
 
         self.training_dbs = [repository.COMMITS_DB]
         self.eval_dbs[repository.COMMITS_DB] = (
@@ -597,6 +606,7 @@ class TestSelectModel(Model):
         # Per-row training metadata is only needed while training.
         state = self.__dict__.copy()
         state.pop("row_push_failures", None)
+        state.pop("row_push_index", None)
         return state
 
     def get_sample_weights(self, y):
@@ -609,6 +619,10 @@ class TestSelectModel(Model):
         if self.positive_weight_k is not None:
             push_failures = np.array(self.row_push_failures[: len(y)])
             weights *= positive_weights(y, push_failures, self.positive_weight_k)
+
+        if self.recency_half_life is not None:
+            push_index = np.array(self.row_push_index[: len(y)])
+            weights *= recency_weights(push_index, self.recency_half_life)
 
         return weights
 
@@ -671,9 +685,11 @@ class TestSelectModel(Model):
 
         # Number of failing runnables in the push of each generated row, for sample weights.
         self.row_push_failures = []
+        # Index of the push of each generated row (pushes are in chronological order).
+        self.row_push_index = []
 
-        for revs, test_datas in test_scheduling.get_test_scheduling_history(
-            self.granularity
+        for push_index, (revs, test_datas) in enumerate(
+            test_scheduling.get_test_scheduling_history(self.granularity)
         ):
             commits = tuple(
                 commit_map.pop(revision) for revision in revs if revision in commit_map
@@ -702,6 +718,7 @@ class TestSelectModel(Model):
                 commit_data = commit_features.merge_commits(commits)
                 commit_data["test_job"] = test_data
                 self.row_push_failures.append(push_failures)
+                self.row_push_index.append(push_index)
                 yield commit_data, classes[(revs[0], name)]
 
     def get_labels(self):
@@ -1146,6 +1163,8 @@ class TestGroupSelectModel(TestSelectModel):
             balance_with_weights=True,
             negative_sample_rate=0.02,
             positive_weight_k=5,
+            # Failure patterns drift over time (e.g. changes in scheduling, per-suite failure rates).
+            recency_half_life=10000,
         )
 
 

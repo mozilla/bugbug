@@ -845,10 +845,12 @@ def test_group_model_balances_with_weights() -> None:
         {"data": [{"total": float(label * 3 + rng.random())} for label in y]}
     )
     model.row_push_failures = list(rng.integers(1, 20, size=len(y)))
+    model.row_push_index = list(range(len(y)))
     model.fit_classifier(X, y)
     probs = model.clf.predict_proba(X)[:, 1]
     assert probs[y == 1].mean() > 0.5 > probs[y == 0].mean()
     assert "row_push_failures" not in model.__getstate__()
+    assert "row_push_index" not in model.__getstate__()
 
 
 def test_items_gen_samples_negatives(monkeypatch) -> None:
@@ -895,6 +897,7 @@ def test_group_model_sample_weights() -> None:
     assert model.positive_weight_k == 5
     y = np.array([1, 0, 1, 0, 0, 0])
     model.row_push_failures = [10, 10, 1, 1, 1, 1]
+    model.row_push_index = [0] * 6
     assert list(model.get_sample_weights(y)) == [0.5, 0.5, 1.0, 0.5, 0.5, 0.5]
 
 
@@ -909,6 +912,11 @@ def test_group_model_uses_manifest_suite() -> None:
     assert any(
         isinstance(fe, test_scheduling_features.ManifestSuite) for fe in extractors
     )
+
+
+def test_recency_weights() -> None:
+    weights = testselect.recency_weights(np.array([0, 10, 20]), 10)
+    assert list(weights) == [0.25, 0.5, 1.0]
 
 
 def test_compute_confidence_thresholds() -> None:
