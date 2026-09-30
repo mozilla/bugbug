@@ -845,17 +845,23 @@ def test_group_model_balances_with_weights() -> None:
         {"data": [{"total": float(label * 3 + rng.random())} for label in y]}
     )
     model.row_push_failures = list(rng.integers(1, 20, size=len(y)))
+    model.row_non_run = [False] * len(y)
     model.row_push_index = list(range(len(y)))
     model.fit_classifier(X, y)
     probs = model.clf.predict_proba(X)[:, 1]
     assert probs[y == 1].mean() > 0.5 > probs[y == 0].mean()
     assert "row_push_failures" not in model.__getstate__()
+    assert "row_non_run" not in model.__getstate__()
     assert "row_push_index" not in model.__getstate__()
 
 
 def test_items_gen_samples_negatives(monkeypatch) -> None:
     history = [
-        ((f"rev{i}",), [{"name": f"group{j}"} for j in range(100)]) for i in range(50)
+        (
+            (f"rev{i}",),
+            [{"name": f"group{j}", "is_non_run_negative": False} for j in range(100)],
+        )
+        for i in range(50)
     ]
     classes = {
         (revs[0], test_data["name"]): int(test_data["name"] == "group0")
@@ -880,6 +886,19 @@ def test_items_gen_samples_negatives(monkeypatch) -> None:
     # The same rows are generated every time.
     assert labels == [label for _, label in model.items_gen(classes)]
 
+    # Non-run negatives are ignored by default.
+    for _, test_datas in history:
+        for test_data in test_datas[50:]:
+            test_data["is_non_run_negative"] = True
+    list(model.items_gen(classes))
+    assert sum(model.row_non_run) == 0
+
+    # When enabled, they are sampled at their own rate (10%).
+    model.non_run_negative_weight = 0.3
+    model.non_run_negative_sample_rate = 0.1
+    list(model.items_gen(classes))
+    assert 150 < sum(model.row_non_run) < 350
+
 
 def test_positive_weights() -> None:
     y = np.array([1, 1, 0, 1])
@@ -897,8 +916,19 @@ def test_group_model_sample_weights() -> None:
     assert model.positive_weight_k == 5
     y = np.array([1, 0, 1, 0, 0, 0])
     model.row_push_failures = [10, 10, 1, 1, 1, 1]
+    model.row_non_run = [False] * 6
     model.row_push_index = [0] * 6
     assert list(model.get_sample_weights(y)) == [0.5, 0.5, 1.0, 0.5, 0.5, 0.5]
+
+    # Non-run negatives (when enabled) get a lower weight, and don't count when balancing the
+    # classes.
+    assert model.non_run_negative_weight is None
+    model.non_run_negative_weight = 0.3
+    y = np.array([1, 0, 0, 0])
+    model.row_push_failures = [1, 1, 1, 1]
+    model.row_non_run = [False, False, True, True]
+    model.row_push_index = [0] * 4
+    assert list(model.get_sample_weights(y)) == [1.0, 1.0, 0.3, 0.3]
 
 
 def test_group_model_uses_manifest_suite() -> None:
