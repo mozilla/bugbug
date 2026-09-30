@@ -45,7 +45,9 @@ class PatchSummarizationTool(GenerativeModelTool):
             }
         )
 
-        summary = result["messages"][-1].content
+        # .text normalizes list-of-blocks content (e.g. extended thinking) to a
+        # plain string; .content does not, and the .rfind below needs a str.
+        summary = str(result["messages"][-1].text)
 
         # FIXME(#5705): This is a temporary workaround until we have a more
         # robust way to handle token budgets in the agent's output
