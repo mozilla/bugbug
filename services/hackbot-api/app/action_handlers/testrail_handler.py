@@ -25,45 +25,17 @@ def _client() -> TestRailClient:
     return TestRailClient()
 
 
-def _require_id(response: object, object_name: str) -> int:
-    if not isinstance(response, dict):
-        raise RuntimeError(f"TestRail did not return a {object_name} object")
-    value = response.get("id")
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError(
-            f"TestRail did not return an id for the created {object_name}"
-        ) from exc
-
-
 async def _resolve_case_type_id(client: TestRailClient) -> int:
-    response = await client.get_case_types()
-    case_types = (
-        response.get("case_types", []) if isinstance(response, dict) else response
-    )
-    for case_type in case_types:
-        if (
-            isinstance(case_type, dict)
-            and str(case_type.get("name", "")).strip().casefold()
-            == _CASE_TYPE_NAME.casefold()
-        ):
-            return _require_id(case_type, "case type")
+    for case_type in await client.get_case_types():
+        if case_type.name.strip().casefold() == _CASE_TYPE_NAME.casefold():
+            return case_type.id
     raise RuntimeError(f'TestRail has no case type named "{_CASE_TYPE_NAME}"')
 
 
 async def _resolve_template_id(client: TestRailClient) -> int:
-    response = await client.get_templates()
-    templates = (
-        response.get("templates", []) if isinstance(response, dict) else response
-    )
-    for template in templates:
-        if (
-            isinstance(template, dict)
-            and str(template.get("name", "")).strip().casefold()
-            == _CASE_TEMPLATE_NAME.casefold()
-        ):
-            return _require_id(template, "template")
+    for template in await client.get_templates():
+        if template.name.strip().casefold() == _CASE_TEMPLATE_NAME.casefold():
+            return template.id
     raise RuntimeError(f'TestRail has no template named "{_CASE_TEMPLATE_NAME}"')
 
 
@@ -73,9 +45,7 @@ async def _resolve_status_ids(client: TestRailClient) -> dict[str, int]:
     An unsuitable case is posted as Blocked, the closest status a result can
     carry; the other two match TestRail's own status names.
     """
-    response = await client.get_statuses()
-    statuses = response.get("statuses", []) if isinstance(response, dict) else response
-    ids = {status["name"]: int(status["id"]) for status in statuses}
+    ids = {status.name: status.id for status in await client.get_statuses()}
     return {
         "passed": ids["passed"],
         "failed": ids["failed"],
@@ -184,36 +154,23 @@ class SubmitTestPlanHandler:
             # Before anything is created, so a missing status leaves no suite behind.
             status_ids = await _resolve_status_ids(client)
             suite_name = f"[Hackbot] - {feature}"
-            suite_id = _require_id(
-                await client.add_suite(suite_name),
-                "suite",
-            )
-            section_id = _require_id(
-                await client.add_section(suite_id, _SECTION_NAME),
-                "section",
-            )
+            suite_id = (await client.add_suite(suite_name)).id
+            section_id = (await client.add_section(suite_id, _SECTION_NAME)).id
 
             created_case_ids: dict[int, int] = {}
             for test_case in test_cases:
                 generated_id = int(test_case["id"])
-                case_id = _require_id(
-                    await client.add_case(
-                        section_id,
-                        _case_payload(
-                            test_case,
-                            case_type_id,
-                            template_id,
-                        ),
-                    ),
-                    "case",
+                case = await client.add_case(
+                    section_id,
+                    _case_payload(test_case, case_type_id, template_id),
                 )
+                case_id = case.id
                 created_case_ids[generated_id] = case_id
 
             case_ids = list(created_case_ids.values())
-            run_id = _require_id(
-                await client.add_run(_run_payload(suite_id, case_ids, summary)),
-                "run",
-            )
+            run_id = (
+                await client.add_run(_run_payload(suite_id, case_ids, summary))
+            ).id
             await client.add_results_for_cases(
                 run_id,
                 _executed_results(params, created_case_ids, status_ids),
