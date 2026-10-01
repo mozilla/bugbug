@@ -210,10 +210,16 @@ Two further hooks shape the comment text as it is recorded:
   checkout.
 - `feedback_tags_hook` (`agent.py`) appends the triage-specific tags a reader can
   add to categorize a problem: `ai-triage-wrong-file`, `ai-triage-wrong-cause`,
-  `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-wrong-fix`,
-  `ai-triage-shallow-fix`. The last two are about the fix plan rather than the
-  diagnosis: one for a fix that would not work, one for a fix that patches the
-  symptom instead of the cause the comment just named. The same hook closes the
+  `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-not-a-bug`,
+  `ai-triage-wrong-fix`, `ai-triage-shallow-fix`, `ai-triage-wrong-severity`.
+  `not-a-bug` is for intended behavior triaged as a defect, which is otherwise
+  filed under `out-of-scope` or `wrong-cause` and inflates both. `wrong-fix` and
+  `shallow-fix` are about the fix plan rather than the diagnosis: one for a fix
+  that would not work, one for a fix that patches the symptom instead of the cause
+  the comment just named. `wrong-severity` separates a bad severity suggestion
+  from a bad analysis, which a 👎 alone cannot do. The footer writes them as one
+  brace group, `ai-triage-{wrong-file, wrong-cause, …}`, so the list stays one
+  line as it grows. The same hook closes the
   comment by asking for a `needinfo?` on `hackbot@mozilla.tld`, which triggers a
   `bug-fix` run ([triggers.md](../../docs/hackbot/triggers.md)).
 
