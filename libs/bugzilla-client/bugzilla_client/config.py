@@ -13,8 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class BugzillaSettings(BaseModel):
-    # Optional: public bugs can be read anonymously. Writes need a key.
-    api_key: str | None = None
+    api_key: str
     # The site root, e.g. ``https://bugzilla.mozilla.org``. A REST base
     # (``.../rest``) is accepted too, since existing config uses both forms.
     url: str = "https://bugzilla.mozilla.org"

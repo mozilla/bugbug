@@ -95,9 +95,10 @@ class BugzillaClient:
 
     @property
     def headers(self) -> dict[str, str]:
-        headers = {"Accept": "application/json"}
-        if self.settings.api_key:
-            headers["X-Bugzilla-API-Key"] = self.settings.api_key
+        headers = {
+            "Accept": "application/json",
+            "X-Bugzilla-API-Key": self.settings.api_key,
+        }
         if self.settings.edge_key:
             headers["Mozilla-Edge-Key"] = self.settings.edge_key
         return headers

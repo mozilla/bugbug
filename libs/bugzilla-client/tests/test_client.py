@@ -92,7 +92,7 @@ def _attachment(id: int, bug_id: int, **extra) -> dict:
 
 
 def test_settings_accept_rest_base_url():
-    settings = BugzillaSettings(url="https://bugzilla.example.com/rest/")
+    settings = BugzillaSettings(api_key="k", url="https://bugzilla.example.com/rest/")
     assert settings.url == "https://bugzilla.example.com"
 
 
@@ -116,10 +116,9 @@ async def test_sends_auth_headers_and_uses_rest_base(bugzilla):
     assert request.headers["Mozilla-Edge-Key"] == "edge"
 
 
-async def test_no_api_key_header_when_anonymous(bugzilla):
-    handler, requests = _recorder(httpx.Response(200, json={"version": "1"}))
-    await bugzilla(handler, api_key=None).request("GET", "version")
-    assert "X-Bugzilla-API-Key" not in requests[0].headers
+def test_settings_require_api_key():
+    with pytest.raises(ValidationError, match="api_key"):
+        BugzillaSettings()
 
 
 def test_bug_url(bugzilla):
