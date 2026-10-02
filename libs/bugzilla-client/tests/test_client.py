@@ -40,10 +40,14 @@ def bugzilla(monkeypatch):
             return real_async_client(transport=httpx.MockTransport(handler), **kwargs)
 
         monkeypatch.setattr(client_module.httpx, "AsyncClient", fake_async_client)
-        settings.setdefault("api_key", "secret")
+        settings.setdefault("api_key", VALID_KEY)
         return BugzillaClient(BugzillaSettings(**settings))
 
     return make
+
+
+# A syntactically valid Bugzilla API key: 40 letters and digits.
+VALID_KEY = "a" * 40
 
 
 def _recorder(*responses: httpx.Response | Exception):
@@ -92,16 +96,18 @@ def _attachment(id: int, bug_id: int, **extra) -> dict:
 
 
 def test_settings_accept_rest_base_url():
-    settings = BugzillaSettings(api_key="k", url="https://bugzilla.example.com/rest/")
+    settings = BugzillaSettings(
+        api_key=VALID_KEY, url="https://bugzilla.example.com/rest/"
+    )
     assert settings.url == "https://bugzilla.example.com"
 
 
 def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("BUGZILLA_URL", "https://bugzilla.example.com/rest")
-    monkeypatch.setenv("BUGZILLA_API_KEY", "k")
+    monkeypatch.setenv("BUGZILLA_API_KEY", VALID_KEY)
     settings = BugzillaSettings.from_env()
     assert settings.url == "https://bugzilla.example.com"
-    assert settings.api_key == "k"
+    assert settings.api_key == VALID_KEY
 
 
 async def test_sends_auth_headers_and_uses_rest_base(bugzilla):
@@ -112,13 +118,19 @@ async def test_sends_auth_headers_and_uses_rest_base(bugzilla):
 
     (request,) = requests
     assert str(request.url) == "https://bugzilla.example.com/rest/version"
-    assert request.headers["X-Bugzilla-API-Key"] == "secret"
+    assert request.headers["X-Bugzilla-API-Key"] == VALID_KEY
     assert request.headers["Mozilla-Edge-Key"] == "edge"
 
 
 def test_settings_require_api_key():
     with pytest.raises(ValidationError, match="api_key"):
         BugzillaSettings()
+
+
+@pytest.mark.parametrize("key", ["a" * 39, "a" * 41], ids=["short", "long"])
+def test_settings_reject_wrong_length_api_key(key):
+    with pytest.raises(ValidationError, match="api_key"):
+        BugzillaSettings(api_key=key)
 
 
 def test_bug_url(bugzilla):

@@ -8,12 +8,15 @@ env-driven config (``BUGZILLA_URL``, ``BUGZILLA_API_KEY``, ...).
 
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from typing import Annotated
+
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class BugzillaSettings(BaseModel):
-    api_key: str
+    # Bugzilla generates API keys as 40 random letters and digits.
+    api_key: Annotated[str, Field(min_length=40, max_length=40)]
     # The site root, e.g. ``https://bugzilla.mozilla.org``. A REST base
     # (``.../rest``) is accepted too, since existing config uses both forms.
     url: str = "https://bugzilla.mozilla.org"
