@@ -22,6 +22,7 @@ members = [
     "bugbug",
     "bugbug-http-service",
     "bugbug-mcp",
+    "bugzilla-client",
     "hackbot-agent-autowebcompat-diagnosis",
     "hackbot-agent-autowebcompat-repro",
     "hackbot-agent-bug-fix",
@@ -841,6 +842,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e5/d0/610e2f68f515238f98f920d9fe0a9b4bbc56436e6cfc64c5b64dc20b1459/bugsy-0.12.0.tar.gz", hash = "sha256:2d49af1cb4a2841e3d677ac535b054c51f457a5d124ad106c43a8fc3847fb26e", size = 17841, upload-time = "2020-07-13T18:47:24.272Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/50/e6/a99aa6ab1ae7842011ca6d50d159a5e5a500717d13fc2ae42f39131741e3/bugsy-0.12.0-py2.py3-none-any.whl", hash = "sha256:b5df82ff0e708cca73a517bfa80494a43b1b97267d5778a5cba62f7a9d04e9da", size = 27223, upload-time = "2020-07-13T18:47:23.232Z" },
+]
+
+[[package]]
+name = "bugzilla-client"
+version = "0.1.0"
+source = { editable = "libs/bugzilla-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+    { name = "tenacity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "tenacity", specifier = ">=9.1.0" },
 ]
 
 [[package]]
