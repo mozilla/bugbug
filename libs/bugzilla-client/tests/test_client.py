@@ -95,15 +95,8 @@ def _attachment(id: int, bug_id: int, **extra) -> dict:
 # Settings
 
 
-def test_settings_accept_rest_base_url():
-    settings = BugzillaSettings(
-        api_key=VALID_KEY, url="https://bugzilla.example.com/rest/"
-    )
-    assert settings.url == "https://bugzilla.example.com"
-
-
 def test_settings_from_env(monkeypatch):
-    monkeypatch.setenv("BUGZILLA_URL", "https://bugzilla.example.com/rest")
+    monkeypatch.setenv("BUGZILLA_URL", "https://bugzilla.example.com")
     monkeypatch.setenv("BUGZILLA_API_KEY", VALID_KEY)
     settings = BugzillaSettings.from_env()
     assert settings.url == "https://bugzilla.example.com"
@@ -134,7 +127,7 @@ def test_settings_reject_wrong_length_api_key(key):
 
 
 def test_bug_url(bugzilla):
-    client = bugzilla(lambda r: None, url="https://bugzilla.example.com/rest")
+    client = bugzilla(lambda r: None, url="https://bugzilla.example.com/")
     assert client.bug_url(42) == "https://bugzilla.example.com/show_bug.cgi?id=42"
 
 

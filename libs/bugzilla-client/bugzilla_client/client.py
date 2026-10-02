@@ -94,6 +94,10 @@ class BugzillaClient:
         self.settings = settings or BugzillaSettings.from_env()
 
     @property
+    def base_url(self) -> str:
+        return self.settings.url.rstrip("/")
+
+    @property
     def headers(self) -> dict[str, str]:
         headers = {
             "Accept": "application/json",
@@ -104,7 +108,7 @@ class BugzillaClient:
         return headers
 
     def bug_url(self, bug_id: int) -> str:
-        return f"{self.settings.url}/show_bug.cgi?id={bug_id}"
+        return f"{self.base_url}/show_bug.cgi?id={bug_id}"
 
     @retry(
         retry=_should_retry,
@@ -134,7 +138,7 @@ class BugzillaClient:
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
             response = await client.request(
                 method,
-                f"{self.settings.url}/rest/{path.lstrip('/')}",
+                f"{self.base_url}/rest/{path.lstrip('/')}",
                 params=params,
                 json=json,
                 headers=self.headers,

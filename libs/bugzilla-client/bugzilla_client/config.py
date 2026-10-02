@@ -10,24 +10,17 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class BugzillaSettings(BaseModel):
     # Bugzilla generates API keys as 40 random letters and digits.
     api_key: Annotated[str, Field(min_length=40, max_length=40)]
-    # The site root, e.g. ``https://bugzilla.mozilla.org``. A REST base
-    # (``.../rest``) is accepted too, since existing config uses both forms.
+    # The site root, without ``/rest``; the client adds it for API calls.
     url: str = "https://bugzilla.mozilla.org"
     timeout_seconds: float = 30
     edge_key: str | None = None
-
-    @field_validator("url")
-    @classmethod
-    def _strip_rest_suffix(cls, v: str) -> str:
-        v = v.rstrip("/")
-        return v.removesuffix("/rest")
 
     @classmethod
     def from_env(cls) -> BugzillaSettings:
