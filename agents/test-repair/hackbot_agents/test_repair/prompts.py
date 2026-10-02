@@ -172,7 +172,7 @@ fixing the root cause you identified in {scratch_out}/analysis.md.
 The recommendation stays "backout". The patch is advice for the commit's author to
 squash into their existing patches and reland, so write it as a change to the
 original patch, not a follow-up on top of it.
-
+{tree_note}
 The source tree is at {source_repo} (your working directory). Search it with
 `git grep`, never `grep -r`.
 Editing: Read a file before you Edit or Write it -- both refuse until the file has
@@ -185,7 +185,10 @@ files and the output runs to tens of MB. Logs already fetched sit under
 {scratch_out}/logs; when you grep or sed one, cap the width as well as the line
 count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB.
 
-1. Make the smallest change that addresses the root cause.
+1. Make the smallest change that addresses the root cause. Do not add code
+   comments explaining the fix or what it replaced: the revision summary carries
+   that, and the patch is squashed into the author's own. Add a comment only where
+   the code would be unclear without it, as the surrounding code would.
 {verify_step}
 3. Append a "## Patch" section to {scratch_out}/analysis.md, under 10 lines: the
    files it touches, the root cause it addresses, and whether it was verified.
@@ -195,6 +198,24 @@ count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB
 5. Update {scratch_out}/verdict.json in place, preserving its existing keys: set
    "proposed_patch" to true if you made a fix, and leave "recommendation" as
    "backout".
+{report}"""
+
+TREE_AT_CULPRIT = """
+The tree is checked out at {culprit_commit} itself, so the diff you leave stacks
+directly on that commit.
+"""
+
+PARENT_REVISION_ARG = (
+    " parent_revision={revision} (the culprit's own revision, D{revision}),"
+)
+
+REPORT_INSTRUCTIONS = """
+6. Submit the patch with the `phabricator_submit_patch` action: bug_id={bug_id},{parent}
+   a title of the form "Bug {bug_id} - <what the fix does>", a summary naming the
+   culprit commit and the failing test(s) and saying the patch is meant to be
+   squashed into the culprit and relanded, and a test_plan stating how it was
+   verified. If you are not confident in the patch, record nothing and say so in
+   your final message.
 """
 
 VERIFY_LOCAL = """\

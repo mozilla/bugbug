@@ -4,6 +4,7 @@ from pathlib import Path
 
 from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.actions.email import record_email
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.slack import record_message
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,6 +13,7 @@ from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
 from .notify import (
     build_email,
     build_message,
+    recipients,
     resolve_culprit_author,
     sheriff_action_required,
 )
@@ -74,6 +76,8 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         log=ctx.log_path,
         verbose=True,
         publish_file=ctx.publish_file,
+        actions_recorder=ctx.actions,
+        checkout=ctx.checkout,
     )
 
     culprit_author = resolve_culprit_author(source_repo, result.culprit_commit)
@@ -109,8 +113,12 @@ def _record_verdict_email(
     """Email every verdict to the team, actionable or not.
 
     Unlike the Slack message this is not filtered: the team tracks what the agent
-    decided, including the intermittents no sheriff has to act on.
+    decided, including the intermittents no sheriff has to act on. The culprit's
+    author is addressed when there is a patch for them.
     """
+    pending = next(
+        (a for a in ctx.actions.actions if a["type"] in PATCH_ACTION_TYPES), None
+    )
     subject, body = build_email(
         result,
         investigation,
@@ -118,9 +126,12 @@ def _record_verdict_email(
         run_id=ctx.run_id,
         culprit_author=culprit_author,
         already_actioned=sheriff_classification(investigation.project, task_id),
+        revision_pending=pending is not None,
+        parent_revision=(pending or {}).get("params", {}).get("parent_revision"),
     )
     record_email(
         ctx.actions,
+        to=recipients(result, culprit_author),
         subject=subject,
         body_markdown=body,
         attach_patch=ctx.source_changed,
