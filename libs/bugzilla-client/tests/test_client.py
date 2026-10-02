@@ -434,7 +434,8 @@ async def test_create_bug_returns_id(bugzilla):
 
 
 async def test_add_attachment_sends_binary_data(bugzilla):
-    handler, requests = _recorder(httpx.Response(201, json={"ids": ["1"]}))
+    body = {"attachments": {"1": _attachment(1, 5)}}
+    handler, requests = _recorder(httpx.Response(201, json=body))
     attachment = NewAttachment(
         data=b"\xff\xfe\x00", file_name="a.bin", summary="s", content_type="x/y"
     )
@@ -443,16 +444,8 @@ async def test_add_attachment_sends_binary_data(bugzilla):
     assert base64.b64decode(body["data"]) == b"\xff\xfe\x00"
 
 
-async def test_add_attachment_reads_ids_from_upstream_response(bugzilla):
-    handler, _ = _recorder(httpx.Response(201, json={"ids": ["300"]}))
-    attachment = NewAttachment(
-        data=b"x", file_name="a.txt", summary="a", content_type="text/plain"
-    )
-    assert await bugzilla(handler).add_attachment(5, attachment) == 300
-
-
 async def test_add_attachment_encodes_data(bugzilla):
-    # BMO's answer: attachments keyed by id, and no ``ids`` list.
+    # BMO's answer: attachments keyed by id.
     body = {"attachments": {"300": _attachment(300, 5)}}
     handler, requests = _recorder(httpx.Response(201, json=body))
     attachment = NewAttachment(
@@ -475,7 +468,14 @@ async def test_add_attachment_encodes_data(bugzilla):
     assert "is_private" not in body
 
 
-@pytest.mark.parametrize("answer", [{"ids": []}, {"ids": [1, 2]}, {}])
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"attachments": {}},
+        {"attachments": {"1": {"id": 1}, "2": {"id": 2}}},
+    ],
+    ids=["none", "two"],
+)
 async def test_add_attachment_rejects_unexpected_id_count(bugzilla, answer):
     handler, _ = _recorder(httpx.Response(201, json=answer))
     attachment = NewAttachment(

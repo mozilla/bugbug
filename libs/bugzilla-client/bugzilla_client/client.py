@@ -246,12 +246,7 @@ class BugzillaClient:
         body["ids"] = [bug_id]
         body["data"] = base64.b64encode(attachment.data).decode("ascii")
         result = await self.request("POST", f"bug/{bug_id}/attachment", json=body)
-        # BMO answers ``{"attachments": {"<id>": {...}}}``; upstream Bugzilla
-        # answers ``{"ids": [...]}``. One bug was targeted, so expect one id.
-        if "attachments" in result:
-            ids = [int(a["id"]) for a in result["attachments"].values()]
-        else:
-            ids = [int(i) for i in result.get("ids") or []]
+        ids = [int(a["id"]) for a in result["attachments"].values()]
         if len(ids) != 1:
             raise BugzillaError(f"Expected one new attachment id, got {ids}")
         return ids[0]
