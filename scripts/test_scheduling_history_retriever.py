@@ -7,6 +7,7 @@ import argparse
 import concurrent.futures
 import math
 import os
+import random
 import traceback
 from datetime import datetime, timezone
 from logging import INFO, basicConfig, getLogger
@@ -189,7 +190,7 @@ class Retriever(object):
         zstd_compress(push_data_db)
 
     def generate_test_scheduling_history(
-        self, granularity: str, training_months: int
+        self, granularity: str, training_months: int, non_run_negatives: int = 0
     ) -> None:
         if granularity != "config_group":
             # Get the commits DB.
@@ -242,6 +243,21 @@ class Retriever(object):
             commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
                 commit_map[commit_data["node"]] = commit_data
+
+            # To add runnables that didn't run on a push as (verified) negatives, we need to know on
+            # which pushes each runnable ran, and when each push was backed out.
+            if non_run_negatives:
+                runs, rev_to_push = test_scheduling.index_runs(push_data_iter())
+                backout_push: dict[int, int] = {}
+                for node, commit_data in commit_map.items():
+                    backedoutby = commit_data["backedoutby"]
+                    if node in rev_to_push and backedoutby in rev_to_push:
+                        i = rev_to_push[node]
+                        backout_push[i] = min(
+                            backout_push.get(i, rev_to_push[backedoutby]),
+                            rev_to_push[backedoutby],
+                        )
+                non_run_candidates = list(all_runnables)
 
             # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
             past_failures.all_runnables = all_runnables
@@ -306,6 +322,30 @@ class Retriever(object):
                     skipped_no_runnables += 1
                     continue
 
+                # Runnables that didn't run on this push, but ran on a later push while its changes
+                # were still in the tree, are known to have passed: add a sample of them as negatives.
+                non_run = set()
+                if non_run_negatives:
+                    end = min(
+                        backout_push.get(
+                            i, i + test_scheduling.NON_RUN_NEGATIVES_MAX_LATER + 1
+                        )
+                        - 1,
+                        i + test_scheduling.NON_RUN_NEGATIVES_MAX_LATER,
+                    )
+                    non_run = set(
+                        test_scheduling.get_non_run_negatives(
+                            i,
+                            end,
+                            non_run_candidates,
+                            set(runnables_to_consider),
+                            runs,
+                            non_run_negatives,
+                            random.Random(i),
+                        )
+                    )
+                    runnables_to_consider += sorted(non_run)
+
                 # Sync DB every 250 pushes, so we cleanup the shelve cache (we'd run OOM otherwise!).
                 if i % 250 == 0:
                     past_failures.sync()
@@ -326,6 +366,8 @@ class Retriever(object):
                     likely_regressions,
                 ):
                     if pushdate > HISTORY_DATE_START:
+                        if non_run_negatives:
+                            data["is_non_run_negative"] = data["name"] in non_run
                         result_data.append(data)
 
                 if pushdate > HISTORY_DATE_START:
@@ -387,6 +429,12 @@ def main():
         required=True,
         help="How many months of pushes to use for training.",
     )
+    parser.add_argument(
+        "--non-run-negatives",
+        type=int,
+        default=0,
+        help="How many runnables that didn't run on a push to sample as (verified) negatives.",
+    )
 
     args = parser.parse_args()
 
@@ -397,7 +445,7 @@ def main():
         )
     elif args.op == "generate":
         retriever.generate_test_scheduling_history(
-            args.granularity, args.training_months
+            args.granularity, args.training_months, args.non_run_negatives
         )
 
 

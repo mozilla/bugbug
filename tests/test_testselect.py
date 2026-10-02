@@ -10,6 +10,7 @@ from typing import Iterator
 
 import hypothesis
 import hypothesis.strategies as st
+import numpy as np
 import pytest
 from igraph import Graph
 
@@ -801,3 +802,196 @@ def test_eval_apply_transforms_cap() -> None:
     assert selected == {"a", "b"}
     selected, _ = testselect.eval_apply_transforms("group", push, 0.5, None, None, 4)
     assert selected == {"a", "b", "c", "d"}
+
+
+def test_group_model_xgboost_params() -> None:
+    for model in (testselect.TestGroupSelectModel(), testselect.TestLabelSelectModel()):
+        params = model.clf.named_steps["estimator"].get_params()
+        assert (
+            params["n_estimators"],
+            params["learning_rate"],
+            params["max_depth"],
+        ) == (
+            400,
+            0.03,
+            4,
+        )
+    default = testselect.TestConfigGroupSelectModel().clf.named_steps["estimator"]
+    assert default.get_params()["n_estimators"] is None
+
+
+def test_class_balance_weights() -> None:
+    y = np.array([1, 0, 0, 0, 1, 0])
+    assert list(testselect.class_balance_weights(y)) == [1.0, 0.5, 0.5, 0.5, 1.0, 0.5]
+    counted = np.array([True, True, True, False, True, False])
+    assert list(testselect.class_balance_weights(y, counted)) == [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+    ]
+
+
+def test_group_model_balances_with_weights() -> None:
+    import pandas as pd
+
+    model = testselect.TestGroupSelectModel()
+    assert "sampler" not in model.clf.named_steps
+    assert "sampler" in testselect.TestLabelSelectModel().clf.named_steps
+    assert (
+        testselect.TestLabelSelectModel().get_sample_weights(np.array([1, 0])) is None
+    )
+
+    rng = np.random.default_rng(0)
+    y = (rng.random(200) < 0.2).astype(int)
+    X = pd.DataFrame(
+        {"data": [{"total": float(label * 3 + rng.random())} for label in y]}
+    )
+    model.row_push_failures = list(rng.integers(1, 20, size=len(y)))
+    model.row_non_run = [False] * len(y)
+    model.row_push_index = list(range(len(y)))
+    model.fit_classifier(X, y)
+    probs = model.clf.predict_proba(X)[:, 1]
+    assert probs[y == 1].mean() > 0.5 > probs[y == 0].mean()
+    assert "row_push_failures" not in model.__getstate__()
+    assert "row_non_run" not in model.__getstate__()
+    assert "row_push_index" not in model.__getstate__()
+
+
+def test_items_gen_samples_negatives(monkeypatch) -> None:
+    history = [
+        (
+            (f"rev{i}",),
+            [{"name": f"group{j}", "is_non_run_negative": False} for j in range(100)],
+        )
+        for i in range(50)
+    ]
+    classes = {
+        (revs[0], test_data["name"]): int(test_data["name"] == "group0")
+        for revs, test_datas in history
+        for test_data in test_datas
+    }
+    monkeypatch.setattr(
+        testselect.test_scheduling,
+        "get_test_scheduling_history",
+        lambda granularity: iter(history),
+    )
+    monkeypatch.setattr(
+        testselect, "get_commit_map", lambda: {f"rev{i}": {} for i in range(50)}
+    )
+    monkeypatch.setattr(testselect.commit_features, "merge_commits", lambda commits: {})
+
+    model = testselect.TestGroupSelectModel()
+    labels = [label for _, label in model.items_gen(classes)]
+    # All the positives, and about 2% of the negatives.
+    assert sum(labels) == 50
+    assert 50 < len(labels) < 250
+    # The same rows are generated every time.
+    assert labels == [label for _, label in model.items_gen(classes)]
+
+    # Non-run negatives are ignored by default.
+    for _, test_datas in history:
+        for test_data in test_datas[50:]:
+            test_data["is_non_run_negative"] = True
+    list(model.items_gen(classes))
+    assert sum(model.row_non_run) == 0
+
+    # When enabled, they are sampled at their own rate (10%).
+    model.non_run_negative_weight = 0.3
+    model.non_run_negative_sample_rate = 0.1
+    list(model.items_gen(classes))
+    assert 150 < sum(model.row_non_run) < 350
+
+
+def test_positive_weights() -> None:
+    y = np.array([1, 1, 0, 1])
+    push_failures = np.array([1, 10, 10, 5])
+    assert list(testselect.positive_weights(y, push_failures, 5)) == [
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+    ]
+
+
+def test_group_model_sample_weights() -> None:
+    model = testselect.TestGroupSelectModel()
+    assert model.positive_weight_k == 5
+    y = np.array([1, 0, 1, 0, 0, 0])
+    model.row_push_failures = [10, 10, 1, 1, 1, 1]
+    model.row_non_run = [False] * 6
+    model.row_push_index = [0] * 6
+    assert list(model.get_sample_weights(y)) == [0.5, 0.5, 1.0, 0.5, 0.5, 0.5]
+
+    # Non-run negatives (when enabled) get a lower weight, and don't count when balancing the
+    # classes.
+    assert model.non_run_negative_weight is None
+    model.non_run_negative_weight = 0.3
+    y = np.array([1, 0, 0, 0])
+    model.row_push_failures = [1, 1, 1, 1]
+    model.row_non_run = [False, False, True, True]
+    model.row_push_index = [0] * 4
+    assert list(model.get_sample_weights(y)) == [1.0, 1.0, 0.3, 0.3]
+
+
+def test_group_model_uses_manifest_suite() -> None:
+    from bugbug import test_scheduling_features
+
+    extractors = (
+        testselect.TestGroupSelectModel()
+        .extraction_pipeline.steps[0][1]
+        .feature_extractors
+    )
+    assert any(
+        isinstance(fe, test_scheduling_features.ManifestSuite) for fe in extractors
+    )
+    assert any(
+        isinstance(fe, test_scheduling_features.TouchedGroupDirs) for fe in extractors
+    )
+
+
+def test_recency_weights() -> None:
+    weights = testselect.recency_weights(np.array([0, 10, 20]), 10)
+    assert list(weights) == [0.25, 0.5, 1.0]
+
+
+def test_compute_confidence_thresholds() -> None:
+    push_confidences = [
+        [0.9, 0.75, 0.5, 0.2],
+        [0.8, 0.6, 0.3],
+        [0.95, 0.4],
+    ]
+    # 1 runnable per push on average: the 3 highest confidences are 0.95, 0.9, 0.8.
+    assert testselect.compute_confidence_thresholds(
+        push_confidences, {"high": 1, "low": 2}
+    ) == {"high": 0.8, "low": 0.5}
+    # Thresholds are rounded down to two decimals, like the confidences.
+    assert testselect.compute_confidence_thresholds([[0.456]], {"high": 1}) == {
+        "high": 0.45
+    }
+    # Targets larger than the number of runnables use the lowest confidence.
+    assert testselect.compute_confidence_thresholds([[0.7, 0.3]], {"low": 5}) == {
+        "low": 0.3
+    }
+
+
+def test_confidence_thresholds_default() -> None:
+    assert testselect.TestGroupSelectModel().confidence_thresholds is None
+    assert set(testselect.CONFIDENCE_LEVEL_TARGETS) == {"label", "group"}
+
+
+def test_share_caught() -> None:
+    pushes = [
+        {"failures": ["a"], "all_possibly_selected": {"a": 0.6, "b": 0.9}},
+        {"failures": ["c", "d"], "all_possibly_selected": {"d": 0.4}},
+        {"failures": ["e"], "all_possibly_selected": {}},
+        {"failures": [], "all_possibly_selected": {"f": 0.9}},
+    ]
+    assert testselect.share_caught(pushes, 0.5) == 1 / 3
+    assert testselect.share_caught(pushes, 0.3) == 2 / 3
+    assert testselect.share_caught(pushes[3:], 0.5) is None
+    assert set(testselect.CONFIDENCE_LEVEL_MIN_CAUGHT) == set(
+        testselect.CONFIDENCE_LEVEL_TARGETS
+    )

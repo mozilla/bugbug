@@ -10,7 +10,14 @@ from _pytest.monkeypatch import MonkeyPatch
 
 from bugbug import repository, test_scheduling
 from bugbug.repository import CommitDict
-from bugbug.test_scheduling import ConfigGroup, Group, Revision, Task
+from bugbug.test_scheduling import (
+    ConfigGroup,
+    Group,
+    PushResult,
+    Revision,
+    Runnable,
+    Task,
+)
 from bugbug.utils import ExpQueue
 
 
@@ -1003,6 +1010,48 @@ def test_generate_data(granularity: str) -> None:
     assert data[1] == obj
 
 
+def test_index_runs() -> None:
+    push_data: list[PushResult] = [
+        ((Revision("r0"),), Revision("f"), (Group("a"), Group("b")), (), ()),
+        ((Revision("r1"),), Revision("f"), (Group("b"),), (), ()),
+        ((Revision("r3"),), Revision("f"), (Group("a"),), (), ()),
+    ]
+    runs, rev_to_push = test_scheduling.index_runs(push_data)
+    assert runs == {"a": [0, 2], "b": [0, 1]}
+    assert rev_to_push == {"r0": 0, "r1": 1, "r3": 2}
+
+
+def test_get_non_run_negatives() -> None:
+    import random
+
+    runs: dict[Runnable, list[int]] = {
+        # Ran on the push itself: excluded by the caller.
+        Group("ran"): [5],
+        # Ran on a later push before the end: verified.
+        Group("later"): [2, 7],
+        # Only ran after the end (e.g. after the backout): unknown.
+        Group("too_late"): [12],
+        # Never ran after the push: unknown.
+        Group("before"): [1, 3],
+    }
+    candidates: list[Runnable] = [
+        Group("ran"),
+        Group("later"),
+        Group("too_late"),
+        Group("before"),
+    ]
+    assert test_scheduling.get_non_run_negatives(
+        5, 10, candidates, {Group("ran")}, runs, 10, random.Random(0)
+    ) == [Group("later")]
+    # With a count of 0, nothing is sampled.
+    assert (
+        test_scheduling.get_non_run_negatives(
+            5, 10, candidates, {Group("ran")}, runs, 0, random.Random(0)
+        )
+        == []
+    )
+
+
 def test_filter_runnables_ignores_jstests() -> None:
     jstests = Group("tests/jsreftest/tests/js/src/tests/jstests.list")
     mochitest = Group("dom/base/test/mochitest.toml")
@@ -1018,6 +1067,27 @@ def test_filter_runnables_ignores_jstests() -> None:
     assert test_scheduling.filter_runnables(
         config_groups, set(config_groups), "config_group"
     ) == (config_groups[1],)
+
+
+def test_get_runnable_dirs() -> None:
+    assert test_scheduling.get_runnable_dirs("dom/base/test/mochitest.toml") == (
+        "dom/base/test",
+    )
+    assert test_scheduling.get_runnable_dirs("layout/reftests/bugs/reftest.list") == (
+        "layout/reftests/bugs",
+    )
+    assert test_scheduling.get_runnable_dirs(
+        "testing/web-platform/tests/css/css-grid"
+    ) == (
+        "testing/web-platform/tests/css/css-grid",
+        "testing/web-platform/meta/css/css-grid",
+    )
+    assert test_scheduling.get_runnable_dirs(
+        "testing/web-platform/mozilla/tests/webgpu"
+    ) == (
+        "testing/web-platform/mozilla/tests/webgpu",
+        "testing/web-platform/mozilla/meta/webgpu",
+    )
 
 
 def test_fallback_on_ini() -> None:
