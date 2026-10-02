@@ -105,9 +105,9 @@ _seen_bugzilla_events: TTLCache = TTLCache(
 )
 async def phabricator_webhook(
     request: Request,
-    phab_client: PhabricatorClient = Depends(get_phabricator_client),
-    authorizer: PhabricatorAuthorizer = Depends(get_phabricator_authorizer),
-    api_client: HackbotClient = Depends(get_hackbot_client),
+    phab_client: Annotated[PhabricatorClient, Depends(get_phabricator_client)],
+    authorizer: Annotated[PhabricatorAuthorizer, Depends(get_phabricator_authorizer)],
+    api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> None:
     payload = await request.json()
 
