@@ -28,8 +28,9 @@ Create these documents:
    at, and do not narrate the steps you took to get here.
 2. {scratch_out}/planning.md with the fix as a short numbered list of edits
 3. {scratch_out}/summary.md -- 2-3 sentences of plain prose, no headings or lists.
-   Open with whether a commit in this push broke the build and which one, then
-   give the error and the fix in a clause each.
+   Open by naming the commit that broke the build, or saying that no commit in
+   this push did, as a statement rather than an answer (no leading "Yes" or "No"),
+   then give the error and the fix in a clause each.
 {blame_step}
 Do not prompt to edit those documents. Do not write any code yet. Work fully
 autonomously and do not ask any questions.
@@ -146,7 +147,7 @@ Read your earlier analysis and implement the fix directly in the source tree:
 2. {scratch_out}/planning.md -- your fixing plan
 
 Edit the source files in {source_repo} (your working directory) to repair the build.
-Editing: use Edit on a file that already exists -- Write refuses until the file has
+{blame_note}Editing: use Edit on a file that already exists -- Write refuses until the file has
 been read, which costs a turn. To see how a commit handled comparable files, run
 `git show <sha> -- <dir>` rather than guessing a sibling's name.
 
@@ -174,10 +175,25 @@ Once the fix builds locally, validate it on CI: call the submit_try_push tool wi
 failing task name ('{task_name}') to push to the try server and report the build result.
 """
 
+BLAME_NOTE = """\
+Commit {blamed_commit} broke the build{tree}. Sheriffs back it out, so the fix is for
+its author to fold into that commit and reland: write it as a change to that commit,
+not a follow-up on top of it.
+"""
+
+TREE_AT_BLAME = " and the tree is checked out at it"
+
+PARENT_REVISION_ARG = (
+    " parent_revision={revision} (the busted commit's own revision, D{revision}),"
+)
+
 REPORT_INSTRUCTIONS = """
 Once the build is verified, submit the fix with the `phabricator_submit_patch`
-action: bug_id={bug_id}, a title of the form "Bug {bug_id} - <what the fix does>",
-and a summary naming the busted commit, the failing task and the root cause.
+action: bug_id={bug_id},{parent} a title of the form "Bug {bug_id} - <what the fix
+does>", and a summary naming the busted commit, the failing task and the root cause
+and saying the fix is for the author to fold into that commit and reland. The test
+plan says what you built and that it ran locally on Linux only; when the failing
+task is for another platform, say the local build does not show the fix builds there.
 If the fix does not build, or you are not confident in it, record nothing and say
 so in your final message.
 """
