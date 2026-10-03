@@ -13,6 +13,7 @@ the Bugzilla token -- the agent process itself never sees it.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sys
@@ -645,14 +646,17 @@ async def run_frontend_triage(
     # Every `SPHINX_TREES` declaration in the checkout, resolved once. Which docs cover a
     # component is derived from this rather than written into `config.py`, so it costs one
     # `git grep` per run instead of a list to keep in step with mozilla-central.
-    known_docs = registrations(source_repo.resolve())
+    known_docs = registrations(await asyncio.to_thread(source_repo.resolve))
 
     # Registered before `permalink_hook`, which rewrites the placeholders this reads.
     actions_recorder.add_hook("bugzilla.add_comment", component_guidance_hook(loaded))
 
     actions_recorder.add_hook(
         "bugzilla.add_comment",
-        permalink_hook(permalink_prefix(searchfox_rev), source_repo.resolve()),
+        permalink_hook(
+            permalink_prefix(searchfox_rev),
+            await asyncio.to_thread(source_repo.resolve),
+        ),
     )
     actions_recorder.add_hook("bugzilla.add_comment", feedback_tags_hook)
 
@@ -661,7 +665,9 @@ async def run_frontend_triage(
     guidance_server = build_sdk_server(
         "guidance",
         GuidanceContext(
-            repo=source_repo.resolve(), loaded=loaded, known_docs=known_docs
+            repo=await asyncio.to_thread(source_repo.resolve),
+            loaded=loaded,
+            known_docs=known_docs,
         ),
         guidance_tools.TOOLS,
     )
@@ -681,7 +687,7 @@ async def run_frontend_triage(
             "investigator": make_investigator(),
             "duplicate_hunter": make_duplicate_hunter(),
         },
-        cwd=str(source_repo.resolve()),
+        cwd=str(await asyncio.to_thread(source_repo.resolve)),
         add_dirs=[str(rules_dir.resolve())],
         permission_mode="bypassPermissions",
         # Read-only investigation tools only: no Write/Edit (source is never

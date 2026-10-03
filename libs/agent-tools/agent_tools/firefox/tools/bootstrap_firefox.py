@@ -20,7 +20,7 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
         Dict with success, message, stdout, stderr. Never raises.
     """
     try:
-        if not firefox_dir.exists():
+        if not await asyncio.to_thread(firefox_dir.exists):
             return {
                 "success": False,
                 "message": f"Firefox directory not found at {firefox_dir}",

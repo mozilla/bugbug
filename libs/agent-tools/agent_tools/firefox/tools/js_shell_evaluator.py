@@ -30,7 +30,7 @@ async def js_shell_evaluator(
         Log values are tail-truncated to 1 MB if the output is large.
         Always returns a dict; never raises.
     """
-    if not js_binary.exists():
+    if not await asyncio.to_thread(js_binary.exists):
         return {
             "crashed": False,
             "message": f"JS shell binary not found at {js_binary}",
@@ -41,7 +41,7 @@ async def js_shell_evaluator(
             fd, tmp_path = tempfile.mkstemp(suffix=".js", dir=tmp_dir)
             testcase_path = Path(tmp_path)
             os.close(fd)
-            testcase_path.write_text(content, encoding="utf-8")
+            await asyncio.to_thread(testcase_path.write_text, content, encoding="utf-8")
 
             proc = await asyncio.create_subprocess_exec(
                 str(js_binary),
