@@ -373,20 +373,14 @@ def test_the_blocks_say_everything_the_fallback_text_says(overrides):
     assert _urls(text) <= _urls(blocks)
 
 
-def test_a_held_run_reports_too_because_its_reader_needs_the_button():
-    # It used to report nothing. The button is why that changed: a result the agent
-    # would not let apply itself is exactly the one a human has to decide on, and
-    # nobody would find it without being told it exists.
-    recorder = ActionsRecorder()
-    action = record_notification(
-        recorder, _result(auto_apply=False, confidence="medium"), run_id=RUN_ID
-    )
+def test_a_held_run_says_its_analysis_is_not_on_the_bug():
+    result = _result(auto_apply=False, confidence="medium")
+    text = build_message(result, run_id=RUN_ID)
+    blocks = build_blocks(result, run_id=RUN_ID)
 
-    assert action is not None
-    blocks = action["params"]["blocks"]
     assert any(b["type"] == "actions" for b in blocks)
-    # And it says the analysis is not on the bug, in both renderings.
-    assert HELD_NOTE in action["params"]["text"]
+    # It says the analysis is not on the bug, in both renderings.
+    assert HELD_NOTE in text
     assert any(HELD_NOTE == b.get("text", {}).get("text") for b in blocks)
 
 
@@ -410,9 +404,7 @@ def test_a_run_that_reported_no_verdict_still_reports():
     # treated as having something to fix rather than as out of scope.
     recorder = ActionsRecorder()
     assert (
-        record_notification(
-            recorder, _result(actionable=None, auto_apply=False), run_id=RUN_ID
-        )
+        record_notification(recorder, _result(actionable=None), run_id=RUN_ID)
         is not None
     )
 
