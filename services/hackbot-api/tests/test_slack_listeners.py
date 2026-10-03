@@ -8,6 +8,7 @@ survive to *reach* one of these is covered in `test_slack_interactions.py`.
 
 import json
 import logging
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -24,6 +25,7 @@ test_logger = logging.getLogger(__name__)
 RUN_ID = "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6"
 DEDUPE_KEY = "frontend-triage-run:11111111-2222-3333-4444-555555555555"
 TRIAGE_RUN_ID = "11111111-2222-3333-4444-555555555555"
+BLOCK_ID = "offers"
 
 
 def _applied(action_type: str, idx: int = 0) -> RunAction:
@@ -55,8 +57,21 @@ def _action(
         value["apply_run_id"] = apply_run_id
     return {
         "type": "button",
+        "block_id": BLOCK_ID,
         "action_id": f"start_agent_run:{agent_name}",
         "value": json.dumps(value),
+    }
+
+
+def _message(*buttons: dict) -> dict:
+    """The message the button was clicked on, as Slack sends it back."""
+    return {
+        "ts": "1700000000.000100",
+        "text": "Bug 1234 triaged",
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": "Bug 1234"}},
+            {"type": "actions", "block_id": BLOCK_ID, "elements": list(buttons)},
+        ],
     }
 
 
@@ -67,14 +82,20 @@ class TestStartAgentRun:
         self.fake_client.trigger_run.return_value = TriggeredRun(
             run_id=RUN_ID, agent="bug-fix", status=RunStatus.pending, is_new=True
         )
-        self.fake_respond = AsyncMock()
+        self.fake_respond = AsyncMock(
+            return_value=SimpleNamespace(status_code=200, body="ok")
+        )
         # The apply endpoint answers with every action of the run and its state
         # after the pass; by default here, all of them landed.
         self.fake_client.apply_actions.return_value = _actions(
             _applied("bugzilla.add_comment")
         )
         self.context = {"hackbot_client": self.fake_client}
-        self.body = {"user": {"id": "U0CLICKER"}}
+        self.body = {
+            "user": {"id": "U0CLICKER"},
+            "channel": {"id": "C0TRIAGE"},
+            "message": _message(_action()),
+        }
 
     def _record_order(self) -> list[str]:
         """Every call the callback makes, in the order it makes them."""
@@ -146,11 +167,13 @@ class TestStartAgentRun:
 
         assert order == ["trigger", "ack"]
 
-    async def test_a_new_run_tells_the_clicker_nothing(self):
+    async def test_a_new_run_tells_the_clicker_nothing_privately(self):
         # The run started and the message they clicked is the record of it.
         await self._call()
 
-        self.fake_respond.assert_not_awaited()
+        assert self._edits() == [
+            call.kwargs for call in self.fake_respond.await_args_list
+        ]
 
     async def test_a_click_that_started_nothing_says_where_the_run_is(self):
         self.fake_client.trigger_run.return_value = self._triggered(
@@ -312,6 +335,115 @@ class TestStartAgentRun:
             await self._call(action)
 
         self.fake_client.trigger_run.assert_not_awaited()
+
+    def _edits(self) -> list[dict]:
+        """The replies that replaced the clicked message, not private notes."""
+        return [
+            call.kwargs
+            for call in self.fake_respond.await_args_list
+            if call.kwargs.get("replace_original")
+        ]
+
+    def _updated_blocks(self) -> list[dict]:
+        (edit,) = self._edits()
+        return edit["blocks"]
+
+    async def test_a_new_run_replaces_the_button_with_who_started_it(self):
+        await self._call()
+
+        (update,) = self._edits()
+        # The message's own text is kept, and the note is added to it: screen
+        # readers read the top-level text, not the blocks.
+        assert update["text"].startswith("Bug 1234 triaged\n")
+        assert "<@U0CLICKER>" in update["text"]
+        assert RUN_ID in update["text"]
+        note = self._updated_blocks()[-1]
+        assert note["type"] == "context"
+        assert "<@U0CLICKER>" in note["elements"][0]["text"]
+        assert RUN_ID in note["elements"][0]["text"]
+        assert not any(b["type"] == "actions" for b in self._updated_blocks())
+
+    async def test_the_note_names_the_agent_the_button_started(self):
+        action = _action(agent_name="test-repair")
+        self.body["message"] = _message(action)
+
+        await self._call(action)
+
+        assert "`test-repair`" in self._updated_blocks()[-1]["elements"][0]["text"]
+
+    async def test_the_rest_of_the_message_is_untouched(self):
+        other = {"type": "button", "action_id": "something_else", "value": "x"}
+        self.body["message"] = _message(_action(), other)
+
+        await self._call()
+
+        blocks = self._updated_blocks()
+        assert blocks[0] == self.body["message"]["blocks"][0]
+        assert blocks[1] == {
+            "type": "actions",
+            "block_id": BLOCK_ID,
+            "elements": [other],
+        }
+        assert blocks[2]["type"] == "context"
+
+    async def test_a_duplicate_click_leaves_the_message_alone(self):
+        # The click may come from a stale copy of the message: updating from it
+        # would overwrite the first clicker's note.
+        self.fake_client.trigger_run.return_value = self._triggered(is_new=False)
+
+        await self._call()
+
+        assert self._edits() == []
+
+    async def test_a_failed_apply_keeps_the_button(self):
+        # Nothing started, so the offer stands and the clicker can try again.
+        self.fake_client.apply_actions.return_value = _actions(
+            _failed("bugzilla.add_comment", "Bugzilla rejected the comment")
+        )
+
+        await self._call(_action(apply_run_id=TRIAGE_RUN_ID))
+
+        assert self._edits() == []
+
+    async def test_a_failed_trigger_keeps_the_button(self):
+        self.fake_client.trigger_run.side_effect = RuntimeError("Jobs is unhappy")
+
+        with pytest.raises(RuntimeError):
+            await self._call()
+
+        assert self._edits() == []
+
+    async def test_an_update_slack_refuses_is_logged_and_the_click_acknowledged(
+        self, caplog
+    ):
+        # The run started; the message is a nicety on top of it. Slack's error
+        # comes back as a response, not an exception.
+        self.fake_respond.return_value = SimpleNamespace(
+            status_code=500, body="Slack said no"
+        )
+
+        with caplog.at_level(logging.ERROR):
+            await self._call()
+
+        self.fake_ack.assert_awaited_once()
+        assert "Slack said no" in caplog.text
+
+    async def test_a_message_without_text_gets_the_note_as_its_text(self):
+        del self.body["message"]["text"]
+
+        await self._call()
+
+        (update,) = self._edits()
+        text = update["text"]
+        assert text.startswith(":white_check_mark: <@U0CLICKER>")
+
+    async def test_a_message_without_the_button_is_left_alone(self):
+        self.body["message"] = {"ts": "1700000000.000100", "text": "", "blocks": []}
+
+        await self._call()
+
+        assert self._edits() == []
+        self.fake_ack.assert_awaited_once()
 
 
 class TestStartAgentRunValue:
