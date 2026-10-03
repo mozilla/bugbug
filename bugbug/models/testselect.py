@@ -5,10 +5,12 @@
 
 import collections
 import concurrent.futures
+import heapq
 import logging
 import math
 import multiprocessing as mp
 import pickle
+import random
 import statistics
 from functools import reduce
 from typing import Any, Callable, Collection, Iterable, Sequence, Set
@@ -408,12 +410,118 @@ def select_configs(
     return configs_by_group
 
 
+# More, shallower trees with a lower learning rate than the XGBoost defaults: mostly improves the share
+# of each push's failures caught.
+TUNED_XGBOOST_PARAMS = {"n_estimators": 400, "learning_rate": 0.03, "max_depth": 4}
+
+
+# Number of runnables per push that the model should select at each confidence level used by the
+# Firefox taskgraph (e.g. bugbug-*-low/medium/high): roughly what the models selected at the fixed
+# 0.7/0.8/0.9 thresholds before the sample weighting and tuning changed their scale.
+CONFIDENCE_LEVEL_TARGETS = {
+    "label": {"low": 26.0, "medium": 15.0, "high": 5.5},
+    "group": {"low": 103.0, "medium": 36.0, "high": 11.0},
+}
+
+# Minimum share of the failing test pushes where the model selects a failure at the "low"
+# threshold (with the targets above, ~67% for tasks and ~90% for groups in offline evaluations):
+# a lower share suggests that the targets don't fit the runnables anymore (e.g. after many
+# manifests were split or added), and should be revisited.
+CONFIDENCE_LEVEL_MIN_CAUGHT = {"label": 0.6, "group": 0.85}
+
+
+def compute_confidence_thresholds(
+    push_confidences: Sequence[Sequence[float]], targets: dict[str, float]
+) -> dict[str, float]:
+    """Confidence thresholds such that on average `targets[level]` runnables per push reach them.
+
+    `push_confidences` holds the (highest) confidences of the runnables of each push. As
+    confidences are rounded down to two decimals by select_tests, so are the thresholds.
+    """
+    confidences = np.sort(
+        np.concatenate([np.asarray(c, dtype=float) for c in push_confidences])
+    )[::-1]
+    thresholds = {}
+    for level, target in targets.items():
+        k = min(len(confidences), max(1, round(target * len(push_confidences))))
+        thresholds[level] = math.floor(confidences[k - 1] * 100) / 100
+    return thresholds
+
+
+def share_caught(pushes: Iterable[dict[str, Any]], threshold: float) -> float | None:
+    """Share of the pushes with failures where a failure is selected at the threshold."""
+    caught = [
+        any(
+            push["all_possibly_selected"].get(failure, 0.0) >= threshold
+            for failure in push["failures"]
+        )
+        for push in pushes
+        if push["failures"]
+    ]
+    return sum(caught) / len(caught) if caught else None
+
+
+def class_balance_weights(
+    y: np.ndarray, counted: np.ndarray | None = None
+) -> np.ndarray:
+    """Weight negatives by the ratio of positives to negatives (counting the `counted` samples).
+
+    The classes get the same total weight as when undersampling the negatives to 1:1 (so predicted
+    probabilities stay comparable), but the model is trained on all of them.
+    """
+    if counted is None:
+        counted = np.ones(len(y), dtype=bool)
+    positives = np.count_nonzero(y[counted] == 1)
+    negatives = np.count_nonzero(y[counted] == 0)
+    return np.where(y == 1, 1.0, positives / max(negatives, 1))
+
+
+def recency_weights(push_index: np.ndarray, half_life: int) -> np.ndarray:
+    """Halve the weight of a sample every `half_life` pushes before the most recent one."""
+    return 0.5 ** ((push_index.max() - push_index) / half_life)
+
+
+def positive_weights(y: np.ndarray, push_failures: np.ndarray, k: int) -> np.ndarray:
+    """Weight each failing runnable by k / max(k, number of failing runnables in its push).
+
+    A few pushes breaking many runnables (e.g. the top 1% of pushes hold ~70% of the failing
+    runnables) would otherwise dominate training, while what matters is catching regressing pushes.
+    """
+    return np.where(y == 1, k / np.maximum(push_failures, k), 1.0)
+
+
 class TestSelectModel(Model):
-    def __init__(self, lemmatization=False, granularity="label", failures_skip=None):
+    def __init__(
+        self,
+        lemmatization=False,
+        granularity="label",
+        failures_skip=None,
+        xgboost_params=None,
+        balance_with_weights=False,
+        negative_sample_rate=None,
+        positive_weight_k=None,
+        non_run_negative_weight=None,
+        non_run_negative_sample_rate=None,
+        recency_half_life=None,
+    ):
         Model.__init__(self, lemmatization)
+
+        # Sample weights require the classes to be balanced with weights too (a sampler step would
+        # drop samples without their weights).
+        assert balance_with_weights or (
+            positive_weight_k is None
+            and non_run_negative_weight is None
+            and recency_half_life is None
+        )
 
         self.granularity = granularity
         self.failures_skip = failures_skip
+        self.balance_with_weights = balance_with_weights
+        self.negative_sample_rate = negative_sample_rate
+        self.positive_weight_k = positive_weight_k
+        self.non_run_negative_weight = non_run_negative_weight
+        self.non_run_negative_sample_rate = non_run_negative_sample_rate
+        self.recency_half_life = recency_half_life
 
         self.training_dbs = [repository.COMMITS_DB]
         self.eval_dbs[repository.COMMITS_DB] = (
@@ -442,6 +550,10 @@ class TestSelectModel(Model):
                 test_scheduling.TOUCHED_TOGETHER_DB,
             )
 
+        # Confidence thresholds for the levels in CONFIDENCE_LEVEL_TARGETS, computed on the test
+        # pushes during the evaluation.
+        self.confidence_thresholds: dict[str, float] | None = None
+
         self.cross_validation_enabled = False
         self.calculate_importance = False
 
@@ -464,6 +576,13 @@ class TestSelectModel(Model):
                 test_scheduling_features.TouchedTogether(),
             ]
 
+        # Suites fail at different rates and depend on different signals (e.g. wpt tests rarely change
+        # together with Gecko code). Only useful once positives are weighted by push size: otherwise the
+        # learned per-suite priors are those of the few pushes breaking many groups.
+        if granularity == "group":
+            feature_extractors.append(test_scheduling_features.ManifestSuite())
+            feature_extractors.append(test_scheduling_features.TouchedGroupDirs())
+
         self.extraction_pipeline = Pipeline(
             [
                 (
@@ -473,16 +592,53 @@ class TestSelectModel(Model):
             ]
         )
 
-        self.clf = ImblearnPipeline(
-            [
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
-                ("sampler", RandomUnderSampler(random_state=0)),
-                (
-                    "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+        steps: list[tuple[str, Any]] = [
+            ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+        ]
+        # Either undersample the negatives, or train on all of them with sample weights balancing
+        # the classes (see get_sample_weights).
+        if not balance_with_weights:
+            steps.append(("sampler", RandomUnderSampler(random_state=0)))
+        steps.append(
+            (
+                "estimator",
+                xgboost.XGBClassifier(
+                    n_jobs=utils.get_physical_cpu_count(), **(xgboost_params or {})
                 ),
-            ]
+            )
         )
+        self.clf = ImblearnPipeline(steps)
+
+    def __getstate__(self):
+        # Per-row training metadata is only needed while training.
+        state = self.__dict__.copy()
+        state.pop("row_push_failures", None)
+        state.pop("row_non_run", None)
+        state.pop("row_push_index", None)
+        return state
+
+    def get_sample_weights(self, y):
+        if not self.balance_with_weights:
+            return None
+
+        # The training samples are a prefix of the rows generated by items_gen.
+        non_run = np.array(self.row_non_run[: len(y)], dtype=bool)
+        weights = class_balance_weights(y, ~non_run)
+
+        if self.positive_weight_k is not None:
+            push_failures = np.array(self.row_push_failures[: len(y)])
+            weights *= positive_weights(y, push_failures, self.positive_weight_k)
+
+        if self.recency_half_life is not None:
+            push_index = np.array(self.row_push_index[: len(y)])
+            weights *= recency_weights(push_index, self.recency_half_life)
+
+        # Non-run negatives (runnables that didn't run on the push, but are known to have passed with
+        # its changes) are mostly easy negatives, so they get a lower weight.
+        if self.non_run_negative_weight is not None:
+            weights[non_run] *= self.non_run_negative_weight
+
+        return weights
 
     def get_pushes(
         self, apply_filters: bool = False
@@ -537,13 +693,31 @@ class TestSelectModel(Model):
     def items_gen(self, classes):
         commit_map = get_commit_map()
 
-        for revs, test_datas in test_scheduling.get_test_scheduling_history(
-            self.granularity
+        # With negative_sample_rate (non_run_negative_sample_rate for non-run negatives), keep all
+        # failures but only a random (fixed, as the rows can be generated more than once) fraction of
+        # the passes.
+        rng = random.Random(0)
+
+        # Number of failing runnables in the push of each generated row, and whether the row is a
+        # runnable that didn't run on the push (see --non-run-negatives in the history retriever).
+        self.row_push_failures = []
+        self.row_non_run = []
+        # Index of the push of each generated row (pushes are in chronological order).
+        self.row_push_index = []
+
+        for push_index, (revs, test_datas) in enumerate(
+            test_scheduling.get_test_scheduling_history(self.granularity)
         ):
             commits = tuple(
                 commit_map.pop(revision) for revision in revs if revision in commit_map
             )
             assert len(commits) > 0
+
+            push_failures = sum(
+                1
+                for test_data in test_datas
+                if classes.get((revs[0], test_data["name"])) == 1
+            )
 
             for test_data in test_datas:
                 name = test_data["name"]
@@ -551,8 +725,28 @@ class TestSelectModel(Model):
                 if (revs[0], name) not in classes:
                     continue
 
+                is_non_run = test_data.get("is_non_run_negative", False)
+                # Non-run negatives are only used when enabled with non_run_negative_weight.
+                if is_non_run and self.non_run_negative_weight is None:
+                    continue
+
+                sample_rate = (
+                    self.non_run_negative_sample_rate
+                    if is_non_run
+                    else self.negative_sample_rate
+                )
+                if (
+                    sample_rate is not None
+                    and classes[(revs[0], name)] == 0
+                    and rng.random() >= sample_rate
+                ):
+                    continue
+
                 commit_data = commit_features.merge_commits(commits)
                 commit_data["test_job"] = test_data
+                self.row_push_failures.append(push_failures)
+                self.row_non_run.append(is_non_run)
+                self.row_push_index.append(push_index)
                 yield commit_data, classes[(revs[0], name)]
 
     def get_labels(self):
@@ -587,6 +781,20 @@ class TestSelectModel(Model):
         confidence: float = 0.5,
         push_num: int | None = None,
     ) -> dict[str, float]:
+        return {
+            name: runnable_confidence
+            for name, runnable_confidence in self.get_confidences(
+                commits, push_num
+            ).items()
+            if runnable_confidence >= confidence
+        }
+
+    def get_confidences(
+        self,
+        commits: Sequence[repository.CommitDict],
+        push_num: int | None = None,
+    ) -> dict[str, float]:
+        """Confidence (rounded down to two decimals) that each runnable fails on the commits."""
         commit_data = commit_features.merge_commits(commits)
 
         past_failures_data = test_scheduling.PastFailures(self.granularity, False)
@@ -609,10 +817,9 @@ class TestSelectModel(Model):
             commit_tests.append(commit_test)
 
         probs = self.classify(commit_tests, probabilities=True)
-        selected_indexes = np.argwhere(probs[:, 1] >= confidence)[:, 0]
         return {
-            commit_tests[i]["test_job"]["name"]: math.floor(probs[i, 1] * 100) / 100
-            for i in selected_indexes
+            commit_test["test_job"]["name"]: math.floor(prob * 100) / 100
+            for commit_test, prob in zip(commit_tests, probs[:, 1])
         }
 
     def evaluation(self) -> None:
@@ -691,6 +898,12 @@ class TestSelectModel(Model):
         last_push_num = past_failures_data.push_num
         past_failures_data.close()
 
+        targets = CONFIDENCE_LEVEL_TARGETS.get(self.granularity)
+        max_target = max(targets.values()) if targets else 0
+        # The highest confidences of the runnables on each test push whose push number isn't
+        # clamped (see below), to compute the confidence thresholds.
+        top_confidences: list[list[tuple[str, float]]] = []
+
         # Select tests for all the pushes in the test set.
         for i, push in enumerate(tqdm(test_pushes.values())):
             commits = tuple(
@@ -718,9 +931,60 @@ class TestSelectModel(Model):
             min_push_num = (
                 start_day_max + int(test_scheduling.PAST_FAILURES_LOOKBACK_MONTH / 100)
             ) * 100
+            clamped = push_num < min_push_num
             push_num = max(push_num, min_push_num)
 
-            push["all_possibly_selected"] = self.select_tests(commits, 0.5, push_num)
+            confidences = self.get_confidences(commits, push_num)
+            push["all_possibly_selected"] = {
+                name: confidence
+                for name, confidence in confidences.items()
+                if confidence >= 0.5
+            }
+
+            if targets:
+                push["top_confidences"] = heapq.nlargest(
+                    int(10 * max_target), confidences.items(), key=lambda x: x[1]
+                )
+                # With a clamped push number, the past failures would include failures of
+                # later pushes (and of the push itself), inflating the confidences.
+                if not clamped:
+                    top_confidences.append(push["top_confidences"])
+
+        confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]
+        if targets and top_confidences:
+            self.confidence_thresholds = compute_confidence_thresholds(
+                [[confidence for _, confidence in top] for top in top_confidences],
+                targets,
+            )
+            logger.info(
+                "Confidence thresholds (on %d test pushes): %s",
+                len(top_confidences),
+                self.confidence_thresholds,
+            )
+            confidence_thresholds = sorted(
+                set(confidence_thresholds) | set(self.confidence_thresholds.values())
+            )
+
+            # Also evaluate at the thresholds, which can be lower than 0.5.
+            lowest = min(self.confidence_thresholds.values())
+            for push in test_pushes.values():
+                push["all_possibly_selected"].update(
+                    (name, confidence)
+                    for name, confidence in push.pop("top_confidences", [])
+                    if confidence >= lowest
+                )
+
+            caught = share_caught(
+                test_pushes.values(), self.confidence_thresholds["low"]
+            )
+            min_caught = CONFIDENCE_LEVEL_MIN_CAUGHT[self.granularity]
+            if caught is not None and caught < min_caught:
+                logger.warning(
+                    "Only %.1f%% of the failing pushes are caught at the low confidence threshold "
+                    "(expected at least %.1f%%): CONFIDENCE_LEVEL_TARGETS might need to be revisited.",
+                    100 * caught,
+                    100 * min_caught,
+                )
 
         def do_eval(
             executor: concurrent.futures.ProcessPoolExecutor,
@@ -903,7 +1167,7 @@ class TestSelectModel(Model):
                 if reduction is not None and self.granularity == "group":
                     _get_equivalence_sets(reduction)
 
-                for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
+                for confidence_threshold in confidence_thresholds:
                     do_eval(executor, confidence_threshold, reduction, cap, minimum)
 
     def get_feature_names(self):
@@ -912,12 +1176,34 @@ class TestSelectModel(Model):
 
 class TestLabelSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
-        TestSelectModel.__init__(self, lemmatization, "label", failures_skip=60)
+        TestSelectModel.__init__(
+            self,
+            lemmatization,
+            "label",
+            failures_skip=60,
+            xgboost_params=TUNED_XGBOOST_PARAMS,
+        )
 
 
 class TestGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
-        TestSelectModel.__init__(self, lemmatization, "group")
+        TestSelectModel.__init__(
+            self,
+            lemmatization,
+            "group",
+            xgboost_params=TUNED_XGBOOST_PARAMS,
+            # Train on more negatives than 1:1 undersampling would keep (~15 per positive), with
+            # sample weights balancing the classes.
+            balance_with_weights=True,
+            negative_sample_rate=0.02,
+            positive_weight_k=5,
+            # Verified non-run negatives (runnables that didn't run on a push but passed on a later
+            # push with its changes) made no measurable difference, so they're disabled. To try them
+            # again, generate the history with --non-run-negatives=150 and set e.g.
+            # non_run_negative_weight=0.3 and non_run_negative_sample_rate=0.1.
+            # Failure patterns drift over time (e.g. changes in scheduling, per-suite failure rates).
+            recency_half_life=10000,
+        )
 
 
 class TestConfigGroupSelectModel(TestSelectModel):

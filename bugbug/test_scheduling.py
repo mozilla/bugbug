@@ -3,12 +3,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import bisect
 import collections
 import glob
 import itertools
 import logging
 import os
 import pickle
+import random
 import re
 import shelve
 import shutil
@@ -24,6 +26,7 @@ from typing import (
     Iterable,
     Iterator,
     NewType,
+    Sequence,
     Set,
     Union,
     cast,
@@ -771,6 +774,68 @@ def _read_and_update_past_failures(
     )
 
 
+WPT_ROOTS = ("testing/web-platform/mozilla", "testing/web-platform")
+
+
+# How many pushes after a push we look for a later run of a runnable that didn't run on it.
+NON_RUN_NEGATIVES_MAX_LATER = 100
+
+
+def index_runs(
+    push_data: Iterable[PushResult],
+) -> tuple[dict[Runnable, list[int]], dict[Revision, int]]:
+    """Map each runnable to the (sorted) indices of the pushes it ran on, and each revision to its push index."""
+    runs: dict[Runnable, list[int]] = collections.defaultdict(list)
+    rev_to_push: dict[Revision, int] = {}
+    for i, (revisions, _, push_runnables, _, _) in enumerate(push_data):
+        for revision in revisions:
+            rev_to_push[revision] = i
+        for runnable in push_runnables:
+            runs[runnable].append(i)
+    return runs, rev_to_push
+
+
+def get_non_run_negatives(
+    push_index: int,
+    end_index: int,
+    candidates: Sequence[Runnable],
+    excluded: Set[Runnable],
+    runs: dict[Runnable, list[int]],
+    count: int,
+    rng: random.Random,
+) -> list[Runnable]:
+    """Sample runnables that didn't run on a push but are known to have passed with its changes.
+
+    A runnable that didn't run on the push is a verified negative if it ran on a later push while the
+    push's changes were still in the tree (up to `end_index`, i.e. before the push was backed out), since
+    a failure there would have been attributed to the push as a regression.
+    """
+    pool = [c for c in candidates if c not in excluded]
+    sampled = rng.sample(pool, min(count, len(pool)))
+    verified = []
+    for runnable in sampled:
+        push_indices = runs.get(runnable, [])
+        pos = bisect.bisect_right(push_indices, push_index)
+        if pos < len(push_indices) and push_indices[pos] <= end_index:
+            verified.append(runnable)
+    return verified
+
+
+def get_runnable_dirs(group: str) -> tuple[str, ...]:
+    """Return the directories whose co-changes are relevant for a group.
+
+    Manifest groups are files, so their tests are in the manifest's directory.
+    WPT groups are the directories containing the tests, and their expectations
+    live in the corresponding directory under meta/ (which is what usually
+    changes together with Gecko code, as tests mostly come from upstream).
+    """
+    for root in WPT_ROOTS:
+        if group.startswith(f"{root}/tests/"):
+            return (group, f"{root}/meta/{group[len(root) + len('/tests/') :]}")
+
+    return (os.path.dirname(group),)
+
+
 def generate_data(
     granularity: str,
     past_failures: PastFailures,
@@ -787,18 +852,19 @@ def generate_data(
 
     for runnable in runnables:
         if granularity != "label":
-            if isinstance(runnable, tuple):
-                runnable_dir = os.path.dirname(runnable[1])
-            else:
-                runnable_dir = os.path.dirname(runnable)
+            runnable_dirs = get_runnable_dirs(
+                runnable[1] if isinstance(runnable, tuple) else runnable
+            )
 
             touched_together_files = sum(
                 get_touched_together(source_file, runnable_dir)
                 for source_file in commit["files"]
+                for runnable_dir in runnable_dirs
             )
             touched_together_directories = sum(
                 get_touched_together(source_file_dir, runnable_dir)
                 for source_file_dir in source_file_dirs
+                for runnable_dir in runnable_dirs
             )
 
         is_possible_regression = runnable in possible_regressions

@@ -23,27 +23,40 @@ component's code lives in. A bug handed to the agent by hand in some other compo
 (`Firefox :: Menus`, say) is triaged the same way and reports to nobody. The components,
 and the channel each reports to:
 
-| Component                            | Reports to                                 |
-| ------------------------------------ | ------------------------------------------ |
-| `Firefox :: New Tab Page`            | `#hnt-dev-triage`                          |
-| `Firefox :: Sidebar`                 | `#p10y-bots`                               |
-| `Firefox :: Site Permissions`        | `#privacy-team-automation`                 |
-| `Toolkit :: Data Sanitization`       | `#privacy-team-automation`                 |
-| `Firefox :: Settings UI`             | `#fx-recomp-bots`                          |
-| `Firefox :: Sharing`                 | `#content-sharing-automation`              |
-| `Firefox :: IP Protection`           | `#team-eng-ip-protection-triage`           |
-| `Firefox :: Messaging System`        | `#omc-triage`                              |
-| `Core :: Machine Learning: Frontend` | `#smart-window-bug-triage`                 |
-| `Core :: Machine Learning: Models`   | `#smart-window-bug-triage`                 |
-| `Core :: Machine Learning: General`  | `#smart-window-bug-triage`                 |
-| `Firefox for Android :: History`     | `#android-core-dev`                        |
-| `Firefox for Android :: Toolbar`     | `#android-core-dev`                        |
-| `Firefox for Android :: Homepage`    | `#android-core-dev`                        |
-| `Toolkit :: Application Update`      | `#installer-updater-bug-triage`            |
-| `Firefox :: Installer`               | `#installer-updater-bug-triage`            |
-| `Firefox :: General`                 | `#fx-toolkit-general-triage-notifications` |
-| `Toolkit :: General`                 | `#fx-toolkit-general-triage-notifications` |
-| `Firefox :: Untriaged`               | `#fx-toolkit-general-triage-notifications` |
+| Component                                                       | Reports to                                 |
+| --------------------------------------------------------------- | ------------------------------------------ |
+| `Firefox :: New Tab Page`                                       | `#hnt-dev-triage`                          |
+| `Firefox :: Sidebar`                                            | `#p10y-bots`                               |
+| `Firefox :: Site Permissions`                                   | `#privacy-team-automation`                 |
+| `Toolkit :: Data Sanitization`                                  | `#privacy-team-automation`                 |
+| `Firefox :: Settings UI`                                        | `#fx-recomp-bots`                          |
+| `Firefox :: Sharing`                                            | `#content-sharing-automation`              |
+| `Firefox :: IP Protection`                                      | `#team-eng-ip-protection-triage`           |
+| `Firefox :: Messaging System`                                   | `#omc-triage`                              |
+| `Core :: Machine Learning: Frontend`                            | `#smart-window-bug-triage`                 |
+| `Core :: Machine Learning: Models`                              | `#smart-window-bug-triage`                 |
+| `Core :: Machine Learning: General`                             | `#smart-window-bug-triage`                 |
+| `Firefox for Android :: History`                                | `#android-core-dev`                        |
+| `Firefox for Android :: Toolbar`                                | `#android-core-dev`                        |
+| `Firefox for Android :: Homepage`                               | `#android-core-dev`                        |
+| `Toolkit :: Application Update`                                 | `#installer-updater-bug-triage`            |
+| `Firefox :: Installer`                                          | `#installer-updater-bug-triage`            |
+| `Firefox :: General`                                            | `#fx-toolkit-general-triage-notifications` |
+| `Toolkit :: General`                                            | `#fx-toolkit-general-triage-notifications` |
+| `Firefox :: Untriaged`                                          | `#fx-toolkit-general-triage-notifications` |
+| `Firefox :: PDF Viewer`                                         | `#pdfjs-triage`                            |
+| `Toolkit :: Password Manager`                                   | `#credential-management-bug-triage`        |
+| `Firefox :: about:logins`                                       | `#credential-management-bug-triage`        |
+| `Firefox for Android :: Downloads`                              | `#android-core-dev`                        |
+| `Firefox for Android :: Tabs`                                   | `#android-core-dev`                        |
+| `Firefox for Android :: Translations`                           | `#android-core-dev`                        |
+| `Firefox for Android :: Experimentation and Telemetry`          | `#android-activation-and-trust`            |
+| `Firefox for Android :: Logins`                                 | `#android-activation-and-trust`            |
+| `Firefox for Android :: Onboarding`                             | `#android-activation-and-trust`            |
+| `Firefox for Android :: Privacy`                                | `#android-activation-and-trust`            |
+| `Firefox for Android :: QR`                                     | `#android-activation-and-trust`            |
+| `Firefox for Android :: Settings`                               | `#android-activation-and-trust`            |
+| `Firefox Build System :: Android Studio and Gradle Integration` | `#android-pie`                             |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
@@ -210,10 +223,16 @@ Two further hooks shape the comment text as it is recorded:
   checkout.
 - `feedback_tags_hook` (`agent.py`) appends the triage-specific tags a reader can
   add to categorize a problem: `ai-triage-wrong-file`, `ai-triage-wrong-cause`,
-  `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-wrong-fix`,
-  `ai-triage-shallow-fix`. The last two are about the fix plan rather than the
-  diagnosis: one for a fix that would not work, one for a fix that patches the
-  symptom instead of the cause the comment just named. The same hook closes the
+  `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-not-a-bug`,
+  `ai-triage-wrong-fix`, `ai-triage-shallow-fix`, `ai-triage-wrong-severity`.
+  `not-a-bug` is for intended behavior triaged as a defect, which is otherwise
+  filed under `out-of-scope` or `wrong-cause` and inflates both. `wrong-fix` and
+  `shallow-fix` are about the fix plan rather than the diagnosis: one for a fix
+  that would not work, one for a fix that patches the symptom instead of the cause
+  the comment just named. `wrong-severity` separates a bad severity suggestion
+  from a bad analysis, which a 👎 alone cannot do. The footer writes them as one
+  brace group, `ai-triage-{wrong-file, wrong-cause, …}`, so the list stays one
+  line as it grows. The same hook closes the
   comment by asking for a `needinfo?` on `hackbot@mozilla.tld`, which triggers a
   `bug-fix` run ([triggers.md](../../docs/hackbot/triggers.md)).
 
