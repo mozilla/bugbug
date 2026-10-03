@@ -8,6 +8,7 @@ denied) as a structured :class:`~agent_tools.registry.ToolError`.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import mimetypes
 from dataclasses import dataclass
@@ -480,8 +481,12 @@ async def download_attachment(
         )
 
     raw = base64.b64decode(data)
-    with open(dest_path, "wb") as fp:
-        fp.write(raw)
+
+    def write_file() -> None:
+        with open(dest_path, "wb") as fp:
+            fp.write(raw)
+
+    await asyncio.to_thread(write_file)
 
     return {
         "attachment_id": attachment_id,

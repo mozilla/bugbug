@@ -8,6 +8,7 @@ that holds the Bugzilla token — the agent process itself never sees it.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 from shlex import quote
@@ -202,7 +203,7 @@ async def run_bug_fix(
             ACTIONS_SERVER_NAME: actions_server,
         },
         agents={"investigator": make_investigator()},
-        cwd=str(source_repo.resolve()),
+        cwd=str(await asyncio.to_thread(source_repo.resolve)),
         add_dirs=[str(rules_dir.resolve())],
         permission_mode="bypassPermissions",
         allowed_tools=[

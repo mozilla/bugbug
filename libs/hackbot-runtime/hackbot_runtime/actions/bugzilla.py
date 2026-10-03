@@ -10,6 +10,7 @@ confirmation string, raising ``ToolError`` on invalid input.
 
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 import os
 from pathlib import Path
@@ -148,12 +149,12 @@ async def add_attachment(
     is_patch=true and omit content_type. Recorded into the run summary for human
     review — does not upload to Bugzilla.
     """
-    if not os.path.isfile(file_path):
+    if not await asyncio.to_thread(os.path.isfile, file_path):
         raise ToolError(f"file not found: {file_path}")
 
     file_name = os.path.basename(file_path)
     resolved_summary = summary or file_name
-    size = os.path.getsize(file_path)
+    size = await asyncio.to_thread(os.path.getsize, file_path)
     if is_patch:
         resolved_content_type = "text/plain"
     else:

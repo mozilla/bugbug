@@ -29,20 +29,20 @@ async def build_firefox(
         stdout, stderr). Always returns a dict; never raises.
     """
     try:
-        if not firefox_dir.exists():
+        if not await asyncio.to_thread(firefox_dir.exists):
             return {
                 "success": False,
                 "message": f"Firefox directory not found at {firefox_dir}",
             }
 
-        if not mozconfig_path.exists():
+        if not await asyncio.to_thread(mozconfig_path.exists):
             return {
                 "success": False,
                 "message": f"MOZCONFIG file not found at {mozconfig_path}",
             }
 
         env = os.environ.copy()
-        env["MOZCONFIG"] = str(mozconfig_path.resolve())
+        env["MOZCONFIG"] = str(await asyncio.to_thread(mozconfig_path.resolve))
         env["CLAUDECODE"] = "1"
 
         # `mach bootstrap` installs rust under ~/.cargo/bin and clang under

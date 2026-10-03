@@ -12,6 +12,7 @@ to score the analysis and the fix.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from logging import getLogger
 from pathlib import Path
@@ -127,7 +128,7 @@ async def run_verify(
     model: str = VERIFY_MODEL,
 ) -> tuple[Judgment, float]:
     """Judge the agent's analysis and fix. Returns (judgment, cost_usd)."""
-    scratch_out.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(scratch_out.mkdir, parents=True, exist_ok=True)
     (scratch_out / "agent_fix.diff").write_text(agent_diff, encoding="utf-8")
 
     prompt = VERIFY_TEMPLATE.format(
