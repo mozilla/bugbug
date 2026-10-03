@@ -82,7 +82,7 @@ def component_guidance_hook(loaded: set[str]) -> ActionHook:
         missing: dict[str, str] = {}
         for path in cited_paths(text):
             owners = owners_for_path(path)
-            # Any owner will do. Three Android components share `mobile/android/`, and
+            # Any owner will do. The Android components share `mobile/android/`, and
             # refusing a Toolbar comment for citing a file its own team owns is noise.
             if owners and not any(o.key in loaded for o in owners):
                 # Keyed by the first owner, which is the one to name in the message.

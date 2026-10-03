@@ -73,8 +73,8 @@ _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 _FEEDBACK_TAGS = (
     "If you want to categorize your feedback you can add one of the following "
-    "tags: ai-triage-wrong-file, ai-triage-wrong-cause, ai-triage-hallucination, "
-    "ai-triage-out-of-scope, ai-triage-wrong-fix, ai-triage-shallow-fix."
+    "tags: ai-triage-{wrong-file, wrong-cause, hallucination, out-of-scope, "
+    "not-a-bug, wrong-fix, shallow-fix, wrong-severity}."
 )
 
 # Repeats the `bugzilla_webhook.bot_login` default in hackbot-api, which this agent
@@ -363,9 +363,11 @@ triage agent pulled from it. Work only from what you can read on Bugzilla.
 
 1. **Search once**, scoped to the same product and component, using the best single term
    from the discriminating signal. Pass narrow fields:
-   `include_fields=id,summary,status,resolution,dupe_of`. Ask for at most 20. Request
-   `dupe_of` explicitly -- it is not in the default field set. Leave `description` out
-   here: you need it for one candidate, not twenty.
+   `include_fields=id,summary,status,resolution,dupe_of`. Ask for at most 20, and always
+   pass `order=bug_id DESC`: Bugzilla returns the oldest matches first, so without it
+   the limit keeps twenty bugs from years ago and drops the recent one you are looking
+   for. Request `dupe_of` explicitly -- it is not in the default field set. Leave
+   `description` out here: you need it for one candidate, not twenty.
 2. **Widen at most three times** if nothing plausible comes back: drop the term, try your
    second-best signal, keep the product and component scope. Then stop.
 3. **Verify only your single best candidate.** Ask for `description` in `include_fields`
