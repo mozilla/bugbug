@@ -38,14 +38,15 @@ def get_code_review_tool():
 
 async def process_review(
     review_request: ReviewRequest,
-) -> tuple[list[GeneratedComment], str, dict]:
+) -> tuple[list[GeneratedComment], str, str, dict]:
     """Process a review request and generate comments.
 
     Args:
         review_request: The review request to process.
 
     Returns:
-        A tuple of (generated comments, patch summary, review details).
+        A tuple of (generated comments, patch summary, general comment, review
+        details).
     """
     logger.info(
         "Processing review request %s for platform %s",
@@ -99,7 +100,12 @@ async def process_review(
         for comment in result.review_comments
     ]
 
-    return generated_comments, result.patch_summary, result.details
+    return (
+        generated_comments,
+        result.patch_summary,
+        result.general_comment,
+        result.details,
+    )
 
 
 def submit_review_to_platform(
@@ -174,8 +180,8 @@ def create_main_review_comment(
     diff_url = f"{settings.phabricator_url}/D{review_request.revision_id}?id={review_request.diff_id}"
     parts = [f"(Reviewing [Diff {review_request.diff_id}]({diff_url}))"]
 
-    if review_request.summary:
-        parts.append(review_request.summary)
+    if review_request.general_comment:
+        parts.append(review_request.general_comment)
         parts.append("\n---\n")
 
     num_comments = len(generated_comments)
