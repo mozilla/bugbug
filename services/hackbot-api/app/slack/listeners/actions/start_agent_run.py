@@ -40,66 +40,30 @@ def _started_note(user: str | None, agent_name: str, run_id: UUID) -> str:
     return f":check-mark-green: {who} started a <{_run_url(run_id)}|{agent_name} run>"
 
 
-def _replace_clicked_button(
-    blocks: list[dict], block_id: str, action_id: str, note: str
-) -> list[dict] | None:
-    """``blocks`` with the clicked button swapped for ``note``, or None if absent.
+def _message_with_note(message: dict, action: dict, note: str) -> dict | None:
+    """``message`` with the clicked button swapped for ``note``, or None if absent.
 
     Only the clicked button goes: any other button in the same row is a
     different offer and stays clickable, with the note placed under that row.
     """
     note_block = {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
+    blocks = message["blocks"]
     for i, block in enumerate(blocks):
-        if block["type"] != "actions" or block["block_id"] != block_id:
+        if block["type"] != "actions" or block["block_id"] != action["block_id"]:
             continue
         elements = block["elements"]
-        remaining = [e for e in elements if e["action_id"] != action_id]
+        remaining = [e for e in elements if e["action_id"] != action["action_id"]]
         if len(remaining) == len(elements):
             return None
         if remaining:
             replacement = [{**block, "elements": remaining}, note_block]
         else:
             replacement = [note_block]
-        return blocks[:i] + replacement + blocks[i + 1 :]
+        return {
+            "text": f"{message['text']}\n{note}".strip(),
+            "blocks": blocks[:i] + replacement + blocks[i + 1 :],
+        }
     return None
-
-
-async def _mark_button_used(
-    respond: AsyncRespond,
-    body: dict,
-    action: dict,
-    note: str,
-    logger: logging.Logger,
-) -> None:
-    """Show on the message that its one-shot button was used.
-
-    Best effort: the run has started by now, so an update Slack refuses is
-    logged, and the dedupe key still stops a second run from a stale button.
-    """
-    message = body["message"]
-    blocks = _replace_clicked_button(
-        message["blocks"], action["block_id"], action["action_id"], note
-    )
-    if blocks is None:
-        logger.warning(
-            "Clicked button '%s' not found in its message; left unchanged",
-            action["action_id"],
-        )
-        return
-
-    response = await respond(
-        text=f"{message['text']}\n{note}".strip(),
-        blocks=blocks,
-        replace_original=True,
-    )
-    # An error from Slack is returned, not raised.
-    if response.status_code != 200:
-        logger.error(
-            "Failed to mark button '%s' as used: HTTP %s %s",
-            action["action_id"],
-            response.status_code,
-            response.body,
-        )
 
 
 async def start_agent_run_callback(
@@ -160,13 +124,24 @@ async def start_agent_run_callback(
             replace_original=False,
             unfurl_links=False,
         )
-    else:
-        await _mark_button_used(
-            respond,
-            body,
-            action,
-            _started_note(user, value.agent_name, run.run_id),
-            logger,
+
+    starter = user if run.is_new else None
+    updated = _message_with_note(
+        body["message"], action, _started_note(starter, value.agent_name, run.run_id)
+    )
+    if updated is None:
+        logger.warning(
+            "Clicked button '%s' not found in its message; left unchanged",
+            action["action_id"],
         )
+    else:
+        response = await respond(**updated, replace_original=True)
+        if response.status_code != 200:
+            logger.error(
+                "Failed to mark button '%s' as used: HTTP %s %s",
+                action["action_id"],
+                response.status_code,
+                response.body,
+            )
 
     await ack()

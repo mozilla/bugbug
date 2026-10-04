@@ -182,12 +182,14 @@ class TestStartAgentRun:
 
         await self._call()
 
-        self.fake_respond.assert_awaited_once()
-        reply = self.fake_respond.await_args.kwargs
+        (reply,) = [
+            call.kwargs
+            for call in self.fake_respond.await_args_list
+            if call.kwargs.get("response_type") == "ephemeral"
+        ]
         assert "already triggered" in reply["text"]
         assert RUN_ID in reply["text"]
-        assert reply["response_type"] == "ephemeral"
-        # The channel keeps the button and its context; only the clicker is told.
+        # Only the clicker is told; the channel's copy is updated separately.
         assert reply["replace_original"] is False
 
     async def test_a_collapsed_click_is_still_acknowledged(self):
@@ -386,14 +388,15 @@ class TestStartAgentRun:
         }
         assert blocks[2]["type"] == "context"
 
-    async def test_a_duplicate_click_leaves_the_message_alone(self):
-        # The click may come from a stale copy of the message: updating from it
-        # would overwrite the first clicker's note.
+    async def test_a_duplicate_click_removes_the_button_without_naming_anyone(self):
         self.fake_client.trigger_run.return_value = self._triggered(is_new=False)
 
         await self._call()
 
-        assert self._edits() == []
+        (update,) = self._edits()
+        assert not any(b["type"] == "actions" for b in update["blocks"])
+        assert "<@U0CLICKER>" not in update["text"]
+        assert RUN_ID in update["text"]
 
     async def test_a_failed_apply_keeps_the_button(self):
         # Nothing started, so the offer stands and the clicker can try again.
