@@ -13,7 +13,7 @@ MAX_LOG_SIZE = 1_048_576  # bytes; logs are tail-truncated to this limit
 async def js_shell_evaluator(
     content: str,
     js_binary: Path,
-    timeout: int = 30,
+    timeout: int = 30,  # noqa: ASYNC109
     flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Execute a testcase in the SpiderMonkey JS shell and capture crash output.

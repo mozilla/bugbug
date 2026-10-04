@@ -62,7 +62,9 @@ def permalink_prefix(rev: str | None) -> str:
     return f"{_BASE_URL}/rev/{rev}" if rev else f"{_BASE_URL}/source"
 
 
-async def resolve_index_revision(*, client=None, timeout: float = 10.0) -> str | None:
+async def resolve_index_revision(
+    *, client=None, timeout: float = 10.0  # noqa: ASYNC109
+) -> str | None:
     """Return the git SHA Searchfox's index is pinned to, or ``None``.
 
     Reads the permalink Searchfox publishes on a file page, so the revision is

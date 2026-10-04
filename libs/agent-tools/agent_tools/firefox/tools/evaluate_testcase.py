@@ -80,7 +80,7 @@ async def evaluate_testcase(
     content: str,
     filename: str,
     firefox_binary: Path,
-    timeout: int = 30,
+    timeout: int = 30,  # noqa: ASYNC109
     prefs: dict[str, str | int | bool] = None,
 ) -> dict[str, Any]:
     """Test a testcase in Firefox and capture crash output.
