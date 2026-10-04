@@ -428,15 +428,6 @@ class TestStartAgentRun:
         self.fake_ack.assert_awaited_once()
         assert "Slack said no" in caplog.text
 
-    async def test_a_message_without_text_gets_the_note_as_its_text(self):
-        del self.body["message"]["text"]
-
-        await self._call()
-
-        (update,) = self._edits()
-        text = update["text"]
-        assert text.startswith(":check-mark-green: <@U0CLICKER>")
-
     async def test_a_message_without_the_button_is_left_alone(self):
         self.body["message"] = {"ts": "1700000000.000100", "text": "", "blocks": []}
 

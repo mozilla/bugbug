@@ -41,7 +41,7 @@ def _started_note(user: str | None, agent_name: str, run_id: UUID) -> str:
 
 
 def _replace_clicked_button(
-    blocks: list[dict], block_id: str | None, action_id: str, note: str
+    blocks: list[dict], block_id: str, action_id: str, note: str
 ) -> list[dict] | None:
     """``blocks`` with the clicked button swapped for ``note``, or None if absent.
 
@@ -50,10 +50,10 @@ def _replace_clicked_button(
     """
     note_block = {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
     for i, block in enumerate(blocks):
-        if block.get("type") != "actions" or block.get("block_id") != block_id:
+        if block["type"] != "actions" or block["block_id"] != block_id:
             continue
-        elements = block.get("elements") or []
-        remaining = [e for e in elements if e.get("action_id") != action_id]
+        elements = block["elements"]
+        remaining = [e for e in elements if e["action_id"] != action_id]
         if len(remaining) == len(elements):
             return None
         if remaining:
@@ -76,9 +76,9 @@ async def _mark_button_used(
     Best effort: the run has started by now, so an update Slack refuses is
     logged, and the dedupe key still stops a second run from a stale button.
     """
-    message = body.get("message") or {}
+    message = body["message"]
     blocks = _replace_clicked_button(
-        message.get("blocks") or [], action.get("block_id"), action["action_id"], note
+        message["blocks"], action["block_id"], action["action_id"], note
     )
     if blocks is None:
         logger.warning(
@@ -88,7 +88,7 @@ async def _mark_button_used(
         return
 
     response = await respond(
-        text=f"{message.get('text', '')}\n{note}".strip(),
+        text=f"{message['text']}\n{note}".strip(),
         blocks=blocks,
         replace_original=True,
     )
