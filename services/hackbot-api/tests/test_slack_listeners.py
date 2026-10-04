@@ -369,7 +369,7 @@ class TestStartAgentRun:
 
         await self._call(action)
 
-        assert "`test-repair`" in self._updated_blocks()[-1]["elements"][0]["text"]
+        assert "|test-repair run>" in self._updated_blocks()[-1]["elements"][0]["text"]
 
     async def test_the_rest_of_the_message_is_untouched(self):
         other = {"type": "button", "action_id": "something_else", "value": "x"}
@@ -435,7 +435,7 @@ class TestStartAgentRun:
 
         (update,) = self._edits()
         text = update["text"]
-        assert text.startswith(":white_check_mark: <@U0CLICKER>")
+        assert text.startswith(":check-mark-green: <@U0CLICKER>")
 
     async def test_a_message_without_the_button_is_left_alone(self):
         self.body["message"] = {"ts": "1700000000.000100", "text": "", "blocks": []}

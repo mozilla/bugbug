@@ -37,10 +37,7 @@ def _run_url(run_id: UUID) -> str:
 
 def _started_note(user: str | None, agent_name: str, run_id: UUID) -> str:
     who = f"<@{user}>" if user else "Someone"
-    return (
-        f":white_check_mark: {who} started a `{agent_name}` run: "
-        f"<{_run_url(run_id)}|View run>"
-    )
+    return f":check-mark-green: {who} started a <{_run_url(run_id)}|{agent_name} run>"
 
 
 def _replace_clicked_button(
