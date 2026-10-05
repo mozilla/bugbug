@@ -168,6 +168,11 @@ class HackbotContext(BaseSettings):
         prepared at. What the run publishes -- its patch, its Phabricator diff, its
         try push -- is then taken against ``ref``, so a revision built from it
         stacks on that commit. Returns the full sha. The tree must be clean.
+
+        ``ref`` must be a commit the clone already holds, and it becomes the base
+        rather than part of the diff. That is the difference from
+        :func:`hackbot_runtime.revision.checkout_revision`, which rebuilds a
+        revision from its Phabricator diffs so the agent can revise it.
         """
         checkout_commit(self.repo_path, ref)
         self._source_base = self._published_base = changes.base_commit(self.repo_path)
