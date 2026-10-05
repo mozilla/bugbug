@@ -13,6 +13,32 @@ from bugbug import phabricator
 from bugbug.tools.core.platforms import phabricator as phab_platform
 
 
+def test_stack_base_patch_is_bottom_ancestor() -> None:
+    class FakePatch(phab_platform.PhabricatorPatch):
+        def __init__(self, revision_phid="PHID-TOP"):
+            self._revision_phid = revision_phid
+
+        @property
+        def _revision_metadata(self):
+            return {"phid": self._revision_phid}
+
+        @property
+        def stack_graph(self):
+            return {
+                "PHID-BASE": [],
+                "PHID-MIDDLE": ["PHID-BASE"],
+                "PHID-TOP": ["PHID-MIDDLE"],
+            }
+
+        @property
+        def patch_set(self):
+            return phab_platform.PatchSet.from_string("")
+
+    patch = FakePatch()
+    assert patch.stack_base_patch.revision_phid == "PHID-BASE"
+    assert len(patch.patch_stack) == 3
+
+
 def test_get_first_review_time() -> None:
     # No transactions.
     transactions: list[phabricator.TransactionDict] = []
