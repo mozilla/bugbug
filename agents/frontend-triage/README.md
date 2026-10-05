@@ -36,9 +36,9 @@ and the channel each reports to:
 | `Core :: Machine Learning: Frontend`                            | `#smart-window-bug-triage`                 |
 | `Core :: Machine Learning: Models`                              | `#smart-window-bug-triage`                 |
 | `Core :: Machine Learning: General`                             | `#smart-window-bug-triage`                 |
-| `Firefox for Android :: History`                                | `#android-core-dev`                        |
-| `Firefox for Android :: Toolbar`                                | `#android-core-dev`                        |
-| `Firefox for Android :: Homepage`                               | `#android-core-dev`                        |
+| `Firefox for Android :: History`                                | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Toolbar`                                | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Homepage`                               | `#firefox-android-dev-info`                |
 | `Toolkit :: Application Update`                                 | `#installer-updater-bug-triage`            |
 | `Firefox :: Installer`                                          | `#installer-updater-bug-triage`            |
 | `Firefox :: General`                                            | `#fx-toolkit-general-triage-notifications` |
@@ -47,9 +47,9 @@ and the channel each reports to:
 | `Firefox :: PDF Viewer`                                         | `#pdfjs-triage`                            |
 | `Toolkit :: Password Manager`                                   | `#credential-management-bug-triage`        |
 | `Firefox :: about:logins`                                       | `#credential-management-bug-triage`        |
-| `Firefox for Android :: Downloads`                              | `#android-core-dev`                        |
-| `Firefox for Android :: Tabs`                                   | `#android-core-dev`                        |
-| `Firefox for Android :: Translations`                           | `#android-core-dev`                        |
+| `Firefox for Android :: Downloads`                              | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Tabs`                                   | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Translations`                           | `#firefox-android-dev-info`                |
 | `Firefox for Android :: Experimentation and Telemetry`          | `#android-activation-and-trust`            |
 | `Firefox for Android :: Logins`                                 | `#android-activation-and-trust`            |
 | `Firefox for Android :: Onboarding`                             | `#android-activation-and-trust`            |

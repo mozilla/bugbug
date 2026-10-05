@@ -437,7 +437,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "History",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=("mobile/android/fenix/", "mobile/android/android-components/"),
         # Every Android component claims the shared trees so that a bug localized
         # anywhere in Fenix reaches an Android team, and the narrower entries below
@@ -458,7 +458,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Toolbar",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=("mobile/android/fenix/", "mobile/android/android-components/"),
         owns=(
             "mobile/android/fenix/",
@@ -484,7 +484,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Homepage",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=("mobile/android/fenix/", "mobile/android/android-components/"),
         owns=(
             "mobile/android/fenix/",
@@ -506,7 +506,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Downloads",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -568,7 +568,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Tabs",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -640,7 +640,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Translations",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",

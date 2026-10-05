@@ -156,7 +156,7 @@ def test_an_unowned_component_has_no_channel():
     assert channel_for("Firefox", "Address Bar") is None
     assert channel_for("Core", "New Tab Page") is None
     # A component name is only owned within its own product: `History` routes to
-    # #android-core-dev under Firefox for Android and nowhere at all under Firefox --
+    # #firefox-android-dev-info under Firefox for Android and nowhere at all under Firefox --
     # which has no `History` component in the first place, only `Bookmarks & History`.
     assert channel_for("Firefox", "History") is None
     assert channel_for("Firefox", None) is None
