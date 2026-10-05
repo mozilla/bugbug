@@ -35,18 +35,20 @@ def _run_url(run_id: UUID) -> str:
     return f"{settings.hackbot_ui_url}/runs/{run_id}"
 
 
-def _started_note(user: str | None, agent_name: str, run_id: UUID) -> str:
+def _generate_replacement_block(
+    user: str | None, agent_name: str, run_id: UUID
+) -> dict:
     who = f"<@{user}>" if user else "Someone"
-    return f":check-mark-green: {who} started a <{_run_url(run_id)}|{agent_name} run>"
+    note = f":check-mark-green: {who} started a <{_run_url(run_id)}|{agent_name} run>"
+    return {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
 
 
-def _message_with_note(message: dict, action: dict, note: str) -> dict | None:
-    """``message`` with the clicked button swapped for ``note``, or None if absent.
+def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | None:
+    """``message`` with the clicked button swapped for ``note_block``, or None if absent.
 
     Only the clicked button goes: any other button in the same row is a
     different offer and stays clickable, with the note placed under that row.
     """
-    note_block = {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
     blocks = message["blocks"]
     for i, block in enumerate(blocks):
         if block["type"] != "actions" or block["block_id"] != action["block_id"]:
@@ -60,7 +62,7 @@ def _message_with_note(message: dict, action: dict, note: str) -> dict | None:
         else:
             replacement = [note_block]
         return {
-            "text": f"{message['text']}\n{note}".strip(),
+            "text": f"{message['text']}\n{note_block['elements'][0]['text']}".strip(),
             "blocks": blocks[:i] + replacement + blocks[i + 1 :],
         }
     return None
@@ -126,11 +128,8 @@ async def start_agent_run_callback(
         )
 
     triggered_by = user if run.is_new else None
-    updated_message = _message_with_note(
-        body["message"],
-        action,
-        _started_note(triggered_by, value.agent_name, run.run_id),
-    )
+    note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
+    updated_message = _message_with_note(body["message"], action, note_block)
     if updated_message is None:
         logger.warning(
             "Clicked button '%s' not found in its message; left unchanged",
