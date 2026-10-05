@@ -61,12 +61,14 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
             )
             return None
         elements = block["elements"]
-        remaining = [e for e in elements if e["action_id"] != action["action_id"]]
-        if len(remaining) == len(elements):
+        filtered_elements = [
+            e for e in elements if e["action_id"] != action["action_id"]
+        ]
+        if len(filtered_elements) == len(elements):
             return None
         replacement = (
-            [{**block, "elements": remaining}, note_block]
-            if remaining
+            [{**block, "elements": filtered_elements}, note_block]
+            if filtered_elements
             else [note_block]
         )
         return {
