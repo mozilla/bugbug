@@ -20,8 +20,9 @@ scope, and it is broad: any user-facing Firefox defect qualifies.
 What is _routed_ is narrower. `TRIAGE_SCOPE` in `config.py` lists the components bugs
 normally arrive from, one entry each, carrying the Slack channel and the trees the
 component's code lives in. A bug handed to the agent by hand in some other component
-(`Firefox :: Menus`, say) is triaged the same way and reports to nobody. The components,
-and the channel each reports to:
+(`Firefox :: Menus`, say) is triaged the same way and reports to nobody. An entry whose
+team asked for no Slack message sets its channel to `None`, and reports to nobody either.
+The components, and the channel each reports to:
 
 | Component                                                       | Reports to                                 |
 | --------------------------------------------------------------- | ------------------------------------------ |

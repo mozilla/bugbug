@@ -132,6 +132,8 @@ def test_every_channel_is_a_channel_name():
     # and severity change have landed, and the run page is the only place it shows. A
     # missing `#` or a stray capital is the whole cost of that, so catch it here.
     for entry in TRIAGE_SCOPE:
+        if entry.channel is None:
+            continue
         assert entry.channel.startswith("#"), entry.key
         assert entry.channel == entry.channel.strip().lower(), entry.key
         assert " " not in entry.channel, entry.key
