@@ -114,15 +114,18 @@ async def phabricator_webhook(
     action = payload.get("action") or {}
     if action.get("test"):
         # Phabricator's "test" ping when a webhook is created/edited.
+        log.info('Phabricator webhook: status="ignored", reason="test ping"')
         return
 
     obj = payload.get("object") or {}
     if obj.get("type") != "DREV":
+        log.info('Phabricator webhook: status="ignored", reason="not a revision"')
         return
 
     object_phid = obj.get("phid")
     triggering = triggering_transaction_phids(payload)
     if not object_phid or not triggering:
+        log.info('Phabricator webhook: status="ignored", reason="no revision or transactions"')
         return
 
     detected = await detect_mention_and_revision(
@@ -133,6 +136,7 @@ async def phabricator_webhook(
         authorizer=authorizer,
     )
     if detected is None:
+        log.info('Phabricator webhook: status="ignored", reason="no actionable @hackbot mention"')
         return
 
     # The anchor transaction identifies the submission, so a retried delivery

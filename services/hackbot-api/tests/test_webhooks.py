@@ -10,6 +10,7 @@ dispatch retry behavior.
 import hashlib
 import hmac
 import json
+import logging
 from unittest.mock import AsyncMock
 
 import pytest
@@ -662,19 +663,21 @@ def test_route_rejects_bad_signature(client):
     assert resp.status_code == 401
 
 
-def test_route_ignores_test_ping(client):
+def test_route_ignores_test_ping(client, caplog):
+    caplog.set_level(logging.INFO, logger="app.routers.webhooks")
     resp = _post(client, {"action": {"test": True}, "object": {"type": "DREV"}})
     assert resp.status_code == 202
-    assert resp.json()["status"] == "ignored"
+    assert ('Phabricator webhook: status="ignored", reason="test ping"' in caplog.messages)
 
-
-def test_route_ignores_non_drev(client):
+def test_route_ignores_non_drev(client, caplog):
+    caplog.set_level(logging.INFO, logger="app.routers.webhooks")
     resp = _post(client, {"object": {"type": "TASK", "phid": "PHID-TASK-1"}})
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "not a revision"
+    assert ('Phabricator webhook: status="ignored", reason="not a revision"' in caplog.messages)
 
 
-def test_route_ignores_no_mention(client, monkeypatch):
+def test_route_ignores_no_mention(client, monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger="app.routers.webhooks")
     monkeypatch.setattr(
         webhooks, "detect_mention_and_revision", AsyncMock(return_value=None)
     )
@@ -686,7 +689,7 @@ def test_route_ignores_no_mention(client, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "no actionable @hackbot mention"
+    assert ('Phabricator webhook: status="ignored", reason="no actionable @hackbot mention"' in caplog.messages)
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
@@ -703,10 +706,7 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json() == {
-        "status": "triggered",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
+    assert resp.json() is None
     assert detect.call_args.args[0] is phab_client
     assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
@@ -757,14 +757,9 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
         "phab-txn:PHID-XACT-1",
         "phab-txn:PHID-XACT-2",
     ]
-    assert first.json()["status"] == "triggered"
-    # The retry is answered with the existing run rather than claimed as new.
-    assert retry.json() == {
-        "status": "ignored",
-        "reason": "duplicate delivery",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
-    assert later.json()["status"] == "triggered"
+    for response in (first, retry, later):
+        assert response.status_code == 202
+        assert response.json() is None
 
 
 def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):
