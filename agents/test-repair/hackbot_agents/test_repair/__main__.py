@@ -127,7 +127,7 @@ def _record_verdict_email(
         culprit_author=culprit_author,
         already_actioned=sheriff_classification(investigation.project, task_id),
         revision_pending=pending is not None,
-        parent_revision=(pending or {}).get("params", {}).get("parent_revision"),
+        parent_revision=(pending or {}).get("params", {}).get("parent_revision_id"),
     )
     record_email(
         ctx.actions,

@@ -70,7 +70,7 @@ change to that commit. When the culprit's bug is known -- `culprit_bug` from the
 verdict, else the bug named in the culprit's commit subject -- it records a
 `phabricator.submit_patch` action in `summary.json`: a WIP revision carrying the
 patch, stacked as a child of the culprit's own revision when its commit footer names
-one (`parent_revision`). Nothing reaches Phabricator during the run, and nothing is
+one (`parent_revision_id`). Nothing reaches Phabricator during the run, and nothing is
 posted to the bug.
 
 A regression is always backed out, so the revision is not meant to land: the author

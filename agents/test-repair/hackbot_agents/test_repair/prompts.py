@@ -206,7 +206,7 @@ directly on that commit.
 """
 
 PARENT_REVISION_ARG = (
-    " parent_revision={revision} (the culprit's own revision, D{revision}),"
+    " parent_revision_id={revision} (the culprit's own revision, D{revision}),"
 )
 
 REPORT_INSTRUCTIONS = """

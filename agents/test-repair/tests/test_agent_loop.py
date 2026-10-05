@@ -209,7 +209,7 @@ def test_the_revision_stacks_on_the_culprits_own(tmp_path, monkeypatch):
         actions_recorder=ActionsRecorder(),
         checkout=lambda sha: sha,
     )
-    assert "parent_revision=325120 (the culprit's own revision, D325120)" in calls[1]
+    assert "parent_revision_id=325120 (the culprit's own revision, D325120)" in calls[1]
 
 
 def test_no_stacking_unless_the_tree_moved_to_the_culprit(tmp_path, monkeypatch):
