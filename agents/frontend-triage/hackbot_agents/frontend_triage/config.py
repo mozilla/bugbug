@@ -58,8 +58,9 @@ class ScopedComponent(NamedTuple):
     component: str
     # Required, because an entry without one would be a component getting unattended
     # triage with nobody told -- which is what `channel_for` failing closed produces,
-    # and not something to be able to express by accident.
-    channel: str
+    # and not something to be able to express by accident. `None` is for a team that
+    # has asked for no Slack message, and has to be written out to get it.
+    channel: str | None
     # Where this component's code lives, for the prompt's index and, unless `doc_trees`
     # below overrides it, for `docs.docs_for`. Descriptive, so it may be broad and
     # overlap another component.
@@ -1605,7 +1606,7 @@ TRIAGE_SCOPE = (
 
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
 # that `notify.py` keeps one flat mapping to look up.
-SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
+SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE if c.channel is not None}
 
 _SCOPE_BY_KEY = {c.key: c for c in TRIAGE_SCOPE}
 
