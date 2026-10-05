@@ -64,10 +64,11 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
         remaining = [e for e in elements if e["action_id"] != action["action_id"]]
         if len(remaining) == len(elements):
             return None
-        if remaining:
-            replacement = [{**block, "elements": remaining}, note_block]
-        else:
-            replacement = [note_block]
+        replacement = (
+            [{**block, "elements": remaining}, note_block]
+            if remaining
+            else [note_block]
+        )
         return {
             "text": f"{message['text']}\n{note_block['elements'][0]['text']}".strip(),
             "blocks": blocks[:i] + replacement + blocks[i + 1 :],
