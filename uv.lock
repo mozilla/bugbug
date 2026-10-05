@@ -648,6 +648,7 @@ dependencies = [
     { name = "tqdm" },
     { name = "unidiff" },
     { name = "weave" },
+    { name = "whatthepatch" },
     { name = "xgboost" },
     { name = "zstandard" },
 ]
@@ -734,6 +735,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'perf-regression-predictor'", specifier = "==5.15.0" },
     { name = "unidiff", specifier = "~=0.7.5" },
     { name = "weave", specifier = ">=0.53.4" },
+    { name = "whatthepatch", specifier = "~=1.0.7" },
     { name = "xgboost", specifier = ">=3.2,<3.5" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
