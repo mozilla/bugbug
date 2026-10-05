@@ -58,6 +58,8 @@ The components, and the channel each reports to:
 | `Firefox for Android :: QR`                                     | `#android-activation-and-trust`            |
 | `Firefox for Android :: Settings`                               | `#android-activation-and-trust`            |
 | `Firefox Build System :: Android Studio and Gradle Integration` | `#android-pie`                             |
+| `Firefox :: Bookmarks & History`                                | none (private comment)                     |
+| `Firefox :: Downloads Panel`                                    | none (private comment)                     |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one

@@ -1605,6 +1605,49 @@ TRIAGE_SCOPE = (
             "depends on the bug still being Untriaged."
         ),
     ),
+    # The Places team asked for no Slack message and for the analysis to be readable
+    # only by insiders, so both components opt out of the channel and opt in to private
+    # comments.
+    ScopedComponent(
+        "Firefox",
+        "Bookmarks & History",
+        None,
+        trees=("browser/components/places/", "browser/components/pagedata/"),
+        owns=(
+            "browser/components/places/",
+            "browser/components/pagedata/",
+            "browser/base/content/browser-places.js",
+        ),
+        private_comments=True,
+        notes=(
+            "The front end only: the library window, the bookmark and history sidebars, "
+            "the edit-bookmark panel and the bookmarks toolbar and menus, mostly "
+            "`browser/components/places/content/` and `PlacesUIUtils.sys.mjs`, plus "
+            "`browser/base/content/browser-places.js` for the toolbar and star-button "
+            "glue. Storage, queries, frecency and sync are `toolkit/components/places/`, "
+            "which is `Toolkit :: Places` and not triaged here. A bug about what a view "
+            "shows is usually the view, but one about what was saved, lost or expired is "
+            "usually the toolkit layer; say which, and where the code turned out to be."
+        ),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Downloads Panel",
+        None,
+        trees=("browser/components/downloads/",),
+        owns=("browser/components/downloads/",),
+        private_comments=True,
+        notes=(
+            "The toolbar panel, the toolbar indicator and the Library's downloads view "
+            "(`about:downloads` included) under `browser/components/downloads/`, with "
+            "`DownloadsCommon.sys.mjs` and `DownloadsViewUI.sys.mjs` shared between "
+            "them. The download itself, where it is saved and what happens to the file "
+            "afterwards are `toolkit/components/downloads/`, which is "
+            "`Toolkit :: Downloads API` and not triaged here. A bug about a download "
+            "that failed or landed in the wrong place is usually that layer, not the "
+            "panel that reported it."
+        ),
+    ),
 )
 
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
