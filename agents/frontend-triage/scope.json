@@ -290,6 +290,16 @@
       "product": "Firefox",
       "component": "Untriaged",
       "channel": "#fx-toolkit-general-triage-notifications"
+    },
+    {
+      "product": "Firefox",
+      "component": "Bookmarks & History",
+      "channel": null
+    },
+    {
+      "product": "Firefox",
+      "component": "Downloads Panel",
+      "channel": null
     }
   ]
 }

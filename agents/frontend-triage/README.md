@@ -84,6 +84,8 @@ The components, and the channel each reports to:
 | `Firefox :: Tabbed Browser`                                     | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Tab Groups`                         | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Split View`                         | `#tabbrowser-triage-bots`                  |
+| `Firefox :: Bookmarks & History`                                | none (private comment)                     |
+| `Firefox :: Downloads Panel`                                    | none (private comment)                     |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
@@ -372,6 +374,9 @@ ScopedComponent(
   copy that stays current.
 - **`related`** ships another component's guidance alongside this one, for bugs that
   routinely turn out to be somewhere else.
+- **`private_comments`** makes the triage comment visible only to BMO's insider group,
+  for a team that asked for it. A channel of `None` sends no Slack message. The Places
+  components set both.
 
 Regenerate `scope.json` from this directory with
 `uv run python -c "from hackbot_agents.frontend_triage.config import scope_json; print(scope_json(), end='')" > scope.json`.
