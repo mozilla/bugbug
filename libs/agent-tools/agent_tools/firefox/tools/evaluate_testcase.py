@@ -80,7 +80,7 @@ async def evaluate_testcase(
     content: str,
     filename: str,
     firefox_binary: Path,
-    timeout: int = 30,
+    timeout_sec: int = 30,
     prefs: dict[str, str | int | bool] = None,
 ) -> dict[str, Any]:
     """Test a testcase in Firefox and capture crash output.
@@ -89,7 +89,7 @@ async def evaluate_testcase(
         content: Testcase file content
         filename: Name for the testcase file
         firefox_binary: Path to Firefox binary
-        timeout: Timeout in seconds (grizzly's crash-wait)
+        timeout_sec: Timeout in seconds (grizzly's crash-wait)
         prefs: Optional custom Firefox preferences to set
 
     Returns:
@@ -109,7 +109,7 @@ async def evaluate_testcase(
     # on — a leaked thread is better than a frozen agent.
     if prefs is None:
         prefs = {}
-    outer_deadline = timeout + 90
+    outer_deadline = timeout_sec + 90
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(
@@ -117,7 +117,7 @@ async def evaluate_testcase(
                 content,
                 filename,
                 firefox_binary,
-                timeout,
+                timeout_sec,
                 prefs,
             ),
             timeout=outer_deadline,
