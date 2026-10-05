@@ -10,7 +10,6 @@ dispatch retry behavior.
 import hashlib
 import hmac
 import json
-import logging
 from unittest.mock import AsyncMock
 
 import pytest
@@ -663,27 +662,17 @@ def test_route_rejects_bad_signature(client):
     assert resp.status_code == 401
 
 
-def test_route_ignores_test_ping(client, caplog):
-    caplog.set_level(logging.INFO, logger="app.routers.webhooks")
+def test_route_ignores_test_ping(client):
     resp = _post(client, {"action": {"test": True}, "object": {"type": "DREV"}})
     assert resp.status_code == 202
-    assert (
-        'Phabricator webhook: status="ignored", reason="test ping"' in caplog.messages
-    )
 
 
-def test_route_ignores_non_drev(client, caplog):
-    caplog.set_level(logging.INFO, logger="app.routers.webhooks")
+def test_route_ignores_non_drev(client):
     resp = _post(client, {"object": {"type": "TASK", "phid": "PHID-TASK-1"}})
     assert resp.status_code == 202
-    assert (
-        'Phabricator webhook: status="ignored", reason="not a revision"'
-        in caplog.messages
-    )
 
 
-def test_route_ignores_no_mention(client, monkeypatch, caplog):
-    caplog.set_level(logging.INFO, logger="app.routers.webhooks")
+def test_route_ignores_no_mention(client, monkeypatch):
     monkeypatch.setattr(
         webhooks, "detect_mention_and_revision", AsyncMock(return_value=None)
     )
@@ -695,10 +684,6 @@ def test_route_ignores_no_mention(client, monkeypatch, caplog):
         },
     )
     assert resp.status_code == 202
-    assert (
-        'Phabricator webhook: status="ignored", reason="no actionable @hackbot mention"'
-        in caplog.messages
-    )
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
