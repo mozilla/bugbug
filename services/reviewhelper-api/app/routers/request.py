@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import verify_external_api_key
@@ -59,8 +59,34 @@ async def create_or_get_review_request(
     )
 
     existing_request = await db.scalar(stmt)
-    # We don't support re-processing the same diff or reviewing older diffs
-    if existing_request and (request.diff_id <= existing_request.diff_id):
+    # The database permits only one request per revision and diff, so an
+    # explicit retry of a failed diff requeues that row. The conditional update
+    # ensures concurrent retries queue a single task.
+    if (
+        existing_request
+        and request.diff_id == existing_request.diff_id
+        and existing_request.status == ReviewStatus.FAILED
+    ):
+        result = await db.execute(
+            update(ReviewRequest)
+            .where(ReviewRequest.id == existing_request.id)
+            .where(ReviewRequest.status == ReviewStatus.FAILED)
+            .values(status=ReviewStatus.PENDING, error=None)
+        )
+        await db.commit()
+        if result.rowcount:
+            await create_review_task(existing_request.id)
+            return JSONResponse(
+                {
+                    "status": ReviewStatus.PENDING.value,
+                    "message": "Failed review scheduled for retry.",
+                },
+                status.HTTP_202_ACCEPTED,
+            )
+        await db.refresh(existing_request)
+
+    # Older diffs and already-active or published requests remain idempotent.
+    if existing_request and request.diff_id <= existing_request.diff_id:
         return JSONResponse(
             {
                 "status": existing_request.status.value,
