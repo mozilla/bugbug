@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import bisect
 import collections
 import concurrent.futures
 import heapq
@@ -644,8 +645,8 @@ class TestSelectModel(Model):
         self, apply_filters: bool = False
     ) -> tuple[list[dict[str, Any]], int]:
         pushes = []
-        for revs, test_datas in test_scheduling.get_test_scheduling_history(
-            self.granularity
+        for push_index, (revs, test_datas) in enumerate(
+            test_scheduling.get_test_scheduling_history(self.granularity)
         ):
             failures = []
             passes = []
@@ -670,6 +671,8 @@ class TestSelectModel(Model):
                     "revs": revs,
                     "failures": failures,
                     "passes": passes,
+                    # Index in the unfiltered history, as in items_gen's row_push_index.
+                    "push_index": push_index,
                 }
             )
 
@@ -679,9 +682,10 @@ class TestSelectModel(Model):
     # according to time: we train on older pushes and evaluate on newer pushes.
     def train_test_split(self, X, y):
         pushes, train_push_len = self.get_pushes(True)
-        train_len = sum(
-            len(push["failures"]) + len(push["passes"])
-            for push in pushes[:train_push_len]
+        # items_gen doesn't generate a row for every runnable of a push (e.g. with negative
+        # sampling), so split on the push of each generated row (rows are in push order).
+        train_len = bisect.bisect_left(
+            self.row_push_index, pushes[train_push_len]["push_index"]
         )
         logger.info(
             "%d pushes in the training set (corresponding to %d push/jobs)",
