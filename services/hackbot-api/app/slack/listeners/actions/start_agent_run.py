@@ -125,17 +125,19 @@ async def start_agent_run_callback(
             unfurl_links=False,
         )
 
-    starter = user if run.is_new else None
-    updated = _message_with_note(
-        body["message"], action, _started_note(starter, value.agent_name, run.run_id)
+    triggered_by = user if run.is_new else None
+    updated_message = _message_with_note(
+        body["message"],
+        action,
+        _started_note(triggered_by, value.agent_name, run.run_id),
     )
-    if updated is None:
+    if updated_message is None:
         logger.warning(
             "Clicked button '%s' not found in its message; left unchanged",
             action["action_id"],
         )
     else:
-        response = await respond(**updated, replace_original=True)
+        response = await respond(**updated_message, replace_original=True)
         if response.status_code != 200:
             logger.error(
                 "Failed to mark button '%s' as used: HTTP %s %s",
