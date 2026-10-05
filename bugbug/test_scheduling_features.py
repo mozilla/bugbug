@@ -352,6 +352,8 @@ class TouchedTogether(object):
         return {
             "touched_together_files": test_job["touched_together_files"],
             "touched_together_directories": test_job["touched_together_directories"],
+            # Pointwise mutual information of the co-changes (see test_scheduling.get_cochange_pmi).
+            "touched_together_pmi": test_job.get("touched_together_pmi", 0.0),
         }
 
 
