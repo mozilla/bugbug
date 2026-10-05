@@ -65,7 +65,6 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
             "text": f"{message['text']}\n{note_block['elements'][0]['text']}".strip(),
             "blocks": blocks[:i] + replacement + blocks[i + 1 :],
         }
-    return None
 
 
 async def start_agent_run_callback(
