@@ -118,3 +118,33 @@ def test_touched_group_dirs():
         "touch_group_dirs": 1,
         "touch_parent_dir": 0,
     }
+
+
+def test_task_name_tokens():
+    tokens = test_scheduling_features.TaskNameTokens()
+    assert tokens({"name": "test-linux2404-64/debug-gtest-1proc"}) == [
+        "test",
+        "linux2404",
+        "debug",
+        "gtest",
+        "1proc",
+    ]
+    assert tokens({"name": "build-win64-asan/opt"}) == ["build", "win64", "asan", "opt"]
+    # Chunk numbers are dropped.
+    assert tokens(
+        {"name": "test-windows11-64-25h2/debug-telemetry-tests-client-2"}
+    ) == [
+        "test",
+        "windows11",
+        "25h2",
+        "debug",
+        "telemetry",
+        "tests",
+        "client",
+    ]
+    assert tokens({"name": "build-apk-focus-debug"}) == [
+        "build",
+        "apk",
+        "focus",
+        "debug",
+    ]

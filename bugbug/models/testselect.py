@@ -566,9 +566,7 @@ class TestSelectModel(Model):
 
         if granularity == "label":
             feature_extractors += [
-                test_scheduling_features.Platform(),
-                # test_scheduling_features.chunk(),
-                test_scheduling_features.Suite(),
+                test_scheduling_features.TaskNameTokens(),
             ]
         elif granularity in ("group", "config_group"):
             feature_extractors += [
@@ -1196,8 +1194,14 @@ class TestLabelSelectModel(TestSelectModel):
             self,
             lemmatization,
             "label",
-            failures_skip=60,
             xgboost_params=TUNED_XGBOOST_PARAMS,
+            # Train on more negatives than 1:1 undersampling would keep (~10 per positive), with
+            # sample weights balancing the classes.
+            balance_with_weights=True,
+            negative_sample_rate=0.05,
+            # Weighting positives by push size handles pushes breaking many tasks (e.g. all the
+            # Android builds) better than skipping them (the previous failures_skip=60).
+            positive_weight_k=5,
         )
 
 

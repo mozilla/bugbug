@@ -839,10 +839,9 @@ def test_group_model_balances_with_weights() -> None:
 
     model = testselect.TestGroupSelectModel()
     assert "sampler" not in model.clf.named_steps
-    assert "sampler" in testselect.TestLabelSelectModel().clf.named_steps
-    assert (
-        testselect.TestLabelSelectModel().get_sample_weights(np.array([1, 0])) is None
-    )
+    config_group_model = testselect.TestConfigGroupSelectModel()
+    assert "sampler" in config_group_model.clf.named_steps
+    assert config_group_model.get_sample_weights(np.array([1, 0])) is None
 
     rng = np.random.default_rng(0)
     y = (rng.random(200) < 0.2).astype(int)
@@ -1165,4 +1164,24 @@ def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None
     # The evaluation ran on the test pushes and computed the confidence thresholds.
     assert set(model.confidence_thresholds) == set(
         testselect.CONFIDENCE_LEVEL_TARGETS[model.granularity]
+    )
+
+
+def test_label_model_configuration() -> None:
+    from bugbug import test_scheduling_features
+
+    model = testselect.TestLabelSelectModel()
+    assert "sampler" not in model.clf.named_steps
+    assert model.negative_sample_rate == 0.05
+    assert model.positive_weight_k == 5
+    assert model.failures_skip is None
+    extractors = model.extraction_pipeline.steps[0][1].feature_extractors
+    assert any(
+        isinstance(fe, test_scheduling_features.TaskNameTokens) for fe in extractors
+    )
+    assert not any(
+        isinstance(
+            fe, (test_scheduling_features.Platform, test_scheduling_features.Suite)
+        )
+        for fe in extractors
     )

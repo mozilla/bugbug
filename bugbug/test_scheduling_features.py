@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
+import re
 
 from bugbug import repository, test_scheduling
 
@@ -69,6 +70,23 @@ class IsTest(object):
 class IsBuild(object):
     def __call__(self, test_job, **kwargs):
         return test_job["name"].startswith("build-")
+
+
+class TaskNameTokens(object):
+    """The tokens of the task label (split on "-" and "/"), without the numbers (e.g. chunks), as features.
+
+    E.g. test-linux2404-64/debug-gtest-1proc has the tokens test, linux2404, debug, gtest and 1proc.
+    Unlike the task name itself, they're shared by related tasks (e.g. all debug tasks, all asan
+    builds, all gtest tasks). The model learns which tokens matter, so new tasks and naming changes
+    don't need any update.
+    """
+
+    def __call__(self, test_job, **kwargs):
+        return [
+            token
+            for token in re.split(r"[-/]", test_job["name"])
+            if token and not token.isdigit()
+        ]
 
 
 class PrevFailures(object):
