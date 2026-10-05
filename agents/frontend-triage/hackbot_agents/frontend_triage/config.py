@@ -97,6 +97,9 @@ class ScopedComponent(NamedTuple):
     # permissions owns. Both ship from the start rather than the agent having to notice
     # mid-run.
     related: tuple[str, ...] = ()
+    # Post the analysis as a private comment, for a team that asked for it. Decided here
+    # and forced by `hooks.add_comment_hook`, never by the model.
+    private_comments: bool = False
 
     @property
     def key(self) -> str:
@@ -1627,6 +1630,14 @@ def guidance_for(
     if entry is None:
         return TRIAGE_SCOPE
     return (entry, *(_SCOPE_BY_KEY[key] for key in entry.related))
+
+
+def private_comments_for(product: str | None, component: str | None) -> bool:
+    """Whether a bug in this component gets a private comment. False when unknown."""
+    entry = _SCOPE_BY_KEY.get(
+        f"{(product or '').strip()} :: {(component or '').strip()}"
+    )
+    return entry is not None and entry.private_comments
 
 
 def _owns(owned: str, path: str) -> bool:

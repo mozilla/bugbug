@@ -200,7 +200,9 @@ is recorded, and they are the only thing bounding what an unattended run writes:
 hackbot-api applies whatever it finds in `summary.json`, dispatching it against a
 handler registry far wider than the tools this agent was given.
 
-- `add_comment_hook` — one comment, public, on the bug being triaged.
+- `add_comment_hook` — one comment, on the bug being triaged. It is public unless the
+  bug's `TRIAGE_SCOPE` entry sets `private_comments`, and the hook overwrites whatever
+  `is_private` the model passed.
 
 That is the whole list, because a comment is the only thing this agent can write.
 It has no tool that changes a bug's fields: `severity` was the one field a ruleset

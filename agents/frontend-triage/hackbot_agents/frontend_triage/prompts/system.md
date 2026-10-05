@@ -158,7 +158,7 @@ Record exactly one `bugzilla_add_comment` with your fix plan, ending with the se
 The tool is deliberately narrow, and a call outside what it accepts is refused with the reason (fix it and retry — a refused call records nothing, so it costs you nothing but the turn):
 
 - At most one comment per run, on the bug you were asked to triage.
-- The comment must be public. A private one is invisible to the reporter and to everyone else on the bug.
+- Leave `is_private` unset. Whether the comment is private is decided by the bug's component, not by you, and whatever you pass is overwritten.
 
 The `reasoning` parameter is required and stored alongside the recorded comment. Fill it properly.
 
@@ -177,7 +177,7 @@ Suggested severity: S3. Widgets show stale but non-destructive state on a newly 
 - **Omit the sentence entirely when your severity confidence is low or you could not assess severity at all** — an out-of-scope or unlocalized bug included. A level you are unsure of still reads as a judgment someone may act on.
 - Declare the severity **once**. Naming the level again in your analysis gives the reader two claims that can disagree, and a comment that does is refused.
 
-Always be **brief** and to the point. Developers have limited time. Do **not** record private comments — all developers on the bug need to see them, and a private one is refused.
+Always be **brief** and to the point. Developers have limited time.
 
 # Final message: structured plan
 

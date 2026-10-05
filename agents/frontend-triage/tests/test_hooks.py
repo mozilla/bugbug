@@ -12,7 +12,10 @@ from hackbot_agents.frontend_triage.agent import (
     _PATCH_REQUEST,
     feedback_tags_hook,
 )
-from hackbot_agents.frontend_triage.config import ENABLED_ACTION_TYPES
+from hackbot_agents.frontend_triage.config import (
+    ENABLED_ACTION_TYPES,
+    private_comments_for,
+)
 from hackbot_agents.frontend_triage.hooks import (
     add_comment_hook,
     component_guidance_hook,
@@ -46,17 +49,27 @@ def test_the_agent_is_given_no_tool_that_changes_a_bug_field():
     assert not [t for t in tools if "update_bug" in t], tools
 
 
-def test_a_private_comment_is_refused():
+def test_the_model_cannot_make_a_comment_private():
     rec = _recorder()
-    with pytest.raises(ToolError):
-        _comment(rec, is_private=True)
-    assert rec.actions == []
-
-
-def test_a_public_comment_is_recorded():
-    rec = _recorder()
-    _comment(rec, is_private=False)
+    _comment(rec, is_private=True)
     assert rec.actions[0]["type"] == "bugzilla.add_comment"
+    assert rec.actions[0]["params"]["is_private"] is False
+
+
+def test_a_private_component_forces_a_private_comment():
+    # The component decides, in both directions: an omitted or `False` flag from the
+    # model does not make the comment public.
+    for params in ({}, {"is_private": False}):
+        rec = ActionsRecorder()
+        rec.add_hook("bugzilla.add_comment", add_comment_hook(rec, BUG, private=True))
+        _comment(rec, **params)
+        assert rec.actions[0]["params"]["is_private"] is True
+
+
+def test_only_a_listed_component_gets_private_comments():
+    assert private_comments_for("Firefox", "New Tab Page") is False
+    assert private_comments_for("Firefox", "Address Bar") is False
+    assert private_comments_for(None, None) is False
 
 
 def test_a_comment_against_another_bug_is_refused():
@@ -82,7 +95,7 @@ def test_a_refused_comment_does_not_use_up_the_allowance():
     # leaves the agent free to retry with a corrected call.
     rec = _recorder()
     with pytest.raises(ToolError):
-        _comment(rec, is_private=True)
+        _comment(rec, bug_id=999)
     _comment(rec)
     assert len(rec.actions) == 1
 
