@@ -69,7 +69,11 @@ def _message(*buttons: dict) -> dict:
         "ts": "1700000000.000100",
         "text": "Bug 1234 triaged",
         "blocks": [
-            {"type": "section", "text": {"type": "mrkdwn", "text": "Bug 1234"}},
+            {
+                "type": "section",
+                "block_id": "headline",
+                "text": {"type": "mrkdwn", "text": "Bug 1234"},
+            },
             {"type": "actions", "block_id": BLOCK_ID, "elements": list(buttons)},
         ],
     }
@@ -430,6 +434,24 @@ class TestStartAgentRun:
 
         self.fake_ack.assert_awaited_once()
         assert "Slack said no" in caplog.text
+
+    async def test_a_button_outside_an_actions_block_is_logged_and_left(self, caplog):
+        # A button can also be a section's accessory, which is not supported yet.
+        self.body["message"]["blocks"] = [
+            {
+                "type": "section",
+                "block_id": BLOCK_ID,
+                "text": {"type": "mrkdwn", "text": "Bug 1234"},
+                "accessory": _action(),
+            }
+        ]
+
+        with caplog.at_level(logging.ERROR):
+            await self._call()
+
+        assert self._edits() == []
+        assert "'section' block" in caplog.text
+        self.fake_ack.assert_awaited_once()
 
     async def test_a_message_without_the_button_is_left_alone(self):
         self.body["message"] = {"ts": "1700000000.000100", "text": "", "blocks": []}

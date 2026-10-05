@@ -51,8 +51,15 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
     """
     blocks = message["blocks"]
     for i, block in enumerate(blocks):
-        if block["type"] != "actions" or block["block_id"] != action["block_id"]:
+        if block["block_id"] != action["block_id"]:
             continue
+        if block["type"] != "actions":
+            log.error(
+                "Clicked button '%s' is in a '%s' block, which is not supported yet",
+                action["action_id"],
+                block["type"],
+            )
+            return None
         elements = block["elements"]
         remaining = [e for e in elements if e["action_id"] != action["action_id"]]
         if len(remaining) == len(elements):
