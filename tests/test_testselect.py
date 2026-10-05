@@ -1176,12 +1176,36 @@ def test_label_model_configuration() -> None:
     assert model.positive_weight_k == 5
     assert model.failures_skip is None
     extractors = model.extraction_pipeline.steps[0][1].feature_extractors
-    assert any(
-        isinstance(fe, test_scheduling_features.TaskNameTokens) for fe in extractors
-    )
+    for extractor in (
+        test_scheduling_features.TaskNameTokens,
+        test_scheduling_features.PushBuildFiles,
+        test_scheduling_features.PushTaskFiles,
+    ):
+        assert any(isinstance(fe, extractor) for fe in extractors)
     assert not any(
         isinstance(
             fe, (test_scheduling_features.Platform, test_scheduling_features.Suite)
         )
         for fe in extractors
+    )
+
+
+def test_label_model_suite_test_dirs(tmp_path) -> None:
+    from bugbug import test_scheduling_features
+
+    (tmp_path / "xpcom" / "tests" / "gtest").mkdir(parents=True)
+    (tmp_path / "xpcom" / "tests" / "gtest" / "moz.build").write_text(
+        'FINAL_LIBRARY = "xul-gtest"\n'
+    )
+
+    model = testselect.TestLabelSelectModel(repo_dir=str(tmp_path))
+    extractors = model.extraction_pipeline.steps[0][1].feature_extractors
+    push_task_files = next(
+        fe
+        for fe in extractors
+        if isinstance(fe, test_scheduling_features.PushTaskFiles)
+    )
+    assert dict(push_task_files.suite_files)["gtest"] == (
+        "testing/gtest/",
+        "xpcom/tests/gtest/",
     )

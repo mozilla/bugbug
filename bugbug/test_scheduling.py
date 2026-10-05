@@ -999,6 +999,63 @@ manifest_by_path: dict[str, set[str]] | None = None
 # If a modified file is close to more manifests than this, it is too broad
 # (e.g. dom/moz.build) for the sibling heuristic to be informative, so we
 # don't schedule any of them and leave the decision to the model.
+# The moz.build variables listing the test manifests of some of the suites selected by the label model.
+_SUITE_MANIFEST_VARIABLES = {
+    "marionette": "MARIONETTE_MANIFESTS",
+    "telemetry-tests": "TELEMETRY_TESTS_CLIENT_MANIFESTS",
+    "firefox-ui": "FIREFOX_UI_FUNCTIONAL_MANIFESTS",
+}
+_SUITE_MANIFEST_LIST_RES = {
+    suite: re.compile(r"\b%s\s*\+?=\s*\[(.*?)\]" % variable, re.S)
+    for suite, variable in _SUITE_MANIFEST_VARIABLES.items()
+}
+_STRING_RE = re.compile(r"[\"']([^\"']+)[\"']")
+_GTEST_LIBRARY_RE = re.compile(r"FINAL_LIBRARY\s*=\s*[\"']xul-gtest[\"']")
+_CPP_UNIT_TESTS_RE = re.compile(r"\bCPP_UNIT_TESTS\b|CppUnitTests\(")
+
+
+def get_suite_test_dirs(repo_dir: str) -> dict[str, tuple[str, ...]]:
+    """The directories with the tests of some suites selected by the label model, from a Firefox tree.
+
+    They come from the moz.build files: the directories of the manifests of the marionette,
+    telemetry-tests-client and firefox-ui suites, the directories built into the gtest library, and
+    the directories with C++ unit tests. Only the moz.build files are needed (e.g. a sparse checkout).
+    """
+    dirs: dict[str, set[str]] = {
+        suite: set()
+        for suite in list(_SUITE_MANIFEST_VARIABLES) + ["gtest", "cppunittest"]
+    }
+    for root, subdirs, files in os.walk(repo_dir):
+        rel_root = os.path.relpath(root, repo_dir)
+        subdirs[:] = [
+            d
+            for d in subdirs
+            if not d.startswith((".", "obj-"))
+            and d != "node_modules"
+            and not (rel_root == "." and d == "third_party")
+        ]
+        if "moz.build" not in files:
+            continue
+
+        base = "" if rel_root == "." else rel_root.replace(os.sep, "/")
+        with open(os.path.join(root, "moz.build"), errors="replace") as f:
+            text = f.read()
+
+        for suite, list_re in _SUITE_MANIFEST_LIST_RES.items():
+            for m in list_re.finditer(text):
+                for manifest in _STRING_RE.findall(m.group(1)):
+                    manifest_dir = os.path.normpath(
+                        os.path.join(base, os.path.dirname(manifest))
+                    )
+                    dirs[suite].add(f"{manifest_dir}/")
+        if _GTEST_LIBRARY_RE.search(text):
+            dirs["gtest"].add(f"{base}/")
+        if _CPP_UNIT_TESTS_RE.search(text):
+            dirs["cppunittest"].add(f"{base}/")
+
+    return {suite: tuple(sorted(suite_dirs)) for suite, suite_dirs in dirs.items()}
+
+
 MAX_SIBLING_MANIFESTS = 42
 
 

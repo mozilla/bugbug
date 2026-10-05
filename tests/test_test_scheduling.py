@@ -1451,3 +1451,34 @@ def test_find_tasks_for_paths(tmp_path) -> None:
     assert (
         test_scheduling.find_tasks_for_paths(str(tmp_path), (), ["test_foo.cpp"]) == []
     )
+
+
+def test_get_suite_test_dirs(tmp_path) -> None:
+    def write(path, content):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(content)
+
+    write(
+        "browser/components/moz.build",
+        'MARIONETTE_MANIFESTS += ["sessionstore/test/marionette/manifest.toml"]\n',
+    )
+    write(
+        "toolkit/components/telemetry/moz.build",
+        "TELEMETRY_TESTS_CLIENT_MANIFESTS += [\n"
+        '    "tests/marionette/tests/manifest.toml",\n'
+        "]\n",
+    )
+    write("xpcom/tests/gtest/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+    write("mfbt/tests/moz.build", 'CppUnitTests(["TestArray"])\n')
+    write("dom/base/moz.build", 'MOCHITEST_MANIFESTS += ["test/mochitest.toml"]\n')
+    # Third-party code and object directories are skipped.
+    write("third_party/foo/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+    write("obj-x86_64-pc-linux-gnu/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+
+    assert test_scheduling.get_suite_test_dirs(str(tmp_path)) == {
+        "marionette": ("browser/components/sessionstore/test/marionette/",),
+        "telemetry-tests": ("toolkit/components/telemetry/tests/marionette/tests/",),
+        "firefox-ui": (),
+        "gtest": ("xpcom/tests/gtest/",),
+        "cppunittest": ("mfbt/tests/",),
+    }
