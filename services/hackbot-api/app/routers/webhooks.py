@@ -125,7 +125,9 @@ async def phabricator_webhook(
     object_phid = obj.get("phid")
     triggering = triggering_transaction_phids(payload)
     if not object_phid or not triggering:
-        log.info('Phabricator webhook: status="ignored", reason="no revision or transactions"')
+        log.info(
+            'Phabricator webhook: status="ignored", reason="no revision or transactions"'
+        )
         return
 
     detected = await detect_mention_and_revision(
@@ -136,7 +138,9 @@ async def phabricator_webhook(
         authorizer=authorizer,
     )
     if detected is None:
-        log.info('Phabricator webhook: status="ignored", reason="no actionable @hackbot mention"')
+        log.info(
+            'Phabricator webhook: status="ignored", reason="no actionable @hackbot mention"'
+        )
         return
 
     # The anchor transaction identifies the submission, so a retried delivery

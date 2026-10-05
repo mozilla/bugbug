@@ -667,13 +667,19 @@ def test_route_ignores_test_ping(client, caplog):
     caplog.set_level(logging.INFO, logger="app.routers.webhooks")
     resp = _post(client, {"action": {"test": True}, "object": {"type": "DREV"}})
     assert resp.status_code == 202
-    assert ('Phabricator webhook: status="ignored", reason="test ping"' in caplog.messages)
+    assert (
+        'Phabricator webhook: status="ignored", reason="test ping"' in caplog.messages
+    )
+
 
 def test_route_ignores_non_drev(client, caplog):
     caplog.set_level(logging.INFO, logger="app.routers.webhooks")
     resp = _post(client, {"object": {"type": "TASK", "phid": "PHID-TASK-1"}})
     assert resp.status_code == 202
-    assert ('Phabricator webhook: status="ignored", reason="not a revision"' in caplog.messages)
+    assert (
+        'Phabricator webhook: status="ignored", reason="not a revision"'
+        in caplog.messages
+    )
 
 
 def test_route_ignores_no_mention(client, monkeypatch, caplog):
@@ -689,7 +695,10 @@ def test_route_ignores_no_mention(client, monkeypatch, caplog):
         },
     )
     assert resp.status_code == 202
-    assert ('Phabricator webhook: status="ignored", reason="no actionable @hackbot mention"' in caplog.messages)
+    assert (
+        'Phabricator webhook: status="ignored", reason="no actionable @hackbot mention"'
+        in caplog.messages
+    )
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
