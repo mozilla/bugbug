@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import bisect
 import collections
 import concurrent.futures
 import heapq
@@ -644,8 +645,8 @@ class TestSelectModel(Model):
         self, apply_filters: bool = False
     ) -> tuple[list[dict[str, Any]], int]:
         pushes = []
-        for revs, test_datas in test_scheduling.get_test_scheduling_history(
-            self.granularity
+        for push_index, (revs, test_datas) in enumerate(
+            test_scheduling.get_test_scheduling_history(self.granularity)
         ):
             failures = []
             passes = []
@@ -670,6 +671,8 @@ class TestSelectModel(Model):
                     "revs": revs,
                     "failures": failures,
                     "passes": passes,
+                    # Index in the unfiltered history, as in items_gen's row_push_index.
+                    "push_index": push_index,
                 }
             )
 
@@ -679,9 +682,10 @@ class TestSelectModel(Model):
     # according to time: we train on older pushes and evaluate on newer pushes.
     def train_test_split(self, X, y):
         pushes, train_push_len = self.get_pushes(True)
-        train_len = sum(
-            len(push["failures"]) + len(push["passes"])
-            for push in pushes[:train_push_len]
+        # items_gen doesn't generate a row for every runnable of a push (e.g. with negative
+        # sampling), so split on the push of each generated row (rows are in push order).
+        train_len = bisect.bisect_left(
+            self.row_push_index, pushes[train_push_len]["push_index"]
         )
         logger.info(
             "%d pushes in the training set (corresponding to %d push/jobs)",
@@ -900,9 +904,11 @@ class TestSelectModel(Model):
 
         targets = CONFIDENCE_LEVEL_TARGETS.get(self.granularity)
         max_target = max(targets.values()) if targets else 0
-        # The highest confidences of the runnables on each test push whose push number isn't
-        # clamped (see below), to compute the confidence thresholds.
+        # The highest confidences of the runnables on each test push, to compute the confidence
+        # thresholds.
         top_confidences: list[list[tuple[str, float]]] = []
+        # Test pushes too old for their past failures to be known (see below).
+        clamped_pushes = []
 
         # Select tests for all the pushes in the test set.
         for i, push in enumerate(tqdm(test_pushes.values())):
@@ -923,16 +929,20 @@ class TestSelectModel(Model):
             # generation we store past failures in batches of 100 pushes.
             push_num -= 100
 
-            # Clamp so that the PAST_FAILURES_LOOKBACK_MONTH-push lookback doesn't
-            # fall before the queue's start_day.
+            # The past failures DB only keeps the last HISTORICAL_TIMESPAN pushes: if the
+            # PAST_FAILURES_LOOKBACK_MONTH-push lookback falls before its start, the push number
+            # would have to be clamped to a later one, and the past failures would include
+            # failures of later pushes (and of the push itself), inflating the results. Skip
+            # these pushes instead.
             start_day_max = round(last_push_num / 100) - int(
                 test_scheduling.HISTORICAL_TIMESPAN / 100
             )
             min_push_num = (
                 start_day_max + int(test_scheduling.PAST_FAILURES_LOOKBACK_MONTH / 100)
             ) * 100
-            clamped = push_num < min_push_num
-            push_num = max(push_num, min_push_num)
+            if push_num < min_push_num:
+                clamped_pushes.append(push["revs"][0])
+                continue
 
             confidences = self.get_confidences(commits, push_num)
             push["all_possibly_selected"] = {
@@ -945,10 +955,16 @@ class TestSelectModel(Model):
                 push["top_confidences"] = heapq.nlargest(
                     int(10 * max_target), confidences.items(), key=lambda x: x[1]
                 )
-                # With a clamped push number, the past failures would include failures of
-                # later pushes (and of the push itself), inflating the confidences.
-                if not clamped:
-                    top_confidences.append(push["top_confidences"])
+                top_confidences.append(push["top_confidences"])
+
+        for rev in clamped_pushes:
+            del test_pushes[rev]
+        logger.info(
+            "Skipped %d test pushes whose past failures aren't available, evaluating on %d (%d with failures).",
+            len(clamped_pushes),
+            len(test_pushes),
+            sum(1 for push in test_pushes.values() if len(push["failures"]) > 0),
+        )
 
         confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]
         if targets and top_confidences:
