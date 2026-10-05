@@ -27,7 +27,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from hackbot_runtime import artifacts, changes
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.recorder import ActionsRecorder
-from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
+from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES, TRY_PUSH_ACTION_TYPE
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
 from hackbot_runtime.source import ensure_source_repo
@@ -48,6 +48,14 @@ def _default_run_id() -> str:
     """
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
     return f"local-{stamp}-{uuid.uuid4().hex[:6]}"
+
+
+def _wip_commit_message(actions: list[dict]) -> str:
+    """The try push title, for the agent's uncommitted work."""
+    for action in actions:
+        if action["type"] == TRY_PUSH_ACTION_TYPE and action["params"]["title"]:
+            return action["params"]["title"]
+    return changes.WIP_MESSAGE
 
 
 class HackbotContext(BaseSettings):
@@ -260,7 +268,10 @@ class HackbotContext(BaseSettings):
         if self._source_base is None:
             return None
         change_set = changes.collect(
-            self.repo_path, self._source_base, self._config.source.repo_url
+            self.repo_path,
+            self._source_base,
+            self._config.source.repo_url,
+            message=_wip_commit_message(self.actions.actions),
         )
         if change_set is None:
             return None

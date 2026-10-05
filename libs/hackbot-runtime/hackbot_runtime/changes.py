@@ -31,7 +31,7 @@ _FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 # Author stamped on the synthetic commit that wraps any uncommitted remainder.
 _WIP_NAME = "Hackbot"
 _WIP_EMAIL = "hackbot@mozilla.tld"
-_WIP_MESSAGE = "Uncommitted agent changes"
+WIP_MESSAGE = "Uncommitted agent changes"
 
 # Record separator for parsing ``git log`` output (NUL avoids clashing with
 # anything in commit messages).
@@ -93,13 +93,13 @@ def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
 
-def _wrap_uncommitted(repo: Path) -> bool:
+def _wrap_uncommitted(repo: Path, message: str = WIP_MESSAGE) -> bool:
     """Commit any staged/unstaged/untracked changes into one synthetic commit.
 
     Returns ``True`` if such a commit was created, ``False`` if the tree was
     already clean.
     """
-    return commit_all(repo, _WIP_MESSAGE)
+    return commit_all(repo, message)
 
 
 def commit_all(repo: Path, message: str, *, author: str | None = None) -> bool:
@@ -346,7 +346,9 @@ def build_try_push(repo: Path, base: str) -> dict | None:
     }
 
 
-def collect(repo: Path, base: str, repo_url: str) -> ChangeSet | None:
+def collect(
+    repo: Path, base: str, repo_url: str, message: str = WIP_MESSAGE
+) -> ChangeSet | None:
     """Collect changes in ``repo`` since ``base`` as a patch plus metadata.
 
     Returns ``None`` when the agent made no changes at all (nothing committed and
@@ -359,7 +361,7 @@ def collect(repo: Path, base: str, repo_url: str) -> ChangeSet | None:
     handler, which needs to re-check-out this same base commit — knows where
     to clone from without re-deriving agent-specific config.
     """
-    wrapped = _wrap_uncommitted(repo)
+    wrapped = _wrap_uncommitted(repo, message)
     patch = _git_bytes(repo, "format-patch", "--stdout", "--binary", f"{base}..HEAD")
     if not patch.strip():
         return None
