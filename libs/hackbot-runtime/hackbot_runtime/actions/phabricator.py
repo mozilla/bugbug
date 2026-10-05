@@ -87,14 +87,12 @@ async def submit_patch(
             ),
         ),
     ] = None,
-    parent_revision: Annotated[
+    parent_revision_id: Annotated[
         int | None,
         Field(
             description=(
-                "Id of the revision this patch stacks on (the number after D), "
-                "when it belongs on top of an existing revision rather than on "
-                "its own. A child revision's diff is taken against its parent, so "
-                "the working tree must be checked out at that revision's commit."
+                "The revision this patch stacks on (the number after D), when it "
+                "belongs on top of an existing revision rather than on its own."
             ),
         ),
     ] = None,
@@ -123,8 +121,8 @@ async def submit_patch(
         "summary": summary,
         "test_plan": test_plan,
     }
-    if parent_revision is not None:
-        params["parent_revision"] = parent_revision
+    if parent_revision_id is not None:
+        params["parent_revision_id"] = parent_revision_id
     action = recorder.record(
         "phabricator.submit_patch", params, reasoning=reasoning, ref=ref
     )

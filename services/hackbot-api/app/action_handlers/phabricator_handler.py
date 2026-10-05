@@ -276,9 +276,9 @@ class SubmitPatchHandler:
                 transactions.append({"type": "summary", "value": summary})
             if test_plan:
                 transactions.append({"type": "testPlan", "value": test_plan})
-            parent_revision = params.get("parent_revision")
-            if parent_revision:
-                parent_phid = await _revision_phid(parent_revision)
+            parent_revision_id = params.get("parent_revision_id")
+            if parent_revision_id:
+                parent_phid = await _revision_phid(parent_revision_id)
                 if parent_phid:
                     transactions.append({"type": "parents.set", "value": [parent_phid]})
 

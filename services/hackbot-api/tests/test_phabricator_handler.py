@@ -145,7 +145,7 @@ async def test_submit_patch_stacks_on_the_parent_revision(monkeypatch):
     )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 1, "title": "Fix", "parent_revision": 325120}, _ctx()
+        {"bug_id": 1, "title": "Fix", "parent_revision_id": 325120}, _ctx()
     )
 
     assert result.status == "applied"
@@ -170,7 +170,7 @@ async def test_submit_patch_files_unstacked_when_the_parent_is_unknown(monkeypat
     )
 
     result = await phabricator_handler.SubmitPatchHandler().apply(
-        {"bug_id": 1, "title": "Fix", "parent_revision": 999999}, _ctx()
+        {"bug_id": 1, "title": "Fix", "parent_revision_id": 999999}, _ctx()
     )
 
     assert result.status == "applied"
