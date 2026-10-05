@@ -137,7 +137,7 @@ async def start_agent_run_callback(
     triggered_by = user if run.is_new else None
     note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
     updated_message = _message_with_note(body["message"], action, note_block)
-    if updated_message is None:
+    if not updated_message:
         logger.warning(
             "Clicked button '%s' not found in its message; left unchanged",
             action["action_id"],
