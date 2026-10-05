@@ -7,7 +7,7 @@
 
 import os
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import cache, cached_property
 from logging import getLogger
 from typing import Iterable, Optional
@@ -61,6 +61,13 @@ PHABRICATOR_REPO_TO_GITHUB = {
     ),
     "NSS": ("mozilla/nss", "master"),
 }
+
+# Subjects of autoland-to-mozilla-central merges, the most recent landed
+# revisions on mozilla-central. Mirrors moz-phab's LANDING_MERGE_MESSAGE_PATTERNS.
+LANDING_MERGE_SUBJECTS = (
+    "Merge autoland to mozilla-central",
+    "Merge firefox-autoland to firefox-main",
+)
 
 # Messages used when redacting untrusted content
 UNTRUSTED_CONTENT_REDACTED = "[Content from untrusted user removed for security]"
@@ -434,15 +441,24 @@ class PhabricatorPatch(Patch):
 
         return r.text
 
+    async def _github_repo(self) -> str:
+        repo_ref = await self.github_repo_ref()
+        if repo_ref is None:
+            raise ValueError("No GitHub upstream is configured for this repository")
+
+        repo, _branch = repo_ref
+        return repo
+
     async def _get_file_from_repo(self, file_path: str, commit_hash: str) -> str:
+        repo = await self._github_repo()
         client = get_http_client()
         r = await client.get(
-            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{file_path}",
+            f"https://raw.githubusercontent.com/{repo}/{commit_hash}/{file_path}",
         )
 
         if r.status_code == 404:
-            raise FileNotFoundError(
-                f"File {file_path} not found in commit {commit_hash}"
+            raise ValueError(
+                f"File {file_path} is unavailable at Git base {commit_hash}"
             )
 
         r.raise_for_status()
@@ -487,14 +503,6 @@ class PhabricatorPatch(Patch):
 
         return raw_diff
 
-    @staticmethod
-    async def _commit_available(commit_hash: str) -> bool:
-        client = get_http_client()
-        r = await client.get(
-            f"https://hg.mozilla.org/mozilla-unified/json-rev/{commit_hash}",
-        )
-        return r.is_success
-
     @cached_property
     def _diff_metadata(self) -> dict:
         phabricator = get_phabricator_client()
@@ -510,40 +518,72 @@ class PhabricatorPatch(Patch):
         except Exception:
             return None
 
-    @alru_cache
-    async def get_base_commit_hash(self) -> str:
-        diff = self._diff_metadata
-
-        try:
-            base_commit_hash = diff["refs"]["base"]["identifier"]
-            if await self._commit_available(base_commit_hash):
-                return base_commit_hash
-        except KeyError:
-            pass
-
-        end_date = datetime.fromtimestamp(diff["dateCreated"])
-        start_date = datetime.fromtimestamp(diff["dateCreated"] - 86400)
-        end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
-        start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
+    @staticmethod
+    async def _commit_exists(repo: str, commit_hash: str) -> bool:
         client = get_http_client()
         r = await client.get(
-            f"https://hg.mozilla.org/mozilla-central/json-pushes?startdate={start_date_str}&enddate={end_date_str}&version=2&tipsonly=1",
+            f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
+            headers={"Accept": "application/vnd.github.sha"},
         )
-        pushes = r.json()["pushes"]
-        closest_push = None
-        for push in pushes.values():
-            if diff["dateCreated"] - push["date"] < 0:
-                continue
+        # GitHub answers 422 for a well-formed SHA it doesn't know.
+        if r.status_code in (404, 422):
+            return False
 
-            if (
-                closest_push is None
-                or diff["dateCreated"] - push["date"]
-                < diff["dateCreated"] - closest_push["date"]
-            ):
-                closest_push = push
+        r.raise_for_status()
+        return True
 
-        assert closest_push is not None
-        return closest_push["changesets"][0]
+    @staticmethod
+    async def _latest_landing_commit(repo: str, before: datetime) -> Optional[str]:
+        """Return the latest autoland-to-mozilla-central merge at or before `before`."""
+        subjects = " OR ".join(f'"{subject}"' for subject in LANDING_MERGE_SUBJECTS)
+        client = get_http_client()
+        r = await client.get(
+            "https://api.github.com/search/commits",
+            params={
+                "q": f"repo:{repo} committer-date:<={before:%Y-%m-%dT%H:%M:%SZ} {subjects}",
+                "sort": "committer-date",
+                "order": "desc",
+            },
+        )
+        r.raise_for_status()
+
+        # The search matches the subjects anywhere in the message.
+        for item in r.json()["items"]:
+            if item["commit"]["message"].startswith(LANDING_MERGE_SUBJECTS):
+                return item["sha"]
+
+        return None
+
+    @alru_cache
+    async def get_base_commit_hash(self) -> str:
+        """Return the Git commit this diff applies to.
+
+        This is the diff's base when it exists upstream. Otherwise, eg. when the
+        base is a local commit absent from Phabricator's stackGraph, it is the
+        latest revision landed on mozilla-central when the diff was created.
+        """
+        repo = await self._github_repo()
+        base = self._diff_metadata.get("refs", {}).get("base", {})
+        commit_hash = base.get("identifier")
+        if commit_hash and await self._commit_exists(repo, commit_hash):
+            return commit_hash
+
+        created = datetime.fromtimestamp(self._diff_metadata["dateCreated"], UTC)
+        landing_hash = await self._latest_landing_commit(repo, before=created)
+        if landing_hash is None:
+            raise ValueError(
+                f"Base revision {commit_hash} is not in {repo}, and no landed "
+                "mozilla-central revision precedes the diff"
+            )
+
+        logger.warning(
+            "Base revision %s of diff %s is not in %s, using landed revision %s",
+            commit_hash,
+            self.diff_id,
+            repo,
+            landing_hash,
+        )
+        return landing_hash
 
     @property
     def date_created(self) -> datetime:
@@ -728,18 +768,17 @@ class PhabricatorPatch(Patch):
         return self._revision_metadata["fields"].get("stackGraph", {})
 
     @cached_property
-    def patch_stack(self) -> list[PatchSet]:
-        """Return the ordered list of patch sets to apply to reach this revision.
+    def _stack_patches(self) -> list["PhabricatorPatch"]:
+        """Return patches from the bottom-most ancestor to this revision.
 
         Walks the Phabricator stackGraph from the bottom-most ancestor up to the
-        current revision. If the graph is non-linear (diamond / merge dependency),
-        only the current patch set is returned and an error is set.
+        current revision. A non-linear ancestry raises ValueError.
         """
         current_phid = self._revision_metadata["phid"]
         stack_graph = self.stack_graph
 
         if not stack_graph or current_phid not in stack_graph:
-            return [self.patch_set]
+            return [self]
 
         # Only walk the ancestry of current_phid — unrelated branches in
         # stack_graph may have diamonds that don't affect this patch's lineage.
@@ -759,11 +798,17 @@ class PhabricatorPatch(Patch):
         ordered_phids.reverse()
 
         return [
-            self.patch_set
-            if phid == current_phid
-            else self.__class__(revision_phid=phid).patch_set
+            self if phid == current_phid else self.__class__(revision_phid=phid)
             for phid in ordered_phids
         ]
+
+    @cached_property
+    def patch_stack(self) -> list[PatchSet]:
+        return [patch.patch_set for patch in self._stack_patches]
+
+    @property
+    def stack_base_patch(self) -> "PhabricatorPatch":
+        return self._stack_patches[0]
 
     @cached_property
     def _all_comments(self) -> list:

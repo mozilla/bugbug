@@ -19,6 +19,7 @@ from searchfox import AsyncSearchfoxClient, SearchfoxNetworkError, SearchfoxRequ
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
+from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 from bugbug.tools.core.validators import StripEnumQuotes
 
 logger = getLogger(__name__)
@@ -96,15 +97,28 @@ async def expand_context(
     warning = None
     try:
         patch_stack = patch.patch_stack
+        base_patch = patch.stack_base_patch
     except ValueError as e:
         warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
         patch_stack = [patch.patch_set]
+        base_patch = patch
 
-    revision = await patch.get_base_revision()
+    base_error = None
+    if isinstance(base_patch, PhabricatorPatch):
+        try:
+            revision = await base_patch.get_base_commit_hash()
+        except Exception as e:
+            revision, base_error = None, e
+    else:
+        revision = await base_patch.get_base_revision()
     client = _get_client()
 
     async def fetch(path: str) -> str:
-        return await _fetch_file(path, revision, client, patch)
+        # Without a base, Phabricator files would be read at the latest
+        # revision, which may not match the patch.
+        if base_error is not None:
+            raise base_error
+        return await _fetch_file(path, revision, client, base_patch)
 
     try:
         file_content = await get_file_after_stack(patch_stack, file_path, fetch)
