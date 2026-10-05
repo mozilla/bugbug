@@ -184,7 +184,7 @@ not a follow-up on top of it.
 TREE_AT_BLAME = " and the tree is checked out at it"
 
 PARENT_REVISION_ARG = (
-    " parent_revision={revision} (the busted commit's own revision, D{revision}),"
+    " parent_revision_id={revision} (the busted commit's own revision, D{revision}),"
 )
 
 REPORT_INSTRUCTIONS = """

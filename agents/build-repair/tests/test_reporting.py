@@ -137,7 +137,7 @@ def test_the_revision_stacks_on_the_blamed_commits_own(tmp_path, monkeypatch):
         checkout=lambda sha: sha,
     )
     assert (
-        "parent_revision=325120 (the busted commit's own revision, D325120)"
+        "parent_revision_id=325120 (the busted commit's own revision, D325120)"
         in fix_prompt
     )
 

@@ -99,7 +99,7 @@ def _record_analysis_email(
         run_id=ctx.run_id,
         has_patch=has_patch,
         revision_pending=pending is not None,
-        parent_revision=(pending or {}).get("params", {}).get("parent_revision"),
+        parent_revision=(pending or {}).get("params", {}).get("parent_revision_id"),
         blamed_author=blamed_author,
     )
     record_email(

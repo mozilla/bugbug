@@ -48,7 +48,7 @@ The fix stage runs on a checkout of the blamed commit itself, so the fix is a ch
 to that commit. Once a bug is known, it records a `phabricator.submit_patch` action in
 `summary.json` -- a WIP revision carrying the fix, whose diff the runtime builds from
 the agent's own checkout into `changes/phabricator_diff.json`, stacked as a child of
-the blamed commit's own revision when its footer names one (`parent_revision`).
+the blamed commit's own revision when its footer names one (`parent_revision_id`).
 Nothing is posted to the bug, and nothing reaches Phabricator during the run.
 
 Bustage is backed out, so the revision is not meant to land on its own: the developer
