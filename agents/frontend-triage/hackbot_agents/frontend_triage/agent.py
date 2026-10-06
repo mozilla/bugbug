@@ -58,6 +58,7 @@ from .config import (
     TRIAGE_SEVERITIES,
     ScopedComponent,
     guidance_for,
+    private_comments_for,
 )
 from .docs import DocRef, docs_for, registrations
 from .guidance import GuidanceContext
@@ -624,19 +625,23 @@ async def run_frontend_triage(
             "[frontend_triage] no searchfox revision; linking tip-of-tree",
             file=sys.stderr,
         )
+    # Whose guidance goes in the prompt. Falls back to every component when the bug's
+    # component is unknown or the lookup failed, which is what the prompt carried before
+    # this was split up -- see `guidance_for`.
+    product, component = await fetch_product_component(bugzilla_mcp_server, bug)
+
     # Bound what the agent may record, at the moment it records it. These are the
     # only check on what an unattended run writes to a bug — see hooks.py. Registered
     # ahead of the hooks below so a refusal happens before the comment body is
     # rewritten.
     actions_recorder.add_hook(
-        "bugzilla.add_comment", add_comment_hook(actions_recorder, bug)
+        "bugzilla.add_comment",
+        add_comment_hook(
+            actions_recorder, bug, private=private_comments_for(product, component)
+        ),
     )
     actions_recorder.add_hook("bugzilla.add_comment", severity_block_hook)
 
-    # Whose guidance goes in the prompt. Falls back to every component when the bug's
-    # component is unknown or the lookup failed, which is what the prompt carried before
-    # this was split up -- see `guidance_for`.
-    product, component = await fetch_product_component(bugzilla_mcp_server, bug)
     components = guidance_for(product, component)
     loaded = {entry.key for entry in components}
     print(

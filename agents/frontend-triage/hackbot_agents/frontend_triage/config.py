@@ -58,8 +58,9 @@ class ScopedComponent(NamedTuple):
     component: str
     # Required, because an entry without one would be a component getting unattended
     # triage with nobody told -- which is what `channel_for` failing closed produces,
-    # and not something to be able to express by accident.
-    channel: str
+    # and not something to be able to express by accident. `None` is for a team that
+    # has asked for no Slack message, and has to be written out to get it.
+    channel: str | None
     # Where this component's code lives, for the prompt's index and, unless `doc_trees`
     # below overrides it, for `docs.docs_for`. Descriptive, so it may be broad and
     # overlap another component.
@@ -96,6 +97,9 @@ class ScopedComponent(NamedTuple):
     # permissions owns. Both ship from the start rather than the agent having to notice
     # mid-run.
     related: tuple[str, ...] = ()
+    # Post the analysis as a private comment, for a team that asked for it. Decided here
+    # and forced by `hooks.add_comment_hook`, never by the model.
+    private_comments: bool = False
 
     @property
     def key(self) -> str:
@@ -1601,11 +1605,54 @@ TRIAGE_SCOPE = (
             "depends on the bug still being Untriaged."
         ),
     ),
+    # The Places team asked for no Slack message and for the analysis to be readable
+    # only by insiders, so both components opt out of the channel and opt in to private
+    # comments.
+    ScopedComponent(
+        "Firefox",
+        "Bookmarks & History",
+        None,
+        trees=("browser/components/places/", "browser/components/pagedata/"),
+        owns=(
+            "browser/components/places/",
+            "browser/components/pagedata/",
+            "browser/base/content/browser-places.js",
+        ),
+        private_comments=True,
+        notes=(
+            "The front end only: the library window, the bookmark and history sidebars, "
+            "the edit-bookmark panel and the bookmarks toolbar and menus, mostly "
+            "`browser/components/places/content/` and `PlacesUIUtils.sys.mjs`, plus "
+            "`browser/base/content/browser-places.js` for the toolbar and star-button "
+            "glue. Storage, queries, frecency and sync are `toolkit/components/places/`, "
+            "which is `Toolkit :: Places` and not triaged here. A bug about what a view "
+            "shows is usually the view, but one about what was saved, lost or expired is "
+            "usually the toolkit layer; say which, and where the code turned out to be."
+        ),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Downloads Panel",
+        None,
+        trees=("browser/components/downloads/",),
+        owns=("browser/components/downloads/",),
+        private_comments=True,
+        notes=(
+            "The toolbar panel, the toolbar indicator and the Library's downloads view "
+            "(`about:downloads` included) under `browser/components/downloads/`, with "
+            "`DownloadsCommon.sys.mjs` and `DownloadsViewUI.sys.mjs` shared between "
+            "them. The download itself, where it is saved and what happens to the file "
+            "afterwards are `toolkit/components/downloads/`, which is "
+            "`Toolkit :: Downloads API` and not triaged here. A bug about a download "
+            "that failed or landed in the wrong place is usually that layer, not the "
+            "panel that reported it."
+        ),
+    ),
 )
 
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
 # that `notify.py` keeps one flat mapping to look up.
-SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
+SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE if c.channel is not None}
 
 _SCOPE_BY_KEY = {c.key: c for c in TRIAGE_SCOPE}
 
@@ -1626,6 +1673,14 @@ def guidance_for(
     if entry is None:
         return TRIAGE_SCOPE
     return (entry, *(_SCOPE_BY_KEY[key] for key in entry.related))
+
+
+def private_comments_for(product: str | None, component: str | None) -> bool:
+    """Whether a bug in this component gets a private comment. False when unknown."""
+    entry = _SCOPE_BY_KEY.get(
+        f"{(product or '').strip()} :: {(component or '').strip()}"
+    )
+    return entry is not None and entry.private_comments
 
 
 def _owns(owned: str, path: str) -> bool:

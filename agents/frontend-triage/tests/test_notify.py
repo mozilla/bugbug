@@ -14,7 +14,7 @@ from hackbot_agents.frontend_triage.agent import (
     FrontendTriageResult,
     SeverityAssessment,
 )
-from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE
+from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE, private_comments_for
 from hackbot_agents.frontend_triage.notify import (
     HELD_NOTE,
     build_blocks,
@@ -132,6 +132,8 @@ def test_every_channel_is_a_channel_name():
     # and severity change have landed, and the run page is the only place it shows. A
     # missing `#` or a stray capital is the whole cost of that, so catch it here.
     for entry in TRIAGE_SCOPE:
+        if entry.channel is None:
+            continue
         assert entry.channel.startswith("#"), entry.key
         assert entry.channel == entry.channel.strip().lower(), entry.key
         assert " " not in entry.channel, entry.key
@@ -162,6 +164,14 @@ def test_an_unowned_component_has_no_channel():
     assert channel_for("Firefox", None) is None
     assert channel_for(None, "New Tab Page") is None
     assert channel_for("", "") is None
+
+
+def test_the_places_components_report_nowhere_and_comment_privately():
+    # The Places team asked for both; an entry that dropped either would post their
+    # analysis publicly or into Slack with no test noticing.
+    for component in ("Bookmarks & History", "Downloads Panel"):
+        assert channel_for("Firefox", component) is None
+        assert private_comments_for("Firefox", component) is True
 
 
 def test_an_auto_applied_run_records_one_slack_action():
