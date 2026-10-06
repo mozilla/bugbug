@@ -58,6 +58,7 @@ or code.
 | `frontend-triage`     | Read-only root-cause analysis and fix plan for a desktop frontend bug.                                                                                                      |  yes   |      no       |          no          |
 | `autowebcompat-repro` | Reproduce a web-compatibility report in headless Firefox via DevTools MCP.                                                                                                  |   no   |      no       |          no          |
 | `test-plan-generator` | Generate Firefox QA test cases, run them through DevTools MCP, report results.                                                                                              |   no   |      no       |          no          |
+| `uplift-resolve`      | Resolve the merge conflicts from cherry-picking patches onto a stable uplift branch, and return the resolved patch with a confidence level.                                 |  yes   |      no       |          no          |
 
 Two shapes recur. **Source agents** (`bug-fix`, `test-repair`, `build-repair`) check out
 Firefox, often build it, edit the tree, and let the runtime capture the diff. **Browser
@@ -81,7 +82,8 @@ Two additions in [services/hackbot-api/](../../services/hackbot-api/):
 2. **[app/agents.py](../../services/hackbot-api/app/agents.py)** — one `AGENT_REGISTRY` entry: `name`, `description`, `job_name`
    (the Cloud Run Job), `input_schema`, and optionally `auto_apply_actions=True`.
    That flag only makes the agent eligible for automatic application;
-   `require_review=true` on a run still holds its actions for manual approval.
+   `require_review=true` on a run still holds its actions for manual approval, except
+   action types listed in `always_apply_actions`.
 
 Env vars are derived from the schema (`bug_id` → `BUG_ID`, lists and dicts JSON-encoded),
 so there is no per-agent mapping code to write. `build_env` exists as an escape hatch for

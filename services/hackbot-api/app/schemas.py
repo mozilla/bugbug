@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any, Literal, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -29,8 +29,8 @@ class ArtifactRef(BaseModel):
 class RunSummary(BaseModel):
     status: str
     error: str | None = None
-    findings: dict[str, Any] = Field(default_factory=dict)
-    actions: list[dict[str, Any]] = Field(default_factory=list)
+    findings: dict[str, Any] = {}
+    actions: list[dict[str, Any]] = []
 
 
 class RunActionDoc(BaseModel):
@@ -55,6 +55,8 @@ class AgentDescriptor(BaseModel):
 
 
 class RunRef(BaseModel):
+    """The API's answer to "start this run": which run is doing the work."""
+
     model_config = ConfigDict(from_attributes=True)
 
     run_id: UUID
@@ -70,12 +72,13 @@ class RunDoc(BaseModel):
     status: RunStatus
     inputs: dict[str, Any]
     requested_by: str | None = None
+    dedupe_key: str | None = None
     created_at: datetime
     updated_at: datetime
     execution_name: str | None = None
     results_prefix: str
     summary: RunSummary | None = None
-    artifacts: list[ArtifactRef] = Field(default_factory=list)
+    artifacts: list[ArtifactRef] = []
     error: str | None = None
 
 
@@ -91,7 +94,7 @@ class BugFixInputs(AgentInputs):
     comment: str | None = None
     # Set only by a Bugzilla flag.needinfo webhook. Its presence selects the
     # follow-up mode and lets the API clear that exact flag after the response.
-    bugzilla_needinfo_flag_id: int | None = Field(default=None, gt=0)
+    bugzilla_needinfo_flag_id: Annotated[int | None, Field(gt=0)] = None
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
@@ -177,4 +180,75 @@ class TestPlanGeneratorInputs(AgentInputs):
     test_scope: str
     model: str | None = None
     max_turns: int | None = None
+    effort: str | None = None
+
+
+# Git will not fetch an abbreviated object id from a remote, and the uplift
+# agent fetches every commit it is given straight from one, so an abbreviation
+# is rejected here rather than at the `git fetch` in the middle of a run.
+FULL_SHA_PATTERN = r"^[0-9a-f]{40}$"
+
+
+class GitUpliftSource(BaseModel):
+    """A patch to uplift, identified by a commit already in the Firefox repo."""
+
+    # Discriminator tag selecting this variant in the `UpliftSource` union.
+    kind: Literal["git"] = "git"
+
+    # Full git commit SHA the agent fetches and cherry-picks onto the branch.
+    commit: str = Field(
+        pattern=FULL_SHA_PATTERN, description="Full git commit SHA to cherry-pick."
+    )
+
+
+class PhabricatorUpliftSource(BaseModel):
+    """A patch to uplift, identified by a Phabricator revision.
+
+    The agent fetches the diff through its broker; inputs reach the job as
+    environment variables, which a raw diff would not fit.
+    """
+
+    # Discriminator tag selecting this variant in the `UpliftSource` union.
+    kind: Literal["phabricator"] = "phabricator"
+
+    # Phabricator revision to uplift, used for context and commit text.
+    revision_id: int = Field(description="Phabricator revision id (the D-number).")
+
+    # Pin the exact diff. Without one, a revision updated since the request
+    # resolves to different code.
+    diff_id: int | None = Field(
+        default=None,
+        description="Diff to uplift; defaults to the revision's latest.",
+    )
+
+
+# `kind` discriminates the two, so one run can mix both.
+UpliftSource = Annotated[
+    Union[GitUpliftSource, PhabricatorUpliftSource], Field(discriminator="kind")
+]
+
+
+class UpliftInputs(BaseModel):
+    """Inputs for the uplift conflict-resolution agent."""
+
+    # The stable branch ref to uplift onto, e.g. `release`, `beta`, `esr128`.
+    target_branch: str
+
+    # The exact commit to uplift onto. Branch names move, so a caller
+    # reproducing a specific uplift should pin it; otherwise the tip is used.
+    target_commit: Annotated[str | None, Field(pattern=FULL_SHA_PATTERN)] = None
+
+    # Ordered patches to apply onto the branch; applied in this sequence.
+    sources: Annotated[list[UpliftSource], Field(min_length=1)]
+
+    # Originating Bugzilla bug, supplied as extra context for the agent.
+    bug_id: int | None = None
+
+    # Override the agent's default Claude model id.
+    model: str | None = None
+
+    # Cap on agent turns; `None` leaves the agent's own default in place.
+    max_turns: int | None = None
+
+    # Override the agent's default reasoning effort (e.g. `high`).
     effort: str | None = None

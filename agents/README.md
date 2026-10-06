@@ -63,7 +63,7 @@ the repo's root `docker-compose.yml`, so running it is three steps:
    ```dotenv
    # .env (repo root) — never commit this file
    ANTHROPIC_API_KEY=sk-ant-...
-   BUGZILLA_API_URL=https://bugzilla.mozilla.org
+   BUGZILLA_API_URL=https://bugzilla.mozilla.org/rest
    BUGZILLA_API_KEY=...
    ```
 
@@ -136,6 +136,7 @@ its own extra (`[bugzilla]`, `[firefox]`):
 ```python
 from agent_tools import bugzilla
 from agent_tools.claude_sdk import build_sdk_server
+
 server = build_sdk_server("bugzilla", BugzillaContext(client=...), bugzilla.TOOLS)
 ```
 

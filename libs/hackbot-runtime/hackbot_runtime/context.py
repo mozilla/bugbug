@@ -19,7 +19,7 @@ import tempfile
 import uuid
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,7 +30,7 @@ from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
-from hackbot_runtime.source import ensure_source_repo
+from hackbot_runtime.source import checkout_commit, ensure_source_repo
 from hackbot_runtime.uploader import SignedPolicyUploader
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ class HackbotContext(BaseSettings):
     uploaded.
     """
 
-    run_id: str = Field(default_factory=_default_run_id)
+    run_id: Annotated[str, Field(default_factory=_default_run_id)]
     results_prefix: str = ""
     results_policy_url: str | None = None
     results_policy_fields: dict[str, str] = {}
@@ -80,6 +80,12 @@ class HackbotContext(BaseSettings):
     # prepared. Stays None for agents that never touch source, which is how
     # publish_changes() knows there are no changes to collect.
     _source_base: str | None = PrivateAttr(default=None)
+    # The commit the checkout was *fetched* at, which unlike `_source_base` is
+    # always a published commit the remote can resolve. The two differ once a
+    # caller seeds the checkout with local commits (see `record_source_base`),
+    # and consumers that hand a base to another service — Lando, for a try push
+    # — need this one rather than a sha that only exists in this container.
+    _published_base: str | None = PrivateAttr(default=None)
     # The prepared checkout path + the ref it was prepared at, so the source is
     # prepared exactly once and a conflicting re-prepare is caught.
     _repo_path: Path | None = PrivateAttr(default=None)
@@ -137,12 +143,40 @@ class HackbotContext(BaseSettings):
         # diff the final tree against it. Best-effort: a failure here must not
         # break the agent's access to source — it only disables change capture.
         try:
-            self._source_base = changes.base_commit(path)
+            self._source_base = self._published_base = changes.base_commit(path)
         except Exception:
             log.warning("Could not record source base commit at %s", path)
         self._repo_path = path
         self._prepared_ref = resolved_ref
         return path
+
+    def record_source_base(self) -> None:
+        """Re-record the commit the agent starts editing from (current HEAD).
+
+        :meth:`prepare_repo` records it at checkout time. A caller that then
+        seeds the checkout with commits that are not the agent's work — e.g. the
+        unlanded ancestors of a stacked Phabricator revision, see
+        ``revision.checkout_revision`` — calls this afterwards so
+        :meth:`publish_changes` collects only what the agent itself did.
+        """
+        self._source_base = changes.base_commit(self.repo_path)
+
+    def checkout(self, ref: str) -> str:
+        """Move the prepared checkout to ``ref`` and start the agent's edits there.
+
+        For work that belongs on a different commit than the one the source was
+        prepared at. What the run publishes -- its patch, its Phabricator diff, its
+        try push -- is then taken against ``ref``, so a revision built from it
+        stacks on that commit. Returns the full sha. The tree must be clean.
+
+        ``ref`` must be a commit the clone already holds, and it becomes the base
+        rather than part of the diff. That is the difference from
+        :func:`hackbot_runtime.revision.checkout_revision`, which rebuilds a
+        revision from its Phabricator diffs so the agent can revise it.
+        """
+        checkout_commit(self.repo_path, ref)
+        self._source_base = self._published_base = changes.base_commit(self.repo_path)
+        return self._source_base
 
     @property
     def repo_path(self) -> Path:
@@ -221,9 +255,20 @@ class HackbotContext(BaseSettings):
             self.uploader, self.run_artifacts_dir, key, payload
         )
 
+    @property
+    def source_changed(self) -> bool:
+        """Whether this run will publish a patch, for a notification to gate on.
+
+        Read-only: the patch itself belongs to the apply step, which reads the
+        published artifact (see hackbot-api's ``app/action_handlers/email_handler.py``).
+        """
+        if self._repo_path is None or self._source_base is None:
+            return False
+        return changes.has_changes(self._repo_path, self._source_base)
+
     def publish_changes(
         self,
-        patch_key: str = "changes/changes.patch",
+        patch_key: str = changes.PATCH_ARTIFACT,
         meta_key: str = "changes/changes.json",
         phabricator_diff_key: str = "changes/phabricator_diff.json",
         try_push_key: str = "changes/try_push.json",
@@ -255,7 +300,11 @@ class HackbotContext(BaseSettings):
                 self.publish_json(phabricator_diff_key, diff_payload)
 
         if recorded_types & TRY_ACTION_TYPES:
-            try_payload = changes.build_try_push(self.repo_path, self._source_base)
+            # From the *published* base, not `_source_base`: Lando has to
+            # resolve the base commit in its own clone, and it pushes the patch
+            # series onto it — so the series has to carry any locally-seeded
+            # commits (a stacked revision's ancestors) rather than assume them.
+            try_payload = changes.build_try_push(self.repo_path, self._published_base)
             if try_payload is not None:
                 self.publish_json(try_push_key, try_payload)
 

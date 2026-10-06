@@ -25,8 +25,6 @@ class WebhookSettings(BaseModel):
     bot_phid: str = ""
     # The mention that triggers a bug-fix follow-up run.
     mention_token: str = "@hackbot"
-    # Best-effort in-memory dedupe of retried deliveries, by transaction.
-    dedupe_ttl_seconds: int = 6 * 60 * 60
 
 
 class BugzillaWebhookSettings(BaseModel):
@@ -49,6 +47,7 @@ class SlackSettings(BaseModel):
     # Slack's app-level signing secret, verifying the HMAC on every interaction
     # delivery.
     signing_secret: HmacSecret
+    bot_token: str
 
 
 class Settings(BaseSettings):
@@ -75,7 +74,7 @@ class Settings(BaseSettings):
 
     # Inbound webhook receiver config, embedded as a nested model and populated
     # from WEBHOOK_<FIELD> env vars in this single parse (WEBHOOK_SECRET,
-    # WEBHOOK_BOT_PHID, WEBHOOK_MENTION_TOKEN, WEBHOOK_DEDUPE_TTL_SECONDS).
+    # WEBHOOK_BOT_PHID, WEBHOOK_MENTION_TOKEN).
     # Required via its `secret` field, so WEBHOOK_SECRET must be set at startup.
     webhook: WebhookSettings
 
@@ -84,6 +83,10 @@ class Settings(BaseSettings):
     # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
 
+    bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
+    bugzilla_api_key: str
+    bugzilla_edge_key: str | None = None
+
     slack: SlackSettings
 
     # The webhook receiver triggers runs over the public API (rather than calling
@@ -91,6 +94,7 @@ class Settings(BaseSettings):
     # is just a matter of repointing this at the remote API. While co-located,
     # this is a loopback call to the same service, authed with external_api_key.
     hackbot_api_url: str = "http://localhost:8080"
+    hackbot_ui_url: str = "https://hackbot.moz.tools"
 
     # Internal event routes (Eventarc / Pub/Sub push targets).
     # Event topics follow a per-domain convention, `<domain>-events` (the GCP
@@ -100,6 +104,11 @@ class Settings(BaseSettings):
     run_events_topic: str = "agent-run-events"
     push_auth_audience: str = ""
     push_auth_service_account: str = ""
+
+    # Run-completion email settings (see app/notifications.py).
+    hackbot_ui_url: str = "http://localhost:3000"
+    sendgrid_api_key: str
+    notification_sender: str
 
     # Server
     port: int = 8080

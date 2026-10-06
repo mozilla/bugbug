@@ -5,21 +5,7 @@ from app import gcs, jobs
 from app.agents import AGENT_REGISTRY, model_to_env
 from app.routers.runs import create_run
 from app.schemas import AgentInputs
-
-
-class _FakeDB:
-    def __init__(self):
-        self.added = None
-        self.commits = 0
-
-    def add(self, value):
-        self.added = value
-
-    async def flush(self):
-        pass
-
-    async def commit(self):
-        self.commits += 1
+from conftest import FakeSession
 
 
 async def _create(monkeypatch, payload: dict, agent: str = "bug-fix"):
@@ -37,8 +23,8 @@ async def _create(monkeypatch, payload: dict, agent: str = "bug-fix"):
     monkeypatch.setattr(gcs, "generate_results_policy", fake_policy)
     monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
 
-    db = _FakeDB()
-    await create_run(agent, payload, on_behalf_of=None, db=db)
+    db = FakeSession()
+    await create_run(agent, payload, on_behalf_of=None, dedupe_key=None, db=db)
     return db.added, triggered
 
 
@@ -106,8 +92,20 @@ async def test_non_boolean_flag_is_rejected(monkeypatch):
     assert getattr(exc.value, "status_code", None) == 422
 
 
+# uplift-resolve's inputs deliberately don't extend `AgentInputs`.
+_AGENTS_WITHOUT_REVIEW_FLAG = {"uplift-resolve"}
+
+
 def test_flag_is_declared_once_on_the_shared_base():
     assert "require_review" in AgentInputs.model_fields
-    for spec in AGENT_REGISTRY.values():
+    for name, spec in AGENT_REGISTRY.items():
+        if name in _AGENTS_WITHOUT_REVIEW_FLAG:
+            continue
         assert issubclass(spec.input_schema, AgentInputs)
         assert "require_review" in spec.input_schema.model_fields
+
+
+def test_agents_without_the_flag_do_not_declare_it():
+    for name in _AGENTS_WITHOUT_REVIEW_FLAG:
+        schema = AGENT_REGISTRY[name].input_schema
+        assert "require_review" not in schema.model_fields

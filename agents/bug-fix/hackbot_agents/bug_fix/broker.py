@@ -1,4 +1,4 @@
-"""Bugzilla MCP + Phabricator patch broker.
+"""Bugzilla MCP + read-only Phabricator broker.
 
 Sidecar container that holds the privileged API keys and serves them over HTTP
 to the agent process (a sibling container in the same Cloud Run Job task), which
@@ -10,9 +10,10 @@ credentials:
 - Phabricator: the read-only `phabricator` MCP tools over `/phabricator/mcp`, so
   a follow-up run can read the revision it was called on: its metadata, the
   full comment thread, and where each inline comment sits.
-- Phabricator: `GET /phabricator/revision/{id}/patch` returns a revision's base
-  commit + raw diff, so the agent can check its source tree out at the revision
-  before running (see ``revision.checkout_revision``).
+- Phabricator: `/phabricator/api` mounts a read-only Conduit proxy
+  (``phabricator_proxy``) — the broker looks enough like a Phabricator instance
+  for a Conduit client to talk to it, but only for an allow-listed set of read
+  methods, and it swaps in the real key so the caller never holds one.
 """
 
 import logging
@@ -26,15 +27,11 @@ from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.phabricator import PhabricatorContext
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from phabricator_client import (
-    PhabricatorClient,
-    PhabricatorSettings,
-    UnresolvedCommitError,
-)
+from phabricator_client import PhabricatorClient, PhabricatorSettings
+from phabricator_proxy import create_app as conduit_proxy
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
-from starlette.routing import Mount, Route
+from starlette.routing import Mount
 
 log = logging.getLogger("bugzilla-broker")
 
@@ -51,38 +48,6 @@ class BrokerInputs(BaseSettings):
         env_nested_delimiter="_",
         env_nested_max_split=1,
     )
-
-
-def _patch_endpoint(client: PhabricatorClient):
-    """A read-only endpoint returning a revision's base commit + raw diff.
-
-    The broker holds the Conduit key; the agent only ever sees this loopback URL,
-    so it can reproduce the revision's tree without any credentials.
-    """
-
-    async def get_patch(request):
-        revision_id = int(request.path_params["revision_id"])
-        diff = await client.query_latest_diff(revision_id)
-        if diff is None:
-            return JSONResponse(
-                {"error": f"D{revision_id} has no diffs"}, status_code=404
-            )
-        if not diff.base_commit:
-            return JSONResponse(
-                {"error": f"D{revision_id} diff {diff.id} has no base commit"},
-                status_code=404,
-            )
-        raw_diff = await client.get_raw_diff(diff.id)
-        # The recorded base is often an abbreviated hash; git can only fetch a
-        # full object id, so expand it here.
-        try:
-            base_commit = await client.resolve_commit(diff.base_commit)
-        except UnresolvedCommitError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=422)
-
-        return JSONResponse({"base_commit": base_commit, "raw_diff": raw_diff})
-
-    return get_patch
 
 
 def _mcp_endpoint(manager: StreamableHTTPSessionManager):
@@ -120,7 +85,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
         async with bugzilla_manager.run(), phabricator_manager.run():
             log.info(
                 "broker ready on %s:%d (bugzilla + phabricator read-only, "
-                "phabricator patch)",
+                "phabricator conduit proxy)",
                 inputs.host,
                 inputs.port,
             )
@@ -130,10 +95,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
         routes=[
             Mount("/bugzilla/mcp", app=_mcp_endpoint(bugzilla_manager)),
             Mount("/phabricator/mcp", app=_mcp_endpoint(phabricator_manager)),
-            Route(
-                "/phabricator/revision/{revision_id:int}/patch",
-                _patch_endpoint(phabricator_client),
-            ),
+            Mount("/phabricator/api", app=conduit_proxy(phabricator_client)),
         ],
         lifespan=lifespan,
     )

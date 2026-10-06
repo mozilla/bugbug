@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Generic, Literal, TypeVar
+from typing import Annotated, Generic, Literal, TypeVar
 
 from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
 from pydantic import (
@@ -31,42 +31,57 @@ class ResultCollector(Generic[ResultT]):
 class DiagnosisPlanResult(BaseModel):
     """What the later tasks need, gathered before any browser is installed."""
 
-    firefox_channel: Literal["nightly"] | Literal["stable"] | Literal["esr"] = Field(
-        description=("The Firefox channel to diagnose on."),
-    )
-
-    channel_rationale: str = Field(
-        description=(
-            "One or two sentences on why you chose that channel, citing what "
-            "you based it on (the `autowebcompat-repro-channels` marker, the "
-            "report text, or the absence of both)."
+    firefox_channel: Annotated[
+        Literal["nightly"] | Literal["stable"] | Literal["esr"],
+        Field(
+            description=("The Firefox channel to diagnose on."),
         ),
-    )
+    ]
 
-    url: str = Field(
-        description="The URL of the page the issue was reported on.",
-    )
-
-    steps: str = Field(
-        description=(
-            "The steps to reproduce the issue, as a single numbered list (1., "
-            "2., 3., ... one step per line), taken from the report and written "
-            "so another agent could follow them with no extra context. Each "
-            "step must be self-contained: whenever a step involves an input the "
-            "report did not provide, state its exact origin. Always fill this "
-            "in, even when a reproduction script is attached — the script may "
-            "turn out not to work."
+    channel_rationale: Annotated[
+        str,
+        Field(
+            description=(
+                "One or two sentences on why you chose that channel, citing what "
+                "you based it on (the `autowebcompat-repro-channels` marker, the "
+                "report text, or the absence of both)."
+            ),
         ),
-    )
+    ]
 
-    script_path: Path | None = Field(
-        description=(
-            "The file path you downloaded the attached Puppeteer reproduction "
-            "script to, or null if the bug has no such attachment. Use the "
-            "exact path you were given to write to (do NOT paste the script "
-            "source)."
+    url: Annotated[
+        str,
+        Field(
+            description="The URL of the page the issue was reported on.",
         ),
-    )
+    ]
+
+    steps: Annotated[
+        str,
+        Field(
+            description=(
+                "The steps to reproduce the issue, as a single numbered list (1., "
+                "2., 3., ... one step per line), taken from the report and written "
+                "so another agent could follow them with no extra context. Each "
+                "step must be self-contained: whenever a step involves an input the "
+                "report did not provide, state its exact origin. Always fill this "
+                "in, even when a reproduction script is attached — the script may "
+                "turn out not to work."
+            ),
+        ),
+    ]
+
+    script_path: Annotated[
+        Path | None,
+        Field(
+            description=(
+                "The file path you downloaded the attached Puppeteer reproduction "
+                "script to, or null if the bug has no such attachment. Use the "
+                "exact path you were given to write to (do NOT paste the script "
+                "source)."
+            ),
+        ),
+    ]
 
     @field_validator("script_path", mode="after")
     @classmethod
@@ -84,28 +99,33 @@ class DiagnosisPlanResult(BaseModel):
 class ReproScriptResult(BaseModel):
     """Verdict from the script task: can the issue still be reproduced?"""
 
-    reproduced: bool = Field(
-        description=(
-            "true if you confirmed the reported issue still reproduces in "
-            "Firefox but not in Chrome, whether via a Puppeteer script or by "
-            "driving the site with the DevTools tools. false if you could not "
-            "reproduce it."
+    reproduced: Annotated[
+        bool,
+        Field(
+            description=(
+                "true if you confirmed the reported issue still reproduces in "
+                "Firefox but not in Chrome, whether via a Puppeteer script or by "
+                "driving the site with the DevTools tools. false if you could not "
+                "reproduce it."
+            ),
         ),
-    )
+    ]
 
-    failure_reason: (
-        Literal["not_reproducible"]
-        | Literal["not_firefox_specific"]
-        | Literal["blocked"]
-        | Literal["blocked_captcha"]
-        | Literal["blocked_geo"]
-        | Literal["login"]
-        | Literal["down"]
-        | Literal["headless"]
-        | Literal["other"]
-        | None
-    ) = Field(
-        description="""Null if the issue reproduced. Otherwise the category
+    failure_reason: Annotated[
+        (
+            Literal["not_reproducible"]
+            | Literal["not_firefox_specific"]
+            | Literal["blocked"]
+            | Literal["blocked_captcha"]
+            | Literal["blocked_geo"]
+            | Literal["login"]
+            | Literal["down"]
+            | Literal["headless"]
+            | Literal["other"]
+            | None
+        ),
+        Field(
+            description="""Null if the issue reproduced. Otherwise the category
         describing why it did not:
           * not_reproducible - all the steps ran, but the reported issue did not occur
           * not_firefox_specific - the reported behavior reproduces in both Firefox
@@ -119,24 +139,31 @@ class ReproScriptResult(BaseModel):
           headless environment
           * other - some other reason (give details in the summary)
 """,
-    )
-
-    summary: str = Field(
-        description=(
-            "A concise account of what you did and what you observed in each "
-            "browser, including why reproduction failed if it did."
         ),
-    )
+    ]
 
-    script_path: Path | None = Field(
-        description=(
-            "The file path of the Puppeteer script that demonstrates the "
-            "difference — Firefox exits 1 and Chrome exits 0. Use the exact "
-            "path you were given to write to (do NOT paste the script source). "
-            "Null if no script validated; that is acceptable and does not by "
-            "itself mean the issue failed to reproduce."
+    summary: Annotated[
+        str,
+        Field(
+            description=(
+                "A concise account of what you did and what you observed in each "
+                "browser, including why reproduction failed if it did."
+            ),
         ),
-    )
+    ]
+
+    script_path: Annotated[
+        Path | None,
+        Field(
+            description=(
+                "The file path of the Puppeteer script that demonstrates the "
+                "difference — Firefox exits 1 and Chrome exits 0. Use the exact "
+                "path you were given to write to (do NOT paste the script source). "
+                "Null if no script validated; that is acceptable and does not by "
+                "itself mean the issue failed to reproduce."
+            ),
+        ),
+    ]
 
     @field_validator("script_path", mode="after")
     @classmethod
@@ -167,9 +194,11 @@ class ReproScriptResult(BaseModel):
 class DiagnosisResult(BaseModel):
     """The agent's root-cause account of why Firefox differs from Chrome."""
 
-    root_cause: str = Field(
-        description=(
-            """Your root-cause hypothesis for why the site behaves differently in
+    root_cause: Annotated[
+        str,
+        Field(
+            description=(
+                """Your root-cause hypothesis for why the site behaves differently in
             Firefox: what the page does, which behavior it depends on, and why
             that produces the reported breakage in Firefox but not Chrome. Be
             specific about the mechanism (e.g. the API, CSS property, or
@@ -178,27 +207,34 @@ class DiagnosisResult(BaseModel):
             then if possible provide links to the relevant parts of the specification
             document that define the behaviour. Skip these links if you don't know the
             right specification or section. Do not propose a fix."""
+            ),
         ),
-    )
+    ]
 
-    evidence: str = Field(
-        description=(
-            "The concrete observations supporting the hypothesis: console "
-            "errors, network requests, DOM or computed-style measurements, "
-            "feature-detection results, and what the reduced testcase showed in "
-            "each browser. Be brief, this will be read by a busy engineer."
-            "Cite what you actually observed, not what you expect."
+    evidence: Annotated[
+        str,
+        Field(
+            description=(
+                "The concrete observations supporting the hypothesis: console "
+                "errors, network requests, DOM or computed-style measurements, "
+                "feature-detection results, and what the reduced testcase showed in "
+                "each browser. Be brief, this will be read by a busy engineer."
+                "Cite what you actually observed, not what you expect."
+            ),
         ),
-    )
-    testcase_path: Path | None = Field(
-        description=(
-            "The file path of the reduced HTML testcase you wrote. Set this only "
-            "if you loaded it in both browsers and confirmed it shows the same "
-            "difference as the real site. Use the exact path you were given to "
-            "write to (do NOT paste the HTML source). Null if you could not "
-            "produce a reduced testcase that reproduces the difference."
+    ]
+    testcase_path: Annotated[
+        Path | None,
+        Field(
+            description=(
+                "The file path of the reduced HTML testcase you wrote. Set this only "
+                "if you loaded it in both browsers and confirmed it shows the same "
+                "difference as the real site. Use the exact path you were given to "
+                "write to (do NOT paste the HTML source). Null if you could not "
+                "produce a reduced testcase that reproduces the difference."
+            ),
         ),
-    )
+    ]
 
     @field_validator("testcase_path", mode="after")
     @classmethod

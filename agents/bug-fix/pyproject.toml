@@ -7,6 +7,7 @@ dependencies = [
     "hackbot-runtime[claude-sdk,phabricator]",
     "agent-tools[bugzilla,firefox]",
     "phabricator-client",
+    "phabricator-proxy",
     "bugsy",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
@@ -21,6 +22,7 @@ dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
 phabricator-client = { workspace = true }
+phabricator-proxy = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

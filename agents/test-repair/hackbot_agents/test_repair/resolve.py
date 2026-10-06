@@ -148,6 +148,39 @@ def _failing_groups(task_id: str) -> list[FailingGroup]:
     return groups
 
 
+# Treeherder /api/failureclassification/, restricted to the verdicts that mean a
+# sheriff has already dealt with the failure. "not classified" (1) and "new failure
+# not classified" (6) are left out: they still may be a real regression.
+_ACTIONED_CLASSIFICATIONS = {
+    2: "fixed by commit",
+    3: "expected fail",
+    4: "intermittent",
+    5: "infra",
+    7: "autoclassified intermittent",
+    8: "intermittent needs bugid",
+}
+
+
+def sheriff_classification(project: str, task_id: str) -> str | None:
+    """How a sheriff classified this failure while the run worked, if they did.
+
+    A run takes long enough that the tree is often dealt with before it reports.
+    Best effort: None on any error, so the report goes out unmarked rather than
+    not at all.
+    """
+    try:
+        jobs = (
+            _get_json(f"{_TREEHERDER}/{project}/jobs/?task_id={task_id}").get("results")
+            or []
+        )
+    except (requests.exceptions.RequestException, ValueError):
+        logger.warning("Could not re-read the classification of task %s", task_id)
+        return None
+    if not jobs:
+        return None
+    return _ACTIONED_CLASSIFICATIONS.get(jobs[0].get("failure_classification_id"))
+
+
 def _open_intermittent_bugs(suggestion: dict) -> list[int]:
     """Ids of the unresolved intermittent-failure bugs a failure line matches."""
     bugs = suggestion.get("bugs") or {}

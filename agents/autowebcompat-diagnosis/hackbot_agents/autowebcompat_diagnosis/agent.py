@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Generic, Literal
+from typing import Any, Generic, Literal, Self
 
 from claude_agent_sdk import (
     ClaudeAgentOptions,
@@ -100,6 +100,7 @@ class TaskConfig:
     ) = None
     log: Path | None = None
     verbose: bool = True
+    headless: bool = False
 
 
 @dataclass
@@ -246,21 +247,27 @@ class Task(ABC, Generic[ResultT]):
         return self.result_collector.result
 
 
-def run_script(script_path: Path, browser: str, browser_path: Path) -> int | None:
+def run_script(
+    script_path: Path, browser: str, browser_path: Path, headless: bool
+) -> int | None:
     """Run the reproduction script in one browser; return its exit code.
 
     Returns ``None`` if the script timed out, i.e. gave no verdict.
     """
     script_timeout = 5 * 60
+    env = {
+        **os.environ,
+        "NODE_PATH": str(NODE_MODULES),
+        "BROWSER": browser,
+        "BROWSER_BIN": str(browser_path),
+    }
+    if headless:
+        env["HEADLESS"] = "1"
+
     try:
         proc = subprocess.run(
             ["node", str(script_path)],
-            env={
-                **os.environ,
-                "NODE_PATH": str(NODE_MODULES),
-                "BROWSER": browser,
-                "BROWSER_BIN": str(browser_path),
-            },
+            env=env,
             capture_output=True,
             text=True,
             timeout=script_timeout,
@@ -280,7 +287,7 @@ def run_script(script_path: Path, browser: str, browser_path: Path) -> int | Non
 
 
 def run_confirmation_script(
-    script_path: Path, firefox_path: Path, chrome_path: Path
+    script_path: Path, firefox_path: Path, chrome_path: Path, headless: bool
 ) -> ReproScriptResult | None:
     """Check the script still demonstrates the difference, without an agent.
 
@@ -289,10 +296,10 @@ def run_confirmation_script(
     outcome — wrong exit codes, a script error, or a timeout — so the caller
     can fall back to the agent task.
     """
-    firefox_code = run_script(script_path, "firefox", firefox_path)
+    firefox_code = run_script(script_path, "firefox", firefox_path, headless)
     if firefox_code != 1:
         return None
-    chrome_code = run_script(script_path, "chrome", chrome_path)
+    chrome_code = run_script(script_path, "chrome", chrome_path, headless)
     if chrome_code != 0:
         return None
 
@@ -398,7 +405,7 @@ class ReproScript(Task):
             "firefox-devtools",
             build_firefox_devtools_server(
                 firefox_path=firefox_path,
-                headless=True,
+                headless=task_config.headless,
                 enable_script=True,
                 enable_privileged_context=False,
             ),
@@ -406,7 +413,9 @@ class ReproScript(Task):
         )
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(chrome_path=chrome_path, headless=True),
+            build_chrome_devtools_server(
+                chrome_path=chrome_path, headless=task_config.headless
+            ),
             CHROME_DEVTOOLS_TOOLS,
         )
 
@@ -432,8 +441,8 @@ You are establishing whether the issue still reproduces, and getting a Puppeteer
 script that demonstrates it. Do not investigate why the difference happens.
 
 1. Confirm the issue: run the reproduction steps against the reported
-   site in Firefox with the Firefox DevTools MCP (headless, as is every browser
-   on this system), then run the same steps in Chrome with the Chrome DevTools
+   site in Firefox with the Firefox DevTools MCP, then run the same steps
+   in Chrome with the Chrome DevTools
    MCP.
    - A genuine web-compat issue reproduces in Firefox but not in Chrome. If the
      behavior is identical in both, your steps may be wrong; refine the steps
@@ -496,7 +505,7 @@ class Diagnosis(Task):
             "firefox-devtools",
             build_firefox_devtools_server(
                 firefox_path=firefox_path,
-                headless=True,
+                headless=task_config.headless,
                 enable_script=True,
                 enable_privileged_context=False,
             ),
@@ -504,7 +513,9 @@ class Diagnosis(Task):
         )
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(chrome_path=chrome_path, headless=True),
+            build_chrome_devtools_server(
+                chrome_path=chrome_path, headless=task_config.headless
+            ),
             CHROME_DEVTOOLS_TOOLS,
         )
 
@@ -599,6 +610,43 @@ class DiagnosisResults:
         )
 
 
+class Environment:
+    def __init__(self):
+        self.started_processes = []
+
+    def start(self, cmd: list[str]) -> None:
+        logging.info("Running %s", " ".join(cmd))
+        self.started_processes.append(subprocess.Popen(cmd))
+
+    def start_xvfb(self) -> None:
+        self.start(
+            [
+                "Xvfb",
+                os.environ["DISPLAY"],
+                "-screen",
+                "0",
+                "%sx%sx%s"
+                % (
+                    os.environ["SCREEN_WIDTH"],
+                    os.environ["SCREEN_HEIGHT"],
+                    os.environ["SCREEN_DEPTH"],
+                ),
+            ]
+        )
+        self.start(["fluxbox", "-display", os.environ["DISPLAY"]])
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args, **kwargs) -> None:
+        for process in self.started_processes:
+            process.terminate()
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
 async def run_autowebcompat_diagnosis(
     config: TaskConfig,
     tracker: RunTracker,
@@ -607,52 +655,56 @@ async def run_autowebcompat_diagnosis(
     publish_file: PublishFile,
 ) -> AutowebcompatDiagnosisResult:
     """Confirm a web-compat issue reproduces, then diagnose why."""
-    firefox_browser = FirefoxBrowsers()
-    chrome_browser = ChromeBrowsers()
+    with Environment() as env:
+        if not config.headless:
+            env.start_xvfb()
 
-    plan_task = DiagnosisPlan(config, tracker, input_data, bugzilla_mcp_server)
-    plan_result = await plan_task.run()
+        firefox_browser = FirefoxBrowsers()
+        chrome_browser = ChromeBrowsers()
 
-    channel = FirefoxChannel(plan_result.firefox_channel)
-    logger.info(
-        "Diagnosing on Firefox %s: %s", channel.value, plan_result.channel_rationale
-    )
-    firefox_path = getattr(firefox_browser, channel.value)
-    chrome_path = chrome_browser.stable
+        plan_task = DiagnosisPlan(config, tracker, input_data, bugzilla_mcp_server)
+        plan_result = await plan_task.run()
 
-    # If the attached script still demonstrates the difference, that settles the
-    # reproduction without spending an agent task on it.
-    repro_result = None
-    if plan_result.script_path is not None:
-        repro_result = run_confirmation_script(
-            plan_result.script_path, firefox_path, chrome_path
-        )
-        if repro_result is None:
-            logger.info(
-                "Attached script did not demonstrate the difference; "
-                "falling back to the reproduction task"
-            )
-    if repro_result is None:
-        repro_task = ReproScript(
-            config, tracker, firefox_path, chrome_path, plan_result
-        )
-        repro_result = await repro_task.run()
-
-    results = DiagnosisResults(publish_file, repro_result)
-
-    if not repro_result.reproduced:
+        channel = FirefoxChannel(plan_result.firefox_channel)
         logger.info(
-            "Issue did not reproduce (%s); skipping diagnosis",
-            repro_result.failure_reason,
+            "Diagnosing on Firefox %s: %s", channel.value, plan_result.channel_rationale
         )
+        firefox_path = getattr(firefox_browser, channel.value)
+        chrome_path = chrome_browser.stable
+
+        # If the attached script still demonstrates the difference, that settles the
+        # reproduction without spending an agent task on it.
+        repro_result = None
+        if plan_result.script_path is not None:
+            repro_result = run_confirmation_script(
+                plan_result.script_path, firefox_path, chrome_path, config.headless
+            )
+            if repro_result is None:
+                logger.info(
+                    "Attached script did not demonstrate the difference; "
+                    "falling back to the reproduction task"
+                )
+        if repro_result is None:
+            repro_task = ReproScript(
+                config, tracker, firefox_path, chrome_path, plan_result
+            )
+            repro_result = await repro_task.run()
+
+        results = DiagnosisResults(publish_file, repro_result)
+
+        if not repro_result.reproduced:
+            logger.info(
+                "Issue did not reproduce (%s); skipping diagnosis",
+                repro_result.failure_reason,
+            )
+            return results.into_result()
+
+        if repro_result.script_path is None:
+            logger.info("No validated script; diagnosing from the reproduction steps")
+
+        diagnosis_task = Diagnosis(
+            config, tracker, firefox_path, chrome_path, plan_result, repro_result
+        )
+        results.set_diagnosis(await diagnosis_task.run())
+
         return results.into_result()
-
-    if repro_result.script_path is None:
-        logger.info("No validated script; diagnosing from the reproduction steps")
-
-    diagnosis_task = Diagnosis(
-        config, tracker, firefox_path, chrome_path, plan_result, repro_result
-    )
-    results.set_diagnosis(await diagnosis_task.run())
-
-    return results.into_result()

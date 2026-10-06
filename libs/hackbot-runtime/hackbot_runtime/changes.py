@@ -73,6 +73,22 @@ def base_commit(repo: Path) -> str:
     return _git(repo, "rev-parse", "HEAD").strip()
 
 
+# Where publish_changes() puts the run's patch; the same key downstream reads.
+PATCH_ARTIFACT = "changes/changes.patch"
+
+
+def has_changes(repo: Path, base: str) -> bool:
+    """Whether the agent left anything for :func:`collect` to publish.
+
+    Read-only, unlike ``collect``, which commits the working tree as it goes: for
+    code that needs the answer mid-run without disturbing what the agent is
+    editing.
+    """
+    return _has_uncommitted(repo) or bool(
+        _git(repo, "rev-list", "-1", f"{base}..HEAD").strip()
+    )
+
+
 def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
@@ -82,6 +98,20 @@ def _wrap_uncommitted(repo: Path) -> bool:
 
     Returns ``True`` if such a commit was created, ``False`` if the tree was
     already clean.
+    """
+    return commit_all(repo, _WIP_MESSAGE)
+
+
+def commit_all(repo: Path, message: str, *, author: str | None = None) -> bool:
+    """Stage everything in ``repo`` and commit it, if there is anything to commit.
+
+    Returns ``True`` if a commit was made, ``False`` if the tree was clean.
+
+    The committer identity is passed explicitly because agent containers often
+    have no git identity configured, which would make ``git commit`` fail
+    outright. ``author`` (``"Name <email>"``) attributes the change to someone
+    else, for commits that replay another author's work; the committer stays
+    hackbot either way, which is the honest split and what `git` is designed for.
     """
     if not _has_uncommitted(repo):
         return False
@@ -94,8 +124,9 @@ def _wrap_uncommitted(repo: Path) -> bool:
         f"user.email={_WIP_EMAIL}",
         "commit",
         "--no-verify",
+        *(["--author", author] if author else []),
         "-m",
-        _WIP_MESSAGE,
+        message,
     )
     return True
 
@@ -190,8 +221,8 @@ def _ambient_git_identity() -> Iterator[None]:
     containers and CI often have no global identity, so point
     ``GIT_CONFIG_GLOBAL`` at a throwaway config carrying a hackbot identity for
     the duration of the call (moz-phab copies ``os.environ`` when it builds its
-    git client). The identity is cosmetic — only the diff is used, never a
-    commit moz-phab would author.
+    git client). The identity is cosmetic: moz-phab is only ever asked to build
+    a diff or apply a patch here, never to author a commit.
     """
     with tempfile.NamedTemporaryFile("w", suffix=".gitconfig") as gc:
         gc.write(f"[user]\n\temail = {_WIP_EMAIL}\n\tname = {_WIP_NAME}\n")

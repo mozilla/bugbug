@@ -14,9 +14,15 @@ It also optionally bootstraps Firefox build if needed.
 
 - `FAILURE_TASKS` - a dictionary of failed Taskcluster tasks {task_name: taskcluster_task_id}.
   The agent resolves the push from them: the failure commit (checked out) plus the other
-  commits in the push, and blames the one that introduced the failure.
+  commits in the push, and blames the one that introduced the failure. The checkout
+  reaches `CHECKOUT_DEPTH` commits back so the agent can find a culprit in an earlier
+  push when the failing job did not run there.
 - `GIT_COMMIT` - Optional override for the failure commit (skips the hg->git lookup).
-- `BUG_ID` - Optional Bugzilla bug id.
+- `BUG_ID` - Optional override, normally unset. The bug is resolved from the push: the
+  pushlog lookup already returns each changeset's description, whose first line names it
+  (`Bug 123 - ...`). The failure commit's bug gives the analysis stage its Bugzilla
+  context; the fix is filed against the _blamed_ commit's bug, known once stage 1 picks
+  the culprit.
 
 ## Output
 
@@ -26,14 +32,48 @@ First stage - analysis:
   the fix
 - `analysis.md` - verdict, error, cause and fix, under a page
 - `planning.md` - intermediate file that outlines fixing steps for the second stage
-- `blame.json` - the commit that introduced the failure (`blamed_commit`, `reason`), null
-  when no commit in the push is to blame
+- `blame.json` - the commit that introduced the failure (`blamed_commit`, `reason`), from
+  this push or an earlier one when the job did not run there; null when no commit is to
+  blame
 
 Second stage - fixing:
 
 - A patch in Hackbot format
 
 The result reports `blamed_commit` so the caller can attribute the failure to a developer.
+
+## Submitting the fix
+
+The fix stage runs on a checkout of the blamed commit itself, so the fix is a change
+to that commit. Once a bug is known, it records a `phabricator.submit_patch` action in
+`summary.json` -- a WIP revision carrying the fix, whose diff the runtime builds from
+the agent's own checkout into `changes/phabricator_diff.json`, stacked as a child of
+the blamed commit's own revision when its footer names one (`parent_revision_id`).
+Nothing is posted to the bug, and nothing reaches Phabricator during the run.
+
+Bustage is backed out, so the revision is not meant to land on its own: the developer
+applies the action from the Hackbot UI, pulls their revision and the child with
+`moz-phab patch`, squashes the fix in, resubmits and relands -- the email spells out
+the steps. Unlike the email, the action waits for a human -- only `email.send`
+auto-applies, see [`agents.py`](../../services/hackbot-api/app/agents.py). Eval runs
+pass no actions recorder and no checkout, so they never record it.
+
+A run whose blamed commit names no bug (a "No bug" commit, a backout) produces the fix
+but records no revision -- one has to be filed against a bug. The agent log says so
+when that happens.
+
+## Email notification
+
+A run that produced a patch records an `email.send` action carrying the analysis, the
+blamed commit, the patch and -- when a revision is pending -- the steps to review and
+apply it, addressed to that commit's author and to the developer who pushed the failing
+change (the hackbot team is copied apply-side). A run that proposed no
+patch is a transient or not-to-blame failure and is not emailed -- see
+`NOTIFY_ONLY_WITH_PATCH` in [config.py](hackbot_agents/build_repair/config.py).
+
+The email is delivered by the apply step, not from the run, so it is visible in the
+hackbot UI before it lands and is delivered at most once. `build-repair` opts into
+auto-apply, so a succeeded run reports without waiting for a human.
 
 ## Test the agent
 

@@ -10,15 +10,10 @@ class Settings(BaseSettings):
     # hackbot-api
     hackbot_api_url: str = ""
     hackbot_api_key: str = ""
-    hackbot_ui_url: str = "https://hackbot.moz.tools"
     agent_name: str = "build-repair"
     # Agent that analyzes test failures (separate Cloud Run Job from build-repair).
     test_repair_agent_name: str = "test-repair"
 
-    # Source links shown in notifications.
-    firefox_git_url: str = "https://github.com/mozilla-firefox/firefox"
-    firefox_hg_url: str = "https://hg.mozilla.org/mozilla-unified"
-    bugzilla_url: str = "https://bugzilla.mozilla.org"
     treeherder_url: str = "https://treeherder.mozilla.org"
 
     # Failure filtering and agent inputs.
@@ -36,6 +31,10 @@ class Settings(BaseSettings):
     # gate waits for the job to be ingested before reading that verdict.
     treeherder_ingest_poll_seconds: int = 30
     treeherder_ingest_max_wait_seconds: int = 240
+    # The log is parsed after the job is ingested; the failure lines the intermittent
+    # gate and the history check read are not there until it is. Measured on 40
+    # autoland failures: parsed by first sight in 39, within 24s in the last.
+    treeherder_log_parse_wait_seconds: int = 60
     # How long to wait for a verdict once the job is ingested. Most test failures turn
     # out to be intermittent or expected-fail, so waiting here rejects them before the
     # ancestor walk and before an agent run. Bounded by how late that makes the
@@ -43,6 +42,13 @@ class Settings(BaseSettings):
     # at p90, so waiting much past that buys few extra rejections and delays every
     # real regression by the full wait.
     treeherder_classification_wait_seconds: int = 600
+    # The wait is skipped for a task whose every failing test looks reliable in the
+    # tests.firefox.dev timings data (see the README). 0.05% is the measured knee: a
+    # strict 0% covers only two thirds of the genuine regressions that 0.05% does,
+    # and looser rates add noise without covering more. The runs floor only rules out
+    # tests too new to judge; anything from 30 to 1000 scores the same.
+    flakiness_min_runs: int = 100
+    flakiness_max_failure_rate: float = 0.0005
 
     # Dedupe (in-memory, by hg revision)
     dedupe_ttl_seconds: int = 6 * 60 * 60
@@ -54,28 +60,15 @@ class Settings(BaseSettings):
     # builds Firefox in its own container, so a bad day on autoland -- a broken
     # manifest inherited by push after push, or a Treeherder outage that leaves every
     # gate failing open -- could otherwise cost far more than the failures are worth.
-    max_test_repairs_per_day: int = 50
+    # A cost backstop, not a quality gate: a 7-hour dry run on a busy day extrapolated
+    # to ~75 runs, so 50 would have dropped the afternoon's regressions unread.
+    max_test_repairs_per_day: int = 100
 
-    # Polling the API for run completion
-    poll_interval_seconds: int = 60
-    run_max_age_minutes: int = 12 * 60
-    # Shared worker pool for message processing and run polling. A
-    # regression check may block for a few minutes waiting for a parent
-    # build to settle, so the pool is sized well above the number of
-    # builds/runs in flight at once. Threads are cheap and mostly idle
+    # Worker pool for message processing. A regression check may block for a few
+    # minutes waiting for a parent build to settle, so the pool is sized well above
+    # the number of builds in flight at once. Threads are cheap and mostly idle
     # while waiting.
     max_workers: int = 256
-
-    # Email notifications (SendGrid)
-    sendgrid_api_key: str | None = None
-    notification_sender: str | None = None
-    # Team address CC'd on every build-repair notification alongside the revision
-    # author, and the only recipient of test-repair verdicts.
-    notification_team_email: str | None = None
-    # Send all notifications to this address instead of the developer (local testing).
-    notification_override_email: str | None = None
-    # Only notify when the run produced a patch (skip transient / not-to-blame runs).
-    notify_only_with_patch: bool = True
 
     dry_run: bool = False
     log_level: str = "INFO"

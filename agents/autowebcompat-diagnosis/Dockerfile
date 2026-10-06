@@ -29,7 +29,7 @@ FROM base AS agent
 
 # The agent needs Node.js + npm to run the DevTools MCP servers (npm packages;
 # the python base ships neither) and the shared libraries the browsers require
-# to run headless. The browser binaries themselves are downloaded at agent
+# to run browsers. The browser binaries themselves are downloaded at agent
 # startup (a fresh build per run): Firefox via mozdownload/mozinstall and Chrome
 # for Testing via the Chrome-for-Testing JSON API (see browser.py).
 RUN apt-get update \
@@ -49,6 +49,9 @@ RUN apt-get update \
         fonts-liberation \
         # Codecs and audio/video related dependencies
         ffmpeg \
+        # Window manager and display backend
+        fluxbox \
+        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the DevTools MCP servers and Puppeteer from the pinned
@@ -68,6 +71,11 @@ COPY agents/autowebcompat-diagnosis/hackbot.toml /app/hackbot.toml
 RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace /app/diagnosis
+
+ENV SCREEN_WIDTH=1280
+ENV SCREEN_HEIGHT=1024
+ENV SCREEN_DEPTH=24
+ENV DISPLAY=:99.0
 
 USER agent
 

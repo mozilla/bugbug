@@ -28,19 +28,32 @@ Create these documents:
    at, and do not narrate the steps you took to get here.
 2. {scratch_out}/planning.md with the fix as a short numbered list of edits
 3. {scratch_out}/summary.md -- 2-3 sentences of plain prose, no headings or lists.
-   Open with whether a commit in this push broke the build and which one, then
-   give the error and the fix in a clause each.
+   Open by naming the commit that broke the build, or saying that no commit in
+   this push did, as a statement rather than an answer (no leading "Yes" or "No"),
+   then give the error and the fix in a clause each.
 {blame_step}
 Do not prompt to edit those documents. Do not write any code yet. Work fully
 autonomously and do not ask any questions.
 """
 
 PUSH_CONTEXT = """
-This commit landed in the same push as the commits below. Any of them may have
-introduced the failure -- the checked-out commit is not necessarily the culprit:
+This push consists of exactly these commits, the checked-out one first. Any of
+them may have introduced the failure -- the checked-out commit is not necessarily
+the culprit:
 {commit_lines}
 Inspect each commit (`git show <commit>`) and correlate with the failure logs to
 determine which single commit introduced the build failure.
+{checkout_history}"""
+
+SINGLE_COMMIT_CONTEXT = """
+This push consists of commit {commit} alone.
+{checkout_history}"""
+
+CHECKOUT_HISTORY = """\
+The history behind it belongs to earlier pushes; the checkout is shallow and
+reaches about {depth} commits back. Its oldest commit is a graft, so `git show`
+lists the whole tree as added and `git blame` marks its lines with `^`; neither
+says what that commit changed.
 """
 
 PUSH_COMMIT_LINE = "- {commit}"
@@ -77,9 +90,14 @@ TREEHERDER_STEP = r"""\
    artifact can be a passing run's log, so a wrong log is worse than none. The run
    is meant to fail here.
 
-   The same command answers CI questions about the push. `--compare <revision>`
-   says whether the failure is new here or was already failing earlier;
-   `--lookback 50 --suspects` finds the push window a failure started in;
+   The same command answers CI questions about the push. Before blaming a commit,
+   confirm the failure started here: `--lookback 50 --suspects` prints the push
+   where the job first failed and the last one where it passed. If it first failed
+   on an earlier push the culprit landed there, not here -- find it in the history
+   (see blame.json below). A build job is not scheduled on every push: a neighbouring
+   push that reports no failure may simply not have run it, and `--match-filter
+   all` on that push lists the job only if it did. `--compare <revision>` says
+   whether the failure is new relative to a push that ran the job;
    `--similar-history <job id>` gives a job's recent pass rate, which separates a
    real bustage from infrastructure flakiness.
 
@@ -105,11 +123,13 @@ TREEHERDER_STEP_NO_PUSH = """\
 
 
 BLAME_STEP = """4. {scratch_out}/blame.json naming the commit that introduced the failure, as JSON:
-   {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Use one of the
-   push commits listed above when there are several, otherwise the checked-out
-   commit. Set "blamed_commit" to null if none of them caused the failure -- it is
-   infrastructure, a toolchain or fetch problem, or it already failed before this
-   push -- rather than naming the least implausible commit.
+   {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Name one of the
+   push commits listed above, or, when the failure started in an earlier push, the
+   commit there that introduced it (`git log -S<symbol> -- <file>` finds it), and
+   say in the Verdict and the summary that it landed before this push. Set
+   "blamed_commit" to null when no commit is to blame -- it is infrastructure, a
+   toolchain or fetch problem -- or you cannot tell which earlier commit it was,
+   rather than naming the least implausible one.
 """
 
 BUG_CONTEXT = "\nThe commit attempted to fix Bugzilla bug {bug_id}.\n"
@@ -127,7 +147,7 @@ Read your earlier analysis and implement the fix directly in the source tree:
 2. {scratch_out}/planning.md -- your fixing plan
 
 Edit the source files in {source_repo} (your working directory) to repair the build.
-Editing: use Edit on a file that already exists -- Write refuses until the file has
+{blame_note}Editing: use Edit on a file that already exists -- Write refuses until the file has
 been read, which costs a turn. To see how a commit handled comparable files, run
 `git show <sha> -- <dir>` rather than guessing a sibling's name.
 
@@ -144,7 +164,7 @@ fast, focused build -- prefer this over a full tree build. If the build reports 
 missing toolchain (e.g. rustc or clang), run the bootstrap_firefox tool once and
 then build again. Verify via the build_firefox tool rather than a raw `./mach
 build` so the build result is recorded.
-{try_push}
+{try_push}{report}
 
 Do not prompt to edit files. Work fully autonomously, do not ask any questions.
 Use all allowed tools without prompting.
@@ -153,4 +173,27 @@ Use all allowed tools without prompting.
 TRY_PUSH_INSTRUCTIONS = """
 Once the fix builds locally, validate it on CI: call the submit_try_push tool with the
 failing task name ('{task_name}') to push to the try server and report the build result.
+"""
+
+BLAME_NOTE = """\
+Commit {blamed_commit} broke the build{tree}. Sheriffs back it out, so the fix is for
+its author to fold into that commit and reland: write it as a change to that commit,
+not a follow-up on top of it.
+"""
+
+TREE_AT_BLAME = " and the tree is checked out at it"
+
+PARENT_REVISION_ARG = (
+    " parent_revision_id={revision} (the busted commit's own revision, D{revision}),"
+)
+
+REPORT_INSTRUCTIONS = """
+Once the build is verified, submit the fix with the `phabricator_submit_patch`
+action: bug_id={bug_id},{parent} a title of the form "Bug {bug_id} - <what the fix
+does>", and a summary naming the busted commit, the failing task and the root cause
+and saying the fix is for the author to fold into that commit and reland. The test
+plan says what you built and that it ran locally on Linux only; when the failing
+task is for another platform, say the local build does not show the fix builds there.
+If the fix does not build, or you are not confident in it, record nothing and say
+so in your final message.
 """

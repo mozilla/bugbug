@@ -18,24 +18,31 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 ACTION_TYPE = "slack.post_message"
 HACKBOT_UI_URL = "https://hackbot.moz.tools"
 
 
 def _params(
-    channel: str, text: str | None, blocks: list[dict] | None = None
-) -> dict[str, str | list[dict]]:
+    channel: str,
+    text: str | None,
+    blocks: list[dict] | None = None,
+    unfurl: bool = False,
+) -> dict[str, str | bool | list[dict]]:
     if not channel:
         raise ToolError("channel must not be blank")
     if not text and not blocks:
         raise ToolError("either 'text' or 'blocks' must be provided")
 
-    params: dict[str, str | list[dict]] = {"channel": channel, "text": text}
+    params: dict[str, str | bool | list[dict]] = {"channel": channel, "text": text}
 
     if blocks:
         params["blocks"] = blocks
+
+    if unfurl:
+        params["unfurl_links"] = True
+        params["unfurl_media"] = True
 
     return params
 
@@ -70,8 +77,8 @@ async def post_message(
 
     Recorded into the run summary for human review -- does not post to Slack.
     """
-    recorder.record(ACTION_TYPE, _params(channel, text), reasoning=reasoning)
-    return f"Recorded {ACTION_TYPE} (#{len(recorder.actions) - 1})."
+    action = recorder.record(ACTION_TYPE, _params(channel, text), reasoning=reasoning)
+    return confirmation(action)
 
 
 def record_message(
@@ -81,13 +88,17 @@ def record_message(
     blocks: list[dict] | None = None,
     *,
     ref: str | None = None,
+    unfurl: bool = False,
 ) -> dict:
     """Record a notification the agent was never asked to decide on.
 
     For a run whose outcome is always worth reporting: the wording is code, not
     a model turn, and the message is recorded once the result exists.
+
+    ``unfurl`` turns Slack's previews back on, recorded as its link and media
+    flags separately.
     """
-    return recorder.record(ACTION_TYPE, _params(channel, text, blocks), ref=ref)
+    return recorder.record(ACTION_TYPE, _params(channel, text, blocks, unfurl), ref=ref)
 
 
 TOOLS = tools_in(__name__)

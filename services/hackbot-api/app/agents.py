@@ -13,6 +13,7 @@ from app.schemas import (
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
+    UpliftInputs,
 )
 
 # Shared run fields are not forwarded to the agent environment.
@@ -38,6 +39,14 @@ class AgentSpec:
     # was; this is where that verdict is honored. Fails closed, so a run that reports
     # no verdict never qualifies.
     auto_apply_requires_consent: bool = False
+    # Per-action overrides for the agent-level auto-apply policy.
+    always_apply_actions: frozenset[str] = frozenset()
+    never_apply_actions: frozenset[str] = frozenset()
+    # Whether a successful run is expected to deliver its result as recorded actions.
+    # When set, a run that records none, or leaves a patch without a patch action, is
+    # reported as an error. Agents that may legitimately finish without acting (or
+    # without Phabricator submission tools) must not set it.
+    expects_actions: bool = False
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -70,6 +79,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-bug-fix",
         input_schema=BugFixInputs,
         auto_apply_actions=True,
+        expects_actions=True,
     ),
     "autowebcompat-repro": AgentSpec(
         name="autowebcompat-repro",
@@ -95,6 +105,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Analyze a Firefox build failure at a specific commit and produce a candidate fix patch.",
         job_name="hackbot-agent-build-repair",
         input_schema=BuildRepairInputs,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send"}),
     ),
     "frontend-triage": AgentSpec(
         name="frontend-triage",
@@ -119,7 +131,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
-        auto_apply_actions=True,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send", "slack.post_message"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",
@@ -129,5 +142,15 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-plan-generator",
         input_schema=TestPlanGeneratorInputs,
+    ),
+    "uplift-resolve": AgentSpec(
+        name="uplift-resolve",
+        description=(
+            "Resolve the merge conflicts from cherry-picking patches (git commits "
+            "and/or Phabricator revisions) onto a stable uplift branch, and return "
+            "the resolved patch with a confidence level for human review."
+        ),
+        job_name="hackbot-agent-uplift-resolve",
+        input_schema=UpliftInputs,
     ),
 }

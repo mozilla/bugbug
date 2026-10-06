@@ -10,6 +10,7 @@ import orjson
 import pytest
 import zstandard
 
+from bugbug.models import testselect
 from bugbug_http import models
 
 
@@ -98,12 +99,65 @@ def test_simple_schedule(
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
-    assert len(result) == 6
+    assert len(result) == 7
     assert result["tasks"] == labels_to_choose
     assert result["groups"] == groups_to_choose
     assert result["reduced_tasks"] == reduced_labels
     assert result["reduced_tasks_higher"] == reduced_labels
     assert result["known_tasks"] == ["prova"]
+    # The mock models don't have confidence thresholds.
+    assert result["confidence_thresholds"] == {}
     assert {k: set(v) for k, v in result["config_groups"].items()} == {
         k: set(v) for k, v in config_groups.items()
     }
+
+
+def test_schedule_with_confidence_thresholds(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+
+    mock_schedule_tests_classify(
+        {"test-linux1804-64-opt-label1": 0.9, "test-linux1804-64-opt-label2": 0.35},
+        {"test-group1": 0.35, "test-group2": 0.2},
+    )
+
+    thresholds = {
+        "tasks": {"low": 0.3, "medium": 0.4, "high": 0.95},
+        "groups": {"low": 0.3, "medium": 0.5, "high": 0.7},
+    }
+
+    class ModelCache:
+        def get(self, model_name):
+            if "group" in model_name:
+                model = testselect.TestGroupSelectModel()
+                model.confidence_thresholds = thresholds["groups"]
+            else:
+                model = testselect.TestLabelSelectModel()
+                model.confidence_thresholds = thresholds["tasks"]
+            return model
+
+    monkeypatch.setattr(models, "MODEL_CACHE", ModelCache())
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["confidence_thresholds"] == thresholds
+    # Runnables are returned down to the lowest threshold, rather than 0.5.
+    assert result["tasks"] == {
+        "test-linux1804-64-opt-label1": 0.9,
+        "test-linux1804-64-opt-label2": 0.35,
+    }
+    assert result["groups"] == {"test-group1": 0.35}
+    # The reduced tasks use the medium and high thresholds.
+    assert result["reduced_tasks"] == {"test-linux1804-64-opt-label1": 0.9}
+    assert result["reduced_tasks_higher"] == {}

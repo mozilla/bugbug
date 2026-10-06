@@ -15,6 +15,7 @@ from hackbot_runtime.changes import (
     _synthetic_commit,
     build_phabricator_diff,
     build_try_push,
+    has_changes,
 )
 
 
@@ -208,3 +209,34 @@ def test_build_try_push_rejects_abbreviated_base(tmp_path):
     # Lando needs a full published hash; a short one would fail server-side with
     # a far less obvious error.
     assert build_try_push(tmp_path, base[:12]) is None
+
+
+# --- has_changes ------------------------------------------------------- #
+
+
+def test_has_changes_sees_an_uncommitted_edit(tmp_path):
+    base = _init_repo(tmp_path)
+    (tmp_path / "file.txt").write_text("line1\nline2 edited\nline3\n")
+    assert has_changes(tmp_path, base) is True
+
+
+def test_has_changes_sees_a_commit(tmp_path):
+    base = _init_repo(tmp_path)
+    _commit_change(tmp_path, "line1\nline2 committed\nline3\n")
+    assert has_changes(tmp_path, base) is True
+
+
+def test_has_changes_is_false_for_an_untouched_tree(tmp_path):
+    base = _init_repo(tmp_path)
+    assert has_changes(tmp_path, base) is False
+
+
+def test_has_changes_leaves_the_tree_and_index_alone(tmp_path):
+    base = _init_repo(tmp_path)
+    (tmp_path / "new.txt").write_text("brand new\n")
+    before = _git(tmp_path, "status", "--porcelain")
+
+    assert has_changes(tmp_path, base) is True
+
+    assert _git(tmp_path, "status", "--porcelain") == before
+    assert _git(tmp_path, "rev-parse", "HEAD").strip() == base

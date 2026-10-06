@@ -35,6 +35,7 @@ class AgentInputs(BaseSettings):
         | Literal["max"]
         | None
     ) = None
+    headless: bool = False
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -66,6 +67,7 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
             effort=inputs.effort,
             log=ctx.log_path,
             verbose=True,
+            headless=inputs.headless,
         ),
         tracker,
         input_data,

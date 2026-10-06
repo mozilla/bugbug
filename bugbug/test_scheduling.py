@@ -3,12 +3,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import bisect
 import collections
 import glob
 import itertools
 import logging
 import os
 import pickle
+import random
 import re
 import shelve
 import shutil
@@ -24,6 +26,7 @@ from typing import (
     Iterable,
     Iterator,
     NewType,
+    Sequence,
     Set,
     Union,
     cast,
@@ -127,6 +130,16 @@ JOBS_TO_IGNORE = (
 )
 
 
+# Manifests of suites which are scheduled as whole tasks rather than by manifest
+# (e.g. jsreftest, whose tasks are in JOBS_TO_IGNORE).
+GROUPS_TO_IGNORE = ("jstests.list",)
+
+
+def is_ignored_group(runnable: Runnable) -> bool:
+    group = runnable[1] if isinstance(runnable, tuple) else runnable
+    return os.path.basename(group) in GROUPS_TO_IGNORE
+
+
 class UnexpectedGranularityError(ValueError):
     def __init__(self, granularity):
         message = f"Unexpected {granularity} granularity"
@@ -146,7 +159,11 @@ def filter_runnables(
             and not any(j in task for j in JOBS_TO_IGNORE)
         )
     else:
-        return tuple(runnable for runnable in runnables if runnable in all_runnables)
+        return tuple(
+            runnable
+            for runnable in runnables
+            if runnable in all_runnables and not is_ignored_group(runnable)
+        )
 
 
 def rename_task(task: str) -> str:
@@ -326,7 +343,9 @@ class PastFailures:
         elif granularity == "group":
             past_failures_db = os.path.join("data", PAST_FAILURES_GROUP_DB)
         elif granularity == "config_group":
-            assert False, "config_group granularity not supported for past failures"
+            raise AssertionError(
+                "config_group granularity not supported for past failures"
+            )
         else:
             raise UnexpectedGranularityError(granularity)
         self.granularity = granularity
@@ -452,7 +471,7 @@ def generate_failing_together_probabilities(
 
     for (
         revisions,
-        fix_revision,
+        _fix_revision,
         tasks,
         likely_regressions,
         candidate_regressions,
@@ -471,7 +490,7 @@ def generate_failing_together_probabilities(
             groups = itertools.groupby(
                 sorted(all_tasks, key=lambda x: x[1]), key=lambda x: x[1]
             )
-            for manifest, group_tasks in groups:
+            for _manifest, group_tasks in groups:
                 count_runs_and_failures(group_tasks)
         else:
             all_available_configs |= all_tasks_set
@@ -755,6 +774,68 @@ def _read_and_update_past_failures(
     )
 
 
+WPT_ROOTS = ("testing/web-platform/mozilla", "testing/web-platform")
+
+
+# How many pushes after a push we look for a later run of a runnable that didn't run on it.
+NON_RUN_NEGATIVES_MAX_LATER = 100
+
+
+def index_runs(
+    push_data: Iterable[PushResult],
+) -> tuple[dict[Runnable, list[int]], dict[Revision, int]]:
+    """Map each runnable to the (sorted) indices of the pushes it ran on, and each revision to its push index."""
+    runs: dict[Runnable, list[int]] = collections.defaultdict(list)
+    rev_to_push: dict[Revision, int] = {}
+    for i, (revisions, _, push_runnables, _, _) in enumerate(push_data):
+        for revision in revisions:
+            rev_to_push[revision] = i
+        for runnable in push_runnables:
+            runs[runnable].append(i)
+    return runs, rev_to_push
+
+
+def get_non_run_negatives(
+    push_index: int,
+    end_index: int,
+    candidates: Sequence[Runnable],
+    excluded: Set[Runnable],
+    runs: dict[Runnable, list[int]],
+    count: int,
+    rng: random.Random,
+) -> list[Runnable]:
+    """Sample runnables that didn't run on a push but are known to have passed with its changes.
+
+    A runnable that didn't run on the push is a verified negative if it ran on a later push while the
+    push's changes were still in the tree (up to `end_index`, i.e. before the push was backed out), since
+    a failure there would have been attributed to the push as a regression.
+    """
+    pool = [c for c in candidates if c not in excluded]
+    sampled = rng.sample(pool, min(count, len(pool)))
+    verified = []
+    for runnable in sampled:
+        push_indices = runs.get(runnable, [])
+        pos = bisect.bisect_right(push_indices, push_index)
+        if pos < len(push_indices) and push_indices[pos] <= end_index:
+            verified.append(runnable)
+    return verified
+
+
+def get_runnable_dirs(group: str) -> tuple[str, ...]:
+    """Return the directories whose co-changes are relevant for a group.
+
+    Manifest groups are files, so their tests are in the manifest's directory.
+    WPT groups are the directories containing the tests, and their expectations
+    live in the corresponding directory under meta/ (which is what usually
+    changes together with Gecko code, as tests mostly come from upstream).
+    """
+    for root in WPT_ROOTS:
+        if group.startswith(f"{root}/tests/"):
+            return (group, f"{root}/meta/{group[len(root) + len('/tests/') :]}")
+
+    return (os.path.dirname(group),)
+
+
 def generate_data(
     granularity: str,
     past_failures: PastFailures,
@@ -771,18 +852,19 @@ def generate_data(
 
     for runnable in runnables:
         if granularity != "label":
-            if isinstance(runnable, tuple):
-                runnable_dir = os.path.dirname(runnable[1])
-            else:
-                runnable_dir = os.path.dirname(runnable)
+            runnable_dirs = get_runnable_dirs(
+                runnable[1] if isinstance(runnable, tuple) else runnable
+            )
 
             touched_together_files = sum(
                 get_touched_together(source_file, runnable_dir)
                 for source_file in commit["files"]
+                for runnable_dir in runnable_dirs
             )
             touched_together_directories = sum(
                 get_touched_together(source_file_dir, runnable_dir)
                 for source_file_dir in source_file_dirs
+                for runnable_dir in runnable_dirs
             )
 
         is_possible_regression = runnable in possible_regressions
@@ -914,6 +996,11 @@ def get_test_info(date: datetime) -> dict[str, Any]:
 
 manifest_by_path: dict[str, set[str]] | None = None
 
+# If a modified file is close to more manifests than this, it is too broad
+# (e.g. dom/moz.build) for the sibling heuristic to be informative, so we
+# don't schedule any of them and leave the decision to the model.
+MAX_SIBLING_MANIFESTS = 42
+
 
 def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
     global manifest_by_path
@@ -964,7 +1051,7 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                 ].add(str(toml_rel))
 
             # Collect support files.
-            def collect_support_files(value):
+            def collect_support_files(value, toml_dir=toml_dir, toml_rel=toml_rel):
                 support_files = value.get("support-files", [])
                 if isinstance(support_files, str):
                     support_files = [support_files]
@@ -1009,15 +1096,21 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
         # If a manifest, a test, or a support file is modified, run the manifest that includes it.
         if path in manifest_by_path:
             manifests.update(manifest_by_path[path])
-        else:
+        # Skip root-level files, otherwise we'd walk the whole repository and
+        # schedule every manifest.
+        elif (repo_dir / path).parent != repo_dir:
             # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
+            sibling_manifests: set[str] = set()
             for sibling in (repo_dir / path).parent.rglob("*"):
                 if sibling.is_dir() and repository.is_test(f"{str(sibling)}/"):
-                    manifests.update(
+                    sibling_manifests.update(
                         str(f.relative_to(repo_dir))
                         for f in sibling.rglob("*.toml")
                         if f.is_file()
                     )
+
+            if len(sibling_manifests) <= MAX_SIBLING_MANIFESTS:
+                manifests.update(sibling_manifests)
 
         # If a web-platform test or meta is modified, run the relevant web-platform folder.
         if not any(path.endswith(ignore) for ignore in ("/META.yml", "/README.md")):
@@ -1101,6 +1194,10 @@ def find_tasks_for_paths(
     # Any file in a folder close to a gtest folder is modified (e.g. dom/media/CubebUtils.cpp and we have dom/media/gtest/).
     if not select_gtest:
         for path in paths:
+            # Skip root-level files, otherwise we'd walk the whole repository.
+            if (repo_dir / path).parent == repo_dir:
+                continue
+
             for sibling in (repo_dir / path).parent.rglob("*"):
                 if sibling.is_dir() and any(
                     part in _GTEST_FOLDERS for part in sibling.parts

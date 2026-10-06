@@ -30,10 +30,13 @@ from rq.job import Job
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from bugbug import bugzilla, get_bugbug_version, utils
+from bugbug.model import CommentModel
+from bugbug.models import get_model_class
 from bugbug_http.models import (
     MODELS_NAMES,
     classify_broken_site_report,
     classify_bug,
+    classify_comment,
     classify_issue,
     get_config_specific_groups,
     schedule_tests,
@@ -243,6 +246,24 @@ def create_bug_classification_jobs(
     )
 
 
+def create_comment_classification_jobs(
+    model_name: str, comment_ids: Sequence[int]
+) -> tuple[JobInfo, str, int]:
+    job_id = get_job_id()
+    redis_conn.mset(
+        {
+            JobInfo(classify_comment, model_name, comment_id).mapping_key: job_id
+            for comment_id in comment_ids
+        }
+    )
+
+    return (
+        JobInfo(classify_comment, model_name, comment_ids, BUGZILLA_TOKEN),
+        job_id,
+        BUGZILLA_JOB_TIMEOUT,
+    )
+
+
 def create_broken_site_report_classification_jobs(
     model_name: str, reports: list[dict]
 ) -> tuple[JobInfo, str, int]:
@@ -349,6 +370,20 @@ def get_bugs_last_change_time(bug_ids):
         Bugzilla.BUGZILLA_CHUNK_SIZE = old_CHUNK_SIZE
 
     return bugs
+
+
+def get_comments_last_change_time(comment_ids: Sequence[int]) -> dict[int, str]:
+    bugzilla.set_token(BUGZILLA_TOKEN)
+    return {
+        comment_id: bug["last_change_time"]
+        for comment_id, (bug, _) in bugzilla.get_comments(comment_ids).items()
+    }
+
+
+def is_comment_model(model_name: str) -> bool:
+    return model_name in MODELS_NAMES and issubclass(
+        get_model_class(model_name), CommentModel
+    )
 
 
 def get_github_issues_update_time(
@@ -772,6 +807,96 @@ def batch_prediction(model_name):
     q.enqueue_many(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
+
+
+@application.route("/<model_name>/predict/comment/<int:comment_id>")
+@cross_origin()
+def comment_prediction(model_name: str, comment_id: int):
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if not is_comment_model(model_name):
+        return jsonify({"error": f"Model {model_name} is not a comment model"}), 404
+
+    job = JobInfo(classify_comment, model_name, comment_id)
+    change_time = get_comments_last_change_time([comment_id]).get(comment_id)
+    if change_time is None:
+        clean_prediction_cache(job)
+        return compress_response({"available": False}, 200)
+
+    if is_prediction_invalidated(job, change_time):
+        clean_prediction_cache(job)
+
+    data = get_result(job)
+    status_code = 200
+    if not data:
+        if not is_pending(job):
+            job_info, job_id, timeout = create_comment_classification_jobs(
+                model_name, [comment_id]
+            )
+            schedule_job(job_info, job_id=job_id, timeout=timeout)
+        data = {"ready": False}
+        status_code = 202
+
+    return compress_response(data, status_code)
+
+
+@application.route("/<model_name>/predict/comment/batch", methods=["POST"])
+@cross_origin()
+def batch_comment_prediction(model_name: str):
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if not is_comment_model(model_name):
+        return jsonify({"error": f"Model {model_name} is not a comment model"}), 404
+
+    batch_body = orjson.loads(request.data)
+    validator = Validator()
+    if not validator.validate(
+        batch_body,
+        {
+            "comments": {
+                "type": "list",
+                "minlength": 1,
+                "schema": {"type": "integer"},
+            }
+        },
+    ):
+        return jsonify({"errors": validator.errors}), 400
+
+    comment_ids = batch_body["comments"]
+    change_times = get_comments_last_change_time(comment_ids)
+    data = {}
+    missing_comments = []
+    status_code = 200
+
+    for comment_id in comment_ids:
+        job = JobInfo(classify_comment, model_name, comment_id)
+        change_time = change_times.get(comment_id)
+        if change_time is not None:
+            if is_prediction_invalidated(job, change_time):
+                clean_prediction_cache(job)
+
+            data[str(comment_id)] = get_result(job)
+            if not data[str(comment_id)]:
+                if not is_pending(job):
+                    missing_comments.append(comment_id)
+                data[str(comment_id)] = {"ready": False}
+                status_code = 202
+            continue
+
+        clean_prediction_cache(job)
+        data[str(comment_id)] = {"available": False}
+
+    queue_jobs: list[Queue] = []
+    for comment_ids_batch in itertools.batched(missing_comments, 100):
+        job_info, job_id, timeout = create_comment_classification_jobs(
+            model_name, comment_ids_batch
+        )
+        queue_jobs.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
+    q.enqueue_many(queue_jobs)
+
+    return compress_response({"comments": data}, status_code)
 
 
 @application.route("/<model_name>/predict/broken_site_report/batch", methods=["POST"])

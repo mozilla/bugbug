@@ -27,6 +27,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PORT=8080
 ENV PATH="/opt/venv/bin:$PATH"
 
+ARG SENTRY_RELEASE
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
+
 RUN useradd --create-home --shell /bin/bash app
 USER app
 

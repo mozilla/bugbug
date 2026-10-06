@@ -96,7 +96,7 @@ def classification_report_imbalanced_values(
 
     result = {"targets": {}}
 
-    for i, label in enumerate(labels):
+    for i in range(len(labels)):
         result["targets"][target_names[i]] = {
             "precision": precision[i],
             "recall": recall[i],
@@ -345,7 +345,7 @@ class Model:
         feature_report = {"classes": {}, "average": {}}
         top_feature_names = []
 
-        for importance, index, is_pos in important_features["average"]:
+        for importance, index, _is_pos in important_features["average"]:
             feature_name = feature_names[int(index)]
 
             top_feature_names.append(feature_name)
@@ -365,6 +365,17 @@ class Model:
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
+
+    def get_sample_weights(self, y) -> np.ndarray | None:
+        """Subclasses can return a weight for each training sample, passed to the estimator."""
+        return None
+
+    def fit_classifier(self, X, y):
+        sample_weight = self.get_sample_weights(y)
+        if sample_weight is None:
+            self.clf.fit(X, y)
+        else:
+            self.clf.fit(X, y, estimator__sample_weight=sample_weight)
 
     def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
@@ -425,7 +436,7 @@ class Model:
         logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
         logger.info("X_test: %s, y_test: %s", X_test.shape, y_test.shape)
 
-        self.clf.fit(X_train, self.le.transform(y_train))
+        self.fit_classifier(X_train, self.le.transform(y_train))
         logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
 
         logger.info("Model trained")
@@ -594,7 +605,7 @@ class Model:
 
             logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
-            self.clf.fit(X_train, self.le.transform(y_train))
+            self.fit_classifier(X_train, self.le.transform(y_train))
 
         model_directory = self.__class__.__name__.lower()
         makedirs(model_directory, exist_ok=True)
@@ -816,3 +827,18 @@ class IssueModel(Model):
                 continue
 
             yield issue, classes[issue_number]
+
+
+class CommentModel(Model):
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
+        self.training_dbs = [bugzilla.BUGS_DB]
+
+    def items_gen(self, classes):
+        for bug in bugzilla.get_bugs():
+            for comment in bug["comments"]:
+                comment_id = comment["id"]
+                if comment_id not in classes:
+                    continue
+
+                yield (bug, comment), classes[comment_id]

@@ -47,6 +47,9 @@ RUN apt-get update \
         fonts-liberation \
         # Codecs and audio/video related dependencies
         ffmpeg \
+        # Window manager and display backend
+        fluxbox \
+        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the DevTools MCP servers and Puppeteer from the pinned
@@ -64,6 +67,11 @@ COPY agents/autowebcompat-repro/hackbot.toml /app/hackbot.toml
 RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace /app/repro
+
+ENV SCREEN_WIDTH=1280
+ENV SCREEN_HEIGHT=1024
+ENV SCREEN_DEPTH=24
+ENV DISPLAY=:99.0
 
 USER agent
 

@@ -3,19 +3,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Resolve a Taskcluster build-failure task into the commits to repair.
+"""Resolve a Taskcluster build-failure task into the push to repair.
 
 Given a failing build task id, look up its push: the failure (head) commit the
 tree is checked out at, plus the other commits that landed in the same push so
 the agent can blame the one that broke the build. Uses the same public
 Taskcluster / lando / pushlog lookups the pulse listener does, so the agent
-derives the commits itself from a task id.
+derives everything it reports from a task id.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 
 import requests
 
@@ -36,6 +37,10 @@ _REPO_PATHS = {
 _HEADERS = {"User-Agent": "hackbot-build-repair/1.0"}
 _TIMEOUT = 30
 
+# Every Firefox commit message opens with the bug it landed ("Bug 123 - ..."),
+# which is where a run gets its bug: it is never an input.
+_BUG_RE = re.compile(r"^Bug (\d+)", re.IGNORECASE)
+
 
 def _get_json(url: str) -> dict:
     resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
@@ -43,25 +48,46 @@ def _get_json(url: str) -> dict:
     return resp.json()
 
 
+def _task(task_id: str) -> dict:
+    return _get_json(_TC_TASK_URL.format(task_id=task_id))
+
+
+def _task_push(task: dict) -> tuple[str | None, str | None]:
+    tags = task.get("tags") or {}
+    return (
+        tags.get("project"),
+        (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV"),
+    )
+
+
 def _hg_to_git(rev: str) -> str:
     return _get_json(_LANDO_HG2GIT.format(rev=rev))["git_hash"]
 
 
-def _push_git_commits(project: str, rev: str) -> list[str]:
-    """Git hashes of the push that landed ``rev`` (pushlog order, oldest first).
+def _bug_from_desc(desc: str) -> int | None:
+    """The bug a changeset landed for, from the first line of its description."""
+    match = _BUG_RE.match(desc.strip())
+    return int(match.group(1)) if match else None
+
+
+def _push_git_commits(project: str, rev: str) -> tuple[list[str], dict[str, int]]:
+    """The push that landed ``rev`` (pushlog order, oldest first) and its bugs.
 
     The pushlog exposes a ``git_changesets`` array parallel to ``changesets``;
-    when a git hash is missing we map that changeset via lando.
+    when a git hash is missing we map that changeset via lando. ``full=1`` also
+    returns each changeset's ``desc``, which is what names the bug, so no extra
+    request is needed to pair the two.
     """
     path = _REPO_PATHS.get(project, project)
     url = f"{_HG_BASE}/{path}/json-pushes?changeset={rev}&full=1&version=2"
     pushes = _get_json(url).get("pushes") or {}
     push = next(iter(pushes.values()), None)
     if not push:
-        return []
+        return [], {}
     git_changesets = push.get("git_changesets") or []
     changesets = push.get("changesets") or []
     commits = []
+    bugs: dict[str, int] = {}
     for i, cs in enumerate(changesets):
         git_commit = git_changesets[i] if i < len(git_changesets) else None
         if not git_commit:
@@ -69,7 +95,10 @@ def _push_git_commits(project: str, rev: str) -> list[str]:
             git_commit = _hg_to_git(node) if node else None
         if git_commit:
             commits.append(git_commit)
-    return commits
+            bug_id = _bug_from_desc(cs.get("desc", "") if isinstance(cs, dict) else "")
+            if bug_id is not None:
+                bugs[git_commit] = bug_id
+    return commits, bugs
 
 
 @dataclass(frozen=True)
@@ -83,16 +112,16 @@ class PushInfo:
     project: str | None
     hg_revision: str | None
     git_commits: list[str]
+    # ``createdForUser``: who pushed the change that failed to build.
+    developer_email: str | None = None
+    # Each push commit mapped to the bug it landed for, from its pushlog
+    # description. A run is never told which bug a failure belongs to.
+    commit_bugs: dict[str, int] = field(default_factory=dict)
 
 
 def task_push(task_id: str) -> tuple[str | None, str | None]:
     """The ``(project, hg_revision)`` a task ran on; what Treeherder is keyed on."""
-    task = _get_json(_TC_TASK_URL.format(task_id=task_id))
-    tags = task.get("tags") or {}
-    return (
-        tags.get("project"),
-        (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV"),
-    )
+    return _task_push(_task(task_id))
 
 
 def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
@@ -102,9 +131,12 @@ def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
     task is still fetched for its revision. Raises on network errors or when the
     failure commit cannot be determined.
     """
-    project, hg_rev = task_push(task_id)
+    task = _task(task_id)
+    project, hg_rev = _task_push(task)
 
-    push = _push_git_commits(project, hg_rev) if hg_rev and project else []
+    push, commit_bugs = (
+        _push_git_commits(project, hg_rev) if hg_rev and project else ([], {})
+    )
 
     failure_commit = git_commit
     if not failure_commit:
@@ -118,4 +150,6 @@ def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
         project=project,
         hg_revision=hg_rev,
         git_commits=[failure_commit] + [c for c in push if c != failure_commit],
+        developer_email=(task.get("tags") or {}).get("createdForUser"),
+        commit_bugs=commit_bugs,
     )

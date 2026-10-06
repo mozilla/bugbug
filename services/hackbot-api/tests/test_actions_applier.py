@@ -79,7 +79,7 @@ class _FakeRun:
     inputs: dict = field(default_factory=dict)
 
 
-def _spec(*, auto=True, consent=False):
+def _spec(*, auto=True, consent=False, always=frozenset(), never=frozenset()):
     """A real `AgentSpec` built with `replace` off a registry entry.
 
     Every field then takes its production default, so a field added later can't read
@@ -90,11 +90,22 @@ def _spec(*, auto=True, consent=False):
         AGENT_REGISTRY["bug-fix"],
         auto_apply_actions=auto,
         auto_apply_requires_consent=consent,
+        always_apply_actions=always,
+        never_apply_actions=never,
     )
 
 
 def _auto_applies(spec, run, require_review=False):
     return actions_applier._auto_apply_blocker(spec, run, require_review) is None
+
+
+def _action_auto_applies(spec, run, action_type, require_review=False):
+    run_level_auto_apply = (
+        actions_applier._auto_apply_blocker(spec, run, require_review) is None
+    )
+    return actions_applier._should_auto_apply(
+        spec, action_type, run_level_auto_apply=run_level_auto_apply
+    )
 
 
 def _run_with_findings(**findings):
@@ -138,6 +149,45 @@ def test_only_an_explicit_request_holds_actions():
 def test_agent_policy_still_gates_a_run_with_no_flag():
     run = _run_with_findings(auto_apply=True)
     assert not _auto_applies(_spec(auto=False), run, None)
+
+
+def test_always_apply_action_overrides_agent_default():
+    action_type = "slack.post_message"
+    spec = _spec(auto=False, always=frozenset({action_type}))
+    assert _action_auto_applies(spec, _run_with_findings(), action_type)
+
+
+def test_always_apply_action_overrides_missing_consent():
+    action_type = "slack.post_message"
+    spec = _spec(auto=True, consent=True, always=frozenset({action_type}))
+    assert _action_auto_applies(spec, _run_with_findings(auto_apply=False), action_type)
+
+
+def test_never_apply_action_overrides_agent_default():
+    action_type = "slack.post_message"
+    spec = _spec(auto=True, never=frozenset({action_type}))
+    assert not _action_auto_applies(spec, _run_with_findings(), action_type)
+
+
+def test_action_without_override_uses_agent_default():
+    spec = _spec(
+        auto=False,
+        always=frozenset({"slack.post_message"}),
+    )
+    assert not _action_auto_applies(spec, _run_with_findings(), "bugzilla.add_comment")
+
+
+def test_always_apply_action_overrides_review_request():
+    action_type = "email.send"
+    spec = _spec(auto=False, always=frozenset({action_type}))
+    assert _action_auto_applies(spec, _run_with_findings(), action_type, True)
+
+
+def test_review_request_holds_actions_without_override():
+    spec = _spec(always=frozenset({"email.send"}))
+    assert not _action_auto_applies(
+        spec, _run_with_findings(), "bugzilla.add_comment", True
+    )
 
 
 # --- the run's own verdict ----------------------------------------------- #
@@ -184,18 +234,18 @@ def test_the_real_frontend_triage_spec_asks_for_consent():
 
 
 def test_which_agents_auto_apply_without_asking_for_consent():
-    # `bug-fix` and `test-repair` auto-apply whatever they record, and the apply step
-    # dispatches against the runtime's *global* handler registry — creating bugs,
-    # attaching files, submitting Phabricator patches. Both predate this change, and
-    # bounding them is a decision about those agents, so this records the gap rather
-    # than closing it. Failing here means a new agent opted in without bounding what
-    # it records.
+    # `bug-fix` auto-applies whatever it records, and the apply step dispatches
+    # against hackbot-api's *global* handler registry — creating bugs, attaching
+    # files, submitting Phabricator patches. It predates this change, and bounding
+    # it is a decision about that agent, so this records the gap rather than
+    # closing it. Failing here means a new agent opted in without bounding what it
+    # records.
     unbounded = {
         name
         for name, spec in AGENT_REGISTRY.items()
         if spec.auto_apply_actions and not spec.auto_apply_requires_consent
     }
-    assert unbounded == {"bug-fix", "test-repair"}
+    assert unbounded == {"bug-fix"}
 
 
 class _FakeDB:
@@ -220,7 +270,7 @@ def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
 
     async def fake_ensure(db, run):
         calls["ensured"] = True
-        return [("row", [])]
+        return [(SimpleNamespace(type="bugzilla.add_comment"), [])]
 
     async def fake_apply(db, run, rows):
         calls["applied"] = True
@@ -274,12 +324,43 @@ async def test_succeeded_unvouched_run_records_but_does_not_apply(monkeypatch):
     assert calls == {"ensured": True, "applied": False}
 
 
+async def test_succeeded_run_only_applies_eligible_action_types(monkeypatch):
+    rows = [
+        (SimpleNamespace(type="bugzilla.update_bug"), []),
+        (SimpleNamespace(type="bugzilla.add_comment"), []),
+    ]
+    applied_types = []
+
+    async def fake_ensure(db, run):
+        return rows
+
+    async def fake_apply(db, run, selected_rows):
+        applied_types.extend(row.type for row, _ in selected_rows)
+
+    spec = _spec(
+        auto=True,
+        never=frozenset({"bugzilla.add_comment"}),
+    )
+    monkeypatch.setattr(actions_applier, "ensure_action_rows", fake_ensure)
+    monkeypatch.setattr(actions_applier, "_apply_pending_rows", fake_apply)
+    monkeypatch.setattr(actions_applier, "AGENT_REGISTRY", {"bug-fix": spec})
+
+    await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value), False)
+
+    assert applied_types == ["bugzilla.update_bug"]
+
+
 async def test_other_agents_do_not_auto_apply():
-    # Opting an agent in is a deliberate edit, so spell out who is in today:
-    # bug-fix and test-repair auto-apply unconditionally, frontend-triage only when
-    # the run vouched for itself, and everyone else stays human-gated.
+    # Opting an agent in is a deliberate edit, so spell out who is in today: bug-fix
+    # auto-applies unconditionally, frontend-triage only when the run vouched for
+    # itself, build-repair and test-repair only their notifications, and everyone
+    # else stays human-gated.
     auto_apply = {n for n, s in AGENT_REGISTRY.items() if s.auto_apply_actions}
-    assert auto_apply == {"bug-fix", "frontend-triage", "test-repair"}
+    assert auto_apply == {"bug-fix", "frontend-triage"}
+    assert AGENT_REGISTRY["test-repair"].always_apply_actions == {
+        "email.send",
+        "slack.post_message",
+    }
 
 
 async def test_apply_all_pending_always_applies(monkeypatch):
@@ -634,3 +715,10 @@ async def test_comment_and_needinfo_clear_coalesce_into_one_update(monkeypatch):
     ]
     assert comment.status == "applied"
     assert clear.status == "applied"
+
+
+def test_build_repair_mails_unattended_but_holds_the_revision():
+    spec = AGENT_REGISTRY["build-repair"]
+    run = _run_with_findings()
+    assert _action_auto_applies(spec, run, "email.send")
+    assert not _action_auto_applies(spec, run, "phabricator.submit_patch")

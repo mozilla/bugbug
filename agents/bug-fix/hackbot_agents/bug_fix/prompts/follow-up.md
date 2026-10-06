@@ -8,6 +8,8 @@ Respond only to the comments quoted below. Ignore any earlier mentions of you el
 
 A quoted comment rarely stands alone: an inline one only makes sense next to the code it sits on. Before acting, use the `phabricator` tools to read D{revision_id} and its thread, and to locate the comment context so you can understand it. Your tree is at the revision's latest diff, so a comment on an older `diff_id` may point at code that has since changed.
 
+The working tree starts with D{revision_id}'s latest diff applied as uncommitted changes on top of its base commit. These initial changes belong to the existing revision, not this run.
+
 Then address each quoted comment by taking the matching path:
 
 - If it requests a code change (a fix, tweak, or follow-up to the patch): make the necessary source changes, verify them, and call phabricator_update_patch with revision_id={revision_id} so the existing revision D{revision_id} is updated.

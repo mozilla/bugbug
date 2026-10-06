@@ -3,13 +3,21 @@ import tempfile
 from pathlib import Path
 
 from hackbot_runtime import HackbotContext, run_async
+from hackbot_runtime.actions.email import record_email
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.slack import record_message
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestRepairResult
 from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
-from .notify import build_message, resolve_culprit_author, sheriff_action_required
-from .resolve import Investigation, resolve_investigation
+from .notify import (
+    build_email,
+    build_message,
+    recipients,
+    resolve_culprit_author,
+    sheriff_action_required,
+)
+from .resolve import Investigation, resolve_investigation, sheriff_classification
 
 logger = logging.getLogger(__name__)
 
@@ -68,22 +76,66 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         log=ctx.log_path,
         verbose=True,
         publish_file=ctx.publish_file,
+        actions_recorder=ctx.actions,
+        checkout=ctx.checkout,
     )
 
+    culprit_author = resolve_culprit_author(source_repo, result.culprit_commit)
     if sheriff_action_required(result):
         message = build_message(
             result,
             investigation,
             task_id=task_id,
             run_id=ctx.run_id,
-            culprit_author=resolve_culprit_author(source_repo, result.culprit_commit),
+            culprit_author=culprit_author,
         )
         record_message(ctx.actions, SLACK_CHANNEL, message)
     else:
         logger.info(
             "Verdict is %s; not notifying %s", result.classification, SLACK_CHANNEL
         )
+
+    try:
+        _record_verdict_email(ctx, result, investigation, task_id, culprit_author)
+    except Exception:
+        # A notification is never worth losing a finished analysis over.
+        logger.exception("Could not record the verdict email")
     return result
+
+
+def _record_verdict_email(
+    ctx: HackbotContext,
+    result: TestRepairResult,
+    investigation: Investigation,
+    task_id: str,
+    culprit_author: str | None,
+) -> None:
+    """Email every verdict to the team, actionable or not.
+
+    Unlike the Slack message this is not filtered: the team tracks what the agent
+    decided, including the intermittents no sheriff has to act on. The culprit's
+    author is addressed when there is a patch for them.
+    """
+    pending = next(
+        (a for a in ctx.actions.actions if a["type"] in PATCH_ACTION_TYPES), None
+    )
+    subject, body = build_email(
+        result,
+        investigation,
+        task_id=task_id,
+        run_id=ctx.run_id,
+        culprit_author=culprit_author,
+        already_actioned=sheriff_classification(investigation.project, task_id),
+        revision_pending=pending is not None,
+        parent_revision=(pending or {}).get("params", {}).get("parent_revision_id"),
+    )
+    record_email(
+        ctx.actions,
+        to=recipients(result, culprit_author),
+        subject=subject,
+        body_markdown=body,
+        attach_patch=ctx.source_changed,
+    )
 
 
 if __name__ == "__main__":

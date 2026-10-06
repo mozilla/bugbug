@@ -23,19 +23,40 @@ component's code lives in. A bug handed to the agent by hand in some other compo
 (`Firefox :: Menus`, say) is triaged the same way and reports to nobody. The components,
 and the channel each reports to:
 
-| Component                         | Reports to                       |
-| --------------------------------- | -------------------------------- |
-| `Firefox :: New Tab Page`         | `#hnt-dev-triage`                |
-| `Firefox :: Site Permissions`     | `#privacy-team-automation`       |
-| `Toolkit :: Data Sanitization`    | `#privacy-team-automation`       |
-| `Firefox :: Sharing`              | `#content-sharing-automation`    |
-| `Firefox :: IP Protection`        | `#team-eng-ip-protection-triage` |
-| `Firefox :: Messaging System`     | `#omc-triage`                    |
-| `Firefox for Android :: History`  | `#android-core-dev`              |
-| `Firefox for Android :: Toolbar`  | `#android-core-dev`              |
-| `Firefox for Android :: Homepage` | `#android-core-dev`              |
-| `Toolkit :: Application Update`   | `#installer-updater-bug-triage`  |
-| `Firefox :: Installer`            | `#installer-updater-bug-triage`  |
+| Component                                                       | Reports to                                 |
+| --------------------------------------------------------------- | ------------------------------------------ |
+| `Firefox :: New Tab Page`                                       | `#hnt-dev-triage`                          |
+| `Firefox :: Sidebar`                                            | `#p10y-bots`                               |
+| `Firefox :: Site Permissions`                                   | `#privacy-team-automation`                 |
+| `Toolkit :: Data Sanitization`                                  | `#privacy-team-automation`                 |
+| `Firefox :: Settings UI`                                        | `#fx-recomp-bots`                          |
+| `Firefox :: Sharing`                                            | `#content-sharing-automation`              |
+| `Firefox :: IP Protection`                                      | `#team-eng-ip-protection-triage`           |
+| `Firefox :: Messaging System`                                   | `#omc-triage`                              |
+| `Core :: Machine Learning: Frontend`                            | `#smart-window-bug-triage`                 |
+| `Core :: Machine Learning: Models`                              | `#smart-window-bug-triage`                 |
+| `Core :: Machine Learning: General`                             | `#smart-window-bug-triage`                 |
+| `Firefox for Android :: History`                                | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Toolbar`                                | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Homepage`                               | `#firefox-android-dev-info`                |
+| `Toolkit :: Application Update`                                 | `#installer-updater-bug-triage`            |
+| `Firefox :: Installer`                                          | `#installer-updater-bug-triage`            |
+| `Firefox :: General`                                            | `#fx-toolkit-general-triage-notifications` |
+| `Toolkit :: General`                                            | `#fx-toolkit-general-triage-notifications` |
+| `Firefox :: Untriaged`                                          | `#fx-toolkit-general-triage-notifications` |
+| `Firefox :: PDF Viewer`                                         | `#pdfjs-triage`                            |
+| `Toolkit :: Password Manager`                                   | `#credential-management-bug-triage`        |
+| `Firefox :: about:logins`                                       | `#credential-management-bug-triage`        |
+| `Firefox for Android :: Downloads`                              | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Tabs`                                   | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Translations`                           | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Experimentation and Telemetry`          | `#android-activation-and-trust`            |
+| `Firefox for Android :: Logins`                                 | `#android-activation-and-trust`            |
+| `Firefox for Android :: Onboarding`                             | `#android-activation-and-trust`            |
+| `Firefox for Android :: Privacy`                                | `#android-activation-and-trust`            |
+| `Firefox for Android :: QR`                                     | `#android-activation-and-trust`            |
+| `Firefox for Android :: Settings`                               | `#android-activation-and-trust`            |
+| `Firefox Build System :: Android Studio and Gradle Integration` | `#android-pie`                             |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
@@ -90,7 +111,7 @@ the secrets in a gitignored `.env` at the repo root:
 
 ```dotenv
 ANTHROPIC_API_KEY=sk-ant-...
-BUGZILLA_API_URL=https://bugzilla.mozilla.org
+BUGZILLA_API_URL=https://bugzilla.mozilla.org/rest
 BUGZILLA_API_KEY=...
 ```
 
@@ -118,16 +139,16 @@ Three bugs that exercise the classes this agent handles:
 Environment variables. `hackbot-api` derives them from the input schema; locally
 they come from `.env`, `compose.yml`, or the command line.
 
-| Env var             | Required | Meaning                                                                                                        |
-| ------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
-| `BUG_ID`            | yes      | The Bugzilla bug to triage                                                                                     |
-| `BROKER_URL`        | yes      | Bugzilla broker base URL; the agent appends `/mcp`. `compose.yml` sets it                                      |
-| `ANTHROPIC_API_KEY` | yes      | Drives the agent (billed per token)                                                                            |
-| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org` — **broker container only**                                                |
-| `BUGZILLA_API_KEY`  | yes      | **Broker container only**; reads only. The agent never sees it                                                 |
-| `MODEL`             | no       | Defaults to `claude-opus-5` (`DEFAULT_MODEL` in `__main__.py`); pinned so runs are reproducible and comparable |
-| `MAX_TURNS`         | no       | Hard cap on loop iterations — a runaway guard, cut off if hit                                                  |
-| `EFFORT`            | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`; only passed when set                                          |
+| Env var             | Required | Meaning                                                                                                          |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `BUG_ID`            | yes      | The Bugzilla bug to triage                                                                                       |
+| `BROKER_URL`        | yes      | Bugzilla broker base URL; the agent appends `/mcp`. `compose.yml` sets it                                        |
+| `ANTHROPIC_API_KEY` | yes      | Drives the agent (billed per token)                                                                              |
+| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org/rest` — **broker container only**                                             |
+| `BUGZILLA_API_KEY`  | yes      | **Broker container only**; reads only. The agent never sees it                                                   |
+| `MODEL`             | no       | Defaults to `claude-opus-5-5` (`DEFAULT_MODEL` in `__main__.py`); pinned so runs are reproducible and comparable |
+| `MAX_TURNS`         | no       | Hard cap on loop iterations — a runaway guard, cut off if hit                                                    |
+| `EFFORT`            | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`; defaults to `high` (`DEFAULT_EFFORT` in `__main__.py`)          |
 
 ## Output
 
@@ -202,10 +223,24 @@ Two further hooks shape the comment text as it is recorded:
   checkout.
 - `feedback_tags_hook` (`agent.py`) appends the triage-specific tags a reader can
   add to categorize a problem: `ai-triage-wrong-file`, `ai-triage-wrong-cause`,
-  `ai-triage-hallucination`, `ai-triage-out-of-scope`.
+  `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-not-a-bug`,
+  `ai-triage-wrong-fix`, `ai-triage-shallow-fix`, `ai-triage-wrong-severity`.
+  `not-a-bug` is for intended behavior triaged as a defect, which is otherwise
+  filed under `out-of-scope` or `wrong-cause` and inflates both. `wrong-fix` and
+  `shallow-fix` are about the fix plan rather than the diagnosis: one for a fix
+  that would not work, one for a fix that patches the symptom instead of the cause
+  the comment just named. `wrong-severity` separates a bad severity suggestion
+  from a bad analysis, which a 👎 alone cannot do. The footer writes them as one
+  brace group, `ai-triage-{wrong-file, wrong-cause, …}`, so the list stays one
+  line as it grows. The same hook closes the
+  comment by asking for a `needinfo?` on `hackbot@mozilla.tld`, which triggers a
+  `bug-fix` run ([triggers.md](../../docs/hackbot/triggers.md)).
 
-Below both sits the runtime's shared footer inviting a 👍 or 👎 reaction. Those
-reactions and tags are the feedback channel — the agent does not request needinfo.
+The tags go under the runtime's shared footer inviting a 👍 or 👎 reaction, which
+`bugzilla.add_comment` has already appended by the time the hook runs. Those
+reactions and tags are the feedback channel; the needinfo is for the patch, and
+only from a requester in Bugzilla's `editbugs` group, which is what the webhook
+authorizes.
 
 ## Slack notification
 
@@ -250,7 +285,7 @@ so `slack.post_message` is _not_ in `ENABLED_ACTION_TYPES` and the agent is neve
 given the tool. Like every other action it is recorded rather than sent, so it
 shows up in the Hackbot UI before it lands and is delivered at most once. Delivery
 needs `SLACK_BOT_TOKEN` on hackbot-api and the app in the channel — see
-`libs/hackbot-runtime/hackbot_runtime/actions/handlers/slack_handler.py`. A failed
+`services/hackbot-api/app/action_handlers/slack_handler.py`. A failed
 Slack post does not affect the Bugzilla writes, and it does not go the other way
 either: the applier runs each action independently, so a rejected `PUT` still
 notifies. The run page shows the failed action.

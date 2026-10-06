@@ -1,0 +1,33 @@
+{
+  "display_information": {
+    "name": "Hackbot"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Hackbot",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "chat:write",
+        "chat:write.public",
+        "reactions:read"
+      ]
+    },
+    "pkce_enabled": false
+  },
+  "settings": {
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://hackbot-api.moz.tools/webhooks/slack"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false,
+    "app_level_token_rotation_enabled": false,
+    "is_mcp_enabled": false
+  }
+}

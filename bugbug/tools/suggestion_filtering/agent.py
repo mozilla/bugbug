@@ -5,7 +5,7 @@
 
 """Suggestion filtering tool implementation."""
 
-from typing import Iterable, Optional
+from typing import Annotated, Iterable, Optional
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
@@ -26,9 +26,12 @@ from bugbug.tools.suggestion_filtering.prompts import (
 class FilteredComments(BaseModel):
     """The response from the filtering agent."""
 
-    comment_indices: list[int] = Field(
-        description="A list of indices of the comments that were kept after filtering"
-    )
+    comment_indices: Annotated[
+        list[int],
+        Field(
+            description="A list of indices of the comments that were kept after filtering"
+        ),
+    ]
 
 
 class SuggestionFilteringTool(GenerativeModelTool):
@@ -150,6 +153,6 @@ class SuggestionFilteringTool(GenerativeModelTool):
             )
 
         if "llm" not in kwargs:
-            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL)
+            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL, effort="high")
 
         return cls(**kwargs)
