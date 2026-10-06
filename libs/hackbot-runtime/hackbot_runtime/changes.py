@@ -93,15 +93,6 @@ def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
 
-def _wrap_uncommitted(repo: Path, message: str = WIP_MESSAGE) -> bool:
-    """Commit any staged/unstaged/untracked changes into one synthetic commit.
-
-    Returns ``True`` if such a commit was created, ``False`` if the tree was
-    already clean.
-    """
-    return commit_all(repo, message)
-
-
 def commit_all(repo: Path, message: str, *, author: str | None = None) -> bool:
     """Stage everything in ``repo`` and commit it, if there is anything to commit.
 
@@ -166,7 +157,7 @@ def _synthetic_commit(repo: Path, base: str) -> str:
     range).
     """
     tree = _git(repo, "rev-parse", "HEAD^{tree}").strip()
-    # Pass an explicit identity (as _wrap_uncommitted does): the synthetic
+    # Pass an explicit identity (as commit_all does): the synthetic
     # commit's author is throwaway — only its tree diff is used — but
     # `commit-tree` errors under `user.useConfigOnly=true` and otherwise
     # invents a `user@hostname` author when the container has no git identity
@@ -327,7 +318,7 @@ def build_try_push(repo: Path, base: str) -> dict | None:
     # Normally already done by `collect`; repeated here (it is a no-op on a
     # clean tree) so this does not silently drop the agent's uncommitted work if
     # it is ever called on its own.
-    _wrap_uncommitted(repo)
+    commit_all(repo, WIP_MESSAGE)
 
     revisions = _git(repo, "rev-list", "--reverse", f"{base}..HEAD").split()
     if not revisions:
@@ -361,7 +352,7 @@ def collect(
     handler, which needs to re-check-out this same base commit — knows where
     to clone from without re-deriving agent-specific config.
     """
-    wrapped = _wrap_uncommitted(repo, message)
+    wrapped = commit_all(repo, message)
     patch = _git_bytes(repo, "format-patch", "--stdout", "--binary", f"{base}..HEAD")
     if not patch.strip():
         return None
