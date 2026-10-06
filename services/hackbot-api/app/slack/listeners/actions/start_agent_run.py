@@ -65,6 +65,10 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
             e for e in elements if e["action_id"] != action["action_id"]
         ]
         if len(filtered_elements) == len(elements):
+            log.error(
+                "Clicked button '%s' is not in its block's elements, which is unexpected",
+                action["action_id"],
+            )
             return None
         replacement = (
             [{**block, "elements": filtered_elements}, note_block]
@@ -119,37 +123,37 @@ async def start_agent_run_callback(
         value.agent_name, value.inputs, dedupe_key=value.dedupe_key
     )
 
-    if not run.is_new:
-        logger.warning(
-            "Slack click by '%s' for key '%r' ignored because a run with the same key run already exists (id=%s)",
-            user,
-            value.dedupe_key,
-            run.run_id,
-        )
-        await respond(
-            text=(
-                f"A {value.agent_name} run is already triggered for this "
-                f"({run.status.value}): {_run_url(run.run_id)}"
-            ),
-            response_type="ephemeral",
-            replace_original=False,
-            unfurl_links=False,
-        )
-
     triggered_by = user if run.is_new else None
     note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
     updated_message = _message_with_note(body["message"], action, note_block)
-    if not updated_message:
-        logger.warning(
-            "Clicked button '%s' not found in its message; left unchanged",
-            action["action_id"],
-        )
-    else:
+    if updated_message:
         response = await respond(**updated_message, replace_original=True)
         if response.status_code != 200:
             logger.error(
                 "Failed to mark button '%s' as used: HTTP %s %s",
                 action["action_id"],
+                response.status_code,
+                response.body,
+            )
+    else:
+        logger.warning(
+            "Slack click by '%s' on button '%s' could not be replaced in its message (run %s, is_new=%s)",
+            user,
+            action["action_id"],
+            run.run_id,
+            run.is_new,
+        )
+
+        response = await respond(
+            text=f"A {value.agent_name} run was started: {_run_url(run.run_id)}",
+            response_type="ephemeral",
+            replace_original=False,
+            unfurl_links=False,
+        )
+        if response.status_code != 200:
+            logger.error(
+                "Failed to send ephemeral response to '%s': HTTP %s %s",
+                user,
                 response.status_code,
                 response.body,
             )
