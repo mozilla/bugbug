@@ -57,6 +57,29 @@ and the channel each reports to:
 | `Firefox for Android :: QR`                                     | `#android-activation-and-trust`            |
 | `Firefox for Android :: Settings`                               | `#android-activation-and-trust`            |
 | `Firefox Build System :: Android Studio and Gradle Integration` | `#android-pie`                             |
+| `DevTools :: about:debugging`                                   | `#devtools-triage`                         |
+| `DevTools :: Application Panel`                                 | `#devtools-triage`                         |
+| `DevTools :: Console`                                           | `#devtools-triage`                         |
+| `DevTools :: Debugger`                                          | `#devtools-triage`                         |
+| `DevTools :: Documentation`                                     | `#devtools-triage`                         |
+| `DevTools :: DOM`                                               | `#devtools-triage`                         |
+| `DevTools :: Framework`                                         | `#devtools-triage`                         |
+| `DevTools :: General`                                           | `#devtools-triage`                         |
+| `DevTools :: Inspector`                                         | `#devtools-triage`                         |
+| `DevTools :: Inspector: Animations`                             | `#devtools-triage`                         |
+| `DevTools :: Inspector: Changes`                                | `#devtools-triage`                         |
+| `DevTools :: Inspector: Compatibility`                          | `#devtools-triage`                         |
+| `DevTools :: Inspector: Layout`                                 | `#devtools-triage`                         |
+| `DevTools :: Inspector: Rules`                                  | `#devtools-triage`                         |
+| `DevTools :: JSON Viewer`                                       | `#devtools-triage`                         |
+| `DevTools :: Memory`                                            | `#devtools-triage`                         |
+| `DevTools :: Netmonitor`                                        | `#devtools-triage`                         |
+| `DevTools :: Object Inspector`                                  | `#devtools-triage`                         |
+| `DevTools :: Responsive Design Mode`                            | `#devtools-triage`                         |
+| `DevTools :: Shared Components`                                 | `#devtools-triage`                         |
+| `DevTools :: Source Editor`                                     | `#devtools-triage`                         |
+| `DevTools :: Storage Inspector`                                 | `#devtools-triage`                         |
+| `DevTools :: Style Editor`                                      | `#devtools-triage`                         |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
@@ -325,8 +348,9 @@ ScopedComponent(
 - **`trees`** is descriptive and may overlap another component. It drives the prompt's
   index and the docs lookup, so it is what makes the component triageable.
 - **`doc_trees`** is for the one case where a component's docs are not under its code,
-  and it **replaces** `trees` for the docs lookup rather than adding to it. Only
-  `Toolkit :: Data Sanitization` needs it: its article is registered by
+  and it **replaces** `trees` for the docs lookup rather than adding to it. The DevTools
+  panels need it because `devtools/moz.build` registers their docs once for all of
+  them. `Toolkit :: Data Sanitization` needs it because its article is registered by
   `toolkit/components/antitracking/moz.build`, and its own
   `browser/base/content/sanitize*` files otherwise resolve to `browser/base/`'s
   tabbrowser and sslerrorreport trees. Leave it empty unless `docs_for` returns a
