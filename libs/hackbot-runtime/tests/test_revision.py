@@ -4,6 +4,7 @@ Only the Conduit HTTP call is faked. The stack walk, the patch application and
 the commit boundaries are the real ones, run against a real git repository.
 """
 
+import base64
 import json
 import subprocess
 from pathlib import Path
@@ -29,7 +30,8 @@ class _FakeCtx:
     def __init__(self, repo: Path):
         self._repo = repo
         self.prepared_ref = None
-        self.rebased_base = False
+        self.source_base = None
+        self.diff_base = None
 
     async def prepare_repo(
         self, ref: str | None = None, depth: int | None = None
@@ -38,7 +40,10 @@ class _FakeCtx:
         return self._repo
 
     def record_source_base(self) -> None:
-        self.rebased_base = True
+        self.source_base = _git(self._repo, "rev-parse", "HEAD").strip()
+
+    def record_diff_base(self) -> None:
+        self.diff_base = _git(self._repo, "rev-parse", "HEAD").strip()
 
 
 def _revision(rev_id: int, *, status: str = "needs-review"):
@@ -321,7 +326,7 @@ def _diff(old: str, new: str) -> str:
 
 
 @pytest.mark.parametrize(
-    "graph, target, committed_head",
+    "graph, target, base_content",
     [
         ({42: []}, 42, "base\n"),
         ({42: [], 43: [42]}, 43, "from D42\n"),
@@ -329,12 +334,14 @@ def _diff(old: str, new: str) -> str:
     ],
     ids=["unstacked", "one-ancestor", "two-ancestors"],
 )
-async def test_only_the_target_is_left_uncommitted(
-    monkeypatch, tmp_path, graph, target, committed_head
+async def test_the_target_is_committed_between_the_diff_base_and_the_source_base(
+    monkeypatch, tmp_path, graph, target, base_content
 ):
     # The invariant the submit path depends on, and it must not vary with the
-    # depth of the stack: everything below the target is committed, and exactly
-    # the target's own change is left in the working tree.
+    # depth of the stack: the target's change is committed, leaving the agent a
+    # clean tree. The diff base sits just below it, so the Phabricator diff still
+    # carries the target's change. The source base sits on it, so the run's own
+    # patch carries only the agent's work.
     repo = _repo_at_base(tmp_path)
     revisions = _with_stack_graph({r: _revision(r) for r in graph}, graph)
     contents = {42: "from D42", 43: "from D43", 44: "from D44"}
@@ -352,12 +359,32 @@ async def test_only_the_target_is_left_uncommitted(
     await revision.checkout_revision(ctx, target, BROKER)
 
     assert ctx.prepared_ref == BASE
-    # HEAD holds the revisions below the target, and nothing of the target.
-    assert _git(repo, "show", "HEAD:file.txt") == committed_head
-    # The target's change is present, and uncommitted.
-    assert (repo / "file.txt").read_text() == f"{contents[target]}\n"
-    assert _git(repo, "diff", "HEAD", "--name-only").split() == ["file.txt"]
-    assert ctx.rebased_base is True
+    # HEAD holds the target's change, and nothing is left uncommitted.
+    assert _git(repo, "show", "HEAD:file.txt") == f"{contents[target]}\n"
+    assert _git(repo, "status", "--porcelain") == ""
+    assert ctx.source_base == _git(repo, "rev-parse", "HEAD").strip()
+    assert ctx.diff_base == _git(repo, "rev-parse", "HEAD~1").strip()
+    assert _git(repo, "show", f"{ctx.diff_base}:file.txt") == base_content
+
+
+async def test_the_target_commit_says_it_is_the_existing_revision(
+    monkeypatch, tmp_path
+):
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph({42: _revision(42)}, {42: []})
+    _fake_conduit(monkeypatch, revisions, raw_diffs={42: _diff("base", "from D42")})
+
+    await revision.checkout_revision(_FakeCtx(repo), 42, BROKER)
+
+    assert _git(repo, "log", "-1", "--format=%s", "HEAD").strip() == (
+        "D42: Do the thing in D42"
+    )
+    body = _git(repo, "log", "-1", "--format=%b", "HEAD")
+    assert "existing state of the revision" in body
+    assert "Not the original commit" in body
+    assert _git(repo, "log", "-1", "--format=%an <%ae>", "HEAD").strip() == (
+        "Author 42 <author42@example.com>"
+    )
 
 
 async def test_each_ancestor_gets_its_own_commit(monkeypatch, tmp_path):
@@ -381,12 +408,13 @@ async def test_each_ancestor_gets_its_own_commit(monkeypatch, tmp_path):
     await revision.checkout_revision(_FakeCtx(repo), 44, BROKER)
 
     assert _git(repo, "log", "--format=%s").splitlines() == [
+        "D44: Do the thing in D44",
         "D43: Do the thing in D43",
         "D42: Do the thing in D42",
         "base commit",
     ]
     # And each says what it is, so nobody mistakes it for the original commit.
-    assert "Replayed by hackbot" in _git(repo, "log", "-1", "--format=%b", "HEAD")
+    assert "Replayed by hackbot" in _git(repo, "log", "-1", "--format=%b", "HEAD~1")
 
 
 async def test_ancestor_commits_keep_their_original_author(monkeypatch, tmp_path):
@@ -407,10 +435,10 @@ async def test_ancestor_commits_keep_their_original_author(monkeypatch, tmp_path
 
     await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
 
-    assert _git(repo, "log", "-1", "--format=%an <%ae>", "HEAD").strip() == (
+    assert _git(repo, "log", "-1", "--format=%an <%ae>", "HEAD~1").strip() == (
         "Author 42 <author42@example.com>"
     )
-    assert _git(repo, "log", "-1", "--format=%cn", "HEAD").strip() == "Hackbot"
+    assert _git(repo, "log", "-1", "--format=%cn", "HEAD~1").strip() == "Hackbot"
 
 
 async def test_an_ancestor_without_author_info_still_commits(monkeypatch, tmp_path):
@@ -432,10 +460,10 @@ async def test_an_ancestor_without_author_info_still_commits(monkeypatch, tmp_pa
 
     await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
 
-    assert _git(repo, "log", "-1", "--format=%s", "HEAD").strip() == (
+    assert _git(repo, "log", "-1", "--format=%s", "HEAD~1").strip() == (
         "D42: Do the thing in D42"
     )
-    assert _git(repo, "log", "-1", "--format=%an", "HEAD").strip() == "Hackbot"
+    assert _git(repo, "log", "-1", "--format=%an", "HEAD~1").strip() == "Hackbot"
 
 
 async def test_descendants_of_the_target_are_not_applied(monkeypatch, tmp_path):
@@ -480,7 +508,10 @@ async def test_a_revision_at_the_bottom_of_someone_elses_stack(monkeypatch, tmp_
     await revision.checkout_revision(_FakeCtx(repo), 42, BROKER)
 
     assert (repo / "file.txt").read_text() == "from D42\n"
-    assert _git(repo, "log", "--format=%s").splitlines() == ["base commit"]
+    assert _git(repo, "log", "--format=%s").splitlines() == [
+        "D42: Do the thing in D42",
+        "base commit",
+    ]
 
 
 async def test_a_stale_stack_fails_and_says_which_revision(monkeypatch, tmp_path):
@@ -546,12 +577,17 @@ async def test_try_push_from_a_stacked_checkout_carries_the_whole_stack(
     published = _git(repo, "rev-parse", "HEAD").strip()
 
     await revision.checkout_revision(_FakeCtx(repo), 43, BROKER)
+    (repo / "agent.txt").write_text("agent work\n")
 
     assert _git(repo, "rev-parse", "HEAD").strip() != published
     payload = changes_module.build_try_push(repo, published)
     assert payload["base_commit"] == published
-    # The seeded ancestors commit plus the agent's work.
-    assert len(payload["patches"]) == 2
+    # The seeded ancestor, then the target, then the agent's work on top.
+    patches = [base64.b64decode(patch).decode() for patch in payload["patches"]]
+    assert len(patches) == 3
+    assert "Subject: [PATCH] D42: Do the thing in D42" in patches[0]
+    assert "Subject: [PATCH] D43: Do the thing in D43" in patches[1]
+    assert "Subject: [PATCH] Uncommitted agent changes" in patches[2]
 
 
 def test_revision_needs_no_mozphab():
