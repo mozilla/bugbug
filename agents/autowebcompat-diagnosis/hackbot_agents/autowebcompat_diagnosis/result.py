@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated, Generic, Literal, TypeVar
 
@@ -191,8 +192,27 @@ class ReproScriptResult(BaseModel):
         return self
 
 
-class DiagnosisResult(BaseModel):
-    """The agent's root-cause account of why Firefox differs from Chrome."""
+def check_written_file(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+
+    if not path.exists():
+        raise ValueError(f"{path} doesn't exist")
+    if not path.read_text().strip():
+        raise ValueError(f"{path} is empty")
+    return path
+
+
+BUGZILLA_COMMENT_FORMAT = (
+    " This field is posted, together with the other one, as a Bugzilla comment "
+    "rendered as Markdown, so format it accordingly: no headings, and a blank "
+    "line between paragraphs. Keep both fields together readable in under a "
+    "minute."
+)
+
+
+class DiagnosisText(BaseModel):
+    """The contents of the diagnosis JSON file the agent writes."""
 
     root_cause: Annotated[
         str,
@@ -207,6 +227,7 @@ class DiagnosisResult(BaseModel):
             then if possible provide links to the relevant parts of the specification
             document that define the behaviour. Skip these links if you don't know the
             right specification or section. Do not propose a fix."""
+                + BUGZILLA_COMMENT_FORMAT
             ),
         ),
     ]
@@ -218,11 +239,40 @@ class DiagnosisResult(BaseModel):
                 "The concrete observations supporting the hypothesis: console "
                 "errors, network requests, DOM or computed-style measurements, "
                 "feature-detection results, and what the reduced testcase showed in "
-                "each browser. Be brief, this will be read by a busy engineer."
+                "each browser. Be brief, this will be read by a busy engineer. "
                 "Cite what you actually observed, not what you expect."
+                + BUGZILLA_COMMENT_FORMAT
             ),
         ),
     ]
+
+    @field_validator("root_cause", "evidence", mode="after")
+    @classmethod
+    def validate_text(cls, text: str) -> str:
+        if not text.strip():
+            raise ValueError("must not be empty")
+        return text
+
+
+class DiagnosisResult(BaseModel):
+    """The agent's root-cause account of why Firefox differs from Chrome.
+
+    The long text fields are written to a JSON file rather than passed as tool
+    arguments, because long string arguments make the model leak tool-call
+    markup into them.
+    """
+
+    diagnosis_path: Annotated[
+        Path,
+        Field(
+            description=(
+                "The file path of the JSON file containing your `root_cause` and "
+                "`evidence`. Use the exact path you were given to write to (do NOT "
+                "paste the JSON)."
+            ),
+        ),
+    ]
+
     testcase_path: Annotated[
         Path | None,
         Field(
@@ -236,17 +286,31 @@ class DiagnosisResult(BaseModel):
         ),
     ]
 
-    @field_validator("testcase_path", mode="after")
+    @field_validator("diagnosis_path", "testcase_path", mode="after")
     @classmethod
-    def validate_testcase_path(cls, path: Path | None) -> Path | None:
-        if path is None:
-            return None
+    def validate_paths(cls, path: Path | None) -> Path | None:
+        return check_written_file(path)
 
-        if not path.exists():
-            raise ValueError(f"Testcase path {path} doesn't exist")
-        if not path.read_text().strip():
-            raise ValueError(f"Testcase path {path} is empty")
+    @field_validator("diagnosis_path", mode="after")
+    @classmethod
+    def validate_diagnosis(cls, path: Path) -> Path:
+        # Tool-call markup the model sometimes leaks into long arguments, see
+        # https://github.com/anthropics/claude-code/issues/49747
+        leaked_xml = re.compile(r'<parameter name="|</(?:content|parameter)>\s*$')
+        text = path.read_text()
+        if leaked_xml.search(text):
+            raise ValueError(
+                f"{path} contains leaked tool-call markup (`<parameter name=` or a "
+                "trailing `</content>`); rewrite the file with only its intended text"
+            )
+        try:
+            DiagnosisText.model_validate_json(text)
+        except ValidationError as exc:
+            raise ValueError(f"{path} is not a valid diagnosis: {exc}") from exc
         return path
+
+    def read_diagnosis(self) -> DiagnosisText:
+        return DiagnosisText.model_validate_json(self.diagnosis_path.read_text())
 
 
 def build_result_server(collector: ResultCollector) -> McpServerConfig:
