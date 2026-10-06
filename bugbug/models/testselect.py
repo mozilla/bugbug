@@ -696,7 +696,16 @@ class TestSelectModel(Model):
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
     def items_gen(self, classes):
-        commit_map = get_commit_map()
+        # Only the commits of the pushes in the history (all the commits don't fit in memory).
+        commit_map = get_commit_map(
+            {
+                revision
+                for revs, _ in test_scheduling.get_test_scheduling_history(
+                    self.granularity
+                )
+                for revision in revs
+            }
+        )
 
         # With negative_sample_rate (non_run_negative_sample_rate for non-run negatives), keep all
         # failures but only a random (fixed, as the rows can be generated more than once) fraction of

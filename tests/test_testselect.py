@@ -877,13 +877,19 @@ def test_items_gen_samples_negatives(monkeypatch) -> None:
         "get_test_scheduling_history",
         lambda granularity: iter(history),
     )
-    monkeypatch.setattr(
-        testselect, "get_commit_map", lambda: {f"rev{i}": {} for i in range(50)}
-    )
+    requested_revs = []
+
+    def get_commit_map(revs=None):
+        requested_revs.append(revs)
+        return {f"rev{i}": {} for i in range(50)}
+
+    monkeypatch.setattr(testselect, "get_commit_map", get_commit_map)
     monkeypatch.setattr(testselect.commit_features, "merge_commits", lambda commits: {})
 
     model = testselect.TestGroupSelectModel()
     labels = [label for _, label in model.items_gen(classes)]
+    # Only the commits of the pushes in the history are loaded.
+    assert requested_revs == [{f"rev{i}" for i in range(50)}]
     # All the positives, and about 2% of the negatives.
     assert sum(labels) == 50
     assert 50 < len(labels) < 250
