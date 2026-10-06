@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("hackbot_runtime.context")
 
+_SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
+
 
 def _default_run_id() -> str:
     """A unique, sortable id for runs that don't get one from the platform.
@@ -51,10 +53,11 @@ def _default_run_id() -> str:
 
 
 def _wip_commit_message(actions: list[dict]) -> str:
-    """The try push title, for the agent's uncommitted work."""
-    for action in actions:
-        if action["type"] == TRY_PUSH_ACTION_TYPE and action["params"]["title"]:
-            return action["params"]["title"]
+    """The patch title, else the try push title, for the agent's uncommitted work."""
+    for action_type in (_SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
+        for action in actions:
+            if action["type"] == action_type and action["params"]["title"]:
+                return action["params"]["title"]
     return changes.WIP_MESSAGE
 
 

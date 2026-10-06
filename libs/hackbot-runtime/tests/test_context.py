@@ -163,12 +163,20 @@ def _hb_with_source(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     ("actions", "message"),
     [
+        # The try push is recorded first, as in mozilla/bugbug#6773.
         (
             [
-                ("try_server.push", {"tasks": ["t"], "title": "Bug 1 - Fix"}),
-                ("phabricator.submit_patch", {"bug_id": 1, "title": "Bug 1 - P"}),
+                ("try_server.push", {"tasks": ["t"], "title": "Bug 1 - verify"}),
+                ("phabricator.submit_patch", {"bug_id": 1, "title": "Bug 1 - Fix"}),
             ],
             "Bug 1 - Fix",
+        ),
+        (
+            [
+                ("phabricator.update_patch", {"revision_id": 42}),
+                ("try_server.push", {"tasks": ["t"], "title": "Bug 1 - verify"}),
+            ],
+            "Bug 1 - verify",
         ),
         (
             [("try_server.push", {"tasks": ["t"], "title": None})],
