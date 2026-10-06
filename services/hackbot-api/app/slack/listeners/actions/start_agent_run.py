@@ -126,9 +126,11 @@ async def start_agent_run_callback(
     triggered_by = user if run.is_new else None
     note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
     updated_message = _message_with_note(body["message"], action, note_block)
+    replaced = False
     if updated_message:
         response = await respond(**updated_message, replace_original=True)
-        if response.status_code != 200:
+        replaced = response.status_code == 200
+        if not replaced:
             logger.error(
                 "Failed to mark button '%s' as used: HTTP %s %s",
                 action["action_id"],
@@ -144,6 +146,7 @@ async def start_agent_run_callback(
             run.is_new,
         )
 
+    if not replaced:
         response = await respond(
             text=f"A {value.agent_name} run was started: {_run_url(run.run_id)}",
             response_type="ephemeral",
