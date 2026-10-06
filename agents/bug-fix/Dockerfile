@@ -28,10 +28,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 FROM base AS agent
 
-# Install Xvfb so evaluate_testcase can run Firefox in grizzly's xvfb display mode.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
+        fluxbox \
         xvfb \
     && rm -rf /var/lib/apt/lists/*
 
