@@ -53,6 +53,17 @@ to `@mozilla.com` accounts:
 | Download artifact | `GET /runs/{run_id}/artifacts/{path}` † |
 | (available)       | `GET /agents`                           |
 
+## Firefox Profiler
+
+hackbot-runtime publishes the Claude Code session transcripts of a run as
+`transcripts/*.jsonl` artifacts. When a run has them, the Traces row of its page
+offers "Firefox Profiler" next to Weave: `GET /api/runs/{run_id}/profile`
+(`lib/profile.ts`) downloads the transcripts and converts them with
+[claude-profiler](https://github.com/fqueze/claude-profiler), and the page hands
+the result to a `profiler.firefox.com/from-post-message/` window
+(`lib/profiler.ts`). Nothing is exposed outside the SSO session; use the
+profiler's own Upload button for a shareable link.
+
 ## Local development
 
 1. Install dependencies:

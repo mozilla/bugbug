@@ -13,6 +13,7 @@
   "dependencies": {
     "@sentry/nextjs": "^10.74.0",
     "better-auth": "^1.6.22",
+    "claude-profiler": "https://github.com/fqueze/claude-profiler/archive/c709090c314fe1df3bd5e7ded4325c866c906d97.tar.gz",
     "diff2html": "^3.4.56",
     "next": "^15.5.22",
     "react": "^19.0.0",
