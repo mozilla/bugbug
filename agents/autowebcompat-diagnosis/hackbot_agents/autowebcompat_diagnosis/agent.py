@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
@@ -32,6 +33,7 @@ from .result import (
     SUBMIT_RESULT_TOOL,
     DiagnosisPlanResult,
     DiagnosisResult,
+    DiagnosisText,
     ReproScriptResult,
     ResultCollector,
     ResultT,
@@ -501,6 +503,7 @@ class Diagnosis(Task):
         self.plan_result = plan_result
         self.repro_result = repro_result
         self.testcase_path = make_empty_temp_file(self.work_dir, "testcase=", ".html")
+        self.diagnosis_path = self.work_dir / "diagnosis.json"
         self.add_mcp_server(
             "firefox-devtools",
             build_firefox_devtools_server(
@@ -566,8 +569,11 @@ as your starting evidence.
    reproduces the same difference; if it does not, revise it until it does. If
    you cannot produce the testcase, leave `testcase_path` null.
 
-4. Submit your diagnosis via `submit_result` (see "Reporting your result"). Do
-   not propose a fix.
+5. Write your diagnosis to exactly {self.diagnosis_path} as a JSON object
+   matching this schema:
+{json.dumps(DiagnosisText.model_json_schema(), indent=2)}
+
+6. Submit your diagnosis via `submit_result` (see "Reporting your result").
 """
             )
         )
@@ -587,6 +593,12 @@ class DiagnosisResults:
         self.diagnosis_result: DiagnosisResult | None = None
 
     @property
+    def diagnosis(self) -> DiagnosisText | None:
+        if self.diagnosis_result is None:
+            return None
+        return self.diagnosis_result.diagnosis
+
+    @property
     def testcase_url(self) -> str | None:
         if self.diagnosis_result is None or self.diagnosis_result.testcase_path is None:
             return None
@@ -600,7 +612,7 @@ class DiagnosisResults:
         self.diagnosis_result = result
 
     def into_result(self) -> AutowebcompatDiagnosisResult:
-        diagnosis = self.diagnosis_result
+        diagnosis = self.diagnosis
         return AutowebcompatDiagnosisResult(
             reproduced=self.repro_result.reproduced,
             failure_reason=self.repro_result.failure_reason,

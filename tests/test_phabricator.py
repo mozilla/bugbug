@@ -494,12 +494,11 @@ class _FakePatchWithRepo(phab_platform.PhabricatorPatch):
 
 
 @pytest.mark.asyncio
-async def test_github_repo_known_callsign(monkeypatch) -> None:
+@pytest.mark.parametrize("callsign", ["FIREFOXAUTOLAND", "FFTESTAUTOLANDDEV"])
+async def test_github_repo_known_callsign(monkeypatch, callsign) -> None:
     phab_platform._repo_callsign.cache_clear()
     response = {
-        "diffusion.repository.search": {
-            "data": [{"fields": {"callsign": "FIREFOXAUTOLAND"}}]
-        }
+        "diffusion.repository.search": {"data": [{"fields": {"callsign": callsign}}]}
     }
     monkeypatch.setattr(
         phab_platform, "get_phabricator_client", lambda: _fake_client(response)

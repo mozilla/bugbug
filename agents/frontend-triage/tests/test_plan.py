@@ -361,7 +361,7 @@ def test_guidance_never_names_a_path_its_own_component_cannot_cite():
             for path in named:
                 # Mirrors `component_guidance_hook`, which passes when *any* owner is
                 # loaded. Checking a single owner instead would fail on the trees the
-                # three Android components share, for a citation the hook allows.
+                # Android components share, for a citation the hook allows.
                 owners = owners_for_path(path)
                 assert not owners or any(o.key in loaded for o in owners), (
                     f"{entry.key}: guidance names {path}, "
@@ -382,11 +382,13 @@ def test_the_bulk_of_a_split_tree_still_has_an_owner():
 
 
 def test_a_shared_tree_is_owned_by_every_component_that_claims_it():
-    # Three components share `mobile/android/`, so ownership there is genuinely plural.
-    # The hook passes when any owner is loaded; collapsing this to one would refuse a
-    # Toolbar bug for citing a file its own team owns.
+    # Every Android component shares `mobile/android/`, so ownership there is genuinely
+    # plural. The hook passes when any owner is loaded; collapsing this to one would
+    # refuse a Toolbar bug for citing a file its own team owns.
     owners = owners_for_path("mobile/android/fenix/app/src/main/AndroidManifest.xml")
-    assert {o.component for o in owners} == {"History", "Toolbar", "Homepage"}
+    android = {c.component for c in TRIAGE_SCOPE if c.product == "Firefox for Android"}
+    assert {"History", "Toolbar", "Homepage"} <= android
+    assert {o.component for o in owners} == android
 
 
 def test_a_narrow_owner_still_beats_the_tree_it_sits_in():

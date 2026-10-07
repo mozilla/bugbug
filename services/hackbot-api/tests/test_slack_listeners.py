@@ -8,6 +8,7 @@ survive to *reach* one of these is covered in `test_slack_interactions.py`.
 
 import json
 import logging
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -24,14 +25,15 @@ test_logger = logging.getLogger(__name__)
 RUN_ID = "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6"
 DEDUPE_KEY = "frontend-triage-run:11111111-2222-3333-4444-555555555555"
 TRIAGE_RUN_ID = "11111111-2222-3333-4444-555555555555"
+BLOCK_ID = "offers"
 
 
 def _applied(action_type: str, idx: int = 0) -> RunAction:
-    return RunAction(idx=idx, type=action_type, status="applied")
+    return RunAction(idx=idx, type=action_type, params={}, status="applied")
 
 
 def _failed(action_type: str, error: str, idx: int = 0) -> RunAction:
-    return RunAction(idx=idx, type=action_type, status="failed", error=error)
+    return RunAction(idx=idx, type=action_type, params={}, status="failed", error=error)
 
 
 def _actions(*actions: RunAction) -> ApplyActionsResponse:
@@ -41,22 +43,39 @@ def _actions(*actions: RunAction) -> ApplyActionsResponse:
 
 def _action(
     agent_name: str = "bug-fix",
-    params: dict | None = None,
+    inputs: dict | None = None,
     dedupe_key: str = DEDUPE_KEY,
     apply_run_id: str | None = None,
 ) -> dict:
     """A clicked button, as Bolt hands it over."""
     value = {
         "agent_name": agent_name,
-        "params": {"bug_id": 1234} if params is None else params,
+        "inputs": {"bug_id": 1234} if inputs is None else inputs,
         "dedupe_key": dedupe_key,
     }
     if apply_run_id is not None:
         value["apply_run_id"] = apply_run_id
     return {
         "type": "button",
+        "block_id": BLOCK_ID,
         "action_id": f"start_agent_run:{agent_name}",
         "value": json.dumps(value),
+    }
+
+
+def _message(*buttons: dict) -> dict:
+    """The message the button was clicked on, as Slack sends it back."""
+    return {
+        "ts": "1700000000.000100",
+        "text": "Bug 1234 triaged",
+        "blocks": [
+            {
+                "type": "section",
+                "block_id": "headline",
+                "text": {"type": "mrkdwn", "text": "Bug 1234"},
+            },
+            {"type": "actions", "block_id": BLOCK_ID, "elements": list(buttons)},
+        ],
     }
 
 
@@ -67,14 +86,20 @@ class TestStartAgentRun:
         self.fake_client.trigger_run.return_value = TriggeredRun(
             run_id=RUN_ID, agent="bug-fix", status=RunStatus.pending, is_new=True
         )
-        self.fake_respond = AsyncMock()
+        self.fake_respond = AsyncMock(
+            return_value=SimpleNamespace(status_code=200, body="ok")
+        )
         # The apply endpoint answers with every action of the run and its state
         # after the pass; by default here, all of them landed.
         self.fake_client.apply_actions.return_value = _actions(
             _applied("bugzilla.add_comment")
         )
         self.context = {"hackbot_client": self.fake_client}
-        self.body = {"user": {"id": "U0CLICKER"}}
+        self.body = {
+            "user": {"id": "U0CLICKER"},
+            "channel": {"id": "C0TRIAGE"},
+            "message": _message(_action()),
+        }
 
     def _record_order(self) -> list[str]:
         """Every call the callback makes, in the order it makes them."""
@@ -110,7 +135,7 @@ class TestStartAgentRun:
         )
 
     async def test_the_agent_and_inputs_come_from_the_buttons_value(self):
-        await self._call(_action(agent_name="test-repair", params={"task_id": "abc"}))
+        await self._call(_action(agent_name="test-repair", inputs={"task_id": "abc"}))
 
         self.fake_client.trigger_run.assert_awaited_once_with(
             "test-repair", {"task_id": "abc"}, dedupe_key=DEDUPE_KEY
@@ -146,11 +171,13 @@ class TestStartAgentRun:
 
         assert order == ["trigger", "ack"]
 
-    async def test_a_new_run_tells_the_clicker_nothing(self):
+    async def test_a_new_run_tells_the_clicker_nothing_privately(self):
         # The run started and the message they clicked is the record of it.
         await self._call()
 
-        self.fake_respond.assert_not_awaited()
+        assert self._edits() == [
+            call.kwargs for call in self.fake_respond.await_args_list
+        ]
 
     async def test_a_click_that_started_nothing_says_where_the_run_is(self):
         self.fake_client.trigger_run.return_value = self._triggered(
@@ -159,12 +186,14 @@ class TestStartAgentRun:
 
         await self._call()
 
-        self.fake_respond.assert_awaited_once()
-        reply = self.fake_respond.await_args.kwargs
+        (reply,) = [
+            call.kwargs
+            for call in self.fake_respond.await_args_list
+            if call.kwargs.get("response_type") == "ephemeral"
+        ]
         assert "already triggered" in reply["text"]
         assert RUN_ID in reply["text"]
-        assert reply["response_type"] == "ephemeral"
-        # The channel keeps the button and its context; only the clicker is told.
+        # Only the clicker is told; the channel's copy is updated separately.
         assert reply["replace_original"] is False
 
     async def test_a_collapsed_click_is_still_acknowledged(self):
@@ -277,7 +306,7 @@ class TestStartAgentRun:
     async def test_a_value_missing_the_agent_is_refused_before_anything_starts(self):
         action = _action()
         action["value"] = json.dumps(
-            {"params": {"bug_id": 1234}, "dedupe_key": DEDUPE_KEY}
+            {"inputs": {"bug_id": 1234}, "dedupe_key": DEDUPE_KEY}
         )
 
         with pytest.raises(ValidationError):
@@ -290,7 +319,7 @@ class TestStartAgentRun:
         # is the failure the key exists to prevent.
         action = _action()
         action["value"] = json.dumps(
-            {"agent_name": "bug-fix", "params": {"bug_id": 1234}}
+            {"agent_name": "bug-fix", "inputs": {"bug_id": 1234}}
         )
 
         with pytest.raises(ValidationError):
@@ -313,13 +342,132 @@ class TestStartAgentRun:
 
         self.fake_client.trigger_run.assert_not_awaited()
 
+    def _edits(self) -> list[dict]:
+        """The replies that replaced the clicked message, not private notes."""
+        return [
+            call.kwargs
+            for call in self.fake_respond.await_args_list
+            if call.kwargs.get("replace_original")
+        ]
+
+    def _updated_blocks(self) -> list[dict]:
+        (edit,) = self._edits()
+        return edit["blocks"]
+
+    async def test_a_new_run_replaces_the_button_with_who_started_it(self):
+        await self._call()
+
+        (update,) = self._edits()
+        # The message's own text is kept, and the note is added to it: screen
+        # readers read the top-level text, not the blocks.
+        assert update["text"].startswith("Bug 1234 triaged\n")
+        assert "<@U0CLICKER>" in update["text"]
+        assert RUN_ID in update["text"]
+        note = self._updated_blocks()[-1]
+        assert note["type"] == "context"
+        assert "<@U0CLICKER>" in note["elements"][0]["text"]
+        assert RUN_ID in note["elements"][0]["text"]
+        assert not any(b["type"] == "actions" for b in self._updated_blocks())
+
+    async def test_the_note_names_the_agent_the_button_started(self):
+        action = _action(agent_name="test-repair")
+        self.body["message"] = _message(action)
+
+        await self._call(action)
+
+        assert "|test-repair run>" in self._updated_blocks()[-1]["elements"][0]["text"]
+
+    async def test_the_rest_of_the_message_is_untouched(self):
+        other = {"type": "button", "action_id": "something_else", "value": "x"}
+        self.body["message"] = _message(_action(), other)
+
+        await self._call()
+
+        blocks = self._updated_blocks()
+        assert blocks[0] == self.body["message"]["blocks"][0]
+        assert blocks[1] == {
+            "type": "actions",
+            "block_id": BLOCK_ID,
+            "elements": [other],
+        }
+        assert blocks[2]["type"] == "context"
+
+    async def test_a_duplicate_click_removes_the_button_without_naming_anyone(self):
+        self.fake_client.trigger_run.return_value = self._triggered(is_new=False)
+
+        await self._call()
+
+        (update,) = self._edits()
+        assert not any(b["type"] == "actions" for b in update["blocks"])
+        assert "<@U0CLICKER>" not in update["text"]
+        assert RUN_ID in update["text"]
+
+    async def test_a_failed_apply_keeps_the_button(self):
+        # Nothing started, so the offer stands and the clicker can try again.
+        self.fake_client.apply_actions.return_value = _actions(
+            _failed("bugzilla.add_comment", "Bugzilla rejected the comment")
+        )
+
+        await self._call(_action(apply_run_id=TRIAGE_RUN_ID))
+
+        assert self._edits() == []
+
+    async def test_a_failed_trigger_keeps_the_button(self):
+        self.fake_client.trigger_run.side_effect = RuntimeError("Jobs is unhappy")
+
+        with pytest.raises(RuntimeError):
+            await self._call()
+
+        assert self._edits() == []
+
+    async def test_an_update_slack_refuses_is_logged_and_the_click_acknowledged(
+        self, caplog
+    ):
+        # The run started; the message is a nicety on top of it. Slack's error
+        # comes back as a response, not an exception.
+        self.fake_respond.return_value = SimpleNamespace(
+            status_code=500, body="Slack said no"
+        )
+
+        with caplog.at_level(logging.ERROR):
+            await self._call()
+
+        self.fake_ack.assert_awaited_once()
+        assert "Slack said no" in caplog.text
+
+    async def test_a_button_outside_an_actions_block_is_logged_and_left(self, caplog):
+        # A button can also be a section's accessory, which is not supported yet.
+        self.body["message"]["blocks"] = [
+            {
+                "type": "section",
+                "block_id": BLOCK_ID,
+                "text": {"type": "mrkdwn", "text": "Bug 1234"},
+                "accessory": _action(),
+            }
+        ]
+
+        with caplog.at_level(logging.ERROR):
+            await self._call()
+
+        assert self._edits() == []
+        assert "'section' block" in caplog.text
+        self.fake_ack.assert_awaited_once()
+
+    async def test_a_message_without_the_button_is_left_alone(self):
+        self.body["message"] = {"ts": "1700000000.000100", "text": "", "blocks": []}
+
+        await self._call()
+
+        assert self._edits() == []
+        self.fake_ack.assert_awaited_once()
+
 
 class TestStartAgentRunValue:
-    def test_params_default_to_empty(self):
+    def test_inputs_default_to_empty(self):
         value = StartAgentRunValue.model_validate(
             {"agent_name": "bug-fix", "dedupe_key": DEDUPE_KEY}
         )
-        assert value.params == {}
+        assert value.inputs == {}
 
     def test_a_run_to_apply_first_is_optional(self):
         value = StartAgentRunValue.model_validate(

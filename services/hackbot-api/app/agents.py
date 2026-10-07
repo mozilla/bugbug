@@ -12,6 +12,7 @@ from app.schemas import (
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
+    UpliftInputs,
 )
 
 
@@ -37,10 +38,11 @@ class AgentSpec:
     # Per-action overrides for the agent-level auto-apply policy.
     always_apply_actions: frozenset[str] = frozenset()
     never_apply_actions: frozenset[str] = frozenset()
-    # Whether a run that produced source changes is expected to submit those changes
-    # to Phabricator. Agents without Phabricator submission tools may legitimately
-    # leave a patch artifact behind, so they must not trigger the warning.
-    warn_on_unsubmitted_patch: bool = False
+    # Whether a successful run is expected to deliver its result as recorded actions.
+    # When set, a run that records none, or leaves a patch without a patch action, is
+    # reported as an error. Agents that may legitimately finish without acting (or
+    # without Phabricator submission tools) must not set it.
+    expects_actions: bool = False
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -73,7 +75,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-bug-fix",
         input_schema=BugFixInputs,
         auto_apply_actions=True,
-        warn_on_unsubmitted_patch=True,
+        expects_actions=True,
     ),
     "autowebcompat-repro": AgentSpec(
         name="autowebcompat-repro",
@@ -125,7 +127,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
-        auto_apply_actions=True,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send", "slack.post_message"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",
@@ -135,5 +138,15 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-plan-generator",
         input_schema=TestPlanGeneratorInputs,
+    ),
+    "uplift-resolve": AgentSpec(
+        name="uplift-resolve",
+        description=(
+            "Resolve the merge conflicts from cherry-picking patches (git commits "
+            "and/or Phabricator revisions) onto a stable uplift branch, and return "
+            "the resolved patch with a confidence level for human review."
+        ),
+        job_name="hackbot-agent-uplift-resolve",
+        input_schema=UpliftInputs,
     ),
 }

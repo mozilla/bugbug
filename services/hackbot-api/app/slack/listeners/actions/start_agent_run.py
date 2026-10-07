@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from hackbot_client import HackbotClient
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
 from slack_bolt.context.respond.async_respond import AsyncRespond
@@ -19,7 +19,13 @@ class StartAgentRunValue(BaseModel):
     """What a button that starts an agent run carries."""
 
     agent_name: str
-    params: dict[str, Any] = {}
+    # A message keeps its buttons clickable, so the values posted
+    # before the key was renamed from `params` are still out there.
+    # FIXME: This alias can be removed after a few months, when we know
+    # all messages are old enough. Target date: 2027-02-01.
+    inputs: dict[str, Any] = Field(
+        default={}, validation_alias=AliasChoices("inputs", "params")
+    )
     dedupe_key: str = Field(min_length=1)
     # A run whose pending actions will be applied before the new run starts.
     apply_run_id: UUID | None = None
@@ -27,6 +33,48 @@ class StartAgentRunValue(BaseModel):
 
 def _run_url(run_id: UUID) -> str:
     return f"{settings.hackbot_ui_url}/runs/{run_id}"
+
+
+def _generate_replacement_block(
+    user: str | None, agent_name: str, run_id: UUID
+) -> dict:
+    who = f"<@{user}>" if user else "Someone"
+    note = f":check-mark-green: {who} started a <{_run_url(run_id)}|{agent_name} run>"
+    return {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
+
+
+def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | None:
+    """``message`` with the clicked button swapped for ``note_block``, or None if absent.
+
+    Only the clicked button goes: any other button in the same row is a
+    different offer and stays clickable, with the note placed under that row.
+    """
+    blocks = message["blocks"]
+    for i, block in enumerate(blocks):
+        if block["block_id"] != action["block_id"]:
+            continue
+        if block["type"] != "actions":
+            log.error(
+                "Clicked button '%s' is in a '%s' block, which is not supported yet",
+                action["action_id"],
+                block["type"],
+            )
+            return None
+        elements = block["elements"]
+        filtered_elements = [
+            e for e in elements if e["action_id"] != action["action_id"]
+        ]
+        if len(filtered_elements) == len(elements):
+            return None
+        replacement = (
+            [{**block, "elements": filtered_elements}, note_block]
+            if filtered_elements
+            else [note_block]
+        )
+        return {
+            "text": f"{message['text']}\n{note_block['elements'][0]['text']}".strip(),
+            "blocks": blocks[:i] + replacement + blocks[i + 1 :],
+        }
 
 
 async def start_agent_run_callback(
@@ -68,7 +116,7 @@ async def start_agent_run_callback(
             return
 
     run = await client.trigger_run(
-        value.agent_name, value.params, dedupe_key=value.dedupe_key
+        value.agent_name, value.inputs, dedupe_key=value.dedupe_key
     )
 
     if not run.is_new:
@@ -87,5 +135,23 @@ async def start_agent_run_callback(
             replace_original=False,
             unfurl_links=False,
         )
+
+    triggered_by = user if run.is_new else None
+    note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
+    updated_message = _message_with_note(body["message"], action, note_block)
+    if not updated_message:
+        logger.warning(
+            "Clicked button '%s' not found in its message; left unchanged",
+            action["action_id"],
+        )
+    else:
+        response = await respond(**updated_message, replace_original=True)
+        if response.status_code != 200:
+            logger.error(
+                "Failed to mark button '%s' as used: HTTP %s %s",
+                action["action_id"],
+                response.status_code,
+                response.body,
+            )
 
     await ack()

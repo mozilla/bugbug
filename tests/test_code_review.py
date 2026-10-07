@@ -12,6 +12,7 @@ from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools, review_context
 from bugbug.tools.code_review.data_types import (
+    AgentResponse,
     ExternalContent,
     GeneratedReviewComment,
     PatchScopeResponse,
@@ -125,7 +126,7 @@ def test_apply_patched_file_removed_file_raises():
     ps = PatchSet.from_string("--- a/f.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\n")
     try:
         apply_patched_file("a\nb\n", ps[0])
-        assert False, "expected FileNotFoundError"
+        raise AssertionError("expected FileNotFoundError")
     except FileNotFoundError:
         pass
 
@@ -193,7 +194,7 @@ def test_get_file_after_stack_raises_for_deleted_file():
                 patch.patch_stack, "f.txt", make_fetch({"f.txt": "a\nb\n"})
             )
         )
-        assert False, "expected FileNotFoundError"
+        raise AssertionError("expected FileNotFoundError")
     except FileNotFoundError:
         pass
 
@@ -242,8 +243,8 @@ def test_patch_stack_bails_on_nonlinear_graph():
 
     fake = FakePatch()
     try:
-        fake.patch_stack
-        assert False, "expected ValueError"
+        _ = fake.patch_stack
+        raise AssertionError("expected ValueError")
     except ValueError as e:
         assert "not linear" in str(e)
 
@@ -1340,13 +1341,19 @@ def test_run_appends_scope_suggestion_last():
     tool._agent_model = "model-x"
     tool.patch_summarizer = MagicMock()
     tool.patch_summarizer.run = MagicMock(return_value="summary")
-    tool.generate_review_comments = AsyncMock(return_value=([regular], []))
+    tool.generate_review_comments = AsyncMock(
+        return_value=(
+            AgentResponse(comments=[regular], general_comment="Looks sound."),
+            [],
+        )
+    )
     tool.suggestion_filterer = MagicMock()
     tool.suggestion_filterer.run = MagicMock(return_value=[regular])
 
     result = asyncio.run(tool.run(patch))
 
     assert result.details["num_scope_suggestions"] == 1
+    assert result.general_comment == "Looks sound."
     assert len(result.review_comments) == 2
     # The split suggestion is sorted last (order = len(filtered) + 1).
     last = result.review_comments[-1]
@@ -1375,7 +1382,7 @@ def _make_review_tool(review_context_repo=None):
     tool._content_overrides = None
 
     async def fake_astream(*args, **kwargs):
-        yield {"structured_response": AgentResponse(comments=[])}
+        yield {"structured_response": AgentResponse(comments=[], general_comment="")}
 
     tool.agent = SimpleNamespace(astream=fake_astream)
     return tool

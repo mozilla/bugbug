@@ -410,7 +410,9 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
     return bugs_number
 
 
-def get_active_product_components(products=[]) -> set[tuple[str, str]]:
+def get_active_product_components(products=None) -> set[tuple[str, str]]:
+    if products is None:
+        products = []
     active_components = set()
 
     def product_handler(product):
