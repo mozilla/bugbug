@@ -73,7 +73,9 @@ def _generate_replacement_block(
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
 
 
-def _message_with_note(message: dict, action: ButtonAction, note_block: dict) -> dict | None:
+def _message_with_note(
+    message: dict, action: ButtonAction, note_block: dict
+) -> dict | None:
     """``message`` with the clicked button swapped for ``note_block``, or None if absent.
 
     Only the clicked button goes: any other button in the same row is a
@@ -91,9 +93,7 @@ def _message_with_note(message: dict, action: ButtonAction, note_block: dict) ->
             )
             return None
         elements = block["elements"]
-        filtered_elements = [
-            e for e in elements if e["action_id"] != action.action_id
-        ]
+        filtered_elements = [e for e in elements if e["action_id"] != action.action_id]
         if len(filtered_elements) == len(elements):
             return None
         replacement = (
