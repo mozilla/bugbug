@@ -562,19 +562,39 @@ class PhabricatorPatch(Patch):
 
         return None
 
+    @cached_property
+    def _first_public_parent(self) -> Optional[str]:
+        """Return the public ancestor moz-phab recorded for this diff, if any."""
+        phabricator = get_phabricator_client()
+        diff = phabricator.request("differential.querydiffs", ids=[self.diff_id])[
+            str(self.diff_id)
+        ]
+        # Conduit encodes an empty property map as an empty list.
+        local_commits = (diff["properties"] or {}).get("local:commits", {})
+        for commit in local_commits.values():
+            if commit.get("firstPublicParent"):
+                return commit["firstPublicParent"]
+
+        return None
+
     @alru_cache
     async def get_base_commit_hash(self) -> str:
         """Return the Git commit this diff applies to.
 
         This is the diff's base when it exists upstream. Otherwise, eg. when the
         base is a local commit absent from Phabricator's stackGraph, it is the
-        latest revision landed on mozilla-central when the diff was created.
+        first public ancestor moz-phab recorded at submission, or else the latest
+        revision landed on mozilla-central when the diff was created.
         """
         repo = await self._github_repo()
         base = self._diff_metadata.get("refs", {}).get("base", {})
         commit_hash = base.get("identifier")
         if commit_hash and await self._commit_exists(repo, commit_hash):
             return commit_hash
+
+        first_public_parent = self._first_public_parent
+        if first_public_parent and await self._commit_exists(repo, first_public_parent):
+            return first_public_parent
 
         created = datetime.fromtimestamp(self._diff_metadata["dateCreated"], UTC)
         landing_hash = await self._latest_landing_commit(repo, before=created)
