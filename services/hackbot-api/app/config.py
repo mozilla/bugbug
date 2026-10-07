@@ -77,7 +77,6 @@ class Settings(BaseSettings):
     webhook: WebhookSettings
 
     # Bugzilla uses a separate shared-secret header and bot identity. These map
-    # from BUGZILLA_WEBHOOK_SECRET and BUGZILLA_WEBHOOK_BOT_LOGIN.
     bugzilla_webhook: BugzillaWebhookSettings
 
     bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
