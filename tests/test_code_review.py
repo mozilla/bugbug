@@ -523,6 +523,7 @@ def make_phabricator_stack(
     upstream=(CENTRAL,),
     repo_files=None,
     landing_merges=(),
+    first_public_parent=None,
 ):
     """Build a stack of real PhabricatorPatch objects backed by fake Conduit/HTTP.
 
@@ -530,7 +531,8 @@ def make_phabricator_stack(
     "old" changeset view serves old_files. GitHub knows the `upstream` commits,
     serves repo_files, keyed by (commit, path), whose values are file contents
     or HTTP status codes, and answers commit searches with landing_merges, a
-    list of (sha, message). Returns the top patch and the list of requests.
+    list of (sha, message). Like moz-phab, every diff records the same
+    first_public_parent, if any. Returns the top patch and the list of requests.
     """
     phids = [f"PHID-DREV-{i}" for i in range(len(revisions))]
     by_phid = dict(zip(phids, revisions))
@@ -603,8 +605,25 @@ def make_phabricator_stack(
             return httpx.Response(200, json=body, request=request)
         return httpx.Response(200, text=body, request=request)
 
+    def conduit(method, ids):
+        requests.append((method, ids))
+        local_commits = {"local-node": {"firstPublicParent": first_public_parent}}
+        return {
+            str(diff_id): {
+                "properties": {"local:commits": local_commits}
+                if first_public_parent
+                else []
+            }
+            for diff_id in ids
+        }
+
     monkeypatch.setattr(
         phab_platform, "get_http_client", lambda: SimpleNamespace(get=get)
+    )
+    monkeypatch.setattr(
+        phab_platform,
+        "get_phabricator_client",
+        lambda: SimpleNamespace(request=conduit),
     )
     return FakeStackPatch(revision_phid=phids[-1]), requests
 
@@ -708,6 +727,49 @@ def test_expand_context_does_not_guess_when_base_file_is_missing(monkeypatch):
     searchfox.get_file.assert_not_awaited()
 
 
+def test_expand_context_uses_first_public_parent(monkeypatch):
+    # As with D330744, whose base de80de07fa1d is a local commit.
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(CENTRAL, "b.txt"): "one\ntwo\n"},
+        landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
+        first_public_parent=CENTRAL,
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result == "1| one\n2| TWO"
+    assert requests == [
+        f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
+        f"{COMMITS_API}/{CENTRAL}",
+        f"{GITHUB}/{CENTRAL}/b.txt",
+    ]
+
+
+def test_expand_context_skips_first_public_parent_missing_upstream(monkeypatch):
+    unknown = "1" * 40
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(LANDING, "b.txt"): "one\ntwo\n"},
+        landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
+        first_public_parent=unknown,
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result == "1| one\n2| TWO"
+    assert requests == [
+        f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
+        f"{COMMITS_API}/{unknown}",
+        landing_search(),
+        f"{GITHUB}/{LANDING}/b.txt",
+    ]
+
+
 def test_expand_context_falls_back_to_landed_revision(monkeypatch):
     patch, requests = make_phabricator_stack(
         monkeypatch,
@@ -725,6 +787,7 @@ def test_expand_context_falls_back_to_landed_revision(monkeypatch):
     assert result == "1| one\n2| TWO"
     assert requests == [
         f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
         landing_search(),
         f"{GITHUB}/{LANDING}/b.txt",
     ]
@@ -743,7 +806,11 @@ def test_expand_context_falls_back_to_landed_revision_without_base(monkeypatch):
     result, _ = run_expand_context(monkeypatch, patch, "c.txt")
 
     assert result == "1| c"
-    assert requests == [landing_search(), f"{GITHUB}/{LANDING}/c.txt"]
+    assert requests == [
+        ("differential.querydiffs", [1]),
+        landing_search(),
+        f"{GITHUB}/{LANDING}/c.txt",
+    ]
 
 
 def test_expand_context_rejects_patch_that_does_not_apply_to_fallback(monkeypatch):
@@ -775,7 +842,11 @@ def test_expand_context_reports_missing_base_and_landing(monkeypatch):
 
     assert result.startswith("Warning: could not retrieve b.txt")
     assert "no landed mozilla-central revision" in result
-    assert requests == [f"{COMMITS_API}/{LOCAL_PARENT}", landing_search()]
+    assert requests == [
+        f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
+        landing_search(),
+    ]
     searchfox.get_file_at_revision.assert_not_awaited()
     searchfox.get_file.assert_not_awaited()
 
