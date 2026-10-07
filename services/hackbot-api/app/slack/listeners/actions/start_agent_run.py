@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from hackbot_client import HackbotClient
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, Json, validate_call, ConfigDict
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
 from slack_bolt.context.respond.async_respond import AsyncRespond
@@ -30,6 +30,26 @@ class StartAgentRunValue(BaseModel):
     # A run whose pending actions will be applied before the new run starts.
     apply_run_id: UUID | None = None
 
+class SlackUser(BaseModel):
+    """User who started a Slack interaction.
+    https://docs.slack.dev/reference/objects/user-object/
+    """
+    id: str | None = None
+
+class SlackClickPayload(BaseModel):
+    """The Slack payload received when a button is clicked.
+    https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
+    """
+    user: SlackUser | None = None
+    message: dict
+
+class SlackClickAction(BaseModel):
+    """The action that starts an agent run.
+    https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
+    """
+    value: Json[StartAgentRunValue]
+    action_id: str
+    block_id: str
 
 def _run_url(run_id: UUID) -> str:
     return f"{settings.hackbot_ui_url}/runs/{run_id}"
@@ -76,11 +96,11 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
             "blocks": blocks[:i] + replacement + blocks[i + 1 :],
         }
 
-
+@validate_call(config=ConfigDict(arbitrary_types_allowed=True))
 async def start_agent_run_callback(
     ack: AsyncAck,
-    action: dict,
-    body: dict,
+    action: SlackClickAction,
+    body: SlackClickPayload,
     context: AsyncBoltContext,
     respond: AsyncRespond,
     logger: logging.Logger,
@@ -92,8 +112,8 @@ async def start_agent_run_callback(
     should be fixed with https://github.com/mozilla/bugbug/issues/6468.
     """
     client: HackbotClient = context["hackbot_client"]
-    user = (body.get("user") or {}).get("id")
-    value = StartAgentRunValue.model_validate_json(action["value"])
+    user = body.user.id if body.user is not None else None
+    value = action.value
 
     if value.apply_run_id:
         actions = await client.apply_actions(value.apply_run_id)
@@ -138,18 +158,18 @@ async def start_agent_run_callback(
 
     triggered_by = user if run.is_new else None
     note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
-    updated_message = _message_with_note(body["message"], action, note_block)
+    updated_message = _message_with_note(body.message, action.model_dump(), note_block)
     if not updated_message:
         logger.warning(
             "Clicked button '%s' not found in its message; left unchanged",
-            action["action_id"],
+            action.action_id,
         )
     else:
         response = await respond(**updated_message, replace_original=True)
         if response.status_code != 200:
             logger.error(
                 "Failed to mark button '%s' as used: HTTP %s %s",
-                action["action_id"],
+                action.action_id,
                 response.status_code,
                 response.body,
             )
