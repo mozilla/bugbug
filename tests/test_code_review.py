@@ -63,7 +63,9 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures/phabricator")
 
 def make_patch(raw_diff):
     patch_set = PatchSet.from_string(raw_diff)
-    return SimpleNamespace(patch_set=patch_set, patch_stack=[patch_set])
+    return SimpleNamespace(
+        patch_set=patch_set, patch_stack=[patch_set], commit_context=""
+    )
 
 
 def make_patch_stack(*raw_diffs):
@@ -1823,6 +1825,8 @@ def _make_review_tool(review_context_repo=None):
     tool = CodeReviewTool.__new__(CodeReviewTool)
     tool.target_software = "Mozilla Firefox"
     tool.is_experiment_env = False
+    tool._code_context = None
+    tool._use_static_examples = True
     tool.review_comments_db = None
     tool.show_patch_example = False
     tool._review_context_repo = review_context_repo
@@ -1841,6 +1845,7 @@ def _make_review_patch(github_repo_ref_return=None):
     patch_set = PatchSet.from_string("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,1 @@\n+a\n")
     return SimpleNamespace(
         raw_diff="diff",
+        commit_context="",
         patch_set=patch_set,
         github_repo_ref=AsyncMock(return_value=github_repo_ref_return),
     )

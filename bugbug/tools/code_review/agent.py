@@ -51,6 +51,7 @@ from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
     format_patch_set,
 )
+from bugbug.tools.core.code_context import CodeContext
 from bugbug.tools.core.exceptions import (
     LargeDiffError,
     RecursionLimitError,
@@ -83,6 +84,9 @@ class CodeReviewTool(GenerativeModelTool):
         review_context_branch: str = "main",
         extra_context_toml: Optional[str] = None,
         content_overrides: Optional[dict[str, str]] = None,
+        context_tools: Optional[list] = None,
+        code_context: CodeContext | None = None,
+        use_static_examples: bool = True,
     ) -> None:
         super().__init__()
 
@@ -107,7 +111,9 @@ class CodeReviewTool(GenerativeModelTool):
         self.patch_summarizer = patch_summarizer
         self.suggestion_filterer = suggestion_filterer
 
-        tools = list(SEARCHFOX_TOOLS)
+        tools = list(SEARCHFOX_TOOLS if context_tools is None else context_tools)
+        self._code_context = code_context
+        self._use_static_examples = use_static_examples
 
         if skills:
             tools.append(create_load_skill_tool(skills))
@@ -117,7 +123,7 @@ class CodeReviewTool(GenerativeModelTool):
         middleware = []
         if todo_enabled:
             middleware.append(
-                TodoListMiddleware(
+                TodoListMiddleware[AgentResponse, CodeReviewContext](
                     system_prompt=CODE_REVIEW_TODO_PROMPT,
                     tool_description=CODE_REVIEW_TODO_TOOL_DESCRIPTION,
                 )
@@ -126,6 +132,7 @@ class CodeReviewTool(GenerativeModelTool):
         self.agent = create_agent(
             llm,
             tools,
+            context_schema=CodeReviewContext,
             system_prompt=SYSTEM_PROMPT_TEMPLATE.format(
                 target_software=self.target_software,
             ),
@@ -191,12 +198,16 @@ class CodeReviewTool(GenerativeModelTool):
         if "patch_summarizer" not in kwargs:
             from bugbug.tools.patch_summarization import PatchSummarizationTool
 
-            kwargs["patch_summarizer"] = PatchSummarizationTool.create()
+            kwargs["patch_summarizer"] = PatchSummarizationTool.create(
+                target_software=kwargs.get("target_software", "Mozilla Firefox")
+            )
 
         if "suggestion_filterer" not in kwargs:
             from bugbug.tools.suggestion_filtering import SuggestionFilteringTool
 
-            kwargs["suggestion_filterer"] = SuggestionFilteringTool.create()
+            kwargs["suggestion_filterer"] = SuggestionFilteringTool.create(
+                target_software=kwargs.get("target_software", "Mozilla Firefox")
+            )
 
         if "skills" not in kwargs:
             from bugbug.tools.code_review.prompts import REVIEW_SKILLS
@@ -213,7 +224,7 @@ class CodeReviewTool(GenerativeModelTool):
     ) -> str:
         created_before = patch.date_created if self.is_experiment_env else None
 
-        return FIRST_MESSAGE_TEMPLATE.format(
+        prompt = FIRST_MESSAGE_TEMPLATE.format(
             current_date=current_date_for_prompt(),
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
@@ -221,6 +232,11 @@ class CodeReviewTool(GenerativeModelTool):
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
         )
+        if patch.commit_context:
+            prompt += "\n\n" + patch.commit_context
+        if self._code_context is not None:
+            prompt += "\n\nCode context capabilities: " + self._code_context.description
+        return prompt
 
     async def generate_review_comments(
         self, patch: Patch, patch_summary: str
@@ -275,7 +291,7 @@ class CodeReviewTool(GenerativeModelTool):
         try:
             async for chunk in self.agent.astream(
                 {"messages": messages},
-                context=CodeReviewContext(patch=patch),
+                context=CodeReviewContext(patch=patch, source=self._code_context),
                 stream_mode="values",
                 config={"recursion_limit": 500},
             ):
@@ -302,7 +318,7 @@ class CodeReviewTool(GenerativeModelTool):
         return result["structured_response"].comments[:1]
 
     async def run(self, patch: Patch) -> CodeReviewToolResponse:
-        if self.count_tokens(patch.raw_diff) > 21000:
+        if self.count_tokens(patch.raw_diff + patch.commit_context) > 21000:
             raise LargeDiffError("The diff is too large")
 
         patch_summary = self.patch_summarizer.run(patch)
@@ -377,6 +393,8 @@ class CodeReviewTool(GenerativeModelTool):
                 )
             ]
 
+        if not comment_examples and not self._use_static_examples:
+            return ""
         if not comment_examples:
             comment_examples = STATIC_COMMENT_EXAMPLES
         else:
