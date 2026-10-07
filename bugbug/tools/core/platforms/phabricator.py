@@ -18,7 +18,11 @@ from libmozdata.phabricator import PhabricatorRevisionNotFoundException
 from tqdm import tqdm
 from unidiff import PatchSet
 
-from bugbug.tools.core.connection import get_http_client, get_user_agent
+from bugbug.tools.core.connection import (
+    get_github_api_headers,
+    get_http_client,
+    get_user_agent,
+)
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
 from bugbug.tools.core.platforms.bugzilla import Bug
@@ -523,7 +527,10 @@ class PhabricatorPatch(Patch):
         client = get_http_client()
         r = await client.get(
             f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
-            headers={"Accept": "application/vnd.github.sha"},
+            headers={
+                "Accept": "application/vnd.github.sha",
+                **get_github_api_headers(),
+            },
         )
         # GitHub answers 422 for a well-formed SHA it doesn't know.
         if r.status_code in (404, 422):
@@ -544,6 +551,7 @@ class PhabricatorPatch(Patch):
                 "sort": "committer-date",
                 "order": "desc",
             },
+            headers=get_github_api_headers(),
         )
         r.raise_for_status()
 
