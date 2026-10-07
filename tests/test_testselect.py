@@ -6,7 +6,7 @@
 import itertools
 import math
 import pickle
-from typing import Iterator
+from typing import Any, Iterator
 
 import hypothesis
 import hypothesis.strategies as st
@@ -839,10 +839,9 @@ def test_group_model_balances_with_weights() -> None:
 
     model = testselect.TestGroupSelectModel()
     assert "sampler" not in model.clf.named_steps
-    assert "sampler" in testselect.TestLabelSelectModel().clf.named_steps
-    assert (
-        testselect.TestLabelSelectModel().get_sample_weights(np.array([1, 0])) is None
-    )
+    config_group_model = testselect.TestConfigGroupSelectModel()
+    assert "sampler" in config_group_model.clf.named_steps
+    assert config_group_model.get_sample_weights(np.array([1, 0])) is None
 
     rng = np.random.default_rng(0)
     y = (rng.random(200) < 0.2).astype(int)
@@ -878,13 +877,19 @@ def test_items_gen_samples_negatives(monkeypatch) -> None:
         "get_test_scheduling_history",
         lambda granularity: iter(history),
     )
-    monkeypatch.setattr(
-        testselect, "get_commit_map", lambda: {f"rev{i}": {} for i in range(50)}
-    )
+    requested_revs = []
+
+    def get_commit_map(revs=None):
+        requested_revs.append(revs)
+        return {f"rev{i}": {} for i in range(50)}
+
+    monkeypatch.setattr(testselect, "get_commit_map", get_commit_map)
     monkeypatch.setattr(testselect.commit_features, "merge_commits", lambda commits: {})
 
     model = testselect.TestGroupSelectModel()
     labels = [label for _, label in model.items_gen(classes)]
+    # Only the commits of the pushes in the history are loaded.
+    assert requested_revs == [{f"rev{i}" for i in range(50)}]
     # All the positives, and about 2% of the negatives.
     assert sum(labels) == 50
     assert 50 < len(labels) < 250
@@ -994,4 +999,219 @@ def test_share_caught() -> None:
     assert testselect.share_caught(pushes[3:], 0.5) is None
     assert set(testselect.CONFIDENCE_LEVEL_MIN_CAUGHT) == set(
         testselect.CONFIDENCE_LEVEL_TARGETS
+    )
+
+
+FAILURE_KEYS = [
+    f"failures{part}"
+    for part in [""]
+    + [
+        f"_{scope}"
+        for scope in (
+            "past_700_pushes",
+            "past_1400_pushes",
+            "past_2800_pushes",
+        )
+    ]
+] + [
+    f"failures{window}_in_{kind}"
+    for kind in ("types", "files", "directories", "components")
+    for window in ("", "_past_700_pushes", "_past_1400_pushes", "_past_2800_pushes")
+]
+
+
+@pytest.mark.parametrize(
+    "model_class, runnables",
+    [
+        (
+            testselect.TestGroupSelectModel,
+            [
+                "dom/base/test/mochitest.toml",
+                "layout/reftests/reftest.list",
+                "testing/web-platform/tests/css/css-grid",
+                "netwerk/test/unit/xpcshell.toml",
+            ],
+        ),
+        (
+            testselect.TestLabelSelectModel,
+            [
+                "test-linux2404-64/opt-gtest-1proc",
+                "test-windows11-64-25h2/debug-marionette-unittest",
+                "build-win64/opt",
+                "build-android-aarch64-fenix/debug",
+            ],
+        ),
+    ],
+)
+def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None:
+    """Train with the real pipeline (items_gen, train_test_split, sample weights) on a fake history."""
+    monkeypatch.chdir(tmp_path)
+    rng = np.random.default_rng(0)
+    history = []
+    for i in range(60):
+        test_datas = []
+        for name in runnables:
+            touched = rng.random() < 0.3
+            failed = touched and rng.random() < 0.5
+            data: dict[str, Any] = {
+                k: int(touched) * int(rng.integers(1, 4)) for k in FAILURE_KEYS
+            }
+            data.update(
+                name=name,
+                is_likely_regression=failed,
+                is_possible_regression=False,
+                touched_together_files=int(touched),
+                touched_together_directories=int(touched),
+                touched_together_pmi=float(touched),
+            )
+            test_datas.append(data)
+        history.append(([f"rev{i}"], test_datas))
+
+    monkeypatch.setattr(
+        testselect.test_scheduling,
+        "get_test_scheduling_history",
+        lambda granularity: iter(history),
+    )
+    monkeypatch.setattr(
+        testselect,
+        "get_commit_map",
+        lambda revs=None: {
+            f"rev{i}": {
+                "files": ["dom/base/Document.cpp"],
+                "types": [".cpp"],
+                "directories": ["dom/base"],
+                "components": ["Core::DOM: Core & HTML"],
+            }
+            for i in range(60)
+        },
+    )
+    monkeypatch.setattr(
+        testselect.commit_features, "merge_commits", lambda commits: dict(commits[0])
+    )
+
+    model = model_class()
+    # Keep more passing runnables than by default, so that the training and test sets aren't empty.
+    model.negative_sample_rate = 0.5
+
+    # The push data used by the evaluation (to generate the failing together DB), at config/group
+    # granularity for the group model.
+    configs = ["test-linux2404-64/opt", "test-windows11-64-25h2/debug"]
+    push_data: list[tuple[Any, ...]] = []
+    for (revs,), test_datas in history:
+        tasks: list[Any]
+        failures: list[Any]
+        if model.granularity == "group":
+            tasks = [
+                (config, data["name"]) for data in test_datas for config in configs
+            ]
+            failures = [
+                (configs[0], data["name"])
+                for data in test_datas
+                if data["is_likely_regression"]
+            ]
+        else:
+            tasks = [data["name"] for data in test_datas]
+            failures = [
+                data["name"] for data in test_datas if data["is_likely_regression"]
+            ]
+        push_data.append(([revs], None, tasks, [], failures))
+    monkeypatch.setattr(
+        testselect.test_scheduling,
+        "get_push_data",
+        lambda granularity: (lambda: iter(push_data), len(push_data), ()),
+    )
+
+    # The past failures DB, whose push number is used to find the past failures of each test push.
+    past_failures = test_scheduling.PastFailures(model.granularity, False)
+    past_failures.push_num = len(history)
+    past_failures.all_runnables = runnables
+    past_failures.close()
+    # An empty touched together DB (used for the group model's features).
+    monkeypatch.setattr(test_scheduling, "touched_together", None)
+    # Other tests leave read-only failing together DBs open, while the evaluation regenerates them.
+    monkeypatch.setattr(test_scheduling, "failing_together", {})
+    test_scheduling.get_touched_together_db(False)
+    test_scheduling.close_touched_together_db()
+
+    # (The wrappers are set on the class, as the trained model is pickled.)
+    splits = []
+    orig_split = model_class.train_test_split
+
+    def train_test_split(self, X, y):
+        result = orig_split(self, X, y)
+        splits.append(result)
+        return result
+
+    monkeypatch.setattr(model_class, "train_test_split", train_test_split)
+
+    weights = []
+    orig_weights = model_class.get_sample_weights
+
+    def get_sample_weights(self, y):
+        w = orig_weights(self, y)
+        weights.append((len(y), w))
+        return w
+
+    monkeypatch.setattr(model_class, "get_sample_weights", get_sample_weights)
+
+    model.train()
+
+    X_train, X_test, y_train, y_test = splits[0]
+    assert len(X_train) > 0 and len(X_test) > 0
+    # The split is by push: training rows come from the first 90% of the pushes.
+    train_pushes = set(np.array(model.row_push_index[: len(y_train)]))
+    test_pushes = set(np.array(model.row_push_index[len(y_train) :]))
+    assert max(train_pushes) < min(test_pushes)
+    assert min(test_pushes) >= math.floor(0.9 * 60) - 1
+    # The sample weights (if the model uses them) match the rows they're for: the training split,
+    # then all the rows.
+    assert [n for n, _ in weights] == [len(y_train), len(y_train) + len(y_test)]
+    assert all(w is None or len(w) == n for n, w in weights)
+    # The evaluation ran on the test pushes and computed the confidence thresholds.
+    assert set(model.confidence_thresholds) == set(
+        testselect.CONFIDENCE_LEVEL_TARGETS[model.granularity]
+    )
+
+
+def test_label_model_configuration() -> None:
+    from bugbug import test_scheduling_features
+
+    model = testselect.TestLabelSelectModel()
+    assert "sampler" not in model.clf.named_steps
+    assert model.negative_sample_rate == 0.05
+    assert model.positive_weight_k == 5
+    assert model.failures_skip is None
+    extractors = model.extraction_pipeline.steps[0][1].feature_extractors
+    for extractor in (
+        test_scheduling_features.TaskNameTokens,
+        test_scheduling_features.PushBuildFiles,
+        test_scheduling_features.PushTaskFiles,
+    ):
+        assert any(isinstance(fe, extractor) for fe in extractors)
+    assert not any(
+        isinstance(
+            fe, (test_scheduling_features.Platform, test_scheduling_features.Suite)
+        )
+        for fe in extractors
+    )
+
+
+def test_label_model_suite_test_dirs(tmp_path) -> None:
+    from bugbug import test_scheduling_features
+
+    (tmp_path / "xpcom" / "tests" / "gtest").mkdir(parents=True)
+    (tmp_path / "xpcom" / "tests" / "gtest" / "moz.build").write_text(
+        'FINAL_LIBRARY = "xul-gtest"\n'
+    )
+
+    model = testselect.TestLabelSelectModel(repo_dir=str(tmp_path))
+    extractors = model.extraction_pipeline.steps[0][1].feature_extractors
+    push_task_files = next(
+        fe
+        for fe in extractors
+        if isinstance(fe, test_scheduling_features.PushTaskFiles)
+    )
+    assert dict(push_task_files.suite_files)["gtest"] == (
+        "testing/gtest/",
+        "xpcom/tests/gtest/",
     )

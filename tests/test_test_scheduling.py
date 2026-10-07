@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import math
 from datetime import datetime
 
 import pytest
@@ -570,6 +571,67 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
 
+def test_cochange_pmi(monkeypatch: MonkeyPatch) -> None:
+    test_scheduling.touched_together = None
+
+    commits = [
+        {
+            "node": "commit1",
+            "backedoutby": "",
+            "files": ["dom/file1.cpp", "dom/tests/manifest1.ini"],
+        },
+        {
+            "node": "commitbackedout",
+            "backedoutby": "commitbackout",
+            "files": ["dom/file1.cpp", "layout/tests/manifest2.ini"],
+        },
+        {
+            "node": "commit2",
+            "backedoutby": "",
+            "files": ["dom/file2.cpp", "layout/tests/manifest2.ini"],
+        },
+        {
+            "node": "commit3",
+            "backedoutby": "",
+            "files": ["layout/file.cpp", "dom/tests/sub/test.js"],
+        },
+        {
+            "node": "commit4",
+            "backedoutby": "",
+            "files": ["dom/file1.cpp", "dom/tests/manifest1.ini"],
+        },
+    ]
+    monkeypatch.setattr(repository, "get_commits", lambda: commits)
+
+    update_touched_together_gen = test_scheduling.update_touched_together(
+        {"dom/tests", "layout/tests"}
+    )
+    next(update_touched_together_gen)
+    update_touched_together_gen.send(Revision("commit4"))
+    try:
+        update_touched_together_gen.send(None)
+    except StopIteration:
+        pass
+
+    # 4 commits (the backed-out one is skipped); dom was changed in 3 of them, layout in 1, dom/tests
+    # (including its subdirectories) in 3, layout/tests in 1.
+    assert test_scheduling.get_cochange_pmi(["layout"], ["dom/tests"]) == pytest.approx(
+        math.log(1 * 4 / (1 * 3))
+    )
+    assert test_scheduling.get_cochange_pmi(["dom"], ["layout/tests"]) == pytest.approx(
+        math.log(1 * 4 / (3 * 1))
+    )
+    # Changed together less often than by chance: 2 * 4 / (3 * 3) < 1.
+    assert test_scheduling.get_cochange_pmi(["dom"], ["dom/tests"]) == 0.0
+    # Never changed together.
+    assert test_scheduling.get_cochange_pmi(["layout"], ["layout/tests"]) == 0.0
+    assert test_scheduling.get_cochange_pmi(["toolkit"], ["dom/tests"]) == 0.0
+    # The maximum over the directories.
+    assert test_scheduling.get_cochange_pmi(
+        ["dom", "layout"], ["dom/tests", "layout/tests"]
+    ) == pytest.approx(math.log(4 / 3))
+
+
 @pytest.mark.parametrize("granularity", ["group", "label"])
 def test_generate_data(granularity: str) -> None:
     past_failures = test_scheduling.PastFailures(granularity, False)
@@ -656,6 +718,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
 
@@ -686,6 +749,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -728,6 +792,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -757,6 +822,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -799,6 +865,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -828,6 +895,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -864,6 +932,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
 
@@ -906,6 +975,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -935,6 +1005,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -977,6 +1048,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -1006,6 +1078,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -1451,3 +1524,34 @@ def test_find_tasks_for_paths(tmp_path) -> None:
     assert (
         test_scheduling.find_tasks_for_paths(str(tmp_path), (), ["test_foo.cpp"]) == []
     )
+
+
+def test_get_suite_test_dirs(tmp_path) -> None:
+    def write(path, content):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(content)
+
+    write(
+        "browser/components/moz.build",
+        'MARIONETTE_MANIFESTS += ["sessionstore/test/marionette/manifest.toml"]\n',
+    )
+    write(
+        "toolkit/components/telemetry/moz.build",
+        "TELEMETRY_TESTS_CLIENT_MANIFESTS += [\n"
+        '    "tests/marionette/tests/manifest.toml",\n'
+        "]\n",
+    )
+    write("xpcom/tests/gtest/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+    write("mfbt/tests/moz.build", 'CppUnitTests(["TestArray"])\n')
+    write("dom/base/moz.build", 'MOCHITEST_MANIFESTS += ["test/mochitest.toml"]\n')
+    # Third-party code and object directories are skipped.
+    write("third_party/foo/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+    write("obj-x86_64-pc-linux-gnu/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+
+    assert test_scheduling.get_suite_test_dirs(str(tmp_path)) == {
+        "marionette": ("browser/components/sessionstore/test/marionette/",),
+        "telemetry-tests": ("toolkit/components/telemetry/tests/marionette/tests/",),
+        "firefox-ui": (),
+        "gtest": ("xpcom/tests/gtest/",),
+        "cppunittest": ("mfbt/tests/",),
+    }

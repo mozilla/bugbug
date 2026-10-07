@@ -270,7 +270,17 @@ class Retriever(object):
             skipped_no_runnables = 0
 
             if granularity in ("group", "config_group"):
-                update_touched_together_gen = test_scheduling.update_touched_together()
+                # The co-changes of source directories with the runnables' directories are counted too.
+                runnable_dirs = {
+                    runnable_dir
+                    for runnable in all_runnables
+                    for runnable_dir in test_scheduling.get_runnable_dirs(
+                        runnable[1] if isinstance(runnable, tuple) else runnable
+                    )
+                }
+                update_touched_together_gen = test_scheduling.update_touched_together(
+                    runnable_dirs
+                )
                 next(update_touched_together_gen)
 
             for (

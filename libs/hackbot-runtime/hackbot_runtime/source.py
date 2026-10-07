@@ -124,3 +124,13 @@ def ensure_source_repo(
         stderr=sys.stderr,
     )
     log.info("shallow clone complete")
+
+
+def checkout_commit(source_repo: Path, ref: str) -> None:
+    """Detach the checkout at ``ref``, which the shallow clone must already hold."""
+    subprocess.run(
+        ["git", "-C", str(source_repo), "checkout", "-q", "--detach", ref],
+        check=True,
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+    )

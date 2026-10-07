@@ -35,6 +35,48 @@ def _run_url(run_id: UUID) -> str:
     return f"{settings.hackbot_ui_url}/runs/{run_id}"
 
 
+def _generate_replacement_block(
+    user: str | None, agent_name: str, run_id: UUID
+) -> dict:
+    who = f"<@{user}>" if user else "Someone"
+    note = f":check-mark-green: {who} started a <{_run_url(run_id)}|{agent_name} run>"
+    return {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
+
+
+def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | None:
+    """``message`` with the clicked button swapped for ``note_block``, or None if absent.
+
+    Only the clicked button goes: any other button in the same row is a
+    different offer and stays clickable, with the note placed under that row.
+    """
+    blocks = message["blocks"]
+    for i, block in enumerate(blocks):
+        if block["block_id"] != action["block_id"]:
+            continue
+        if block["type"] != "actions":
+            log.error(
+                "Clicked button '%s' is in a '%s' block, which is not supported yet",
+                action["action_id"],
+                block["type"],
+            )
+            return None
+        elements = block["elements"]
+        filtered_elements = [
+            e for e in elements if e["action_id"] != action["action_id"]
+        ]
+        if len(filtered_elements) == len(elements):
+            return None
+        replacement = (
+            [{**block, "elements": filtered_elements}, note_block]
+            if filtered_elements
+            else [note_block]
+        )
+        return {
+            "text": f"{message['text']}\n{note_block['elements'][0]['text']}".strip(),
+            "blocks": blocks[:i] + replacement + blocks[i + 1 :],
+        }
+
+
 async def start_agent_run_callback(
     ack: AsyncAck,
     action: dict,
@@ -93,5 +135,23 @@ async def start_agent_run_callback(
             replace_original=False,
             unfurl_links=False,
         )
+
+    triggered_by = user if run.is_new else None
+    note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
+    updated_message = _message_with_note(body["message"], action, note_block)
+    if not updated_message:
+        logger.warning(
+            "Clicked button '%s' not found in its message; left unchanged",
+            action["action_id"],
+        )
+    else:
+        response = await respond(**updated_message, replace_original=True)
+        if response.status_code != 200:
+            logger.error(
+                "Failed to mark button '%s' as used: HTTP %s %s",
+                action["action_id"],
+                response.status_code,
+                response.body,
+            )
 
     await ack()
