@@ -327,11 +327,10 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
         log.warning("Failed to fetch execution status for run %s", run.run_id)
         raise
 
-    if exec_status in (ExecutionStatus.pending, ExecutionStatus.running):
-        if (
-            run.status == RunStatus.pending.value
-            and exec_status == ExecutionStatus.running
-        ):
+    if exec_status == ExecutionStatus.pending:
+        return
+    if exec_status == ExecutionStatus.running:
+        if run.status == RunStatus.pending.value:
             run.status = RunStatus.running.value
             await db.commit()
         return
