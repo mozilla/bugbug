@@ -62,7 +62,9 @@ def permalink_prefix(rev: str | None) -> str:
     return f"{_BASE_URL}/rev/{rev}" if rev else f"{_BASE_URL}/source"
 
 
-async def resolve_index_revision(*, client=None, timeout: float = 10.0) -> str | None:
+async def resolve_index_revision(
+    *, client=None, http_timeout: float = 10.0
+) -> str | None:
     """Return the git SHA Searchfox's index is pinned to, or ``None``.
 
     Reads the permalink Searchfox publishes on a file page, so the revision is
@@ -83,7 +85,7 @@ async def resolve_index_revision(*, client=None, timeout: float = 10.0) -> str |
             import httpx
 
             async with httpx.AsyncClient(
-                timeout=timeout, follow_redirects=True
+                http_timeout=http_timeout, follow_redirects=True
             ) as owned:
                 resp = await owned.get(_PROBE_URL, headers={"User-Agent": _USER_AGENT})
         else:
