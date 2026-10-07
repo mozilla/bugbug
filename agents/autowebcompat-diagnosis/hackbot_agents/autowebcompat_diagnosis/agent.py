@@ -593,6 +593,12 @@ class DiagnosisResults:
         self.diagnosis_result: DiagnosisResult | None = None
 
     @property
+    def diagnosis(self) -> DiagnosisText | None:
+        if self.diagnosis_result is None:
+            return None
+        return self.diagnosis_result.diagnosis
+
+    @property
     def testcase_url(self) -> str | None:
         if self.diagnosis_result is None or self.diagnosis_result.testcase_path is None:
             return None
@@ -606,11 +612,7 @@ class DiagnosisResults:
         self.diagnosis_result = result
 
     def into_result(self) -> AutowebcompatDiagnosisResult:
-        diagnosis = (
-            self.diagnosis_result.read_diagnosis()
-            if self.diagnosis_result is not None
-            else None
-        )
+        diagnosis = self.diagnosis
         return AutowebcompatDiagnosisResult(
             reproduced=self.repro_result.reproduced,
             failure_reason=self.repro_result.failure_reason,

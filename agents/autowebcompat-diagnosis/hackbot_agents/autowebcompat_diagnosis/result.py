@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Annotated, Generic, Literal, TypeVar
 
@@ -294,22 +293,14 @@ class DiagnosisResult(BaseModel):
     @field_validator("diagnosis_path", mode="after")
     @classmethod
     def validate_diagnosis(cls, path: Path) -> Path:
-        # Tool-call markup the model sometimes leaks into long arguments, see
-        # https://github.com/anthropics/claude-code/issues/49747
-        leaked_xml = re.compile(r'<parameter name="|</(?:content|parameter)>\s*$')
-        text = path.read_text()
-        if leaked_xml.search(text):
-            raise ValueError(
-                f"{path} contains leaked tool-call markup (`<parameter name=` or a "
-                "trailing `</content>`); rewrite the file with only its intended text"
-            )
         try:
-            DiagnosisText.model_validate_json(text)
+            DiagnosisText.model_validate_json(path.read_text())
         except ValidationError as exc:
             raise ValueError(f"{path} is not a valid diagnosis: {exc}") from exc
         return path
 
-    def read_diagnosis(self) -> DiagnosisText:
+    @property
+    def diagnosis(self) -> DiagnosisText:
         return DiagnosisText.model_validate_json(self.diagnosis_path.read_text())
 
 
