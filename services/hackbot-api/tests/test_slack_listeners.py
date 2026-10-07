@@ -182,22 +182,20 @@ class TestStartAgentRun:
             call.kwargs for call in self.fake_respond.await_args_list
         ]
 
-    async def test_a_click_that_started_nothing_says_where_the_run_is(self):
+    async def test_a_click_that_started_nothing_tells_the_clicker_nothing_privately(
+        self,
+    ):
+        # The button is swapped for a note linking the existing run, which is
+        # all the clicker needs.
         self.fake_client.trigger_run.return_value = self._triggered(
             is_new=False, status=RunStatus.running
         )
 
         await self._call()
 
-        (reply,) = [
-            call.kwargs
-            for call in self.fake_respond.await_args_list
-            if call.kwargs.get("response_type") == "ephemeral"
+        assert self._edits() == [
+            call.kwargs for call in self.fake_respond.await_args_list
         ]
-        assert "already triggered" in reply["text"]
-        assert RUN_ID in reply["text"]
-        # Only the clicker is told; the channel's copy is updated separately.
-        assert reply["replace_original"] is False
 
     async def test_a_collapsed_click_is_still_acknowledged(self):
         # It is a click Slack delivered and this app handled, whatever it caused.
