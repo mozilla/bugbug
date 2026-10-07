@@ -9,7 +9,7 @@ import math
 import os
 import random
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Any, Generator
 
@@ -43,8 +43,8 @@ class Retriever(object):
 
         # We use the actual date instead of 'today-X' aliases to avoid mozci caching
         # this query.
-        from_date = datetime.now(timezone.utc) - relativedelta(months=from_months)
-        to_date = datetime.now(timezone.utc) - relativedelta(days=3)
+        from_date = datetime.utcnow() - relativedelta(months=from_months)
+        to_date = datetime.utcnow() - relativedelta(days=3)
 
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
@@ -270,7 +270,17 @@ class Retriever(object):
             skipped_no_runnables = 0
 
             if granularity in ("group", "config_group"):
-                update_touched_together_gen = test_scheduling.update_touched_together()
+                # The co-changes of source directories with the runnables' directories are counted too.
+                runnable_dirs = {
+                    runnable_dir
+                    for runnable in all_runnables
+                    for runnable_dir in test_scheduling.get_runnable_dirs(
+                        runnable[1] if isinstance(runnable, tuple) else runnable
+                    )
+                }
+                update_touched_together_gen = test_scheduling.update_touched_together(
+                    runnable_dirs
+                )
                 next(update_touched_together_gen)
 
             for (

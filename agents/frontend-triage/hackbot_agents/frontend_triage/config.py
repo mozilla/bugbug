@@ -68,7 +68,10 @@ class ScopedComponent(NamedTuple):
     # Overrides `trees` for `docs.docs_for` and for nothing else: the prompt's index still
     # renders `trees`, because a docs directory is not where the code is.
     #
-    # Data Sanitization is the only entry that needs it, and it needs it twice over. The
+    # Every DevTools panel needs it too: the contributor and user docs are registered
+    # once, by `devtools/moz.build`, so a panel's own tree resolves to none of them.
+    #
+    # Data Sanitization needs it twice over. The
     # article is registered by `toolkit/components/antitracking/moz.build`, which is
     # `Core :: Privacy: Anti-Tracking` and not a tree this component may claim; and its own
     # `browser/base/content/sanitize*` files resolve to `browser/base/moz.build`'s
@@ -437,7 +440,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "History",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=("mobile/android/fenix/", "mobile/android/android-components/"),
         # Every Android component claims the shared trees so that a bug localized
         # anywhere in Fenix reaches an Android team, and the narrower entries below
@@ -458,7 +461,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Toolbar",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=("mobile/android/fenix/", "mobile/android/android-components/"),
         owns=(
             "mobile/android/fenix/",
@@ -484,7 +487,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Homepage",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=("mobile/android/fenix/", "mobile/android/android-components/"),
         owns=(
             "mobile/android/fenix/",
@@ -506,7 +509,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Downloads",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -568,7 +571,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Tabs",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -640,7 +643,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Translations",
-        "#android-core-dev",
+        "#firefox-android-dev-info",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -1540,6 +1543,1278 @@ TRIAGE_SCOPE = (
             "paths mocked through `OSKeyStore` rather than the real dialog."
         ),
         related=("Toolkit :: Password Manager",),
+    ),
+    # DevTools is triaged by one team in one channel, so its 23 components share
+    # `#devtools-triage`. Ownership follows the `BUG_COMPONENT` lines under `devtools/`,
+    # with the server actors and shared modules `moz.build` gives to General left
+    # unowned so that every panel's run may cite them.
+    # `devtools/server/actors/inspector/` is owned because its `moz.build` gives it to
+    # this component. The highlighters are a tree only: `moz.build` leaves them General.
+    ScopedComponent(
+        "DevTools",
+        "Inspector",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/inspector/",
+            "devtools/server/actors/inspector/",
+            "devtools/server/actors/highlighters/",
+        ),
+        owns=("devtools/client/inspector/", "devtools/server/actors/inspector/"),
+        notes=(
+            "**Five sidebar panels have components of their own; everything else in "
+            "the panel is filed here.** The Rules view, Animations, Changes, "
+            "Compatibility and the Layout tab's container each have one, but the "
+            "markup view, breadcrumbs, search, node picker, Computed view, Fonts, and "
+            "the box model, flexbox and grid sections inside the Layout tab are "
+            "Inspector: `devtools/client/inspector/boxmodel/`, "
+            "`devtools/client/inspector/flexbox/` and `devtools/client/inspector/grids/` "
+            "set no `BUG_COMPONENT` and inherit this one. When a bug filed here belongs "
+            "elsewhere it is mostly the Rules view: of the 45 DevTools bugs moved off "
+            "Inspector since 2022, 16 went to `DevTools :: Inspector: Rules`, whose "
+            "guidance ships alongside, and only 1 to any other sub-panel; 8 went to "
+            "General and 6 to Storage Inspector, filed here for the name.\n\n"
+            "**The markup tree is the walker's, not the view's.** A node missing, "
+            "duplicated or stale in the markup view is usually "
+            "`devtools/server/actors/inspector/walker.js` rather than "
+            "`devtools/client/inspector/markup/`. Native anonymous content is hidden "
+            "unless `devtools.inspector.showAllAnonymousContent` is true, which is "
+            "expected. Event badges come from "
+            "`devtools/server/actors/inspector/event-collector.js`, which recognizes "
+            "plain DOM listeners plus jQuery and React and nothing else, so listeners "
+            "from another framework showing as their underlying DOM listener is an "
+            "enhancement request. Highlighters are drawn by "
+            "`devtools/server/actors/highlighters/` from `getAdjustedQuads` in "
+            "`devtools/shared/layout/utils.js`, a wrapper over `getBoxQuads()`: an "
+            "outline that is misplaced while `getBoxQuads()` returns the same wrong "
+            "box is `Core :: Layout`. The Computed view and Fonts are served by "
+            "`devtools/server/actors/page-style.js`; Fonts lists what "
+            "`InspectorUtils.getUsedFontFaces` returns, and "
+            "`layout/inspector/InspectorUtils.cpp` is `Core :: Layout` by `moz.build`, "
+            "so a wrong used font that the API itself reports is platform.\n\n"
+            "**Prefs that make the same steps look different.** "
+            "`devtools.inspector.three-pane-enabled` is true but "
+            "`devtools.inspector.chrome.three-pane-enabled` is false, so the Browser "
+            "Toolbox shows the Rules view as a sidebar tab rather than a third pane by "
+            "design. `devtools.layout.boxmodel.highlightProperty` (hover a box model "
+            "value to jump to its rule) is inside `#if defined(NIGHTLY_BUILD)` in "
+            "`browser/app/profile/firefox.js`, so it does nothing on Beta or release. "
+            "`devtools.markup.collapseAttributes` truncates attribute values past "
+            "`devtools.markup.collapseAttributeLength` (120).\n\n"
+            "**Coverage is heavy, so an empty `relevant_tests` is almost always "
+            "wrong.** Browser tests: 86 in `devtools/client/inspector/test/browser.toml`, "
+            "80 in its `highlighter/` and 21 in its `search/` manifests, 164 across the "
+            "three markup manifests, 28 computed, 16 fonts, 23 boxmodel, 36 flexbox, 32 "
+            "grids (plus 1 xpcshell) and 16 in `devtools/client/inspector/shared/test/`. "
+            "The walker side has 13 `browser_inspector-*` tests in "
+            "`devtools/server/tests/browser/` and 22 `test_inspector*` chrome tests in "
+            "`devtools/server/tests/chrome/`."
+        ),
+        related=("DevTools :: Inspector: Rules",),
+    ),
+    # `animation-type-longhand.js` is added to the planned map: only `animation.js` and
+    # its own chrome test require it, though `moz.build` leaves it General.
+    ScopedComponent(
+        "DevTools",
+        "Inspector: Animations",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/inspector/animation/",
+            "devtools/server/actors/animation.js",
+            "devtools/server/actors/animation-type-longhand.js",
+        ),
+        owns=(
+            "devtools/client/inspector/animation/",
+            "devtools/server/actors/animation.js",
+            "devtools/server/actors/animation-type-longhand.js",
+        ),
+        notes=(
+            "**The panel lists what Web Animations reports.** "
+            "`devtools/server/actors/animation.js` makes one actor per entry of the "
+            "selected node's `getAnimations({ subtree: true })` and follows changes "
+            "with a `MutationObserver` on `animations`, so an animation missing from "
+            "the list is first a question for `dom/animation/` (`Core :: DOM: "
+            "Animation`). Two list behaviors are deliberate: a finished animation "
+            "without forwards fill stays listed so it can be replayed (only `idle` ones "
+            "are dropped), and selecting any `::view-transition` child shows the whole "
+            "transition.\n\n"
+            "**Two things that look like bugs and are not.** The playback-rate dropdown "
+            "does not change each animation's `playbackRate`: "
+            "`devtools/client/inspector/animation/animation.js` sets "
+            "`animationsPlayBackRateMultiplier` on the BrowsingContext through target "
+            "configuration, and `BrowsingContext::AnimationsPlayBackRateMultiplier` "
+            "reads it from `Top()`, so every Web Animation in the tab slows down, "
+            "iframes included, while script-driven `requestAnimationFrame` motion does "
+            "not. Scroll-driven animations are not supported: "
+            "`layout.css.scroll-driven-animations.enabled` is Nightly-only in "
+            "`modules/libpref/init/StaticPrefList.yaml`, neither the actor nor the "
+            "client mentions scroll timelines, and the actor reports "
+            "`document.timeline.currentTime` as the reference clock. A garbled "
+            "scroll-driven animation is a missing feature, not a regression.\n\n"
+            "**A new CSS property can fail this component's test without touching its "
+            "code.** `devtools/server/actors/animation-type-longhand.js` is a "
+            "hand-kept table of every longhand's animation type, and "
+            "`devtools/server/tests/chrome/test_animation-type-longhand.html` fails "
+            "when `InspectorUtils.getCSSPropertyNames` (experimental properties "
+            "included) returns a longhand missing from it; the fix is one line in the "
+            "right set. Otherwise coverage is good and an empty `relevant_tests` is "
+            "wrong: 70 browser tests in "
+            "`devtools/client/inspector/animation/test/browser.toml` and 16 "
+            "`browser_animation_*` actor tests in `devtools/server/tests/browser/`."
+        ),
+        related=("DevTools :: Inspector",),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "Inspector: Changes",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/inspector/changes/",),
+        owns=("devtools/client/inspector/changes/",),
+        notes=(
+            "**Changes only sees edits the Rules view makes.** The record is a "
+            "`track-css-change` event emitted by "
+            "`devtools/server/actors/style-rule.js` (declaration and selector edits) "
+            "and `devtools/server/actors/page-style.js` (new rules), collected by "
+            "`devtools/server/actors/resources/css-changes.js` and delivered as the "
+            "`CSS_CHANGE` resource. Nothing else emits it, so edits made in the Style "
+            "Editor, in the markup view's `style` attribute or by page script are "
+            "absent by design. A change recorded wrong (old value, index, duplicate "
+            "entry) is usually `logDeclarationChange` in `style-rule.js`, not this "
+            "directory. `devtools/server/actors/changes.js` is dead code: it is not in "
+            "the `DevToolsModules` list in `devtools/server/actors/moz.build` and "
+            "nothing requires it, so do not localize there.\n\n"
+            "**The list is per tab, in memory, and cleared on navigation on purpose.** "
+            "`ChangesView` empties its store on the top-level target's `dom-loading` "
+            "document event, so a reload wiping the list is expected; nothing persists "
+            "it. The copy actions are built client-side in "
+            "`devtools/client/inspector/changes/ChangesView.js` and "
+            "`devtools/client/inspector/changes/ChangesContextMenu.js`. 17 browser tests "
+            "and 1 xpcshell (`test_changes_stylesheet.js`) cover it, so an empty "
+            "`relevant_tests` is usually wrong."
+        ),
+        related=("DevTools :: Inspector",),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "Inspector: Compatibility",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/inspector/compatibility/",
+            "devtools/server/actors/compatibility/",
+            "devtools/shared/compatibility/",
+        ),
+        owns=(
+            "devtools/client/inspector/compatibility/",
+            "devtools/server/actors/compatibility/",
+            "devtools/shared/compatibility/",
+        ),
+        notes=(
+            "**Wrong support data is fixed upstream.** "
+            "`devtools/shared/compatibility/dataset/css-properties.json` is a snapshot "
+            "of `@mdn/browser-compat-data` written by "
+            "`devtools/shared/compatibility/bin/update.js` and refreshed about once a "
+            "release cycle (most recently Bug 2070223 on 2026-09-08, for 157); hand "
+            "edits are overwritten. A property flagged for a browser that supports it, "
+            "or the reverse, goes to github.com/mdn/browser-compat-data and arrives "
+            "with the next refresh. The browser versions in the settings list come "
+            "from the `devtools-compatibility-browsers` Remote Settings collection, not "
+            "the tree.\n\n"
+            "**Only property names are checked.** `getCSSDeclarationBlockIssues` in "
+            "`devtools/server/actors/compatibility/lib/MDNCompatibility.js` reads each "
+            "declaration's name, never its value, and skips custom properties, so "
+            "unsupported values, selectors, at-rules, HTML and JS are never reported; "
+            "asking for them is an enhancement. The browsers offered are 8 ids and 4 "
+            "release statuses fixed in `devtools/shared/compatibility/constants.js`, "
+            "and the user's selection is `devtools.inspector.compatibility.target-"
+            "browsers`, where empty means all. The same lookup draws the warning icon "
+            "beside a declaration in the Rules view, so a wrong icon there is this "
+            "component's data.\n\n"
+            "**Coverage is moderate and mostly mocked.** 16 browser and 1 xpcshell "
+            "under `devtools/client/inspector/compatibility/test/`, 4 jest tests in "
+            "`devtools/client/inspector/compatibility/test/node/` run by "
+            "`devtools/client/bin/devtools-node-test-runner.js`, 2 xpcshell under "
+            "`devtools/server/actors/compatibility/lib/test/` and "
+            "`browser_compatibility_cssIssues.js` in `devtools/server/tests/browser/`. "
+            "All but the 2 tagged `devtools-compat-data` run against "
+            "`devtools/shared/compatibility/dataset/mock-css-properties.json`, so a "
+            "passing test says nothing about the real dataset."
+        ),
+        related=("DevTools :: Inspector",),
+    ),
+    # The box model, flexbox and grid directories are trees here but owned by Inspector,
+    # which is what their `moz.build` says; `layout.js` is a tree only (General).
+    ScopedComponent(
+        "DevTools",
+        "Inspector: Layout",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/inspector/layout/",
+            "devtools/client/inspector/boxmodel/",
+            "devtools/client/inspector/flexbox/",
+            "devtools/client/inspector/grids/",
+            "devtools/server/actors/layout.js",
+        ),
+        owns=("devtools/client/inspector/layout/",),
+        notes=(
+            "**This component's own directory is only the tab.** "
+            "`devtools/client/inspector/layout/` is `layout.js` and `LayoutApp.js`, "
+            "which mount accordions whose code is in "
+            "`devtools/client/inspector/boxmodel/`, "
+            "`devtools/client/inspector/flexbox/` and "
+            "`devtools/client/inspector/grids/`. `moz.build` files those three under "
+            "`DevTools :: Inspector`, whose guidance ships alongside, so a correctly "
+            "filed Layout bug usually localizes outside this component's tree; say so "
+            "rather than re-scoping it. Filing follows the same split: of 85 DevTools "
+            "bugs since 2023 with flexbox, grid or box model in the summary, 42 are in "
+            "Inspector, 19 here and 18 in Rules.\n\n"
+            "**Most wrong numbers come from the platform.** Grid data is "
+            "`getGridFragments()` and flex data `getAsFlexContainer()`, wrapped by "
+            "`devtools/server/actors/layout.js`. The objects they return are "
+            "`dom/grid/` and `dom/flex/` (`Core :: CSS Parsing and Computation` by "
+            "`moz.build`) over `layout/generic/nsGridContainerFrame.cpp` and "
+            "`layout/generic/nsFlexContainerFrame.cpp` (`Core :: Layout: Grid` and "
+            "`Layout: Flexbox`), so when the flex item sizing section or a grid line "
+            "disagrees with what renders, check what those APIs return before blaming "
+            "the panel. The first `getGridFragments()` call per container forces a "
+            "synchronous reflow, which is where slowness on large grids comes from. "
+            "The overlays are `css-grid.js`, `flexbox.js` and `box-model.js` in "
+            "`devtools/server/actors/highlighters/`. A flex or grid property greyed "
+            "out in the Rules view is the inactive-CSS check, which is `DevTools :: "
+            "Inspector: Rules`.\n\n"
+            "**Expected limits, and where the tests are.** Only 3 grids can be "
+            "highlighted at once (`devtools.gridinspector.maxHighlighters`), so further "
+            "checkboxes are disabled; the grid outline gives way to a cannot-show "
+            "message past 50 rows or columns (`devtools.gridinspector.gridOutlineMaxRows` "
+            "and `...MaxColumns`). There are no tests under "
+            "`devtools/client/inspector/layout/`, but an empty `relevant_tests` is still "
+            "wrong: 23 boxmodel, 36 flexbox and 32 grids browser tests (plus 1 grids "
+            "xpcshell) in those directories, and 3 `browser_layout_*` actor tests in "
+            "`devtools/server/tests/browser/`."
+        ),
+        related=("DevTools :: Inspector",),
+    ),
+    # `inactive-property-helper.js` is added to the planned map: `style-rule.js` is its
+    # only consumer and it exists to grey out declarations in this view, though
+    # `moz.build` leaves `devtools/server/actors/utils/` General.
+    ScopedComponent(
+        "DevTools",
+        "Inspector: Rules",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/inspector/rules/",
+            "devtools/client/inspector/emulation/",
+            "devtools/server/actors/css-properties.js",
+            "devtools/server/actors/utils/inactive-property-helper.js",
+        ),
+        owns=(
+            "devtools/client/inspector/rules/",
+            "devtools/client/inspector/emulation/",
+            "devtools/server/actors/css-properties.js",
+            "devtools/server/actors/utils/inactive-property-helper.js",
+        ),
+        notes=(
+            "**The view is client-side; what it shows and every edit go through two "
+            "shared actors.** The rule list is `getApplied` in "
+            "`devtools/server/actors/page-style.js` over "
+            "`InspectorUtils.getMatchingCSSRules`, and edits are applied by "
+            "`devtools/server/actors/style-rule.js`, whose `setRuleText` rewrites the "
+            "whole stylesheet text through "
+            "`InspectorUtils.replaceBlockRuleBodyTextInStylesheet`; a Rules edit that "
+            "mangles the sheet is there even when the reporter noticed it in the Style "
+            "Editor. Both actors also serve the Computed view and Fonts, which is why "
+            "neither is owned here. Value rendering (color swatches, `var()` and URL "
+            "links, CSS-explainers markup) is `devtools/client/shared/output-parser.js`. "
+            "Autocomplete reads the database `devtools/server/actors/css-properties.js` "
+            "builds at runtime from `InspectorUtils`, so a missing keyword is usually "
+            "`getCSSValuesForProperty` in `layout/inspector/InspectorUtils.cpp` "
+            "(`Core :: Layout` by `moz.build`), not a DevTools list; likewise a rule "
+            "missing or out of order is platform when `getMatchingCSSRules` returns it "
+            "that way.\n\n"
+            "**Inactive-CSS warnings are a hand-written rule table.** "
+            "`devtools/server/actors/utils/inactive-property-helper.js` (1753 lines) "
+            "decides when a declaration is greyed out with an info icon, one `when` "
+            "condition per group of properties. A false positive or a missing warning "
+            "is a rule in that file, and its file header says not to add rules for "
+            "properties that inherit by default, so asking for one is a wontfix rather "
+            "than an oversight. Its cases are 36 modules in "
+            "`devtools/server/tests/chrome/inactive-property-helper/` driven by "
+            "`test_inspector-inactive-property-helper.html`; a fix should add one. The "
+            "browser-compatibility icon beside a declaration is not this component's "
+            "data: it comes from the MDN dataset `DevTools :: Inspector: "
+            "Compatibility` owns.\n\n"
+            "**Prefs and expected states.** User-agent rules are hidden unless "
+            "`devtools.inspector.showUserAgentStyles` is true, pseudo-element rules "
+            "start collapsed (`devtools.inspector.show_pseudo_elements`), CSS explainers "
+            "are off (`devtools.inspector.css-explainers`), and colors keep their "
+            "authored format (`devtools.defaultColorUnit`). The print, color-scheme and "
+            "reduced-motion buttons in `devtools/client/inspector/emulation/` set "
+            "`mediumOverride`, `prefersColorSchemeOverride` and "
+            "`prefersReducedMotionOverride` on the BrowsingContext through "
+            "`devtools/server/actors/target-configuration.js`, so a page whose media "
+            "queries do not react once the override is set is platform.\n\n"
+            "**Coverage is the heaviest in DevTools, so an empty `relevant_tests` is "
+            "wrong.** 316 browser tests in `devtools/client/inspector/rules/test/` "
+            "split across `browser_part1.toml` (154) and `browser_part2.toml` (162), "
+            "including 8 for the emulation buttons (RDM, bfcache and "
+            "resistFingerprinting among them), plus 6 `test_styles-*` and "
+            "`test_css-properties.html` chrome tests in `devtools/server/tests/chrome/`."
+        ),
+        related=("DevTools :: Inspector",),
+    ),
+    # The server files are named one by one: `devtools/server/actors/moz.build` gives
+    # `webconsole.js` to Console and `resources/moz.build` gives it `*-messages.js`,
+    # while the rest of `devtools/server/` is `DevTools :: General`.
+    ScopedComponent(
+        "DevTools",
+        "Console",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/webconsole/",
+            "devtools/server/actors/webconsole.js",
+            "devtools/server/actors/resources/console-messages.js",
+            "devtools/server/actors/resources/css-messages.js",
+            "devtools/server/actors/resources/error-messages.js",
+            "devtools/server/actors/resources/platform-messages.js",
+        ),
+        owns=(
+            "devtools/client/webconsole/",
+            "devtools/server/actors/webconsole.js",
+            "devtools/server/actors/resources/console-messages.js",
+            "devtools/server/actors/resources/css-messages.js",
+            "devtools/server/actors/resources/error-messages.js",
+            "devtools/server/actors/resources/platform-messages.js",
+        ),
+        notes=(
+            "**The panel renders messages; the server and the platform produce them.** "
+            "`devtools/client/webconsole/` is React and Redux over resources from "
+            "`devtools/server/actors/resources/console-messages.js`, "
+            "`devtools/server/actors/resources/error-messages.js`, "
+            "`devtools/server/actors/resources/css-messages.js` and "
+            "`devtools/server/actors/resources/platform-messages.js`; evaluation and "
+            "autocomplete go through `devtools/server/actors/webconsole.js` into "
+            "`devtools/server/actors/webconsole/eval-with-debugger.js` and "
+            "`devtools/shared/webconsole/js-property-provider.js`, and the `$`, `$$` "
+            "and `:screenshot` helpers are "
+            "`devtools/server/actors/webconsole/commands/manager.js`. The text of a "
+            "message is mostly not DevTools': `console.*` format specifiers (`%s`, "
+            "`%d`, `%o`, `%c`) are `ProcessArguments` in `dom/console/Console.cpp` "
+            "(`Core :: DOM: Core & HTML`), JS error text is "
+            "`js/public/friend/ErrorNumbers.msg`, DOM exception text is "
+            "`dom/base/domerr.msg`, and a CSP, cookie or mixed-content warning is "
+            'emitted by the subsystem it names. So "the message says the wrong thing" '
+            "is usually a platform bug with the Console as the messenger, while "
+            '"shows up wrong, twice, or not at all" is this component. The "Learn '
+            'more" link comes from the 77 `JSMSG_` entries in '
+            "`devtools/server/actors/errordocs.js`.\n\n"
+            "**Several missing-message reports are default prefs.** "
+            "`devtools.webconsole.filter.css` is false, and only turning it on makes "
+            "`devtools/server/actors/resources/css-messages.js` set "
+            "`cssErrorReportingEnabled` and reparse existing sheets, skipping any "
+            "whose rules were modified through CSSOM, so CSS errors from before the "
+            "filter was enabled in such a sheet never appear. "
+            "`devtools.webconsole.filter.net` and `.netxhr` are false too. Output is "
+            "pruned past `devtools.hud.loglimit` (10000), repeats collapse under "
+            "`devtools.webconsole.groupSimilarMessages`, and navigation clears the "
+            "output unless `devtools.webconsole.persistlog` is set; all are in "
+            "`browser/app/profile/firefox.js`. The Browser Console shows only the "
+            "parent process unless `devtools.browsertoolbox.scope` is `everything` "
+            "(Multiprocess mode). An empty eager-evaluation preview means the call is "
+            "not allowlisted: JS builtins are hand-maintained in "
+            "`devtools/server/actors/webconsole/eager-ecma-allowlist.js`, but DOM "
+            "methods are in "
+            "`devtools/server/actors/webconsole/webidl-pure-allowlist.js`, which "
+            "`devtools/shared/webconsole/GenerateDataFromWebIdls.py` generates "
+            "from WebIDL `Affects=Nothing` annotations on an interface allowlist, so "
+            "that fix is an annotation plus a regeneration, not a hand edit.\n\n"
+            "**The input editor and expanded objects are other components.** The "
+            "input is CodeMirror 5 unless `devtools.webconsole.codemirrorNext` (false) "
+            "is set, so a cursor, selection or highlighting bug in it is `DevTools :: "
+            "Source Editor`'s CodeMirror 5 path. Expanding an object, the object "
+            "sidebar and getter invocation are `DevTools :: Object Inspector`, whose "
+            "guidance ships alongside; the collapsed one-line preview is reps, under "
+            "`DevTools :: Shared Components`.\n\n"
+            "**Coverage is heavy, so an empty `relevant_tests` is almost always "
+            "wrong.** 382 browser tests in 7 manifests under "
+            "`devtools/client/webconsole/test/browser/` (118 in `_jsterm.toml`, 92 in "
+            "`_webconsole_lz.toml`, 90 in `_webconsole_ak.toml`, 37 in "
+            "`_browser_console.toml`), 1 chrome, 2 xpcshell and 14 jest tests under "
+            "`devtools/client/webconsole/test/node/`, plus 21 chrome tests for the "
+            "console actor in `devtools/shared/webconsole/test/chrome/`. The jest "
+            "tests read packet stubs written by 6 `browser_webconsole_stubs_*.js` "
+            "tests, so a change to a message packet's shape fails them until the stubs "
+            "are regenerated with `WEBCONSOLE_STUBS_UPDATE=true`."
+        ),
+        related=("DevTools :: Object Inspector", "DevTools :: Shared Components"),
+    ),
+    # `breakpoint.js` and `source.js` are named one by one:
+    # `devtools/server/actors/moz.build` gives those two files to Debugger, and the rest
+    # of `devtools/server/` (including `thread.js`) is `DevTools :: General`.
+    ScopedComponent(
+        "DevTools",
+        "Debugger",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/debugger/",
+            "devtools/server/actors/breakpoint.js",
+            "devtools/server/actors/source.js",
+        ),
+        owns=(
+            "devtools/client/debugger/",
+            "devtools/server/actors/breakpoint.js",
+            "devtools/server/actors/source.js",
+        ),
+        notes=(
+            "**Three layers, and the bottom one is SpiderMonkey.** The panel is "
+            "Redux in `devtools/client/debugger/src/`, with "
+            "`devtools/client/debugger/src/client/firefox/commands.js` as the protocol "
+            "edge. On the server, `devtools/server/actors/thread.js` pauses, steps and "
+            "pauses on exceptions, `devtools/server/actors/source.js` serves source "
+            "text and breakpoint positions, `devtools/server/actors/breakpoint.js` "
+            "sets them, and scopes come from `devtools/server/actors/environment.js`. "
+            "Breakable positions are `getPossibleBreakpoints()` and stepping is the "
+            "`onStep`/`onPop` hooks of the Debugger API, so when the actor passes "
+            'SpiderMonkey\'s answer through unchanged, "cannot break on this column" '
+            'and "step skips a line" are `Core :: JavaScript: Debugger API` '
+            "(`js/src/debugger/`) or the engine. A variable shown as `(optimized "
+            "away)` is the engine having dropped the binding, which is expected.\n\n"
+            "**`devtools/client/debugger/dist/` is generated; never patch it.** Its "
+            "three worker bundles (parser 1.5 MB, pretty-print 450 KB, search 11 KB) "
+            "are rollup output of `devtools/client/debugger/bin/bundle.js` over "
+            "`devtools/client/debugger/src/workers/` plus the npm packages pinned in "
+            "`devtools/client/debugger/yarn.lock`: `@babel/parser` 7.28.4 in the "
+            "parser worker and `acorn` 8.17.0 in the pretty-printer. A fix goes in "
+            "`devtools/client/debugger/src/workers/` with the bundles regenerated in "
+            "the same patch, and the tier-2 `node(devtools-bundle)` job fails if they "
+            "are stale. Syntax the scope mapper cannot parse is a Babel bump. The "
+            "pretty-printer itself, "
+            "`devtools/client/debugger/src/workers/pretty-print/pretty-fast.js`, is "
+            "an in-tree fork despite its BSD license, so it is fixed here. Source "
+            "maps are parsed by the vendored source-map library in "
+            "`devtools/client/shared/vendor/source-map/` (a `moz.yaml` import fixed "
+            "upstream) through `devtools/client/shared/source-map-loader/`; most "
+            '"original file missing" reports are the site\'s own map.\n\n'
+            "**Several reported behaviors are defaults.** In "
+            "`devtools/client/preferences/debugger.js`, "
+            "`devtools.debugger.pause-on-exceptions` is false, "
+            "`devtools.debugger.ignore-caught-exceptions` is true, "
+            "`devtools.debugger.map-scopes-enabled` is false (so source-mapped code "
+            "shows generated names until the user maps scopes), "
+            "`devtools.debugger.auto-pretty-print` is false and "
+            "`devtools.debugger.features.javascript-tracing` is false; "
+            "`devtools.debugger.show-content-scripts` is false in "
+            "`browser/app/profile/firefox.js`, so extension content scripts are "
+            "missing from the source tree on purpose. The editor is CodeMirror 6 "
+            "through `DevTools :: Source Editor`, whose guidance ships alongside: a "
+            "gutter, folding, search or highlighting bug that also reproduces in the "
+            "Netmonitor response preview is there, and `devtools.editor.keymap` "
+            "(vim, emacs, sublime) is only honored by CodeMirror 5, so it doing "
+            "nothing in the Debugger is a missing port rather than a regression.\n\n"
+            "**Coverage is heavy, so an empty `relevant_tests` is almost always "
+            "wrong.** 234 browser tests in 6 manifests under "
+            "`devtools/client/debugger/test/mochitest/` (73 in `browser_af.toml`, 71 "
+            "in `browser_gp.toml`, 49 in `browser_qz.toml`, 17 sourcemaps, 13 "
+            "integration, 11 tracer) and 1 xpcshell. The 8 jest specs cover only the "
+            "parser, pretty-print and search workers, so a UI regression needs a "
+            "mochitest. The actors are tested in `devtools/server/tests/xpcshell/`: "
+            "25 `test_breakpoint*`, 20 `test_step*`, 15 `test_frame*`, 7 "
+            "`test_blackbox*` and 7 `test_pause*`."
+        ),
+        related=("DevTools :: Source Editor",),
+    ),
+    # Nested inside Shared Components' tree; the longer claim takes it out. Reps stays
+    # with Shared Components because the JSON Viewer, Netmonitor and Inspector render it
+    # too, so it is `related` here for the citations rather than owned.
+    ScopedComponent(
+        "DevTools",
+        "Object Inspector",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/shared/components/object-inspector/",),
+        owns=("devtools/client/shared/components/object-inspector/",),
+        notes=(
+            "**The tree is client-side; what goes in it comes from the object actor.** "
+            "`devtools/client/shared/components/object-inspector/` keeps expansion "
+            "state and fetches children through "
+            "`devtools/client/shared/components/object-inspector/utils/load-properties.js`, "
+            "and each node is drawn by a rep picked in "
+            "`devtools/client/shared/components/reps/reps/rep.mjs`. On the server, "
+            "`devtools/server/actors/object.js` and "
+            "`devtools/server/actors/object/property-iterator.js` enumerate "
+            "properties, and `devtools/server/actors/object/previewers.js` builds the "
+            "collapsed preview from 25 class-keyed previewers (`Map`, `Headers`, "
+            "`Promise`, `Proxy` and so on) plus the class-independent "
+            '`previewers.Object` chain. So "no useful preview for CookieStore" is a '
+            'new previewer and usually a new rep, "wrong entries once expanded" is '
+            'the property iterator, and "renders oddly" is the rep. It is hosted by '
+            "the Console (expanded output and the sidebar) and the Debugger (Scopes "
+            "pane and hover preview); the DOM panel and JSON Viewer use a different "
+            "tree and are not this component.\n\n"
+            "**Some reports describe intended behavior.** The collapsed preview is "
+            "a snapshot taken when the value was logged, and expanding fetches the "
+            "object's current state, so a logged object showing other values once "
+            "expanded is expected. Getters are not run automatically; "
+            "`invokeGetter` runs one on request. `(optimized away)` in the "
+            "Debugger's Scopes pane is the engine having dropped the binding. Custom "
+            "formatters are off by default (`devtools.custom-formatters.enabled`), "
+            "and render through "
+            "`devtools/client/shared/components/reps/reps/custom-formatter.mjs` from "
+            "`devtools/server/actors/utils/custom-formatters.js`.\n\n"
+            "**Reps is maintained here, not vendored.** "
+            "`devtools/client/shared/components/reps/` is the source of truth and is "
+            "published from the tree to npm as `devtools-reps` for the Firefox "
+            "Profiler, so a rep bug is fixed in-tree.\n\n"
+            "**Coverage is indirect since Bug 1929387 removed every reps and "
+            "object-inspector jest test in March 2025.** What remains is the "
+            "Console's 19 tests in `_webconsole_object_inspector.toml` (35 Console "
+            "browser tests touch the tree in all), 18 Debugger preview and scopes "
+            "mochitests, and 25 `test_objectgrips-*` xpcshell tests in "
+            "`devtools/server/tests/xpcshell/` for the actor. An empty "
+            "`relevant_tests` is usually wrong; point at those rather than reporting "
+            "no unit tests."
+        ),
+        related=("DevTools :: Shared Components",),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "Source Editor",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/shared/sourceeditor/",),
+        owns=("devtools/client/shared/sourceeditor/",),
+        notes=(
+            "**There are two CodeMirrors, and the panel decides which.** "
+            "`devtools/client/shared/sourceeditor/editor.js` wraps both behind its "
+            "`cm6` config flag, which defaults to false. CodeMirror 6 runs in the "
+            "Debugger, the Netmonitor response preview, the Inspector's Edit As HTML "
+            "editor and "
+            "`devtools/client/shared/widgets/tooltip/EventTooltipHelper.js`; "
+            "CodeMirror 5 runs in the Style Editor and in the Console input unless "
+            "`devtools.webconsole.codemirrorNext` (false) is set. The same symptom "
+            "is different code in each, so establish the panel before localizing.\n\n"
+            "**Both are bundles, built differently, and CI checks neither.** "
+            "`devtools/client/shared/sourceeditor/codemirror6/codemirror6.bundle.mjs` "
+            "is a 588 KB minified rollup build of "
+            "`devtools/client/shared/sourceeditor/codemirror6/index.mjs` at the "
+            "versions in `devtools/client/shared/sourceeditor/package-lock.json` "
+            "(`@codemirror/view` 6.36.6, `@codemirror/language` 6.11.0, "
+            "`@codemirror/lang-javascript` 6.2.3). It cannot usefully be read on "
+            "Searchfox, so localize a CodeMirror 6 bug in the upstream package at "
+            "that version; the fix lands upstream and arrives with a version bump "
+            "and `npm run build-cm6`, and anything not exported from `index.mjs` is "
+            "not available to `editor.js` at all. CodeMirror 5 is 5.58.1 in "
+            "`devtools/client/shared/sourceeditor/codemirror/`, and "
+            "`devtools/client/jar.mn` ships only its webpack "
+            "`codemirror.bundle.js` plus the keymaps and CSS, so editing "
+            "`devtools/client/shared/sourceeditor/codemirror/lib/codemirror.js` "
+            "without `npm run build` changes nothing. The README lists the local "
+            "patches to it. The `node(devtools-bundle)` job only rebuilds the "
+            "Debugger's workers, so a stale CodeMirror bundle goes unnoticed.\n\n"
+            "**Editor prefs are `devtools.editor.*` in "
+            "`browser/app/profile/firefox.js`**: `tabsize` 2, `expandtab`, "
+            "`detectindentation`, `autoclosebrackets`, `enableCodeFolding` and "
+            "`autocomplete`. `devtools.editor.keymap` (vim, emacs, sublime) is only "
+            "loaded in the CodeMirror 5 setup path, so it has no effect in "
+            "CodeMirror 6 editors such as the Debugger's.\n\n"
+            "**Coverage is CodeMirror 5 only.** The 21 browser tests in "
+            "`devtools/client/shared/sourceeditor/test/browser.toml` never set "
+            "`cm6`, and two of them run CodeMirror 5's imported upstream suites. "
+            "CodeMirror 6 behavior is covered only through its consumers, mostly the "
+            "Debugger's 234 mochitests, so for a CodeMirror 6 bug an empty "
+            "`relevant_tests` from this directory is expected and the regression "
+            "test belongs in the consuming panel."
+        ),
+    ),
+    # `devtools/client/shared/moz.build` gives `components/**` to Shared Components and
+    # everything else under `devtools/client/shared/` to General, which is why the owned
+    # tree stops at `components/` and Object Inspector carves its directory out of it.
+    ScopedComponent(
+        "DevTools",
+        "Shared Components",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/shared/components/",),
+        owns=("devtools/client/shared/components/",),
+        notes=(
+            "**There are three tree widgets; find out which one the panel uses.** "
+            "`devtools/client/shared/components/Tree.js` is the Debugger's source "
+            "tree and the Object Inspector's; "
+            "`devtools/client/shared/components/VirtualizedTree.js` is used by "
+            "Accessibility, Memory and the Debugger; and "
+            "`devtools/client/shared/components/tree/TreeView.mjs` by the DOM panel, "
+            "JSON Viewer, Netmonitor, Accessibility and the Inspector's extension "
+            "sidebar. A keyboard, scrolling or selection bug in one is not evidence "
+            "about the others. The Object Inspector sits under this directory but is "
+            "its own component.\n\n"
+            "**Reps lives here and is maintained here.** "
+            "`devtools/client/shared/components/reps/` renders object grips for the "
+            "Console, Debugger, JSON Viewer, Netmonitor and Inspector, and is "
+            "published from the tree to npm as `devtools-reps` for the Firefox "
+            "Profiler, so it is fixed in-tree. Rep bugs get filed under Object "
+            "Inspector, Console and General as often as here. The network "
+            "throttling menu is `devtools/client/shared/components/throttling/`, but "
+            "the throttling itself is "
+            "`devtools/shared/network-observer/NetworkThrottleManager.sys.mjs`.\n\n"
+            '**"The X panel has crashed" is filed from here but rarely belongs '
+            "here.** `devtools/client/shared/components/AppErrorBoundary.js` opens a "
+            "bug blocking `devtools-toolbox-crash` with a `## Stacktrace` section, "
+            "and prefills the hosting panel's component: Console, Debugger or "
+            "Netmonitor for theirs, General for the toolbox and the Inspector. "
+            "Localize from the stack, not the component; only a broken boundary or "
+            '"File Bug Report" button is this component.\n\n'
+            "**Coverage is moderate.** 41 chrome mochitests in "
+            "`devtools/client/shared/components/test/chrome/` (16 `test_tree*`, 5 "
+            "notification box, 8 for search box, accordion and stack traces), 2 "
+            "browser tests and 1 jest test (`tree.test.js`). `VirtualizedTree.js` "
+            "and reps have no dedicated test, so for them an empty `relevant_tests` "
+            "is honest; point at the consuming panel's tests instead."
+        ),
+    ),
+    # The observer and the actors are in `trees` but not `owns`: `moz.build` leaves both
+    # at `DevTools :: General`, and the observer is shared with WebDriver BiDi.
+    ScopedComponent(
+        "DevTools",
+        "Netmonitor",
+        "#devtools-triage",
+        doc_trees=("devtools/client/netmonitor/docs/", "devtools/docs/"),
+        trees=(
+            "devtools/client/netmonitor/",
+            "devtools/shared/network-observer/",
+            "devtools/server/actors/network-monitor/",
+        ),
+        owns=("devtools/client/netmonitor/",),
+        notes=(
+            "**The panel only renders what the parent-process observer collected.** "
+            "`devtools/shared/network-observer/NetworkObserver.sys.mjs` wraps every "
+            "channel and is also what WebDriver BiDi reads, through "
+            "`remote/shared/listeners/NetworkListener.sys.mjs`, so a change there is "
+            "not local to DevTools. "
+            "`devtools/server/actors/network-monitor/` and "
+            "`devtools/server/actors/resources/network-events.js` relay it, and "
+            "`devtools/client/netmonitor/src/connector/firefox-data-provider.js` is "
+            "where the client receives it. A request that is missing, duplicated, or "
+            "has the wrong size or timings is usually the observer; one that is listed "
+            "right but filtered, sorted or rendered wrong is the client. Console "
+            "renders the same details tabs inline for its network messages "
+            "(`devtools/client/netmonitor/src/components/TabboxPanel.js`), so a bug in "
+            "an expanded network row in the console is often this component's code.\n\n"
+            "**Netmonitor reports Necko's view of the channel, so the evidence is not "
+            "always the bug.** Timings come from `nsITimedChannel` in "
+            "`devtools/shared/network-observer/NetworkTimings.sys.mjs`, so a phase "
+            "that is always zero may be Necko never filling it in. The blocked reason "
+            "is `nsILoadInfo.requestBlockingReason`, turned into text by "
+            "`BLOCKED_REASON_MESSAGES` in `devtools/client/netmonitor/src/constants.js`; "
+            "codes 2010 (email tracking) and 7000 (WebDriver BiDi) have no entry there "
+            'and show the generic "Blocked". A request that is actually sent or '
+            "cached wrong, or blocked by CORS, ORB or a cookie policy, belongs in Core "
+            "Networking (HTTP, Cookies, Cache) or DOM, and the panel showing it "
+            "faithfully is not a DevTools bug.\n\n"
+            "**Several reports describe limits rather than defects.** "
+            "`devtools.netmonitor.bodyLimit` is 1 MB in `modules/libpref/init/all.js`, "
+            "and `ResponsePanel.js` skips the JSON and HTML preview for a truncated "
+            "body, so a large response with no preview is expected. WebSocket and SSE "
+            "payloads stop at 100 KB (`devtools.netmonitor.msg.messageDataLimit`). "
+            "Unchecking persist logs (`devtools.netmonitor.persistlog`) clears the "
+            "list on navigation, and WebTransport is behind "
+            "`devtools.netmonitor.features.webtransport`, false in "
+            "`browser/app/profile/firefox.js`. The panel is not offered for worker "
+            "toolboxes (`isToolSupported` in `devtools/client/definitions.js`), and "
+            "content-process targets report `networkMonitor: false`. The throttling "
+            "dropdown is Shared Components code shared with Responsive Design Mode; "
+            "the throttling itself is "
+            "`devtools/shared/network-observer/NetworkThrottleManager.sys.mjs`.\n\n"
+            "**Coverage is the heaviest in DevTools, so an empty `relevant_tests` is "
+            "almost always wrong.** 255 browser tests: 197 split alphabetically "
+            "between `devtools/client/netmonitor/test/browser_al.toml` and "
+            "`devtools/client/netmonitor/test/browser_mz.toml`, plus filters (8), "
+            "new-resend-request (17), websockets (20), HTTP/3 (2, `run-if` http3 only) "
+            "and HAR (11) in `devtools/client/netmonitor/src/har/test/`. Also 6 "
+            "xpcshell and a single jest spec in `devtools/client/netmonitor/test/node/`, "
+            "run by `./mach devtools-node-test`. The observer has its own 10 browser "
+            "and 9 xpcshell tests in `devtools/shared/network-observer/test/`."
+        ),
+    ),
+    # The storage actors are owned too: `devtools/server/actors/resources/storage/
+    # moz.build` gives them to this component.
+    ScopedComponent(
+        "DevTools",
+        "Storage Inspector",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/storage/",
+            "devtools/server/actors/resources/storage/",
+        ),
+        owns=(
+            "devtools/client/storage/",
+            "devtools/server/actors/resources/storage/",
+        ),
+        notes=(
+            "**One large client file over one actor per storage type.** "
+            "`devtools/client/storage/ui.js` (about 1,800 lines) drives the tree, "
+            "table and sidebar; the table is "
+            "`devtools/client/shared/widgets/TableWidget.js` and the sidebar is "
+            "`devtools/client/storage/VariablesView.sys.mjs`, a 3,185-line legacy "
+            "widget nothing else in the toolbox uses any more. The data is "
+            "`devtools/server/actors/resources/storage/`, one file per type. Cookies, "
+            "IndexedDB and extension storage are read in the parent process (their "
+            "watchers extend "
+            "`devtools/server/actors/resources/utils/parent-process-storage.js`); "
+            "local/session storage and Cache are read in content. A wrong value, or an "
+            "edit that does not stick, is the actor; layout, sorting and keyboard "
+            "handling are the client.\n\n"
+            "**What the panel lists is what the platform stored.** Cookies come from "
+            "`Services.cookies.getCookiesFromHost` per origin-attributes set in "
+            "`devtools/server/actors/resources/storage/cookies.js`, so a cookie the "
+            "page set that never appears was usually rejected or partitioned (SameSite, "
+            "third-party blocking, dFPI, CHIPS behind `network.cookie.CHIPS.enabled`), "
+            "which is Core Networking: Cookies or Privacy: Anti-Tracking. An edited "
+            "expiry goes through `Services.cookies.maybeCapExpiry`, so a far-future "
+            "date coming back shorter is the platform cap. IndexedDB is different: "
+            "`getDBNamesForHost` in "
+            "`devtools/server/actors/resources/storage/indexed-db.js` finds databases "
+            "by scanning `storage/{default,permanent,temporary}/<origin>/idb/*.sqlite` "
+            "in the profile, so a database that exists but is missing from the tree is "
+            "that scan, while wrong records inside a listed one are read through "
+            "`openForPrincipal` and more likely Core Storage: IndexedDB.\n\n"
+            "**Some absences are by design.** Extension Storage shows only the `local` "
+            "and `sync` areas (`AREA_LOCAL` and `AREA_SYNC` in "
+            "`devtools/server/actors/resources/storage/extension-storage.js`); "
+            "`session` and `managed` are not listed. The panel exists only for tab, "
+            "parent-process and web-extension toolboxes (`isToolSupported` in "
+            "`devtools/client/definitions.js`), so it is missing from worker and "
+            "content-process toolboxes on purpose. The Cookies tab inside a "
+            "Netmonitor request is Netmonitor's, not this panel's.\n\n"
+            "**Coverage is good, so an empty `relevant_tests` is usually wrong.** 68 "
+            "browser tests in `devtools/client/storage/test/browser.toml`, plus 5 "
+            "`browser_storage_*` actor tests in "
+            "`devtools/server/tests/browser/browser.toml` and 2 extension-storage "
+            "xpcshell tests in `devtools/server/tests/xpcshell/xpcshell.toml`. No jest "
+            "suite."
+        ),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "Application Panel",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/application/",),
+        owns=("devtools/client/application/",),
+        notes=(
+            "**`moz.build` does not name this component.** "
+            "`devtools/client/application/moz.build` has no `BUG_COMPONENT`, so the "
+            "panel's files resolve to `DevTools :: General` in Bugzilla's file "
+            "mapping and in regressor metadata; do not re-scope a bug off Application "
+            "Panel for that. The panel has three pages: service workers, manifest, and "
+            "session history, the last behind "
+            "`devtools.application.sessionHistory.enabled`, false in "
+            "`browser/app/profile/firefox.js`.\n\n"
+            "**Manifest content and warnings come from the DOM, not DevTools.** "
+            "`devtools/server/actors/manifest.js` only calls "
+            "`ManifestObtainer.contentObtainManifest` with `checkConformance: true` "
+            "from `dom/manifest/ManifestObtainer.sys.mjs`; the processed values and "
+            "every entry in the issue list come from "
+            "`dom/manifest/ManifestProcessor.sys.mjs` and its siblings, which "
+            "`moz.build` gives to Core :: DOM: Core & HTML. A wrong or missing "
+            "warning, or a member ignored, localizes there; how a correct result is "
+            "drawn is `devtools/client/application/src/components/manifest/`.\n\n"
+            "**The service-worker list is deliberately narrow.** "
+            "`devtools/client/application/src/components/service-workers/"
+            "WorkersPage.js` keeps only registrations that have a worker and whose "
+            "first worker's script hostname equals the page's, ignoring scheme and "
+            "port; the full cross-origin list is about:debugging (DevTools :: "
+            "about:debugging), which the empty state links to. In `Worker.js` the "
+            "Start button is hidden while a worker is running or not active, and the "
+            "inspect link appears only while it runs. Registration, update, activation "
+            "and termination behaving wrong are Core :: DOM: Service Workers; the "
+            "panel is reading `devtools/server/actors/worker/`. Service workers over "
+            "HTTP with the toolbox open is `devtools.serviceWorkers.testing.enabled`, "
+            "a toolbox option and not this panel.\n\n"
+            "**Coverage is moderate: 23 browser tests, 4 xpcshell, and 22 jest files "
+            "in `devtools/client/application/test/node/`.** Jest covers components "
+            "and reducers in isolation, so a rendering bug usually has a jest file to "
+            "name even when no mochitest exercises it."
+        ),
+    ),
+    # Shared Components ships alongside because the tree and every value in it are the
+    # shared TreeView and reps, not code under `devtools/client/jsonview/`.
+    ScopedComponent(
+        "DevTools",
+        "JSON Viewer",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/jsonview/",),
+        owns=("devtools/client/jsonview/",),
+        notes=(
+            "**This is a Necko stream converter before it is a viewer, so check "
+            "whether it ran at all.** `devtools/client/jsonview/Sniffer.sys.mjs` is "
+            "registered in `net-content-sniffers` and `net-and-orb-content-sniffers` "
+            "by `devtools/client/jsonview/components.conf`, and retypes a response "
+            "only for a top-level document load whose Content-Type is "
+            "application/json or application/<x>+json (or JSON Lines by type or a "
+            "`.jsonl` extension), and that is not `Content-Disposition: attachment`. "
+            "So JSON inside an iframe, served as text/plain, or sent as an "
+            "attachment is shown raw or downloaded by design, and the whole feature is "
+            "`devtools.jsonview.enabled`. When the conditions hold and it still does "
+            "not trigger, the next suspect is Necko's content sniffing or ORB.\n\n"
+            "**`devtools/client/jsonview/converter-child.js` rewrites the channel, "
+            "which explains several reports.** It sets the content type to "
+            "text/html, swaps the owner to a "
+            "`resource://devtools/client/jsonview/` principal, replaces the page's CSP "
+            "with its own strict one, rejects multipart responses outright, and forces "
+            "UTF-8 regardless of the charset parameter (bug 741776), so mojibake on a "
+            "non-UTF-8 response is expected. Save-as recovering the original type is "
+            "`fixSave` in the same file.\n\n"
+            "**Rendering is mostly shared code.** The tree is Shared Components' "
+            "TreeView and each value is a rep, including the lossless big-number "
+            "parsing (`parseJsonLossless`), so a value that displays wrong is often "
+            "fixed there; that guidance ships alongside. Netmonitor's JSON response "
+            "preview is a separate implementation in Netmonitor and not this "
+            "component. The size profiler button is "
+            "`devtools/client/jsonview/json-size-profiler.mjs`, Nightly-only through "
+            "`devtools.jsonview.size-profiler.enabled` in "
+            "`modules/libpref/init/all.js`.\n\n"
+            "**37 browser tests in `devtools/client/jsonview/test/browser.toml` and "
+            "nothing else**: no xpcshell or jest. Sniffing, encoding, CSP, multipart "
+            "and number display each have a test, so an empty `relevant_tests` is "
+            "usually wrong; for a rep bug, cite the reps tests instead."
+        ),
+        related=("DevTools :: Shared Components",),
+    ),
+    # Everything here but `devtools/client/memory/` is outside the client and owned on
+    # the strength of `moz.build`, except `devtools/server/performance/memory.js`: see
+    # MAP CHANGES.
+    ScopedComponent(
+        "DevTools",
+        "Memory",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/memory/",
+            "devtools/shared/heapsnapshot/",
+            "devtools/server/actors/memory.js",
+            "devtools/server/performance/memory.js",
+            "dom/chrome-webidl/HeapSnapshot.webidl",
+        ),
+        owns=(
+            "devtools/client/memory/",
+            "devtools/shared/heapsnapshot/",
+            "devtools/server/actors/memory.js",
+            "devtools/server/performance/memory.js",
+            "dom/chrome-webidl/HeapSnapshot.webidl",
+        ),
+        notes=(
+            "**Three layers, and the bottom one is C++ split between this component "
+            "and SpiderMonkey.** The panel is `devtools/client/memory/`. "
+            "`devtools/server/actors/memory.js` is a thin wrapper over "
+            "`devtools/server/performance/memory.js`, which `moz.build` labels "
+            "Performance Tools although the memory actor is its only consumer. "
+            "Snapshots are written and read by "
+            "`devtools/shared/heapsnapshot/HeapSnapshot.cpp`, which implements "
+            "`ChromeUtils.saveHeapSnapshot` and the `HeapSnapshot` interface in "
+            "`dom/chrome-webidl/HeapSnapshot.webidl`; census, dominator tree and "
+            "shortest paths run in "
+            "`devtools/shared/heapsnapshot/HeapAnalyses.worker.js`. The graph walk "
+            "itself is `JS::ubi::Node` in `js/public/UbiNode.h` and "
+            "`js/src/vm/UbiNode.cpp`, so a crash whose top frames are in `UbiNode*` is "
+            "Core :: JavaScript Engine, while one in `HeapSnapshot.cpp` or "
+            "`DeserializedNode.cpp` is this component. "
+            "`devtools/shared/heapsnapshot/CoreDump.pb.cc` and its header are protoc "
+            "output from `CoreDump.proto` via "
+            "`devtools/shared/heapsnapshot/generate-core-dump-sources.sh`; regenerate "
+            "them rather than editing.\n\n"
+            "**Snapshot numbers are not meant to match about:memory.** For a tab, "
+            "`saveHeapSnapshot` in `devtools/server/performance/memory.js` scopes the "
+            "snapshot to the debuggee globals (`{ debugger: this.dbg }`); only "
+            "parent- and content-process toolboxes snapshot the whole runtime. "
+            "about:memory is `Toolkit :: about:memory`, and the Firefox Profiler's "
+            "memory track is Performance Tools. Allocation stacks exist only for "
+            'objects allocated after "Record call stacks" was checked, so an empty '
+            "call-stack grouping is expected. The Individuals view stops at "
+            "`devtools.memory.max-individuals` (1000) and retaining paths at "
+            "`devtools.memory.max-retaining-paths` (10), both in "
+            "`browser/app/profile/firefox.js`. The panel is not offered for worker or "
+            "web-extension toolboxes (`isToolSupported` in "
+            "`devtools/client/definitions.js`).\n\n"
+            "**Coverage is good, so an empty `relevant_tests` is usually wrong.** "
+            "Under `devtools/client/memory/test/`: 49 xpcshell, 20 browser and 16 "
+            "chrome tests. Under `devtools/shared/heapsnapshot/tests/`: 85 xpcshell, 2 "
+            "chrome, 1 browser and 8 gtest files. The xpcshell suites are the ones that "
+            "cover snapshot reading and the analyses."
+        ),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "DOM",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/dom/",),
+        owns=("devtools/client/dom/",),
+        notes=(
+            "**This is the DOM property viewer panel, not the DOM.** A report about "
+            "the markup tree or selecting nodes is Inspector, and one about a DOM API "
+            "behaving wrong is a Core :: DOM component; reporters pick this component "
+            "for both. The panel asks for `window` through the console's "
+            "`scriptCommand` (`getRootGrip` in `devtools/client/dom/panel.js`) and "
+            "expands it with the object actor's `prototypeAndProperties` in "
+            "`devtools/server/actors/object.js`, which Console and Debugger share. A "
+            "property that is missing or wrong in all three is the actor; one wrong "
+            "only here is `devtools/client/dom/content/`. It draws with Shared "
+            "Components' TreeView and reps, not the Object Inspector, so a fix in one "
+            "does not carry to the other.\n\n"
+            "**The panel reloads its tree only on a top-level `dom-complete` or an "
+            "iframe-picker change**, so values that went stale after the page mutated "
+            "are expected until Refresh is pressed. Coverage is thin: 7 browser tests "
+            "in `devtools/client/dom/test/browser.toml` and nothing else, so an empty "
+            "`relevant_tests` is often right; say the area is barely covered."
+        ),
+    ),
+    # The emulation actors are in `trees` and not `owns`: `moz.build` leaves them at
+    # `DevTools :: General`.
+    ScopedComponent(
+        "DevTools",
+        "Responsive Design Mode",
+        "#devtools-triage",
+        doc_trees=("devtools/client/responsive/docs/", "devtools/docs/"),
+        trees=(
+            "devtools/client/responsive/",
+            "devtools/server/actors/emulation/",
+        ),
+        owns=("devtools/client/responsive/",),
+        notes=(
+            "**RDM sets BrowsingContext state and the platform does the emulating.** "
+            "`devtools/client/responsive/ui.js` puts `toolbar.xhtml` in the tab's "
+            "browser container and calls `enterResponsiveMode()` in "
+            "`toolkit/content/widgets/browser-custom-element.mjs`, which sets "
+            "`inRDMPane` from `dom/chrome-webidl/BrowsingContext.webidl`. User agent, "
+            "pixel ratio, touch and orientation are applied to the BrowsingContext by "
+            "`devtools/server/actors/target-configuration.js`, and touch events are "
+            "synthesized from the mouse by "
+            "`devtools/server/actors/emulation/touch-simulator.js`. Layout and DOM "
+            "then branch on `inRDMPane`: `nsLayoutUtils::ShouldHandleMetaViewport` "
+            "honors `<meta name=viewport>` only in RDM on desktop "
+            "(`dom.meta-viewport.enabled` is false), "
+            "`nsPresContext::UseOverlayScrollbars` forces overlay scrollbars, and form "
+            "controls get a separate RDM theme, all in `layout/base/`. So a page that "
+            "looks different in RDM than in a normal tab is often expected, and one "
+            "that differs from a real phone usually localizes in layout, APZ or DOM "
+            "rather than here. RDM is desktop Gecko; behavior specific to Firefox for "
+            "Android needs remote debugging through about:debugging.\n\n"
+            "**The contributor-docs page on RDM architecture is stale.** It describes "
+            "swapping docshells with `gBrowser._swapBrowserDocShells` and a "
+            "navigation tunnel, and `ui.js` does neither now, so do not localize "
+            "against it.\n\n"
+            "**Several reports describe documented behavior.** `overrideDPPX` changes "
+            "only `devicePixelRatio`, media queries and responsive image selection, not "
+            "rendering, per its comment in the WebIDL. Changing the user agent or "
+            "touch simulation does not reload unless "
+            "`devtools.responsive.reloadConditions.userAgent` or `.touchSimulation` "
+            "is set; a reload notification shows instead, controlled by "
+            "`devtools.responsive.reloadNotification.enabled`. Page zoom resizes the "
+            "viewport rather than zooming the content, because `enterResponsiveMode` "
+            "stores the zoom and pins the BrowsingContext's `fullZoom` to 1. "
+            "Dynamic-toolbar emulation is off behind "
+            "`devtools.responsive.dynamicToolbar.enabled`. All these defaults are in "
+            "`browser/app/profile/firefox.js`. The throttling dropdown is Shared "
+            "Components code shared with Netmonitor.\n\n"
+            "**Coverage is good: 78 browser tests in "
+            "`devtools/client/responsive/test/browser/browser.toml` and 13 xpcshell "
+            "reducer tests.** Many browser tests exercise platform behavior through "
+            "RDM (`browser_viewport_*`, `browser_touch_*`), so they are the right "
+            "citation even when the fix is in layout or APZ; an empty "
+            "`relevant_tests` is usually wrong."
+        ),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "Framework",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=("devtools/client/framework/",),
+        owns=("devtools/client/framework/",),
+        notes=(
+            "**Framework is the toolbox shell, not the panels inside it.** "
+            "`devtools/client/framework/toolbox.js` (about 5,200 lines) owns the tab "
+            "bar, the toolbar buttons, split console, the frame picker, the error count "
+            "and panel switching; `devtools/client/framework/toolbox-hosts.js` owns "
+            "docking (bottom, left, right, separate window); "
+            "`devtools/client/framework/toolbox-options.js` is the Settings panel. A "
+            "bug *inside* one panel belongs to that panel's component even if the "
+            "reporter blamed the toolbox. A Settings checkbox that saves but does "
+            'nothing is usually the setting\'s consumer: "Disable HTTP Cache" and '
+            '"Disable JavaScript" go through `targetConfigurationCommand` to '
+            "`devtools/server/actors/target-configuration.js`, which is General's. "
+            "Docked hosts insert the toolbox into the tab's `.browserSidebarContainer`, "
+            "so overlap with content dialogs, the find bar or the browser sidebar "
+            "involves browser chrome as well.\n\n"
+            "**Open, close and navigate bugs often sit below the toolbox.** A toolbox "
+            "that goes blank, loses panels or stops updating after a cross-origin "
+            "navigation or reload is usually target switching in "
+            "`devtools/shared/commands/target/` or the target actors in "
+            "`devtools/server/actors/targets/` (both General), not toolbox.js. The "
+            "entry points that exist before DevTools loads (F12, the Browser Tools "
+            "menu, the `--devtools`/`--jsdebugger`/`--start-debugger-server` flags, "
+            'and "Inspect" in the page context menu via '
+            "`devtools/startup/DevToolsShim.sys.mjs`) are in "
+            "`devtools/startup/DevToolsStartup.sys.mjs`, also General. "
+            "`about:devtools-toolbox` (the toolbox about:debugging opens for a remote "
+            "or worker target) is this component: "
+            "`devtools/client/framework/toolbox-init.js` and "
+            "`devtools/client/framework/commands-from-url.js`.\n\n"
+            "**Expected states that get filed as bugs.** Nothing opens and the menus "
+            "are gone: `devtools.policy.disabled`, which the `DisableDeveloperTools` "
+            "enterprise policy sets and locks. F12 does nothing: "
+            "`devtools.f12_enabled` is false. The Browser Toolbox is unavailable on "
+            "release builds until `devtools.chrome.enabled` and "
+            "`devtools.debugger.remote-enabled` are set (both default false under "
+            "`MOZILLA_OFFICIAL` in `modules/libpref/init/all.js`), and outside Nightly "
+            "it shows an incoming-connection prompt (`devtools.debugger.prompt-"
+            "connection`). It only sees the parent process unless "
+            "`devtools.browsertoolbox.scope` is changed from `parent-process`. "
+            "`devtools/client/framework/browser-toolbox/Launcher.sys.mjs` copies "
+            "`prefs.js` into `chrome_debugger_profile` only when that directory is "
+            "first created, so a pref changed later in the main profile not reaching "
+            "the Browser Toolbox is expected.\n\n"
+            "**Coverage is heavy, so an empty `relevant_tests` is almost always "
+            "wrong.** 121 browser tests in "
+            "`devtools/client/framework/test/browser.toml` (keybindings, hosts, "
+            "options, target switching, source maps), 18 in "
+            "`devtools/client/framework/browser-toolbox/test/browser.toml`, 1 "
+            "xpcshell and 2 jest tests, plus 16 single-test manifests under "
+            "`devtools/client/framework/test/`, 14 of which (allocations and metrics) "
+            "track memory and module counts rather than behavior."
+        ),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "General",
+        "#devtools-triage",
+        trees=("devtools/",),
+        notes=(
+            "**General is a bucket, so the first job is routing.** Name the panel the "
+            "symptom appears in and route there: the panels each have a component, "
+            "and two that are not triaged here also exist, `DevTools :: Accessibility "
+            "Tools` (`devtools/client/accessibility/`, "
+            "`devtools/server/actors/accessibility/`) and `DevTools :: Performance "
+            "Tools (Profiler/Timeline)` (`devtools/client/performance-new/`, which "
+            "includes about:profiling). Toolbox chrome (tabs, docking, Settings, "
+            "split console) is `DevTools :: Framework`; a remote device or "
+            "about:debugging is `DevTools :: about:debugging`. What genuinely stays "
+            "General is cross-panel: the protocol, target switching, the loader, "
+            "theming, l10n, the screenshot, rulers and measure buttons, and the JS "
+            "tracer backend in `devtools/server/tracer/`. The grid, flexbox and box "
+            "model highlighters in `devtools/server/actors/highlighters/` are General "
+            "per `moz.build` but their bugs are normally filed under the Inspector "
+            "sub-panel that toggles them.\n\n"
+            "**Every panel has a client half and a server half, and only some actors "
+            "are assigned to a panel.** `devtools/server/` runs in the debugged "
+            "process (content process, worker or parent) and exposes actors over "
+            "`devtools/shared/protocol.js`; their method signatures are in "
+            "`devtools/shared/specs/` and their client wrappers in "
+            "`devtools/client/fronts/`. `devtools/shared/commands/` is the client-side "
+            "API every panel builds on (`TargetCommand`, `ResourceCommand`), and "
+            "`devtools/server/actors/watcher/` with "
+            "`devtools/server/actors/targets/` decides which documents and workers "
+            "are debugged. So a symptom in every panel at once (all panels empty "
+            "after navigation, an iframe or worker missing everywhere) points to "
+            "commands, watcher or targets; a symptom in one panel points to that "
+            "panel's client or its actor. `devtools/server/actors/moz.build` assigns "
+            "some actors to panels (`webconsole.js` to Console, `source.js` and "
+            "`breakpoint.js` to Debugger, `stylesheets/` to Style Editor); the rest, "
+            "including `devtools/server/actors/network-monitor/` and "
+            "`devtools/shared/network-observer/` that only Netmonitor uses, are "
+            "General by default. `devtools/startup/` is loaded even when DevTools has "
+            "never been opened (shortcuts, menu items, command-line flags, "
+            "`DevToolsShim` for callers outside devtools/), which is why it lives "
+            "outside `devtools/client/`.\n\n"
+            "**Some reports are not DevTools.** `--remote-debugging-port`, WebDriver "
+            "BiDi and CDP are `remote/` (product Remote Protocol). The "
+            "`devtools.*` extension APIs are "
+            "`browser/components/extensions/parent/ext-devtools*.js` and belong to "
+            "`WebExtensions :: Developer Tools`. Wrong values from the `Debugger` "
+            "API are `js/src/debugger/` (`Core :: JavaScript: Debugger API`); wrong "
+            "style or stylesheet data straight from `InspectorUtils` is "
+            "`layout/inspector/` (Core). `devtools/platform/` is the small C++ glue "
+            "for `JSDebugger` and stays here.\n\n"
+            "**Vendored code, shared strings and shared CSS.** "
+            "`devtools/client/shared/vendor/` holds React, Redux, reselect, "
+            "fluent-react, dagre-d3, WasmParser and others, each upgraded by "
+            "following its `*_UPGRADING.md`; only "
+            "`devtools/client/shared/vendor/source-map/moz.yaml` is `mach vendor`. "
+            "`devtools/shared/jsbeautify/` and `devtools/shared/sprintfjs/` are "
+            "vendored the same way. The panels' strings are in "
+            "`devtools/client/locales/en-US/` (36 files) and much of its CSS in "
+            "`devtools/client/themes/` (38 files, e.g. `rules.css` for the Rules "
+            "view), so a fix there can be another component's bug. Coverage is "
+            "heavy and an empty `relevant_tests` is almost always wrong: 328 tests "
+            "under `devtools/server/` (192 xpcshell, 76 browser, 60 chrome), 282 "
+            "under `devtools/shared/` (88 of them `heapsnapshot`, which is Memory's, "
+            "and 83 under `devtools/shared/commands/`), 125 in "
+            "`devtools/client/shared/test/`, and 6 in `devtools/startup/tests/`."
+        ),
+    ),
+    # `devtools/client/shared/remote-debugging/` (ADB, USB runtimes, the version check)
+    # is given to about:debugging by its own `moz.build`, so it is owned here rather
+    # than left to General.
+    ScopedComponent(
+        "DevTools",
+        "about:debugging",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        trees=(
+            "devtools/client/aboutdebugging/",
+            "devtools/client/shared/remote-debugging/",
+        ),
+        owns=(
+            "devtools/client/aboutdebugging/",
+            "devtools/client/shared/remote-debugging/",
+        ),
+        notes=(
+            "**The page is a launcher; what it launches is mostly someone else's.** "
+            "`devtools/client/aboutdebugging/src/` is the React/Redux page that lists "
+            "runtimes and targets. Clicking Inspect opens about:devtools-toolbox, "
+            "which is `DevTools :: Framework` once loaded, and a bug in a panel "
+            'inside that toolbox is that panel\'s. "Load Temporary Add-on" calls '
+            "`AddonManager.installTemporaryAddon`, so a manifest or install error "
+            "is usually `Toolkit :: Add-ons Manager` or WebExtensions, and the "
+            "service worker rows reflect what `dom.serviceWorkers.enabled` and the "
+            "service worker manager report. The page is registered by "
+            "`devtools/startup/AboutDebuggingRegistration.sys.mjs`; the paths "
+            "`devtools/client/aboutdebugging/README.md` gives for that are stale.\n\n"
+            "**Remote debugging has three hops, and only the first is here.** "
+            "`devtools/client/shared/remote-debugging/adb/` drives an `adb` binary "
+            "that ships in a separate extension (`adb@mozilla.org`), downloaded on "
+            "demand from the ftp.mozilla.org URL in `devtools.remote.adb."
+            "extensionURL` in `modules/libpref/init/all.js` and not built from this "
+            "tree. The device side is Firefox for Android's \"Remote debugging via "
+            'USB" setting (Fenix) feeding '
+            "`mobile/shared/modules/geckoview/GeckoViewRemoteDebugger.sys.mjs` "
+            "(`GeckoView :: General`), which listens on an abstract "
+            "`firefox-debugger-socket`. A device that never appears is usually adb "
+            "authorization or the Android setting, which the user docs already walk "
+            "through. Network locations connect with "
+            "`devtools/shared/security/socket.js` to a server started with "
+            "`--start-debugger-server`, which binds only to loopback while "
+            "`devtools.debugger.force-local` is true.\n\n"
+            "**Expected states that get filed as bugs.** "
+            "`devtools/client/shared/remote-debugging/version-checker.js` warns when "
+            "the remote runtime is more than 3 major versions older than this "
+            "Firefox or any newer major version, and also when the same major is "
+            "more than 7 days newer by build ID. There is no Tabs section under This "
+            "Firefox on release builds (`devtools.aboutdebugging.local-tab-"
+            "debugging` is false under `MOZILLA_OFFICIAL` in "
+            "`browser/app/profile/firefox.js`), system and hidden add-ons are "
+            "missing unless `devtools.aboutdebugging.showHiddenAddons` is set, and "
+            "the service worker warning shows when `dom.serviceWorkers.enabled` is "
+            "false or `browser.privatebrowsing.autostart` is true. The "
+            "`DisableDeveloperTools` enterprise policy blocks about:debugging "
+            "outright.\n\n"
+            "**USB is mocked in automation, so device bugs have no regression "
+            "test.** 102 browser tests in "
+            "`devtools/client/aboutdebugging/test/browser/browser.toml`, which "
+            "replace adb with `devtools/client/aboutdebugging/test/browser/mocks/"
+            "helper-adb-mock.js`; the 2 `browser_aboutdebugging_real_*` tests need a "
+            "physical device. 9 backward-compatibility tests in "
+            "`devtools/client/aboutdebugging/test/browser/browser_backward_compat."
+            "toml` no-op unless `./mach devtools-compat-test` provisions a second "
+            "Firefox. 6 xpcshell tests split across "
+            "`devtools/client/aboutdebugging/test/xpcshell/`, "
+            "`devtools/client/shared/remote-debugging/test/xpcshell/` and "
+            "`devtools/client/shared/remote-debugging/adb/xpcshell/`, plus 1 jest "
+            "test. An empty `relevant_tests` is wrong for page UI bugs and usually "
+            "right for a real-device connection bug."
+        ),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "Documentation",
+        "#devtools-triage",
+        trees=("devtools/docs/",),
+        owns=("devtools/docs/",),
+        notes=(
+            "**The in-tree user docs are the published ones; MDN no longer has "
+            "them.** `devtools/docs/user/` (129 Markdown pages) was imported from "
+            "MDN in bug 1737573 and publishes at firefox-source-docs.mozilla.org/"
+            'devtools-user/, which is where the in-product "Learn more" links in '
+            "panels point. Content fixes land here, not on MDN. "
+            "`devtools/docs/contributor/` (50 pages) publishes at /devtools/. A "
+            'broken "Learn more" link can be either a moved page here or a stale '
+            "URL in the panel's code, which is that panel's component. "
+            "Panel-local READMEs and `docs` folders under `devtools/client/` are not "
+            "published and belong to their panel.\n\n"
+            "**Some pages document things DevTools does not own or no longer "
+            "ships.** `devtools/docs/user/debugger-api/` is the published copy of "
+            "the SpiderMonkey `Debugger` API reference, mirroring "
+            "`js/src/doc/Debugger/`, which `docs/config.yml` excludes from the "
+            "build; a content fix lands in both, and an API behavior question is "
+            "`Core :: JavaScript: Debugger API`. The 3D view, Shader Editor, Web "
+            "Audio Editor and Firebug migration pages describe removed tools and "
+            'carry a warning saying so, so "this tool doesn\'t exist" against them '
+            "is expected. The per-file `BUG_COMPONENT` entries in "
+            "`devtools/moz.build` for `docs/tools/*.md` and "
+            "`docs/backend/debugger-api.md` point at paths that no longer exist, so "
+            "every docs file resolves to General there; don't read them as "
+            "routing.\n\n"
+            "**No tests, so an empty `relevant_tests` is correct.** The checks are "
+            "the `./mach doc` build (the `source-test` doc tasks), which allows 7 "
+            "known `devtools-user` warnings listed in `docs/config.yml`, and the "
+            "`rumdl` Markdown lint in `tools/lint/md.yml`, which includes "
+            "`devtools/docs/`."
+        ),
+    ),
+    ScopedComponent(
+        "DevTools",
+        "Style Editor",
+        "#devtools-triage",
+        doc_trees=("devtools/docs/",),
+        # The server half is descriptive only: `moz.build` gives
+        # `devtools/server/actors/stylesheets/` to this component, but the Rules view
+        # edits stylesheets through the same StyleSheetsManager, so it stays unowned.
+        trees=(
+            "devtools/client/styleeditor/",
+            "devtools/server/actors/style-sheets.js",
+            "devtools/server/actors/stylesheets/",
+            "devtools/server/actors/resources/stylesheets.js",
+        ),
+        owns=("devtools/client/styleeditor/",),
+        notes=(
+            "**The panel is thin; listing and text come from the server.** "
+            "`devtools/client/styleeditor/StyleEditorUI.sys.mjs` is the sheet list, "
+            "at-rules sidebar and toolbar, and "
+            "`devtools/client/styleeditor/StyleSheetEditor.sys.mjs` wraps one "
+            "editor, which is `DevTools :: Source Editor` (CodeMirror) for typing, "
+            "autocomplete and syntax highlighting bugs. Which sheets appear is "
+            "`devtools/server/actors/stylesheets/stylesheets-manager.js` calling "
+            "`InspectorUtils.getAllStyleSheets`, and the text shown is "
+            "`getStyleSheetText` in "
+            "`devtools/server/actors/stylesheets/stylesheet-utils.js`, which "
+            "refetches external sheets from cache rather than reading the parsed "
+            "rules. The same StyleSheetsManager applies Rules view edits, so a Rules "
+            "view change not showing up here, or the reverse, is a shared-actor bug "
+            "that `DevTools :: Inspector: Rules` may equally claim.\n\n"
+            "**Expected states that get filed as bugs.** Constructed and adopted "
+            "stylesheets show empty text (bug 1769933, a TODO in "
+            "`getStyleSheetText`). User-agent sheets are listed only when the "
+            "document has the system principal, so they appear in the Browser "
+            "Toolbox but never for a web page. Minified sheets are reformatted on "
+            "open by `prettifyCSS` in `devtools/shared/inspector/css-logic.js` "
+            "based on rule count. A source-mapped original (Sass, Less) shown while "
+            "`devtools.source-map.client-service.enabled` is on can be edited and "
+            "saved but is not applied to the page live, and pretty-print is "
+            "disabled for it. Edits are not persisted across reload unless saved "
+            "to a file.\n\n"
+            "**Coverage is good, so an empty `relevant_tests` is usually wrong.** "
+            "58 browser tests in `devtools/client/styleeditor/test/browser.toml`, "
+            "plus 5 `browser_resources_stylesheets*` tests in "
+            "`devtools/shared/commands/resource/tests/` for the server-side "
+            "listing. There are no jest tests."
+        ),
     ),
     # The three buckets, which are where a filing lands when the reporter could not pick
     # a component. Grouped at the end rather than beside a related area because they are

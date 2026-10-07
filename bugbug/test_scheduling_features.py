@@ -3,7 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import os
+import re
 
 from bugbug import repository, test_scheduling
 
@@ -71,6 +73,233 @@ class IsBuild(object):
         return test_job["name"].startswith("build-")
 
 
+class TaskNameTokens(object):
+    """The tokens of the task label (split on "-" and "/"), without the numbers (e.g. chunks), as features.
+
+    E.g. test-linux2404-64/debug-gtest-1proc has the tokens test, linux2404, debug, gtest and 1proc.
+    Unlike the task name itself, they're shared by related tasks (e.g. all debug tasks, all asan
+    builds, all gtest tasks). The model learns which tokens matter, so new tasks and naming changes
+    don't need any update.
+    """
+
+    def __call__(self, test_job, **kwargs):
+        return [
+            token
+            for token in re.split(r"[-/]", test_job["name"])
+            if token and not token.isdigit()
+        ]
+
+
+# Build-relevant file types and directories, for PushBuildFiles.
+# Build-relevant file types: (suffixes, file names, path substrings). A file has the first matching type.
+_BUILD_FILE_TYPES = {
+    "build": (
+        ("moz.build", ".mozbuild", ".mk", ".in", "configure", ".m4", ".gn", ".gni"),
+        ("configure.py", "GNUmakefile"),
+        ("/mozconfig",),
+    ),
+    # Dependencies: Rust crates, Python packages, Gradle libraries, audits of vendored crates.
+    "deps": (
+        (),
+        (
+            "Cargo.toml",
+            "Cargo.lock",
+            "pyproject.toml",
+            "uv.lock",
+            "libs.versions.toml",
+            "imports.lock",
+        ),
+        (),
+    ),
+    # Other TOML files, mostly test manifests (which the build processes).
+    "manifests": ((".toml",), (), ()),
+    "java": ((".java", ".kt", ".gradle", ".kts"), ("gradle.properties", "gradlew"), ()),
+    "swift": ((".swift",), (), ()),
+    "rs": ((".rs",), (), ()),
+}
+# Files changing the build system, for PushTaskFiles.
+_BUILD_SYSTEM_TYPES = ("build", "deps")
+# The OS of a task, from the start of its platform (the label without the task kind).
+_OS_PATTERNS = (
+    (
+        "android",
+        re.compile(
+            r"^(android|apk|bundle|fenix|focus|klar|components|geckoview|samples|fat-aar)"
+        ),
+    ),
+    ("ios", re.compile(r"^ios")),
+    ("macosx", re.compile(r"^(macosx|osx|mac)")),
+    ("windows", re.compile(r"^(windows|win|mingw)")),
+    ("linux", re.compile(r"^(linux|sm-|spidermonkey)")),
+)
+# The names of the directories with the platform-specific code of each OS (e.g. widget/cocoa,
+# accessible/mac, security/sandbox/win). "unix" directories (e.g. xpcom/reflect/xptcall/md/unix) are
+# shared by Linux and macOS.
+_OS_DIR_NAMES = {
+    "android": frozenset({"android"}),
+    "ios": frozenset({"ios", "uikit"}),
+    "macosx": frozenset({"cocoa", "mac", "macos", "macosx", "osx", "unix"}),
+    "windows": frozenset({"windows", "win", "win32"}),
+    "linux": frozenset({"gtk", "linux", "unix", "x11", "wayland", "atk", "gnome"}),
+}
+# More platform-specific files (path prefixes, file types), for test tasks.
+_TEST_PLATFORM_FILES = {
+    "android": (("mobile/shared/",), (".java", ".kt", ".gradle", ".kts")),
+    "ios": ((), (".swift",)),
+    "macosx": ((), (".mm",)),
+}
+# The harness and tests of the test suites selected by the label model (the first matching substring of the
+# task name wins). Suites run per manifest (e.g. mochitest, xpcshell, reftest, web-platform-tests) are selected
+# by the group model, and some (e.g. jittest, jsreftest) aren't selected by bugbug at all
+# (test_scheduling.JOBS_TO_IGNORE), so they aren't here. Patterns starting with "/" match anywhere in the path,
+# the others match its start. For gtest, cppunittest, marionette, telemetry-tests and firefox-ui, these are
+# only the harnesses: the directories of their tests come from the Firefox tree when training
+# (test_scheduling.get_suite_test_dirs).
+_SUITE_FILES = (
+    ("appservices", ("third_party/application-services/",)),
+    ("geckoview-junit", ("mobile/android/geckoview/",)),
+    ("gtest", ("testing/gtest/",)),
+    ("cppunittest", ("testing/cppunittest", "testing/runcppunittests.py")),
+    ("marionette", ("testing/marionette/", "remote/marionette/")),
+    ("telemetry-tests", ("toolkit/components/telemetry/tests/marionette/",)),
+    ("firefox-ui", ("testing/firefox-ui/",)),
+    ("web-platform-tests-print-reftest", ("/print", "/Print", "/nsPrint")),
+    ("devtools-compat", ("devtools/",)),
+    ("crashtest", ("/crashtests/", "testing/reftest/")),
+    ("reftest", ("layout/reftests/", "testing/reftest/")),
+    ("test-apk-fenix", ("mobile/android/fenix/",)),
+    ("test-apk-focus", ("mobile/android/focus-android/",)),
+    ("test-apk-klar", ("mobile/android/focus-android/",)),
+    ("test-apk", ("mobile/android/",)),
+    ("test-components", ("mobile/android/android-components/",)),
+)
+
+
+def get_task_os(name: str) -> str:
+    """The OS of a task (android, ios, macosx, windows or linux), or "other"."""
+    platform = re.sub(r"^(build-signing-|build-|test-)", "", name).partition("/")[0]
+    return next(
+        (os_ for os_, pattern in _OS_PATTERNS if pattern.search(platform)), "other"
+    )
+
+
+def get_task_source_dir(name: str) -> str | None:
+    """The source directory of an Android component, sample or app task, if any.
+
+    E.g. build-components-feature-logins and test-components-android-feature-logins are built from
+    mobile/android/android-components/components/feature/logins/.
+    """
+    m = re.match(r"^(?:build|test)-components-(?:android-)?([a-z]+)-(.+)$", name)
+    if m:
+        return (
+            f"mobile/android/android-components/components/{m.group(1)}/{m.group(2)}/"
+        )
+    m = re.match(r"^build-samples-(.+)$", name)
+    if m:
+        return f"mobile/android/android-components/samples/{m.group(1)}/"
+    m = re.match(r"^(?:build|test)-apk-(fenix|focus|klar)", name)
+    if m:
+        return (
+            "mobile/android/fenix/"
+            if m.group(1) == "fenix"
+            else "mobile/android/focus-android/"
+        )
+    return None
+
+
+def _file_type(f: str) -> str | None:
+    name = os.path.basename(f)
+    for file_type, (suffixes, names, substrings) in _BUILD_FILE_TYPES.items():
+        if f.endswith(suffixes) or name in names or any(s in f for s in substrings):
+            return file_type
+    return None
+
+
+def _file_oses(f: str) -> list[str]:
+    dirs = set(f.split("/")[:-1])
+    return [os_ for os_, names in _OS_DIR_NAMES.items() if dirs & names]
+
+
+def _is_build(name: str) -> bool:
+    return name.startswith("build-") and not name.startswith("build-signing-")
+
+
+class PushBuildFiles(object):
+    """For build tasks, the number of modified files of each build-relevant type and in the code of each OS.
+
+    E.g. a build system or toolchain change can break any build, a change under mobile/android the
+    Android builds. Test tasks don't get them: for them, they'd be a push-level "risky push" signal,
+    which moves the selection budget away from the tests related to the change.
+    """
+
+    def __call__(self, test_job, commit, **kwargs):
+        if not _is_build(test_job["name"]):
+            return None
+
+        files = commit["files"]
+        types = collections.Counter(_file_type(f) for f in files)
+        features = {f"push_build_files_type_{t}": types[t] for t in _BUILD_FILE_TYPES}
+        oses = collections.Counter(os_ for f in files for os_ in _file_oses(f))
+        features.update({f"push_build_files_os_{o}": oses[o] for o in _OS_DIR_NAMES})
+        return features
+
+
+class PushTaskFiles(object):
+    """The number of modified files related to the task.
+
+    For every task, the files in the platform-specific code of its OS, and in its source directory
+    (for Android components, samples and apps); for build tasks, the files changing the build
+    system; for test tasks, the files in the platform-specific code of its OS (including
+    platform-specific file types, e.g. .java for Android) and in its suite's harness and tests.
+    """
+
+    def __init__(self, suite_test_dirs: dict[str, tuple[str, ...]] | None = None):
+        # The directories with the tests of some suites (see test_scheduling.get_suite_test_dirs), in
+        # addition to their harnesses.
+        suite_test_dirs = suite_test_dirs or {}
+        self.suite_files = tuple(
+            (key, patterns + suite_test_dirs.get(key, ()))
+            for key, patterns in _SUITE_FILES
+        )
+
+    def __call__(self, test_job, commit, **kwargs):
+        name = test_job["name"]
+        files = commit["files"]
+        os_ = get_task_os(name)
+        is_platform_file = [os_ in _file_oses(f) for f in files]
+        features = {"push_platform_files": sum(is_platform_file)}
+
+        source_dir = get_task_source_dir(name)
+        if source_dir is not None:
+            features["push_source_files"] = sum(
+                1 for f in files if f.startswith(source_dir)
+            )
+
+        if _is_build(name):
+            features["push_build_system_files"] = sum(
+                1 for f in files if _file_type(f) in _BUILD_SYSTEM_TYPES
+            )
+        elif name.startswith("test-"):
+            prefixes, extensions = _TEST_PLATFORM_FILES.get(os_, ((), ()))
+            features["push_test_platform_files"] = sum(
+                1
+                for f, is_platform in zip(files, is_platform_file)
+                if is_platform
+                or (prefixes and f.startswith(prefixes))
+                or (extensions and f.endswith(extensions))
+            )
+            patterns = next((p for key, p in self.suite_files if key in name), ())
+            features["push_suite_files"] = sum(
+                1
+                for f in files
+                if any(
+                    (p in f) if p.startswith("/") else f.startswith(p) for p in patterns
+                )
+            )
+
+        return features
+
+
 class PrevFailures(object):
     def __call__(self, test_job, **kwargs):
         return {
@@ -123,6 +352,8 @@ class TouchedTogether(object):
         return {
             "touched_together_files": test_job["touched_together_files"],
             "touched_together_directories": test_job["touched_together_directories"],
+            # Pointwise mutual information of the co-changes (see test_scheduling.get_cochange_pmi).
+            "touched_together_pmi": test_job.get("touched_together_pmi", 0.0),
         }
 
 

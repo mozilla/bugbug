@@ -20,6 +20,8 @@ from hackbot_client import RunStatus, TriggeredRun
 from slack_sdk.signature import SignatureVerifier
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.web.async_slack_response import AsyncSlackResponse
+from slack_sdk.webhook import WebhookResponse
+from slack_sdk.webhook.async_client import AsyncWebhookClient
 
 SIGNING_SECRET = "test-signing-secret"
 RUN_ID = "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6"
@@ -70,6 +72,19 @@ def slack_auth(monkeypatch):
     monkeypatch.setattr(AsyncWebClient, "auth_test", auth_test)
 
 
+@pytest.fixture(autouse=True)
+def slack_response_url(monkeypatch):
+    """Accept the message update a click sends to its `response_url`.
+
+    Without this the suite would post to the payload's made-up URL.
+    """
+
+    async def send_dict(self, body, headers=None):
+        return WebhookResponse(url=self.url, status_code=200, body="ok", headers={})
+
+    monkeypatch.setattr(AsyncWebhookClient, "send_dict", send_dict)
+
+
 @pytest.fixture
 def hackbot_client():
     return _FakeHackbotClient()
@@ -84,8 +99,7 @@ def client(monkeypatch, hackbot_client):
     app.dependency_overrides[webhooks.get_slack_handler] = build_request_handler
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: hackbot_client
     try:
-        with TestClient(app, raise_server_exceptions=False) as test_client:
-            yield test_client
+        yield TestClient(app, raise_server_exceptions=False)
     finally:
         app.dependency_overrides.clear()
 
@@ -96,26 +110,30 @@ def _payload(
     value: dict | None = None,
     payload_type: str = "block_actions",
 ) -> dict:
+    button = {
+        "type": "button",
+        "block_id": "offers",
+        "action_id": action_id,
+        "value": json.dumps(
+            {
+                "agent_name": "bug-fix",
+                "inputs": {"bug_id": 1234},
+                "dedupe_key": DEDUPE_KEY,
+            }
+            if value is None
+            else value
+        ),
+    }
     return {
         "type": payload_type,
         "user": {"id": "U0CLICKER", "username": "clicker"},
         "channel": {"id": "C0TRIAGE"},
-        "message": {"ts": "1700000000.000100"},
-        "actions": [
-            {
-                "type": "button",
-                "action_id": action_id,
-                "value": json.dumps(
-                    {
-                        "agent_name": "bug-fix",
-                        "inputs": {"bug_id": 1234},
-                        "dedupe_key": DEDUPE_KEY,
-                    }
-                    if value is None
-                    else value
-                ),
-            }
-        ],
+        "message": {
+            "ts": "1700000000.000100",
+            "text": "Bug 1234 triaged",
+            "blocks": [{"type": "actions", "block_id": "offers", "elements": [button]}],
+        },
+        "actions": [button],
         "response_url": "https://hooks.slack.example/actions/T1/1/abc",
         "trigger_id": "123.456.abc",
         "team": {"id": "T1"},

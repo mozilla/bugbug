@@ -21,6 +21,7 @@ recording agent's to decide.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import os
@@ -136,7 +137,9 @@ class SendEmailHandler:
                 )
             )
 
-        response = sendgrid.SendGridAPIClient(api_key=api_key).send(message=message)
+        client = sendgrid.SendGridAPIClient(api_key=api_key)
+        # The SendGrid client is synchronous; keep its HTTP call off the event loop.
+        response = await asyncio.to_thread(client.send, message=message)
         return ActionResult.ok(
             {"recipients": recipients, "status_code": response.status_code}
         )

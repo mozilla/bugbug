@@ -8,6 +8,7 @@ import collections
 import glob
 import itertools
 import logging
+import math
 import os
 import pickle
 import random
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import (
     Any,
     Callable,
+    Collection,
     Deque,
     Generator,
     Iterable,
@@ -674,7 +676,106 @@ def set_touched_together(f1: str, f2: str) -> None:
         )
 
 
-def update_touched_together() -> Generator[None, Revision | None, None]:
+def _increment_touched_together(touched_together: LMDBDict, key: bytes) -> None:
+    try:
+        touched_together[key] = struct.pack(
+            "I", struct.unpack("I", touched_together[key])[0] + 1
+        )
+    except KeyError:
+        touched_together[key] = struct.pack("I", 1)
+
+
+def _get_touched_together_count(touched_together: LMDBDict, key: bytes) -> int:
+    try:
+        return struct.unpack("I", touched_together[key])[0]
+    except KeyError:
+        return 0
+
+
+def update_cochanges(
+    touched_together: LMDBDict, files: list[str], runnable_dirs: Collection[str]
+) -> None:
+    """Count the co-changes of source directories and runnable directories in a commit.
+
+    A commit co-changes a source directory and a runnable directory if it modifies a file directly in
+    the source directory (outside any runnable directory) and a file in the runnable directory or in
+    one of its subdirectories. The commits touching each source and runnable directory, and their
+    total, are counted too, to compute the pointwise mutual information (get_cochange_pmi).
+    """
+    source_dirs = set()
+    touched_runnable_dirs = set()
+    for f in files:
+        dirs = []
+        d = os.path.dirname(f)
+        while d:
+            dirs.append(d)
+            d = os.path.dirname(d)
+        file_runnable_dirs = [d for d in dirs if d in runnable_dirs]
+        if file_runnable_dirs:
+            touched_runnable_dirs.update(file_runnable_dirs)
+        elif dirs:
+            source_dirs.add(dirs[0])
+
+    _increment_touched_together(touched_together, b"cochange_total")
+    for source_dir in source_dirs:
+        _increment_touched_together(
+            touched_together, f"cochange_source${source_dir}".encode("utf-8")
+        )
+    for runnable_dir in touched_runnable_dirs:
+        _increment_touched_together(
+            touched_together, f"cochange_runnable${runnable_dir}".encode("utf-8")
+        )
+    for source_dir in source_dirs:
+        for runnable_dir in touched_runnable_dirs:
+            _increment_touched_together(
+                touched_together,
+                f"cochange_pair${source_dir}${runnable_dir}".encode("utf-8"),
+            )
+
+
+def get_cochange_pmi(source_dirs: Iterable[str], runnable_dirs: Iterable[str]) -> float:
+    """Maximum pointwise mutual information of the co-changes of the source and runnable directories.
+
+    log(n(d, r) * N / (n(d) * n(r))) for a source directory d and a runnable directory r, where N is
+    the number of commits counted by update_cochanges: how much more often they were changed
+    together than by chance. 0 if they were never changed together (or less often than by chance).
+    Unlike the raw co-change counts, it doesn't favor directories which are changed very often.
+    """
+    touched_together = get_touched_together_db(True)
+    total = _get_touched_together_count(touched_together, b"cochange_total")
+    if total == 0:
+        return 0.0
+
+    best = 0.0
+    for source_dir in source_dirs:
+        source_count = _get_touched_together_count(
+            touched_together, f"cochange_source${source_dir}".encode("utf-8")
+        )
+        if source_count == 0:
+            continue
+        for runnable_dir in runnable_dirs:
+            count = _get_touched_together_count(
+                touched_together,
+                f"cochange_pair${source_dir}${runnable_dir}".encode("utf-8"),
+            )
+            if count == 0:
+                continue
+            runnable_count = _get_touched_together_count(
+                touched_together, f"cochange_runnable${runnable_dir}".encode("utf-8")
+            )
+            best = max(best, math.log(count * total / (source_count * runnable_count)))
+    return best
+
+
+def update_touched_together(
+    runnable_dirs: Collection[str] = (),
+) -> Generator[None, Revision | None, None]:
+    """Update the touched together DB with the commits up to the revisions sent to the generator.
+
+    With runnable_dirs (the directories of the runnables, see get_runnable_dirs), also count their
+    co-changes with source directories (see update_cochanges).
+    """
+    runnable_dirs = set(runnable_dirs)
     touched_together = get_touched_together_db(False)
     last_analyzed = (
         touched_together[b"last_analyzed"]
@@ -710,6 +811,9 @@ def update_touched_together() -> Generator[None, Revision | None, None]:
                     list(set(os.path.dirname(f) for f in commit["files"])), 2
                 ):
                     set_touched_together(d1, d2)
+
+                if runnable_dirs:
+                    update_cochanges(touched_together, commit["files"], runnable_dirs)
 
         elif last_analyzed == commit["node"].encode("ascii"):
             can_start = True
@@ -866,6 +970,9 @@ def generate_data(
                 for source_file_dir in source_file_dirs
                 for runnable_dir in runnable_dirs
             )
+            touched_together_pmi = get_cochange_pmi(
+                set(source_file_dirs), runnable_dirs
+            )
 
         is_possible_regression = runnable in possible_regressions
         is_likely_regression = runnable in likely_regressions
@@ -966,6 +1073,7 @@ def generate_data(
         if granularity != "label":
             obj["touched_together_files"] = touched_together_files
             obj["touched_together_directories"] = touched_together_directories
+            obj["touched_together_pmi"] = touched_together_pmi
 
         yield obj
 
@@ -999,6 +1107,63 @@ manifest_by_path: dict[str, set[str]] | None = None
 # If a modified file is close to more manifests than this, it is too broad
 # (e.g. dom/moz.build) for the sibling heuristic to be informative, so we
 # don't schedule any of them and leave the decision to the model.
+# The moz.build variables listing the test manifests of some of the suites selected by the label model.
+_SUITE_MANIFEST_VARIABLES = {
+    "marionette": "MARIONETTE_MANIFESTS",
+    "telemetry-tests": "TELEMETRY_TESTS_CLIENT_MANIFESTS",
+    "firefox-ui": "FIREFOX_UI_FUNCTIONAL_MANIFESTS",
+}
+_SUITE_MANIFEST_LIST_RES = {
+    suite: re.compile(r"\b%s\s*\+?=\s*\[(.*?)\]" % variable, re.S)
+    for suite, variable in _SUITE_MANIFEST_VARIABLES.items()
+}
+_STRING_RE = re.compile(r"[\"']([^\"']+)[\"']")
+_GTEST_LIBRARY_RE = re.compile(r"FINAL_LIBRARY\s*=\s*[\"']xul-gtest[\"']")
+_CPP_UNIT_TESTS_RE = re.compile(r"\bCPP_UNIT_TESTS\b|CppUnitTests\(")
+
+
+def get_suite_test_dirs(repo_dir: str) -> dict[str, tuple[str, ...]]:
+    """The directories with the tests of some suites selected by the label model, from a Firefox tree.
+
+    They come from the moz.build files: the directories of the manifests of the marionette,
+    telemetry-tests-client and firefox-ui suites, the directories built into the gtest library, and
+    the directories with C++ unit tests. Only the moz.build files are needed (e.g. a sparse checkout).
+    """
+    dirs: dict[str, set[str]] = {
+        suite: set()
+        for suite in list(_SUITE_MANIFEST_VARIABLES) + ["gtest", "cppunittest"]
+    }
+    for root, subdirs, files in os.walk(repo_dir):
+        rel_root = os.path.relpath(root, repo_dir)
+        subdirs[:] = [
+            d
+            for d in subdirs
+            if not d.startswith((".", "obj-"))
+            and d != "node_modules"
+            and not (rel_root == "." and d == "third_party")
+        ]
+        if "moz.build" not in files:
+            continue
+
+        base = "" if rel_root == "." else rel_root.replace(os.sep, "/")
+        with open(os.path.join(root, "moz.build"), errors="replace") as f:
+            text = f.read()
+
+        for suite, list_re in _SUITE_MANIFEST_LIST_RES.items():
+            for m in list_re.finditer(text):
+                for manifest in _STRING_RE.findall(m.group(1)):
+                    manifest_dir = os.path.normpath(
+                        os.path.join(base, os.path.dirname(manifest))
+                    )
+                    dirs[suite].add(f"{manifest_dir}/")
+        if _GTEST_LIBRARY_RE.search(text):
+            dirs["gtest"].add(f"{base}/")
+        if _CPP_UNIT_TESTS_RE.search(text):
+            dirs["cppunittest"].add(f"{base}/")
+
+    return {suite: tuple(sorted(suite_dirs)) for suite, suite_dirs in dirs.items()}
+
+
 MAX_SIBLING_MANIFESTS = 42
 
 

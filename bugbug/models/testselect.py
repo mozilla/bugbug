@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import bisect
 import collections
 import concurrent.futures
 import heapq
@@ -503,6 +504,7 @@ class TestSelectModel(Model):
         non_run_negative_weight=None,
         non_run_negative_sample_rate=None,
         recency_half_life=None,
+        suite_test_dirs=None,
     ):
         Model.__init__(self, lemmatization)
 
@@ -565,9 +567,9 @@ class TestSelectModel(Model):
 
         if granularity == "label":
             feature_extractors += [
-                test_scheduling_features.Platform(),
-                # test_scheduling_features.chunk(),
-                test_scheduling_features.Suite(),
+                test_scheduling_features.TaskNameTokens(),
+                test_scheduling_features.PushBuildFiles(),
+                test_scheduling_features.PushTaskFiles(suite_test_dirs),
             ]
         elif granularity in ("group", "config_group"):
             feature_extractors += [
@@ -644,8 +646,8 @@ class TestSelectModel(Model):
         self, apply_filters: bool = False
     ) -> tuple[list[dict[str, Any]], int]:
         pushes = []
-        for revs, test_datas in test_scheduling.get_test_scheduling_history(
-            self.granularity
+        for push_index, (revs, test_datas) in enumerate(
+            test_scheduling.get_test_scheduling_history(self.granularity)
         ):
             failures = []
             passes = []
@@ -670,6 +672,8 @@ class TestSelectModel(Model):
                     "revs": revs,
                     "failures": failures,
                     "passes": passes,
+                    # Index in the unfiltered history, as in items_gen's row_push_index.
+                    "push_index": push_index,
                 }
             )
 
@@ -679,9 +683,10 @@ class TestSelectModel(Model):
     # according to time: we train on older pushes and evaluate on newer pushes.
     def train_test_split(self, X, y):
         pushes, train_push_len = self.get_pushes(True)
-        train_len = sum(
-            len(push["failures"]) + len(push["passes"])
-            for push in pushes[:train_push_len]
+        # items_gen doesn't generate a row for every runnable of a push (e.g. with negative
+        # sampling), so split on the push of each generated row (rows are in push order).
+        train_len = bisect.bisect_left(
+            self.row_push_index, pushes[train_push_len]["push_index"]
         )
         logger.info(
             "%d pushes in the training set (corresponding to %d push/jobs)",
@@ -691,7 +696,16 @@ class TestSelectModel(Model):
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
     def items_gen(self, classes):
-        commit_map = get_commit_map()
+        # Only the commits of the pushes in the history (all the commits don't fit in memory).
+        commit_map = get_commit_map(
+            {
+                revision
+                for revs, _ in test_scheduling.get_test_scheduling_history(
+                    self.granularity
+                )
+                for revision in revs
+            }
+        )
 
         # With negative_sample_rate (non_run_negative_sample_rate for non-run negatives), keep all
         # failures but only a random (fixed, as the rows can be generated more than once) fraction of
@@ -900,9 +914,11 @@ class TestSelectModel(Model):
 
         targets = CONFIDENCE_LEVEL_TARGETS.get(self.granularity)
         max_target = max(targets.values()) if targets else 0
-        # The highest confidences of the runnables on each test push whose push number isn't
-        # clamped (see below), to compute the confidence thresholds.
+        # The highest confidences of the runnables on each test push, to compute the confidence
+        # thresholds.
         top_confidences: list[list[tuple[str, float]]] = []
+        # Test pushes too old for their past failures to be known (see below).
+        clamped_pushes = []
 
         # Select tests for all the pushes in the test set.
         for i, push in enumerate(tqdm(test_pushes.values())):
@@ -923,16 +939,20 @@ class TestSelectModel(Model):
             # generation we store past failures in batches of 100 pushes.
             push_num -= 100
 
-            # Clamp so that the PAST_FAILURES_LOOKBACK_MONTH-push lookback doesn't
-            # fall before the queue's start_day.
+            # The past failures DB only keeps the last HISTORICAL_TIMESPAN pushes: if the
+            # PAST_FAILURES_LOOKBACK_MONTH-push lookback falls before its start, the push number
+            # would have to be clamped to a later one, and the past failures would include
+            # failures of later pushes (and of the push itself), inflating the results. Skip
+            # these pushes instead.
             start_day_max = round(last_push_num / 100) - int(
                 test_scheduling.HISTORICAL_TIMESPAN / 100
             )
             min_push_num = (
                 start_day_max + int(test_scheduling.PAST_FAILURES_LOOKBACK_MONTH / 100)
             ) * 100
-            clamped = push_num < min_push_num
-            push_num = max(push_num, min_push_num)
+            if push_num < min_push_num:
+                clamped_pushes.append(push["revs"][0])
+                continue
 
             confidences = self.get_confidences(commits, push_num)
             push["all_possibly_selected"] = {
@@ -945,10 +965,16 @@ class TestSelectModel(Model):
                 push["top_confidences"] = heapq.nlargest(
                     int(10 * max_target), confidences.items(), key=lambda x: x[1]
                 )
-                # With a clamped push number, the past failures would include failures of
-                # later pushes (and of the push itself), inflating the confidences.
-                if not clamped:
-                    top_confidences.append(push["top_confidences"])
+                top_confidences.append(push["top_confidences"])
+
+        for rev in clamped_pushes:
+            del test_pushes[rev]
+        logger.info(
+            "Skipped %d test pushes whose past failures aren't available, evaluating on %d (%d with failures).",
+            len(clamped_pushes),
+            len(test_pushes),
+            sum(1 for push in test_pushes.values() if len(push["failures"]) > 0),
+        )
 
         confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]
         if targets and top_confidences:
@@ -1175,13 +1201,35 @@ class TestSelectModel(Model):
 
 
 class TestLabelSelectModel(TestSelectModel):
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=False, repo_dir: str = ""):
+        # The directories with the tests of some suites come from a Firefox tree (only its moz.build
+        # files are needed), and are stored with the model.
+        suite_test_dirs = None
+        if repo_dir:
+            suite_test_dirs = test_scheduling.get_suite_test_dirs(repo_dir)
+            logger.info(
+                "Test directories of the suites: %s",
+                {suite: len(dirs) for suite, dirs in suite_test_dirs.items()},
+            )
+        else:
+            logger.warning(
+                "No Firefox repository (repo_dir): the suite files features only include the "
+                "harnesses of the suites, not their tests"
+            )
+
         TestSelectModel.__init__(
             self,
             lemmatization,
             "label",
-            failures_skip=60,
+            suite_test_dirs=suite_test_dirs,
             xgboost_params=TUNED_XGBOOST_PARAMS,
+            # Train on more negatives than 1:1 undersampling would keep (~10 per positive), with
+            # sample weights balancing the classes.
+            balance_with_weights=True,
+            negative_sample_rate=0.05,
+            # Weighting positives by push size handles pushes breaking many tasks (e.g. all the
+            # Android builds) better than skipping them (the previous failures_skip=60).
+            positive_weight_k=5,
         )
 
 

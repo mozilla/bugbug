@@ -45,7 +45,7 @@ class PatchSummarizationTool(GenerativeModelTool):
             }
         )
 
-        summary = result["messages"][-1].content
+        summary = result["messages"][-1].text
 
         # FIXME(#5705): This is a temporary workaround until we have a more
         # robust way to handle token budgets in the agent's output
