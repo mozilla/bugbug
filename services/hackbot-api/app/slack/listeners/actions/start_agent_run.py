@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from hackbot_client import HackbotClient
-from pydantic import AliasChoices, BaseModel, Field, Json, validate_call, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, Json, validate_call
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
 from slack_bolt.context.respond.async_respond import AsyncRespond
@@ -30,26 +30,36 @@ class StartAgentRunValue(BaseModel):
     # A run whose pending actions will be applied before the new run starts.
     apply_run_id: UUID | None = None
 
+
 class SlackUser(BaseModel):
     """User who started a Slack interaction.
+
     https://docs.slack.dev/reference/objects/user-object/
     """
+
     id: str | None = None
+
 
 class SlackClickPayload(BaseModel):
     """The Slack payload received when a button is clicked.
+
     https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
     """
+
     user: SlackUser | None = None
     message: dict
 
+
 class SlackClickAction(BaseModel):
     """The action that starts an agent run.
+
     https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
     """
+
     value: Json[StartAgentRunValue]
     action_id: str
     block_id: str
+
 
 def _run_url(run_id: UUID) -> str:
     return f"{settings.hackbot_ui_url}/runs/{run_id}"
@@ -95,6 +105,7 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
             "text": f"{message['text']}\n{note_block['elements'][0]['text']}".strip(),
             "blocks": blocks[:i] + replacement + blocks[i + 1 :],
         }
+
 
 @validate_call(config=ConfigDict(arbitrary_types_allowed=True))
 async def start_agent_run_callback(
