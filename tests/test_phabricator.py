@@ -3,14 +3,59 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from datetime import timedelta
-from unittest.mock import MagicMock
+import asyncio
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 from unittest.mock import patch as mock_patch
 
 import pytest
 
 from bugbug import phabricator
+from bugbug.tools.core import connection
 from bugbug.tools.core.platforms import phabricator as phab_platform
+
+
+@pytest.fixture
+def github_token(monkeypatch):
+    monkeypatch.delenv("TC_SECRET_ID", raising=False)
+    monkeypatch.setenv("BUGBUG_GITHUB_TOKEN", "secret-token")
+    connection.get_github_api_headers.cache_clear()
+    yield
+    connection.get_github_api_headers.cache_clear()
+
+
+def test_github_api_headers_without_token(monkeypatch) -> None:
+    monkeypatch.delenv("TC_SECRET_ID", raising=False)
+    monkeypatch.delenv("BUGBUG_GITHUB_TOKEN", raising=False)
+    connection.get_github_api_headers.cache_clear()
+    assert connection.get_github_api_headers() == {}
+    connection.get_github_api_headers.cache_clear()
+
+
+def test_github_api_headers_with_token(github_token) -> None:
+    assert connection.get_github_api_headers() == {
+        "Authorization": "Bearer secret-token"
+    }
+
+
+def test_base_lookup_authenticates_github_api(monkeypatch, github_token) -> None:
+    client = MagicMock()
+    client.get = AsyncMock(
+        return_value=MagicMock(status_code=200, json=lambda: {"items": []})
+    )
+    monkeypatch.setattr(phab_platform, "get_http_client", lambda: client)
+    patch_class = phab_platform.PhabricatorPatch
+
+    asyncio.run(patch_class._commit_exists("mozilla-firefox/firefox", "abc"))
+    asyncio.run(
+        patch_class._latest_landing_commit(
+            "mozilla-firefox/firefox", before=datetime(2026, 10, 5, tzinfo=UTC)
+        )
+    )
+
+    for call in client.get.await_args_list:
+        assert call.kwargs["headers"]["Authorization"] == "Bearer secret-token"
+    assert client.get.await_count == 2
 
 
 def test_stack_base_patch_is_bottom_ancestor() -> None:
