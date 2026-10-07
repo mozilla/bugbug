@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(PYTHONPATH=. uv run python -m pytest tests/test_list_runs_api.py -q)",
+      "Bash(npm run *)",
+      "Bash(echo \"exit=$?\")",
+      "Read(//tmp/**)",
+      "Bash(docker rm *)",
+      "Bash(rm -f /tmp/up.sql /tmp/down.sql /tmp/up.err /tmp/alembic_local.ini)",
+      "Bash(git check-ignore *)",
+      "Bash(curl -s \"http://localhost:3000/api/runs?limit=50&author=sledru@mozilla.com\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('count', len\\(d\\)\\); [print\\(' ', r['run_id'][:8], r['agent'], r['status'], r['author']\\) for r in d[:4]]\")",
+      "Bash(curl -s \"http://localhost:3000/api/runs?limit=50\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('count', len\\(d\\), '| distinct authors:', sorted\\({str\\(r['author']\\) for r in d}\\)\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/runs?limit=50&agent=bug-fix&status=failed\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('count', len\\(d\\)\\)\")",
+      "Bash(curl -s \"http://127.0.0.1:8080/runs?limit=50\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); from collections import Counter; c=Counter\\(str\\(r['author']\\) for r in d\\); print\\('all runs by author:', dict\\(c\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(sorted\\({str\\(r['author']\\) for r in d}\\)\\)\")",
+      "Bash(python3 stub_api.py)",
+      "Bash(python3 -c \"import sys,json; from collections import Counter; d=json.load\\(sys.stdin\\); print\\(dict\\(Counter\\(str\\(r['author']\\) for r in d\\)\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; print\\(len\\(json.load\\(sys.stdin\\)\\)\\)\")",
+      "Bash(pkill -f stub_api.py)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(rm -f services/hackbot-ui/.env.local)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"tsc exit=$?\")",
+      "Bash(git commit -q -m 'hackbot: record and filter runs by author *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'hackbot-ui: add local stub API with a sample run dataset *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "Bash(uvx ruff *)",
+      "Bash(python3 -c ' *)",
+      "Bash(git commit -q -m 'hackbot-ui: address review on the local stub API *)"
+    ]
+  }
+}
