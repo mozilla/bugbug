@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -29,12 +30,12 @@ class StaleRunSweep(BaseModel):
     errored: list[uuid.UUID]
 
 
-@router.post("/finalize-stale-runs", response_model=StaleRunSweep)
+@router.post("/finalize-stale-runs")
 async def finalize_stale_runs(
-    min_age_minutes: int = Query(default=120, ge=1),
-    limit: int = Query(default=100, ge=1, le=1000),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    min_age_minutes: Annotated[int, Query(ge=1)] = 120,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     dry_run: bool = False,
-    db: AsyncSession = Depends(get_db),
 ) -> StaleRunSweep:
     """Finalize runs whose completion event never arrived or never landed."""
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=min_age_minutes)

@@ -14,6 +14,7 @@ patch and runs whenever stage 1 blamed a commit.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -30,7 +31,9 @@ from claude_agent_sdk import (
     McpServerConfig,
     ResultMessage,
 )
-from hackbot_runtime import AgentError, HackbotAgentResult
+from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 
 from .config import (
@@ -38,6 +41,7 @@ from .config import (
     ALLOWED_TOOLS,
     ANALYSIS_MODEL,
     BUGZILLA_READ_TOOLS,
+    ENABLED_ACTION_TYPES,
     FIREFOX_TOOLS,
     FIX_MODEL,
     SKIP_FIREFOX_BUILD,
@@ -50,6 +54,9 @@ from .prompts import (
     KNOWN_INTERMITTENTS_LINE,
     MAX_CANDIDATE_COMMITS,
     MAX_TESTS_PER_GROUP,
+    PARENT_REVISION_ARG,
+    REPORT_INSTRUCTIONS,
+    TREE_AT_CULPRIT,
     VERIFY_LOCAL,
     VERIFY_REMOTE,
     VERIFY_SKIPPED,
@@ -59,6 +66,11 @@ from .resolve import CommitRange, Investigation
 _CLASSIFICATIONS = ("regression", "intermittent")
 _RECOMMENDATIONS = ("backout", "do_not_backout", "rerun")
 _SANITIZER_OPTIONS = {"asan": "address-sanitizer", "tsan": "thread-sanitizer"}
+_BUG_RE = re.compile(r"^Bug (\d+)", re.IGNORECASE)
+_REVISION_RE = re.compile(
+    r"^Differential Revision: https://phabricator\.services\.mozilla\.com/D(\d+)",
+    re.MULTILINE,
+)
 
 
 class TestRepairResult(HackbotAgentResult):
@@ -258,6 +270,46 @@ def _as_int(value) -> int | None:
         return None
 
 
+def _commit_message(repo: Path, sha: str) -> str:
+    """A commit's full message from the local checkout; empty when unreadable."""
+    try:
+        return subprocess.run(
+            ["git", "-C", str(repo), "log", "-1", "--format=%B", sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (subprocess.CalledProcessError, OSError):
+        return ""
+
+
+def _bug_from_commit(repo: Path, sha: str) -> int | None:
+    """The bug a commit landed for, read off its subject."""
+    match = _BUG_RE.match(_commit_message(repo, sha).strip())
+    return int(match.group(1)) if match else None
+
+
+def _revision_from_commit(repo: Path, sha: str) -> int | None:
+    """The Phabricator revision a commit landed from, off its footer."""
+    match = _REVISION_RE.search(_commit_message(repo, sha))
+    return int(match.group(1)) if match else None
+
+
+def _checkout(checkout: Callable[[str], str] | None, sha: str) -> bool:
+    """Move the tree to ``sha`` for the fix stage; False when it stays put.
+
+    Best effort: a checkout that fails costs the stacking, not the analysis.
+    """
+    if checkout is None:
+        return False
+    try:
+        checkout(sha)
+    except Exception as exc:
+        print(f"[test-repair] could not check out {sha}: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
 def _assemble_result(
     scratch_out: Path,
     *,
@@ -327,8 +379,20 @@ async def run_test_repair(
     verbose: bool = False,
     log: Path | None = None,
     publish_file: Callable[[str, Path, str | None], str] | None = None,
+    actions_recorder: ActionsRecorder | None = None,
+    checkout: Callable[[str], str] | None = None,
 ) -> TestRepairResult:
-    """Blame the commit that regressed a failing test and propose a fix."""
+    """Blame the commit that regressed a failing test and propose a fix.
+
+    Pass ``actions_recorder`` to let the fix stage submit the patch for review as a
+    Phabricator revision, recorded as a proposed action rather than submitted
+    here. Runs without a recorder, or with no bug for the culprit, only produce
+    the patch in the source tree.
+
+    Pass ``checkout`` (``HackbotContext.checkout``) to move the tree to the culprit
+    before the fix stage, so the patch is a change to that commit and the revision
+    stacks on the culprit's own.
+    """
     commit_range = investigation.commit_range
     failure_commit = investigation.failure_commit
     print(
@@ -401,6 +465,7 @@ async def run_test_repair(
         culprit_commit = _resolve_culprit(source_repo, verdict.get("culprit_commit"))
         if culprit_commit:
             reporter.header(f"{label}: fix")
+            at_culprit = _checkout(checkout, culprit_commit)
             if skip_firefox_build:
                 verify_step = VERIFY_SKIPPED.format(scratch_out=scratch_out)
             else:
@@ -410,19 +475,65 @@ async def run_test_repair(
                 verify_step = template.format(
                     harness=investigation.harness, platform=investigation.platform
                 ) + ENVIRONMENT_NOTE.format(platform=investigation.platform)
+            bug_id = _as_int(verdict.get("culprit_bug")) or _bug_from_commit(
+                source_repo, culprit_commit
+            )
+            # A child revision has to be based on its parent's commit, so the
+            # patch only stacks when the tree really moved there.
+            parent_revision = (
+                _revision_from_commit(source_repo, culprit_commit)
+                if at_culprit
+                else None
+            )
+            report = actions_recorder is not None and bug_id is not None
+            fix_mcp_servers = mcp_servers
+            fix_allowed_tools = allowed_tools
+            if report:
+                _, actions_server = actions_server_for(
+                    actions_recorder, types=ENABLED_ACTION_TYPES
+                )
+                fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
+                fix_allowed_tools = [
+                    *allowed_tools,
+                    *actions_to_tool_names(ENABLED_ACTION_TYPES),
+                ]
+            elif actions_recorder is not None:
+                print(
+                    f"[test-repair] no bug for culprit {culprit_commit}: the patch "
+                    "will be produced but not submitted for review, since a "
+                    "Phabricator revision is filed against a bug",
+                    file=sys.stderr,
+                )
             fix_prompt = FIX_TEMPLATE.format(
                 culprit_commit=culprit_commit,
                 verify_step=verify_step,
                 source_repo=source_repo,
                 scratch_out=scratch_out,
+                tree_note=(
+                    TREE_AT_CULPRIT.format(culprit_commit=culprit_commit)
+                    if at_culprit
+                    else ""
+                ),
+                report=(
+                    REPORT_INSTRUCTIONS.format(
+                        bug_id=bug_id,
+                        parent=(
+                            PARENT_REVISION_ARG.format(revision=parent_revision)
+                            if parent_revision
+                            else ""
+                        ),
+                    )
+                    if report
+                    else ""
+                ),
             )
             fix_opts = _build_options(
                 model=model or FIX_MODEL,
                 effort="low",
                 cwd=source_repo,
                 scratch_dir=scratch_dir,
-                mcp_servers=mcp_servers,
-                allowed_tools=allowed_tools,
+                mcp_servers=fix_mcp_servers,
+                allowed_tools=fix_allowed_tools,
                 max_turns=max_turns,
             )
             # A failed fix stage must not discard the analysis we already paid for.

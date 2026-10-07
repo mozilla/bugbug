@@ -81,7 +81,7 @@ async def evaluate_testcase(
     filename: str,
     firefox_binary: Path,
     timeout: int = 30,
-    prefs: dict[str, str | int | bool] = {},
+    prefs: dict[str, str | int | bool] = None,
 ) -> dict[str, Any]:
     """Test a testcase in Firefox and capture crash output.
 
@@ -107,6 +107,8 @@ async def evaluate_testcase(
     # what gets us out. The thread itself will keep running after a timeout
     # (threads can't be cancelled), but the tool returns and the agent moves
     # on — a leaked thread is better than a frozen agent.
+    if prefs is None:
+        prefs = {}
     outer_deadline = timeout + 90
     try:
         return await asyncio.wait_for(
@@ -152,12 +154,14 @@ def _run_testcase_in_browser(
     filename: str,
     firefox_binary: Path,
     timeout: int = 30,
-    prefs: dict[str, str | int | bool] = {},
+    prefs: dict[str, str | int | bool] = None,
 ) -> dict[str, Any]:
     """Internal: run testcase in Firefox via grizzly replay.
 
     Synchronous — called via ``asyncio.to_thread`` from the async wrapper.
     """
+    if prefs is None:
+        prefs = {}
     if not firefox_binary.exists():
         return {
             "crashed": False,

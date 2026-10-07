@@ -399,6 +399,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
             "reduced_tasks": {},
             "reduced_tasks_higher": {},
             "known_tasks": get_known_tasks(),
+            "confidence_thresholds": {},
         }
 
     test_selection_threshold = float(
@@ -408,24 +409,43 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     testlabelselect_model = MODEL_CACHE.get("testlabelselect")
     testgroupselect_model = MODEL_CACHE.get("testgroupselect")
 
+    # The confidence thresholds computed when training the models for the low/medium/high levels
+    # used by the taskgraph, as the scale of the confidences depends on the models.
+    confidence_thresholds = {
+        key: model.confidence_thresholds
+        for key, model in (
+            ("tasks", testlabelselect_model),
+            ("groups", testgroupselect_model),
+        )
+        if getattr(model, "confidence_thresholds", None)
+    }
+    tasks_thresholds = confidence_thresholds.get("tasks", {})
+    groups_thresholds = confidence_thresholds.get("groups", {})
+
     known_tasks = get_known_tasks()
     modified_paths = list(set(path for commit in commits for path in commit["files"]))
 
-    tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+    tasks = testlabelselect_model.select_tests(
+        commits, min([test_selection_threshold, *tasks_thresholds.values()])
+    )
     for task in test_scheduling.find_tasks_for_paths(
         REPO_DIR, known_tasks, modified_paths
     ):
         tasks[task] = 1.0
 
     reduced = testselect.reduce_configs(
-        set(t for t, c in tasks.items() if c >= 0.8), 1.0
+        set(t for t, c in tasks.items() if c >= tasks_thresholds.get("medium", 0.8)),
+        1.0,
     )
 
     reduced_higher = testselect.reduce_configs(
-        set(t for t, c in tasks.items() if c >= 0.9), 1.0
+        set(t for t, c in tasks.items() if c >= tasks_thresholds.get("high", 0.9)),
+        1.0,
     )
 
-    groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+    groups = testgroupselect_model.select_tests(
+        commits, min([test_selection_threshold, *groups_thresholds.values()])
+    )
     for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
 
@@ -438,6 +458,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
         "known_tasks": known_tasks,
+        "confidence_thresholds": confidence_thresholds,
     }
 
     return data

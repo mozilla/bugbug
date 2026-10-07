@@ -156,7 +156,7 @@ def test_an_unowned_component_has_no_channel():
     assert channel_for("Firefox", "Address Bar") is None
     assert channel_for("Core", "New Tab Page") is None
     # A component name is only owned within its own product: `History` routes to
-    # #android-core-dev under Firefox for Android and nowhere at all under Firefox --
+    # #firefox-android-dev-info under Firefox for Android and nowhere at all under Firefox --
     # which has no `History` component in the first place, only `Bookmarks & History`.
     assert channel_for("Firefox", "History") is None
     assert channel_for("Firefox", None) is None
@@ -296,7 +296,7 @@ def test_the_button_carries_what_the_receiver_needs_to_start_the_run():
     # rearranged.
     assert _button_value() == {
         "agent_name": "bug-fix",
-        "params": {"bug_id": BUG_ID},
+        "inputs": {"bug_id": BUG_ID},
         "dedupe_key": f"frontend-triage-run:{RUN_ID}",
         "apply_run_id": RUN_ID,
     }
@@ -373,36 +373,30 @@ def test_the_blocks_say_everything_the_fallback_text_says(overrides):
     assert _urls(text) <= _urls(blocks)
 
 
-def test_a_held_run_reports_too_because_its_reader_needs_the_button():
-    # It used to report nothing. The button is why that changed: a result the agent
-    # would not let apply itself is exactly the one a human has to decide on, and
-    # nobody would find it without being told it exists.
-    recorder = ActionsRecorder()
-    action = record_notification(
-        recorder, _result(auto_apply=False, confidence="medium"), run_id=RUN_ID
-    )
+def test_a_held_run_says_its_analysis_is_not_on_the_bug():
+    result = _result(auto_apply=False, confidence="medium")
+    text = build_message(result, run_id=RUN_ID)
+    blocks = build_blocks(result, run_id=RUN_ID)
 
-    assert action is not None
-    blocks = action["params"]["blocks"]
     assert any(b["type"] == "actions" for b in blocks)
-    # And it says the analysis is not on the bug, in both renderings.
-    assert HELD_NOTE in action["params"]["text"]
+    # It says the analysis is not on the bug, in both renderings.
+    assert HELD_NOTE in text
     assert any(HELD_NOTE == b.get("text", {}).get("text") for b in blocks)
 
 
-def test_a_run_with_nothing_to_fix_reports_nothing():
-    # No fix to offer, so a button would be an offer to act on a bug this agent
-    # just called out of scope, and the channel would have nothing to do with it.
+def test_a_run_with_nothing_to_fix_still_reports():
+    # Every run reports, so the owning team sees an out-of-scope verdict too rather
+    # than the run disappearing without a trace.
     recorder = ActionsRecorder()
-    assert (
-        record_notification(
-            recorder,
-            _result(actionable=False, auto_apply=False, confidence="low"),
-            run_id=RUN_ID,
-        )
-        is None
+    action = record_notification(
+        recorder,
+        _result(actionable=False, auto_apply=False, confidence="low"),
+        run_id=RUN_ID,
     )
-    assert recorder.actions == []
+
+    assert action is not None
+    assert [a["type"] for a in recorder.actions] == ["slack.post_message"]
+    assert HELD_NOTE in action["params"]["text"]
 
 
 def test_a_run_that_reported_no_verdict_still_reports():
@@ -410,9 +404,7 @@ def test_a_run_that_reported_no_verdict_still_reports():
     # treated as having something to fix rather than as out of scope.
     recorder = ActionsRecorder()
     assert (
-        record_notification(
-            recorder, _result(actionable=None, auto_apply=False), run_id=RUN_ID
-        )
+        record_notification(recorder, _result(actionable=None), run_id=RUN_ID)
         is not None
     )
 
