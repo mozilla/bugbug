@@ -824,7 +824,7 @@ def test_bugzilla_route_rejects_bad_secret(client):
 def test_bugzilla_route_ignores_non_matching_event(client):
     response = _post_bugzilla(
         client,
-        _bugzilla_payload(added="? (someone@mozilla.com)"),
+        _bugzilla_payload(requestee="someone@mozilla.com"),
     )
     assert response.status_code == 202
     assert response.json() == {

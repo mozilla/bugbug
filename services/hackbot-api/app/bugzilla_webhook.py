@@ -41,9 +41,8 @@ def detect_needinfo_request(
     if actor_login == bot_login:
         return None
 
-    expected_added = f"? ({bot_login})"
     if not any(
-        change["field"] == "flag.needinfo" and change["added"] == expected_added
+        change["field"] == "flag.needinfo" and change["added"].startswith("?")
         for change in event["changes"]
     ):
         return None
