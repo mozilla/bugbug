@@ -1163,11 +1163,16 @@ tasks:
         - test-label-scheduling-history-generator
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-base:${version}
+        # The image with git, to get the moz.build files of Firefox (from which the model gets the
+        # directories with the tests of some suites).
+        image: mozilla/bugbug-commit-retrieval:${version}
         command:
-          - bugbug-train
-          - testlabelselect
-          - --download-eval
+          - "/bin/sh"
+          - "-cxe"
+          - "git clone --quiet --depth 1 --filter=blob:none --no-checkout https://github.com/mozilla-firefox/firefox.git /firefox &&
+            git -C /firefox sparse-checkout set --no-cone moz.build &&
+            git -C /firefox checkout --quiet &&
+            bugbug-train testlabelselect --download-eval --repo_dir /firefox"
 
         artifacts:
           public/testlabelselectmodel.tar.zst:

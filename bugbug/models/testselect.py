@@ -504,6 +504,7 @@ class TestSelectModel(Model):
         non_run_negative_weight=None,
         non_run_negative_sample_rate=None,
         recency_half_life=None,
+        suite_test_dirs=None,
     ):
         Model.__init__(self, lemmatization)
 
@@ -566,9 +567,9 @@ class TestSelectModel(Model):
 
         if granularity == "label":
             feature_extractors += [
-                test_scheduling_features.Platform(),
-                # test_scheduling_features.chunk(),
-                test_scheduling_features.Suite(),
+                test_scheduling_features.TaskNameTokens(),
+                test_scheduling_features.PushBuildFiles(),
+                test_scheduling_features.PushTaskFiles(suite_test_dirs),
             ]
         elif granularity in ("group", "config_group"):
             feature_extractors += [
@@ -695,7 +696,16 @@ class TestSelectModel(Model):
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
     def items_gen(self, classes):
-        commit_map = get_commit_map()
+        # Only the commits of the pushes in the history (all the commits don't fit in memory).
+        commit_map = get_commit_map(
+            {
+                revision
+                for revs, _ in test_scheduling.get_test_scheduling_history(
+                    self.granularity
+                )
+                for revision in revs
+            }
+        )
 
         # With negative_sample_rate (non_run_negative_sample_rate for non-run negatives), keep all
         # failures but only a random (fixed, as the rows can be generated more than once) fraction of
@@ -1191,13 +1201,35 @@ class TestSelectModel(Model):
 
 
 class TestLabelSelectModel(TestSelectModel):
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=False, repo_dir: str = ""):
+        # The directories with the tests of some suites come from a Firefox tree (only its moz.build
+        # files are needed), and are stored with the model.
+        suite_test_dirs = None
+        if repo_dir:
+            suite_test_dirs = test_scheduling.get_suite_test_dirs(repo_dir)
+            logger.info(
+                "Test directories of the suites: %s",
+                {suite: len(dirs) for suite, dirs in suite_test_dirs.items()},
+            )
+        else:
+            logger.warning(
+                "No Firefox repository (repo_dir): the suite files features only include the "
+                "harnesses of the suites, not their tests"
+            )
+
         TestSelectModel.__init__(
             self,
             lemmatization,
             "label",
-            failures_skip=60,
+            suite_test_dirs=suite_test_dirs,
             xgboost_params=TUNED_XGBOOST_PARAMS,
+            # Train on more negatives than 1:1 undersampling would keep (~10 per positive), with
+            # sample weights balancing the classes.
+            balance_with_weights=True,
+            negative_sample_rate=0.05,
+            # Weighting positives by push size handles pushes breaking many tasks (e.g. all the
+            # Android builds) better than skipping them (the previous failures_skip=60).
+            positive_weight_k=5,
         )
 
 

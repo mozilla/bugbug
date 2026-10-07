@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from hackbot_client import HackbotClient
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, Json, validate_call
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
 from slack_bolt.context.respond.async_respond import AsyncRespond
@@ -31,6 +31,36 @@ class StartAgentRunValue(BaseModel):
     apply_run_id: UUID | None = None
 
 
+class SlackUser(BaseModel):
+    """User who started a Slack interaction.
+
+    https://docs.slack.dev/reference/objects/user-object/
+    """
+
+    id: str | None = None
+
+
+class BlockActionsPayload(BaseModel):
+    """The Slack payload received when a button is clicked.
+
+    https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
+    """
+
+    user: SlackUser | None = None
+    message: dict
+
+
+class ButtonAction(BaseModel):
+    """The action that starts an agent run.
+
+    https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
+    """
+
+    value: Json[StartAgentRunValue]
+    action_id: str
+    block_id: str
+
+
 def _run_url(run_id: UUID) -> str:
     return f"{settings.hackbot_ui_url}/runs/{run_id}"
 
@@ -43,7 +73,9 @@ def _generate_replacement_block(
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
 
 
-def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | None:
+def _message_with_note(
+    message: dict, action: ButtonAction, note_block: dict
+) -> dict | None:
     """``message`` with the clicked button swapped for ``note_block``, or None if absent.
 
     Only the clicked button goes: any other button in the same row is a
@@ -51,23 +83,21 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
     """
     blocks = message["blocks"]
     for i, block in enumerate(blocks):
-        if block["block_id"] != action["block_id"]:
+        if block["block_id"] != action.block_id:
             continue
         if block["type"] != "actions":
             log.error(
                 "Clicked button '%s' is in a '%s' block, which is not supported yet",
-                action["action_id"],
+                action.action_id,
                 block["type"],
             )
             return None
         elements = block["elements"]
-        filtered_elements = [
-            e for e in elements if e["action_id"] != action["action_id"]
-        ]
+        filtered_elements = [e for e in elements if e["action_id"] != action.action_id]
         if len(filtered_elements) == len(elements):
             log.error(
                 "Clicked button '%s' is not in its block's elements, which is unexpected",
-                action["action_id"],
+                action.action_id,
             )
             return None
         replacement = (
@@ -81,10 +111,11 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
         }
 
 
+@validate_call(config=ConfigDict(arbitrary_types_allowed=True))
 async def start_agent_run_callback(
     ack: AsyncAck,
-    action: dict,
-    body: dict,
+    action: ButtonAction,
+    body: BlockActionsPayload,
     context: AsyncBoltContext,
     respond: AsyncRespond,
     logger: logging.Logger,
@@ -96,8 +127,8 @@ async def start_agent_run_callback(
     should be fixed with https://github.com/mozilla/bugbug/issues/6468.
     """
     client: HackbotClient = context["hackbot_client"]
-    user = (body.get("user") or {}).get("id")
-    value = StartAgentRunValue.model_validate_json(action["value"])
+    user = body.user.id if body.user else None
+    value = action.value
 
     if value.apply_run_id:
         actions = await client.apply_actions(value.apply_run_id)
@@ -125,7 +156,7 @@ async def start_agent_run_callback(
 
     triggered_by = user if run.is_new else None
     note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
-    updated_message = _message_with_note(body["message"], action, note_block)
+    updated_message = _message_with_note(body.message, action, note_block)
     replaced = False
     if updated_message:
         response = await respond(**updated_message, replace_original=True)
@@ -133,7 +164,7 @@ async def start_agent_run_callback(
         if not replaced:
             logger.error(
                 "Failed to mark button '%s' as used: HTTP %s %s",
-                action["action_id"],
+                action.action_id,
                 response.status_code,
                 response.body,
             )
@@ -141,7 +172,7 @@ async def start_agent_run_callback(
         logger.warning(
             "Slack click by '%s' on button '%s' could not be replaced in its message (run %s, is_new=%s)",
             user,
-            action["action_id"],
+            action.action_id,
             run.run_id,
             run.is_new,
         )

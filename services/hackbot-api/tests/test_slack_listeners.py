@@ -19,6 +19,9 @@ from app.slack.listeners.actions.start_agent_run import (
 )
 from hackbot_client import ApplyActionsResponse, RunAction, RunStatus, TriggeredRun
 from pydantic import ValidationError
+from slack_bolt.context.ack.async_ack import AsyncAck
+from slack_bolt.context.async_context import AsyncBoltContext
+from slack_bolt.context.respond.async_respond import AsyncRespond
 
 test_logger = logging.getLogger(__name__)
 
@@ -81,20 +84,20 @@ def _message(*buttons: dict) -> dict:
 
 class TestStartAgentRun:
     def setup_method(self):
-        self.fake_ack = AsyncMock()
+        self.fake_ack = AsyncMock(spec=AsyncAck)
         self.fake_client = AsyncMock()
         self.fake_client.trigger_run.return_value = TriggeredRun(
             run_id=RUN_ID, agent="bug-fix", status=RunStatus.pending, is_new=True
         )
         self.fake_respond = AsyncMock(
-            return_value=SimpleNamespace(status_code=200, body="ok")
+            spec=AsyncRespond, return_value=SimpleNamespace(status_code=200, body="ok")
         )
         # The apply endpoint answers with every action of the run and its state
         # after the pass; by default here, all of them landed.
         self.fake_client.apply_actions.return_value = _actions(
             _applied("bugzilla.add_comment")
         )
-        self.context = {"hackbot_client": self.fake_client}
+        self.context = AsyncBoltContext({"hackbot_client": self.fake_client})
         self.body = {
             "user": {"id": "U0CLICKER"},
             "channel": {"id": "C0TRIAGE"},

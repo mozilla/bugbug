@@ -24,7 +24,7 @@ _TRY_REPO_NAME = "try"
 
 _TRY_CONFIG_FILENAME = "try_task_config.json"
 
-_DEFAULT_TITLE = "Hackbot try push"
+_COMMIT_TITLE = f"Add {_TRY_CONFIG_FILENAME}"
 _COMMIT_BODY = "Pushed via hackbot."
 
 # Author of the generated try_task_config.json commit. Cosmetic (Lando attributes
@@ -124,7 +124,6 @@ def try_task_config(
 
 def try_task_config_patch(
     tasks: list[str] | None = None,
-    title: str | None = None,
     now: datetime | None = None,
     *,
     auto: bool = False,
@@ -147,24 +146,13 @@ def try_task_config_patch(
     patch = _PATCH_TEMPLATE.format(
         author=_AUTHOR,
         date=format_datetime(now or datetime.now(timezone.utc)),
-        title=_commit_title(title),
+        title=_COMMIT_TITLE,
         body=_COMMIT_BODY,
         filename=_TRY_CONFIG_FILENAME,
         line_count=len(added_lines),
         added_lines="\n".join(f"+{line}" for line in added_lines),
     )
     return patch.encode()
-
-
-def _commit_title(title: str | None) -> str:
-    """A single-line commit subject for the try commit.
-
-    The agent's title is free text, so collapse it to one line: a newline in it
-    would end the ``Subject`` header early and push the rest of the title into
-    the patch body (or, worse, be read as another header).
-    """
-    single_line = " ".join((title or "").split())
-    return single_line or _DEFAULT_TITLE
 
 
 class PushHandler:
@@ -194,7 +182,6 @@ class PushHandler:
                     encode_patch(
                         try_task_config_patch(
                             tasks,
-                            params.get("title"),
                             auto=auto,
                             test_paths=test_paths,
                         )

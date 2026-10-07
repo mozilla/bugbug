@@ -839,10 +839,9 @@ def test_group_model_balances_with_weights() -> None:
 
     model = testselect.TestGroupSelectModel()
     assert "sampler" not in model.clf.named_steps
-    assert "sampler" in testselect.TestLabelSelectModel().clf.named_steps
-    assert (
-        testselect.TestLabelSelectModel().get_sample_weights(np.array([1, 0])) is None
-    )
+    config_group_model = testselect.TestConfigGroupSelectModel()
+    assert "sampler" in config_group_model.clf.named_steps
+    assert config_group_model.get_sample_weights(np.array([1, 0])) is None
 
     rng = np.random.default_rng(0)
     y = (rng.random(200) < 0.2).astype(int)
@@ -878,13 +877,19 @@ def test_items_gen_samples_negatives(monkeypatch) -> None:
         "get_test_scheduling_history",
         lambda granularity: iter(history),
     )
-    monkeypatch.setattr(
-        testselect, "get_commit_map", lambda: {f"rev{i}": {} for i in range(50)}
-    )
+    requested_revs = []
+
+    def get_commit_map(revs=None):
+        requested_revs.append(revs)
+        return {f"rev{i}": {} for i in range(50)}
+
+    monkeypatch.setattr(testselect, "get_commit_map", get_commit_map)
     monkeypatch.setattr(testselect.commit_features, "merge_commits", lambda commits: {})
 
     model = testselect.TestGroupSelectModel()
     labels = [label for _, label in model.items_gen(classes)]
+    # Only the commits of the pushes in the history are loaded.
+    assert requested_revs == [{f"rev{i}" for i in range(50)}]
     # All the positives, and about 2% of the negatives.
     assert sum(labels) == 50
     assert 50 < len(labels) < 250
@@ -1165,4 +1170,48 @@ def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None
     # The evaluation ran on the test pushes and computed the confidence thresholds.
     assert set(model.confidence_thresholds) == set(
         testselect.CONFIDENCE_LEVEL_TARGETS[model.granularity]
+    )
+
+
+def test_label_model_configuration() -> None:
+    from bugbug import test_scheduling_features
+
+    model = testselect.TestLabelSelectModel()
+    assert "sampler" not in model.clf.named_steps
+    assert model.negative_sample_rate == 0.05
+    assert model.positive_weight_k == 5
+    assert model.failures_skip is None
+    extractors = model.extraction_pipeline.steps[0][1].feature_extractors
+    for extractor in (
+        test_scheduling_features.TaskNameTokens,
+        test_scheduling_features.PushBuildFiles,
+        test_scheduling_features.PushTaskFiles,
+    ):
+        assert any(isinstance(fe, extractor) for fe in extractors)
+    assert not any(
+        isinstance(
+            fe, (test_scheduling_features.Platform, test_scheduling_features.Suite)
+        )
+        for fe in extractors
+    )
+
+
+def test_label_model_suite_test_dirs(tmp_path) -> None:
+    from bugbug import test_scheduling_features
+
+    (tmp_path / "xpcom" / "tests" / "gtest").mkdir(parents=True)
+    (tmp_path / "xpcom" / "tests" / "gtest" / "moz.build").write_text(
+        'FINAL_LIBRARY = "xul-gtest"\n'
+    )
+
+    model = testselect.TestLabelSelectModel(repo_dir=str(tmp_path))
+    extractors = model.extraction_pipeline.steps[0][1].feature_extractors
+    push_task_files = next(
+        fe
+        for fe in extractors
+        if isinstance(fe, test_scheduling_features.PushTaskFiles)
+    )
+    assert dict(push_task_files.suite_files)["gtest"] == (
+        "testing/gtest/",
+        "xpcom/tests/gtest/",
     )
