@@ -40,7 +40,7 @@ class SlackUser(BaseModel):
     id: str | None = None
 
 
-class SlackClickPayload(BaseModel):
+class BlockActionsPayload(BaseModel):
     """The Slack payload received when a button is clicked.
 
     https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
@@ -50,7 +50,7 @@ class SlackClickPayload(BaseModel):
     message: dict
 
 
-class SlackClickAction(BaseModel):
+class ButtonAction(BaseModel):
     """The action that starts an agent run.
 
     https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
@@ -73,7 +73,7 @@ def _generate_replacement_block(
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
 
 
-def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | None:
+def _message_with_note(message: dict, action: ButtonAction, note_block: dict) -> dict | None:
     """``message`` with the clicked button swapped for ``note_block``, or None if absent.
 
     Only the clicked button goes: any other button in the same row is a
@@ -81,18 +81,18 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
     """
     blocks = message["blocks"]
     for i, block in enumerate(blocks):
-        if block["block_id"] != action["block_id"]:
+        if block["block_id"] != action.block_id:
             continue
         if block["type"] != "actions":
             log.error(
                 "Clicked button '%s' is in a '%s' block, which is not supported yet",
-                action["action_id"],
+                action.action_id,
                 block["type"],
             )
             return None
         elements = block["elements"]
         filtered_elements = [
-            e for e in elements if e["action_id"] != action["action_id"]
+            e for e in elements if e["action_id"] != action.action_id
         ]
         if len(filtered_elements) == len(elements):
             return None
@@ -110,8 +110,8 @@ def _message_with_note(message: dict, action: dict, note_block: dict) -> dict | 
 @validate_call(config=ConfigDict(arbitrary_types_allowed=True))
 async def start_agent_run_callback(
     ack: AsyncAck,
-    action: SlackClickAction,
-    body: SlackClickPayload,
+    action: ButtonAction,
+    body: BlockActionsPayload,
     context: AsyncBoltContext,
     respond: AsyncRespond,
     logger: logging.Logger,
@@ -123,7 +123,7 @@ async def start_agent_run_callback(
     should be fixed with https://github.com/mozilla/bugbug/issues/6468.
     """
     client: HackbotClient = context["hackbot_client"]
-    user = body.user.id if body.user is not None else None
+    user = body.user.id if body.user else None
     value = action.value
 
     if value.apply_run_id:
@@ -169,7 +169,7 @@ async def start_agent_run_callback(
 
     triggered_by = user if run.is_new else None
     note_block = _generate_replacement_block(triggered_by, value.agent_name, run.run_id)
-    updated_message = _message_with_note(body.message, action.model_dump(), note_block)
+    updated_message = _message_with_note(body.message, action, note_block)
     if not updated_message:
         logger.warning(
             "Clicked button '%s' not found in its message; left unchanged",
