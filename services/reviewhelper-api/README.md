@@ -59,3 +59,5 @@ DB_NAME=reviewhelper
 ```
 
 Ensure your Cloud Run service has the Cloud SQL connection configured in the deployment settings.
+
+Pushing to the `deploy/reviewhelper-api-dev` branch deploys to the dev environment.
