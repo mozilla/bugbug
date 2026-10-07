@@ -1,20 +1,10 @@
 FROM mozilla/bugbug-base:latest
 
-ENV PATH="${PATH}:/git-cinnabar"
-
 # git is required by the annotate pipeline.
-# libcurl4 is required by git-cinnabar.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git xz-utils curl libcurl4 && \
+    apt-get install -y --no-install-recommends git xz-utils curl && \
     hg clone -r 50a59e00c4a76fcfae660e3feb9b79e0cd549b15 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
-    git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
-    cd /git-cinnabar && git -c advice.detachedHead=false checkout fd17180c439c3eb3ab9de5cfc47923b04242394a && cd .. && \
-    git config --global cinnabar.experiments python3 && \
-    git config --global cinnabar.check no-version-check && \
-    git config --global fetch.prune true && \
-    git cinnabar download && \
-    rm -r /git-cinnabar/.git /git-cinnabar/CI /git-cinnabar/tests && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv && \
     apt-get purge -y xz-utils curl && \
     apt-get autoremove -y && \
