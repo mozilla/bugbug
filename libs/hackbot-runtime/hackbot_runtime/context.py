@@ -25,7 +25,10 @@ from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts, changes
-from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
+from hackbot_runtime.actions.phabricator import (
+    PATCH_ACTION_TYPES,
+    SUBMIT_PATCH_ACTION_TYPE,
+)
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES, TRY_PUSH_ACTION_TYPE
 from hackbot_runtime.config import HackbotConfig, load_config
@@ -37,8 +40,6 @@ if TYPE_CHECKING:
     from agent_tools.firefox import FirefoxContext
 
 log = logging.getLogger("hackbot_runtime.context")
-
-_SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
 
 
 def _default_run_id() -> str:
@@ -54,7 +55,7 @@ def _default_run_id() -> str:
 
 def _wip_commit_message(actions: list[dict]) -> str:
     """The patch title, else the try push title, for the agent's uncommitted work."""
-    for action_type in (_SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
+    for action_type in (SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
         for action in actions:
             if action["type"] == action_type and action["params"]["title"]:
                 return action["params"]["title"]

@@ -21,10 +21,13 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
+SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
+UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
+
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
-PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
+PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
 
 _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
@@ -124,7 +127,7 @@ async def submit_patch(
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
     action = recorder.record(
-        "phabricator.submit_patch", params, reasoning=reasoning, ref=ref
+        SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning, ref=ref
     )
     return confirmation(action)
 
@@ -162,7 +165,7 @@ async def update_patch(
     association exactly as they are.
     """
     action = recorder.record(
-        "phabricator.update_patch",
+        UPDATE_PATCH_ACTION_TYPE,
         {"revision_id": revision_id},
         reasoning=reasoning,
     )
