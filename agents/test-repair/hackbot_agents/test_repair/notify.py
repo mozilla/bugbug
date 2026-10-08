@@ -45,12 +45,12 @@ _RECOMMENDATIONS = {
     "do_not_backout": "DO NOT back out (intermittent)",
     "rerun": "RETRIGGER the job",
 }
-# The email reaches developers as well as the team, so it states the sheriff's
-# action without shouting it.
+# The email reaches developers as well as the team, so it states the action
+# without shouting it.
 _EMAIL_RECOMMENDATIONS = {
-    "backout": "sheriffs back out the culprit",
+    "backout": "back out the culprit",
     "do_not_backout": "no backout",
-    "rerun": "sheriffs retrigger the job",
+    "rerun": "retrigger the job",
 }
 
 
@@ -98,12 +98,20 @@ def resolve_culprit_author(source_repo: Path, sha: str | None) -> str | None:
     return proc.stdout.strip() or None
 
 
-def recipients(result: TestRepairResult, culprit_author: str | None) -> list[str]:
+def recipients(
+    result: TestRepairResult,
+    culprit_author: str | None,
+    classification: str | None = None,
+) -> list[str]:
     """Who the verdict concerns individually.
 
     The culprit's author, when a patch was proposed for them to squash and reland.
-    The team address is added apply-side.
+    The team address is added apply-side, so the team gets every email.
     """
+    # Treeherder can misclassify a regression as intermittent, so the patch may
+    # still help, but a reland email for an intermittent confuses the author.
+    if classification and "intermittent" in classification:
+        return []
     if result.proposed_patch and culprit_author:
         return [culprit_author]
     return []
@@ -201,22 +209,6 @@ def _groups_label(investigation: Investigation) -> str:
     return f"{first} (+{len(rest)} more)" if rest else first
 
 
-def _already_actioned_banner(classification: str | None) -> list[str]:
-    """Say up front that a sheriff has dealt with the tree, when they have."""
-    if not classification:
-        return []
-    consequence = (
-        ", usually a backout. The analysis and patch below are for the reland."
-        if classification == "fixed by commit"
-        else "; nothing more is needed on the tree."
-    )
-    return [
-        f"> **A sheriff has already handled this** -- Treeherder classifies the job"
-        f" as _{classification}_{consequence}",
-        "",
-    ]
-
-
 def _headline(result: TestRepairResult, investigation: Investigation) -> str:
     """What happened, in a developer's words, for the subject line."""
     tests = _groups_label(investigation)
@@ -245,12 +237,16 @@ def _why_paragraph(result: TestRepairResult, culprit_author: str | None) -> list
     ]
 
 
-def _failing_bullet(investigation: Investigation, task_id: str) -> str:
+def _failing_bullet(investigation: Investigation) -> str:
     groups = (
         ", ".join(f"`{group.group}`" for group in investigation.failing_groups)
         or "not resolved"
     )
     job = investigation.label or f"{investigation.harness} on {investigation.platform}"
+    return f"- **Failing:** {groups} in `{job}`"
+
+
+def _jobs_bullet(investigation: Investigation, task_id: str) -> str:
     treeherder = _md_link(
         TREEHERDER_JOB_URL.format(
             project=investigation.project,
@@ -259,8 +255,8 @@ def _failing_bullet(investigation: Investigation, task_id: str) -> str:
         ),
         "Treeherder",
     )
-    task = _md_link(TASK_URL.format(task_id=task_id), "task")
-    return f"- **Failing:** {groups} in `{job}` ({treeherder}, {task})"
+    task = _md_link(TASK_URL.format(task_id=task_id), "Taskcluster")
+    return f"- **Jobs:** {treeherder}, {task}"
 
 
 def _push_bullet(investigation: Investigation) -> str:
@@ -300,15 +296,18 @@ def _culprit_bullet(result: TestRepairResult, culprit_author: str | None) -> str
     return line
 
 
-def _verdict_bullet(result: TestRepairResult, already_actioned: str | None) -> str:
-    line = f"- **Verdict:** {result.classification}, confidence {result.confidence}"
-    # Once a sheriff has acted, the recommendation is history.
-    if not already_actioned:
-        action = _EMAIL_RECOMMENDATIONS.get(
-            result.recommendation, result.recommendation
-        )
-        line += f"; {action}"
-    return line
+def _verdict_bullet(result: TestRepairResult) -> str:
+    action = _EMAIL_RECOMMENDATIONS.get(result.recommendation, result.recommendation)
+    return (
+        f"- **Verdict:** {result.classification}, confidence {result.confidence};"
+        f" {action}"
+    )
+
+
+def _classification_bullet(classification: str | None) -> str:
+    return "- **Current Treeherder classification:** " + (
+        classification or "not classified"
+    )
 
 
 def _reland_steps(
@@ -354,7 +353,7 @@ def build_email(
     task_id: str,
     run_id: str,
     culprit_author: str | None = None,
-    already_actioned: str | None = None,
+    classification: str | None = None,
     revision_pending: bool = False,
     parent_revision: int | None = None,
 ) -> tuple[str, str]:
@@ -362,26 +361,25 @@ def build_email(
 
     ``revision_pending`` means the run recorded a ``phabricator.submit_patch``
     action that is waiting for approval, so the email says how to apply it;
-    ``parent_revision`` is the culprit's revision it stacks on, when known.
+    ``parent_revision`` is the culprit's revision it stacks on, when known;
+    ``classification`` is the job's Treeherder classification when recorded.
     """
-    # In the subject too, so it can be skipped from the inbox.
-    prefix = "[handled by sheriff] " if already_actioned else ""
     subject = (
-        f"[test-repair] {prefix}{_headline(result, investigation)}"
-        f" ({investigation.project})"
+        f"[test-repair] {_headline(result, investigation)} ({investigation.project})"
     )
     run_url = RUN_URL.format(run_id=run_id)
 
     lines = [
-        *_already_actioned_banner(already_actioned),
         "# Test failure analysis",
         "",
         *_why_paragraph(result, culprit_author),
-        _failing_bullet(investigation, task_id),
+        _failing_bullet(investigation),
+        _jobs_bullet(investigation, task_id),
         _push_bullet(investigation),
         _culprit_bullet(result, culprit_author),
-        _verdict_bullet(result, already_actioned),
-        f"- **Run:** {run_url}",
+        _verdict_bullet(result),
+        _classification_bullet(classification),
+        f"- **Hackbot Run:** {run_url}",
     ]
     lines += _analysis_section(result)
     if revision_pending:
