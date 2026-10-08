@@ -1443,3 +1443,44 @@ def test_generate_review_comments_no_repo_configured_or_known():
 
     fake_patch.github_repo_ref.assert_awaited_once()
     loader.assert_not_awaited()
+
+
+def test_generate_review_comments_retries_missing_structured_response():
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch(github_repo_ref_return=None)
+    calls = []
+
+    async def fake_astream(input, **kwargs):
+        calls.append(input)
+        if len(calls) == 1:
+            yield {"messages": input["messages"], "structured_response": None}
+        else:
+            yield {
+                "messages": input["messages"],
+                "structured_response": AgentResponse(
+                    comments=[], general_comment="Review complete."
+                ),
+            }
+
+    tool.agent = SimpleNamespace(astream=fake_astream)
+    response, manifest = asyncio.run(
+        tool.generate_review_comments(fake_patch, "summary")
+    )
+
+    assert response.general_comment == "Review complete."
+    assert manifest == []
+    assert len(calls) == 2
+    assert len(calls[1]["messages"]) == 2
+    assert "AgentResponse" in calls[1]["messages"][-1].content
+
+
+def test_generate_review_comments_reports_missing_structured_response():
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch(github_repo_ref_return=None)
+
+    async def fake_astream(input, **kwargs):
+        yield {"messages": input["messages"], "structured_response": None}
+
+    tool.agent = SimpleNamespace(astream=fake_astream)
+    with pytest.raises(ValueError, match="no structured response"):
+        asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
