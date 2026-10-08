@@ -33,7 +33,7 @@ When a bug needs reproducing or fixing, you have `firefox` MCP tools:
 
 Follow these rules:
 
-- Prefer building and running tests over asking developers, even if it is slow.
+- To verify your changes, build and run automated and manual tests. Don't verify only by analyzing the source code. This is always cheaper and faster than asking developers.
 - If reproducing requires any external scripts (e.g. an external server script), download that to a temporary
   directory and run it for reproduction purposes.
 - Reproduce the issue first, then plan your fix and test that the issue no longer reproduces. If you cannot
