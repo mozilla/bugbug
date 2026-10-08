@@ -801,7 +801,7 @@ def batch_prediction(model_name):
 
     queueJobList: Queue = []
 
-    for bug_ids in itertools.batched(missing_bugs, 100):
+    for bug_ids in itertools.batched(missing_bugs, 100, strict=False):
         job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
     q.enqueue_many(queueJobList)
@@ -889,7 +889,7 @@ def batch_comment_prediction(model_name: str):
         data[str(comment_id)] = {"available": False}
 
     queue_jobs: list[Queue] = []
-    for comment_ids_batch in itertools.batched(missing_comments, 100):
+    for comment_ids_batch in itertools.batched(missing_comments, 100, strict=False):
         job_info, job_id, timeout = create_comment_classification_jobs(
             model_name, comment_ids_batch
         )
@@ -1073,7 +1073,7 @@ def batch_prediction_broken_site_report(model_name):
 
     queueJobList: Queue = []
 
-    for reports in itertools.batched(missing_reports, 100):
+    for reports in itertools.batched(missing_reports, 100, strict=False):
         job_info, job_id, timeout = create_broken_site_report_classification_jobs(
             model_name, reports
         )

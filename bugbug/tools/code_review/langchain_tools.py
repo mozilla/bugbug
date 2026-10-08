@@ -63,7 +63,7 @@ async def _fetch_file(
 ) -> str:
     try:
         return await patch.get_old_file(path)
-    except (FileNotFoundError, httpx.HTTPStatusError):
+    except FileNotFoundError, httpx.HTTPStatusError:
         pass
     if revision:
         return await _retry(client.get_file_at_revision)(path, revision)

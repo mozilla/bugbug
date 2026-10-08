@@ -1,4 +1,4 @@
-FROM python:3.12 AS builder
+FROM python:3.14 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
     uv sync --locked --no-dev --no-editable --package hackbot-agent-uplift-resolve
 
-FROM python:3.12 AS base
+FROM python:3.14 AS base
 
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app

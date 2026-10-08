@@ -462,7 +462,7 @@ async def execute_actions(
                     trust_reason="github_repo_content",
                 )
             )
-        except (ValueError, ExternalContentLoadError):
+        except ValueError, ExternalContentLoadError:
             logger.error(
                 "Failed to load content for action %s", _action_to_dict(action)
             )
@@ -520,7 +520,7 @@ async def load_external_content_for_diff(
             review_context_path,
         )
         return []
-    except (tomllib.TOMLDecodeError, ReviewContextValidationError):
+    except tomllib.TOMLDecodeError, ReviewContextValidationError:
         logger.exception(
             "Could not parse review context from %s@%s:%s",
             review_context_repo,
@@ -535,7 +535,7 @@ async def load_external_content_for_diff(
 
     try:
         actions = collect_actions(diff, config, bug_component, extra_context_toml)
-    except (tomllib.TOMLDecodeError, ReviewContextValidationError):
+    except tomllib.TOMLDecodeError, ReviewContextValidationError:
         logger.exception("Could not parse extra review context")
         return []
 

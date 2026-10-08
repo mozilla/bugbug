@@ -65,7 +65,7 @@ uv sync
 
 For test dependencies, run `uv sync --group test`. For NLP extras, run `uv sync --extra nlp`.
 
-Currently, Python 3.12+ is required. You can double check the version we use by looking at pyproject.toml.
+Currently, Python 3.14+ is required. You can double check the version we use by looking at pyproject.toml.
 
 Also, libgit2 (needs [v1.0.0](https://github.com/libgit2/libgit2/releases/tag/v1.0.0), only in [experimental on Debian](https://wiki.debian.org/DebianExperimental)), **might** be required (if you can't install it, skip this step).
 
