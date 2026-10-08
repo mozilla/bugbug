@@ -2,7 +2,7 @@
 
 import argparse
 import contextlib
-from datetime import datetime
+from datetime import datetime, timezone
 from logging import getLogger
 
 import dateutil.parser
@@ -60,7 +60,7 @@ class Retriever(object):
         changed_ids |= deleted_component_ids
 
         # Get IDs of bugs between (two years and six months ago) and now.
-        two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
+        two_years_and_six_months_ago = datetime.now(timezone.utc) - relativedelta(
             years=2, months=6
         )
         logger.info("Retrieving bug IDs since %s", two_years_and_six_months_ago)
@@ -120,7 +120,7 @@ class Retriever(object):
         test_failure_bug_ids = [
             item["bug_id"]
             for item in test_scheduling.get_failure_bugs(
-                two_years_and_six_months_ago, datetime.utcnow()
+                two_years_and_six_months_ago, datetime.now(timezone.utc)
             )
             if item["bug_id"] is not None
         ]

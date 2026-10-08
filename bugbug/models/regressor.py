@@ -5,7 +5,7 @@
 
 import itertools
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import dateutil.parser
 import numpy as np
@@ -188,7 +188,9 @@ class RegressorModel(CommitModel):
             push_date = dateutil.parser.parse(commit_data["pushdate"])
 
             # Skip commits used for the evaluation phase.
-            if push_date > datetime.utcnow() - relativedelta(months=EVALUATION_MONTHS):
+            if push_date > datetime.now(timezone.utc) - relativedelta(
+                months=EVALUATION_MONTHS
+            ):
                 continue
 
             node = commit_data["node"]
@@ -203,7 +205,7 @@ class RegressorModel(CommitModel):
                 # In the future, we might want to re-evaluate this limit (e.g. extend ), but we
                 # have to be careful (using too old patches might cause worse results as patch
                 # characteristics evolve over time).
-                if push_date < datetime.utcnow() - relativedelta(years=2):
+                if push_date < datetime.now(timezone.utc) - relativedelta(years=2):
                     continue
 
                 # We remove the last 3 months, as there could be regressions which haven't been
@@ -211,7 +213,7 @@ class RegressorModel(CommitModel):
                 # time, more than 3 months seems overly conservative.
                 # There will be some patches we currently add to the clean set and will later move
                 # to the regressor set, but they are a very small subset.
-                if push_date > datetime.utcnow() - relativedelta(months=3):
+                if push_date > datetime.now(timezone.utc) - relativedelta(months=3):
                     continue
 
                 classes[node] = 0
@@ -267,7 +269,9 @@ class RegressorModel(CommitModel):
             push_date = dateutil.parser.parse(commit_data["pushdate"])
 
             # Use the past two months of data (make sure it is not also used for training!).
-            if push_date < datetime.utcnow() - relativedelta(months=EVALUATION_MONTHS):
+            if push_date < datetime.now(timezone.utc) - relativedelta(
+                months=EVALUATION_MONTHS
+            ):
                 continue
 
             commits.append(commit_data)
