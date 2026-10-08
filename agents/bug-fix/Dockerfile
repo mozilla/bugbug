@@ -30,6 +30,8 @@ FROM base AS agent
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        # Firefox runtime deps.
+        libgtk-3-0 libasound2t64 \
         ffmpeg \
         fluxbox \
         xvfb \
