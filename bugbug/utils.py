@@ -403,7 +403,7 @@ class CustomJsonEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
             return obj.item()
-        except (ValueError, IndexError, AttributeError, TypeError):
+        except ValueError, IndexError, AttributeError, TypeError:
             pass
 
         return super().default(obj)

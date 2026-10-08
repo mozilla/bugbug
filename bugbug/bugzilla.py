@@ -234,7 +234,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
 
     new_bug_ids = sorted(list(new_bug_ids_set))
 
-    chunks = itertools.batched(new_bug_ids, Bugzilla.BUGZILLA_CHUNK_SIZE)
+    chunks = itertools.batched(new_bug_ids, Bugzilla.BUGZILLA_CHUNK_SIZE, strict=False)
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),
@@ -504,7 +504,7 @@ def get_comments(comment_ids: Iterable[int]) -> dict[int, tuple[BugDict, dict]]:
     normalized_ids = list(dict.fromkeys(map(int, comment_ids)))
     comments = {
         comment_id: comment
-        for comment_ids_batch in itertools.batched(normalized_ids, 100)
+        for comment_ids_batch in itertools.batched(normalized_ids, 100, strict=False)
         for comment_id, comment in fetch_comments(list(comment_ids_batch)).items()
     }
     bugs = get({comment["bug_id"] for comment in comments.values()})

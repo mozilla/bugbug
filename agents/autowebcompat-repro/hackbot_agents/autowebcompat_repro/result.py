@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import imghdr
 from pathlib import Path
 from typing import Annotated, Literal
 
+import imghdr
 from pydantic import (
     BaseModel,
     Field,
