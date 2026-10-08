@@ -119,13 +119,13 @@ async def phabricator_webhook(
 
     obj = payload.get("object") or {}
     if obj.get("type") != "DREV":
-        log.info("Phabricator webhook ignored: not a revision")
+        log.warning("Phabricator webhook ignored: not a revision")
         return
 
     object_phid = obj.get("phid")
     triggering = triggering_transaction_phids(payload)
     if not object_phid or not triggering:
-        log.info("Phabricator webhook ignored: no revision or transactions")
+        log.warning("Phabricator webhook ignored: no revision or transactions")
         return
 
     detected = await detect_mention_and_revision(
