@@ -165,8 +165,8 @@ def sheriff_classification(project: str, task_id: str) -> str | None:
     """How a sheriff classified this failure while the run worked, if they did.
 
     A run takes long enough that the tree is often dealt with before it reports.
-    Best effort: None on any error, so the report goes out unmarked rather than
-    not at all.
+    Best effort: None on any error, so the report goes out as unclassified rather
+    than not at all.
     """
     try:
         jobs = (

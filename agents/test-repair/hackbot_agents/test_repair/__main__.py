@@ -119,19 +119,20 @@ def _record_verdict_email(
     pending = next(
         (a for a in ctx.actions.actions if a["type"] in PATCH_ACTION_TYPES), None
     )
+    classification = sheriff_classification(investigation.project, task_id)
     subject, body = build_email(
         result,
         investigation,
         task_id=task_id,
         run_id=ctx.run_id,
         culprit_author=culprit_author,
-        already_actioned=sheriff_classification(investigation.project, task_id),
+        classification=classification,
         revision_pending=pending is not None,
         parent_revision=(pending or {}).get("params", {}).get("parent_revision_id"),
     )
     record_email(
         ctx.actions,
-        to=recipients(result, culprit_author),
+        to=recipients(result, culprit_author, classification),
         subject=subject,
         body_markdown=body,
         attach_patch=ctx.source_changed,

@@ -1,3 +1,4 @@
+import pytest
 from hackbot_agents.test_repair.agent import TestRepairResult
 from hackbot_agents.test_repair.notify import (
     build_email,
@@ -226,60 +227,41 @@ def test_the_subject_says_when_no_culprit_was_narrowed_down():
     assert "retrigger suggested" in subject
 
 
-def test_the_context_fits_in_five_bullets():
+def test_the_context_bullets():
     _, body = _email(culprit_author="author@mozilla.com")
     bullets = [line for line in body.splitlines() if line.startswith("- **")]
-    assert [b.split(":**")[0] for b in bullets] == [
-        "- **Failing",
-        "- **Push",
-        "- **Culprit",
-        "- **Verdict",
-        "- **Run",
-    ]
-    assert bullets[0] == (
+    assert bullets == [
         "- **Failing:** `toolkit/modules/tests/xpcshell/xpcshell.toml` in "
-        "`test-linux1804-64/opt-xpcshell-1` ([Treeherder](https://treeherder.mozilla.org"
-        f"/#/jobs?repo=autoland&revision={HG_REVISION}&selectedTaskRun={TASK_ID}), "
-        f"[task](https://firefox-ci-tc.services.mozilla.com/tasks/{TASK_ID}))"
-    )
-    assert bullets[1] == (
+        "`test-linux1804-64/opt-xpcshell-1`",
+        "- **Jobs:** [Treeherder](https://treeherder.mozilla.org/#/jobs?repo=autoland"
+        f"&revision={HG_REVISION}&selectedTaskRun={TASK_ID}), "
+        f"[Taskcluster](https://firefox-ci-tc.services.mozilla.com/tasks/{TASK_ID})",
         f"- **Push:** autoland [hg {HG_REVISION[:12]}]({HG_URL}) / "
-        f"[git {GIT_REVISION[:12]}]({GIT_URL})"
-    )
-    assert bullets[2] == (
+        f"[git {GIT_REVISION[:12]}]({GIT_URL})",
         f"- **Culprit:** [`{GIT_REVISION[:12]}`]({GIT_URL}) by author@mozilla.com, "
-        "[bug 2061487](https://bugzilla.mozilla.org/show_bug.cgi?id=2061487)"
-    )
-    assert bullets[3] == (
-        "- **Verdict:** regression, confidence 0.7; sheriffs back out the culprit"
-    )
-    assert bullets[4] == "- **Run:** https://hackbot.moz.tools/runs/1218e630-78c8"
+        "[bug 2061487](https://bugzilla.mozilla.org/show_bug.cgi?id=2061487)",
+        "- **Verdict:** regression, confidence 0.7; back out the culprit",
+        "- **Current Treeherder classification:** not classified",
+        "- **Hackbot Run:** https://hackbot.moz.tools/runs/1218e630-78c8",
+    ]
 
 
-def test_the_sheriff_action_is_stated_without_shouting():
+def test_the_recommendation_is_stated_without_shouting():
     _, body = _email()
-    assert "sheriffs back out the culprit" in body
+    assert "back out the culprit" in body
     assert "BACK OUT" not in body
 
 
-def test_the_sheriff_action_is_dropped_once_a_sheriff_has_acted():
-    _, body = _email(already_actioned="fixed by commit")
-    assert "- **Verdict:** regression, confidence 0.7\n" in body
-    assert "back out the culprit" not in body
-
-
-def test_a_sheriffed_failure_is_flagged_in_subject_and_body():
-    subject, body = _email(already_actioned="fixed by commit")
-    assert subject.startswith("[test-repair] [handled by sheriff] ")
-    assert body.startswith("> **A sheriff has already handled this**")
-    assert "_fixed by commit_, usually a backout" in body
-    assert "for the reland" in body
-
-
-def test_a_sheriffed_intermittent_does_not_talk_about_a_reland():
-    _, body = _email(already_actioned="intermittent")
-    assert "_intermittent_; nothing more is needed on the tree." in body
-    assert "reland" not in body.split("# Test failure analysis")[0]
+def test_sheriffs_are_not_mentioned():
+    subject, body = _email(
+        _result(proposed_patch=True),
+        culprit_author="author@mozilla.com",
+        classification="fixed by commit",
+    )
+    assert "sheriff" not in (subject + body).lower()
+    assert body.startswith("# Test failure analysis")
+    assert "- **Current Treeherder classification:** fixed by commit" in body
+    assert "the agent believes your" in body
 
 
 def test_candidates_are_listed_when_no_single_commit_was_blamed():
@@ -316,6 +298,35 @@ def test_a_verdict_without_a_patch_reaches_nobody_individually():
 
 def test_an_unknown_author_reaches_nobody_individually():
     assert recipients(_result(proposed_patch=True), None) == []
+
+
+def test_the_author_is_addressed_after_a_backout():
+    assert recipients(
+        _result(proposed_patch=True), "author@mozilla.com", "fixed by commit"
+    ) == ["author@mozilla.com"]
+
+
+@pytest.mark.parametrize(
+    "classification", ["intermittent", "autoclassified intermittent"]
+)
+def test_the_author_is_not_addressed_while_classified_intermittent(classification):
+    assert (
+        recipients(_result(proposed_patch=True), "author@mozilla.com", classification)
+        == []
+    )
+
+
+def test_the_body_does_not_depend_on_who_receives_it():
+    def body(classification):
+        return _email(
+            _result(proposed_patch=True),
+            culprit_author="author@mozilla.com",
+            classification=classification,
+        )[1]
+
+    assert body("intermittent") == body("fixed by commit").replace(
+        "fixed by commit", "intermittent"
+    )
 
 
 def test_the_author_is_told_up_front_why_they_are_on_the_email():

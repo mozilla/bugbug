@@ -96,8 +96,8 @@ proposed patch, for the hackbot team to track what the agent decided -- unfilter
 the run proposed a patch, the culprit commit's author is addressed too, so they can
 squash it into their patches and reland (see `recipients` in
 [notify.py](hackbot_agents/test_repair/notify.py)); the team is copied apply-side.
-Treeherder is re-read just before it is recorded, so a failure a sheriff dealt with while
-the run worked says so in the subject.
+Treeherder is re-read just before it is recorded and the email shows the job's current
+classification. The author is not addressed while the job is classified intermittent.
 
 Both are delivered by the apply step, not from the run, so they are visible in the
 hackbot UI before they land and are delivered at most once. Both always apply, so a
