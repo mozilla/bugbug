@@ -3,7 +3,7 @@
 import argparse
 import csv
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from logging import INFO, basicConfig, getLogger
 
 import numpy as np
@@ -26,7 +26,7 @@ def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> 
     model = model_class.load(model_file_name)
 
     bugzilla.set_token(token)
-    bug_ids = bugzilla.get_ids_between(datetime.utcnow() - timedelta(days))
+    bug_ids = bugzilla.get_ids_between(datetime.now(timezone.utc) - timedelta(days))
     bugs = bugzilla.get(bug_ids)
 
     logger.info("Classifying %d bugs...", len(bugs))
@@ -55,7 +55,7 @@ def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> 
     with open(
         os.path.join(
             "sheets",
-            f"{model_name}-{datetime.utcnow().strftime('%Y-%m-%d')}-labels.csv",
+            f"{model_name}-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}-labels.csv",
         ),
         "w",
     ) as f:
