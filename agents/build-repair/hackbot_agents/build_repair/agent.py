@@ -307,86 +307,85 @@ async def run_build_repair(
                 source_repo, blamed_commit
             )
 
-        at_blame = blamed_commit is not None and _checkout(checkout, blamed_commit)
-        # A child revision has to be based on its parent's commit, so the fix
-        # only stacks when the tree really moved there.
-        parent_revision = (
-            _revision_from_commit(source_repo, blamed_commit) if at_blame else None
-        )
-
-        # Reporting is confined to the fix stage: the analysis stage must not
-        # submit anything before there is a verified fix.
-        report = actions_recorder is not None and resolved_bug_id is not None
-        fix_mcp_servers = mcp_servers
-        fix_allowed_tools = allowed_tools
-        if report:
-            _, actions_server = actions_server_for(
-                actions_recorder, types=ENABLED_ACTION_TYPES
-            )
-            fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
-            fix_allowed_tools = [
-                *allowed_tools,
-                *actions_to_tool_names(ENABLED_ACTION_TYPES),
-            ]
-        elif actions_recorder is not None:
-            print(
-                f"[build_repair] no bug for blamed commit {blamed_commit}: the fix "
-                "will be produced but not submitted for review, since a "
-                "Phabricator revision is filed against a bug",
-                file=sys.stderr,
+        if blamed_commit is not None:
+            at_blame = _checkout(checkout, blamed_commit)
+            # A child revision has to be based on its parent's commit, so the fix
+            # only stacks when the tree really moved there.
+            parent_revision = (
+                _revision_from_commit(source_repo, blamed_commit) if at_blame else None
             )
 
-        fix_prompt = FIX_TEMPLATE.format(
-            target_software=TARGET_SOFTWARE,
-            source_repo=source_repo,
-            scratch_out=scratch_out,
-            blame_note=(
-                BLAME_NOTE.format(
+            # Reporting is confined to the fix stage: the analysis stage must not
+            # submit anything before there is a verified fix.
+            report = actions_recorder is not None and resolved_bug_id is not None
+            fix_mcp_servers = mcp_servers
+            fix_allowed_tools = allowed_tools
+            if report:
+                _, actions_server = actions_server_for(
+                    actions_recorder, types=ENABLED_ACTION_TYPES
+                )
+                fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
+                fix_allowed_tools = [
+                    *allowed_tools,
+                    *actions_to_tool_names(ENABLED_ACTION_TYPES),
+                ]
+            elif actions_recorder is not None:
+                print(
+                    f"[build_repair] no bug for blamed commit {blamed_commit}: the fix "
+                    "will be produced but not submitted for review, since a "
+                    "Phabricator revision is filed against a bug",
+                    file=sys.stderr,
+                )
+
+            fix_prompt = FIX_TEMPLATE.format(
+                target_software=TARGET_SOFTWARE,
+                source_repo=source_repo,
+                scratch_out=scratch_out,
+                blame_note=BLAME_NOTE.format(
                     blamed_commit=blamed_commit,
                     tree=TREE_AT_BLAME if at_blame else "",
-                )
-                if blamed_commit
-                else ""
-            ),
-            try_push=(
-                TRY_PUSH_INSTRUCTIONS.format(task_name=task_name)
-                if run_try_push
-                else ""
-            ),
-            report=(
-                REPORT_INSTRUCTIONS.format(
-                    bug_id=resolved_bug_id,
-                    parent=(
-                        PARENT_REVISION_ARG.format(revision=parent_revision)
-                        if parent_revision
-                        else ""
-                    ),
-                )
-                if report
-                else ""
-            ),
-        )
+                ),
+                try_push=(
+                    TRY_PUSH_INSTRUCTIONS.format(task_name=task_name)
+                    if run_try_push
+                    else ""
+                ),
+                report=(
+                    REPORT_INSTRUCTIONS.format(
+                        bug_id=resolved_bug_id,
+                        parent=(
+                            PARENT_REVISION_ARG.format(revision=parent_revision)
+                            if parent_revision
+                            else ""
+                        ),
+                    )
+                    if report
+                    else ""
+                ),
+            )
 
-        # Stage 2: fix (lower effort, edits the source tree and verifies it
-        # builds against a mozconfig that mirrors the failing CI config).
-        _write_mozconfig(fx_ctx)
-        fix_label = f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
-        reporter.header(f"{fix_label}: fix")
-        fix_opts = _build_options(
-            model=model or FIX_MODEL,
-            effort="low",
-            cwd=source_repo,
-            scratch_dir=scratch_dir,
-            mcp_servers=fix_mcp_servers,
-            allowed_tools=fix_allowed_tools,
-            max_turns=max_turns,
-        )
-        result_msg = await _run_session(
-            reporter, fix_opts, fix_prompt, captured, tracked
-        )
-        _check(result_msg, label, "fix")
-        total_cost += result_msg.total_cost_usd or 0.0
-        total_turns += result_msg.num_turns or 0
+            # Stage 2: fix (lower effort, edits the source tree and verifies it
+            # builds against a mozconfig that mirrors the failing CI config).
+            _write_mozconfig(fx_ctx)
+            fix_label = (
+                f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
+            )
+            reporter.header(f"{fix_label}: fix")
+            fix_opts = _build_options(
+                model=model or FIX_MODEL,
+                effort="low",
+                cwd=source_repo,
+                scratch_dir=scratch_dir,
+                mcp_servers=fix_mcp_servers,
+                allowed_tools=fix_allowed_tools,
+                max_turns=max_turns,
+            )
+            result_msg = await _run_session(
+                reporter, fix_opts, fix_prompt, captured, tracked
+            )
+            _check(result_msg, label, "fix")
+            total_cost += result_msg.total_cost_usd or 0.0
+            total_turns += result_msg.num_turns or 0
 
     summary = _read_doc(scratch_out, "summary", publish_file)
     analysis = _read_doc(scratch_out, "analysis", publish_file)

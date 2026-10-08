@@ -36,7 +36,7 @@ First stage - analysis:
   this push or an earlier one when the job did not run there; null when no commit is to
   blame
 
-Second stage - fixing:
+Second stage - fixing, skipped when no commit is to blame:
 
 - A patch in Hackbot format
 
