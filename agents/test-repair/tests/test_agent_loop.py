@@ -702,14 +702,16 @@ def test_both_stages_name_the_checkout_path(tmp_path, monkeypatch):
 
 def test_both_stages_steer_tree_searches_to_git_grep(tmp_path, monkeypatch):
     # An unbounded `grep -r` over the Firefox tree burns the whole Bash timeout.
-    _result, calls, _head = _run(
+    options = []
+    _run(
         tmp_path,
         [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
         monkeypatch,
+        options_out=options,
     )
-    assert len(calls) == 2
-    for prompt in calls:
-        assert "`git grep`" in prompt
+    assert len(options) == 2
+    for opts in options:
+        assert "`git grep`" in opts.system_prompt["append"]
 
 
 def test_all_failing_tests_are_listed(tmp_path, monkeypatch):

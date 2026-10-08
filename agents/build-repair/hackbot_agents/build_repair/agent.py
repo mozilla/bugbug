@@ -66,6 +66,7 @@ from .prompts import (
     PUSH_CONTEXT,
     REPORT_INSTRUCTIONS,
     SINGLE_COMMIT_CONTEXT,
+    SYSTEM_PROMPT_APPEND,
     TREE_AT_BLAME,
     TREEHERDER_STEP,
     TREEHERDER_STEP_NO_PUSH,
@@ -116,16 +117,23 @@ def _build_options(
     # sandbox and tools run without per-command permission prompts.
     return ClaudeAgentOptions(
         model=model,
-        system_prompt={"type": "preset", "preset": "claude_code"},
+        system_prompt={
+            "type": "preset",
+            "preset": "claude_code",
+            "append": SYSTEM_PROMPT_APPEND,
+        },
         cwd=str(cwd),
         mcp_servers=mcp_servers,
         allowed_tools=allowed_tools,
-        disallowed_tools=["AskUserQuestion", "Task"],
+        disallowed_tools=["AskUserQuestion", "Task", "Skill"],
         add_dirs=[*ADDITIONAL_DIRS, str(scratch_dir)],
         permission_mode="bypassPermissions",
         effort=effort,
         max_turns=max_turns,
-        setting_sources=[],
+        # Loads the Firefox tree's CLAUDE.md, which imports its AGENTS.md.
+        setting_sources=["project"],
+        # Ignores the tree's .mcp.json; only mcp_servers are available.
+        extra_args={"strict-mcp-config": None},
     )
 
 

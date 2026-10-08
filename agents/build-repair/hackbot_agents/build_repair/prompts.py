@@ -5,13 +5,37 @@
 
 """Prompt templates for the build-repair agent."""
 
+SYSTEM_PROMPT_APPEND = """\
+# Unattended run
+
+You run in an isolated container as part of Mozilla's automated CI repair. No human
+is watching or can answer, so do not ask questions or wait for replies: finish the
+task and state the outcome in your final message. Do not propose good first bugs.
+
+# Tools
+
+`searchfox-cli`, `rg` and the `moz` MCP server are not available here; do not run
+`./mach bootstrap` to get them. Search the tree with `git grep`, restricted to paths
+where you can, never `grep -r`, which hits the Bash timeout on a tree this big. Use
+the Bugzilla and Phabricator tools you were given.
+
+# Working in the tree
+
+- Stay in your working directory, the source tree: write scratch files by absolute
+  path rather than `cd`-ing elsewhere. If a command reports "not a git repository",
+  you have moved -- run `git -C <tree>` rather than hunting for the tree.
+- Review your edits with `git diff --stat` and `git diff -- <path>`, never
+  `git status`: after a build the objdir adds millions of untracked files and the
+  output runs to tens of MB.
+- Never read or cat a whole CI log; they run to six figures of lines. Read a window
+  with `sed -n`, and clip the width as well as the line count with `| cut -c1-200`,
+  because a single log line can be 10 KB.
+"""
+
 ANALYSIS_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing and fixing a build failure.
 
 Investigate why the {target_software} build broke at commit {git_commit}. The source
-tree is at {source_repo} (your working directory), checked out at that commit. Stay
-in it: write scratch files by absolute path rather than `cd`-ing elsewhere. If a
-command reports "not a git repository" you have moved -- run `git -C {source_repo}`
-rather than hunting for the tree.
+tree is at {source_repo} (your working directory), checked out at that commit.
 {push_context}{bug_context}
 Analyze the following:
 1. The git diff of commit {git_commit} (use `git show {git_commit}`).
@@ -32,8 +56,7 @@ Create these documents:
    this push did, as a statement rather than an answer (no leading "Yes" or "No"),
    then give the error and the fix in a clause each.
 {blame_step}
-Do not prompt to edit those documents. Do not write any code yet. Work fully
-autonomously and do not ask any questions.
+Do not write any code yet.
 """
 
 PUSH_CONTEXT = """
@@ -71,11 +94,7 @@ TREEHERDER_STEP = r"""\
    to get the whole diagnostic:
    `sed -n '165280,165320p' {scratch_out}/logs/job_<id>/live_backing_log.log | cut -c1-200`
    An `ERROR -` line is usually only the first line of a compiler error -- the
-   offending source and the `^` caret follow it. Never read or cat a whole log;
-   they run to six figures of lines.
-   Clip the width as well as the line count: log lines run to thousands of
-   characters, so append `| cut -c1-200` to any grep or sed over a log -- 40 wpt
-   lines alone came to 38 KB without it.
+   offending source and the `^` caret follow it.
    Two things can stop that command finding the job, and both are recoverable:
    - Treeherder sometimes returns a malformed response ("error decoding response
      body"). Retry the same command once; it usually succeeds.
@@ -151,24 +170,14 @@ Edit the source files in {source_repo} (your working directory) to repair the bu
 been read, which costs a turn. To see how a commit handled comparable files, run
 `git show <sha> -- <dir>` rather than guessing a sibling's name.
 
-Working in this tree: review your own edits with `git diff --stat` and `git diff --
-<path>`, never `git status` -- after a build the objdir adds millions of untracked
-files and the output runs to tens of MB. Logs already fetched sit under
-{scratch_out}/logs; when you grep or sed one, cap the width as well as the line
-count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB.
- A mozconfig
-that mirrors the failing CI configuration (release milestone, warnings-as-errors)
+Logs already fetched sit under {scratch_out}/logs. A mozconfig that mirrors the failing CI configuration (release milestone, warnings-as-errors)
 is already set up. Verify the fix compiles with the build_firefox tool, passing
 the directory of the file you changed as `target` (e.g. 'docshell/base') for a
 fast, focused build -- prefer this over a full tree build. If the build reports a
 missing toolchain (e.g. rustc or clang), run the bootstrap_firefox tool once and
 then build again. Verify via the build_firefox tool rather than a raw `./mach
 build` so the build result is recorded.
-{try_push}{report}
-
-Do not prompt to edit files. Work fully autonomously, do not ask any questions.
-Use all allowed tools without prompting.
-"""
+{try_push}{report}"""
 
 TRY_PUSH_INSTRUCTIONS = """
 Once the fix builds locally, validate it on CI: call the submit_try_push tool with the
