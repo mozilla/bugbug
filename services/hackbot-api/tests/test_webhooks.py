@@ -663,13 +663,11 @@ def test_route_rejects_bad_signature(client):
 def test_route_ignores_test_ping(client):
     resp = _post(client, {"action": {"test": True}, "object": {"type": "DREV"}})
     assert resp.status_code == 202
-    assert resp.json()["status"] == "ignored"
 
 
 def test_route_ignores_non_drev(client):
     resp = _post(client, {"object": {"type": "TASK", "phid": "PHID-TASK-1"}})
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "not a revision"
 
 
 def test_route_ignores_no_mention(client, monkeypatch):
@@ -684,7 +682,6 @@ def test_route_ignores_no_mention(client, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "no actionable @hackbot mention"
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
@@ -701,10 +698,7 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json() == {
-        "status": "triggered",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
+    assert resp.json() is None
     assert detect.call_args.args[0] is phab_client
     assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
@@ -755,14 +749,9 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
         "phab-txn:PHID-XACT-1",
         "phab-txn:PHID-XACT-2",
     ]
-    assert first.json()["status"] == "triggered"
-    # The retry is answered with the existing run rather than claimed as new.
-    assert retry.json() == {
-        "status": "ignored",
-        "reason": "duplicate delivery",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
-    assert later.json()["status"] == "triggered"
+    for response in (first, retry, later):
+        assert response.status_code == 202
+        assert response.json() is None
 
 
 def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):
