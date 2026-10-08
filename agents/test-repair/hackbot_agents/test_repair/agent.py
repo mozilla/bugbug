@@ -98,6 +98,7 @@ def _build_options(
 ) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         model=model,
+        system_prompt={"type": "preset", "preset": "claude_code"},
         cwd=str(cwd),
         mcp_servers=mcp_servers,
         allowed_tools=allowed_tools,
