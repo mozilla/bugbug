@@ -246,3 +246,17 @@ class UpliftInputs(BaseModel):
 
     # Override the agent's default reasoning effort (e.g. `high`).
     effort: str | None = None
+
+
+class AutowebcompatInterventionInputs(BaseModel):
+    bug_data: str | None = None
+    bug_id: int | None = None
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None
+
+    @model_validator(mode="after")
+    def _require_subject(self) -> "AutowebcompatInterventionInputs":
+        if self.bug_data is None and self.bug_id is None:
+            raise ValueError("provide at least one of bug_data or bug_id")
+        return self

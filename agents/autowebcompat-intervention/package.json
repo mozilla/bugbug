@@ -1,0 +1,10 @@
+{
+  "name": "hackbot-agent-autowebcompat-intervention-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP server the autowebcompat-intervention agent drives.",
+  "dependencies": {
+    "@mozilla/firefox-devtools-mcp-moz": "0.9.12",
+    "puppeteer": "25.4.0"
+  }
+}
