@@ -15,6 +15,9 @@ SKIP_FIREFOX_BUILD = True
 # Where the verdict is reported.
 SLACK_CHANNEL = "#sheriff-notifications"
 
+# Lando repo a backout of a culprit lands on, by Treeherder project.
+LANDO_REPOS = {"autoland": "firefox-autoland"}
+
 # Recordable action types the fix stage may take, by dotted id. Submitting the
 # patch for review is the only one: the author reviews it in the Hackbot UI and
 # then in Phabricator. It needs a bug to file the revision against, so it is

@@ -4,13 +4,15 @@ from pathlib import Path
 
 from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.actions.email import record_email
+from hackbot_runtime.actions.lando import record_backout
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.slack import record_message
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestRepairResult
-from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
+from .config import LANDO_REPOS, SKIP_FIREFOX_BUILD, SLACK_CHANNEL
 from .notify import (
+    backout_reason,
     build_email,
     build_message,
     recipients,
@@ -80,6 +82,11 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         checkout=ctx.checkout,
     )
 
+    try:
+        _record_backout(ctx, result, investigation, source_repo)
+    except Exception:
+        logger.exception("Could not record the backout")
+
     culprit_author = resolve_culprit_author(source_repo, result.culprit_commit)
     if sheriff_action_required(result):
         message = build_message(
@@ -101,6 +108,31 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
         # A notification is never worth losing a finished analysis over.
         logger.exception("Could not record the verdict email")
     return result
+
+
+def _record_backout(
+    ctx: HackbotContext,
+    result: TestRepairResult,
+    investigation: Investigation,
+    source_repo: Path,
+) -> None:
+    """Propose backing out the culprit; it lands only once a human applies it."""
+    if result.recommendation != "backout" or not result.culprit_commit:
+        return
+    lando_repo = LANDO_REPOS.get(investigation.project)
+    if lando_repo is None:
+        logger.info(
+            "No Lando repo for %s; not proposing a backout", investigation.project
+        )
+        return
+    record_backout(
+        ctx.actions,
+        source_repo,
+        lando_repo=lando_repo,
+        commit=result.culprit_commit,
+        reason=backout_reason(investigation),
+        reasoning=result.summary or None,
+    )
 
 
 def _record_verdict_email(

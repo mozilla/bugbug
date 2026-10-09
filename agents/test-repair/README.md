@@ -63,6 +63,14 @@ Stage 2:
 
 - A patch in Hackbot format
 
+## Backing out the culprit
+
+A `backout` verdict on autoland records a `lando.backout` action: the culprit's revert,
+worded as sheriffs word it (`Revert "<subject>" for causing failures at <test>.`), which
+lands on `firefox-autoland` through Lando the way `lando push-commits` does. It waits
+for a human to apply it from the Hackbot UI; see `_record_backout` in
+[`__main__.py`](hackbot_agents/test_repair/__main__.py).
+
 ## Submitting the patch
 
 The fix stage runs on a checkout of the culprit commit itself, so the patch is a
