@@ -19,6 +19,7 @@ resolution-markers = [
 [manifest]
 members = [
     "agent-tools",
+    "autowebcompat-tools",
     "bugbug",
     "bugbug-http-service",
     "bugbug-mcp",
@@ -495,6 +496,32 @@ sdist = { url = "https://files.pythonhosted.org/packages/36/98/7d93f30d029643c02
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/95/adcb68e20c34162e9135f370d6e31737719c2b6f94bc953fe7ed1f10fe21/authlib-1.7.2-py2.py3-none-any.whl", hash = "sha256:3e1faedc9d87e7d56a164eca3ccb6ace0d61b94abe83e92242f8dc8bba9b4a9f", size = 259548, upload-time = "2026-05-06T08:10:21.436Z" },
 ]
+
+[[package]]
+name = "autowebcompat-tools"
+version = "0.1.0"
+source = { editable = "libs/autowebcompat-tools" }
+dependencies = [
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "claude-agent-sdk", specifier = ">=0.2.0" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "backoff"
@@ -2489,6 +2516,7 @@ version = "0.1.0"
 source = { editable = "agents/autowebcompat-diagnosis" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "autowebcompat-tools" },
     { name = "bugsy" },
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
@@ -2504,6 +2532,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "autowebcompat-tools", editable = "libs/autowebcompat-tools" },
     { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
@@ -2522,6 +2551,7 @@ version = "0.1.0"
 source = { editable = "agents/autowebcompat-repro" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "autowebcompat-tools" },
     { name = "bugsy" },
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
@@ -2537,6 +2567,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "autowebcompat-tools", editable = "libs/autowebcompat-tools" },
     { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
