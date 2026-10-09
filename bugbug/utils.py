@@ -338,16 +338,16 @@ def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
         with (
-            open(path, "wb") as f,
-            cctx.stream_writer(f) as compressor,
+            open(path, "wb") as output_file,
+            cctx.stream_writer(output_file) as compressor,
             tarfile.open(mode="w|", fileobj=compressor) as tar,
         ):
             yield tar
     elif mode == "r":
         dctx = zstandard.ZstdDecompressor()
         with (
-            open(path, "rb") as f,
-            dctx.stream_reader(f) as reader,
+            open(path, "rb") as input_file,
+            dctx.stream_reader(input_file) as reader,
             tarfile.open(mode="r|", fileobj=reader) as tar,
         ):
             yield tar
