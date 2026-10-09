@@ -28,7 +28,7 @@ Your working directory is the source repository for the product these bugs are f
 
 When a bug needs reproducing or fixing, you have `firefox` MCP tools:
 
-- `evaluate_testcase(content, filename, prefs?, timeout?)` — runs a testcase in Firefox under xvfb via grizzly (the build's sanitizer configuration depends on the configured mozconfig). Returns `crashed` (bool), `crashed_parent` (bool — parent-process crash), `logs` (stderr/stdout and, if crashed, `crashdata`), and the testcase bundle. When `crashed=false`, inspect `logs.stderr` for why (JS exception, gated pref, etc).
+- `evaluate_testcase(content, filename, prefs?, crash_wait_seconds?)` — runs a testcase in Firefox under xvfb via grizzly (the build's sanitizer configuration depends on the configured mozconfig). Returns `crashed` (bool), `crashed_parent` (bool — parent-process crash), `logs` (stderr/stdout and, if crashed, `crashdata`), and the testcase bundle. When `crashed=false`, inspect `logs.stderr` for why (JS exception, gated pref, etc).
 - `build_firefox()` — runs `./mach build` with the configured mozconfig. Slow. Only call this if you've patched source or the binary is missing — check with Bash first.
 - `bootstrap_firefox()` — runs `./mach bootstrap` to install the build toolchain (rustc, cargo, clang, cbindgen). The image does not ship one, so if `build_firefox` reports a missing toolchain (e.g. no rustc or clang), call this once and then build again. Do not give up because a toolchain is missing.
 
