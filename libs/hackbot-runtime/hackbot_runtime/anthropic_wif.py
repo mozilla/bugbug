@@ -29,11 +29,11 @@ See https://platform.claude.com/docs/en/manage-claude/wif-providers/gcp
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import tempfile
 import threading
-import contextlib
 from pathlib import Path
 
 import google.auth.transport.requests

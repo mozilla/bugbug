@@ -5,13 +5,13 @@
 
 import collections
 import concurrent.futures
+import contextlib
 import logging
 import os
 
 import hglib
 import requests
 import tenacity
-import contextlib
 from tqdm import tqdm
 
 from bugbug import repository, test_scheduling, utils

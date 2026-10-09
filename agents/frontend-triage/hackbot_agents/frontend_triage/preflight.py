@@ -65,7 +65,7 @@ async def fetch_bug(bugzilla_mcp_server: McpServerConfig, bug: int) -> dict:
     try:
         async with (
             streamablehttp_client(url) as (read, write, _),
-            ClientSession(read, write) as session
+            ClientSession(read, write) as session,
         ):
             await session.initialize()
             res = await session.call_tool(
@@ -73,9 +73,7 @@ async def fetch_bug(bugzilla_mcp_server: McpServerConfig, bug: int) -> dict:
                 {"ids": [bug], "include_fields": BUG_FIELDS},
             )
             if res.isError:
-                raise RuntimeError(
-                    "".join(getattr(c, "text", "") for c in res.content)
-                )
+                raise RuntimeError("".join(getattr(c, "text", "") for c in res.content))
             bugs = json.loads(res.content[0].text).get("bugs") or []
             return bugs[0] if bugs else {}
     except Exception as e:  # - see docstring; every failure fails open

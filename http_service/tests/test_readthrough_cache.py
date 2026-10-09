@@ -163,10 +163,7 @@ def test_cache_thread():
         ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
     )
     mocksleep = MockSleep(mockdatetime)
-    with (
-        patch("datetime.datetime", mockdatetime),
-        patch("time.sleep", mocksleep.sleep)
-    ):
+    with patch("datetime.datetime", mockdatetime), patch("time.sleep", mocksleep.sleep):
         cache.get("key_a", force_store=True)
         cache.start_ttl_thread()
 

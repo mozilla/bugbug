@@ -6,8 +6,9 @@ levels, and it emits lines while being imported -- so configuring later would
 both miss those lines and leave its per-task chatter unfiltered.
 """
 
-import logging
 import contextlib
+import logging
+
 from app.config import settings
 
 

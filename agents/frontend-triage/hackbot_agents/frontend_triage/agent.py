@@ -237,7 +237,7 @@ async def fetch_product_component(
     try:
         async with (
             streamablehttp_client(url) as (read, write, _),
-            ClientSession(read, write) as session
+            ClientSession(read, write) as session,
         ):
             await session.initialize()
             res = await session.call_tool(
@@ -248,9 +248,7 @@ async def fetch_product_component(
                 {"ids": [bug], "include_fields": "id,product,component"},
             )
             if res.isError:
-                raise RuntimeError(
-                    "".join(getattr(c, "text", "") for c in res.content)
-                )
+                raise RuntimeError("".join(getattr(c, "text", "") for c in res.content))
             bugs = json.loads(res.content[0].text).get("bugs") or []
             if not bugs:
                 return None, None

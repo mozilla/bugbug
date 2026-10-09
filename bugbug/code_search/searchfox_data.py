@@ -107,31 +107,26 @@ def find_symbol_definition(
                                 or target_sym_type_restriction in syntax
                             )
                             and (
-                                not target_sym_is_pretty
-                                or target_sym in obj["pretty"]
+                                not target_sym_is_pretty or target_sym in obj["pretty"]
                             )
                         ):
-                                    sym_found = target_sym
-                                    ret_obj = {}
-                                    ret_obj["name"] = obj["pretty"]
-                                    ret_obj["file"] = searchfox_file
-                                    ret_obj["target_line"] = int(
-                                        obj["loc"].split(":")[0]
-                                    )
+                            sym_found = target_sym
+                            ret_obj = {}
+                            ret_obj["name"] = obj["pretty"]
+                            ret_obj["file"] = searchfox_file
+                            ret_obj["target_line"] = int(obj["loc"].split(":")[0])
 
-                                    if "nestingRange" in obj:
-                                        ret_obj["target_end_line"] = int(
-                                            obj["nestingRange"]
-                                            .split("-")[-1]
-                                            .split(":")[0]
-                                        )
-                                    else:
-                                        ret_obj["target_end_line"] = None
+                            if "nestingRange" in obj:
+                                ret_obj["target_end_line"] = int(
+                                    obj["nestingRange"].split("-")[-1].split(":")[0]
+                                )
+                            else:
+                                ret_obj["target_end_line"] = None
 
-                                    ret[target_sym].append(ret_obj)
+                            ret[target_sym].append(ret_obj)
 
-                                    if not target_sym_is_pretty:
-                                        break
+                            if not target_sym_is_pretty:
+                                break
 
                 if not target_sym_is_pretty and sym_found is not None:
                     target_symbols_left.remove(sym_found)
@@ -227,12 +222,14 @@ def extract_function_approx(
     target_sym = None
     target_sym_is_pretty = False
     target_sym_interface = None
-    with (open(searchfox_origfile_path, "r") as fd):
+    with open(searchfox_origfile_path, "r") as fd:
         for line in fd:
             obj = json.loads(line)
             lineno = int(obj["loc"].split(":")[0])
             if (
-                lineno >= line_start and lineno < line_stop and "syntax" in obj
+                lineno >= line_start
+                and lineno < line_stop
+                and "syntax" in obj
                 and "use" in obj["syntax"].split(",")
                 and re.search(pattern, obj["pretty"])
             ):
@@ -248,8 +245,7 @@ def extract_function_approx(
                             )
                             return None
                         print(
-                            "Using pretty name for interface rewriting: %s"
-                            % target_sym
+                            "Using pretty name for interface rewriting: %s" % target_sym
                         )
                         target_sym_is_pretty = True
                         target_sym_interface = interface

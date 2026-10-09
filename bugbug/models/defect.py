@@ -107,10 +107,7 @@ class DefectModel(BugModel):
             elif kind == "regression":
                 if category == "False":
                     classes[int(bug_id)] = 0
-            elif (
-                kind == "defect_enhancement_task"
-                and category == "True"
-            ):
+            elif kind == "defect_enhancement_task" and category == "True":
                 classes[int(bug_id)] = "defect"
 
         for bug_id, category in labels.get_labels("regression_bug_nobug"):
@@ -127,10 +124,7 @@ class DefectModel(BugModel):
                     continue
 
                 classes[int(bug_id)] = 1 if category == "regression" else 0
-            elif (
-                kind == "defect_enhancement_task"
-                and category != "nobug"
-            ):
+            elif kind == "defect_enhancement_task" and category != "nobug":
                 classes[int(bug_id)] = "defect"
 
         defect_enhancement_task_e = dict(labels.get_labels("defect_enhancement_task_e"))

@@ -836,7 +836,7 @@ async def test_load_external_content_for_diff_file_load():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, review_context_branch="release"
@@ -878,7 +878,7 @@ async def test_load_external_content_for_diff_no_match():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(diff, review_context_repo)
 
@@ -893,7 +893,7 @@ async def test_load_external_content_for_diff_rules_fetch_failure():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, "mozilla-firefox/firefox"
@@ -932,11 +932,9 @@ load = [{ type = "file", path = "skills/guide.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
-        results = await load_external_content_for_diff(
-            _DIFF_MEDIA, review_context_repo
-        )
+        results = await load_external_content_for_diff(_DIFF_MEDIA, review_context_repo)
 
     assert len(results) == 1
     assert results[0].matched_rules == ["Rule A", "Rule B"]
@@ -970,7 +968,7 @@ load = [{ type = "file", path = "skills/high.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1004,7 +1002,7 @@ load = [{ type = "file", repo = "whatwg/html", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1038,7 +1036,7 @@ load = [{ type = "file", repo = "mozilla/cubeb", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1142,7 +1140,7 @@ async def test_content_override_used_instead_of_fetch():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -1168,7 +1166,7 @@ async def test_external_content_manifest_and_prompt_body():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -1234,7 +1232,7 @@ load = [{ type = "file", path = ".claude/skills/dom-media.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             diff_js,
@@ -1271,7 +1269,7 @@ load = [{ type = "file", path = ".claude/skills/dom-media-v2.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client)
+        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,

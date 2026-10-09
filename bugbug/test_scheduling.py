@@ -777,11 +777,11 @@ def update_touched_together(
     """
     runnable_dirs = set(runnable_dirs)
     touched_together = get_touched_together_db(False)
-    last_analyzed = (
-        touched_together[b"last_analyzed"]  # noqa: SIM401
-        if b"last_analyzed" in touched_together
-        else None
-    )
+    if b"last_analyzed" in touched_together:
+        last_analyzed = touched_together[b"last_analyzed"]
+    else:
+        # LMDBDict does not implement get().
+        last_analyzed = None
 
     # We can start once we get to the last revision we added in the previous run.
     can_start = last_analyzed is None

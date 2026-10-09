@@ -338,15 +338,17 @@ def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
         with (
-            open(path, "wb") as f, cctx.stream_writer(f) as compressor,
-            tarfile.open(mode="w|", fileobj=compressor) as tar
+            open(path, "wb") as f,
+            cctx.stream_writer(f) as compressor,
+            tarfile.open(mode="w|", fileobj=compressor) as tar,
         ):
             yield tar
     elif mode == "r":
         dctx = zstandard.ZstdDecompressor()
         with (
-            open(path, "rb") as f, dctx.stream_reader(f) as reader,
-            tarfile.open(mode="r|", fileobj=reader) as tar
+            open(path, "rb") as f,
+            dctx.stream_reader(f) as reader,
+            tarfile.open(mode="r|", fileobj=reader) as tar,
         ):
             yield tar
     else:
@@ -591,7 +593,6 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
 
         # Don't analyze changesets which simply specify try parameters.
         return changeset["files"] == ["try_task_config.json"]
-
 
     return [
         c["node"].encode("ascii")

@@ -3,12 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import json
 import logging
 import os
 import pickle
 import re
-import contextlib
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Callable

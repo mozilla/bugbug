@@ -85,12 +85,8 @@ def find_function_for_line(commit_hash, path, line):
     selected_function = None
 
     for function in functions:
-        if (
-            function["start"] <= line <= function["end"]
-            and (
-                selected_function is None
-                or selected_function["start"] < function["start"]
-            )
+        if function["start"] <= line <= function["end"] and (
+            selected_function is None or selected_function["start"] < function["start"]
         ):
             # We want to return the closest scope. For example, for line https://searchfox.org/mozilla-central/rev/6b8a3f804789fb865f42af54e9d2fef9dd3ec74d/browser/components/asrouter/modules/CFRPageActions.jsm#333,
             # we have:

@@ -4,10 +4,10 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import contextlib
 import os
 import subprocess
 import tempfile
-import contextlib
 from collections import defaultdict
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from datetime import datetime, timedelta
@@ -211,10 +211,7 @@ def get_fixed_by_commit_pushes():
     # Skip cases where there are multiple backouts associated to the same bug ID.
     multiple_backouts = set()
     for bug_id, backouts in backouts_by_bug_id.items():
-        if (
-            backouts > 1
-            and bug_id in fixed_by_commit_pushes
-        ):
+        if backouts > 1 and bug_id in fixed_by_commit_pushes:
             multiple_backouts.add(bug_id)
 
     logger.info(
@@ -232,7 +229,9 @@ def get_fixed_by_commit_pushes():
     # Skip cases where there is no backout (and so the fix was a bustage fix).
     no_backouts = set()
     for bug_id, obj in fixed_by_commit_pushes.items():
-        if bug_id not in backouts_by_bug_id or not any(commit["backedoutby"] for commit in obj["commits"]):
+        if bug_id not in backouts_by_bug_id or not any(
+            commit["backedoutby"] for commit in obj["commits"]
+        ):
             no_backouts.add(bug_id)
 
     logger.info(

@@ -188,7 +188,8 @@ def _open_intermittent_bugs(suggestion: dict) -> list[int]:
     for bug in (bugs.get("open_recent") or []) + (bugs.get("all_others") or []):
         keywords = [k.strip() for k in (bug.get("keywords") or "").split(",")]
         if (
-            bug.get("id") and not bug.get("resolution")
+            bug.get("id")
+            and not bug.get("resolution")
             and _INTERMITTENT_KEYWORD in keywords
         ):
             matched.append(bug["id"])

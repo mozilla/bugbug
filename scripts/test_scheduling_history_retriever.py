@@ -5,11 +5,11 @@
 
 import argparse
 import concurrent.futures
+import contextlib
 import math
 import os
 import random
 import traceback
-import contextlib
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Any, Generator
@@ -156,7 +156,7 @@ class Retriever(object):
 
         with (
             concurrent.futures.ThreadPoolExecutor() as executor,
-            tqdm(total=total_pushes) as progress_bar
+            tqdm(total=total_pushes) as progress_bar,
         ):
             # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
             # consume a lot of memory, and they all have references to each other through "parent"

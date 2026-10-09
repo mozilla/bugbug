@@ -14,12 +14,12 @@ analysis artifacts.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import subprocess
 import sys
 import tempfile
-import contextlib
 from collections.abc import Callable
 from pathlib import Path
 

@@ -91,7 +91,7 @@ def test_trace_agent_tags_spans_with_run_id(monkeypatch):
 
     with (
         tracing.trace_agent(entry, "run-1"),
-        provider.get_tracer("test").start_as_current_span("turn") as span
+        provider.get_tracer("test").start_as_current_span("turn") as span,
     ):
         pass
 

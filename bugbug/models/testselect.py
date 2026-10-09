@@ -656,7 +656,8 @@ class TestSelectModel(Model):
 
             if (
                 apply_filters
-                and self.failures_skip and len(failures) > self.failures_skip
+                and self.failures_skip
+                and len(failures) > self.failures_skip
             ):
                 continue
 
