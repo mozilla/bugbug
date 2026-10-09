@@ -239,16 +239,12 @@ class DefectModel(BugModel):
 
             if can_use_type:
                 if bug["type"] == "enhancement":
-                    if kind == "bug":
-                        classes[bug_id] = 0
-                    elif kind == "regression":
+                    if kind == "bug" or kind == "regression":
                         classes[bug_id] = 0
                     elif kind == "defect_enhancement_task":
                         classes[bug_id] = "enhancement"
                 elif bug["type"] == "task":
-                    if kind == "bug":
-                        classes[bug_id] = 0
-                    elif kind == "regression":
+                    if kind == "bug" or kind == "regression":
                         classes[bug_id] = 0
                     elif kind == "defect_enhancement_task":
                         classes[bug_id] = "task"
