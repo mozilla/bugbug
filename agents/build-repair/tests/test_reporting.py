@@ -77,8 +77,7 @@ def _run(
             checkout=checkout,
         )
     )
-    assert len(sessions) == 2
-    return result, sessions[0], sessions[1]
+    return result, sessions[0], sessions[1] if len(sessions) > 1 else None
 
 
 # --- the fix stage works on the blamed commit itself ----------------------- #
@@ -104,18 +103,19 @@ def test_the_tree_moves_to_the_blamed_commit_before_the_fix_stage(
     assert "checked out at it" not in analysis_prompt
 
 
-def test_no_checkout_when_the_agent_blamed_nothing(tmp_path, monkeypatch):
+def test_no_fix_stage_when_the_agent_blamed_nothing(tmp_path, monkeypatch):
     checked_out = []
-    _, _, (_, fix_prompt) = _run(
+    result, _, fix = _run(
         tmp_path,
         monkeypatch,
         bug_id=1,
-        actions_recorder=None,
+        actions_recorder=ActionsRecorder(),
         blame="",
         checkout=lambda sha: checked_out.append(sha),
     )
+    assert fix is None
     assert checked_out == []
-    assert "broke the build" not in fix_prompt
+    assert result.blamed_commit is None
 
 
 def test_the_prompt_does_not_claim_a_checkout_that_did_not_happen(

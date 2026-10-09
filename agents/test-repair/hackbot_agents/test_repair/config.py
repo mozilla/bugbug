@@ -5,8 +5,8 @@
 
 """Models and tool allowlist for the test-repair agent."""
 
-ANALYSIS_MODEL = "claude-opus-5"
-FIX_MODEL = "claude-opus-5"
+ANALYSIS_MODEL = "claude-opus-5-5"
+FIX_MODEL = "claude-opus-5-5"
 
 # Building costs ten-odd minutes and only verifies a patch the sheriff does not act
 # on, so the fix stage proposes an unverified patch unless a run asks otherwise.
