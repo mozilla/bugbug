@@ -359,13 +359,14 @@ class TestToMdEndToEnd:
 
     def _mock_api_request(self, method, **kwargs):
         """Mock for `phabricator.PHABRICATOR_API.request()`."""
-        if method == "transaction.search":
-            return self.MOCK_TRANSACTIONS_WITH_COMMENTS
-        elif method == "user.search":
-            return self.MOCK_USERS
-        elif method == "project.search":
-            return self.MOCK_MOCO_GROUP
-        raise ValueError(f"Unexpected API call: {method}")
+        responses = {
+            "transaction.search": self.MOCK_TRANSACTIONS_WITH_COMMENTS,
+            "user.search": self.MOCK_USERS,
+            "project.search": self.MOCK_MOCO_GROUP,
+        }
+        if method not in responses:
+            raise ValueError(f"Unexpected API call: {method}")
+        return responses[method]
 
     def test_to_md_filters_untrusted_content_after_last_trusted(self):
         """Test that to_md() correctly filters untrusted content."""
@@ -430,13 +431,14 @@ class TestToMdEndToEnd:
         }
 
         def mock_request(method, **kwargs):
-            if method == "transaction.search":
-                return mock_transactions
-            elif method == "user.search":
-                return self.MOCK_USERS
-            elif method == "project.search":
-                return self.MOCK_MOCO_GROUP
-            raise ValueError(f"Unexpected: {method}")
+            responses = {
+                "transaction.search": mock_transactions,
+                "user.search": self.MOCK_USERS,
+                "project.search": self.MOCK_MOCO_GROUP,
+            }
+            if method not in responses:
+                raise ValueError(f"Unexpected: {method}")
+            return responses[method]
 
         mock_api = MagicMock()
         mock_api.request = mock_request
@@ -534,13 +536,14 @@ class TestToMdEndToEnd:
         }
 
         def mock_request(method, **kwargs):
-            if method == "transaction.search":
-                return mock_transactions_untrusted_only
-            elif method == "user.search":
-                return self.MOCK_USERS
-            elif method == "project.search":
-                return self.MOCK_MOCO_GROUP
-            raise ValueError(f"Unexpected API call: {method}")
+            responses = {
+                "transaction.search": mock_transactions_untrusted_only,
+                "user.search": self.MOCK_USERS,
+                "project.search": self.MOCK_MOCO_GROUP,
+            }
+            if method not in responses:
+                raise ValueError(f"Unexpected API call: {method}")
+            return responses[method]
 
         def mock_load_revision(rev_phid=None, rev_id=None):
             if rev_phid == "PHID-DREV-parent":
@@ -669,13 +672,14 @@ class TestToMdEndToEnd:
         }
 
         def mock_request(method, **kwargs):
-            if method == "transaction.search":
-                return mock_transactions_with_trusted
-            elif method == "user.search":
-                return self.MOCK_USERS
-            elif method == "project.search":
-                return self.MOCK_MOCO_GROUP
-            raise ValueError(f"Unexpected API call: {method}")
+            responses = {
+                "transaction.search": mock_transactions_with_trusted,
+                "user.search": self.MOCK_USERS,
+                "project.search": self.MOCK_MOCO_GROUP,
+            }
+            if method not in responses:
+                raise ValueError(f"Unexpected API call: {method}")
+            return responses[method]
 
         def mock_load_revision(rev_phid=None, rev_id=None):
             if rev_phid == "PHID-DREV-parent":
