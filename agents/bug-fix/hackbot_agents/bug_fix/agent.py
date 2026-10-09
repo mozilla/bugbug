@@ -137,6 +137,8 @@ def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
         "ac_add_options --enable-debug\n"
         "ac_add_options --enable-optimize\n"
         "ac_add_options --enable-clang-plugin\n"
+        # For the evaluate_js_shell tool: desktop builds skip the JS shell.
+        "ac_add_options --enable-js-shell\n"
         f"mk_add_options MOZ_OBJDIR={quote(str(fx_ctx.objdir))}\n"
     )
 
