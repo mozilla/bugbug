@@ -45,6 +45,10 @@ RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
 
+# `mach bootstrap` installs the toolchain here at runtime; put it on PATH so the
+# agent's own `./mach build` (and the build_firefox tool) find rustc/clang.
+ENV PATH="/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:${PATH}"
+
 USER agent
 
 CMD ["python", "-m", "hackbot_agents.bug_fix"]
