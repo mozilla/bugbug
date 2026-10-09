@@ -1128,38 +1128,44 @@ def notification(days: int) -> None:
             elif bug["assignee"] is None:
                 cur_team_data["unassigned_new_regressions"] += 1
 
-        if creation_date > datetime.utcnow() - relativedelta(weeks=2):
-            if bug["regression"] and not bug["fixed"]:
-                if bug["team"] == "Compiler and Development Tools":
-                    print("Unfixed regression: {}".format(bug["id"]))
-                cur_team_data["unfixed_regressions"].append(bug)
+        if (
+            creation_date > datetime.utcnow() - relativedelta(weeks=2)
+            and bug["regression"]
+            and not bug["fixed"]
+        ):
+            if bug["team"] == "Compiler and Development Tools":
+                print("Unfixed regression: {}".format(bug["id"]))
+            cur_team_data["unfixed_regressions"].append(bug)
 
-        if creation_date > datetime.utcnow() - relativedelta(days=days):
-            if bug["regression"] and not bug["fixed"]:
-                cur_team_data["carryover_regressions"] += 1
+        if (
+            creation_date > datetime.utcnow() - relativedelta(days=days)
+            and bug["regression"]
+            and not bug["fixed"]
+        ):
+            cur_team_data["carryover_regressions"] += 1
 
-                if bug["team"] == "DOM":
-                    carrytest.add(bug["id"])
+            if bug["team"] == "DOM":
+                carrytest.add(bug["id"])
 
-                full_bug = bug_map[bug["id"]]
-                if (
-                    "stalled" not in full_bug["keywords"]
-                    and "intermittent-failure" not in full_bug["keywords"]
-                ):
-                    for version in [nightly_ver, beta_ver, release_ver]:
-                        if (
-                            f"cf_status_firefox{version}" in full_bug
-                            and full_bug[f"cf_status_firefox{version}"] == "affected"
-                            and (
-                                f"cf_tracking_firefox{version}" not in full_bug
-                                or full_bug[f"cf_tracking_firefox{version}"] != "-"
-                            )
-                            and f"cf_status_firefox{version - 1}" in full_bug
-                            and full_bug[f"cf_status_firefox{version - 1}"]
-                            not in ("unaffected", "?", "---")
-                        ):
-                            cur_team_data["affecting_carryover_regressions"].append(bug)
-                            break
+            full_bug = bug_map[bug["id"]]
+            if (
+                "stalled" not in full_bug["keywords"]
+                and "intermittent-failure" not in full_bug["keywords"]
+            ):
+                for version in [nightly_ver, beta_ver, release_ver]:
+                    if (
+                        f"cf_status_firefox{version}" in full_bug
+                        and full_bug[f"cf_status_firefox{version}"] == "affected"
+                        and (
+                            f"cf_tracking_firefox{version}" not in full_bug
+                            or full_bug[f"cf_tracking_firefox{version}"] != "-"
+                        )
+                        and f"cf_status_firefox{version - 1}" in full_bug
+                        and full_bug[f"cf_status_firefox{version - 1}"]
+                        not in ("unaffected", "?", "---")
+                    ):
+                        cur_team_data["affecting_carryover_regressions"].append(bug)
+                        break
 
     for bug in all_s1_s2_bugs:
         if bug["status"] in ("VERIFIED", "RESOLVED"):
