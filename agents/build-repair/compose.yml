@@ -66,4 +66,4 @@ services:
 
 volumes:
   workspace:
-    name: bugbug_workspace
+    name: hackbot_workspace
