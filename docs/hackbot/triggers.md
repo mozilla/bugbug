@@ -87,11 +87,8 @@ Guards, each closing a specific failure mode:
   project. Membership is cached with a short TTL; an unknown author triggers one refresh so
   new members take effect promptly, then a cooldown so unauthorized deliveries don't cause a
   Conduit call each.
-- **Dedupe** — retried deliveries are deduped by triggering transaction PHID, and a
-  transaction is marked seen **only after a successful trigger**. A transient Conduit
-  failure therefore 500s and gets reprocessed on retry rather than dropped as a duplicate.
-- **Fresh transactions only** — a payload mixing new and already-seen PHIDs can't
-  re-trigger on an old one.
+- **Dedupe** — one delivery is one submission. Its smallest mentioning comment transaction
+  PHID is the run's database dedupe key, making the key independent of transaction order.
 
 One review can leave several inline comments, each its own transaction; all qualifying ones
 are combined and passed to the agent as XML-tagged `<comment>` elements carrying the comment

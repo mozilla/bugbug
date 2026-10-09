@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NamedTuple
 from xml.sax.saxutils import escape
 
 if TYPE_CHECKING:
@@ -40,7 +40,18 @@ class HackbotMention:
     author_phid: str
     comment_id: int
     comment_type: Literal["regular", "inline"]
+    transaction_phid: str
     diff_id: int | None = None
+
+
+class DetectedMention(NamedTuple):
+    """An actionable ``@hackbot`` mention, resolved and ready to trigger a run."""
+
+    comment: str
+    revision_id: int
+    bug_id: int
+    # Identifies the submission across webhook retries.
+    anchor_phid: str
 
 
 def triggering_transaction_phids(payload: dict) -> list[str]:
@@ -96,11 +107,17 @@ def find_hackbot_mentions(
                     comment_type=(
                         "inline" if transaction["type"] == "inline" else "regular"
                     ),
+                    transaction_phid=transaction["phid"],
                     diff_id=diff_id,
                 )
             )
             break
     return matches
+
+
+def anchor_transaction_phid(mentions: list[HackbotMention]) -> str:
+    """Return a stable transaction PHID independent of mention order."""
+    return min(mention.transaction_phid for mention in mentions)
 
 
 def _format_comment(mention: HackbotMention) -> str:
@@ -150,8 +167,8 @@ async def detect_mention_and_revision(
     triggering_phids: list[str],
     *,
     authorizer: PhabricatorAuthorizer,
-) -> tuple[str, int, int] | None:
-    """Read Conduit and return ``(comment, revision_id, bug_id)`` or None.
+) -> DetectedMention | None:
+    """Read Conduit and return the :class:`DetectedMention`, or ``None``.
 
     ``comment`` is the raw text of the triggering ``@hackbot`` comment(s), passed
     through as data — the agent frames it (identity, scope, how to respond). When
@@ -161,7 +178,9 @@ async def detect_mention_and_revision(
     Returns ``None`` when there is no qualifying ``@hackbot`` mention, the
     revision can't be resolved, or it has no Bugzilla bug id (bug-fix needs one).
     """
-    transactions = await client.search_transactions(object_phid)
+    transactions = await client.search_transactions(
+        object_phid, constraints={"phids": triggering_phids}
+    )
     mentions = find_hackbot_mentions(
         transactions,
         set(triggering_phids),
@@ -201,4 +220,9 @@ async def detect_mention_and_revision(
         )
         return None
 
-    return comment, revision_id, bug_id
+    return DetectedMention(
+        comment=comment,
+        revision_id=revision_id,
+        bug_id=bug_id,
+        anchor_phid=anchor_transaction_phid(authorized_mentions),
+    )

@@ -70,6 +70,7 @@ def _fake_conduit(
     revisions: dict[int, dict],
     *,
     base: str = BASE,
+    first_public_parent: str | None = None,
     querycommits: dict | None = None,
     raw_diffs: dict[int, str] | None = None,
     with_authors: bool = True,
@@ -98,6 +99,12 @@ def _fake_conduit(
             if rev_id not in revisions:
                 return {}
             diff = {"id": rev_id * 10, "sourceControlBaseRevision": base}
+            if first_public_parent:
+                diff["properties"] = {
+                    "local:commits": {
+                        "local-node": {"firstPublicParent": first_public_parent}
+                    }
+                }
             if with_authors:
                 diff["authorName"] = f"Author {rev_id}"
                 diff["authorEmail"] = f"author{rev_id}@example.com"
@@ -243,6 +250,23 @@ async def test_an_unresolvable_base_is_reported(monkeypatch):
             base=short,
             querycommits={"identifierMap": {}, "data": {}},
         )
+
+
+async def test_first_public_parent_is_used_when_base_is_unlanded(monkeypatch):
+    short = "69706d7a081e"
+    public_parent = "2" * 40
+    revisions = _with_stack_graph({42: _revision(42)}, {42: []})
+
+    stack, _ = await _stack_of(
+        monkeypatch,
+        revisions,
+        42,
+        base=short,
+        first_public_parent=public_parent,
+        querycommits={"identifierMap": {}, "data": {}},
+    )
+
+    assert stack.base_commit == public_parent
 
 
 async def test_a_missing_revision_is_reported(monkeypatch):
