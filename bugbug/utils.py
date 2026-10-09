@@ -16,7 +16,7 @@ import tarfile
 import urllib.parse
 from collections import deque
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import cache
 from importlib.metadata import PackageNotFoundError
 from typing import Any, Iterator
@@ -267,6 +267,20 @@ def download_check_etag(url, path=None):
         f.write(new_etag)
 
     return True
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def parse_timestamp(value: str | None) -> datetime | None:
+    """Parse an ISO 8601 timestamp, treating a missing zone as UTC."""
+    if not value:
+        return None
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def get_last_modified(url: str) -> datetime | None:

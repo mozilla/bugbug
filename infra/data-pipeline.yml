@@ -638,6 +638,144 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: perf-alerts-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-perf-alerts
+          - retrieve
+
+        artifacts:
+          public/perf_alerts.json.zst:
+            path: /data/perf_alerts.json.zst
+            type: file
+          public/perf_alerts.json.version:
+            path: /data/perf_alerts.json.version
+            type: file
+          public/perf_pushes.json.zst:
+            path: /data/perf_pushes.json.zst
+            type: file
+          public/perf_pushes.json.version:
+            path: /data/perf_pushes.json.version
+            type: file
+          public/perf_alert_bugs.json.zst:
+            path: /data/perf_alert_bugs.json.zst
+            type: file
+          public/perf_alert_bugs.json.version:
+            path: /data/perf_alert_bugs.json.version
+            type: file
+          public/perf_task_costs.json.zst:
+            path: /data/perf_task_costs.json.zst
+            type: file
+          public/perf_task_costs.json.version:
+            path: /data/perf_task_costs.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_alerts.${version}
+        - index.project.bugbug.data_perf_alerts.latest
+      metadata:
+        name: bugbug performance alerts retrieval
+        description: bugbug performance alerts, pushes and regression bugs retrieval
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: perf-regressions-generator
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - perf-alerts-retrieval
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-perf-alerts
+          - generate
+
+        artifacts:
+          public/perf_regressions.json.zst:
+            path: /data/perf_regressions.json.zst
+            type: file
+          public/perf_regressions.json.version:
+            path: /data/perf_regressions.json.version
+            type: file
+          public/perf_scheduling_pairs.json.zst:
+            path: /data/perf_scheduling_pairs.json.zst
+            type: file
+          public/perf_scheduling_pairs.json.version:
+            path: /data/perf_scheduling_pairs.json.version
+            type: file
+          public/perf_push_status.json.zst:
+            path: /data/perf_push_status.json.zst
+            type: file
+          public/perf_push_status.json.version:
+            path: /data/perf_push_status.json.version
+            type: file
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_regressions.${version}
+        - index.project.bugbug.data_perf_regressions.latest
+      metadata:
+        name: bugbug performance regressions generator
+        description: bugbug labeled performance regressions and perf push data generator
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: perf-regression-commits-export
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - perf-regressions-generator
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-data-perf-alerts
+          - export
+          - --repo-dir=/cache/mozilla-central
+
+        artifacts:
+          public/perf_regression_commits.json.zst:
+            path: /data/perf_regression_commits.json.zst
+            type: file
+          public/perf_regression_commits.json.version:
+            path: /data/perf_regression_commits.json.version
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_regression_commits.${version}
+        - index.project.bugbug.data_perf_regression_commits.latest
+      metadata:
+        name: bugbug performance regression commits export
+        description: bugbug commit messages and diffs labeled with performance regressions
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: rollback-test-task
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
