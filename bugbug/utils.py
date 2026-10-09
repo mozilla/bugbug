@@ -590,10 +590,8 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
             return True
 
         # Don't analyze changesets which simply specify try parameters.
-        if changeset["files"] == ["try_task_config.json"]:
-            return True
+        return changeset["files"] == ["try_task_config.json"]
 
-        return False
 
     return [
         c["node"].encode("ascii")
