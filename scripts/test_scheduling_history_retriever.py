@@ -154,39 +154,41 @@ class Retriever(object):
 
         total_pushes = last_push_id - first_push_id + 1
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            with tqdm(total=total_pushes) as progress_bar:
-                # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
-                # consume a lot of memory, and they all have references to each other through "parent"
-                # and "child" links so they are basically never released while we run this).
-                while from_date < to_date:
-                    next_from_date = from_date + relativedelta(days=7)
-                    if next_from_date > to_date:
-                        next_from_date = to_date
+        with (
+            concurrent.futures.ThreadPoolExecutor() as executor,
+            tqdm(total=total_pushes) as progress_bar,
+        ):
+            # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
+            # consume a lot of memory, and they all have references to each other through "parent"
+            # and "child" links so they are basically never released while we run this).
+            while from_date < to_date:
+                next_from_date = from_date + relativedelta(days=7)
+                if next_from_date > to_date:
+                    next_from_date = to_date
 
-                    logger.info(
-                        "Retrieving pushes from %s to %s...", from_date, next_from_date
-                    )
+                logger.info(
+                    "Retrieving pushes from %s to %s...", from_date, next_from_date
+                )
 
-                    pushes = mozci.push.make_push_objects(
-                        from_date=from_date.strftime("%Y-%m-%d"),
-                        to_date=next_from_date.strftime("%Y-%m-%d"),
-                        branch="autoland",
-                    )
+                pushes = mozci.push.make_push_objects(
+                    from_date=from_date.strftime("%Y-%m-%d"),
+                    to_date=next_from_date.strftime("%Y-%m-%d"),
+                    branch="autoland",
+                )
 
-                    futures = [
-                        executor.submit(retrieve_from_cache, push) for push in pushes
-                    ]
+                futures = [
+                    executor.submit(retrieve_from_cache, push) for push in pushes
+                ]
 
-                    try:
-                        db.append(push_data_db, generate(progress_bar, pushes, futures))
-                    except Exception:
-                        for f in futures:
-                            f.cancel()
+                try:
+                    db.append(push_data_db, generate(progress_bar, pushes, futures))
+                except Exception:
+                    for f in futures:
+                        f.cancel()
 
-                        raise
+                    raise
 
-                    from_date = next_from_date
+                from_date = next_from_date
 
         zstd_compress(push_data_db)
 

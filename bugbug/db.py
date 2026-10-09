@@ -218,14 +218,12 @@ def _db_open(path, mode):
     elif compression == "zstd":
         if "w" in mode or "a" in mode:
             cctx = zstandard.ZstdCompressor()
-            with open(path, mode) as f:
-                with cctx.stream_writer(f) as writer:
-                    yield store_constructor(writer, use_mmap=False)
+            with open(path, mode) as f, cctx.stream_writer(f) as writer:
+                yield store_constructor(writer, use_mmap=False)
         else:
             dctx = zstandard.ZstdDecompressor()
-            with open(path, mode) as f:
-                with dctx.stream_reader(f) as reader:
-                    yield store_constructor(reader, use_mmap=False)
+            with open(path, mode) as f, dctx.stream_reader(f) as reader:
+                yield store_constructor(reader, use_mmap=False)
     else:
         with open(path, mode) as f:
             yield store_constructor(f, use_mmap=True)
@@ -277,9 +275,8 @@ def delete(path, match):
                 yield elem
 
     try:
-        with _db_open(path, "rb") as rstore:
-            with _db_open(new_path, "wb") as wstore:
-                wstore.write(matching_elems(rstore))
+        with _db_open(path, "rb") as rstore, _db_open(new_path, "wb") as wstore:
+            wstore.write(matching_elems(rstore))
     except FileNotFoundError:
         return
 
