@@ -46,6 +46,7 @@ from bugbug.tools.code_review.review_context_schema import (
     main as validate_review_context_main,
 )
 from bugbug.tools.code_review.utils import find_comment_scope
+from bugbug.tools.core.platforms import phabricator as phab_platform
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
     get_file_after_stack,
@@ -138,6 +139,18 @@ def test_apply_patched_file_multiple_hunks():
         "@@ -5,2 +5,2 @@\n e\n-f\n+F\n"
     )
     assert apply_patched_file("a\nb\nc\nd\ne\nf\n", ps[0]) == "a\nB\nc\nd\ne\nF\n"
+
+
+def test_apply_patched_file_rejects_mismatched_base():
+    ps = PatchSet.from_string(
+        "--- a/f.txt\n+++ b/f.txt\n"
+        "@@ -1,2 +1,2 @@\n a\n-b\n+B\n"
+        "@@ -5,2 +5,2 @@\n e\n-f\n+F\n"
+    )
+    with pytest.raises(
+        ValueError, match='f.txt: context line 6, "f" does not match "changed"'
+    ):
+        apply_patched_file("a\nb\nc\nd\ne\nchanged\n", ps[0])
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +473,433 @@ def test_load_skill_tool_description_lists_skills():
 # ---------------------------------------------------------------------------
 # _fetch_file
 # ---------------------------------------------------------------------------
+
+
+def test_expand_context_fetches_from_stack_base(monkeypatch):
+    base_patch = SimpleNamespace(
+        get_base_revision=AsyncMock(return_value="exact-base"),
+        get_old_file=AsyncMock(return_value="before\n"),
+    )
+    current_patch = SimpleNamespace(
+        patch_stack=[
+            PatchSet.from_string(
+                "--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-before\n+after\n"
+            )
+        ],
+        stack_base_patch=base_patch,
+    )
+    monkeypatch.setattr(
+        langchain_tools,
+        "get_runtime",
+        lambda _: SimpleNamespace(context=SimpleNamespace(patch=current_patch)),
+    )
+    monkeypatch.setattr(langchain_tools, "_get_client", MagicMock)
+
+    result = asyncio.run(langchain_tools.expand_context.coroutine("file.txt"))
+
+    assert result == "1| after"
+    base_patch.get_old_file.assert_awaited_once_with("file.txt")
+
+
+GITHUB = "https://raw.githubusercontent.com/mozilla-firefox/firefox"
+COMMITS_API = "https://api.github.com/repos/mozilla-firefox/firefox/commits"
+SEARCH_API = "https://api.github.com/search/commits"
+CENTRAL = "6ae7ad81504b6b8d1010aa2938002e7f31cb7910"
+# moz-phab records the parent commit as the base of every non-bottom diff,
+# which is a local commit that does not exist upstream.
+LOCAL_PARENT = "5426149f616e4c0ffee0000000000000000000"
+LANDING = "4f030eadb8e64c07761f6693645e6a961c15915e"
+# 2026-10-05T12:00:00Z
+DIFF_CREATED = 1791201600
+A_DIFF = "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+A\n"
+B_DIFF = "--- a/b.txt\n+++ b/b.txt\n@@ -1,2 +1,2 @@\n one\n-two\n+TWO\n"
+
+
+def make_phabricator_stack(
+    monkeypatch,
+    revisions,
+    *,
+    stack_graph=None,
+    upstream=(CENTRAL,),
+    repo_files=None,
+    landing_merges=(),
+    first_public_parent=None,
+):
+    """Build a stack of real PhabricatorPatch objects backed by fake Conduit/HTTP.
+
+    revisions lists (base, raw_diff, old_files) from bottom to top. Phabricator's
+    "old" changeset view serves old_files. GitHub knows the `upstream` commits,
+    serves repo_files, keyed by (commit, path), whose values are file contents
+    or HTTP status codes, and answers commit searches with landing_merges, a
+    list of (sha, message). Like moz-phab, every diff records the same
+    first_public_parent, if any. Returns the top patch and the list of requests.
+    """
+    phids = [f"PHID-DREV-{i}" for i in range(len(revisions))]
+    by_phid = dict(zip(phids, revisions))
+    if stack_graph is None:
+        stack_graph = {phid: phids[i - 1 : i] for i, phid in enumerate(phids)}
+
+    class FakeStackPatch(phab_platform.PhabricatorPatch):
+        @property
+        def _revision_metadata(self):
+            return {
+                "phid": self._revision_phid,
+                "fields": {
+                    "diffID": phids.index(self._revision_phid) + 1,
+                    "stackGraph": stack_graph,
+                },
+            }
+
+        @property
+        def _diff_metadata(self):
+            base = by_phid[self._revision_phid][0]
+            return {
+                "dateCreated": DIFF_CREATED,
+                "refs": {"base": {"identifier": base}} if base else {},
+            }
+
+        @property
+        def raw_diff(self):
+            return by_phid[self._revision_phid][1]
+
+        @property
+        def _changesets(self):
+            return [
+                {
+                    "id": f"{self._revision_phid}:{pf.path}",
+                    "fields": {"path": {"displayPath": pf.path}},
+                }
+                for pf in self.patch_set
+            ]
+
+        async def github_repo_ref(self):
+            return "mozilla-firefox/firefox", "autoland"
+
+    responses = {
+        f"{phab_platform._base_url()}/differential/changeset/?view=old&ref={phid}:{path}": text
+        for phid, (_, _, old_files) in by_phid.items()
+        for path, text in old_files.items()
+    }
+    responses.update({f"{COMMITS_API}/{commit}": commit for commit in upstream})
+    responses.update(
+        {
+            f"{GITHUB}/{commit}/{path}": text
+            for (commit, path), text in (repo_files or {}).items()
+        }
+    )
+    responses[SEARCH_API] = {
+        "items": [
+            {"sha": sha, "commit": {"message": message}}
+            for sha, message in landing_merges
+        ]
+    }
+    requests = []
+
+    async def get(url, params=None, headers=None):
+        requests.append(url if params is None else (url, params))
+        body = responses.get(url, 404)
+        request = httpx.Request("GET", url)
+        if isinstance(body, int):
+            return httpx.Response(body, request=request)
+        if isinstance(body, dict):
+            return httpx.Response(200, json=body, request=request)
+        return httpx.Response(200, text=body, request=request)
+
+    def conduit(method, ids):
+        requests.append((method, ids))
+        local_commits = {"local-node": {"firstPublicParent": first_public_parent}}
+        return {
+            str(diff_id): {
+                "properties": {"local:commits": local_commits}
+                if first_public_parent
+                else []
+            }
+            for diff_id in ids
+        }
+
+    monkeypatch.setattr(
+        phab_platform, "get_http_client", lambda: SimpleNamespace(get=get)
+    )
+    monkeypatch.setattr(
+        phab_platform,
+        "get_phabricator_client",
+        lambda: SimpleNamespace(request=conduit),
+    )
+    return FakeStackPatch(revision_phid=phids[-1]), requests
+
+
+def run_expand_context(monkeypatch, patch, file_path):
+    searchfox = SimpleNamespace(
+        get_file=AsyncMock(return_value="searchfox latest\n"),
+        get_file_at_revision=AsyncMock(return_value="searchfox at revision\n"),
+    )
+    monkeypatch.setattr(
+        langchain_tools,
+        "get_runtime",
+        lambda _: SimpleNamespace(context=SimpleNamespace(patch=patch)),
+    )
+    monkeypatch.setattr(langchain_tools, "_get_client", lambda: searchfox)
+    result = asyncio.run(langchain_tools.expand_context.coroutine(file_path))
+    return result, searchfox
+
+
+def landing_search(before="2026-10-05T12:00:00Z"):
+    return (
+        SEARCH_API,
+        {
+            "q": f"repo:mozilla-firefox/firefox committer-date:<={before} "
+            '"Merge autoland to mozilla-central" OR '
+            '"Merge firefox-autoland to firefox-main"',
+            "sort": "committer-date",
+            "order": "desc",
+        },
+    )
+
+
+def test_expand_context_uses_bottom_revision_base_for_stack(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(CENTRAL, "b.txt"): "one\ntwo\n"},
+    )
+
+    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result == "1| one\n2| TWO"
+    assert requests == [f"{COMMITS_API}/{CENTRAL}", f"{GITHUB}/{CENTRAL}/b.txt"]
+    searchfox.get_file_at_revision.assert_not_awaited()
+    searchfox.get_file.assert_not_awaited()
+
+
+def test_expand_context_applies_whole_stack_to_bottom_old_file(monkeypatch):
+    top_diff = "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-A\n+AA\n"
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(CENTRAL, A_DIFF, {"a.txt": "a\n"}), (LOCAL_PARENT, top_diff, {})],
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "a.txt")
+
+    assert result == "1| AA"
+    assert len(requests) == 2
+    assert "differential/changeset/?view=old&ref=PHID-DREV-0:a.txt" in requests[1]
+
+
+def test_expand_context_reads_untouched_file_at_bottom_base(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(CENTRAL, "c.txt"): "c\n"},
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "c.txt")
+
+    assert result == "1| c"
+    assert requests == [f"{COMMITS_API}/{CENTRAL}", f"{GITHUB}/{CENTRAL}/c.txt"]
+
+
+def test_expand_context_file_added_in_stack_needs_no_base(monkeypatch):
+    added = "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+new\n"
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(CENTRAL, added, {}), (LOCAL_PARENT, B_DIFF, {})],
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "new.txt")
+
+    assert result == "1| new"
+    assert requests == [f"{COMMITS_API}/{CENTRAL}"]
+
+
+def test_expand_context_does_not_guess_when_base_file_is_missing(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        landing_merges=[(LANDING, "Merge autoland to mozilla-central a=merge")],
+    )
+
+    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result.startswith("Warning: could not retrieve b.txt")
+    assert f"Git base {CENTRAL}" in result
+    assert requests == [f"{COMMITS_API}/{CENTRAL}", f"{GITHUB}/{CENTRAL}/b.txt"]
+    searchfox.get_file_at_revision.assert_not_awaited()
+    searchfox.get_file.assert_not_awaited()
+
+
+def test_expand_context_uses_first_public_parent(monkeypatch):
+    # As with D330744, whose base de80de07fa1d is a local commit.
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(CENTRAL, "b.txt"): "one\ntwo\n"},
+        landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
+        first_public_parent=CENTRAL,
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result == "1| one\n2| TWO"
+    assert requests == [
+        f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
+        f"{COMMITS_API}/{CENTRAL}",
+        f"{GITHUB}/{CENTRAL}/b.txt",
+    ]
+
+
+def test_expand_context_skips_first_public_parent_missing_upstream(monkeypatch):
+    unknown = "1" * 40
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(LANDING, "b.txt"): "one\ntwo\n"},
+        landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
+        first_public_parent=unknown,
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result == "1| one\n2| TWO"
+    assert requests == [
+        f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
+        f"{COMMITS_API}/{unknown}",
+        landing_search(),
+        f"{GITHUB}/{LANDING}/b.txt",
+    ]
+
+
+def test_expand_context_falls_back_to_landed_revision(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(LANDING, "b.txt"): "one\ntwo\n"},
+        landing_merges=[
+            # Commit search matches anywhere in the message, not just the subject.
+            ("b" * 40, 'Revert "Merge autoland to mozilla-central"'),
+            (LANDING, "Merge autoland to mozilla-central a=merge"),
+        ],
+    )
+
+    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result == "1| one\n2| TWO"
+    assert requests == [
+        f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
+        landing_search(),
+        f"{GITHUB}/{LANDING}/b.txt",
+    ]
+    searchfox.get_file_at_revision.assert_not_awaited()
+    searchfox.get_file.assert_not_awaited()
+
+
+def test_expand_context_falls_back_to_landed_revision_without_base(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(None, B_DIFF, {})],
+        repo_files={(LANDING, "c.txt"): "c\n"},
+        landing_merges=[(LANDING, "Merge firefox-autoland to firefox-main")],
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "c.txt")
+
+    assert result == "1| c"
+    assert requests == [
+        ("differential.querydiffs", [1]),
+        landing_search(),
+        f"{GITHUB}/{LANDING}/c.txt",
+    ]
+
+
+def test_expand_context_rejects_patch_that_does_not_apply_to_fallback(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(LANDING, "b.txt"): "one\nchanged since\n"},
+        landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
+    )
+
+    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert requests[-1] == f"{GITHUB}/{LANDING}/b.txt"
+    searchfox.get_file_at_revision.assert_not_awaited()
+
+    assert result == (
+        "Warning: could not retrieve b.txt: Patch does not apply to b.txt: "
+        'context line 2, "two" does not match "changed since", in hunk #1.'
+    )
+
+
+def test_expand_context_reports_missing_base_and_landing(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+    )
+
+    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+
+    assert result.startswith("Warning: could not retrieve b.txt")
+    assert "no landed mozilla-central revision" in result
+    assert requests == [
+        f"{COMMITS_API}/{LOCAL_PARENT}",
+        ("differential.querydiffs", [1]),
+        landing_search(),
+    ]
+    searchfox.get_file_at_revision.assert_not_awaited()
+    searchfox.get_file.assert_not_awaited()
+
+
+def test_expand_context_does_not_read_latest_when_base_lookup_fails(monkeypatch):
+    patch, _ = make_phabricator_stack(monkeypatch, [(CENTRAL, B_DIFF, {})])
+    phab_platform.PhabricatorPatch.get_base_commit_hash.cache_clear()
+
+    async def rate_limited(url, params=None, headers=None):
+        return httpx.Response(403, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(
+        phab_platform, "get_http_client", lambda: SimpleNamespace(get=rate_limited)
+    )
+
+    result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
+
+    assert result.startswith("Warning: could not retrieve c.txt")
+    searchfox.get_file.assert_not_awaited()
+
+
+def test_expand_context_falls_back_to_searchfox_at_exact_base(monkeypatch):
+    patch, _ = make_phabricator_stack(
+        monkeypatch,
+        [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        repo_files={(CENTRAL, "c.txt"): 503},
+    )
+
+    result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
+
+    assert result == "1| searchfox at revision"
+    searchfox.get_file_at_revision.assert_awaited_once_with("c.txt", CENTRAL)
+
+
+def test_expand_context_nonlinear_stack_uses_own_base(monkeypatch):
+    own_base = "0123456789abcdef0123456789abcdef01234567"
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(CENTRAL, A_DIFF, {}), (CENTRAL, A_DIFF, {}), (own_base, B_DIFF, {})],
+        stack_graph={
+            "PHID-DREV-0": [],
+            "PHID-DREV-1": [],
+            "PHID-DREV-2": ["PHID-DREV-0", "PHID-DREV-1"],
+        },
+        upstream=(own_base,),
+        repo_files={(own_base, "c.txt"): "c\n"},
+    )
+
+    result, _ = run_expand_context(monkeypatch, patch, "c.txt")
+
+    assert result.startswith("Warning: Could not retrieve the full patch stack")
+    assert result.endswith("1| c")
+    assert requests == [f"{COMMITS_API}/{own_base}", f"{GITHUB}/{own_base}/c.txt"]
 
 
 def make_client(*, at_revision=None, latest=None):

@@ -7,7 +7,9 @@
 
 from typing import Awaitable, Callable, Optional
 
+import whatthepatch
 from unidiff import PatchedFile, PatchSet
+from whatthepatch.exceptions import HunkApplyException
 
 
 def strip_diff_prefix(file_path: str) -> str:
@@ -28,24 +30,26 @@ def find_patched_file(patch_set: PatchSet, file_path: str) -> Optional[PatchedFi
 
 
 def apply_patched_file(base_content: str, patched_file: PatchedFile) -> str:
-    """Apply a single patched file's hunks to base_content and return the result."""
+    """Apply a single patched file's hunks to base_content and return the result.
+
+    Raises ValueError when base_content doesn't match the hunks' context, rather
+    than silently producing wrong content.
+    """
     if patched_file.is_removed_file:
         raise FileNotFoundError("File is removed by the patch")
 
-    base_lines = [] if patched_file.is_added_file else base_content.splitlines(True)
-    new_lines = []
-    source_index = 0
+    diff = next(whatthepatch.parse_patch(str(patched_file)))
+    # Binary files and pure renames have no hunks.
+    if not diff.changes:
+        return base_content
 
-    # hunk.target_lines() only covers the hunk's span; we must explicitly copy
-    # the unchanged base lines that fall between hunks ourselves.
-    for hunk in patched_file:
-        hunk_source_start = max(hunk.source_start - 1, 0)
-        new_lines.extend(base_lines[source_index:hunk_source_start])
-        new_lines.extend(line.value for line in hunk.target_lines())
-        source_index = hunk_source_start + hunk.source_length
+    base = "" if patched_file.is_added_file else base_content
+    try:
+        lines = whatthepatch.apply_diff(diff, base)
+    except HunkApplyException as e:
+        raise ValueError(f"Patch does not apply to {patched_file.path}: {e}") from e
 
-    new_lines.extend(base_lines[source_index:])
-    return "".join(new_lines)
+    return "".join(f"{line}\n" for line in lines)
 
 
 async def get_file_after_stack(
