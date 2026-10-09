@@ -1,6 +1,7 @@
 import pytest
 from hackbot_agents.test_repair.agent import TestRepairResult
 from hackbot_agents.test_repair.notify import (
+    backout_reason,
     build_email,
     build_message,
     recipients,
@@ -55,6 +56,24 @@ def _message(result=None, investigation=None, **kwargs):
         run_id="1218e630-78c8",
         **kwargs,
     )
+
+
+@pytest.mark.parametrize(
+    ("groups", "expected"),
+    [
+        (
+            [FailingGroup("dom/tests/mochitest.toml", ["dom/tests/test_a.html"])],
+            "failures at test_a.html",
+        ),
+        (
+            [FailingGroup("dom/tests/mochitest.toml", [])],
+            "failures in dom/tests/mochitest.toml",
+        ),
+        ([], "xpcshell failures"),
+    ],
+)
+def test_backout_reason_names_the_failing_test(groups, expected):
+    assert backout_reason(_investigation(groups=groups)) == expected
 
 
 def test_a_known_intermittent_is_not_worth_a_notification():
