@@ -173,7 +173,7 @@ def sheriff_classification(project: str, task_id: str) -> str | None:
             _get_json(f"{_TREEHERDER}/{project}/jobs/?task_id={task_id}").get("results")
             or []
         )
-    except (requests.exceptions.RequestException, ValueError):
+    except requests.exceptions.RequestException, ValueError:
         logger.warning("Could not re-read the classification of task %s", task_id)
         return None
     if not jobs:
@@ -208,7 +208,7 @@ def _known_intermittent_bugs(project: str, task_id: str) -> list[int]:
         suggestions = _get_json(
             f"{_TREEHERDER}/{project}/jobs/{jobs[0]['id']}/bug_suggestions/"
         )
-    except (requests.exceptions.RequestException, ValueError, KeyError):
+    except requests.exceptions.RequestException, ValueError, KeyError:
         logger.warning("Could not read bug suggestions for task %s", task_id)
         return []
 

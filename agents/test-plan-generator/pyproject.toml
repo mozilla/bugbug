@@ -2,7 +2,7 @@
 name = "hackbot-agent-test-plan-generator"
 version = "0.1.0"
 description = "Cloud Run Job image that generates and runs Firefox QA test plans"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
     "claude-agent-sdk>=0.1.30",

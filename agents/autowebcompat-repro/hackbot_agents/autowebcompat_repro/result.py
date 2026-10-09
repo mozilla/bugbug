@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import imghdr
 from pathlib import Path
 from typing import Annotated, Generic, Literal, TypeVar
 
+import imghdr
 from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
 from pydantic import (
     BaseModel,

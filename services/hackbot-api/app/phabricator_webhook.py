@@ -155,7 +155,7 @@ async def resolve_revision(
     bug_id_raw = fields.get("bugzilla.bug-id")
     try:
         bug_id = int(bug_id_raw) if bug_id_raw not in (None, "") else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         bug_id = None
     return revision_id, bug_id
 

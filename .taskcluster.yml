@@ -41,7 +41,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: astral/uv:python3.12-trixie
+          image: astral/uv:python3.14-trixie
         metadata:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
