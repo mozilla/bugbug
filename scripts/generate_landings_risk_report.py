@@ -1381,10 +1381,7 @@ def notification(days: int) -> None:
     def get_top_crashes(team: str, channel: str) -> str | None:
         top_crashes = []
 
-        if team in super_teams:
-            teams = set(super_teams[team])
-        else:
-            teams = {team}
+        teams = set(super_teams[team]) if team in super_teams else {team}
 
         for signature, data in crash_signatures[channel].items():
             bugs = [
@@ -1798,10 +1795,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
                 team: str = team,
             ) -> dict[str, dict]:
                 start_date = datetime.utcnow() - period
-                if team in super_teams:
-                    me_teams = super_teams[team]
-                else:
-                    me_teams = [team]
+                me_teams = super_teams.get(team, [team])
                 return bugzilla.calculate_maintenance_effectiveness_indicator(
                     me_teams, start_date, datetime.utcnow()
                 )

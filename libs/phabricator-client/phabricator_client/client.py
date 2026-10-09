@@ -48,13 +48,10 @@ def _select_full_commit(ref: str, result: dict) -> str:
         return ref
     data = result.get("data") or {}
     commit_phid = (result.get("identifierMap") or {}).get(ref)
-    if commit_phid in data:
-        commits = [data[commit_phid]]
-    else:
-        # ``identifierMap`` only maps unambiguous commits, and a firefox
-        # commit is mirrored to autoland, beta, release, etc. Thus, the same
-        # hash can appear in multiple repos with different PHIDs.
-        commits = data.values()
+    # ``identifierMap`` only maps unambiguous commits, and a firefox
+    # commit is mirrored to autoland, beta, release, etc. Thus, the same
+    # hash can appear in multiple repos with different PHIDs.
+    commits = [data[commit_phid]] if commit_phid in data else data.values()
 
     identifiers = {
         commit["identifier"]

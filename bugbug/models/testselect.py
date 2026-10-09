@@ -163,10 +163,7 @@ def _generate_equivalence_sets(
             try:
                 support, confidence = failing_together_stats[task2]
             except KeyError:
-                if not assume_redundant:
-                    confidence = 0.0
-                else:
-                    confidence = 1.0
+                confidence = 0.0 if not assume_redundant else 1.0
 
             if confidence >= min_redundancy_confidence:
                 add_to_groups(task1, task2)
