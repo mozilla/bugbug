@@ -4,7 +4,7 @@ On run completion the recorded actions from `summary["actions"]` are always
 upserted as `run_actions` rows (one per entry) so they're visible and
 manageable in the UI. Whether they're then applied *automatically* is decided by
 the agent's run-level policy and per-action overrides (see `app/agents.py`);
-either way they can be applied on demand (manual apply-all from the UI).
+either way they can be applied on demand (manual apply-all or per-action from the UI).
 Application runs each pending row through the handler registry in
 `app.action_handlers` and is idempotent per action — an already-`applied` row is
 never re-applied, so Pub/Sub retries and repeated manual applies are safe.
@@ -12,6 +12,7 @@ never re-applied, so Pub/Sub retries and repeated manual applies are safe.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -311,3 +312,37 @@ async def apply_all_pending(db: AsyncSession, run: Run) -> None:
     rows = await ensure_action_rows(db, run)
     await db.commit()
     await _apply_pending_rows(db, run, rows)
+
+
+class ActionNotFound(LookupError):
+    pass
+
+
+class UnappliedDependency(ValueError):
+    pass
+
+
+async def apply_one(db: AsyncSession, run: Run, idx: int) -> None:
+    """Apply a single action on demand (manual), if not already `applied`.
+
+    Raises `UnappliedDependency` if its params reference an action that isn't
+    applied yet, rather than posting the unresolved placeholder.
+    """
+    rows = await ensure_action_rows(db, run)
+    await db.commit()
+
+    target = next((item for item in rows if item[0].idx == idx), None)
+    if target is None:
+        raise ActionNotFound(f"Run has no action {idx}")
+
+    applied = [item for item in rows if item[0].status == "applied"]
+    applied_refs = {row.ref for row, _ in applied if row.ref}
+    missing = {
+        ref
+        for ref, _ in _PLACEHOLDER_RE.findall(json.dumps(target[0].params))
+        if ref not in applied_refs
+    }
+    if missing:
+        raise UnappliedDependency(f"Apply action(s) {', '.join(sorted(missing))} first")
+
+    await _apply_pending_rows(db, run, [*applied, target])

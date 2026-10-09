@@ -96,7 +96,8 @@ Triggered by the `run.completed` event, on a subscription filtered to **succeede
    `run_actions` row (`pending`), keyed `(run_id, idx)`. This happens for _all_ succeeded
    runs, whether or not the agent auto-applies, so the UI can always show and apply them.
 2. **Apply, if opted in.** With `auto_apply_actions=True` on the agent's registry entry,
-   pending rows are applied immediately. Otherwise they wait for a human to click apply.
+   pending rows are applied immediately. Otherwise they wait for a human to apply them,
+   all at once or one by one.
 3. **Dispatch.** Each row's `type` selects a handler from hackbot-api's registry. The
    handler gets the params and an `ApplyContext` — which can `download_artifact(key)`
    without knowing GCS is behind it.
@@ -123,6 +124,7 @@ add_comment(text="Patch up for review: {{actions.patch.url}}")
 `{{actions.<ref>.<field>}}` is substituted at apply time, recursively through params.
 Resolution draws on rows already `applied` in earlier passes as well as this one, so a
 later manual apply can still reference an earlier action's result.
+Applying a single action is refused while it references an action not yet applied.
 
 An unresolvable placeholder is **left as-is and logged**, rather than raising. The action
 then fails with an error a human can read, instead of silently posting mangled text.
@@ -135,6 +137,8 @@ entry, instead of a burst. Other comments on that bug still apply separately. A 
 applied at its last member's index, once every earlier dependency has resolved, and any
 group whose rows carry a `ref` is excluded (nothing should reference a coalesced member's
 result).
+Coalescing happens only within one apply pass, so actions applied one by one are sent
+separately.
 
 ## Where to look
 

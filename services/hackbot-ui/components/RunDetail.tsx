@@ -80,7 +80,8 @@ export function RunDetail({
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(true);
   const [actions, setActions] = useState<RunAction[] | null>(null);
-  const [applying, setApplying] = useState(false);
+  // Which apply is in flight: an action's idx, "all", or null.
+  const [applying, setApplying] = useState<number | "all" | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [retriggering, setRetriggering] = useState(false);
   const [retriggerError, setRetriggerError] = useState<string | null>(null);
@@ -140,21 +141,27 @@ export function RunDetail({
     if (run && isTerminal(run.status)) fetchActions();
   }, [run, fetchActions]);
 
-  const applyActions = useCallback(async () => {
-    setApplying(true);
-    setApplyError(null);
-    try {
-      const res = await fetch(`/api/runs/${runId}/actions`, { method: "POST" });
-      const body = await res.json();
-      if (!res.ok)
-        throw new Error(body?.error ?? `Request failed (${res.status})`);
-      setActions(body as RunAction[]);
-    } catch (err) {
-      setApplyError((err as Error).message);
-    } finally {
-      setApplying(false);
-    }
-  }, [runId]);
+  const applyActions = useCallback(
+    async (idx?: number) => {
+      setApplying(idx ?? "all");
+      setApplyError(null);
+      try {
+        const path = idx === undefined ? "" : `/${idx}`;
+        const res = await fetch(`/api/runs/${runId}/actions${path}`, {
+          method: "POST",
+        });
+        const body = await res.json();
+        if (!res.ok)
+          throw new Error(body?.error ?? `Request failed (${res.status})`);
+        setActions(body as RunAction[]);
+      } catch (err) {
+        setApplyError((err as Error).message);
+      } finally {
+        setApplying(null);
+      }
+    },
+    [runId]
+  );
 
   const retrigger = useCallback(async () => {
     setRetriggering(true);
@@ -199,10 +206,10 @@ export function RunDetail({
     actions?.filter((action) => action.status === "failed").length ?? 0;
   const applyLabel =
     pendingActions && failedActions
-      ? "Apply pending & retry failed actions"
+      ? "Apply all pending & retry failed actions"
       : failedActions
-        ? "Retry failed actions"
-        : "Apply pending actions";
+        ? "Retry all failed actions"
+        : "Apply all pending actions";
 
   const hasPatch = run.artifacts.some((a) => a.name === PATCH_ARTIFACT);
 
@@ -319,6 +326,19 @@ export function RunDetail({
                     {action.error && (
                       <span className="muted">{action.error}</span>
                     )}
+                    {action.status !== "applied" && (
+                      <button
+                        type="button"
+                        onClick={() => applyActions(action.idx)}
+                        disabled={applying !== null}
+                      >
+                        {applying === action.idx
+                          ? "Applying…"
+                          : action.status === "failed"
+                            ? "Retry"
+                            : "Apply"}
+                      </button>
+                    )}
                   </div>
                   {preview && (
                     <div className="action-preview">
@@ -330,9 +350,14 @@ export function RunDetail({
               );
             })}
           </ul>
-          {pendingActions + failedActions > 0 && (
-            <button type="button" onClick={applyActions} disabled={applying}>
-              {applying ? "Applying…" : applyLabel}
+          {pendingActions + failedActions > 1 && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => applyActions()}
+              disabled={applying !== null}
+            >
+              {applying === "all" ? "Applying…" : applyLabel}
             </button>
           )}
         </div>
