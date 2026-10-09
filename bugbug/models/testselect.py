@@ -663,8 +663,10 @@ class TestSelectModel(Model):
                 else:
                     passes.append(name)
 
-            if apply_filters:
-                if self.failures_skip and len(failures) > self.failures_skip:
+            if (
+                apply_filters
+                and self.failures_skip and len(failures) > self.failures_skip
+            ):
                     continue
 
             pushes.append(

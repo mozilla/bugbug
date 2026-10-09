@@ -337,13 +337,17 @@ def zstd_decompress(path: str) -> None:
 def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
-        with open(path, "wb") as f, cctx.stream_writer(f) as compressor:
-            with tarfile.open(mode="w|", fileobj=compressor) as tar:
+        with (
+            open(path, "wb") as f, cctx.stream_writer(f) as compressor,
+            tarfile.open(mode="w|", fileobj=compressor) as tar
+        ):
                 yield tar
     elif mode == "r":
         dctx = zstandard.ZstdDecompressor()
-        with open(path, "rb") as f, dctx.stream_reader(f) as reader:
-            with tarfile.open(mode="r|", fileobj=reader) as tar:
+        with (
+            open(path, "rb") as f, dctx.stream_reader(f) as reader,
+            tarfile.open(mode="r|", fileobj=reader) as tar
+        ):
                 yield tar
     else:
         raise AssertionError(f"Unexpected mode: {mode}")

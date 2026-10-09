@@ -761,10 +761,11 @@ def rollback(bug, when=None, do_assert=False):
 
                 continue
 
-            if change["added"] != "---":
-                if field not in bug and not is_expected_inconsistent_field(
-                    field, last_product, bug["id"]
-                ):
+            if (
+                change["added"] != "---"
+                and field not in bug
+                and not is_expected_inconsistent_field(field, last_product, bug["id"])
+            ):
                     assert_or_log(f"{field} is not present")
 
             if field in bug and isinstance(bug[field], list):

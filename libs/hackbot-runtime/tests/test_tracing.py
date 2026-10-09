@@ -89,8 +89,10 @@ def test_trace_agent_tags_spans_with_run_id(monkeypatch):
     monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: provider)
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
 
-    with tracing.trace_agent(entry, "run-1"):
-        with provider.get_tracer("test").start_as_current_span("turn") as span:
+    with (
+        tracing.trace_agent(entry, "run-1"),
+        provider.get_tracer("test").start_as_current_span("turn") as span
+    ):
             pass
 
     assert span.attributes[tracing.RUN_ID_SPAN_ATTRIBUTE] == "run-1"

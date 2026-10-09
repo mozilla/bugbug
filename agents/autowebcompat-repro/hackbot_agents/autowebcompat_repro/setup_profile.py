@@ -55,8 +55,10 @@ def resolve_xpi_url(slug: str) -> tuple[str, str]:
 
 
 def download(url: str, dest: Path) -> None:
-    with amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp:
-        with dest.open("wb") as f:
+    with (
+        amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp,
+        dest.open("wb") as f
+    ):
             for chunk in resp.iter_content(chunk_size=64 * 1024):
                 if chunk:
                     f.write(chunk)

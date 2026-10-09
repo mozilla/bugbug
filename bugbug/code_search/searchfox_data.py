@@ -99,16 +99,18 @@ def find_symbol_definition(
                 for target_sym in target_symbols_left:
                     if target_sym in line:
                         obj = json.loads(line)
-                        if "syntax" in obj:
-                            syntax = obj["syntax"].split(",")
-                            if "def" in syntax and (
+                        syntax = obj.get("syntax", "").split(",")
+                        if (
+                            "def" in syntax
+                            and (
                                 target_sym_type_restriction is None
                                 or target_sym_type_restriction in syntax
-                            ):
-                                if (
-                                    not target_sym_is_pretty
-                                    or target_sym in obj["pretty"]
-                                ):
+                            )
+                            and (
+                                not target_sym_is_pretty
+                                or target_sym in obj["pretty"]
+                            )
+                        ):
                                     sym_found = target_sym
                                     ret_obj = {}
                                     ret_obj["name"] = obj["pretty"]
@@ -227,13 +229,15 @@ def extract_function_approx(
     target_sym = None
     target_sym_is_pretty = False
     target_sym_interface = None
-    with open(searchfox_origfile_path, "r") as fd:
+    with (open(searchfox_origfile_path, "r") as fd):
         for line in fd:
             obj = json.loads(line)
             lineno = int(obj["loc"].split(":")[0])
-            if lineno >= line_start and lineno < line_stop and "syntax" in obj:
-                if "use" in obj["syntax"].split(","):
-                    if re.search(pattern, obj["pretty"]):
+            if (
+                lineno >= line_start and lineno < line_stop and "syntax" in obj
+                and "use" in obj["syntax"].split(",")
+                and re.search(pattern, obj["pretty"])
+            ):
                         for interface in interface_rewrites:
                             if ("%s::" % interface) in obj["pretty"]:
                                 for item in obj["pretty"].split(" "):
@@ -335,10 +339,10 @@ def extract_function_approx(
                     current_lineno >= target_sym_line
                     and current_lineno <= target_sym_end_line
                 ):
-                    if "syntax" in obj:
-                        syntax = obj["syntax"].split(",")
-                        if "use" in syntax and "field" in syntax:
-                            field_syms.add(obj["sym"])
+                    syntax = obj.get("syntax", "").split(",")
+
+                    if "use" in syntax and "field" in syntax:
+                        field_syms.add(obj["sym"])
 
         # Step 5: Locate and annotate member definitions as comments (optional)
         result = find_symbol_definition(

@@ -210,8 +210,10 @@ def get_fixed_by_commit_pushes():
     # Skip cases where there are multiple backouts associated to the same bug ID.
     multiple_backouts = set()
     for bug_id, backouts in backouts_by_bug_id.items():
-        if backouts > 1:
-            if bug_id in fixed_by_commit_pushes:
+        if (
+            backouts > 1
+            and bug_id in fixed_by_commit_pushes
+        ):
                 multiple_backouts.add(bug_id)
 
     logger.info(

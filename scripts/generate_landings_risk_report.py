@@ -1128,14 +1128,20 @@ def notification(days: int) -> None:
             elif bug["assignee"] is None:
                 cur_team_data["unassigned_new_regressions"] += 1
 
-        if creation_date > datetime.utcnow() - relativedelta(weeks=2):
-            if bug["regression"] and not bug["fixed"]:
+        if (
+            creation_date > datetime.utcnow() - relativedelta(weeks=2)
+            and bug["regression"]
+            and not bug["fixed"]
+        ):
                 if bug["team"] == "Compiler and Development Tools":
                     print("Unfixed regression: {}".format(bug["id"]))
                 cur_team_data["unfixed_regressions"].append(bug)
 
-        if creation_date > datetime.utcnow() - relativedelta(days=days):
-            if bug["regression"] and not bug["fixed"]:
+        if (
+            creation_date > datetime.utcnow() - relativedelta(days=days)
+            and bug["regression"]
+            and not bug["fixed"]
+        ):
                 cur_team_data["carryover_regressions"] += 1
 
                 if bug["team"] == "DOM":

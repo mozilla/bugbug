@@ -77,10 +77,12 @@ diff --git a/test.txt b/test.txt
         try:
             from flask import has_request_context, request
 
-            if has_request_context() and request.method == "POST":
-                # Access the internal Flask request object to check if body was consumed
-                # The _cached_data attribute is set when request.data is accessed
-                if hasattr(request, "_cached_data"):
+            # Access the internal Flask request object to check if body was consumed
+            # The _cached_data attribute is set when request.data is accessed
+            if (
+                has_request_context() and request.method == "POST"
+                and hasattr(request, "_cached_data")
+            ):
                     request_data_accessed_before_compress = True
         except Exception:
             pass

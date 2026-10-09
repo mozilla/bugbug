@@ -63,8 +63,10 @@ async def fetch_bug(bugzilla_mcp_server: McpServerConfig, bug: int) -> dict:
         return {}
 
     try:
-        async with streamablehttp_client(url) as (read, write, _):
-            async with ClientSession(read, write) as session:
+        async with (
+            streamablehttp_client(url) as (read, write, _),
+            ClientSession(read, write) as session
+        ):
                 await session.initialize()
                 res = await session.call_tool(
                     "get_bugs",

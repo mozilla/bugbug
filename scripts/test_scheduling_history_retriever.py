@@ -153,8 +153,10 @@ class Retriever(object):
 
         total_pushes = last_push_id - first_push_id + 1
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            with tqdm(total=total_pushes) as progress_bar:
+        with (
+            concurrent.futures.ThreadPoolExecutor() as executor,
+            tqdm(total=total_pushes) as progress_bar
+        ):
                 # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
                 # consume a lot of memory, and they all have references to each other through "parent"
                 # and "child" links so they are basically never released while we run this).
