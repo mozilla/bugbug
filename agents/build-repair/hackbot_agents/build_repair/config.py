@@ -5,8 +5,8 @@
 
 """Models and tool allowlist for the build-repair agent."""
 
-ANALYSIS_MODEL = "claude-opus-4-8"
-FIX_MODEL = "claude-opus-4-8"
+ANALYSIS_MODEL = "claude-opus-5-5"
+FIX_MODEL = "claude-opus-5-5"
 
 # A run that proposed no patch is a transient or not-to-blame failure; emailing the
 # developer about it is noise.
