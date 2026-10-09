@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import contextlib
 import os
 import subprocess
 import tempfile
@@ -336,10 +337,8 @@ def diff_failure_vs_fix(repo, failure_commits, fix_commits):
                 .strip()
             )
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(idx)
-            except OSError:
-                pass
 
         return subprocess.check_output(
             ["git", "-C", repo, "diff", "-w", failure_commits[-1], tree_fixed]

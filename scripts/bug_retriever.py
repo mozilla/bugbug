@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import contextlib
 from datetime import datetime
 from logging import getLogger
 
@@ -21,10 +22,8 @@ class Retriever(object):
         db.download(bugzilla.BUGS_DB)
 
         # Get IDs of bugs changed since last run.
-        try:
+        with contextlib.suppress(db.LastModifiedNotAvailable):
             last_modified = db.last_modified(bugzilla.BUGS_DB)
-        except db.LastModifiedNotAvailable:
-            pass
 
         if last_modified is not None:
             logger.info(

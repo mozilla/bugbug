@@ -5,6 +5,7 @@
 
 import argparse
 import concurrent.futures
+import contextlib
 import math
 import os
 import random
@@ -388,10 +389,8 @@ class Retriever(object):
                     }
 
             if granularity == "group":
-                try:
+                with contextlib.suppress(StopIteration):
                     update_touched_together_gen.send(None)
-                except StopIteration:
-                    pass
 
             logger.info("saved push data nodes: %d", len(saved_nodes))
             logger.info("skipped %d (no commits in our DB)", skipped_no_commits)

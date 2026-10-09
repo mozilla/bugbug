@@ -6,6 +6,7 @@ levels, and it emits lines while being imported -- so configuring later would
 both miss those lines and leave its per-task chatter unfiltered.
 """
 
+import contextlib
 import logging
 
 from app.config import settings
@@ -46,10 +47,8 @@ def _capture_loguru() -> None:
         return
 
     loguru_logger.remove()
-    try:
+    with contextlib.suppress(ImportError):
         import mozci  # noqa: F401
-    except ImportError:
-        pass
     loguru_logger.remove()
     loguru_logger.add(_forward_to_stdlib, level=settings.mozci_log_level.upper())
 
