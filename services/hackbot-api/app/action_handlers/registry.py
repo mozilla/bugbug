@@ -15,6 +15,7 @@ from app.action_handlers.github_handler import AddInlineCommentsHandler
 from app.action_handlers.github_handler import (
     SubmitPatchHandler as GitHubSubmitPatchHandler,
 )
+from app.action_handlers.lando_handler import BackoutHandler
 from app.action_handlers.phabricator_handler import (
     AddCommentHandler as PhabricatorAddCommentHandler,
 )
@@ -51,6 +52,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "try_server.push": PushHandler(),
     "feedback.report_problem": ReportProblemHandler(),
     "agents.start_run": StartRunHandler(),
+    "lando.backout": BackoutHandler(),
 }
 
 
