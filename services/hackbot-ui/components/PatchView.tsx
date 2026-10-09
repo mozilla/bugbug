@@ -1,7 +1,6 @@
 "use client";
 
-import { html, parse } from "diff2html";
-import { ColorSchemeType } from "diff2html/lib/types";
+import { parseDiff, Diff, Hunk } from "react-diff-view";
 import { useEffect, useState } from "react";
 
 // The artifact every agent that edits source publishes (see
@@ -19,7 +18,7 @@ export function PatchPanel({
   diff: string;
   truncated?: boolean;
 }) {
-  const files = parse(diff);
+  const files = parseDiff(diff);
 
   return (
     <div className="panel">
@@ -36,18 +35,32 @@ export function PatchPanel({
               from the Artifacts list for the rest.
             </p>
           )}
-          {/* diff2html only emits markup for the diff it was given and escapes
-              its content, so this does not render arbitrary agent HTML. */}
-          <div
-            className="patch-diff"
-            dangerouslySetInnerHTML={{
-              __html: html(files, {
-                drawFileList: files.length > 1,
-                matching: "lines",
-                colorScheme: ColorSchemeType.DARK,
-              }),
-            }}
-          />
+          <div className="patch-diff">
+            {files.map((file) => (
+              <div
+                key={`${file.oldPath}-${file.newPath}`}
+                className="patch-file"
+              >
+                {/* Only label files when there's more than one to tell apart. */}
+                {files.length > 1 && (
+                  <div className="patch-file-header">
+                    {/* A deleted file's newPath is /dev/null; fall back to
+                        oldPath so the header shows the actual filename. */}
+                    {file.newPath !== "/dev/null" ? file.newPath : file.oldPath}
+                  </div>
+                )}
+                <Diff
+                  viewType="unified"
+                  diffType={file.type}
+                  hunks={file.hunks}
+                >
+                  {(hunks) =>
+                    hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)
+                  }
+                </Diff>
+              </div>
+            ))}
+          </div>
         </>
       )}
     </div>
