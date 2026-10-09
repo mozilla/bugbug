@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Generic, Literal, TypeVar
+from typing import Annotated, Literal
 
-from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
 from pydantic import (
     BaseModel,
     Field,
@@ -15,17 +14,6 @@ from pydantic import (
 )
 
 RESULT_SERVER_NAME = "autowebcompat-diagnosis"
-SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
-
-ResultT = TypeVar("ResultT", bound=BaseModel)
-
-
-class ResultCollector(Generic[ResultT]):
-    """Holds the result submitted by the agent, if any."""
-
-    def __init__(self, result_cls: type[ResultT]) -> None:
-        self._result_cls: type[ResultT] = result_cls
-        self.result: ResultT | None = None
 
 
 class DiagnosisPlanResult(BaseModel):
@@ -302,33 +290,3 @@ class DiagnosisResult(BaseModel):
     @property
     def diagnosis(self) -> DiagnosisText:
         return DiagnosisText.model_validate_json(self.diagnosis_path.read_text())
-
-
-def build_result_server(collector: ResultCollector) -> McpServerConfig:
-    """Build an in-process MCP server exposing the ``submit_result`` tool.
-
-    The handler validates the payload against the collector's result class and
-    stores it. A validation error is returned to the model (as tool output) so
-    it can correct and resubmit rather than failing the run.
-    """
-
-    @tool(
-        "submit_result",
-        "Submit the final result for this task. Call exactly once, at the end, "
-        "after completing the task.",
-        {
-            **collector._result_cls.model_json_schema(),
-            "additionalProperties": False,
-        },
-    )
-    async def submit_result(args: dict) -> dict:
-        try:
-            collector.result = collector._result_cls.model_validate(args)
-        except ValidationError as exc:
-            return {
-                "content": [{"type": "text", "text": f"Invalid result: {exc}"}],
-                "is_error": True,
-            }
-        return {"content": [{"type": "text", "text": "Result recorded."}]}
-
-    return create_sdk_mcp_server(name=RESULT_SERVER_NAME, tools=[submit_result])

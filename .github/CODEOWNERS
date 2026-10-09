@@ -1,6 +1,7 @@
 *                                    @mozilla/ai4dev
 
-# Code owners for specific Hackbot agents
+# Code owners for specific Hackbot agents or tools
 /agents/frontend-triage/             @mozilla/hackbot-frontend
 /agents/autowebcompat-repro/         @mozilla/hackbot-webcompat
 /agents/autowebcompat-diagnosis/     @mozilla/hackbot-webcompat
+/libs/autowebcompat-tools/           @mozilla/hackbot-webcompat
