@@ -305,6 +305,32 @@ def build_phabricator_diff(repo: Path, base: str, repo_url: str) -> dict | None:
     }
 
 
+def build_backout(repo: Path, commit: str, reason: str) -> bytes:
+    """A ``git format-patch`` email reverting ``commit``, worded as sheriffs do.
+
+    The revert is a detached commit on top of ``commit`` carrying its parent's
+    tree, so neither the working tree nor HEAD moves.
+    """
+    sha = _git(repo, "rev-parse", "--verify", f"{commit}^{{commit}}").strip()
+    subject = _git(repo, "log", "-1", "--format=%s", sha).strip()
+    revert = _git(
+        repo,
+        "-c",
+        f"user.name={_WIP_NAME}",
+        "-c",
+        f"user.email={_WIP_EMAIL}",
+        "commit-tree",
+        f"{sha}^^{{tree}}",
+        "-p",
+        sha,
+        "-m",
+        f'Revert "{subject}" for causing {reason}.',
+        "-m",
+        f"This reverts commit {sha}.",
+    ).strip()
+    return _git_bytes(repo, "format-patch", "--binary", "--stdout", "-1", revert)
+
+
 def build_try_push(repo: Path, base: str) -> dict | None:
     """Build the artifact for pushing the agent's changes to the try server."""
     if not _FULL_SHA_RE.fullmatch(base):

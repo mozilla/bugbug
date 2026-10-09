@@ -55,6 +55,7 @@ def test_urls_are_built_from_the_configured_host():
     # A trailing slash in config must not double up in the URLs.
     assert client.try_patches_url == "https://lando-dev.allizom.org/api/try/patches"
     assert client.job_url(7) == "https://lando-dev.allizom.org/landings/7"
+    assert client.automation_job_url(7) == "https://lando-dev.allizom.org/api/job/7"
     # Pointing at another deployment moves the Treeherder link with it, with no
     # second setting to keep in step.
     assert client.treeherder_url(7) == (
@@ -165,3 +166,44 @@ async def test_submit_try_patches_raises_when_no_job_id_comes_back(monkeypatch):
         await _client().submit_try_patches(["cGF0Y2g="], "a" * 40)
 
     assert "no job id" in str(excinfo.value)
+
+
+async def test_push_commits_queues_one_add_commit_per_patch(monkeypatch):
+    captured = _capture_post(
+        monkeypatch, httpx.Response(202, json={"job_id": 99, "status": "SUBMITTED"})
+    )
+
+    job_id = await _client(headless_api_token="headless").push_commits(
+        "firefox-autoland", ["cGF0Y2g=", "b3RoZXI="]
+    )
+
+    assert job_id == 99
+    assert captured["url"] == "https://lando.moz.tools/api/repo/firefox-autoland"
+    assert captured["headers"]["Authorization"] == "Bearer headless"
+    assert captured["json"] == {
+        "actions": [
+            {"action": "add-commit-base64", "content": "cGF0Y2g="},
+            {"action": "add-commit-base64", "content": "b3RoZXI="},
+        ]
+    }
+
+
+async def test_push_commits_needs_the_headless_token(monkeypatch):
+    captured = _capture_post(monkeypatch, httpx.Response(202, json={"job_id": 1}))
+
+    with pytest.raises(LandoAPIError, match="LANDO_HEADLESS_API_TOKEN"):
+        await _client().push_commits("firefox-autoland", ["cGF0Y2g="])
+
+    assert captured == {}
+
+
+async def test_push_commits_raises_with_the_headless_error_details(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(403, json={"details": "Missing permission: automation."}),
+    )
+
+    with pytest.raises(LandoAPIError, match="Missing permission: automation."):
+        await _client(headless_api_token="headless").push_commits(
+            "firefox-autoland", ["cGF0Y2g="]
+        )
