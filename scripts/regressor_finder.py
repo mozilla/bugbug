@@ -569,7 +569,7 @@ def evaluate(bug_introducing_commits):
     misassigned_regressors = 0
     for bug_id, regressor_bugs in tqdm(known_regressors.items()):
         # Get all commits which fixed the bug.
-        fix_commits = bug_to_commits_map[bug_id] if bug_id in bug_to_commits_map else []
+        fix_commits = bug_to_commits_map.get(bug_id, [])
         if len(fix_commits) == 0:
             continue
 

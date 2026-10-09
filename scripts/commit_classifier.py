@@ -81,10 +81,7 @@ REVIEWERS_RE = re.compile(
 
 
 def replace_reviewers(commit_description, reviewers):
-    if not reviewers:
-        reviewers_str = ""
-    else:
-        reviewers_str = "r=" + ",".join(reviewers)
+    reviewers_str = "r=" + ",".join(reviewers) if reviewers else ""
 
     if commit_description == "":
         return reviewers_str

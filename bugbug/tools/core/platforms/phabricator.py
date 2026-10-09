@@ -888,7 +888,7 @@ class PhabricatorPatch(Patch):
                 phid: (
                     self if phid == current_phid else self.__class__(revision_phid=phid)
                 )
-                for phid in stack_graph.keys()
+                for phid in stack_graph
             }
 
             for phid, dependencies in stack_graph.items():
