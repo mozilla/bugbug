@@ -66,3 +66,4 @@ services:
 
 volumes:
   workspace:
+    name: bugbug_workspace
