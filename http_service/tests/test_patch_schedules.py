@@ -83,7 +83,7 @@ diff --git a/test.txt b/test.txt
                 has_request_context() and request.method == "POST"
                 and hasattr(request, "_cached_data")
             ):
-                    request_data_accessed_before_compress = True
+                request_data_accessed_before_compress = True
         except Exception:
             pass
         return original_compress_response(*args, **kwargs)

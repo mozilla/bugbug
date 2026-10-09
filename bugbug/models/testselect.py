@@ -667,7 +667,7 @@ class TestSelectModel(Model):
                 apply_filters
                 and self.failures_skip and len(failures) > self.failures_skip
             ):
-                    continue
+                continue
 
             pushes.append(
                 {

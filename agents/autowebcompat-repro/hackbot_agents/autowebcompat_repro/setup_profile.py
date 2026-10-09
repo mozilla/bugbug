@@ -59,9 +59,9 @@ def download(url: str, dest: Path) -> None:
         amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp,
         dest.open("wb") as f
     ):
-            for chunk in resp.iter_content(chunk_size=64 * 1024):
-                if chunk:
-                    f.write(chunk)
+        for chunk in resp.iter_content(chunk_size=64 * 1024):
+            if chunk:
+                f.write(chunk)
 
 
 def extract_extension_id(xpi: Path) -> str:

@@ -92,11 +92,11 @@ def find_function_for_line(commit_hash, path, line):
                 or selected_function["start"] < function["start"]
             )
         ):
-                # We want to return the closest scope. For example, for line https://searchfox.org/mozilla-central/rev/6b8a3f804789fb865f42af54e9d2fef9dd3ec74d/browser/components/asrouter/modules/CFRPageActions.jsm#333,
-                # we have:
-                # {'path': 'browser/components/asrouter/modules/CFRPageActions.jsm', 'start': 65, 'end': 878}
-                # {'path': 'browser/components/asrouter/modules/CFRPageActions.jsm', 'start': 326, 'end': 362}
-                selected_function = function
+            # We want to return the closest scope. For example, for line https://searchfox.org/mozilla-central/rev/6b8a3f804789fb865f42af54e9d2fef9dd3ec74d/browser/components/asrouter/modules/CFRPageActions.jsm#333,
+            # we have:
+            # {'path': 'browser/components/asrouter/modules/CFRPageActions.jsm', 'start': 65, 'end': 878}
+            # {'path': 'browser/components/asrouter/modules/CFRPageActions.jsm', 'start': 326, 'end': 362}
+            selected_function = function
 
     return selected_function
 

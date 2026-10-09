@@ -239,22 +239,22 @@ async def fetch_product_component(
             streamablehttp_client(url) as (read, write, _),
             ClientSession(read, write) as session
         ):
-                await session.initialize()
-                res = await session.call_tool(
-                    "get_bugs",
-                    # `id` is not optional: `get_bugs` diffs requested against
-                    # returned ids to report inaccessible bugs, so leaving it out
-                    # of `include_fields` makes the tool itself raise KeyError.
-                    {"ids": [bug], "include_fields": "id,product,component"},
+            await session.initialize()
+            res = await session.call_tool(
+                "get_bugs",
+                # `id` is not optional: `get_bugs` diffs requested against
+                # returned ids to report inaccessible bugs, so leaving it out
+                # of `include_fields` makes the tool itself raise KeyError.
+                {"ids": [bug], "include_fields": "id,product,component"},
+            )
+            if res.isError:
+                raise RuntimeError(
+                    "".join(getattr(c, "text", "") for c in res.content)
                 )
-                if res.isError:
-                    raise RuntimeError(
-                        "".join(getattr(c, "text", "") for c in res.content)
-                    )
-                bugs = json.loads(res.content[0].text).get("bugs") or []
-                if not bugs:
-                    return None, None
-                return bugs[0].get("product"), bugs[0].get("component")
+            bugs = json.loads(res.content[0].text).get("bugs") or []
+            if not bugs:
+                return None, None
+            return bugs[0].get("product"), bugs[0].get("component")
     except Exception as e:  # - see docstring; every failure fails open
         print(
             f"[frontend_triage] component lookup failed ({type(e).__name__}: {e}); "

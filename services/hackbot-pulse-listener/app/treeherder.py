@@ -525,5 +525,5 @@ def _open_intermittent_bugs(suggestion: dict) -> list[int]:
             and not bug.get("resolution")
             and _INTERMITTENT_KEYWORD in [k.strip() for k in keywords]
         ):
-                matched.append(bug["id"])
+            matched.append(bug["id"])
     return matched

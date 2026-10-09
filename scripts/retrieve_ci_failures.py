@@ -214,7 +214,7 @@ def get_fixed_by_commit_pushes():
             backouts > 1
             and bug_id in fixed_by_commit_pushes
         ):
-                multiple_backouts.add(bug_id)
+            multiple_backouts.add(bug_id)
 
     logger.info(
         "%s cases to be removed because there were multiple backouts in the same bug.",

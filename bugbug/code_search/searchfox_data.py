@@ -238,28 +238,28 @@ def extract_function_approx(
                 and "use" in obj["syntax"].split(",")
                 and re.search(pattern, obj["pretty"])
             ):
-                        for interface in interface_rewrites:
-                            if ("%s::" % interface) in obj["pretty"]:
-                                for item in obj["pretty"].split(" "):
-                                    if ("%s::" % interface) in item:
-                                        target_sym = item
-                                if not target_sym:
-                                    print(
-                                        "ERROR: Failed to extract pretty name for interface rewriting: %s"
-                                        % obj["pretty"]
-                                    )
-                                    return None
-                                print(
-                                    "Using pretty name for interface rewriting: %s"
-                                    % target_sym
-                                )
-                                target_sym_is_pretty = True
-                                target_sym_interface = interface
-                                break
-                        if target_sym is not None:
-                            break
-                        target_sym = obj["sym"]
+                for interface in interface_rewrites:
+                    if ("%s::" % interface) in obj["pretty"]:
+                        for item in obj["pretty"].split(" "):
+                            if ("%s::" % interface) in item:
+                                target_sym = item
+                        if not target_sym:
+                            print(
+                                "ERROR: Failed to extract pretty name for interface rewriting: %s"
+                                % obj["pretty"]
+                            )
+                            return None
+                        print(
+                            "Using pretty name for interface rewriting: %s"
+                            % target_sym
+                        )
+                        target_sym_is_pretty = True
+                        target_sym_interface = interface
                         break
+                if target_sym is not None:
+                    break
+                target_sym = obj["sym"]
+                break
 
     # searchfox/363bddf92f7a2d58a5b87cac7b19a4c74c7544e5_linux64/gfx/2d/DataSurfaceHelpers.cpp:68:{"loc":"00037:36-67","source":1,"nestingRange":"39:25-56:0","syntax":"def,function","type":"already_AddRefed<DataSourceSurface> (const IntSize &, SurfaceFormat, const uint8_t *, int32_t)","pretty":"function mozilla::gfx::CreateDataSourceSurfaceFromData","sym":"_ZN7mozilla3gfx31CreateDataSourceSurfaceFromDataERKNS0_12IntSizeTypedINS0_12UnknownUnitsEEENS0_13SurfaceFormatEPKhi"}
 
