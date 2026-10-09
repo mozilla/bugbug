@@ -268,7 +268,7 @@ def reduce_configs(
             solver.Add(sum_constraint >= 1)
 
     # Choose the best set of tasks that satisfy the constraints with the lowest cost.
-    solver.Minimize(sum(_get_cost(task) * task_vars[task] for task in task_vars.keys()))
+    solver.Minimize(sum(_get_cost(task) * task_vars[task] for task in task_vars))
 
     if _solve_optimization(solver):
         return {
@@ -382,10 +382,10 @@ def select_configs(
     # group that can run either on the costly one or on a cheaper one, they'd both run
     # on the costly one (since we have to pay its setup cost anyway).
     solver.Minimize(
-        sum(10 * config_costs[c] * config_vars[c] for c in config_vars.keys())
+        sum(10 * config_costs[c] * config_vars[c] for c in config_vars)
         + sum(
             config_costs[config] * config_group_vars[(config, group)]
-            for config, group in config_group_vars.keys()
+            for config, group in config_group_vars
         )
     )
 

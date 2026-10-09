@@ -415,7 +415,7 @@ class LandingsRiskReportGenerator(object):
             try:
                 test_info = test_scheduling.get_test_info(date)
 
-                for component in test_info["tests"].keys():
+                for component in test_info["tests"]:
                     test_infos[date_str]["skips"][component] = sum(
                         1 for test in test_info["tests"][component] if "skip-if" in test
                     )

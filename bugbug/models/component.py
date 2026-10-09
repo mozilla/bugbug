@@ -267,7 +267,7 @@ class ComponentModel(BugModel):
         for product, component in self.meaningful_product_components:
             full_comp = f"{product}::{component}"
 
-            if full_comp not in bugs_number.keys():
+            if full_comp not in bugs_number:
                 logger.warning(
                     "Component %r of product %r doesn't exists, failure",
                     component,
