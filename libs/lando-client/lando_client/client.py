@@ -36,9 +36,17 @@ class LandoClient:
     def try_patches_url(self) -> str:
         return f"{self.base_url}/api/try/patches"
 
+    def repo_url(self, repo_name: str) -> str:
+        """The headless API endpoint that queues actions on a landing repo."""
+        return f"{self.base_url}/api/repo/{repo_name}"
+
     def job_url(self, job_id: int) -> str:
         """Lando's own page for a landing job (its live status)."""
         return f"{self.base_url}/landings/{job_id}"
+
+    def automation_job_url(self, job_id: int) -> str:
+        """The status of a headless API job."""
+        return f"{self.base_url}/api/job/{job_id}"
 
     def treeherder_url(self, job_id: int, repo_name: str = "try") -> str:
         """Treeherder's view of a Lando try job.
@@ -97,6 +105,40 @@ class LandoClient:
                 "job id"
             ) from exc
 
+    async def push_commits(self, repo_name: str, patches: list[str]) -> int:
+        """Land base64-encoded ``git format-patch`` commits on a repo; return the job id.
+
+        What ``lando push-commits`` does: Lando applies the commits, in order, on
+        top of the repo's current head. Needs the headless API token.
+        """
+        if not self.settings.headless_api_token:
+            raise LandoAPIError("LANDO_HEADLESS_API_TOKEN is not configured")
+        payload = {
+            "actions": [
+                {"action": "add-commit-base64", "content": patch} for patch in patches
+            ]
+        }
+        async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
+            response = await client.post(
+                self.repo_url(repo_name),
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {self.settings.headless_api_token}",
+                    "User-Agent": self.settings.user_agent,
+                },
+            )
+
+        if response.status_code >= 400:
+            raise LandoAPIError(_error_detail(response))
+
+        try:
+            return int(response.json()["job_id"])
+        except (ValueError, KeyError, TypeError) as exc:
+            raise LandoAPIError(
+                f"Lando accepted the push ({response.status_code}) but returned no "
+                "job id"
+            ) from exc
+
 
 def _error_detail(response: httpx.Response) -> str:
     """A readable message for a failed Lando response.
@@ -111,7 +153,11 @@ def _error_detail(response: httpx.Response) -> str:
         problem = None
 
     if isinstance(problem, dict):
-        parts = [str(problem[key]) for key in ("title", "detail") if problem.get(key)]
+        parts = [
+            str(problem[key])
+            for key in ("title", "detail", "details")
+            if problem.get(key)
+        ]
         if parts:
             return f"Lando returned HTTP {response.status_code}: {': '.join(parts)}"
 

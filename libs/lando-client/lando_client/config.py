@@ -26,9 +26,14 @@ class LandoSettings(BaseModel):
     ``access_token`` is an OIDC bearer token for the account that owns the
     pushes: Lando's Try endpoint authenticates the *user* (it has no API-key
     mode), and the try repository's permissions are checked against that user.
+
+    ``headless_api_token`` authenticates pushes to landing repos (autoland) through
+    the headless API, as ``lando push-commits`` does; the account it belongs to
+    needs the repo's automation permission.
     """
 
     access_token: Annotated[str, Field(min_length=1)]
+    headless_api_token: str | None = None
     url: str = "https://lando.moz.tools"
     instance_id: str | None = None
     timeout_seconds: int = 60
