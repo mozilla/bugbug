@@ -4,9 +4,8 @@ from uuid import UUID
 
 import httpx
 import pytest
-from hackbot_client import HackbotClient, RunStatus
+from hackbot_client import HackbotAPIError, HackbotClient, RunStatus
 from hackbot_client import client as client_module
-from pydantic import ValidationError
 
 RUN_ID = "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6"
 
@@ -40,6 +39,25 @@ def _capture_post(monkeypatch, response: httpx.Response) -> dict:
 
     monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
     return captured
+
+
+def _unreachable(monkeypatch) -> None:
+    """Stub httpx.AsyncClient so that every request fails before any answer."""
+
+    class _UnreachableAsyncClient:
+        def __init__(self, timeout=None):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, **kwargs):
+            raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", _UnreachableAsyncClient)
 
 
 async def test_trigger_run_posts_inputs_and_returns_typed_reference(monkeypatch):
@@ -90,14 +108,30 @@ async def test_trigger_run_omits_attribution_when_not_provided(monkeypatch):
 async def test_trigger_run_raises_for_http_errors(monkeypatch):
     _capture_post(monkeypatch, httpx.Response(401, json={"detail": "Invalid API key"}))
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(HackbotAPIError, match="HTTP 401"):
+        await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_raises_when_the_api_is_unreachable(monkeypatch):
+    _unreachable(monkeypatch)
+
+    with pytest.raises(HackbotAPIError, match="Hackbot API request failed"):
         await _client().trigger_run("bug-fix", {"bug_id": 1234})
 
 
 async def test_trigger_run_rejects_an_invalid_success_response(monkeypatch):
     _capture_post(monkeypatch, httpx.Response(201, json={"run_id": RUN_ID}))
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(HackbotAPIError, match=r"invalid run \(HTTP 201\)"):
+        await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_rejects_a_success_response_that_is_not_an_object(
+    monkeypatch,
+):
+    _capture_post(monkeypatch, httpx.Response(201, json=[]))
+
+    with pytest.raises(HackbotAPIError, match=r"invalid run \(HTTP 201\)"):
         await _client().trigger_run("bug-fix", {"bug_id": 1234})
 
 
@@ -151,10 +185,16 @@ async def test_apply_actions_returns_each_action_with_its_state(monkeypatch):
         httpx.Response(
             200,
             json=[
-                {"idx": 0, "type": "bugzilla.add_comment", "status": "applied"},
+                {
+                    "idx": 0,
+                    "type": "bugzilla.add_comment",
+                    "params": {},
+                    "status": "applied",
+                },
                 {
                     "idx": 1,
                     "type": "slack.post_message",
+                    "params": {},
                     "status": "failed",
                     "error": "channel_not_found",
                 },
@@ -179,8 +219,18 @@ async def test_apply_actions_reports_a_clean_pass_as_all_applied(monkeypatch):
         httpx.Response(
             200,
             json=[
-                {"idx": 0, "type": "bugzilla.add_comment", "status": "applied"},
-                {"idx": 1, "type": "slack.post_message", "status": "applied"},
+                {
+                    "idx": 0,
+                    "type": "bugzilla.add_comment",
+                    "params": {},
+                    "status": "applied",
+                },
+                {
+                    "idx": 1,
+                    "type": "slack.post_message",
+                    "params": {},
+                    "status": "applied",
+                },
             ],
         ),
     )
@@ -205,5 +255,22 @@ async def test_apply_actions_on_a_run_with_no_actions_is_all_applied(monkeypatch
 async def test_apply_actions_raises_for_http_errors(monkeypatch):
     _capture_post(monkeypatch, httpx.Response(404, json={"detail": "Run not found"}))
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(HackbotAPIError, match="HTTP 404"):
+        await _client().apply_actions(RUN_ID)
+
+
+async def test_apply_actions_raises_when_the_api_is_unreachable(monkeypatch):
+    _unreachable(monkeypatch)
+
+    with pytest.raises(HackbotAPIError, match="Hackbot API request failed"):
+        await _client().apply_actions(RUN_ID)
+
+
+async def test_apply_actions_rejects_an_invalid_success_response(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(200, json=[{"idx": 0, "type": "bugzilla.add_comment"}]),
+    )
+
+    with pytest.raises(HackbotAPIError, match=r"invalid action list \(HTTP 200\)"):
         await _client().apply_actions(RUN_ID)
