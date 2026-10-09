@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs
@@ -35,6 +35,10 @@ from app.schemas import RunStatus
 log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
+
+
+_CLAIMABLE_STATUSES = ("pending", "failed")
+_CLAIM_LEASE = timedelta(minutes=15)
 
 
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
@@ -184,21 +188,49 @@ async def _dispatch(
         return ActionResult.failed(str(exc))
 
 
-async def _lock_unapplied(db: AsyncSession, member_rows: list[RunAction]) -> bool:
-    """Lock an action group and return whether it still needs dispatch.
+async def _claim_for_apply(db: AsyncSession, rows: list[RunAction]) -> bool:
+    """Take ownership of every not-yet-`applied` row in `rows`, all or nothing.
 
-    Refreshing with ``FOR UPDATE`` both locks each row and replaces its stale
-    in-memory state. Locks are taken in primary-key order to avoid deadlocks and
-    remain held until the caller commits the handler result.
+    Commits the claim before any handler runs, so no connection is held across
+    a handler's HTTP call. All or nothing because a later action can reference
+    an earlier one's result, and half a chain cannot resolve those
+    placeholders. A row stuck in `applying` past `_CLAIM_LEASE` is taken over.
     """
-    for row in sorted(member_rows, key=lambda row: row.id):
-        await db.refresh(row, with_for_update=True)
+    wanted = [row.id for row in rows if row.status != "applied"]
+    if not wanted:
+        return False
 
-    if all(row.status != "applied" for row in member_rows):
-        return True
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        update(RunAction)
+        .where(
+            RunAction.id.in_(wanted),
+            or_(
+                RunAction.status.in_(_CLAIMABLE_STATUSES),
+                and_(
+                    RunAction.status == "applying",
+                    RunAction.claimed_at < now - _CLAIM_LEASE,
+                ),
+            ),
+        )
+        .values(status="applying", claimed_at=now)
+        .returning(RunAction.id)
+    )
+    claimed = set(result.scalars())
+
+    if len(claimed) != len(wanted):
+        # Rolling back un-claims whatever this statement did take, so the caller
+        # holding the rest of the chain can claim the lot on its next pass.
+        await db.rollback()
+        log.info(
+            "Not applying: %d of %d actions are already being applied elsewhere",
+            len(wanted) - len(claimed),
+            len(wanted),
+        )
+        return False
 
     await db.commit()
-    return False
+    return True
 
 
 async def _apply_pending_rows(
@@ -215,7 +247,13 @@ async def _apply_pending_rows(
     that are already `applied` (seeded from prior applies) plus ones applied
     earlier in this pass, so a later (even manual) apply can still reference an
     earlier action's result.
+
+    Claims the whole set before dispatching anything, and returns without doing
+    anything if another caller already holds part of it.
     """
+    if not await _claim_for_apply(db, [row for row, _ in rows]):
+        return
+
     results_by_ref: dict[str, dict] = {
         row.ref: row.result
         for row, _ in rows
@@ -249,21 +287,6 @@ async def _apply_pending_rows(
             [pending[i][0] for i in group_at[anchor]] if anchor is not None else [row]
         )
 
-        # The pending list above is only a snapshot. Lock and refresh the exact
-        # rows immediately before dispatch so a concurrent caller either goes
-        # first or observes the committed result and skips it.
-        if not await _lock_unapplied(db, member_rows):
-            # Preserve results revealed by the refresh so later action
-            # placeholders can still reference work done by the other caller.
-            for member in member_rows:
-                if (
-                    member.ref
-                    and member.status == "applied"
-                    and member.result is not None
-                ):
-                    results_by_ref[member.ref] = member.result
-            continue
-
         if anchor is not None:
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
@@ -283,6 +306,7 @@ async def _apply_pending_rows(
             member.status = outcome.status
             member.result = outcome.result
             member.error = outcome.error
+            member.claimed_at = None
             if applied_at is not None:
                 member.applied_at = applied_at
         await db.commit()

@@ -8,6 +8,7 @@ the manual `apply_all_pending` path — see app/actions_applier.py.
 import logging
 import uuid
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from app import actions_applier
@@ -18,6 +19,7 @@ from app.actions_applier import (
 )
 from app.agents import AGENT_REGISTRY
 from app.schemas import RunStatus
+from sqlalchemy.dialects import postgresql
 
 
 def test_resolves_known_ref_and_field():
@@ -217,39 +219,86 @@ def test_which_agents_auto_apply_without_asking_for_consent():
     assert unbounded == {"bug-fix", "test-repair"}
 
 
+class _ClaimResult:
+    def __init__(self, ids):
+        self._ids = ids
+
+    def scalars(self):
+        return iter(self._ids)
+
+
 class _FakeDB:
-    def __init__(self):
+    """Session stand-in that answers the claim UPDATE and counts commits.
+
+    `grants` narrows which row ids the claim may take, letting a test play the
+    caller that loses a race. The default grants every id the claim asks for.
+    """
+
+    def __init__(self, grants=None):
         self.commits = 0
-        self.refreshed = []
+        self.rollbacks = 0
+        self.claimed = []
+        self.statements = []
+        self._grants = grants
 
     async def commit(self):
         self.commits += 1
 
-    async def refresh(self, row, *, with_for_update=False):
-        assert with_for_update is True
-        self.refreshed.append(row.id)
+    async def rollback(self):
+        self.rollbacks += 1
 
-    async def execute(self, *a, **k):
-        raise AssertionError(
-            "ensure_action_rows should be monkeypatched in these tests"
-        )
+    async def execute(self, stmt, *a, **k):
+        self.statements.append(stmt)
+        wanted = stmt.compile(dialect=postgresql.dialect()).params["id_1"]
+        self.claimed.append(list(wanted))
+        if self._grants is None:
+            return _ClaimResult(list(wanted))
+        return _ClaimResult([i for i in wanted if i in self._grants])
 
 
-async def test_lock_unapplied_refreshes_in_id_order_with_for_update():
-    first = SimpleNamespace(id=1, status="pending")
-    second = SimpleNamespace(id=2, status="pending")
+async def test_claim_takes_every_unapplied_row_and_commits():
+    rows = [_row(0, "pending"), _row(1, "failed"), _row(2, "applied")]
     db = _FakeDB()
 
-    assert await actions_applier._lock_unapplied(db, [second, first]) is True
-    assert db.refreshed == [1, 2]
-
-
-async def test_lock_unapplied_skips_a_concurrently_applied_row():
-    row = SimpleNamespace(id=1, status="applied")
-    db = _FakeDB()
-
-    assert await actions_applier._lock_unapplied(db, [row]) is False
+    assert await actions_applier._claim_for_apply(db, rows) is True
+    # The applied row is terminal, so it is never asked for.
+    assert db.claimed == [[1, 2]]
     assert db.commits == 1
+
+
+async def test_claim_with_nothing_left_to_do_skips_the_database():
+    db = _FakeDB()
+    assert await actions_applier._claim_for_apply(db, [_row(0, "applied")]) is False
+    assert db.claimed == []
+    assert db.commits == 0
+
+
+async def test_claim_stamps_a_lease_and_takes_over_an_abandoned_row():
+    # A worker killed mid-apply leaves its rows in `applying` for good, so the
+    # claim also matches rows whose stamp has aged past the lease.
+    db = _FakeDB()
+    before = datetime.now(timezone.utc)
+
+    assert await actions_applier._claim_for_apply(db, [_row(0, "pending")]) is True
+
+    params = db.statements[0].compile(dialect=postgresql.dialect()).params
+    assert params["status"] == "applying"
+    assert params["claimed_at"] >= before
+    # The cutoff trails the stamp by exactly one lease.
+    assert params["claimed_at"] - params["claimed_at_1"] == actions_applier._CLAIM_LEASE
+    # ... and an `applying` row is a candidate, not only pending/failed ones.
+    assert params["status_2"] == "applying"
+
+
+async def test_a_partial_claim_is_rolled_back_rather_than_half_applied():
+    rows = [_row(0, "pending"), _row(1, "pending")]
+    # Another caller already holds row id 2.
+    db = _FakeDB(grants={1})
+
+    assert await actions_applier._claim_for_apply(db, rows) is False
+    assert db.rollbacks == 1
+    assert db.commits == 0
+    assert [r.status for r in rows] == ["pending", "pending"]
 
 
 def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
@@ -395,38 +444,57 @@ def _row(
         result=result,
         error=error,
         applied_at=applied_at,
+        claimed_at=None,
     )
 
 
-async def test_concurrent_apply_keeps_the_skipped_rows_result_for_later_refs(
-    monkeypatch,
-):
+async def test_a_caller_that_loses_the_claim_dispatches_nothing(monkeypatch):
+    # Two requests race. The one that cannot take the whole chain must not
+    # post anything: the winner owns every row and will apply them in order.
     handler = _RecordingHandler(
         SimpleNamespace(status="applied", result={"ok": 1}, error=None)
     )
     monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
 
-    created = _row(
-        0,
-        "pending",
-        action_type="bugzilla.create_bug",
-        ref="created",
-    )
-    comment = _row(
-        1,
-        "pending",
-        params={"text": "Created at {{actions.created.url}}"},
+    created = _row(0, "pending", action_type="bugzilla.create_bug", ref="created")
+    comment = _row(1, "pending", params={"text": "Created at {{actions.created.url}}"})
+    db = _FakeDB(grants=set())
+
+    await actions_applier._apply_pending_rows(
+        db,
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(created, []), (comment, [])],
     )
 
-    async def lock_rows(db, member_rows):
-        if member_rows == [created]:
-            # Simulate another request committing while this caller waited.
-            created.status = "applied"
-            created.result = {"url": "https://bugzilla.example/1"}
-            return False
-        return True
+    assert handler.calls == []
+    assert db.rollbacks == 1
 
-    monkeypatch.setattr(actions_applier, "_lock_unapplied", lock_rows)
+
+async def test_the_winner_applies_the_whole_chain_so_refs_still_resolve(monkeypatch):
+    # Claiming the run up front is what keeps placeholders working: one caller
+    # holds every row, so an earlier action's result is always in hand.
+    results = iter(
+        [
+            SimpleNamespace(
+                status="applied",
+                result={"url": "https://bugzilla.example/1"},
+                error=None,
+            ),
+            SimpleNamespace(status="applied", result={"ok": 1}, error=None),
+        ]
+    )
+    calls = []
+
+    async def apply(params, ctx):
+        calls.append(params)
+        return next(results)
+
+    monkeypatch.setattr(
+        actions_applier, "get_handler", lambda t: SimpleNamespace(apply=apply)
+    )
+
+    created = _row(0, "pending", action_type="bugzilla.create_bug", ref="created")
+    comment = _row(1, "pending", params={"text": "Created at {{actions.created.url}}"})
 
     await actions_applier._apply_pending_rows(
         _FakeDB(),
@@ -434,7 +502,25 @@ async def test_concurrent_apply_keeps_the_skipped_rows_result_for_later_refs(
         [(created, []), (comment, [])],
     )
 
-    assert handler.calls == [{"text": "Created at https://bugzilla.example/1"}]
+    assert calls[1] == {"text": "Created at https://bugzilla.example/1"}
+
+
+async def test_a_finished_row_no_longer_carries_a_claim(monkeypatch):
+    # Only an in-flight row should have a `claimed_at`, so the abandoned-claim
+    # check never has to care about the status alongside it.
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"ok": 1}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+    row = _row(0, "pending")
+    row.claimed_at = datetime.now(timezone.utc)
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), [(row, [])]
+    )
+
+    assert row.status == "applied"
+    assert row.claimed_at is None
 
 
 async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
