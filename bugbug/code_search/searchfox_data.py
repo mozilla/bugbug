@@ -148,13 +148,11 @@ def default_read_mc_path(path):
 
 
 def extract_source(target_sym_file, target_sym_line, target_sym_end_line, read_mc_path):
-    current_lineno = 0
     target_source = None
     end_template = "%s}"
     end = None
-    for line in read_mc_path(target_sym_file):
+    for current_lineno, line in enumerate(read_mc_path(target_sym_file), start=1):
         line = line.rstrip()
-        current_lineno += 1
         if current_lineno == target_sym_line:
             target_source = []
 
