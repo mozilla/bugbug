@@ -7,13 +7,13 @@ import logging
 
 from bugbug import utils
 from bugbug_http import ALLOW_MISSING_MODELS
-from bugbug_http.models import MODEL_CACHE, MODELS_NAMES
+from bugbug_http.models import MODEL_CACHE, MODELS_TO_DOWNLOAD
 
 LOGGER = logging.getLogger()
 
 
 def download_models():
-    for model_name in MODELS_NAMES:
+    for model_name in MODELS_TO_DOWNLOAD:
         utils.download_model(model_name)
         # Try loading the model
         try:

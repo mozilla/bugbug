@@ -23,6 +23,7 @@ MODELS = {
     "invalidcompatibilityreport": "bugbug.models.invalid_compatibility_report.InvalidCompatibilityReportModel",
     "needsdiagnosis": "bugbug.models.needsdiagnosis.NeedsDiagnosisModel",
     "performancebug": "bugbug.models.performancebug.PerformanceBugModel",
+    "perfregressionpredictor": "bugbug.models.perf_regression_predictor.PerfRegressionPredictorModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "rcatype": "bugbug.models.rcatype.RCATypeModel",
     "regression": "bugbug.models.regression.RegressionModel",
