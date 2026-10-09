@@ -14,7 +14,7 @@
     "@sentry/nextjs": "^10.74.0",
     "better-auth": "^1.6.22",
     "diff2html": "^3.4.56",
-    "next": "^15.5.22",
+    "next": "^15.5.27",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
