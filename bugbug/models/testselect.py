@@ -197,9 +197,7 @@ def _get_equivalence_sets(min_redundancy_confidence: float):
             ) -> dict[str, tuple[float, float]]:
                 return failing_together_stats[config]
 
-            configs = (
-                configs_by_group[group] if group in configs_by_group else all_configs
-            )
+            configs = configs_by_group.get(group, all_configs)
 
             equivalence_sets[group] = _generate_equivalence_sets(
                 configs, min_redundancy_confidence, load_failing_together, True
@@ -305,11 +303,7 @@ def select_configs(
     config_group_vars = {
         (config, group): solver.BoolVar(f"{group}@{config}")
         for group in groups
-        for config in (
-            all_configs_by_group[group]
-            if group in all_configs_by_group
-            else all_configs
-        )
+        for config in (all_configs_by_group.get(group, all_configs))
     }
 
     # Configs used by high-confidence groups are already committed; fix their
