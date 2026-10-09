@@ -9,6 +9,7 @@ import math
 import os
 import random
 import traceback
+import contextlib
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Any, Generator
@@ -390,10 +391,8 @@ class Retriever(object):
                     }
 
             if granularity == "group":
-                try:
+                with contextlib.suppress(StopIteration):
                     update_touched_together_gen.send(None)
-                except StopIteration:
-                    pass
 
             logger.info("saved push data nodes: %d", len(saved_nodes))
             logger.info("skipped %d (no commits in our DB)", skipped_no_commits)

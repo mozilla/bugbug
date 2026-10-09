@@ -7,6 +7,7 @@ import argparse
 import os
 import subprocess
 import tempfile
+import contextlib
 from collections import defaultdict
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from datetime import datetime, timedelta
@@ -334,10 +335,8 @@ def diff_failure_vs_fix(repo, failure_commits, fix_commits):
                 .strip()
             )
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(idx)
-            except OSError:
-                pass
 
         return subprocess.check_output(
             ["git", "-C", repo, "diff", "-w", failure_commits[-1], tree_fixed]

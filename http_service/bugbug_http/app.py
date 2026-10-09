@@ -8,6 +8,7 @@ import itertools
 import logging
 import os
 import uuid
+import contextlib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Sequence
@@ -77,7 +78,7 @@ redis_conn = Redis(
     host=url.hostname,
     port=url.port if url.port is not None else 6379,
     password=url.password,
-    ssl=True if url.scheme == "rediss" else False,
+    ssl=(url.scheme == "rediss"),
     ssl_cert_reqs=None,
 )
 
@@ -429,13 +430,12 @@ def get_result(job: JobInfo) -> Any | None:
 
     if result:
         LOGGER.debug("Found %r", result)
-        try:
+
+        # Some job results were stored before compression was enabled.
+        # We can remove the exception handling after enough time has passed
+        # since 47114f4f47db6b73214cf946377be8da945d34b5.
+        with contextlib.suppress(zstandard.ZstdError):
             result = dctx.decompress(result)
-        except zstandard.ZstdError:
-            # Some job results were stored before compression was enabled.
-            # We can remove the exception handling after enough time has passed
-            # since 47114f4f47db6b73214cf946377be8da945d34b5.
-            pass
 
         assert result is not None  # mypy thinks it could be None
         return orjson.loads(result)

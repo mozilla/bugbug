@@ -33,6 +33,7 @@ import logging
 import os
 import tempfile
 import threading
+import contextlib
 from pathlib import Path
 
 import google.auth.transport.requests
@@ -155,10 +156,8 @@ class _TokenFileRefresher:
                 handle.write(token)
             os.replace(tmp, self._token_file)
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp)
-            except OSError:
-                pass
             raise
 
     def _loop(self) -> None:
