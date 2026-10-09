@@ -17,32 +17,16 @@ PHABRICATOR_READ_TOOLS = [
     "mcp__phabricator__get_revision_diff",
 ]
 
-# Action types that the agent may record during triage/fix runs.
-TRIAGE_AND_FIX_ACTIONS = [
+# Action types that the agent may record in any bug-fix workflow.
+BUG_FIX_ACTIONS = [
     "bugzilla.update_bug",
     "bugzilla.add_comment",
     "bugzilla.add_attachment",
     "bugzilla.create_bug",
     "try_server.push",
     "phabricator.submit_patch",
-]
-
-# Action types that the agent may record during follow-up runs on a revision.
-PHABRICATOR_FOLLOW_UP_ACTIONS = [
-    "bugzilla.update_bug",
-    "bugzilla.add_attachment",
-    "bugzilla.create_bug",
-    "try_server.push",
     "phabricator.update_patch",
     "phabricator.add_comment",
-]
-
-# Action types available after a Bugzilla needinfo request.
-BUGZILLA_NEEDINFO_ACTIONS = [
-    "bugzilla.update_bug",
-    "bugzilla.add_comment",
-    "bugzilla.add_attachment",
-    "phabricator.submit_patch",
 ]
 
 # Firefox build/test tools.
