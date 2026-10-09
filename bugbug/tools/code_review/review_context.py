@@ -173,9 +173,7 @@ def _file_matches(predicate: FilePredicate, path: str) -> bool:
         fnmatch.fnmatchcase(path, pattern) for pattern in predicate.exclude
     ):
         return False
-    if predicate.ext and not any(path.endswith(ext) for ext in predicate.ext):
-        return False
-    return True
+    return not (predicate.ext and not any(path.endswith(ext) for ext in predicate.ext))
 
 
 def _bugzilla_matches(

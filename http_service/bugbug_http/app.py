@@ -411,10 +411,7 @@ def is_prediction_invalidated(job, change_time):
     # If we have no last changed time, the bug was not classified yet or the bug was classified by an old worker
     if not saved_change_time:
         # We can have a result without a cache time
-        if redis_conn.exists(job.result_key):
-            return True
-
-        return False
+        return bool(redis_conn.exists(job.result_key))
 
     return saved_change_time.decode("utf-8") != change_time
 

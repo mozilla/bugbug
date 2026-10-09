@@ -746,10 +746,9 @@ class IsPerformanceBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return bool(
+            any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
+        )
 
 
 class IsMemoryBug(SingleBugFeature):
@@ -782,10 +781,9 @@ class IsMemoryBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return bool(
+            any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
+        )
 
 
 class IsPowerBug(SingleBugFeature):
@@ -809,10 +807,9 @@ class IsPowerBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return bool(
+            any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
+        )
 
 
 class IsSecurityBug(SingleBugFeature):
@@ -837,10 +834,9 @@ class IsSecurityBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return bool(
+            any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
+        )
 
 
 class IsCrashBug(SingleBugFeature):
@@ -861,14 +857,13 @@ class IsCrashBug(SingleBugFeature):
         if bug.get("cf_crash_signature") and "[@" in bug["cf_crash_signature"]:
             return True
 
-        if any(
-            keyword.startswith(prefix)
-            for keyword in bug["keywords"]
-            for prefix in self.keyword_prefixes
-        ):
-            return True
-
-        return False
+        return bool(
+            any(
+                keyword.startswith(prefix)
+                for keyword in bug["keywords"]
+                for prefix in self.keyword_prefixes
+            )
+        )
 
 
 class BugTypes(SingleBugFeature):
