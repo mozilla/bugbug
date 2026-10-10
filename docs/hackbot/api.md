@@ -23,6 +23,13 @@ user's email, stored as `requested_by` — the caller is a trusted service (the 
 is attribution, not authentication. It also takes a `dedupe_key` query parameter, which
 decides whether the request starts a run at all (see [Deduplication](#deduplication)).
 
+Every agent input schema includes `require_review`, which defaults to `false`. When set,
+the run's actions stay pending for manual approval, except action types the agent lists
+in `always_apply_actions`; otherwise, the agent's existing auto-apply policy decides. The
+value is stored with the run inputs so it remains available at completion, but it is not
+forwarded to the agent environment or prompt. Retriggers preserve the value because they
+reuse the original inputs.
+
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.
 

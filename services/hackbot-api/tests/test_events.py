@@ -6,7 +6,10 @@ a Cloud Run Jobs `system_event` completion LogEntry (routed via a logging sink).
 
 import base64
 import json
+import uuid
+from types import SimpleNamespace
 
+from app.routers import events
 from app.routers.events import (
     _decode_pubsub_push_body,
     _execution_name_from_completion_log,
@@ -73,3 +76,51 @@ def test_execution_name_falls_back_to_labels():
 def test_execution_name_missing():
     assert _execution_name_from_completion_log({"protoPayload": {}}) is None
     assert _execution_name_from_completion_log({}) is None
+
+
+class _Request:
+    def __init__(self, payload: dict):
+        self._body = _push_envelope(payload)
+
+    async def json(self):
+        return self._body
+
+
+class _DB:
+    def __init__(self, run):
+        self.run = run
+
+    async def get(self, _model, _run_id):
+        return self.run
+
+
+async def test_apply_actions_event_passes_review_flag(monkeypatch):
+    run_id = uuid.uuid4()
+    run = SimpleNamespace(run_id=run_id)
+    captured = []
+
+    async def fake_on_completed(db, completed_run, require_review):
+        captured.append((db, completed_run, require_review))
+
+    monkeypatch.setattr(events, "on_run_completed", fake_on_completed)
+    db = _DB(run)
+    await events.apply_run_actions(
+        _Request({"run_id": str(run_id), "require_review": True}),
+        db,
+    )
+
+    assert captured == [(db, run, True)]
+
+
+async def test_apply_actions_event_without_flag_passes_none(monkeypatch):
+    run_id = uuid.uuid4()
+    run = SimpleNamespace(run_id=run_id)
+    captured = []
+
+    async def fake_on_completed(_db, _run, require_review):
+        captured.append(require_review)
+
+    monkeypatch.setattr(events, "on_run_completed", fake_on_completed)
+    await events.apply_run_actions(_Request({"run_id": str(run_id)}), _DB(run))
+
+    assert captured == [None]

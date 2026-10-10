@@ -24,6 +24,7 @@ class _FakeRun:
     agent: str = "bug-fix"
     status: str = RunStatus.pending.value
     execution_name: str | None = "projects/p/locations/l/jobs/j/executions/e"
+    inputs: dict = field(default_factory=lambda: {"require_review": False})
     artifacts: list = field(default_factory=list)
     summary: dict | None = None
     error: str | None = None
@@ -42,8 +43,8 @@ class _FakeDB:
 def _no_publish(monkeypatch):
     published = []
 
-    async def fake_publish(run_id, agent, status):
-        published.append((run_id, agent, status))
+    async def fake_publish(run_id, agent, status, require_review):
+        published.append((run_id, agent, status, require_review))
 
     monkeypatch.setattr(pubsub, "publish_run_completed", fake_publish)
     return published
@@ -94,7 +95,9 @@ async def test_finalizes_succeeded_run(monkeypatch, _no_publish):
     assert run.status == RunStatus.succeeded.value
     assert run.finalized_at is not None
     assert run.artifacts == [{"name": "summary.json", "size": 10, "content_type": None}]
-    assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+    assert _no_publish == [
+        (str(run.run_id), run.agent, RunStatus.succeeded.value, False)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -207,7 +210,9 @@ async def test_recovers_status_from_summary_when_execution_is_gone(
 
     assert run.status == RunStatus.succeeded.value
     assert run.finalized_at is not None
-    assert _no_publish == [(str(run.run_id), run.agent, RunStatus.succeeded.value)]
+    assert _no_publish == [
+        (str(run.run_id), run.agent, RunStatus.succeeded.value, False)
+    ]
 
 
 async def test_gone_execution_reports_summary_error(monkeypatch):
@@ -261,3 +266,19 @@ async def test_run_without_execution_name_is_failed_not_asserted(monkeypatch):
     assert run.error == "Run was never associated with an execution"
     assert run.finalized_at is not None
     assert db.commits == 1
+
+
+async def test_publishes_no_review_flag_for_an_agent_without_one(
+    monkeypatch, _no_publish
+):
+    # uplift-resolve's inputs don't extend `AgentInputs`, so its runs carry no flag.
+    run = _FakeRun(agent="uplift-resolve", inputs={"target_branch": "beta"})
+    monkeypatch.setattr(jobs, "get_execution_status", _async(ExecutionStatus.succeeded))
+    monkeypatch.setattr(gcs, "read_summary", _async(RunSummary(status="ok")))
+    monkeypatch.setattr(gcs, "list_artifacts", _async([]))
+
+    await finalize_run(_FakeDB(), run)
+
+    assert _no_publish == [
+        (str(run.run_id), run.agent, RunStatus.succeeded.value, None)
+    ]

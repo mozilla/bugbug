@@ -40,14 +40,16 @@ async def test_publish_run_completed_publishes_filterable_attributes(monkeypatch
 
     monkeypatch.setattr(pubsub, "_publish_sync", fake_sync)
 
-    await pubsub.publish_run_completed("run-1", "bug-fix", "failed")
+    await pubsub.publish_run_completed("run-1", "bug-fix", "failed", True)
 
     assert captured["topic"] == pubsub.settings.run_events_topic
     # The keys the applier subscription filter matches on must be present.
     assert captured["attributes"]["event_type"] == "run.completed"
     assert captured["attributes"]["status"] == "failed"
     assert captured["attributes"]["agent"] == "bug-fix"
-    assert json.loads(captured["data"])["run_id"] == "run-1"
+    payload = json.loads(captured["data"])
+    assert payload["run_id"] == "run-1"
+    assert payload["require_review"] is True
 
 
 async def test_publish_failure_is_swallowed(monkeypatch):
@@ -57,4 +59,4 @@ async def test_publish_failure_is_swallowed(monkeypatch):
     monkeypatch.setattr(pubsub, "_publish_sync", boom)
     # Best-effort: a publish failure must not propagate (run is already
     # finalized before this is called).
-    await pubsub.publish_run_completed("run-1", "bug-fix", "succeeded")
+    await pubsub.publish_run_completed("run-1", "bug-fix", "succeeded", "auto")
