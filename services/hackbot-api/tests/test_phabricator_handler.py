@@ -11,7 +11,7 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from app.action_handlers import ApplyContext, phabricator_handler
+from app.action_handlers import ApplyContext, ArtifactTooLargeError, phabricator_handler
 from app.action_handlers.registry import PATCH_ACTION_TYPES, get_handler
 
 
@@ -429,7 +429,29 @@ async def test_missing_artifact_fails(handler, params):
     ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
     result = await getattr(phabricator_handler, handler)().apply(params, ctx)
     assert result.status == "failed"
-    assert "No Phabricator submission artifact" in result.error
+    assert "Could not load the Phabricator submission artifact" in result.error
+
+
+@pytest.mark.parametrize(
+    "handler, params",
+    [
+        ("SubmitPatchHandler", {"bug_id": 1, "title": "x"}),
+        ("UpdatePatchHandler", {"revision_id": 7}),
+    ],
+)
+async def test_oversized_artifact_is_not_submitted(monkeypatch, handler, params):
+    async def download(key):
+        raise ArtifactTooLargeError(key, 100 * 1024 * 1024, 50 * 1024 * 1024)
+
+    conduit = AsyncMock()
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", conduit)
+
+    ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
+    result = await getattr(phabricator_handler, handler)().apply(params, ctx)
+
+    assert result.status == "failed"
+    assert "over the 50.0 MiB limit" in result.error
+    conduit.assert_not_called()
 
 
 async def test_submit_patch_conduit_error_fails(monkeypatch):

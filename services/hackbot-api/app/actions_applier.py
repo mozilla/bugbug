@@ -169,8 +169,8 @@ async def _dispatch(
 
     ctx = ApplyContext(
         run_id=str(run.run_id),
-        download_artifact=lambda key, run_id=str(run.run_id): (
-            gcs.download_artifact_bytes(run_id, key)
+        download_artifact=lambda key, max_bytes=None, run_id=str(run.run_id): (
+            gcs.download_artifact_bytes(run_id, key, max_bytes=max_bytes)
         ),
         attachments=attachments,
         agent=run.agent,

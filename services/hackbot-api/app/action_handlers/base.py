@@ -5,6 +5,19 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
+class ArtifactTooLargeError(Exception):
+    """An artifact is bigger than the caller is willing to download."""
+
+    def __init__(self, key: str, size: int, max_bytes: int) -> None:
+        super().__init__(
+            f"Artifact {key} is {size / 1024 / 1024:.1f} MiB, over the "
+            f"{max_bytes / 1024 / 1024:.1f} MiB limit"
+        )
+        self.key = key
+        self.size = size
+        self.max_bytes = max_bytes
+
+
 @dataclass
 class ApplyContext:
     """Everything an :class:`ActionHandler` needs from the run.
@@ -15,11 +28,16 @@ class ApplyContext:
     ``/internal/events/apply-run-actions`` route) — so this package stays free of
     a dependency on any particular storage backend. Async, matching
     hackbot-api's own GCS wrappers and ``ActionHandler.apply`` itself.
+
+    ``download_artifact(key, max_bytes=None)`` raises
+    :class:`ArtifactTooLargeError` instead of downloading an artifact bigger than
+    ``max_bytes``, so an oversized artifact is never loaded into memory. Without
+    ``max_bytes`` a default limit applies; a handler passes its own to change it.
     """
 
     run_id: str
     agent: str
-    download_artifact: Callable[[str], Awaitable[bytes]]
+    download_artifact: Callable[..., Awaitable[bytes]]
     attachments: list[dict[str, str]] = field(default_factory=list)
 
     def artifact_key(self, name: str) -> str | None:
