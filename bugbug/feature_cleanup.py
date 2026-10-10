@@ -179,7 +179,7 @@ class synonyms(object):
             for synonym in synonym_list
         }
         self.pattern = re.compile(
-            r"|".join(rf"\b{synonym}\b" for synonym in self.synonyms_dict.keys()),
+            r"|".join(rf"\b{synonym}\b" for synonym in self.synonyms_dict),
             flags=re.IGNORECASE,
         )
 

@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import json
 import logging
 import os
@@ -338,10 +339,9 @@ def mock_get_config_specific_groups(
     ]
     past_failures_data.close()
 
-    try:
+    with contextlib.suppress(AssertionError):
         test_scheduling.close_failing_together_db("config_group")
-    except AssertionError:
-        pass
+
     failing_together = test_scheduling.get_failing_together_db("config_group", False)
     failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
         ["test-linux1804-64/opt-*", "test-windows10/debug-*", "test-windows10/opt-*"]
@@ -397,10 +397,9 @@ def mock_schedule_tests_classify(
         ]
         past_failures_data.close()
 
-    try:
+    with contextlib.suppress(AssertionError):
         test_scheduling.close_failing_together_db("label")
-    except AssertionError:
-        pass
+
     failing_together = test_scheduling.get_failing_together_db("label", False)
     failing_together[b"test-linux1804-64/opt"] = pickle.dumps(
         {
@@ -409,10 +408,9 @@ def mock_schedule_tests_classify(
     )
     test_scheduling.close_failing_together_db("label")
 
-    try:
+    with contextlib.suppress(AssertionError):
         test_scheduling.close_failing_together_db("config_group")
-    except AssertionError:
-        pass
+
     failing_together = test_scheduling.get_failing_together_db("config_group", False)
     failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
         ["test-linux1804-64/opt", "test-windows10/debug", "test-windows10/opt"]
@@ -444,10 +442,9 @@ def mock_schedule_tests_classify(
     )
     test_scheduling.close_failing_together_db("config_group")
 
-    try:
+    with contextlib.suppress(AssertionError):
         test_scheduling.close_touched_together_db()
-    except AssertionError:
-        pass
+
     test_scheduling.get_touched_together_db(False)
     test_scheduling.close_touched_together_db()
 

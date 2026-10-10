@@ -777,11 +777,7 @@ def update_touched_together(
     """
     runnable_dirs = set(runnable_dirs)
     touched_together = get_touched_together_db(False)
-    last_analyzed = (
-        touched_together[b"last_analyzed"]
-        if b"last_analyzed" in touched_together
-        else None
-    )
+    last_analyzed = touched_together.get(b"last_analyzed")
 
     # We can start once we get to the last revision we added in the previous run.
     can_start = last_analyzed is None
@@ -1192,7 +1188,7 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
 
             # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
             if "DEFAULT" not in data and not any(
-                key.startswith("test") for key in data.keys()
+                key.startswith("test") for key in data
             ):
                 continue
 

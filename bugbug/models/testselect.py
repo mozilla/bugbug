@@ -163,10 +163,7 @@ def _generate_equivalence_sets(
             try:
                 support, confidence = failing_together_stats[task2]
             except KeyError:
-                if not assume_redundant:
-                    confidence = 0.0
-                else:
-                    confidence = 1.0
+                confidence = 0.0 if not assume_redundant else 1.0
 
             if confidence >= min_redundancy_confidence:
                 add_to_groups(task1, task2)
@@ -200,9 +197,7 @@ def _get_equivalence_sets(min_redundancy_confidence: float):
             ) -> dict[str, tuple[float, float]]:
                 return failing_together_stats[config]
 
-            configs = (
-                configs_by_group[group] if group in configs_by_group else all_configs
-            )
+            configs = configs_by_group.get(group, all_configs)
 
             equivalence_sets[group] = _generate_equivalence_sets(
                 configs, min_redundancy_confidence, load_failing_together, True
@@ -271,7 +266,7 @@ def reduce_configs(
             solver.Add(sum_constraint >= 1)
 
     # Choose the best set of tasks that satisfy the constraints with the lowest cost.
-    solver.Minimize(sum(_get_cost(task) * task_vars[task] for task in task_vars.keys()))
+    solver.Minimize(sum(_get_cost(task) * task_vars[task] for task in task_vars))
 
     if _solve_optimization(solver):
         return {
@@ -308,11 +303,7 @@ def select_configs(
     config_group_vars = {
         (config, group): solver.BoolVar(f"{group}@{config}")
         for group in groups
-        for config in (
-            all_configs_by_group[group]
-            if group in all_configs_by_group
-            else all_configs
-        )
+        for config in all_configs_by_group.get(group, all_configs)
     }
 
     # Configs used by high-confidence groups are already committed; fix their
@@ -385,10 +376,10 @@ def select_configs(
     # group that can run either on the costly one or on a cheaper one, they'd both run
     # on the costly one (since we have to pay its setup cost anyway).
     solver.Minimize(
-        sum(10 * config_costs[c] * config_vars[c] for c in config_vars.keys())
+        sum(10 * config_costs[c] * config_vars[c] for c in config_vars)
         + sum(
             config_costs[config] * config_group_vars[(config, group)]
-            for config, group in config_group_vars.keys()
+            for config, group in config_group_vars
         )
     )
 
@@ -663,9 +654,12 @@ class TestSelectModel(Model):
                 else:
                     passes.append(name)
 
-            if apply_filters:
-                if self.failures_skip and len(failures) > self.failures_skip:
-                    continue
+            if (
+                apply_filters
+                and self.failures_skip
+                and len(failures) > self.failures_skip
+            ):
+                continue
 
             pushes.append(
                 {

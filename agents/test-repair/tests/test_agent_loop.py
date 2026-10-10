@@ -304,7 +304,7 @@ def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
     assert not ACTION_TOOLS & set(analysis_opts.allowed_tools)
     assert "actions" not in analysis_opts.mcp_servers
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "actions" in fix_opts.mcp_servers
 
 
@@ -353,7 +353,7 @@ def test_the_culprits_subject_stands_in_for_a_missing_verdict_bug(
         options_out=options,
         actions_recorder=ActionsRecorder(),
     )
-    assert ACTION_TOOLS <= set(options[1].allowed_tools)
+    assert set(options[1].allowed_tools) >= ACTION_TOOLS
     assert "bug_id=555" in calls[1]
 
 

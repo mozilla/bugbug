@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import gzip
 import itertools
 import logging
@@ -77,7 +78,7 @@ redis_conn = Redis(
     host=url.hostname,
     port=url.port if url.port is not None else 6379,
     password=url.password,
-    ssl=True if url.scheme == "rediss" else False,
+    ssl=(url.scheme == "rediss"),
     ssl_cert_reqs=None,
 )
 
@@ -410,10 +411,7 @@ def is_prediction_invalidated(job, change_time):
     # If we have no last changed time, the bug was not classified yet or the bug was classified by an old worker
     if not saved_change_time:
         # We can have a result without a cache time
-        if redis_conn.exists(job.result_key):
-            return True
-
-        return False
+        return bool(redis_conn.exists(job.result_key))
 
     return saved_change_time.decode("utf-8") != change_time
 
@@ -432,13 +430,12 @@ def get_result(job: JobInfo) -> Any | None:
 
     if result:
         LOGGER.debug("Found %r", result)
-        try:
+
+        # Some job results were stored before compression was enabled.
+        # We can remove the exception handling after enough time has passed
+        # since 47114f4f47db6b73214cf946377be8da945d34b5.
+        with contextlib.suppress(zstandard.ZstdError):
             result = dctx.decompress(result)
-        except zstandard.ZstdError:
-            # Some job results were stored before compression was enabled.
-            # We can remove the exception handling after enough time has passed
-            # since 47114f4f47db6b73214cf946377be8da945d34b5.
-            pass
 
         assert result is not None  # mypy thinks it could be None
         return orjson.loads(result)

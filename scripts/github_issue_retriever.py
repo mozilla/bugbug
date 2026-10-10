@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import contextlib
 from logging import getLogger
 
 import requests
@@ -73,10 +74,8 @@ class Retriever(object):
         last_modified = None
         db.download(self.github.db_path)
 
-        try:
+        with contextlib.suppress(db.LastModifiedNotAvailable):
             last_modified = db.last_modified(self.github.db_path)
-        except db.LastModifiedNotAvailable:
-            pass
 
         if last_modified:
             logger.info(

@@ -14,6 +14,7 @@ analysis artifacts.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import subprocess
@@ -439,10 +440,9 @@ async def _run_session(
                         and not block.is_error
                     ):
                         name = pending.pop(block.tool_use_id)
-                        try:
+                        with contextlib.suppress(ValueError, TypeError):
                             captured[name] = json.loads(_result_text(block))
-                        except (ValueError, TypeError):
-                            pass
+
             elif isinstance(msg, ResultMessage):
                 result_msg = msg
     return result_msg

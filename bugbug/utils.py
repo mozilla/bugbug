@@ -314,9 +314,8 @@ def zstd_compress(path: str) -> None:
             "%s. Falling back to zstandard API, which could be slower.", error
         )
         cctx = zstandard.ZstdCompressor()
-        with open(path, "rb") as input_f:
-            with open(f"{path}.zst", "wb") as output_f:
-                cctx.copy_stream(input_f, output_f)
+        with open(path, "rb") as input_f, open(f"{path}.zst", "wb") as output_f:
+            cctx.copy_stream(input_f, output_f)
 
 
 def zstd_decompress(path: str) -> None:
@@ -330,25 +329,28 @@ def zstd_decompress(path: str) -> None:
             "%s. Falling back to zstandard API, which could be slower.", error
         )
         dctx = zstandard.ZstdDecompressor()
-        with open(f"{path}.zst", "rb") as input_f:
-            with open(path, "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
+        with open(f"{path}.zst", "rb") as input_f, open(path, "wb") as output_f:
+            dctx.copy_stream(input_f, output_f)
 
 
 @contextmanager
 def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
-        with open(path, "wb") as f:
-            with cctx.stream_writer(f) as compressor:
-                with tarfile.open(mode="w|", fileobj=compressor) as tar:
-                    yield tar
+        with (
+            open(path, "wb") as output_file,
+            cctx.stream_writer(output_file) as compressor,
+            tarfile.open(mode="w|", fileobj=compressor) as tar,
+        ):
+            yield tar
     elif mode == "r":
         dctx = zstandard.ZstdDecompressor()
-        with open(path, "rb") as f:
-            with dctx.stream_reader(f) as reader:
-                with tarfile.open(mode="r|", fileobj=reader) as tar:
-                    yield tar
+        with (
+            open(path, "rb") as input_file,
+            dctx.stream_reader(input_file) as reader,
+            tarfile.open(mode="r|", fileobj=reader) as tar,
+        ):
+            yield tar
     else:
         raise AssertionError(f"Unexpected mode: {mode}")
 
@@ -498,6 +500,9 @@ class LMDBDict:
         for key, _value in cursor:
             yield key.tobytes()
 
+    def get(self, key: bytes, default: Any = None) -> Any:
+        return self.txn.get(key, default)
+
 
 def get_free_tcp_port() -> int:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -590,10 +595,7 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
             return True
 
         # Don't analyze changesets which simply specify try parameters.
-        if changeset["files"] == ["try_task_config.json"]:
-            return True
-
-        return False
+        return changeset["files"] == ["try_task_config.json"]
 
     return [
         c["node"].encode("ascii")

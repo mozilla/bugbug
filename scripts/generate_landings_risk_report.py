@@ -415,7 +415,7 @@ class LandingsRiskReportGenerator(object):
             try:
                 test_info = test_scheduling.get_test_info(date)
 
-                for component in test_info["tests"].keys():
+                for component in test_info["tests"]:
                     test_infos[date_str]["skips"][component] = sum(
                         1 for test in test_info["tests"][component] if "skip-if" in test
                     )
@@ -1128,38 +1128,44 @@ def notification(days: int) -> None:
             elif bug["assignee"] is None:
                 cur_team_data["unassigned_new_regressions"] += 1
 
-        if creation_date > datetime.utcnow() - relativedelta(weeks=2):
-            if bug["regression"] and not bug["fixed"]:
-                if bug["team"] == "Compiler and Development Tools":
-                    print("Unfixed regression: {}".format(bug["id"]))
-                cur_team_data["unfixed_regressions"].append(bug)
+        if (
+            creation_date > datetime.utcnow() - relativedelta(weeks=2)
+            and bug["regression"]
+            and not bug["fixed"]
+        ):
+            if bug["team"] == "Compiler and Development Tools":
+                print("Unfixed regression: {}".format(bug["id"]))
+            cur_team_data["unfixed_regressions"].append(bug)
 
-        if creation_date > datetime.utcnow() - relativedelta(days=days):
-            if bug["regression"] and not bug["fixed"]:
-                cur_team_data["carryover_regressions"] += 1
+        if (
+            creation_date > datetime.utcnow() - relativedelta(days=days)
+            and bug["regression"]
+            and not bug["fixed"]
+        ):
+            cur_team_data["carryover_regressions"] += 1
 
-                if bug["team"] == "DOM":
-                    carrytest.add(bug["id"])
+            if bug["team"] == "DOM":
+                carrytest.add(bug["id"])
 
-                full_bug = bug_map[bug["id"]]
-                if (
-                    "stalled" not in full_bug["keywords"]
-                    and "intermittent-failure" not in full_bug["keywords"]
-                ):
-                    for version in [nightly_ver, beta_ver, release_ver]:
-                        if (
-                            f"cf_status_firefox{version}" in full_bug
-                            and full_bug[f"cf_status_firefox{version}"] == "affected"
-                            and (
-                                f"cf_tracking_firefox{version}" not in full_bug
-                                or full_bug[f"cf_tracking_firefox{version}"] != "-"
-                            )
-                            and f"cf_status_firefox{version - 1}" in full_bug
-                            and full_bug[f"cf_status_firefox{version - 1}"]
-                            not in ("unaffected", "?", "---")
-                        ):
-                            cur_team_data["affecting_carryover_regressions"].append(bug)
-                            break
+            full_bug = bug_map[bug["id"]]
+            if (
+                "stalled" not in full_bug["keywords"]
+                and "intermittent-failure" not in full_bug["keywords"]
+            ):
+                for version in [nightly_ver, beta_ver, release_ver]:
+                    if (
+                        f"cf_status_firefox{version}" in full_bug
+                        and full_bug[f"cf_status_firefox{version}"] == "affected"
+                        and (
+                            f"cf_tracking_firefox{version}" not in full_bug
+                            or full_bug[f"cf_tracking_firefox{version}"] != "-"
+                        )
+                        and f"cf_status_firefox{version - 1}" in full_bug
+                        and full_bug[f"cf_status_firefox{version - 1}"]
+                        not in ("unaffected", "?", "---")
+                    ):
+                        cur_team_data["affecting_carryover_regressions"].append(bug)
+                        break
 
     for bug in all_s1_s2_bugs:
         if bug["status"] in ("VERIFIED", "RESOLVED"):
@@ -1381,10 +1387,7 @@ def notification(days: int) -> None:
     def get_top_crashes(team: str, channel: str) -> str | None:
         top_crashes = []
 
-        if team in super_teams:
-            teams = set(super_teams[team])
-        else:
-            teams = {team}
+        teams = set(super_teams.get(team, [team]))
 
         for signature, data in crash_signatures[channel].items():
             bugs = [
@@ -1798,10 +1801,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
                 team: str = team,
             ) -> dict[str, dict]:
                 start_date = datetime.utcnow() - period
-                if team in super_teams:
-                    me_teams = super_teams[team]
-                else:
-                    me_teams = [team]
+                me_teams = super_teams.get(team, [team])
                 return bugzilla.calculate_maintenance_effectiveness_indicator(
                     me_teams, start_date, datetime.utcnow()
                 )

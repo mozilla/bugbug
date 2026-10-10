@@ -381,7 +381,7 @@ def test_a_held_run_says_its_analysis_is_not_on_the_bug():
     assert any(b["type"] == "actions" for b in blocks)
     # It says the analysis is not on the bug, in both renderings.
     assert HELD_NOTE in text
-    assert any(HELD_NOTE == b.get("text", {}).get("text") for b in blocks)
+    assert any(b.get("text", {}).get("text") == HELD_NOTE for b in blocks)
 
 
 def test_a_run_with_nothing_to_fix_still_reports():

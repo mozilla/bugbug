@@ -29,6 +29,7 @@ See https://platform.claude.com/docs/en/manage-claude/wif-providers/gcp
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import tempfile
@@ -155,10 +156,8 @@ class _TokenFileRefresher:
                 handle.write(token)
             os.replace(tmp, self._token_file)
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp)
-            except OSError:
-                pass
             raise
 
     def _loop(self) -> None:
