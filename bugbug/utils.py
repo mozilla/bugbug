@@ -500,6 +500,10 @@ class LMDBDict:
         for key, _value in cursor:
             yield key.tobytes()
 
+    def get(self, key: bytes, default: Any = None) -> Any:
+        return self.txn.get(key, default)
+
+
 
 def get_free_tcp_port() -> int:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
