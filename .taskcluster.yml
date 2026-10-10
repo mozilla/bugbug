@@ -287,6 +287,139 @@ tasks:
                 name: bugbug hackbot-ui tests
                 description: bugbug hackbot-ui tests
 
+        # Agent images use BuildKit features and a non-final target, which taskboot's
+        # build commands don't support, so call podman (what taskboot uses) directly.
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("bug_fix_image_build") }
+              workerType: ci
+              payload:
+                capabilities:
+                  privileged: true
+                image: "${taskboot_image}"
+                command:
+                  - "/bin/sh"
+                  - "-cxe"
+                  - "git clone --quiet ${repository} /code &&
+                    cd /code &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    podman build --target agent -f agents/bug-fix/Dockerfile -t mozilla/bugbug-hackbot-agent-bug-fix:latest . &&
+                    mkdir /images &&
+                    podman save --format docker-archive mozilla/bugbug-hackbot-agent-bug-fix:latest | zstd -q -o /images/bugbug-hackbot-agent-bug-fix.tar.zst"
+                artifacts:
+                  public/bug-fix-agent:
+                    expires: { $fromNow: "2 weeks" }
+                    path: /images
+                    type: directory
+              scopes:
+                - docker-worker:capability:privileged
+              metadata:
+                name: bugbug bug-fix agent image build
+                description: bugbug bug-fix agent image build
+
+        # Runs inside the image, where the entrypoint has started the display and
+        # audio services. The tests download Firefox, minidump-stackwalk and Python
+        # packages, so failures are retried once to ride out network hiccups.
+        # TASKCLUSTER_ROOT_URL is unset as it is where the agent runs: mach would
+        # otherwise look Firefox's toolchains up on this cluster.
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("bug_fix_image_tests") }
+              dependencies:
+                - { $eval: as_slugid("bug_fix_image_build") }
+              payload:
+                image:
+                  type: task-image
+                  path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                  taskId: { $eval: as_slugid("bug_fix_image_build") }
+                command:
+                  - "/bin/bash"
+                  - "-cx"
+                  - "git clone --quiet ${repository} /tmp/bugbug &&
+                    cd /tmp/bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 &&
+                    cd agents/bug-fix &&
+                    unset TASKCLUSTER_ROOT_URL &&
+                    export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                    (python -m pytest -v -rs tests/test_image.py ||
+                    python -m pytest -v -rs --last-failed tests/test_image.py)"
+              metadata:
+                name: bugbug bug-fix agent image tests
+                description: bugbug bug-fix agent image tests
+
+        # Bootstraps a Firefox checkout, makes an artifact build and runs tests in
+        # it. This mostly breaks because of changes in Firefox, so it runs after
+        # merges rather than on every pull request.
+        # TEMPORARY: also on pull requests, to verify it on this PR. Drop the
+        # pull request condition before merging.
+        - $if: '(tasks_for == "github-push" && head_branch == "refs/heads/master") || tasks_for[:19] == "github-pull-request"'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("bug_fix_image_slow_tests") }
+                dependencies:
+                  - { $eval: as_slugid("bug_fix_image_build") }
+                workerType: compute-large
+                payload:
+                  env:
+                    BUG_FIX_IMAGE_SLOW: "1"
+                  image:
+                    type: task-image
+                    path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                    taskId: { $eval: as_slugid("bug_fix_image_build") }
+                  command:
+                    - "/bin/bash"
+                    - "-cx"
+                    - "git clone --quiet ${repository} /tmp/bugbug &&
+                      cd /tmp/bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 &&
+                      cd agents/bug-fix &&
+                      unset TASKCLUSTER_ROOT_URL &&
+                      export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                      (python -m pytest -s -v -rs tests/test_image.py -k artifact_build ||
+                      python -m pytest -s -v -rs --last-failed tests/test_image.py -k artifact_build)"
+                metadata:
+                  name: bugbug bug-fix agent image slow tests
+                  description: bugbug bug-fix agent image slow tests
+
+        # Like the slow tests, but a full build with the agent's own mozconfig, as
+        # the agent makes. It takes hours, so a failure is not retried.
+        # TEMPORARY: also on pull requests, to verify it on this PR. Drop the
+        # pull request condition before merging.
+        - $if: '(tasks_for == "github-push" && head_branch == "refs/heads/master") || tasks_for[:19] == "github-pull-request"'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("bug_fix_image_full_build_tests") }
+                dependencies:
+                  - { $eval: as_slugid("bug_fix_image_build") }
+                deadline: { $fromNow: "8 hours" }
+                workerType: compute-super-large
+                payload:
+                  maxRunTime: 21600
+                  env:
+                    BUG_FIX_IMAGE_FULL_BUILD: "1"
+                  image:
+                    type: task-image
+                    path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                    taskId: { $eval: as_slugid("bug_fix_image_build") }
+                  command:
+                    - "/bin/bash"
+                    - "-cx"
+                    - "git clone --quiet ${repository} /tmp/bugbug &&
+                      cd /tmp/bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 &&
+                      cd agents/bug-fix &&
+                      unset TASKCLUSTER_ROOT_URL &&
+                      export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                      python -m pytest -s -v -rs tests/test_image.py -k full_build"
+                metadata:
+                  name: bugbug bug-fix agent image full build tests
+                  description: bugbug bug-fix agent image full build tests
+
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
             $mergeDeep:
