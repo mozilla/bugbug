@@ -9,8 +9,7 @@ checkout_path = "/workspace/firefox"
 enabled = true
 objdir = "objdir-test-repair"
 
-# Infrastructure this agent runs on, applied by Terraform in
-# mozilla/webservices-infra (see tools/hackbot-deploy). Changing anything here
+# Infrastructure this agent runs on, applied by Terraform. Changing anything here
 # changes the agent's shape and goes through an infra PR; the image ships on
 # its own.
 [deploy]

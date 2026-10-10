@@ -5,8 +5,7 @@ checkout_path = "/workspace/firefox"
 # No [firefox] table: this agent does read-only triage and planning. It never
 # builds Firefox or runs testcases, so the build toolchain is not prepared.
 
-# Infrastructure this agent runs on, applied by Terraform in
-# mozilla/webservices-infra (see tools/hackbot-deploy). Changing anything here
+# Infrastructure this agent runs on, applied by Terraform. Changing anything here
 # changes the agent's shape and goes through an infra PR; the image ships on
 # its own.
 [deploy]
