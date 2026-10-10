@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -18,6 +18,18 @@ class ArtifactTooLargeError(Exception):
         self.max_bytes = max_bytes
 
 
+class ArtifactDownloader(Protocol):
+    """Fetches one of the run's artifacts by its recorded key.
+
+    Raises :class:`ArtifactTooLargeError` instead of downloading an artifact
+    bigger than ``max_bytes``, so an oversized artifact is never loaded into
+    memory. Without ``max_bytes`` a default limit applies; a handler passes its
+    own to change it.
+    """
+
+    def __call__(self, key: str, max_bytes: int | None = None) -> Awaitable[bytes]: ...
+
+
 @dataclass
 class ApplyContext:
     """Everything an :class:`ActionHandler` needs from the run.
@@ -28,16 +40,11 @@ class ApplyContext:
     ``/internal/events/apply-run-actions`` route) — so this package stays free of
     a dependency on any particular storage backend. Async, matching
     hackbot-api's own GCS wrappers and ``ActionHandler.apply`` itself.
-
-    ``download_artifact(key, max_bytes=None)`` raises
-    :class:`ArtifactTooLargeError` instead of downloading an artifact bigger than
-    ``max_bytes``, so an oversized artifact is never loaded into memory. Without
-    ``max_bytes`` a default limit applies; a handler passes its own to change it.
     """
 
     run_id: str
     agent: str
-    download_artifact: Callable[..., Awaitable[bytes]]
+    download_artifact: ArtifactDownloader
     attachments: list[dict[str, str]] = field(default_factory=list)
 
     def artifact_key(self, name: str) -> str | None:
