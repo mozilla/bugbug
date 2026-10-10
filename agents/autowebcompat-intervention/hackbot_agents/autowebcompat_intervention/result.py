@@ -114,18 +114,6 @@ class InterventionResult(BaseModel):
         ),
     ]
 
-    files_changed: Annotated[
-        list[str],
-        Field(
-            default_factory=list,
-            description=(
-                "Repo-relative paths you created or edited, e.g. "
-                "'browser/extensions/webcompat/data/interventions/"
-                "1234567-example.com.json'."
-            ),
-        ),
-    ]
-
     failure_reason: Annotated[
         (
             Literal["not_reproducible"]
@@ -133,6 +121,7 @@ class InterventionResult(BaseModel):
             | Literal["no_intervention_possible"]
             | Literal["build_failed"]
             | Literal["verification_failed"]
+            | Literal["unexpected_changes"]
             | Literal["unsupported_android"]
             | Literal["unsupported_ios"]
             | Literal["unsupported_desktop_os"]
@@ -156,6 +145,8 @@ class InterventionResult(BaseModel):
           * build_failed - When the artifact build would not complete
           * verification_failed - Set automatically when the reproduction script does not
           exit 0 against the build with the intervention; do not use it yourself
+          * unexpected_changes - Set automatically when the patch touches files outside
+          browser/extensions/webcompat/ or testing/webcompat/; do not use it yourself
           * unsupported_android - When the report is specific to Android
           * unsupported_ios - When the report is specific to iOS
           * unsupported_desktop_os - When the report is specific to a desktop OS that isn't

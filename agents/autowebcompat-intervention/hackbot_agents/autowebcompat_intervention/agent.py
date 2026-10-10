@@ -17,6 +17,7 @@ from typing import Any
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox import FirefoxContext
+from agent_tools.registry import ToolError
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
 from autowebcompat_tools.task import RunTracker, Task, TaskConfig
@@ -29,6 +30,7 @@ from pydantic import BaseModel
 
 from .browser import FirefoxBrowsers
 from .config import (
+    ALLOWED_CHANGE_PATHS,
     BUGZILLA_READ_TOOLS,
     DEVTOOLS_TOOLS,
     FIREFOX_BUILD_TOOLS,
@@ -84,6 +86,7 @@ class AutowebcompatInterventionResult(BaseModel):
     bug_id: int | None
     plan: InterventionPlanResult
     result: InterventionResult
+    files_changed: list[str] = []
 
 
 def write_mozconfig(fx_ctx: FirefoxContext) -> None:
@@ -99,6 +102,23 @@ def write_mozconfig(fx_ctx: FirefoxContext) -> None:
         )
         + "\n"
     )
+
+
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
+
+
+def changed_files(repo: Path, base: str) -> list[str]:
+    """Repo-relative paths changed since ``base``, committed or not."""
+    tracked = git(repo, "diff", "--name-only", base).splitlines()
+    untracked = git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
+    return sorted(set(tracked + untracked))
+
+
+def unexpected_changes(changed: list[str]) -> list[str]:
+    return [path for path in changed if not path.startswith(ALLOWED_CHANGE_PATHS)]
 
 
 def run_script(script_path: Path, firefox_path: Path, headless: bool) -> int | None:
@@ -321,6 +341,7 @@ class InterventionResults:
         self.bug_id = bug_id
         self.plan_result = plan_result
         self.intervention_result: InterventionResult | None = None
+        self.files_changed: list[str] = []
 
     def set_intervention(self, result: InterventionResult) -> None:
         if self.intervention_result is not None:
@@ -340,6 +361,7 @@ class InterventionResults:
             bug_id=self.bug_id,
             plan=self.plan_result,
             result=intervention,
+            files_changed=self.files_changed,
         )
 
 
@@ -415,15 +437,39 @@ async def run_autowebcompat_intervention(
             actions_server,
             actions_to_tool_names(INTERVENTION_ACTIONS),
         )
-        intervention_result = await intervention_task.run()
+        base = git(source_repo, "rev-parse", "HEAD").strip()
 
-        if (
+        def reject_unexpected_changes(action: dict) -> None:
+            unexpected = unexpected_changes(changed_files(source_repo, base))
+            if unexpected:
+                raise ToolError(
+                    "An intervention patch may only change files under "
+                    "browser/extensions/webcompat/ and testing/webcompat/. "
+                    f"These are outside it: {', '.join(unexpected)}. Revert them, "
+                    "then either fix the issue with an intervention within allowed "
+                    "directories or report `no_intervention_possible` without submitting a patch."
+                )
+
+        actions_recorder.add_hook("phabricator.submit_patch", reject_unexpected_changes)
+
+        intervention_result = await intervention_task.run()
+        results.files_changed = changed_files(source_repo, base)
+
+        unexpected = unexpected_changes(results.files_changed)
+        failure_reason = None
+        if unexpected:
+            logger.warning("Patch touches unexpected files: %s", unexpected)
+            failure_reason = "unexpected_changes"
+        elif (
             intervention_result.fixed_with_intervention
             and run_script(plan_result.script_path, fx_ctx.binary, config.headless) != 0
         ):
             logger.warning("Reproduction script did not confirm the intervention")
+            failure_reason = "verification_failed"
+
+        if failure_reason is not None:
             intervention_result.fixed_with_intervention = False
-            intervention_result.failure_reason = "verification_failed"
+            intervention_result.failure_reason = failure_reason
             for action in actions_recorder.list_actions():
                 if action["type"] in INTERVENTION_ACTIONS:
                     actions_recorder.remove_action(action["action_id"])

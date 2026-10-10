@@ -58,4 +58,14 @@ INTERVENTIONS_DIR = "browser/extensions/webcompat/data/interventions"
 
 INTERVENTION_TESTS_DIR = "testing/webcompat/interventions/tests"
 
+# An intervention patch may only touch the webcompat add-on and its tests;
+# anything else is rejected at submit_patch and drops the patch at the end.
+ALLOWED_CHANGE_PATHS = (
+    "browser/extensions/webcompat/",
+    "testing/webcompat/",
+)
+
+# Artifact builds download the binaries of the nearest ancestor commit that was
+# built on CI. The tip is sometimes a DONTBUILD push, so increasing depth ensures
+# there are built ancestors available.
 CHECKOUT_DEPTH = 100
