@@ -31,8 +31,8 @@ size = "40Gi"
 cpu = "1"                   # default
 memory = "512Mi"            # default
 
-[deploy.broker.secret_env]
-BUGZILLA_API_KEY = "bugzilla-api-key"
+[deploy.broker.secret_env]  # optional, on top of the shared broker secrets
+SOME_OTHER_KEY = "some-other-secret"
 ```
 
 Unknown keys are errors, so a typo fails instead of falling back to a default.

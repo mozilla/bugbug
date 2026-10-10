@@ -10,15 +10,11 @@
             "timeout_seconds": 7200,
             "broker": {
                 "cpu": "1",
-                "memory": "512Mi",
-                "secret_env": {
-                    "BUGZILLA_API_KEY": "bugzilla-api-key",
-                    "PHABRICATOR_API_KEY": "phabricator-api-key"
-                }
+                "memory": "512Mi"
             },
-            "config_hash": "70563217b35e5175",
+            "config_hash": "e885f3354ff8a74c",
             "compatible": [
-                "70563217b35e5175"
+                "e885f3354ff8a74c"
             ]
         },
         "autowebcompat-repro": {
@@ -28,15 +24,11 @@
             "timeout_seconds": 7200,
             "broker": {
                 "cpu": "1",
-                "memory": "512Mi",
-                "secret_env": {
-                    "BUGZILLA_API_KEY": "bugzilla-api-key",
-                    "PHABRICATOR_API_KEY": "phabricator-api-key"
-                }
+                "memory": "512Mi"
             },
-            "config_hash": "5ab63eca615ad6a5",
+            "config_hash": "9843f44b4f4cee92",
             "compatible": [
-                "5ab63eca615ad6a5"
+                "9843f44b4f4cee92"
             ]
         },
         "bug-fix": {
@@ -49,15 +41,11 @@
             },
             "broker": {
                 "cpu": "1",
-                "memory": "512Mi",
-                "secret_env": {
-                    "BUGZILLA_API_KEY": "bugzilla-api-key",
-                    "PHABRICATOR_API_KEY": "phabricator-api-key"
-                }
+                "memory": "512Mi"
             },
-            "config_hash": "b662ffab28e8e272",
+            "config_hash": "b7fa703d8856234e",
             "compatible": [
-                "b662ffab28e8e272"
+                "b7fa703d8856234e"
             ]
         },
         "build-repair": {
@@ -67,15 +55,11 @@
             "timeout_seconds": 7200,
             "broker": {
                 "cpu": "1",
-                "memory": "512Mi",
-                "secret_env": {
-                    "BUGZILLA_API_KEY": "bugzilla-api-key",
-                    "PHABRICATOR_API_KEY": "phabricator-api-key"
-                }
+                "memory": "512Mi"
             },
-            "config_hash": "b6c39991338fcc00",
+            "config_hash": "ae4c8525b6aecb26",
             "compatible": [
-                "b6c39991338fcc00"
+                "ae4c8525b6aecb26"
             ]
         },
         "frontend-triage": {
@@ -85,15 +69,11 @@
             "timeout_seconds": 7200,
             "broker": {
                 "cpu": "1",
-                "memory": "512Mi",
-                "secret_env": {
-                    "BUGZILLA_API_KEY": "bugzilla-api-key",
-                    "PHABRICATOR_API_KEY": "phabricator-api-key"
-                }
+                "memory": "512Mi"
             },
-            "config_hash": "9bc4181d2413c747",
+            "config_hash": "dc535e086f833155",
             "compatible": [
-                "9bc4181d2413c747"
+                "dc535e086f833155"
             ]
         },
         "test-plan-generator": {

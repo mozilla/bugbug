@@ -18,7 +18,3 @@ timeout_seconds = 7200
 [deploy.broker]
 cpu = "1"
 memory = "512Mi"
-
-[deploy.broker.secret_env]
-BUGZILLA_API_KEY = "bugzilla-api-key"
-PHABRICATOR_API_KEY = "phabricator-api-key"
