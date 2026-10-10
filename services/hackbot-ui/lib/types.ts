@@ -40,7 +40,7 @@ export interface RunSummary {
   findings: Record<string, unknown>;
 }
 
-export type RunActionStatus = "pending" | "applied" | "failed";
+export type RunActionStatus = "pending" | "applying" | "applied" | "failed";
 
 // Mirror of RunActionDoc (services/hackbot-api/app/schemas.py): a recorded
 // agent action and its apply state.

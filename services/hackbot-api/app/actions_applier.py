@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs
@@ -35,6 +35,10 @@ from app.schemas import RunStatus
 log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
+
+
+_CLAIMABLE_STATUSES = ("pending", "failed")
+_CLAIM_LEASE = timedelta(minutes=15)
 
 
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
@@ -184,6 +188,51 @@ async def _dispatch(
         return ActionResult.failed(str(exc))
 
 
+async def _claim_for_apply(db: AsyncSession, rows: list[RunAction]) -> bool:
+    """Take ownership of every not-yet-`applied` row in `rows`, all or nothing.
+
+    Commits the claim before any handler runs, so no connection is held across
+    a handler's HTTP call. All or nothing because a later action can reference
+    an earlier one's result, and half a chain cannot resolve those
+    placeholders. A row stuck in `applying` past `_CLAIM_LEASE` is taken over.
+    """
+    wanted = [row.id for row in rows if row.status != "applied"]
+    if not wanted:
+        return False
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        update(RunAction)
+        .where(
+            RunAction.id.in_(wanted),
+            or_(
+                RunAction.status.in_(_CLAIMABLE_STATUSES),
+                and_(
+                    RunAction.status == "applying",
+                    RunAction.claimed_at < now - _CLAIM_LEASE,
+                ),
+            ),
+        )
+        .values(status="applying", claimed_at=now)
+        .returning(RunAction.id)
+    )
+    claimed = set(result.scalars())
+
+    if len(claimed) != len(wanted):
+        # Rolling back un-claims whatever this statement did take, so the caller
+        # holding the rest of the chain can claim the lot on its next pass.
+        await db.rollback()
+        log.info(
+            "Not applying: %d of %d actions are already being applied elsewhere",
+            len(wanted) - len(claimed),
+            len(wanted),
+        )
+        return False
+
+    await db.commit()
+    return True
+
+
 async def _apply_pending_rows(
     db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
 ) -> None:
@@ -198,7 +247,13 @@ async def _apply_pending_rows(
     that are already `applied` (seeded from prior applies) plus ones applied
     earlier in this pass, so a later (even manual) apply can still reference an
     earlier action's result.
+
+    Claims the whole set before dispatching anything, and returns without doing
+    anything if another caller already holds part of it.
     """
+    if not await _claim_for_apply(db, [row for row, _ in rows]):
+        return
+
     results_by_ref: dict[str, dict] = {
         row.ref: row.result
         for row, _ in rows
@@ -228,8 +283,11 @@ async def _apply_pending_rows(
         if anchor is not None and pos != anchor:
             continue  # non-anchor member: applied together with its anchor
 
+        member_rows = (
+            [pending[i][0] for i in group_at[anchor]] if anchor is not None else [row]
+        )
+
         if anchor is not None:
-            member_rows = [pending[i][0] for i in group_at[anchor]]
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
@@ -238,7 +296,6 @@ async def _apply_pending_rows(
                 run, "bugzilla.update_bug", merge_resolved(entries), []
             )
         else:
-            member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
             outcome = await _dispatch(run, row.type, params, attachments)
 
@@ -249,6 +306,7 @@ async def _apply_pending_rows(
             member.status = outcome.status
             member.result = outcome.result
             member.error = outcome.error
+            member.claimed_at = None
             if applied_at is not None:
                 member.applied_at = applied_at
         await db.commit()
