@@ -252,7 +252,7 @@ class SubmitPatchHandler:
                 "Failed to load Phabricator submission artifact for run %s", ctx.run_id
             )
             return ActionResult.failed(
-                f"No Phabricator submission artifact for this run: {exc}"
+                f"Could not load the Phabricator submission artifact for this run: {exc}"
             )
 
         try:
@@ -332,7 +332,7 @@ class UpdatePatchHandler:
                 "Failed to load Phabricator submission artifact for run %s", ctx.run_id
             )
             return ActionResult.failed(
-                f"No Phabricator submission artifact for this run: {exc}"
+                f"Could not load the Phabricator submission artifact for this run: {exc}"
             )
 
         try:
