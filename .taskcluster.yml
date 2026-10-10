@@ -305,6 +305,8 @@ tasks:
 
         # Agent images use BuildKit features and a non-final target, which taskboot's
         # build commands don't support, so call podman (what taskboot uses) directly.
+        # Its storage is a cache, so unchanged layers (system packages, mostly) are
+        # reused; layers left over from older builds are pruned after a week.
         - $mergeDeep:
             - { $eval: default_task_definition }
             - taskId: { $eval: as_slugid("bug_fix_image_build") }
@@ -313,6 +315,8 @@ tasks:
                 capabilities:
                   privileged: true
                 image: "${taskboot_image}"
+                cache:
+                  bugbug-bug-fix-image-podman: /var/lib/containers
                 command:
                   - "/bin/sh"
                   - "-cxe"
@@ -321,7 +325,8 @@ tasks:
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     podman build --target agent -f agents/bug-fix/Dockerfile -t mozilla/bugbug-hackbot-agent-bug-fix:latest . &&
                     mkdir /images &&
-                    podman save --format docker-archive mozilla/bugbug-hackbot-agent-bug-fix:latest | zstd -q -o /images/bugbug-hackbot-agent-bug-fix.tar.zst"
+                    podman save --format docker-archive mozilla/bugbug-hackbot-agent-bug-fix:latest | zstd -q -o /images/bugbug-hackbot-agent-bug-fix.tar.zst &&
+                    podman image prune --force --filter until=168h"
                 artifacts:
                   public/bug-fix-agent:
                     expires: { $fromNow: "2 weeks" }
@@ -329,6 +334,8 @@ tasks:
                     type: directory
               scopes:
                 - docker-worker:capability:privileged
+                - docker-worker:cache:bugbug-bug-fix-image-podman
+                - generic-worker:cache:bugbug-bug-fix-image-podman
               metadata:
                 name: bugbug bug-fix agent image build
                 description: bugbug bug-fix agent image build

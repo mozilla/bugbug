@@ -26,7 +26,6 @@ RUN npm install --global --prefix /opt/profiler-cli --no-fund --no-audit \
 
 FROM python:3.14 AS base
 
-COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
@@ -115,12 +114,18 @@ ENV DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/runtime-agent/bus
 # and the profiler-cli that runs with that node.
 ENV PATH="/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:/home/agent/.mozbuild/minidump-stackwalk:/home/agent/.mozbuild/node/bin:/home/agent/.mozbuild/samply:/opt/profiler-cli/bin:${PATH}"
 
+# Last, as it changes with any Python change: the layers above (system
+# packages, mostly) stay cached across those.
+COPY --from=builder /opt/venv /opt/venv
+
 USER agent
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["python", "-m", "hackbot_agents.bug_fix"]
 
 FROM base AS broker
+
+COPY --from=builder /opt/venv /opt/venv
 
 RUN useradd --create-home --shell /bin/bash broker
 
