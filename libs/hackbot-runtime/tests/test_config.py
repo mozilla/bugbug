@@ -58,3 +58,27 @@ def test_firefox_defaults(tmp_path):
     assert cfg.firefox is not None
     assert cfg.firefox.enabled is True
     assert cfg.firefox.objdir == "objdir-ff-asan"
+
+
+# The [deploy] table belongs to tools/hackbot-deploy, not the runtime. It sits in
+# the same file, so the runtime has to keep ignoring it: making HackbotConfig
+# strict about unknown tables would stop every deployed agent from starting.
+REPO_AGENT_TOMLS = sorted((Path(__file__).parents[3] / "agents").glob("*/hackbot.toml"))
+
+
+def test_deploy_table_is_ignored(tmp_path):
+    path = tmp_path / "hackbot.toml"
+    path.write_text(
+        FULL_TOML
+        + '\n[deploy]\nruntime = "cloud_run_job"\ncpu = "6"\n\n[deploy.broker]\ncpu = "1"\n'
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.source is not None
+    assert not hasattr(cfg, "deploy")
+
+
+@pytest.mark.parametrize("path", REPO_AGENT_TOMLS, ids=lambda p: p.parent.name)
+def test_every_agent_config_loads(path):
+    load_config(path)

@@ -39,6 +39,11 @@ copied into the image's working directory, where the runtime discovers it.
 Registering the agent in `AGENT_REGISTRY` requires the Job to exist under the `job_name`
 given there.
 
+The Job's infrastructure is declared in the agent's own `hackbot.toml`, under `[deploy]`
+(runtime, sizing, broker, workspace, extra env and secrets), and applied by Terraform in
+mozilla/webservices-infra. Images ship separately and never need an infra PR. See
+[tools/hackbot-deploy](../../tools/hackbot-deploy/README.md).
+
 ## Environments
 
 `ENVIRONMENT` (`development` / `production`) selects the Sentry environment and, in the
@@ -77,7 +82,7 @@ The listener also honours `DRY_RUN=true`, which logs intended calls without POST
 
 ## Running locally
 
-The repo is a `uv` workspace (`agents/*`, `libs/*`, `services/*`), so everything shares one
+The repo is a `uv` workspace (`agents/*`, `libs/*`, `services/*`, `tools/*`), so everything shares one
 lockfile.
 
 **An agent**, exactly as it ships, via its `compose.yml`:

@@ -1,3 +1,21 @@
 # autowebcompat-repro needs no platform prep: no [source] checkout, no [firefox] build.
 # Subject comes from the request (bug_data / bug_id); the DevTools MCP drives a
 # Firefox instance installed in the image.
+
+# Infrastructure this agent runs on, applied by Terraform in
+# mozilla/webservices-infra (see tools/hackbot-deploy). Changing anything here
+# changes the agent's shape and goes through an infra PR; the image ships on
+# its own.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "6"
+memory = "24Gi"
+timeout_seconds = 7200
+
+[deploy.broker]
+cpu = "1"
+memory = "512Mi"
+
+[deploy.broker.secret_env]
+BUGZILLA_API_KEY = "bugzilla-api-key"
+PHABRICATOR_API_KEY = "phabricator-api-key"

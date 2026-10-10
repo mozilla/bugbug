@@ -1,0 +1,120 @@
+{
+    "schema_version": 1,
+    "generator": "hackbot-deploy",
+    "hash_algorithm": "sha256-canonical-json-v1",
+    "agents": {
+        "autowebcompat-diagnosis": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi",
+                "secret_env": {
+                    "BUGZILLA_API_KEY": "bugzilla-api-key",
+                    "PHABRICATOR_API_KEY": "phabricator-api-key"
+                }
+            },
+            "config_hash": "70563217b35e5175",
+            "compatible": [
+                "70563217b35e5175"
+            ]
+        },
+        "autowebcompat-repro": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi",
+                "secret_env": {
+                    "BUGZILLA_API_KEY": "bugzilla-api-key",
+                    "PHABRICATOR_API_KEY": "phabricator-api-key"
+                }
+            },
+            "config_hash": "5ab63eca615ad6a5",
+            "compatible": [
+                "5ab63eca615ad6a5"
+            ]
+        },
+        "bug-fix": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "workspace": {
+                "size": "40Gi"
+            },
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi",
+                "secret_env": {
+                    "BUGZILLA_API_KEY": "bugzilla-api-key",
+                    "PHABRICATOR_API_KEY": "phabricator-api-key"
+                }
+            },
+            "config_hash": "b662ffab28e8e272",
+            "compatible": [
+                "b662ffab28e8e272"
+            ]
+        },
+        "build-repair": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi",
+                "secret_env": {
+                    "BUGZILLA_API_KEY": "bugzilla-api-key",
+                    "PHABRICATOR_API_KEY": "phabricator-api-key"
+                }
+            },
+            "config_hash": "b6c39991338fcc00",
+            "compatible": [
+                "b6c39991338fcc00"
+            ]
+        },
+        "frontend-triage": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi",
+                "secret_env": {
+                    "BUGZILLA_API_KEY": "bugzilla-api-key",
+                    "PHABRICATOR_API_KEY": "phabricator-api-key"
+                }
+            },
+            "config_hash": "9bc4181d2413c747",
+            "compatible": [
+                "9bc4181d2413c747"
+            ]
+        },
+        "test-plan-generator": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "config_hash": "8aed6b3c5c99e9c2",
+            "compatible": [
+                "8aed6b3c5c99e9c2"
+            ]
+        },
+        "test-repair": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "config_hash": "40f35310e8b2554b",
+            "compatible": [
+                "40f35310e8b2554b"
+            ]
+        }
+    }
+}

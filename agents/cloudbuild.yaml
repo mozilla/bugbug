@@ -1,0 +1,72 @@
+# Build one agent's images and ship them to dev, then stage.
+#
+# Each agent gets its own trigger (created by Terraform in webservices-infra
+# from agents.json) that runs this on a push to main touching agents/<agent>/,
+# with _AGENT set. Prod is a separate, approved promotion; nothing here
+# reaches it.
+#
+# Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
+# build on unknown ones, so shell variables below are written `$$name`.
+steps:
+  - id: Shape
+    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    entrypoint: bash
+    args:
+      - -c
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy info "${_AGENT}" > /workspace/shape.env
+
+  # Every image carries the shape it was built for (hackbot.config_hash); the
+  # deploy step only puts it on infrastructure with that shape applied.
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        source /workspace/shape.env
+        created=$$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        targets=agent
+        if [ "$$HAS_BROKER" = true ]; then targets="agent broker"; fi
+        for target in $$targets; do
+          image="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_AGENT}-$$target:$COMMIT_SHA"
+          docker build -f "agents/${_AGENT}/Dockerfile" --target "$$target" \
+            --label "hackbot.config_hash=$$CONFIG_HASH" \
+            --label "org.opencontainers.image.revision=$COMMIT_SHA" \
+            --label "org.opencontainers.image.created=$$created" \
+            -t "$$image" .
+          docker push "$$image"
+          docker inspect --format='{{index .RepoDigests 0}}' "$$image" > "/workspace/$$target.digest"
+        done
+
+  # Dev first, then stage with the same digests. If the shape isn't applied
+  # yet (exit 3), stop without failing: the deploy is rerun once the infra PR
+  # for this change is applied.
+  - id: Deploy
+    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -uo pipefail
+        images=(--agent-image "$$(cat /workspace/agent.digest)")
+        if [ -f /workspace/broker.digest ]; then images+=(--broker-image "$$(cat /workspace/broker.digest)"); fi
+        for env in dev stage; do
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy "${_AGENT}" --env "$$env" "$${images[@]}"
+          status=$$?
+          if [ "$$status" -eq 3 ]; then
+            echo "Waiting for infra: not deploying past $$env."
+            exit 0
+          fi
+          if [ "$$status" -ne 0 ]; then exit "$$status"; fi
+        done
+
+options:
+  substitutionOption: MUST_MATCH
+  logging: CLOUD_LOGGING_ONLY
+  # Agent images can be large; size the builder for them rather than the
+  # default.
+  machineType: E2_HIGHCPU_8
+  diskSizeGb: 100
