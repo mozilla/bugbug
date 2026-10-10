@@ -11,6 +11,7 @@ include:
   - path: agents/frontend-triage/compose.yml
   - path: agents/test-plan-generator/compose.yml
   - path: agents/uplift-resolve/compose.yml
+  - path: agents/autowebcompat-intervention/compose.yml
 
 services:
   bugbug-base:

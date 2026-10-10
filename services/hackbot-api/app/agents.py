@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.schemas import (
     AutowebcompatDiagnosisInputs,
+    AutowebcompatInterventionInputs,
     AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
@@ -148,5 +149,16 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-uplift-resolve",
         input_schema=UpliftInputs,
+    ),
+    "autowebcompat-intervention": AgentSpec(
+        name="autowebcompat-intervention",
+        description=(
+            "Write a Firefox webcompat intervention for a broken-site bug: "
+            "confirm the breakage reproduces, write the intervention and a "
+            "test, verify that it fixes the site, and submit a patch."
+        ),
+        job_name="hackbot-agent-autowebcompat-intervention",
+        input_schema=AutowebcompatInterventionInputs,
+        auto_apply_actions=True,
     ),
 }
