@@ -102,7 +102,6 @@ class Settings(BaseSettings):
     push_auth_service_account: str = ""
 
     # Run-completion email settings (see app/notifications.py).
-    hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str
     notification_sender: str
 
