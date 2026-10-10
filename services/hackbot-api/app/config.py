@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     signed_policy_max_bytes: int = 5 * 1024 * 1024 * 1024
     signed_policy_grace_seconds: int = 60 * 60
 
+    # Largest run artifact an action handler downloads unless it asks for a
+    # different limit. Guards against loading something like a multi-GB patch
+    # into memory, which can take the service down.
+    action_apply_max_bytes: int = 100 * 1024 * 1024
+
     # API auth
     external_api_key: str = ""
 
