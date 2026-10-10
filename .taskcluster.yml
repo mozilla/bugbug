@@ -351,7 +351,9 @@ tasks:
         # Bootstraps a Firefox checkout, makes an artifact build and runs tests in
         # it. This mostly breaks because of changes in Firefox, so it runs after
         # merges rather than on every pull request.
-        - $if: 'tasks_for == "github-push" && head_branch == "refs/heads/master"'
+        # TEMPORARY: also on pull requests, to verify it on this PR. Drop the
+        # pull request condition before merging.
+        - $if: '(tasks_for == "github-push" && head_branch == "refs/heads/master") || tasks_for[:19] == "github-pull-request"'
           then:
             $mergeDeep:
               - { $eval: default_task_definition }
@@ -384,7 +386,9 @@ tasks:
 
         # Like the slow tests, but a full build with the agent's own mozconfig, as
         # the agent makes. It takes hours, so a failure is not retried.
-        - $if: 'tasks_for == "github-push" && head_branch == "refs/heads/master"'
+        # TEMPORARY: also on pull requests, to verify it on this PR. Drop the
+        # pull request condition before merging.
+        - $if: '(tasks_for == "github-push" && head_branch == "refs/heads/master") || tasks_for[:19] == "github-pull-request"'
           then:
             $mergeDeep:
               - { $eval: default_task_definition }
