@@ -24,12 +24,10 @@ a digest can't.
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
-from urllib.parse import quote
 
 REGION = "us-west1"
 LABEL_CONFIG_HASH = "hackbot.config_hash"
@@ -91,7 +89,7 @@ class StoredObject:
 
 
 class Cloud(Protocol):
-    """What the deploy needs from GCP. The real one is :class:`GoogleCloud`."""
+    """What the deploy needs from GCP. The real one is :class:`hackbot_deploy.gcp.GoogleCloud`."""
 
     def read_object(self, bucket: str, name: str) -> StoredObject | None: ...
 
@@ -516,193 +514,3 @@ def older_builds(cloud: Cloud, project: str, location: str, build_id: str) -> li
         for b in cloud.ongoing_builds(project, location, trigger)
         if b["id"] != build_id and datetime.fromisoformat(b["createTime"]) < created
     )
-
-
-class GoogleCloud:
-    """:class:`Cloud` over the GCP REST APIs, with Application Default Credentials.
-
-    No gcloud: ADC works the same from Cloud Build (the build's service
-    account), GitHub Actions (Workload Identity Federation) and a laptop.
-    """
-
-    _MANIFEST_TYPES = ", ".join(
-        [
-            "application/vnd.oci.image.index.v1+json",
-            "application/vnd.docker.distribution.manifest.list.v2+json",
-            "application/vnd.oci.image.manifest.v1+json",
-            "application/vnd.docker.distribution.manifest.v2+json",
-        ]
-    )
-
-    def __init__(
-        self,
-        session: Any = None,
-        poll_seconds: float = 3.0,
-        timeout_seconds: float = 600.0,
-    ) -> None:
-        if session is None:
-            import google.auth
-            from google.auth.transport.requests import AuthorizedSession
-
-            credentials, _ = google.auth.default(
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            session = AuthorizedSession(credentials)
-        self.session = session
-        self.poll_seconds = poll_seconds
-        self.timeout_seconds = timeout_seconds
-
-    def _check(self, response: Any, what: str) -> Any:
-        if response.status_code >= 400:
-            raise DeployError(
-                f"{what}: HTTP {response.status_code}: {response.text[:500]}"
-            )
-        return response
-
-    def read_object(self, bucket: str, name: str) -> StoredObject | None:
-        url = f"https://storage.googleapis.com/storage/v1/b/{bucket}/o/{quote(name, safe='')}"
-        meta = self.session.get(url)
-        if meta.status_code == 404:
-            return None
-        generation = int(
-            self._check(meta, f"gs://{bucket}/{name}").json()["generation"]
-        )
-        # Read that exact generation, so a write conditioned on it can't be
-        # based on content newer than the generation it names.
-        media = self.session.get(url, params={"alt": "media", "generation": generation})
-        return StoredObject(
-            self._check(media, f"gs://{bucket}/{name}").content, generation
-        )
-
-    def write_object(
-        self, bucket: str, name: str, data: bytes, if_generation_match: int
-    ) -> None:
-        response = self.session.post(
-            f"https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o",
-            params={
-                "uploadType": "media",
-                "name": name,
-                "ifGenerationMatch": if_generation_match,
-            },
-            data=data,
-            headers={"Content-Type": "application/json"},
-        )
-        if response.status_code == 412:
-            raise DeployError(
-                f"gs://{bucket}/{name} changed during the deploy; another deploy ran concurrently. Retry."
-            )
-        self._check(response, f"writing gs://{bucket}/{name}")
-
-    def image_labels(self, image: str) -> dict[str, str]:
-        reference, digest = image.split("@", 1)
-        host, path = reference.split("/", 1)
-        base = f"https://{host}/v2/{path}"
-        manifest = self._check(
-            self.session.get(
-                f"{base}/manifests/{digest}", headers={"Accept": self._MANIFEST_TYPES}
-            ),
-            f"manifest of {image}",
-        ).json()
-        if "manifests" in manifest:  # a multi-platform index
-            platforms = [
-                m
-                for m in manifest["manifests"]
-                if m.get("platform", {}) == {"architecture": "amd64", "os": "linux"}
-            ] or [
-                m
-                for m in manifest["manifests"]
-                if m.get("platform", {}).get("architecture") == "amd64"
-            ]
-            if not platforms:
-                raise DeployError(f"{image} has no linux/amd64 image")
-            manifest = self._check(
-                self.session.get(
-                    f"{base}/manifests/{platforms[0]['digest']}",
-                    headers={"Accept": self._MANIFEST_TYPES},
-                ),
-                f"amd64 manifest of {image}",
-            ).json()
-        config = self._check(
-            self.session.get(f"{base}/blobs/{manifest['config']['digest']}"),
-            f"config of {image}",
-        ).json()
-        return config.get("config", {}).get("Labels") or {}
-
-    @staticmethod
-    def _run_url(project: str, region: str, kind: str, name: str) -> str:
-        return f"https://run.googleapis.com/v2/projects/{project}/locations/{region}/{kind}/{name}"
-
-    def _patch_and_wait(self, url: str, body: dict[str, Any], what: str) -> None:
-        operation = self._check(
-            self.session.patch(url, json=body), f"updating {what}"
-        ).json()
-        deadline = time.monotonic() + self.timeout_seconds
-        while not operation.get("done"):
-            if time.monotonic() > deadline:
-                raise DeployError(
-                    f"updating {what} didn't finish in {self.timeout_seconds:.0f}s ({operation['name']})"
-                )
-            time.sleep(self.poll_seconds)
-            operation = self._check(
-                self.session.get(f"https://run.googleapis.com/v2/{operation['name']}"),
-                f"waiting on {what}",
-            ).json()
-        if "error" in operation:
-            raise DeployError(f"updating {what} failed: {operation['error']}")
-
-    def get_job(self, project: str, region: str, name: str) -> dict[str, Any]:
-        return self._check(
-            self.session.get(self._run_url(project, region, "jobs", name)),
-            f"Cloud Run Job {name}",
-        ).json()
-
-    def set_job_images(
-        self, project: str, region: str, name: str, images: dict[str, str]
-    ) -> None:
-        job = self.get_job(project, region, name)
-        for container in job["template"]["template"]["containers"]:
-            container["image"] = images[container["name"]]
-        self._patch_and_wait(self._run_url(project, region, "jobs", name), job, name)
-
-    def get_service(self, project: str, region: str, name: str) -> dict[str, Any]:
-        return self._check(
-            self.session.get(self._run_url(project, region, "services", name)),
-            f"Cloud Run service {name}",
-        ).json()
-
-    def set_service_images(
-        self, project: str, region: str, name: str, images: dict[str, str]
-    ) -> None:
-        service = self.get_service(project, region, name)
-        for container in service["template"]["containers"]:
-            container["image"] = images[container["name"]]
-        self._patch_and_wait(
-            self._run_url(project, region, "services", name), service, name
-        )
-
-    @staticmethod
-    def _builds_url(project: str, location: str) -> str:
-        return f"https://cloudbuild.googleapis.com/v1/projects/{project}/locations/{location}/builds"
-
-    def get_build(self, project: str, location: str, build_id: str) -> dict[str, Any]:
-        return self._check(
-            self.session.get(f"{self._builds_url(project, location)}/{build_id}"),
-            f"build {build_id}",
-        ).json()
-
-    def ongoing_builds(
-        self, project: str, location: str, trigger_id: str
-    ) -> list[dict[str, Any]]:
-        params = {
-            "filter": f'trigger_id="{trigger_id}" AND (status="QUEUED" OR status="WORKING")'
-        }
-        builds: list[dict[str, Any]] = []
-        while True:
-            page = self._check(
-                self.session.get(self._builds_url(project, location), params=params),
-                f"builds of trigger {trigger_id}",
-            ).json()
-            builds += page.get("builds", [])
-            if not page.get("nextPageToken"):
-                return builds
-            params["pageToken"] = page["nextPageToken"]

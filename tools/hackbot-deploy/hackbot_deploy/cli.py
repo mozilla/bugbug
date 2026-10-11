@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from hackbot_deploy import deploy, manifest
+from hackbot_deploy.gcp import GoogleCloud
 
 EXIT_WAITING_FOR_INFRA = 3
 
@@ -58,9 +59,8 @@ def _cmd_info(args: argparse.Namespace) -> int:
 
 
 def _cmd_check_build(args: argparse.Namespace) -> int:
-    older = deploy.older_builds(
-        deploy.GoogleCloud(), args.project, args.location, args.build_id
-    )
+    cloud = GoogleCloud()
+    older = deploy.older_builds(cloud, args.project, args.location, args.build_id)
     if older:
         print(
             f"an older build of this trigger is still running ({', '.join(older)}); "
@@ -90,7 +90,7 @@ def _run_deploy(args: argparse.Namespace) -> int:
             "an image is required: --image for a service, --agent-image for an agent"
         )
 
-    cloud = deploy.GoogleCloud()
+    cloud = GoogleCloud()
     common = {
         "force": getattr(args, "force", False),
         "dry_run": args.dry_run,

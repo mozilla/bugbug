@@ -2113,6 +2113,23 @@ requests = [
 ]
 
 [[package]]
+name = "google-cloud-build"
+version = "3.40.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpc-google-iam-v1" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/11/88/cc16df80e48cf202e1a1c2ecacc38aa2c3a1f43b9b4f62c947ddd0ca4a6e/google_cloud_build-3.40.0.tar.gz", hash = "sha256:ee46dfe09bf8dbbac93b93aa2f45a00586d9321adb30cb9b53a173e3e2cd6cf6", size = 240586, upload-time = "2026-10-01T18:15:23.01Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/53/c3/964a0cb52287094422d735a6da0b42886a7c2887f187ad96d198a23e1d85/google_cloud_build-3.40.0-py3-none-any.whl", hash = "sha256:19d4e21220ae898750b2c606d40c869c386ecc9ce1f220e36edbbe11375452f0", size = 187807, upload-time = "2026-10-01T18:08:50.649Z" },
+]
+
+[[package]]
 name = "google-cloud-core"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2881,6 +2898,9 @@ version = "0.1.0"
 source = { editable = "tools/hackbot-deploy" }
 dependencies = [
     { name = "google-auth" },
+    { name = "google-cloud-build" },
+    { name = "google-cloud-run" },
+    { name = "google-cloud-storage" },
     { name = "pydantic" },
     { name = "requests" },
 ]
@@ -2893,6 +2913,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "google-auth", specifier = ">=2.0.0" },
+    { name = "google-cloud-build", specifier = ">=3.0.0" },
+    { name = "google-cloud-run", specifier = ">=0.10.0" },
+    { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "requests", specifier = ">=2.32.0" },

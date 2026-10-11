@@ -5,6 +5,9 @@ description = "Hackbot agent deploy tooling: the [deploy] schema, the agents.jso
 requires-python = ">=3.12"
 dependencies = [
     "google-auth>=2.0.0",
+    "google-cloud-build>=3.0.0",
+    "google-cloud-run>=0.10.0",
+    "google-cloud-storage>=2.16.0",
     "pydantic>=2.0",
     "requests>=2.32.0",
 ]
