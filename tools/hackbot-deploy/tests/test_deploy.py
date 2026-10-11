@@ -13,7 +13,7 @@ from hackbot_deploy.deploy import (
 )
 
 DEV, STAGE = ENVIRONMENTS["dev"], ENVIRONMENTS["stage"]
-REPO = "us-west1-docker.pkg.dev/moz-fx-hackbot-prod/hackbot"
+REPO = "us-docker.pkg.dev/moz-fx-hackbot-prod/hackbot-prod"
 
 
 def image(name: str, n: int) -> str:
