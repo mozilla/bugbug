@@ -113,6 +113,10 @@ ENV DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/runtime-agent/bus
 # agent's shell finds node, samply and the developer tools (in ~/.cargo/bin),
 # and the profiler-cli that runs with that node.
 ENV PATH="/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:/home/agent/.mozbuild/minidump-stackwalk:/home/agent/.mozbuild/node/bin:/home/agent/.mozbuild/samply:/opt/profiler-cli/bin:${PATH}"
+# Likewise for Android, once bootstrapped for it: java, adb, aapt2, apksigner,
+# apkanalyzer, lint, sdkmanager. bootstrap_firefox links the versioned
+# directories they are in as `current`/`latest`.
+ENV PATH="${PATH}:/home/agent/.mozbuild/jdk/current/bin:/home/agent/.mozbuild/android-sdk-linux/platform-tools:/home/agent/.mozbuild/android-sdk-linux/build-tools/latest:/home/agent/.mozbuild/android-sdk-linux/cmdline-tools/latest/bin"
 
 # Last, as it changes with any Python change: the layers above (system
 # packages, mostly) stay cached across those.

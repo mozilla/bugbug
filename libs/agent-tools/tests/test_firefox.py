@@ -1,6 +1,7 @@
 """Tests for the Firefox tools."""
 
 import os
+from pathlib import Path
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
@@ -80,7 +81,7 @@ def _recording_tree(tmp_path, tools_exit_code):
     mach = src / "mach"
     mach.write_text(
         "#!/bin/sh\n"
-        f'echo "$1 $2" >> "{tmp_path}/mach.log"\n'
+        f'echo "$@" >> "{tmp_path}/mach.log"\n'
         f'[ "$1" = python ] && exit {tools_exit_code}\n'
         "exit 0\n"
     )
@@ -94,9 +95,11 @@ async def test_bootstrap_installs_developer_tools(tmp_path):
     assert result["success"]
     assert result["message"] == "mach bootstrap completed successfully"
     log = (tmp_path / "mach.log").read_text().splitlines()
-    assert log[0] == "--no-interactive bootstrap"
-    assert log[1].startswith("python ")
-    assert log[1].endswith("/mach_python/install_developer_tools.py")
+    assert log[0] == "--no-interactive bootstrap --application-choice=browser"
+    script = log[1].split(" ", 1)[1]
+    assert log[1] == f"python {script}"
+    assert script.endswith("/mach_python/install_developer_tools.py")
+    assert Path(script).is_file()
 
 
 async def test_developer_tools_failure_does_not_fail_bootstrap(tmp_path):
@@ -123,3 +126,122 @@ async def test_bootstrap_runs_without_controlling_terminal(tmp_path):
     sessions = (tmp_path / "sessions").read_text().split()
     assert len(sessions) == 2
     assert str(os.getsid(0)) not in sessions
+
+
+async def test_bootstrap_for_android(tmp_path, monkeypatch):
+    src = _recording_tree(tmp_path, 0)
+    mozbuild = tmp_path / "mozbuild"
+    for path in (
+        "jdk/jdk-17.0.9+1",
+        "jdk/jdk-17.0.20.1+1",
+        "jdk/mozboot",
+        "android-sdk-linux/build-tools/36.1.0",
+        "android-sdk-linux/build-tools/37.0.0",
+        "android-sdk-linux/cmdline-tools/23.0",
+        "android-sdk-linux/cmdline-tools/mozboot",
+    ):
+        (mozbuild / path).mkdir(parents=True)
+    monkeypatch.setenv("MOZBUILD_STATE_PATH", str(mozbuild))
+
+    result = await bootstrap_firefox(src, "mobile_android")
+
+    assert result["success"]
+    assert (tmp_path / "mach.log").read_text().splitlines()[0] == (
+        "--no-interactive bootstrap --application-choice=mobile_android"
+    )
+    # The newest of each, for PATH to point at.
+    assert os.readlink(mozbuild / "jdk/current") == "jdk-17.0.20.1+1"
+    sdk = mozbuild / "android-sdk-linux"
+    assert os.readlink(sdk / "build-tools/latest") == "37.0.0"
+    assert os.readlink(sdk / "cmdline-tools/latest") == "23.0"
+
+
+async def test_bootstrap_rejects_unknown_application(tmp_path):
+    result = await bootstrap_firefox(_recording_tree(tmp_path, 0), "ios")
+
+    assert not result["success"]
+    assert "Unknown application 'ios'" in result["message"]
+    assert not (tmp_path / "mach.log").exists()
+
+
+async def test_bootstrap_tool_offers_android(tmp_path):
+    ctx = firefox.FirefoxContext.from_source_repo(tmp_path)
+    tools = await _list(build_sdk_server("firefox", ctx, firefox.TOOLS)["instance"])
+    bootstrap = next(t for t in tools if t.name == "bootstrap_firefox")
+    assert (
+        "mobile_android" in bootstrap.inputSchema["properties"]["application"]["enum"]
+    )
+
+
+def _mach_logging_mozconfig(tmp_path, bootstrap_exit_code=0):
+    """A source dir whose `./mach` logs the MOZCONFIG it runs with."""
+    src = tmp_path / "firefox"
+    src.mkdir()
+    mach = src / "mach"
+    mach.write_text(
+        "#!/bin/sh\n"
+        f'echo "$MOZCONFIG $1 $2" >> "{tmp_path}/mach.log"\n'
+        f'[ "$2" = bootstrap ] && exit {bootstrap_exit_code}\n'
+        "exit 0\n"
+    )
+    mach.chmod(0o755)
+    (src / ".mozconfig").write_text("ac_add_options --enable-debug\n")
+    return src
+
+
+async def test_android_bootstrap_switches_builds_to_android(tmp_path, monkeypatch):
+    monkeypatch.setenv("MOZBUILD_STATE_PATH", str(tmp_path / "mozbuild"))
+    src = _mach_logging_mozconfig(tmp_path)
+    ctx = firefox.FirefoxContext.from_source_repo(src)
+
+    result = await firefox.bootstrap_firefox(
+        ctx, application="mobile_android_artifact_mode"
+    )
+
+    assert result["success"]
+    android = src / ".mozconfig-android"
+    assert f"MOZCONFIG={android}" in result["message"]
+    assert android.read_text().splitlines()[2:] == [
+        "ac_add_options --enable-project=mobile/android",
+        "ac_add_options --enable-artifact-builds",
+        f"mk_add_options MOZ_OBJDIR={src / 'objdir-android-artifact'}",
+    ]
+    assert ctx.build_config() == (android, src / "objdir-android-artifact")
+
+    result = await firefox.build_firefox(ctx)
+
+    assert result["success"]
+    assert result["build_dir"] == str(src / "objdir-android-artifact")
+    assert (tmp_path / "mach.log").read_text().splitlines()[-1] == f"{android} build "
+
+    # Bootstrapping for desktop goes back to the agent's own mozconfig.
+    await firefox.bootstrap_firefox(ctx, application="browser")
+    await firefox.build_firefox(ctx)
+
+    assert ctx.build_config() == (src / ".mozconfig", src / "objdir-ff-asan")
+    assert (tmp_path / "mach.log").read_text().splitlines()[-1] == (
+        f"{src / '.mozconfig'} build "
+    )
+
+
+async def test_full_android_build_gets_its_own_objdir(tmp_path, monkeypatch):
+    monkeypatch.setenv("MOZBUILD_STATE_PATH", str(tmp_path / "mozbuild"))
+    src = _mach_logging_mozconfig(tmp_path)
+    ctx = firefox.FirefoxContext.from_source_repo(src)
+
+    await firefox.bootstrap_firefox(ctx, application="mobile_android")
+
+    android = (src / ".mozconfig-android").read_text()
+    assert "--enable-artifact-builds" not in android
+    assert f"MOZ_OBJDIR={src / 'objdir-android'}\n" in android
+
+
+async def test_failed_android_bootstrap_keeps_building_desktop(tmp_path):
+    src = _mach_logging_mozconfig(tmp_path, bootstrap_exit_code=1)
+    ctx = firefox.FirefoxContext.from_source_repo(src)
+
+    result = await firefox.bootstrap_firefox(ctx, application="mobile_android")
+
+    assert not result["success"]
+    assert not (src / ".mozconfig-android").exists()
+    assert ctx.build_config() == (src / ".mozconfig", src / "objdir-ff-asan")

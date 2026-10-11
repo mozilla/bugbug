@@ -1,9 +1,18 @@
 """Install the Firefox build toolchain via `./mach bootstrap`."""
 
 import asyncio
+import os
+import re
 from pathlib import Path
 from shutil import which
 from typing import Any
+
+APPLICATIONS = (
+    "browser",
+    "browser_artifact_mode",
+    "mobile_android",
+    "mobile_android_artifact_mode",
+)
 
 
 def _refresh_minidump_stackwalk() -> None:
@@ -43,8 +52,43 @@ async def _install_developer_tools(firefox_dir: Path) -> tuple[int | None, str, 
     )
 
 
-async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
+def _version_key(path: Path) -> tuple[int, ...]:
+    return tuple(int(n) for n in re.findall(r"\d+", path.name))
+
+
+def _link_android_tools() -> None:
+    """Give the JDK and Android SDK tools bootstrap installed stable paths.
+
+    They go in versioned directories (jdk/jdk-17.0.20.1+1, build-tools/37.0.0,
+    cmdline-tools/23.0), so link the newest of each as `current` or `latest`
+    (the SDK's own convention), for PATH to point at.
+    """
+    mozbuild = Path(os.environ.get("MOZBUILD_STATE_PATH", Path.home() / ".mozbuild"))
+    sdk = mozbuild / "android-sdk-linux"
+    for parent, link in (
+        (mozbuild / "jdk", "current"),
+        (sdk / "build-tools", "latest"),
+        (sdk / "cmdline-tools", "latest"),
+    ):
+        versions = [
+            p
+            for p in parent.glob("*")
+            if p.is_dir() and not p.is_symlink() and re.match(r"(jdk-)?\d", p.name)
+        ]
+        if not versions:
+            continue
+        target = parent / link
+        target.unlink(missing_ok=True)
+        target.symlink_to(max(versions, key=_version_key).name)
+
+
+async def bootstrap_firefox(
+    firefox_dir: Path, application: str = "browser"
+) -> dict[str, Any]:
     """Run `./mach bootstrap` to install rust/clang/cbindgen for full builds.
+
+    With ``application="mobile_android"`` (or ``"mobile_android_artifact_mode"``)
+    it installs what Android builds need instead: a JDK, the Android SDK and NDK.
 
     Also installs the developer tools bootstrap offers coding agents
     (treeherder-cli, searchfox-cli, socorro-cli, stmo-cli, webspec-index);
@@ -57,11 +101,20 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
 
     Args:
         firefox_dir: Firefox source directory (contains ./mach).
+        application: What to bootstrap for, one of APPLICATIONS.
 
     Returns:
         Dict with success, message, stdout, stderr. Never raises.
     """
     try:
+        if application not in APPLICATIONS:
+            return {
+                "success": False,
+                "message": f"Unknown application {application!r}, expected one of "
+                + ", ".join(APPLICATIONS),
+                "stdout": "",
+                "stderr": "",
+            }
         if not firefox_dir.exists():
             return {
                 "success": False,
@@ -74,7 +127,7 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
             "./mach",
             "--no-interactive",
             "bootstrap",
-            "--application-choice=browser",
+            f"--application-choice={application}",
             cwd=firefox_dir,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
@@ -92,6 +145,8 @@ async def bootstrap_firefox(firefox_dir: Path) -> dict[str, Any]:
 
         if process.returncode == 0:
             _refresh_minidump_stackwalk()
+            if application.startswith("mobile_android"):
+                _link_android_tools()
             message = "mach bootstrap completed successfully"
             returncode, tools_stdout, tools_stderr = await _install_developer_tools(
                 firefox_dir
