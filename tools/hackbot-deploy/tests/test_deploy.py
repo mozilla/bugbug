@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 import pytest
-from hackbot_deploy import deploy
+from hackbot_deploy import cli, deploy
 from hackbot_deploy.deploy import (
     ENVIRONMENTS,
     DeployError,
@@ -255,6 +255,29 @@ def test_rollback_goes_back_one_deployment_at_a_time(cloud: FakeCloud) -> None:
     assert third not in [h["images"] for h in cloud.record(DEV, "bug-fix")["history"]]
 
 
+def test_rollback_refuses_explicit_images(cloud: FakeCloud) -> None:
+    first = ship(cloud, 1).images
+    ship(cloud, 2, created="2026-10-09T11:00:00Z")
+
+    with pytest.raises(DeployError, match="takes no images"):
+        deploy_agent(cloud, "bug-fix", DEV, first, rollback=True)
+    assert len(cloud.updates) == 2
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--image", image("hackbot-api", 1)],
+        ["--agent-image", image("bug-fix", 1)],
+        ["--broker-image", image("bug-fix-broker", 1)],
+    ],
+)
+def test_rollback_cli_takes_no_images(flags: list[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["rollback", "bug-fix", "--env", "dev", *flags])
+    assert exc.value.code == 2
+
+
 def test_rollback_onto_a_compatible_older_shape(cloud: FakeCloud) -> None:
     cloud.apply(DEV, "bug-fix", "h1")
     cloud.job(DEV, "bug-fix", ["agent", "broker"], label="h1")
@@ -418,6 +441,18 @@ def test_service_rollback_goes_back_one_deployment_at_a_time(
 
     assert deploy_service(services, "hackbot-api", DEV, rollback=True).images == second
     assert deploy_service(services, "hackbot-api", DEV, rollback=True).images == first
+
+
+def test_service_rollback_refuses_an_explicit_image(services: FakeCloud) -> None:
+    first = api_image(services, 1, "2026-10-09T11:00:00Z")
+    deploy_service(services, "hackbot-api", DEV, first)
+    deploy_service(
+        services, "hackbot-api", DEV, api_image(services, 2, "2026-10-09T12:00:00Z")
+    )
+
+    with pytest.raises(DeployError, match="takes no images"):
+        deploy_service(services, "hackbot-api", DEV, first, rollback=True)
+    assert len(services.updates) == 2
 
 
 def test_promote_dispatches_services(services: FakeCloud) -> None:

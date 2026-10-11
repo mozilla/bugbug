@@ -90,14 +90,14 @@ def _run_deploy(args: argparse.Namespace) -> int:
             deploy.ENVIRONMENTS[args.target],
             **common,
         )
+    elif args.command == "rollback":
+        roll_back = deploy.deploy_service if is_service else deploy.deploy_agent
+        result = roll_back(
+            cloud, args.name, deploy.ENVIRONMENTS[args.env], rollback=True, **common
+        )
     elif is_service:
         result = deploy.deploy_service(
-            cloud,
-            args.name,
-            deploy.ENVIRONMENTS[args.env],
-            args.image,
-            rollback=args.command == "rollback",
-            **common,
+            cloud, args.name, deploy.ENVIRONMENTS[args.env], args.image, **common
         )
     else:
         images = None
@@ -106,12 +106,7 @@ def _run_deploy(args: argparse.Namespace) -> int:
             if args.broker_image:
                 images["broker"] = args.broker_image
         result = deploy.deploy_agent(
-            cloud,
-            args.name,
-            deploy.ENVIRONMENTS[args.env],
-            images,
-            rollback=args.command == "rollback",
-            **common,
+            cloud, args.name, deploy.ENVIRONMENTS[args.env], images, **common
         )
     shape = f" ({result.config_hash})" if result.config_hash else ""
     print(f"{result.name} in {result.environment}: {result.action}{shape}")
@@ -156,10 +151,11 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name, help=help_text)
         p.add_argument("name", help=what)
         p.add_argument("--env", required=True, choices=envs)
-        p.add_argument("--image", help="a service's image, …@sha256:…")
-        p.add_argument("--agent-image", help="an agent's image, …@sha256:…")
-        p.add_argument("--broker-image", help="an agent's broker image, …@sha256:…")
         if name == "deploy":
+            # A rollback takes no images: it only steps back through history.
+            p.add_argument("--image", help="a service's image, …@sha256:…")
+            p.add_argument("--agent-image", help="an agent's image, …@sha256:…")
+            p.add_argument("--broker-image", help="an agent's broker image, …@sha256:…")
             p.add_argument(
                 "--force",
                 action="store_true",

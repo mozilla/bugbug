@@ -157,6 +157,14 @@ def _summary(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# A rollback that took images would skip the stale-build check and put any
+# compatible image on an environment without going through a deploy.
+_ROLLBACK_WITH_IMAGES = (
+    "a rollback only goes back through the recorded deployments and takes no "
+    "images; deploy a specific image with deploy"
+)
+
+
 def _rollback_target(
     current: dict[str, Any] | None, name: str, env: Environment
 ) -> dict[str, str]:
@@ -290,9 +298,11 @@ def deploy_agent(
     for agents that have one. With ``rollback``, leave ``images`` out to go
     back to the deployment before the current one.
     """
+    if rollback and images is not None:
+        raise DeployError(_ROLLBACK_WITH_IMAGES)
     current, generation = _read_record(cloud, env, agent)
 
-    if rollback and images is None:
+    if rollback:
         images = _rollback_target(current, agent, env)
     if not images or "agent" not in images:
         raise DeployError("an agent image is required")
@@ -385,6 +395,8 @@ def deploy_service(
         raise DeployError(
             f"{service} is not a service; services are {', '.join(SERVICES)}"
         )
+    if rollback and image is not None:
+        raise DeployError(_ROLLBACK_WITH_IMAGES)
     current, generation = _read_record(cloud, env, service)
 
     name = env.service_name(service)
@@ -399,7 +411,7 @@ def deploy_service(
             f"{name} runs {len(containers)} containers; the deploy script handles one"
         )
 
-    if rollback and image is None:
+    if rollback:
         images = _rollback_target(current, service, env)
     elif image:
         images = {containers[0]: image}
