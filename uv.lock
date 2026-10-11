@@ -2903,6 +2903,7 @@ dependencies = [
     { name = "google-cloud-storage" },
     { name = "pydantic" },
     { name = "requests" },
+    { name = "typer" },
 ]
 
 [package.optional-dependencies]
@@ -2919,6 +2920,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "requests", specifier = ">=2.32.0" },
+    { name = "typer", specifier = ">=0.12.0" },
 ]
 provides-extras = ["dev"]
 
