@@ -9,6 +9,8 @@ from hackbot_deploy.deploy import (
     StoredObject,
     WaitingForInfra,
     deploy_agent,
+    deploy_service,
+    promote,
     promote_agent,
 )
 
@@ -25,7 +27,9 @@ class FakeCloud:
         self.objects: dict[tuple[str, str], StoredObject] = {}
         self.labels: dict[str, dict[str, str]] = {}
         self.jobs: dict[str, dict[str, Any]] = {}
+        self.services: dict[str, dict[str, Any]] = {}
         self.updates: list[tuple[str, dict[str, str]]] = []
+        self.revisions_fail = False
 
     # --- setup helpers ---
     def apply(
@@ -62,6 +66,13 @@ class FakeCloud:
                     ]
                 }
             },
+        }
+
+    def service(self, env: deploy.Environment, service: str) -> None:
+        self.services[env.service_name(service)] = {
+            "template": {"containers": [{"name": service, "image": "placeholder"}]},
+            "latestReadyRevision": "r1",
+            "latestCreatedRevision": "r1",
         }
 
     def build(
@@ -108,6 +119,21 @@ class FakeCloud:
     ) -> None:
         for container in self.jobs[name]["template"]["template"]["containers"]:
             container["image"] = images[container["name"]]
+        self.updates.append((name, images))
+
+    def get_service(self, project: str, region: str, name: str) -> dict[str, Any]:
+        return json.loads(json.dumps(self.services[name]))
+
+    def set_service_images(
+        self, project: str, region: str, name: str, images: dict[str, str]
+    ) -> None:
+        svc = self.services[name]
+        for container in svc["template"]["containers"]:
+            container["image"] = images[container["name"]]
+        n = int(svc["latestCreatedRevision"][1:]) + 1
+        svc["latestCreatedRevision"] = f"r{n}"
+        if not self.revisions_fail:
+            svc["latestReadyRevision"] = f"r{n}"
         self.updates.append((name, images))
 
 
@@ -301,3 +327,101 @@ def test_environment_names_match_the_terraform() -> None:
         ENVIRONMENTS["stage"].registry_bucket == "moz-fx-hackbot-nonprod-registry-stage"
     )
     assert ENVIRONMENTS["prod"].registry_bucket == "moz-fx-hackbot-prod-registry"
+    assert ENVIRONMENTS["stage"].service_name("hackbot-api") == "hackbot-api-stage"
+    assert ENVIRONMENTS["prod"].service_name("hackbot-ui") == "hackbot-ui"
+
+
+# --- Services ----------------------------------------------------------------
+
+
+@pytest.fixture
+def services() -> FakeCloud:
+    fake = FakeCloud()
+    for env in (DEV, STAGE):
+        fake.service(env, "hackbot-api")
+    return fake
+
+
+def api_image(cloud: FakeCloud, n: int, created: str = "2026-10-09T10:00:00Z") -> str:
+    ref = f"{REPO}/hackbot-api@sha256:{n:064x}"
+    # Service images carry no config hash: services have no gate.
+    cloud.labels[ref] = {deploy.LABEL_CREATED: created, deploy.LABEL_REVISION: "abc123"}
+    return ref
+
+
+def test_service_deploys_without_a_gate(services: FakeCloud) -> None:
+    result = deploy_service(
+        services, "hackbot-api", DEV, api_image(services, 1), actor="test"
+    )
+
+    assert result.action == "deployed"
+    assert result.config_hash is None
+    assert services.updates == [
+        ("hackbot-api-dev", {"hackbot-api": api_image(services, 1)})
+    ]
+    record = services.record(DEV, "hackbot-api")
+    assert (record["runtime"], record["config_hash"]) == ("cloud_run_service", None)
+
+
+def test_service_refuses_tags(services: FakeCloud) -> None:
+    with pytest.raises(DeployError, match="digest"):
+        deploy_service(services, "hackbot-api", DEV, f"{REPO}/hackbot-api:latest")
+
+
+def test_only_known_services_are_services(services: FakeCloud) -> None:
+    with pytest.raises(DeployError, match="not a service"):
+        deploy_service(services, "bug-fix", DEV, api_image(services, 1))
+
+
+def test_a_revision_that_never_becomes_ready_fails_and_is_not_recorded(
+    services: FakeCloud,
+) -> None:
+    services.revisions_fail = True
+    with pytest.raises(DeployError, match="keeps serving r1"):
+        deploy_service(services, "hackbot-api", DEV, api_image(services, 1))
+    assert (DEV.registry_bucket, "deployments/hackbot-api.json") not in services.objects
+
+
+def test_service_redeploy_is_a_no_op_and_stale_builds_are_refused(
+    services: FakeCloud,
+) -> None:
+    deploy_service(
+        services, "hackbot-api", DEV, api_image(services, 2, "2026-10-09T12:00:00Z")
+    )
+    assert (
+        deploy_service(
+            services, "hackbot-api", DEV, api_image(services, 2, "2026-10-09T12:00:00Z")
+        ).action
+        == "unchanged"
+    )
+    with pytest.raises(DeployError, match="--force"):
+        deploy_service(
+            services, "hackbot-api", DEV, api_image(services, 1, "2026-10-09T11:00:00Z")
+        )
+
+
+def test_service_rollback_goes_back_one_deployment_at_a_time(
+    services: FakeCloud,
+) -> None:
+    first, second = (
+        deploy_service(
+            services,
+            "hackbot-api",
+            DEV,
+            api_image(services, n, f"2026-10-09T1{n}:00:00Z"),
+        ).images
+        for n in (1, 2)
+    )
+    deploy_service(
+        services, "hackbot-api", DEV, api_image(services, 3, "2026-10-09T13:00:00Z")
+    )
+
+    assert deploy_service(services, "hackbot-api", DEV, rollback=True).images == second
+    assert deploy_service(services, "hackbot-api", DEV, rollback=True).images == first
+
+
+def test_promote_dispatches_services(services: FakeCloud) -> None:
+    images = deploy_service(services, "hackbot-api", DEV, api_image(services, 1)).images
+    result = promote(services, "hackbot-api", DEV, STAGE, actor="test")
+    assert result.images == images
+    assert services.updates[-1] == ("hackbot-api-stage", images)

@@ -1,17 +1,21 @@
-"""Ship agent images onto their infrastructure.
+"""Ship images onto hackbot's infrastructure: agents and the API and UI.
 
-Terraform owns an agent's infrastructure; this owns which image runs on it.
+Terraform owns the infrastructure; this owns which image runs on it.
 Deploying, promoting and rolling back are all the same operation: set the
-images an agent runs in one environment, then record that in the
-environment's registry bucket.
+images something runs in one environment, then record that in the
+environment's registry bucket (``deployments/<name>.json``).
 
-The gate. Every image carries the ``config_hash`` of the shape it was built
-for (the ``hackbot.config_hash`` label), and every environment's Terraform
-publishes the shape it has applied (``applied.json``). A forward deploy needs
-the two to match; otherwise the image would land on infrastructure it wasn't
-built for, so the deploy waits for the infra PR to be applied. A rollback
-needs the image's hash to be in ``compatible``, the shapes the current
-infrastructure can still run.
+The gate, for agents. Every agent image carries the ``config_hash`` of the
+shape it was built for (the ``hackbot.config_hash`` label), and every
+environment's Terraform publishes the shape it has applied (``applied.json``).
+A forward deploy needs the two to match; otherwise the image would land on
+infrastructure it wasn't built for, so the deploy waits for the infra PR to be
+applied. A rollback needs the image's hash to be in ``compatible``, the shapes
+the current infrastructure can still run.
+
+The API and UI have no gate. Their infrastructure is written by hand in
+webservices-infra and changes there first, so an infra change that new code
+depends on is simply applied before the code ships.
 
 Images are always pinned by digest. A tag can be moved by anyone who can push;
 a digest can't.
@@ -21,6 +25,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -32,6 +37,9 @@ LABEL_REVISION = "org.opencontainers.image.revision"
 LABEL_CREATED = "org.opencontainers.image.created"
 JOB_LABEL_CONFIG_HASH = "hackbot-config-hash"
 HISTORY_LIMIT = 10
+
+# Deployed as Cloud Run services; everything else is an agent.
+SERVICES = ("hackbot-api", "hackbot-ui")
 
 
 @dataclass(frozen=True)
@@ -53,6 +61,9 @@ class Environment:
 
     def job_name(self, agent: str) -> str:
         return f"hackbot-agent-{agent}{self.name_suffix}"
+
+    def service_name(self, service: str) -> str:
+        return f"{service}{self.name_suffix}"
 
 
 ENVIRONMENTS = {
@@ -98,14 +109,21 @@ class Cloud(Protocol):
     ) -> None:
         """Set container images by container name, and wait until done."""
 
+    def get_service(self, project: str, region: str, name: str) -> dict[str, Any]: ...
+
+    def set_service_images(
+        self, project: str, region: str, name: str, images: dict[str, str]
+    ) -> None:
+        """Set container images by container name, and wait for the new revision."""
+
 
 @dataclass
 class Result:
-    agent: str
+    name: str
     environment: str
-    action: str  # "deployed", "rolled back", "unchanged"
+    action: str  # "deployed", "rolled back", "unchanged", "would be …"
     images: dict[str, str]
-    config_hash: str
+    config_hash: str | None
     record: dict[str, Any] = field(default_factory=dict)
 
 
@@ -120,6 +138,111 @@ def require_digest(image: str) -> str:
 
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _read_record(
+    cloud: Cloud, env: Environment, name: str
+) -> tuple[dict[str, Any] | None, int]:
+    stored = cloud.read_object(env.registry_bucket, f"deployments/{name}.json")
+    if stored is None:
+        return None, 0
+    return json.loads(stored.data), stored.generation
+
+
+def _summary(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        k: record[k]
+        for k in ("images", "config_hash", "revision", "created", "deployed_at")
+        if k in record
+    }
+
+
+def _rollback_target(
+    current: dict[str, Any] | None, name: str, env: Environment
+) -> dict[str, str]:
+    if not current or not current.get("history"):
+        raise DeployError(
+            f"{name} in {env.name} has no earlier deployment to roll back to"
+        )
+    return dict(current["history"][0]["images"])
+
+
+def _refuse_stale(
+    current: dict[str, Any] | None,
+    created: str | None,
+    name: str,
+    env: Environment,
+    *,
+    rollback: bool,
+    force: bool,
+) -> None:
+    # Builds aren't serialised, so an older build can finish last. Don't let
+    # it replace a newer one, unless that's the point (a rollback, or --force).
+    if rollback or force or not current or not created or not current.get("created"):
+        return
+    if created < current["created"]:
+        raise DeployError(
+            f"{name} in {env.name} already runs an image built at {current['created']}; "
+            f"this one was built at {created}. Use --force to deploy it anyway."
+        )
+
+
+def _history(
+    current: dict[str, Any] | None, images: dict[str, str], *, rollback: bool
+) -> list[dict[str, Any]]:
+    if rollback:
+        # The target leaves the history; the deployment being rolled back
+        # doesn't join it, so rolling back twice goes back two deployments.
+        return [
+            h for h in (current or {}).get("history", []) if h.get("images") != images
+        ]
+    return ([_summary(current)] + current.get("history", [])) if current else []
+
+
+def _ship(
+    cloud: Cloud,
+    env: Environment,
+    name: str,
+    *,
+    images: dict[str, str],
+    config_hash: str | None,
+    runtime: str,
+    labels: dict[str, str],
+    current: dict[str, Any] | None,
+    generation: int,
+    rollback: bool,
+    dry_run: bool,
+    actor: str,
+    update: Callable[[], None],
+) -> Result:
+    """Build the deployment record, apply the update, and write the record."""
+    record = {
+        "name": name,
+        "environment": env.name,
+        "runtime": runtime,
+        "images": images,
+        "config_hash": config_hash,
+        "revision": labels.get(LABEL_REVISION),
+        "created": labels.get(LABEL_CREATED),
+        "deployed_at": _now(),
+        "deployed_by": actor,
+        "history": _history(current, images, rollback=rollback)[:HISTORY_LIMIT],
+    }
+    action = "rolled back" if rollback else "deployed"
+    if dry_run:
+        return Result(name, env.name, f"would be {action}", images, config_hash, record)
+
+    update()
+    cloud.write_object(
+        env.registry_bucket,
+        f"deployments/{name}.json",
+        (json.dumps(record, indent=2) + "\n").encode(),
+        if_generation_match=generation,
+    )
+    return Result(name, env.name, action, images, config_hash, record)
+
+
+# --- Agents ------------------------------------------------------------------
 
 
 def _applied(cloud: Cloud, env: Environment, agent: str) -> dict[str, Any]:
@@ -150,23 +273,6 @@ def _image_hash(cloud: Cloud, images: dict[str, str]) -> tuple[str, dict[str, st
     return next(iter(hashes.values())), labels["agent"]  # type: ignore[return-value]
 
 
-def _read_record(
-    cloud: Cloud, env: Environment, agent: str
-) -> tuple[dict[str, Any] | None, int]:
-    stored = cloud.read_object(env.registry_bucket, f"deployments/{agent}.json")
-    if stored is None:
-        return None, 0
-    return json.loads(stored.data), stored.generation
-
-
-def _summary(record: dict[str, Any]) -> dict[str, Any]:
-    return {
-        k: record[k]
-        for k in ("images", "config_hash", "revision", "created", "deployed_at")
-        if k in record
-    }
-
-
 def deploy_agent(
     cloud: Cloud,
     agent: str,
@@ -187,11 +293,7 @@ def deploy_agent(
     current, generation = _read_record(cloud, env, agent)
 
     if rollback and images is None:
-        if not current or not current.get("history"):
-            raise DeployError(
-                f"{agent} in {env.name} has no earlier deployment to roll back to"
-            )
-        images = dict(current["history"][0]["images"])
+        images = _rollback_target(current, agent, env)
     if not images or "agent" not in images:
         raise DeployError("an agent image is required")
     images = {container: require_digest(ref) for container, ref in images.items()}
@@ -213,22 +315,9 @@ def deploy_agent(
 
     if current and current.get("images") == images:
         return Result(agent, env.name, "unchanged", images, image_hash, current)
-
-    # Builds aren't serialised, so an older build can finish last. Don't let
-    # it replace a newer one, unless that's the point (a rollback, or --force).
-    created = labels.get(LABEL_CREATED)
-    if (
-        not rollback
-        and not force
-        and current
-        and created
-        and current.get("created")
-        and created < current["created"]
-    ):
-        raise DeployError(
-            f"{agent} in {env.name} already runs an image built at {current['created']}; "
-            f"this one was built at {created}. Use --force to deploy it anyway."
-        )
+    _refuse_stale(
+        current, labels.get(LABEL_CREATED), agent, env, rollback=rollback, force=force
+    )
 
     job_name = env.job_name(agent)
     job = cloud.get_job(env.project_id, REGION, job_name)
@@ -244,57 +333,145 @@ def deploy_agent(
             f"{job_name} runs containers {sorted(containers)}, but images were given for {sorted(images)}"
         )
 
-    if rollback:
-        # The target leaves the history; the deployment being rolled back
-        # doesn't join it, so rolling back twice goes back two deployments.
-        history = [
-            h for h in (current or {}).get("history", []) if h.get("images") != images
-        ]
-    else:
-        history = ([_summary(current)] + current.get("history", [])) if current else []
-    record = {
-        "agent": agent,
-        "environment": env.name,
-        "runtime": applied["runtime"],
-        "images": images,
-        "config_hash": image_hash,
-        "revision": labels.get(LABEL_REVISION),
-        "created": created,
-        "deployed_at": _now(),
-        "deployed_by": actor,
-        "history": history[:HISTORY_LIMIT],
-    }
-    action = "rolled back" if rollback else "deployed"
-    if dry_run:
-        return Result(agent, env.name, f"would be {action}", images, image_hash, record)
+    def update() -> None:
+        cloud.set_job_images(env.project_id, REGION, job_name, images)
+        after = cloud.get_job(env.project_id, REGION, job_name)
+        running = {
+            c["name"]: c["image"] for c in after["template"]["template"]["containers"]
+        }
+        if running != images:
+            raise DeployError(
+                f"{job_name} reports {running} after the update, not {images}"
+            )
 
-    cloud.set_job_images(env.project_id, REGION, job_name, images)
-    after = cloud.get_job(env.project_id, REGION, job_name)
-    running = {
-        c["name"]: c["image"] for c in after["template"]["template"]["containers"]
-    }
-    if running != images:
+    return _ship(
+        cloud,
+        env,
+        agent,
+        images=images,
+        config_hash=image_hash,
+        runtime=applied["runtime"],
+        labels=labels,
+        current=current,
+        generation=generation,
+        rollback=rollback,
+        dry_run=dry_run,
+        actor=actor,
+        update=update,
+    )
+
+
+# --- The API and UI ----------------------------------------------------------
+
+
+def deploy_service(
+    cloud: Cloud,
+    service: str,
+    env: Environment,
+    image: str | None = None,
+    *,
+    rollback: bool = False,
+    force: bool = False,
+    dry_run: bool = False,
+    actor: str = "unknown",
+) -> Result:
+    """Put ``image`` on ``service`` in ``env``, or roll back to the last deployment.
+
+    Only the image changes; everything else about the service is Terraform's.
+    A new revision is rolled out, and if it never becomes ready Cloud Run keeps
+    serving the old one.
+    """
+    if service not in SERVICES:
         raise DeployError(
-            f"{job_name} reports {running} after the update, not {images}"
+            f"{service} is not a service; services are {', '.join(SERVICES)}"
+        )
+    current, generation = _read_record(cloud, env, service)
+
+    name = env.service_name(service)
+    containers = [
+        c["name"]
+        for c in cloud.get_service(env.project_id, REGION, name)["template"][
+            "containers"
+        ]
+    ]
+    if len(containers) != 1:
+        raise DeployError(
+            f"{name} runs {len(containers)} containers; the deploy script handles one"
         )
 
-    cloud.write_object(
-        env.registry_bucket,
-        f"deployments/{agent}.json",
-        (json.dumps(record, indent=2) + "\n").encode(),
-        if_generation_match=generation,
+    if rollback and image is None:
+        images = _rollback_target(current, service, env)
+    elif image:
+        images = {containers[0]: image}
+    else:
+        raise DeployError("an image is required")
+    images = {container: require_digest(ref) for container, ref in images.items()}
+    if set(images) != set(containers):
+        raise DeployError(
+            f"{name} runs container {containers[0]}, but images were given for {sorted(images)}"
+        )
+
+    labels = cloud.image_labels(images[containers[0]])
+    if current and current.get("images") == images:
+        return Result(service, env.name, "unchanged", images, None, current)
+    _refuse_stale(
+        current, labels.get(LABEL_CREATED), service, env, rollback=rollback, force=force
     )
-    return Result(agent, env.name, action, images, image_hash, record)
+
+    def update() -> None:
+        cloud.set_service_images(env.project_id, REGION, name, images)
+        after = cloud.get_service(env.project_id, REGION, name)
+        running = {c["name"]: c["image"] for c in after["template"]["containers"]}
+        if running != images:
+            raise DeployError(
+                f"{name} reports {running} after the update, not {images}"
+            )
+        if after.get("latestReadyRevision") != after.get("latestCreatedRevision"):
+            raise DeployError(
+                f"the new revision of {name} ({after.get('latestCreatedRevision')}) isn't ready; "
+                f"Cloud Run keeps serving {after.get('latestReadyRevision')}"
+            )
+
+    return _ship(
+        cloud,
+        env,
+        service,
+        images=images,
+        config_hash=None,
+        runtime="cloud_run_service",
+        labels=labels,
+        current=current,
+        generation=generation,
+        rollback=rollback,
+        dry_run=dry_run,
+        actor=actor,
+        update=update,
+    )
+
+
+# --- Either --------------------------------------------------------------------
+
+
+def promote(
+    cloud: Cloud, name: str, source: Environment, target: Environment, **kwargs: Any
+) -> Result:
+    """Deploy to ``target`` exactly the images ``name`` runs in ``source``."""
+    record, _ = _read_record(cloud, source, name)
+    if record is None:
+        raise DeployError(f"{name} has never been deployed to {source.name}")
+    images = dict(record["images"])
+    if name in SERVICES:
+        return deploy_service(
+            cloud, name, target, next(iter(images.values())), **kwargs
+        )
+    return deploy_agent(cloud, name, target, images, **kwargs)
 
 
 def promote_agent(
     cloud: Cloud, agent: str, source: Environment, target: Environment, **kwargs: Any
 ) -> Result:
     """Deploy to ``target`` exactly the images ``agent`` runs in ``source``."""
-    record, _ = _read_record(cloud, source, agent)
-    if record is None:
-        raise DeployError(f"{agent} has never been deployed to {source.name}")
-    return deploy_agent(cloud, agent, target, dict(record["images"]), **kwargs)
+    return promote(cloud, agent, source, target, **kwargs)
 
 
 class GoogleCloud:
@@ -407,9 +584,33 @@ class GoogleCloud:
         ).json()
         return config.get("config", {}).get("Labels") or {}
 
+    @staticmethod
+    def _run_url(project: str, region: str, kind: str, name: str) -> str:
+        return f"https://run.googleapis.com/v2/projects/{project}/locations/{region}/{kind}/{name}"
+
+    def _patch_and_wait(self, url: str, body: dict[str, Any], what: str) -> None:
+        operation = self._check(
+            self.session.patch(url, json=body), f"updating {what}"
+        ).json()
+        deadline = time.monotonic() + self.timeout_seconds
+        while not operation.get("done"):
+            if time.monotonic() > deadline:
+                raise DeployError(
+                    f"updating {what} didn't finish in {self.timeout_seconds:.0f}s ({operation['name']})"
+                )
+            time.sleep(self.poll_seconds)
+            operation = self._check(
+                self.session.get(f"https://run.googleapis.com/v2/{operation['name']}"),
+                f"waiting on {what}",
+            ).json()
+        if "error" in operation:
+            raise DeployError(f"updating {what} failed: {operation['error']}")
+
     def get_job(self, project: str, region: str, name: str) -> dict[str, Any]:
-        url = f"https://run.googleapis.com/v2/projects/{project}/locations/{region}/jobs/{name}"
-        return self._check(self.session.get(url), f"Cloud Run Job {name}").json()
+        return self._check(
+            self.session.get(self._run_url(project, region, "jobs", name)),
+            f"Cloud Run Job {name}",
+        ).json()
 
     def set_job_images(
         self, project: str, region: str, name: str, images: dict[str, str]
@@ -417,20 +618,20 @@ class GoogleCloud:
         job = self.get_job(project, region, name)
         for container in job["template"]["template"]["containers"]:
             container["image"] = images[container["name"]]
-        url = f"https://run.googleapis.com/v2/projects/{project}/locations/{region}/jobs/{name}"
-        operation = self._check(
-            self.session.patch(url, json=job), f"updating {name}"
+        self._patch_and_wait(self._run_url(project, region, "jobs", name), job, name)
+
+    def get_service(self, project: str, region: str, name: str) -> dict[str, Any]:
+        return self._check(
+            self.session.get(self._run_url(project, region, "services", name)),
+            f"Cloud Run service {name}",
         ).json()
-        deadline = time.monotonic() + self.timeout_seconds
-        while not operation.get("done"):
-            if time.monotonic() > deadline:
-                raise DeployError(
-                    f"updating {name} didn't finish in {self.timeout_seconds:.0f}s ({operation['name']})"
-                )
-            time.sleep(self.poll_seconds)
-            operation = self._check(
-                self.session.get(f"https://run.googleapis.com/v2/{operation['name']}"),
-                f"waiting on {name}",
-            ).json()
-        if "error" in operation:
-            raise DeployError(f"updating {name} failed: {operation['error']}")
+
+    def set_service_images(
+        self, project: str, region: str, name: str, images: dict[str, str]
+    ) -> None:
+        service = self.get_service(project, region, name)
+        for container in service["template"]["containers"]:
+            container["image"] = images[container["name"]]
+        self._patch_and_wait(
+            self._run_url(project, region, "services", name), service, name
+        )

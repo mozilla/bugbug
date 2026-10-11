@@ -1,8 +1,9 @@
 # hackbot-deploy
 
-Deploy tooling for hackbot agents: the `[deploy]` table in each agent's
+Deploy tooling for hackbot: the `[deploy]` table in each agent's
 `hackbot.toml`, the generator that turns those tables into `agents.json` for
-mozilla/webservices-infra, and the script that ships images.
+mozilla/webservices-infra, and the script that ships images for agents and for
+the API and UI.
 
 The split it enforces: **Terraform owns an agent's infrastructure, this owns
 which image runs on it.** Changing an agent's code ships without touching the
@@ -75,15 +76,20 @@ non-ASCII escaped, exactly as that repo's `pretty-format-json` hook wants.
 
 ```sh
 hackbot-deploy deploy  bug-fix --env dev --agent-image …@sha256:… --broker-image …@sha256:…
+hackbot-deploy deploy  hackbot-api --env dev --image …@sha256:…
 hackbot-deploy promote bug-fix --from stage --to prod
-hackbot-deploy rollback bug-fix --env prod
+hackbot-deploy rollback hackbot-ui --env prod
 ```
+
+`hackbot-api` and `hackbot-ui` are services and take `--image`; anything else
+is an agent and takes `--agent-image` (plus `--broker-image` where it has a
+broker). Mixing them up is an error.
 
 (`uv run --package hackbot-deploy python -m hackbot_deploy …` from the repo
 root.) Credentials are Application Default Credentials, so the same command
 works from Cloud Build, GitHub Actions and a laptop.
 
-What a deploy checks, in order:
+What an agent deploy checks, in order:
 
 1. Images are pinned by digest, never a tag.
 2. The images carry `hackbot.config_hash` and agree on it.
@@ -95,8 +101,13 @@ What a deploy checks, in order:
 5. The Job's containers match the images given, and its config-hash label
    agrees with `applied.json` (catching an incomplete apply).
 
-Then it updates the Job, reads it back, and writes
-`deployments/<agent>.json` with the images, commit, build time and a
+A service deploy skips the gate (2, 3 and 5): its infrastructure is written by
+hand in webservices-infra and changes there first. It changes only the image,
+and fails without recording anything if the new revision never becomes ready,
+in which case Cloud Run keeps serving the old one.
+
+Then it updates the Job or service, reads it back, and writes
+`deployments/<name>.json` with the images, commit, build time and a
 deployment history. The write is conditioned on the record's generation, so
 two concurrent deploys can't silently overwrite each other. A rollback steps
 back through that history one deployment at a time.
@@ -110,6 +121,6 @@ mirror the Terraform in webservices-infra. Change one, change both.
 
 ## Building
 
-`agents/cloudbuild.yaml` builds an agent's images with the hash label, then
-deploys to dev and then stage. Its per-agent triggers are created in
-webservices-infra.
+`agents/cloudbuild.yaml` builds an agent's images with the hash label, and
+`services/<service>/cloudbuild.yaml` builds the API and UI. Each then deploys
+to dev and then stage. Their triggers are created in webservices-infra.
