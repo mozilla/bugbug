@@ -8,13 +8,16 @@ import os
 
 import pytest
 
+from bugbug import bug_features
 from bugbug.bug_features import (
     BlockedBugsNumber,
     BugExtractor,
     BugReporter,
     BugTypes,
     CommentCount,
+    CommentFirstPathComponent,
     CommentLength,
+    CommentPathsComponents,
     Component,
     DeltaNightlyRequestMerge,
     HasCrashSignature,
@@ -32,6 +35,8 @@ from bugbug.bug_features import (
     Product,
     Severity,
     Whiteboard,
+    extract_path_components,
+    find_component,
 )
 from bugbug.feature_cleanup import fileref, url
 
@@ -187,3 +192,107 @@ def test_BugTypes(read) -> None:
         BugTypes,
         [["performance"], ["memory"], ["power"], ["security"], ["crash"]],
     )
+
+
+@pytest.fixture
+def mock_component_mapping(monkeypatch):
+    # Mimics repository.get_component_mapping(), which is backed by an
+    # LMDBDict with bytes keys and memoryview values.
+    mapping = {
+        b"dom/base/nsGlobalWindow.cpp": memoryview(b"Core::DOM"),
+        b"layout/generic/nsFrame.cpp": memoryview(b"Core::Layout"),
+    }
+    monkeypatch.setattr(
+        bug_features.repository, "get_component_mapping", lambda: mapping
+    )
+    return mapping
+
+
+def test_extract_path_components(mock_component_mapping):
+    comments = [
+        {"text": "The crash happens in dom/base/nsGlobalWindow.cpp around line 42."},
+        {
+            "text": "It might also be related to layout/generic/nsFrame.cpp and "
+            "some/unknown/path.cpp."
+        },
+    ]
+
+    assert extract_path_components(comments) == ["Core::DOM", "Core::Layout"]
+
+
+def test_extract_path_components_no_match(mock_component_mapping):
+    comments = [{"text": "Nothing looks like a source path here."}]
+
+    assert extract_path_components(comments) == []
+
+
+def test_find_component_exact_match(mock_component_mapping):
+    assert (
+        find_component(b"dom/base/nsGlobalWindow.cpp", mock_component_mapping)
+        == "Core::DOM"
+    )
+
+
+def test_find_component_longest_suffix_match(mock_component_mapping):
+    # The path has an extra leading directory (e.g. a local checkout root),
+    # so it doesn't match a mapping key exactly, but its longest suffix does.
+    assert (
+        find_component(
+            b"mozilla-central/dom/base/nsGlobalWindow.cpp", mock_component_mapping
+        )
+        == "Core::DOM"
+    )
+
+
+def test_find_component_no_match(mock_component_mapping):
+    assert find_component(b"some/unknown/path.cpp", mock_component_mapping) is None
+
+
+def test_extract_path_components_extra_prefix(mock_component_mapping):
+    comments = [
+        {"text": "Reproduced with src/mozilla-central/dom/base/nsGlobalWindow.cpp."}
+    ]
+
+    assert extract_path_components(comments) == ["Core::DOM"]
+
+
+def test_comment_first_path_component(mock_component_mapping):
+    bug = {
+        "comments": [
+            {"text": "See layout/generic/nsFrame.cpp and dom/base/nsGlobalWindow.cpp."}
+        ]
+    }
+
+    assert CommentFirstPathComponent()(bug) == "Core::Layout"
+
+
+def test_comment_first_path_component_no_match(mock_component_mapping):
+    bug = {"comments": [{"text": "Nothing looks like a source path here."}]}
+
+    assert CommentFirstPathComponent()(bug) is None
+
+
+def test_comment_paths_components(mock_component_mapping):
+    bug = {
+        "comments": [
+            {"text": "See layout/generic/nsFrame.cpp and dom/base/nsGlobalWindow.cpp."}
+        ]
+    }
+
+    assert CommentPathsComponents()(bug) == {"Core::Layout": 1, "Core::DOM": 1 / 2}
+
+
+def test_comment_paths_components_repeated_mentions(mock_component_mapping):
+    bug = {
+        "comments": [
+            {
+                "text": "See layout/generic/nsFrame.cpp, then "
+                "dom/base/nsGlobalWindow.cpp, then layout/generic/nsFrame.cpp again."
+            }
+        ]
+    }
+
+    assert CommentPathsComponents()(bug) == {
+        "Core::Layout": 1 + 1 / 3,
+        "Core::DOM": 1 / 2,
+    }

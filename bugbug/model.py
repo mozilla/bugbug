@@ -7,7 +7,7 @@ import logging
 import pickle
 from collections import defaultdict
 from os import makedirs, path
-from typing import Any
+from typing import Any, Callable
 
 import matplotlib
 import numpy as np
@@ -180,6 +180,8 @@ class Model:
         self.training_dbs: list[str] = []
         # DBs and DB support files required at runtime.
         self.eval_dbs: dict[str, tuple[str, ...]] = {}
+        # Non-DB data files required for training (e.g. LMDB mappings), downloaded on demand.
+        self.training_extra_downloads: list[Callable[[], None]] = []
 
         self.le = LabelEncoder()
 
