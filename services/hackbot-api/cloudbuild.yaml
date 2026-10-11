@@ -9,6 +9,14 @@
 # build on unknown ones, so shell variables below are written `$$name`.
 
 steps:
+  # Before anything else: if an older build of this trigger is still going,
+  # stop here rather than deploy over it.
+  - id: One at a time
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      ["tools/hackbot-deploy/abort-if-older-build.sh", "$BUILD_ID", "$LOCATION"]
+
   - id: Build
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
