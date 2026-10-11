@@ -10,9 +10,10 @@ image of the ``agent`` target and they run themselves in containers of it:
     BUG_FIX_IMAGE=bug-fix-agent uv run --extra dev pytest -s tests/test_image.py
 
 They need network access: the evaluate_testcase tests download a Firefox nightly.
-Two slower tests bootstrap a Firefox checkout and build it. One makes an
+Three slower tests bootstrap a Firefox checkout and build it. One makes an
 artifact build and runs tests in it (about 13 minutes the first time, then 8),
-and one only runs when asked:
+one makes an Android artifact build, then inspects its APKs and runs unit tests
+and the formatter (about 30 minutes), and one only runs when asked:
 
 - BUG_FIX_IMAGE_FULL_BUILD=1: a full build with the agent's own mozconfig, then
   running a testcase and tests in it (hours, and a lot of memory).
@@ -40,8 +41,8 @@ import time
 from pathlib import Path
 
 import pytest
+from agent_tools import firefox
 from agent_tools.firefox import FirefoxContext
-from agent_tools.firefox.tools import bootstrap_firefox, build_firefox
 from agent_tools.firefox.tools.evaluate_testcase import evaluate_testcase
 from agent_tools.firefox.tools.js_shell_evaluator import js_shell_evaluator
 
@@ -816,7 +817,43 @@ def test_firefox_profiler(nightly, tmp_path):
     check_profiler(nightly, tmp_path)
 
 
-def checkout_and_bootstrap():
+@pytest.fixture
+def bootstrapped_checkout(request):
+    """A Firefox checkout bootstrapped the way the agent does it.
+
+    For desktop Firefox unless parametrized (indirectly) with another
+    application. Returns the FirefoxContext the agent's tools then work with.
+    """
+    return checkout_and_bootstrap(getattr(request, "param", "browser"))
+
+
+# What every bootstrap installs, and what the agent's shell should then find.
+BOOTSTRAPPED_TOOLS = (
+    "minidump-stackwalk --version",
+    "node --version",
+    "treeherder-cli --version",
+    "searchfox-cli --version",
+    "socorro-cli --version",
+    "stmo-cli --version",
+    "webspec-index --version",
+    "samply --version",
+    "profiler-cli --version",
+    "pq --version",
+)
+TOOLCHAIN_TOOLS = ("rustc --version", "cargo --version", "clang --version")
+ANDROID_TOOLS = (
+    "java -version",
+    "javac -version",
+    "adb version",
+    "aapt2 version",
+    "apksigner --version",
+    "d8 --version",
+    "sdkmanager --version",
+    "lint --version",
+)
+
+
+def checkout_and_bootstrap(application="browser"):
     """Get a Firefox checkout and bootstrap it the way the agent does."""
     step(f"Getting a Firefox checkout in {SRC}")
     # Deep enough for an artifact build to find a recent push CI has built: the
@@ -833,11 +870,12 @@ def checkout_and_bootstrap():
             + ["https://github.com/mozilla-firefox/firefox.git", SRC],
             timeout=1800,
         )
-    _write_mozconfig(FirefoxContext.from_source_repo(SRC))
+    ctx = FirefoxContext.from_source_repo(SRC)
+    _write_mozconfig(ctx)
 
     # Bootstrap runs unprivileged: everything it would need sudo for is in the image.
-    step("Bootstrapping, with the agent's bootstrap_firefox")
-    result = asyncio.run(bootstrap_firefox(SRC))
+    step(f"Bootstrapping for {application}, with the agent's bootstrap_firefox")
+    result = asyncio.run(firefox.bootstrap_firefox(ctx, application=application))
     print(result["stdout"], result["stderr"], sep="\n")
     assert result["success"], result["message"]
     # evaluate_testcase can symbolize crashes from then on, in the same process.
@@ -845,22 +883,14 @@ def checkout_and_bootstrap():
 
     # The agent's shell finds what bootstrap installed.
     step("Running the bootstrapped toolchain")
-    for command in (
-        "rustc --version",
-        "cargo --version",
-        "clang --version",
-        "minidump-stackwalk --version",
-        "node --version",
-        "treeherder-cli --version",
-        "searchfox-cli --version",
-        "socorro-cli --version",
-        "stmo-cli --version",
-        "webspec-index --version",
-        "samply --version",
-        "profiler-cli --version",
-        "pq --version",
-    ):
+    tools = list(BOOTSTRAPPED_TOOLS)
+    if application == "browser":
+        tools += TOOLCHAIN_TOOLS
+    if application.startswith("mobile_android"):
+        tools += ANDROID_TOOLS
+    for command in tools:
         sh(command)
+    return ctx
 
 
 def mach(*args, mozconfig=None, timeout=900):
@@ -871,8 +901,7 @@ def mach(*args, mozconfig=None, timeout=900):
     return run(["./mach", *args], cwd=SRC, env=env, timeout=timeout).stdout
 
 
-def test_artifact_build_and_tests(tmp_path):
-    checkout_and_bootstrap()
+def test_artifact_build_and_tests(bootstrapped_checkout, tmp_path):
 
     # The agent's debug + clang-plugin config finds the bootstrapped toolchain.
     step("Configuring with the agent's mozconfig")
@@ -946,8 +975,8 @@ def test_artifact_build_and_tests(tmp_path):
     assert formatted == "int probe(int a) { return a + 1; }\n"
 
 
-def build_firefox_showing_progress(fx):
-    """The agent's build_firefox, printing mach's log as it goes.
+def build_firefox_showing_progress(ctx):
+    """The agent's build_firefox tool, printing mach's log as it goes.
 
     build_firefox returns mach's output only at the end. Under a coding agent (it
     sets CLAUDECODE) mach also writes it to a log as it goes; follow that.
@@ -956,7 +985,7 @@ def build_firefox_showing_progress(fx):
 
     def follow_build_log():
         started = time.time()
-        logs = fx.objdir / ".mozbuild" / "logs" / "build"
+        logs = ctx.build_config()[1] / ".mozbuild" / "logs" / "build"
         while not done.is_set():
             new = [
                 p for p in logs.glob("build_log_*.log") if p.stat().st_mtime >= started
@@ -978,16 +1007,15 @@ def build_firefox_showing_progress(fx):
     follower = threading.Thread(target=follow_build_log)
     follower.start()
     try:
-        return asyncio.run(build_firefox(fx.source_dir, fx.mozconfig, fx.objdir))
+        return asyncio.run(firefox.build_firefox(ctx))
     finally:
         done.set()
         follower.join()
 
 
 @pytest.mark.skipif(not FULL_BUILD, reason="BUG_FIX_IMAGE_FULL_BUILD is not set")
-def test_full_build_and_tests(tmp_path_factory):
-    checkout_and_bootstrap()
-    fx = FirefoxContext.from_source_repo(SRC)
+def test_full_build_and_tests(bootstrapped_checkout, tmp_path_factory):
+    fx = bootstrapped_checkout
 
     # What the agent builds, with its own tool and mozconfig.
     step("Building, with the agent's build_firefox and mozconfig")
@@ -1022,6 +1050,84 @@ def test_full_build_and_tests(tmp_path_factory):
     mach("static-analysis", "check", "xpcom/string/nsReadableUtils.cpp", timeout=3600)
 
 
+GECKOVIEW_EXAMPLE_APK = (
+    "gradle/build/mobile/android/geckoview_example/outputs/apk/debug"
+    "/geckoview_example-debug.apk"
+)
+
+
+@pytest.mark.parametrize(
+    "bootstrapped_checkout", ["mobile_android_artifact_mode"], indirect=True
+)
+def test_android_build_and_tests(bootstrapped_checkout):
+    ctx = bootstrapped_checkout
+    # Bootstrapping for Android set the agent's tools up to build it.
+    android, objdir = ctx.build_config()
+    assert android == ctx.android_mozconfig and android.exists()
+
+    step("Making an Android artifact build, with the agent's build_firefox")
+    result = build_firefox_showing_progress(ctx)
+    step("Built" if result["success"] else "Build failed")
+    assert result["success"], result["message"]
+
+    step("Inspecting the APKs it built")
+    apk = objdir / GECKOVIEW_EXAMPLE_APK
+    assert (
+        run(["apkanalyzer", "manifest", "application-id", apk])
+        .stdout.strip()
+        .endswith("org.mozilla.geckoview_example")
+    )
+    run(["apksigner", "verify", apk])
+
+    # The tree's android skill: `./mach gradle -p <subproject>`, not gradlew.
+    step("Running android-components unit tests")
+    mach(
+        "gradle",
+        "-p",
+        "mobile/android/android-components",
+        ":components:support-base:testDebugUnitTest",
+        "--tests",
+        "mozilla.components.support.base.log.LogTest",
+        mozconfig=android,
+        timeout=3600,
+    )
+    report = (
+        objdir / "gradle/build/mobile/android/android-components"
+        "/components/support/base/test-results/testDebugUnitTest"
+        "/TEST-mozilla.components.support.base.log.LogTest.xml"
+    ).read_text()
+    assert 'failures="0"' in report and 'errors="0"' in report
+    assert 'tests="0"' not in report
+
+    step("Formatting Java")
+    probe = SRC / (
+        "mobile/android/geckoview_example/src/main/java/org/mozilla"
+        "/geckoview_example/HackbotFormatProbe.java"
+    )
+    probe.write_text(
+        "/* This Source Code Form is subject to the terms of the Mozilla Public\n"
+        " * License, v. 2.0. If a copy of the MPL was not distributed with this\n"
+        " * file, You can obtain one at http://mozilla.org/MPL/2.0/. */\n\n"
+        "package org.mozilla.geckoview_example;\n\n"
+        "class HackbotFormatProbe { int   probe( int a ){return a+1;} }\n"
+    )
+    try:
+        lint = ["lint", "-l", "android-format", probe.relative_to(SRC)]
+        check = run(
+            ["./mach", *lint],
+            cwd=SRC,
+            env={**os.environ, "MOZCONFIG": str(android)},
+            timeout=1800,
+            check=False,
+        )
+        assert check.returncode != 0, "misformatted Java went unnoticed"
+        mach(*lint, "--fix", mozconfig=android, timeout=1800)
+        formatted = probe.read_text()
+    finally:
+        probe.unlink()
+    assert "  int probe(int a) {\n    return a + 1;\n  }" in formatted
+
+
 # Outside the image, run the tests above in containers of it instead: one for the
 # quick tests and one for each slow test, which needs a fresh home directory.
 if not INSIDE:
@@ -1031,7 +1137,11 @@ if not INSIDE:
     @pytest.mark.parametrize(
         ("selection", "env"),
         [
-            pytest.param("not artifact_build and not full_build", {}, id="quick"),
+            pytest.param(
+                "not artifact_build and not full_build and not android",
+                {},
+                id="quick",
+            ),
             pytest.param("artifact_build", {}, id="artifact_build"),
             pytest.param(
                 "full_build",
@@ -1041,6 +1151,7 @@ if not INSIDE:
                     not FULL_BUILD, reason="BUG_FIX_IMAGE_FULL_BUILD is not set"
                 ),
             ),
+            pytest.param("android", {}, id="android"),
         ],
     )
     def test_in_image(selection, env):

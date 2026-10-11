@@ -365,8 +365,8 @@ tasks:
                     cd agents/bug-fix &&
                     unset TASKCLUSTER_ROOT_URL &&
                     export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
-                    (python -m pytest -v -rs tests/test_image.py -k 'not artifact_build' ||
-                    python -m pytest -v -rs --last-failed tests/test_image.py -k 'not artifact_build')"
+                    (python -m pytest -v -rs tests/test_image.py -k 'not artifact_build and not android' ||
+                    python -m pytest -v -rs --last-failed tests/test_image.py -k 'not artifact_build and not android')"
               metadata:
                 name: bugbug bug-fix agent image tests
                 description: bugbug bug-fix agent image tests
@@ -438,6 +438,43 @@ tasks:
                 metadata:
                   name: bugbug bug-fix agent image full build tests
                   description: bugbug bug-fix agent image full build tests
+
+        # Bootstraps a Firefox checkout for Android, makes an artifact build and
+        # runs tests in it.
+        # Too slow for every pull request, it runs after merges that change the
+        # image or what goes into it.
+        - $if: 'tasks_for == "github-push" && head_branch == "refs/heads/master" && touches_bug_fix_image'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("bug_fix_image_android_tests") }
+                dependencies:
+                  - { $eval: as_slugid("bug_fix_image_build") }
+                deadline: { $fromNow: "3 hours" }
+                # The Android SDK and NDK take ~14 GiB, which leaves other pools' disks
+                # nearly full.
+                workerType: firefox-build
+                payload:
+                  maxRunTime: 7200
+                  image:
+                    type: task-image
+                    path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                    taskId: { $eval: as_slugid("bug_fix_image_build") }
+                  command:
+                    - "/bin/bash"
+                    - "-cx"
+                    - "git clone --quiet ${repository} /tmp/bugbug &&
+                      cd /tmp/bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
+                      cd agents/bug-fix &&
+                      unset TASKCLUSTER_ROOT_URL &&
+                      export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                      (python -m pytest -s -v -rs tests/test_image.py -k android ||
+                      python -m pytest -s -v -rs --last-failed tests/test_image.py -k android)"
+                metadata:
+                  name: bugbug bug-fix agent image Android tests
+                  description: bugbug bug-fix agent image Android tests
 
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
