@@ -1,12 +1,4 @@
 # Build one agent's images and ship them to dev, then stage.
-#
-# Each agent gets its own trigger (created by Terraform in webservices-infra
-# from agents.json) that runs this on a push to main touching agents/<agent>/,
-# with _AGENT set. Prod is a separate, approved promotion; nothing here
-# reaches it.
-#
-# Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
-# build on unknown ones, so shell variables below are written `$$name`.
 steps:
   - id: Shape
     name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
