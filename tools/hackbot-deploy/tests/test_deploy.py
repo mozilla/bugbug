@@ -30,6 +30,7 @@ class FakeCloud:
         self.services: dict[str, dict[str, Any]] = {}
         self.updates: list[tuple[str, dict[str, str]]] = []
         self.revisions_fail = False
+        self.builds: list[dict[str, Any]] = []
 
     # --- setup helpers ---
     def apply(
@@ -135,6 +136,19 @@ class FakeCloud:
         if not self.revisions_fail:
             svc["latestReadyRevision"] = f"r{n}"
         self.updates.append((name, images))
+
+    def get_build(self, project: str, location: str, build_id: str) -> dict[str, Any]:
+        return next(b for b in self.builds if b["id"] == build_id)
+
+    def ongoing_builds(
+        self, project: str, location: str, trigger_id: str
+    ) -> list[dict[str, Any]]:
+        return [
+            b
+            for b in self.builds
+            if b.get("buildTriggerId") == trigger_id
+            and b["status"] in ("QUEUED", "WORKING")
+        ]
 
 
 @pytest.fixture
@@ -460,3 +474,34 @@ def test_promote_dispatches_services(services: FakeCloud) -> None:
     result = promote(services, "hackbot-api", DEV, STAGE, actor="test")
     assert result.images == images
     assert services.updates[-1] == ("hackbot-api-stage", images)
+
+
+def build(id: str, created: str, status: str = "WORKING", trigger: str | None = "t1"):
+    return {
+        "id": id,
+        "createTime": created,
+        "status": status,
+        **({"buildTriggerId": trigger} if trigger else {}),
+    }
+
+
+def test_a_build_stops_while_an_older_one_of_its_trigger_runs() -> None:
+    fake = FakeCloud()
+    fake.builds = [
+        build("older", "2026-10-10T13:25:39.093624Z", status="QUEUED"),
+        build("this", "2026-10-10T13:25:40Z"),
+        build("newer", "2026-10-10T13:26:00Z"),
+        build("finished", "2026-10-10T13:00:00Z", status="SUCCESS"),
+        build("other-trigger", "2026-10-10T13:00:00Z", trigger="t2"),
+    ]
+    assert deploy.older_builds(fake, "p", "us-west1", "this") == ["older"]
+    assert deploy.older_builds(fake, "p", "us-west1", "older") == []
+
+
+def test_a_build_started_by_hand_is_never_stopped() -> None:
+    fake = FakeCloud()
+    fake.builds = [
+        build("older", "2026-10-10T13:00:00Z", trigger=None),
+        build("this", "2026-10-10T13:25:40Z", trigger=None),
+    ]
+    assert deploy.older_builds(fake, "p", "us-west1", "this") == []

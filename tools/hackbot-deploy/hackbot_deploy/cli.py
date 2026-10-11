@@ -57,6 +57,20 @@ def _cmd_info(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_check_build(args: argparse.Namespace) -> int:
+    older = deploy.older_builds(
+        deploy.GoogleCloud(), args.project, args.location, args.build_id
+    )
+    if older:
+        print(
+            f"an older build of this trigger is still running ({', '.join(older)}); "
+            "rerun this trigger once it finishes to deploy this commit",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def _run_deploy(args: argparse.Namespace) -> int:
     is_service = args.name in deploy.SERVICES
     agent_flags = bool(
@@ -141,6 +155,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("agent")
     p.set_defaults(func=_cmd_info)
+
+    p = sub.add_parser(
+        "check-build",
+        help="fail if an older build of this build's trigger is still running",
+    )
+    p.add_argument("build_id")
+    p.add_argument("--project", required=True)
+    p.add_argument("--location", required=True)
+    p.set_defaults(func=_cmd_check_build)
 
     envs = sorted(deploy.ENVIRONMENTS)
     what = f"an agent, or one of the services: {', '.join(deploy.SERVICES)}"

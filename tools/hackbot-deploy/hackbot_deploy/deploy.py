@@ -116,6 +116,15 @@ class Cloud(Protocol):
     ) -> None:
         """Set container images by container name, and wait for the new revision."""
 
+    def get_build(
+        self, project: str, location: str, build_id: str
+    ) -> dict[str, Any]: ...
+
+    def ongoing_builds(
+        self, project: str, location: str, trigger_id: str
+    ) -> list[dict[str, Any]]:
+        """The trigger's builds that are queued or running."""
+
 
 @dataclass
 class Result:
@@ -486,6 +495,29 @@ def promote_agent(
     return promote(cloud, agent, source, target, **kwargs)
 
 
+# --- Builds --------------------------------------------------------------------
+
+
+def older_builds(cloud: Cloud, project: str, location: str, build_id: str) -> list[str]:
+    """Return the builds of this build's trigger that started earlier and are still going.
+
+    Deploys of one agent or service aren't serialised, and two at once can
+    leave it running one image while the record names the other. So a build
+    stops when an older one of its trigger is still going; rerunning the
+    trigger once that finishes deploys the newer commit.
+    """
+    build = cloud.get_build(project, location, build_id)
+    trigger = build.get("buildTriggerId")
+    if not trigger:  # started by hand, not by a trigger
+        return []
+    created = datetime.fromisoformat(build["createTime"])
+    return sorted(
+        b["id"]
+        for b in cloud.ongoing_builds(project, location, trigger)
+        if b["id"] != build_id and datetime.fromisoformat(b["createTime"]) < created
+    )
+
+
 class GoogleCloud:
     """:class:`Cloud` over the GCP REST APIs, with Application Default Credentials.
 
@@ -647,3 +679,30 @@ class GoogleCloud:
         self._patch_and_wait(
             self._run_url(project, region, "services", name), service, name
         )
+
+    @staticmethod
+    def _builds_url(project: str, location: str) -> str:
+        return f"https://cloudbuild.googleapis.com/v1/projects/{project}/locations/{location}/builds"
+
+    def get_build(self, project: str, location: str, build_id: str) -> dict[str, Any]:
+        return self._check(
+            self.session.get(f"{self._builds_url(project, location)}/{build_id}"),
+            f"build {build_id}",
+        ).json()
+
+    def ongoing_builds(
+        self, project: str, location: str, trigger_id: str
+    ) -> list[dict[str, Any]]:
+        params = {
+            "filter": f'trigger_id="{trigger_id}" AND (status="QUEUED" OR status="WORKING")'
+        }
+        builds: list[dict[str, Any]] = []
+        while True:
+            page = self._check(
+                self.session.get(self._builds_url(project, location), params=params),
+                f"builds of trigger {trigger_id}",
+            ).json()
+            builds += page.get("builds", [])
+            if not page.get("nextPageToken"):
+                return builds
+            params["pageToken"] = page["nextPageToken"]
