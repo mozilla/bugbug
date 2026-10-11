@@ -1,9 +1,9 @@
 import logging
 from datetime import datetime
+from typing import Literal
 
 from autowebcompat_tools.inputs import BugDataInput, BugIdInput
 from autowebcompat_tools.task import RunTracker, TaskConfig
-from claude_agent_sdk import EffortLevel
 from hackbot_runtime import (
     HackbotAgentResult,
     HackbotContext,
@@ -24,7 +24,14 @@ class AgentInputs(BaseSettings):
     bug_id: int | None = None
     model: str | None = None
     max_turns: int | None = None
-    effort: EffortLevel | None = None
+    effort: (
+        Literal["low"]
+        | Literal["medium"]
+        | Literal["high"]
+        | Literal["xhigh"]
+        | Literal["max"]
+        | None
+    ) = None
     headless: bool = False
 
     model_config = SettingsConfigDict(extra="ignore")
