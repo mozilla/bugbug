@@ -48,8 +48,10 @@ steps:
   - id: Deploy
     name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
     entrypoint: bash
-    # Recorded as deployed_by; substitutions aren't in a step's environment.
+    # Recorded as deployed_by: whoever pushed, or the build when the trigger
+    # is run by hand. Substitutions aren't in a step's environment otherwise.
     env:
+      - GITHUB_ACTOR=${_PUSHER}
       - BUILD_ID=$BUILD_ID
     args:
       - -c
@@ -66,6 +68,10 @@ steps:
           fi
           if [ "$$status" -ne 0 ]; then exit "$$status"; fi
         done
+
+# The trigger sets it from the push event; empty when run any other way.
+substitutions:
+  _PUSHER: ""
 
 options:
   substitutionOption: MUST_MATCH

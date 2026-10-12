@@ -14,8 +14,10 @@ from contextlib import contextmanager
 from typing import Any
 
 import google.auth
+import requests
 from google.api_core.exceptions import GoogleAPICallError, PreconditionFailed
-from google.auth.transport.requests import AuthorizedSession
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import AuthorizedSession, Request
 from google.cloud import run_v2, storage
 from google.cloud.devtools import cloudbuild_v1
 
@@ -25,6 +27,7 @@ from hackbot_deploy.deploy import DeployError, StoredObject, split_image
 # library; image labels are read from it directly, with the deploy's
 # credentials. So they only go to Artifact Registry hosts, in any region.
 _REGISTRY_HOST_SUFFIX = "-docker.pkg.dev"
+_TOKENINFO = "https://oauth2.googleapis.com/tokeninfo"
 _MANIFEST_TYPES = ", ".join(
     [
         "application/vnd.oci.image.index.v1+json",
@@ -66,7 +69,24 @@ class GoogleCloud:
         self.services = run_v2.ServicesClient(credentials=credentials)
         self.builds = cloudbuild_v1.CloudBuildClient(credentials=credentials)
         self.registry = AuthorizedSession(credentials)
+        self.credentials = credentials
         self.timeout_seconds = timeout_seconds
+
+    def identity(self) -> str | None:
+        """The account the credentials act as: a service account, or the signed-in user."""
+        email = getattr(self.credentials, "service_account_email", None)
+        if email and email != "default":
+            return email
+        # A user's credentials don't name the user; the token's info does.
+        try:
+            if not self.credentials.valid:
+                self.credentials.refresh(Request())
+            response = requests.get(
+                _TOKENINFO, params={"access_token": self.credentials.token}, timeout=10
+            )
+        except (GoogleAuthError, requests.RequestException):
+            return None
+        return response.json().get("email") if response.ok else None
 
     # --- Storage ---
 

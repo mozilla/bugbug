@@ -44,11 +44,19 @@ EnvOption = Annotated[Env, typer.Option("--env")]
 DryRun = Annotated[bool, typer.Option("--dry-run")]
 
 
-def _actor() -> str:
-    for var in ("HACKBOT_DEPLOY_ACTOR", "GITHUB_ACTOR", "BUILD_ID"):
-        if os.environ.get(var):
-            return f"{var.lower()}:{os.environ[var]}"
-    return os.environ.get("USER", "unknown")
+def _actor(cloud: GoogleCloud) -> str:
+    """Who to record as deployed_by."""
+    if os.environ.get("HACKBOT_DEPLOY_ACTOR"):
+        return os.environ["HACKBOT_DEPLOY_ACTOR"]
+    # GitHub Actions sets it; Cloud Build passes the pusher as it, and leaves
+    # the payload binding unresolved when the trigger is run by hand.
+    github = os.environ.get("GITHUB_ACTOR", "")
+    if github and not github.startswith("$("):
+        return f"github:{github}"
+    if os.environ.get("BUILD_ID"):
+        return f"cloudbuild:{os.environ['BUILD_ID']}"
+    # Run by hand: whoever is signed in to Google.
+    return cloud.identity() or os.environ.get("USER", "unknown")
 
 
 def _report(result: deploy.Result) -> None:
@@ -140,7 +148,8 @@ def deploy_(
     dry_run: DryRun = False,
 ) -> None:
     """Deploy images to an environment."""
-    common = {"force": force, "dry_run": dry_run, "actor": _actor()}
+    cloud = GoogleCloud()
+    common = {"force": force, "dry_run": dry_run, "actor": _actor(cloud)}
     if name in deploy.SERVICES:
         if agent_image or broker_image:
             raise deploy.DeployError(
@@ -149,7 +158,7 @@ def deploy_(
         if not image:
             raise deploy.DeployError(f"{name} is a service: --image is required")
         result = deploy.deploy_service(
-            GoogleCloud(), name, deploy.ENVIRONMENTS[env], image, **common
+            cloud, name, deploy.ENVIRONMENTS[env], image, **common
         )
     else:
         if image:
@@ -162,7 +171,7 @@ def deploy_(
         if broker_image:
             images["broker"] = broker_image
         result = deploy.deploy_agent(
-            GoogleCloud(), name, deploy.ENVIRONMENTS[env], images, **common
+            cloud, name, deploy.ENVIRONMENTS[env], images, **common
         )
     _report(result)
 
@@ -176,14 +185,15 @@ def rollback(name: Name, env: EnvOption, dry_run: DryRun = False) -> None:
     roll_back = (
         deploy.deploy_service if name in deploy.SERVICES else deploy.deploy_agent
     )
+    cloud = GoogleCloud()
     _report(
         roll_back(
-            GoogleCloud(),
+            cloud,
             name,
             deploy.ENVIRONMENTS[env],
             rollback=True,
             dry_run=dry_run,
-            actor=_actor(),
+            actor=_actor(cloud),
         )
     )
 
@@ -196,14 +206,15 @@ def promote(
     dry_run: DryRun = False,
 ) -> None:
     """Deploy the images one environment runs to another."""
+    cloud = GoogleCloud()
     _report(
         deploy.promote(
-            GoogleCloud(),
+            cloud,
             name,
             deploy.ENVIRONMENTS[source],
             deploy.ENVIRONMENTS[target],
             dry_run=dry_run,
-            actor=_actor(),
+            actor=_actor(cloud),
         )
     )
 

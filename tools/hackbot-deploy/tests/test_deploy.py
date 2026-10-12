@@ -583,3 +583,29 @@ def test_a_job_without_the_config_hash_label_is_an_incomplete_apply(
     with pytest.raises(DeployError, match="no config hash"):
         ship(cloud, 1)
     assert cloud.updates == []
+
+
+class SignedIn:
+    def identity(self) -> str | None:
+        return "someone@mozilla.com"
+
+
+@pytest.mark.parametrize(
+    ("env", "actor"),
+    [
+        ({"HACKBOT_DEPLOY_ACTOR": "release-bot", "GITHUB_ACTOR": "x"}, "release-bot"),
+        ({"GITHUB_ACTOR": "octocat", "BUILD_ID": "b1"}, "github:octocat"),
+        # A trigger run by hand leaves the pusher binding unresolved.
+        ({"GITHUB_ACTOR": "$(push.pusher.name)", "BUILD_ID": "b1"}, "cloudbuild:b1"),
+        ({"GITHUB_ACTOR": "", "BUILD_ID": "b1"}, "cloudbuild:b1"),
+        ({}, "someone@mozilla.com"),
+    ],
+)
+def test_deployed_by(
+    monkeypatch: pytest.MonkeyPatch, env: dict[str, str], actor: str
+) -> None:
+    for var in ("HACKBOT_DEPLOY_ACTOR", "GITHUB_ACTOR", "BUILD_ID"):
+        monkeypatch.delenv(var, raising=False)
+    for var, value in env.items():
+        monkeypatch.setenv(var, value)
+    assert cli._actor(SignedIn()) == actor  # type: ignore[arg-type]
