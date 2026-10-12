@@ -120,17 +120,14 @@ def make_investigator() -> AgentDefinition:
 
 
 def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
-    """Write a debug browser config, preserving any existing config.
+    """Write an optimized browser config, preserving any existing config.
 
-    ``--enable-debug`` turns on assertions that catch a whole class of mistakes
-    during development, and ``--enable-clang-plugin`` adds Mozilla's own static
-    analysis on top.
+    ``--enable-clang-plugin`` adds Mozilla's own static analysis.
     """
     if fx_ctx.mozconfig.exists():
         return
     fx_ctx.mozconfig.write_text(
         "ac_add_options --enable-application=browser\n"
-        "ac_add_options --enable-debug\n"
         "ac_add_options --enable-optimize\n"
         "ac_add_options --enable-clang-plugin\n"
         f"mk_add_options MOZ_OBJDIR={quote(str(fx_ctx.objdir))}\n"
