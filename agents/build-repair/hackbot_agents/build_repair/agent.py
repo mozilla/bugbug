@@ -55,15 +55,18 @@ from .config import (
 )
 from .prompts import (
     ANALYSIS_TEMPLATE,
+    BLAME_NOTE,
     BLAME_STEP,
     BUG_ANALYSIS_STEP,
     BUG_CONTEXT,
     CHECKOUT_HISTORY,
     FIX_TEMPLATE,
+    PARENT_REVISION_ARG,
     PUSH_COMMIT_LINE,
     PUSH_CONTEXT,
     REPORT_INSTRUCTIONS,
     SINGLE_COMMIT_CONTEXT,
+    TREE_AT_BLAME,
     TREEHERDER_STEP,
     TREEHERDER_STEP_NO_PUSH,
     TRY_PUSH_INSTRUCTIONS,
@@ -165,8 +168,13 @@ async def run_build_repair(
     log: Path | None = None,
     publish_file: Callable[[str, Path, str | None], str] | None = None,
     actions_recorder: ActionsRecorder | None = None,
+    checkout: Callable[[str], str] | None = None,
 ) -> BuildRepairResult:
     """Analyze a build failure and implement a fix in ``source_repo``.
+
+    Pass ``checkout`` (``HackbotContext.checkout``) to move the tree to the blamed
+    commit before the fix stage, so the fix is a change to that commit and the
+    revision stacks on the commit's own.
 
     Returns a :class:`BuildRepairResult`; raises :class:`AgentError` if a stage
     ends in an error or produces no result.
@@ -290,6 +298,13 @@ async def run_build_repair(
                 source_repo, blamed_commit
             )
 
+        at_blame = blamed_commit is not None and _checkout(checkout, blamed_commit)
+        # A child revision has to be based on its parent's commit, so the fix
+        # only stacks when the tree really moved there.
+        parent_revision = (
+            _revision_from_commit(source_repo, blamed_commit) if at_blame else None
+        )
+
         # Reporting is confined to the fix stage: the analysis stage must not
         # submit anything before there is a verified fix.
         report = actions_recorder is not None and resolved_bug_id is not None
@@ -316,13 +331,30 @@ async def run_build_repair(
             target_software=TARGET_SOFTWARE,
             source_repo=source_repo,
             scratch_out=scratch_out,
+            blame_note=(
+                BLAME_NOTE.format(
+                    blamed_commit=blamed_commit,
+                    tree=TREE_AT_BLAME if at_blame else "",
+                )
+                if blamed_commit
+                else ""
+            ),
             try_push=(
                 TRY_PUSH_INSTRUCTIONS.format(task_name=task_name)
                 if run_try_push
                 else ""
             ),
             report=(
-                REPORT_INSTRUCTIONS.format(bug_id=resolved_bug_id) if report else ""
+                REPORT_INSTRUCTIONS.format(
+                    bug_id=resolved_bug_id,
+                    parent=(
+                        PARENT_REVISION_ARG.format(revision=parent_revision)
+                        if parent_revision
+                        else ""
+                    ),
+                )
+                if report
+                else ""
             ),
         )
 
@@ -490,6 +522,40 @@ def _bug_from_commit(repo: Path, sha: str) -> int | None:
 
 
 _SHA_RE = re.compile(r"[0-9a-f]{7,40}$")
+_REVISION_RE = re.compile(
+    r"^Differential Revision: https://phabricator\.services\.mozilla\.com/D(\d+)",
+    re.MULTILINE,
+)
+
+
+def _revision_from_commit(repo: Path, sha: str) -> int | None:
+    """The Phabricator revision a commit landed from, off its footer."""
+    try:
+        body = subprocess.run(
+            ["git", "-C", str(repo), "log", "-1", "--format=%B", sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    match = _REVISION_RE.search(body)
+    return int(match.group(1)) if match else None
+
+
+def _checkout(checkout: Callable[[str], str] | None, sha: str) -> bool:
+    """Move the tree to ``sha`` for the fix stage; False when it stays put.
+
+    Best effort: a checkout that fails costs the stacking, not the analysis.
+    """
+    if checkout is None:
+        return False
+    try:
+        checkout(sha)
+    except Exception as exc:
+        print(f"[build_repair] could not check out {sha}: {exc}", file=sys.stderr)
+        return False
+    return True
 
 
 def _match_commit(sha: str | None, git_commits: list[str]) -> str | None:

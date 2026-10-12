@@ -40,6 +40,9 @@ TRUSTED_BOT_PHIDS = {REVIEWBOT_PHID, REVIEWHELPER_PHID}
 # added the corresponding repo starts working automatically.
 PHABRICATOR_REPO_TO_GITHUB = {
     "FIREFOXAUTOLAND": ("mozilla-firefox/firefox", "autoland"),
+    # The read-only autoland Phabricator dev repository needs something to be
+    # working end-to-end, let's pick regular autoland (it's read-only anyways)
+    "FFTESTAUTOLANDDEV": ("mozilla-firefox/firefox", "autoland"),
     "FIREFOXBETA": ("mozilla-firefox/firefox", "beta"),
     "FIREFOXRELEASE": ("mozilla-firefox/firefox", "release"),
     "FIREFOXESRONEFOURZERO": ("mozilla-firefox/firefox", "esr140"),

@@ -22,11 +22,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # only ships prebuilt Linux binaries for x86_64, and `cargo install` also works for an
 # arm64 developer build. A bookworm builder is safe against either python:3.12 base
 # (same glibc, or older building for newer); rustls means no OpenSSL to link.
-# Built from the evgenyrp fork until the test-repair-history branch (manifest history
-# across pushes, regex --filter, stable --json) is released upstream.
+# Built from the evgenyrp fork until the User-Agent fix (Treeherder rejects requests
+# without one) is released upstream: https://github.com/padenot/treeherder-cli/pull/12
 FROM rust:1-slim-bookworm AS treeherder-cli
 ARG TREEHERDER_CLI_GIT=https://github.com/evgenyrp/treeherder-cli.git
-ARG TREEHERDER_CLI_REV=9bac9c71b0fd806904fa675375303d5145970614
+ARG TREEHERDER_CLI_REV=0095956a9db27306e2b5dc3b524870e893fd4a86
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \

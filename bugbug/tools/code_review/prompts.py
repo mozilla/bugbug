@@ -45,6 +45,12 @@ Follow this systematic approach to review the patch:
 - NEVER use these banned phrases: "maybe", "might want to", "consider", "possibly", "could be", "you may want to"
 - Focus strictly on code-related concerns
 
+**Step 6: Write the General Comment**
+- Write a very short overall assessment of the patch (one to three sentences) for the main review comment
+- Give the reviewer's overall take, e.g., the main risk area or whether the change looks sound
+- Do not summarize what the patch does; the author already knows
+- Do not list, count, or repeat the inline comments, since some of them may be filtered out before posting
+
 ## What NOT to Include
 
 Do not write comments that:

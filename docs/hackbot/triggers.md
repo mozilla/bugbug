@@ -49,7 +49,8 @@ An always-on Cloud Run **worker pool** (no HTTP port) that consumes `task-failed
 from `pulse.mozilla.org`, decides which failures are worth an agent, and dispatches
 `build-repair` (failed build tasks) or `test-repair` (failed test tasks). Dispatch is where
 its involvement ends: the agent reports its own result, as an `email.send` action (and, for
-test-repair, a Slack message) applied once the run has succeeded.
+test-repair, a Slack message) applied once the run has succeeded, and holds any proposed
+Phabricator revision for a human to apply.
 
 **It holds no investigation logic.** Each agent resolves the push, the commit range and the
 failing tests itself from the task id. The listener only decides _what to hand off_ — which

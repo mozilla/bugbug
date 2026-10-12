@@ -12,6 +12,7 @@ from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools, review_context
 from bugbug.tools.code_review.data_types import (
+    AgentResponse,
     ExternalContent,
     GeneratedReviewComment,
     PatchScopeResponse,
@@ -1340,13 +1341,19 @@ def test_run_appends_scope_suggestion_last():
     tool._agent_model = "model-x"
     tool.patch_summarizer = MagicMock()
     tool.patch_summarizer.run = MagicMock(return_value="summary")
-    tool.generate_review_comments = AsyncMock(return_value=([regular], []))
+    tool.generate_review_comments = AsyncMock(
+        return_value=(
+            AgentResponse(comments=[regular], general_comment="Looks sound."),
+            [],
+        )
+    )
     tool.suggestion_filterer = MagicMock()
     tool.suggestion_filterer.run = MagicMock(return_value=[regular])
 
     result = asyncio.run(tool.run(patch))
 
     assert result.details["num_scope_suggestions"] == 1
+    assert result.general_comment == "Looks sound."
     assert len(result.review_comments) == 2
     # The split suggestion is sorted last (order = len(filtered) + 1).
     last = result.review_comments[-1]
@@ -1375,7 +1382,7 @@ def _make_review_tool(review_context_repo=None):
     tool._content_overrides = None
 
     async def fake_astream(*args, **kwargs):
-        yield {"structured_response": AgentResponse(comments=[])}
+        yield {"structured_response": AgentResponse(comments=[], general_comment="")}
 
     tool.agent = SimpleNamespace(astream=fake_astream)
     return tool

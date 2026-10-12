@@ -162,13 +162,11 @@ def test_try_task_config_patch_is_byte_identical_for_equivalent_requests():
     stamp = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
     first = try_server_handler.try_task_config_patch(
         ["source-test-mozlint-eslint", "build-linux64/opt", "build-linux64/opt"],
-        "Bug 1 - verify",
         stamp,
         test_paths={"xpcshell": ["dom/b", "dom/a"], "mochitest-plain": ["dom/c"]},
     )
     second = try_server_handler.try_task_config_patch(
         ["build-linux64/opt", "source-test-mozlint-eslint"],
-        "Bug 1 - verify",
         stamp,
         test_paths={"mochitest-plain": ["dom/c"], "xpcshell": ["dom/a", "dom/b"]},
     )
@@ -201,36 +199,16 @@ def _apply_with_git_am(repo, patch: bytes):
 
 
 def test_try_task_config_patch_applies_as_a_real_git_patch(tmp_path):
-    patch = try_server_handler.try_task_config_patch(
-        ["build-linux64/opt"], "Bug 1 - verify the fix"
-    )
+    patch = try_server_handler.try_task_config_patch(["build-linux64/opt"])
 
     log = _apply_with_git_am(tmp_path, patch)
 
     # Same identity `changes.py` stamps on the agent's own commits, so one push
     # does not show two different authors.
     assert log.startswith("Hackbot <hackbot@mozilla.tld>")
-    assert "Bug 1 - verify the fix" in log
+    assert log.splitlines()[1] == "Add try_task_config.json"
     written = json.loads((tmp_path / "try_task_config.json").read_text())
     assert written == try_server_handler.try_task_config(["build-linux64/opt"])
-
-
-def test_try_task_config_patch_falls_back_to_a_default_title(tmp_path):
-    patch = try_server_handler.try_task_config_patch(["build-linux64/opt"])
-
-    assert "Subject: [PATCH] Hackbot try push" in patch.decode()
-    assert (tmp_path / "try_task_config.json").exists() is False
-
-
-def test_try_task_config_patch_collapses_a_multiline_title(tmp_path):
-    """A newline in the title would end the Subject header early."""
-    patch = try_server_handler.try_task_config_patch(
-        ["build-linux64/opt"], "Bug 1 - a fix\nDate: bogus\n\nnot the body"
-    )
-
-    log = _apply_with_git_am(tmp_path, patch)
-
-    assert log.splitlines()[1] == "Bug 1 - a fix Date: bogus not the body"
 
 
 # --- PushHandler --------------------------------------------------------- #

@@ -70,6 +70,18 @@ async def _repository_phid() -> str:
     raise RuntimeError(f"Could not find a Phabricator repository named '{name}'")
 
 
+async def _revision_phid(revision_id: int) -> str | None:
+    """The PHID of ``D<revision_id>``, or None (logged) when there is no such revision."""
+    result = await _conduit_request(
+        "differential.revision.search", constraints={"ids": [revision_id]}
+    )
+    data = result.get("data") or []
+    if not data:
+        log.warning("Parent revision D%s not found; filing unstacked", revision_id)
+        return None
+    return data[0]["phid"]
+
+
 # moz-phab's arc commit-message template (see mozphab.commits) — replicated so
 # the local:commits message we store matches what moz-phab itself would write.
 _ARC_COMMIT_MESSAGE_TEMPLATE = """
@@ -264,6 +276,11 @@ class SubmitPatchHandler:
                 transactions.append({"type": "summary", "value": summary})
             if test_plan:
                 transactions.append({"type": "testPlan", "value": test_plan})
+            parent_revision_id = params.get("parent_revision_id")
+            if parent_revision_id:
+                parent_phid = await _revision_phid(parent_revision_id)
+                if parent_phid:
+                    transactions.append({"type": "parents.set", "value": [parent_phid]})
 
             revision_result = await _conduit_request(
                 "differential.revision.edit", transactions=transactions

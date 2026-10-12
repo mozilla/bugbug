@@ -9,9 +9,8 @@ from dataclasses import dataclass
 from typing import Iterable, Optional
 
 from qdrant_client import QdrantClient
-from qdrant_client.conversions import common_types as qdrant_types
 from qdrant_client.http.exceptions import UnexpectedResponse
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import Distance, Filter, PointStruct, VectorParams
 
 
 @dataclass
@@ -45,8 +44,8 @@ class QueryFilter:
     must_not_has_id: Optional[list[int]] = None
     must_range: Optional[dict[str, dict[str, float]]] = None
 
-    def to_qdrant_filter(self) -> qdrant_types.Filter:
-        qdrant_filter: qdrant_types.Filter = {}
+    def to_qdrant_filter(self) -> Filter | None:
+        qdrant_filter: dict = {}
 
         if self.must_match:
             qdrant_filter["must"] = [
@@ -69,7 +68,7 @@ class QueryFilter:
         if self.must_not_has_id:
             qdrant_filter["must_not"] = [{"has_id": self.must_not_has_id}]
 
-        return qdrant_filter or None
+        return Filter.model_validate(qdrant_filter) if qdrant_filter else None
 
 
 class VectorDB(ABC):

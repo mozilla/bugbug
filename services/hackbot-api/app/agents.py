@@ -12,6 +12,7 @@ from app.schemas import (
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
+    UpliftInputs,
 )
 
 
@@ -126,7 +127,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
-        auto_apply_actions=True,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send", "slack.post_message"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",
@@ -136,5 +138,15 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-plan-generator",
         input_schema=TestPlanGeneratorInputs,
+    ),
+    "uplift-resolve": AgentSpec(
+        name="uplift-resolve",
+        description=(
+            "Resolve the merge conflicts from cherry-picking patches (git commits "
+            "and/or Phabricator revisions) onto a stable uplift branch, and return "
+            "the resolved patch with a confidence level for human review."
+        ),
+        job_name="hackbot-agent-uplift-resolve",
+        input_schema=UpliftInputs,
     ),
 }

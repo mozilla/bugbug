@@ -27,16 +27,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from hackbot_runtime import artifacts, changes
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.recorder import ActionsRecorder
-from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
+from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES, TRY_PUSH_ACTION_TYPE
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
-from hackbot_runtime.source import ensure_source_repo
+from hackbot_runtime.source import checkout_commit, ensure_source_repo
 from hackbot_runtime.uploader import SignedPolicyUploader
 
 if TYPE_CHECKING:
     from agent_tools.firefox import FirefoxContext
 
 log = logging.getLogger("hackbot_runtime.context")
+
+_SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
 
 
 def _default_run_id() -> str:
@@ -48,6 +50,15 @@ def _default_run_id() -> str:
     """
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
     return f"local-{stamp}-{uuid.uuid4().hex[:6]}"
+
+
+def _wip_commit_message(actions: list[dict]) -> str:
+    """The patch title, else the try push title, for the agent's uncommitted work."""
+    for action_type in (_SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
+        for action in actions:
+            if action["type"] == action_type and action["params"]["title"]:
+                return action["params"]["title"]
+    return changes.WIP_MESSAGE
 
 
 class HackbotContext(BaseSettings):
@@ -161,6 +172,23 @@ class HackbotContext(BaseSettings):
         """
         self._source_base = changes.base_commit(self.repo_path)
 
+    def checkout(self, ref: str) -> str:
+        """Move the prepared checkout to ``ref`` and start the agent's edits there.
+
+        For work that belongs on a different commit than the one the source was
+        prepared at. What the run publishes -- its patch, its Phabricator diff, its
+        try push -- is then taken against ``ref``, so a revision built from it
+        stacks on that commit. Returns the full sha. The tree must be clean.
+
+        ``ref`` must be a commit the clone already holds, and it becomes the base
+        rather than part of the diff. That is the difference from
+        :func:`hackbot_runtime.revision.checkout_revision`, which rebuilds a
+        revision from its Phabricator diffs so the agent can revise it.
+        """
+        checkout_commit(self.repo_path, ref)
+        self._source_base = self._published_base = changes.base_commit(self.repo_path)
+        return self._source_base
+
     @property
     def repo_path(self) -> Path:
         """The prepared source checkout path. Call :meth:`prepare_repo` first."""
@@ -260,7 +288,10 @@ class HackbotContext(BaseSettings):
         if self._source_base is None:
             return None
         change_set = changes.collect(
-            self.repo_path, self._source_base, self._config.source.repo_url
+            self.repo_path,
+            self._source_base,
+            self._config.source.repo_url,
+            message=_wip_commit_message(self.actions.actions),
         )
         if change_set is None:
             return None
