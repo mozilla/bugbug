@@ -44,6 +44,8 @@ def _calling(what: str) -> Iterator[None]:
         raise DeployError(f"{what}: {exc}") from exc
     except TimeoutError as exc:
         raise DeployError(f"{what}: timed out") from exc
+    except KeyError as exc:  # a container no image was given for
+        raise DeployError(f"{what}: no image given for container {exc}") from exc
 
 
 def _as_dict(message: Any) -> dict[str, Any]:

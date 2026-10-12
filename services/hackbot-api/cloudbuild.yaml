@@ -42,6 +42,9 @@ steps:
   - id: Deploy
     name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
     entrypoint: bash
+    # Recorded as deployed_by; substitutions aren't in a step's environment.
+    env:
+      - BUILD_ID=$BUILD_ID
     args:
       - -c
       - |

@@ -11,7 +11,6 @@ from hackbot_deploy.deploy import (
     deploy_agent,
     deploy_service,
     promote,
-    promote_agent,
 )
 
 DEV, STAGE = ENVIRONMENTS["dev"], ENVIRONMENTS["stage"]
@@ -241,6 +240,22 @@ def test_an_incomplete_apply_is_caught(cloud: FakeCloud) -> None:
         ship(cloud, 1)
 
 
+def test_redeploying_repairs_a_job_that_drifted_from_the_record(
+    cloud: FakeCloud,
+) -> None:
+    ship(cloud, 1)
+    ship(cloud, 2)
+    # Terraform recreated the Job on its placeholder image.
+    cloud.job(DEV, "bug-fix", ["agent", "broker"], label="h2")
+    result = ship(cloud, 2)
+    assert result.action == "deployed"
+    job = cloud.jobs[DEV.job_name("bug-fix")]["template"]["template"]
+    assert {c["image"] for c in job["containers"]} == set(result.images.values())
+    # Not a new deployment: the history still steps back to 1, once.
+    history = cloud.record(DEV, "bug-fix")["history"]
+    assert [h["images"]["agent"] for h in history] == [image("bug-fix-agent", 1)]
+
+
 def test_redeploying_the_same_images_is_a_no_op(cloud: FakeCloud) -> None:
     ship(cloud, 1)
     assert ship(cloud, 1).action == "unchanged"
@@ -360,7 +375,7 @@ def test_promote_deploys_the_source_environment_images(cloud: FakeCloud) -> None
     cloud.apply(STAGE, "bug-fix", "h2")
     cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
 
-    result = promote_agent(cloud, "bug-fix", DEV, STAGE, actor="test")
+    result = promote(cloud, "bug-fix", DEV, STAGE, actor="test")
     assert result.images == images
     assert cloud.updates[-1] == ("hackbot-agent-bug-fix-stage", images)
 
@@ -370,7 +385,7 @@ def test_promote_waits_for_infra_in_the_target(cloud: FakeCloud) -> None:
     cloud.apply(STAGE, "bug-fix", "h1")
     cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h1")
     with pytest.raises(WaitingForInfra):
-        promote_agent(cloud, "bug-fix", DEV, STAGE)
+        promote(cloud, "bug-fix", DEV, STAGE)
 
 
 def test_environment_names_match_the_terraform() -> None:
@@ -451,6 +466,16 @@ def test_service_redeploy_is_a_no_op_and_stale_builds_are_refused(
         deploy_service(
             services, "hackbot-api", DEV, api_image(services, 1, "2026-10-09T11:00:00Z")
         )
+
+
+def test_service_redeploy_repairs_drift(services: FakeCloud) -> None:
+    ref = api_image(services, 1)
+    deploy_service(services, "hackbot-api", DEV, ref)
+    services.service(DEV, "hackbot-api")  # recreated on its placeholder image
+    assert deploy_service(services, "hackbot-api", DEV, ref).action == "deployed"
+    svc = services.services[DEV.service_name("hackbot-api")]
+    assert svc["template"]["containers"][0]["image"] == ref
+    assert services.record(DEV, "hackbot-api")["history"] == []
 
 
 def test_service_rollback_goes_back_one_deployment_at_a_time(

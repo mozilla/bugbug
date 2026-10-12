@@ -158,11 +158,6 @@ def split_image(image: str) -> tuple[str, str, str]:
     return match["host"], match["path"], match["digest"]
 
 
-def require_image(image: str) -> str:
-    split_image(image)
-    return image
-
-
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -222,13 +217,21 @@ def _refuse_stale(
         )
 
 
-def _history(current: dict[str, Any] | None, *, rollback: bool) -> list[dict[str, Any]]:
+def _history(
+    current: dict[str, Any] | None, images: dict[str, str], *, rollback: bool
+) -> list[dict[str, Any]]:
     if rollback:
         # The target (always the latest entry) leaves the history; the
         # deployment being rolled back doesn't join it, so rolling back twice
         # goes back two deployments.
         return (current or {}).get("history", [])[1:]
-    return ([_summary(current)] + current.get("history", [])) if current else []
+    if not current:
+        return []
+    if current.get("images") == images:
+        # Putting the recorded images back on a resource that drifted from
+        # them isn't a new deployment.
+        return current.get("history", [])
+    return [_summary(current)] + current.get("history", [])
 
 
 def _ship(
@@ -258,7 +261,7 @@ def _ship(
         "created": labels.get(LABEL_CREATED),
         "deployed_at": _now(),
         "deployed_by": actor,
-        "history": _history(current, rollback=rollback)[:HISTORY_LIMIT],
+        "history": _history(current, images, rollback=rollback)[:HISTORY_LIMIT],
     }
     action = "rolled back" if rollback else "deployed"
     if dry_run:
@@ -330,7 +333,8 @@ def deploy_agent(
         images = _rollback_target(current, agent, env)
     if not images or "agent" not in images:
         raise DeployError("an agent image is required")
-    images = {container: require_image(ref) for container, ref in images.items()}
+    for ref in images.values():
+        split_image(ref)
 
     applied = _applied(cloud, env, agent)
     image_hash, labels = _image_hash(cloud, images)
@@ -347,12 +351,6 @@ def deploy_agent(
             "Deploy again once the infra PR for this change is applied."
         )
 
-    if current and current.get("images") == images:
-        return Result(agent, env.name, "unchanged", images, image_hash, current)
-    _refuse_stale(
-        current, labels.get(LABEL_CREATED), agent, env, rollback=rollback, force=force
-    )
-
     job_name = env.job_name(agent)
     job = cloud.get_job(env.project_id, REGION, job_name)
     job_hash = job.get("labels", {}).get(JOB_LABEL_CONFIG_HASH)
@@ -361,11 +359,18 @@ def deploy_agent(
             f"{job_name} is labelled {job_hash or 'with no config hash'} but applied.json says {applied['applied']}; "
             "a Terraform apply looks incomplete"
         )
-    containers = {c["name"] for c in job["template"]["template"]["containers"]}
-    if containers != set(images):
+    running = {c["name"]: c["image"] for c in job["template"]["template"]["containers"]}
+    if set(running) != set(images):
         raise DeployError(
-            f"{job_name} runs containers {sorted(containers)}, but images were given for {sorted(images)}"
+            f"{job_name} runs containers {sorted(running)}, but images were given for {sorted(images)}"
         )
+    # Compared with what the Job runs, not just the record: Terraform can
+    # recreate a Job on its placeholder image, and a redeploy must repair that.
+    if current and current.get("images") == images == running:
+        return Result(agent, env.name, "unchanged", images, image_hash, current)
+    _refuse_stale(
+        current, labels.get(LABEL_CREATED), agent, env, rollback=rollback, force=force
+    )
 
     def update() -> None:
         cloud.set_job_images(env.project_id, REGION, job_name, images)
@@ -424,12 +429,13 @@ def deploy_service(
     current, generation = _read_record(cloud, env, service)
 
     name = env.service_name(service)
-    containers = [
-        c["name"]
+    running = {
+        c["name"]: c["image"]
         for c in cloud.get_service(env.project_id, REGION, name)["template"][
             "containers"
         ]
-    ]
+    }
+    containers = list(running)
     if len(containers) != 1:
         raise DeployError(
             f"{name} runs {len(containers)} containers; the deploy script handles one"
@@ -441,14 +447,15 @@ def deploy_service(
         images = {containers[0]: image}
     else:
         raise DeployError("an image is required")
-    images = {container: require_image(ref) for container, ref in images.items()}
+    for ref in images.values():
+        split_image(ref)
     if set(images) != set(containers):
         raise DeployError(
             f"{name} runs container {containers[0]}, but images were given for {sorted(images)}"
         )
 
     labels = cloud.image_labels(images[containers[0]])
-    if current and current.get("images") == images:
+    if current and current.get("images") == images == running:
         return Result(service, env.name, "unchanged", images, None, current)
     _refuse_stale(
         current, labels.get(LABEL_CREATED), service, env, rollback=rollback, force=force
@@ -501,13 +508,6 @@ def promote(
             cloud, name, target, next(iter(images.values())), **kwargs
         )
     return deploy_agent(cloud, name, target, images, **kwargs)
-
-
-def promote_agent(
-    cloud: Cloud, agent: str, source: Environment, target: Environment, **kwargs: Any
-) -> Result:
-    """Deploy to ``target`` exactly the images ``agent`` runs in ``source``."""
-    return promote(cloud, agent, source, target, **kwargs)
 
 
 # --- Builds --------------------------------------------------------------------
