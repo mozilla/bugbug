@@ -11,7 +11,7 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from app.action_handlers import ApplyContext, phabricator_handler
+from app.action_handlers import ApplyContext, ArtifactTooLargeError, phabricator_handler
 from app.action_handlers.registry import PATCH_ACTION_TYPES, get_handler
 
 
@@ -129,6 +129,53 @@ async def test_submit_patch_creates_planned_changes_revision(monkeypatch):
     assert transactions["bugzilla.bug-id"] == "1"
     assert transactions["summary"] == "s"
     assert transactions["testPlan"] == "uv run pytest (passed)"
+
+
+async def test_submit_patch_stacks_on_the_parent_revision(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "differential.revision.edit": {"object": {"id": 555, "phid": "PHID-REV-1"}},
+            "differential.revision.search": {"data": [{"phid": "PHID-REV-PARENT"}]},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 1, "title": "Fix", "parent_revision_id": 325120}, _ctx()
+    )
+
+    assert result.status == "applied"
+    search_call = next(c for c in calls if c[0] == "differential.revision.search")
+    assert search_call[1]["constraints"] == {"ids": [325120]}
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
+    assert transactions["parents.set"] == ["PHID-REV-PARENT"]
+
+
+async def test_submit_patch_files_unstacked_when_the_parent_is_unknown(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "differential.revision.edit": {"object": {"id": 555, "phid": "PHID-REV-1"}},
+            "differential.revision.search": {"data": []},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 1, "title": "Fix", "parent_revision_id": 999999}, _ctx()
+    )
+
+    assert result.status == "applied"
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    assert "parents.set" not in {t["type"] for t in edit_call[1]["transactions"]}
 
 
 async def test_submit_patch_accepts_legacy_action_without_test_plan(monkeypatch):
@@ -382,7 +429,29 @@ async def test_missing_artifact_fails(handler, params):
     ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
     result = await getattr(phabricator_handler, handler)().apply(params, ctx)
     assert result.status == "failed"
-    assert "No Phabricator submission artifact" in result.error
+    assert "Could not load the Phabricator submission artifact" in result.error
+
+
+@pytest.mark.parametrize(
+    "handler, params",
+    [
+        ("SubmitPatchHandler", {"bug_id": 1, "title": "x"}),
+        ("UpdatePatchHandler", {"revision_id": 7}),
+    ],
+)
+async def test_oversized_artifact_is_not_submitted(monkeypatch, handler, params):
+    async def download(key):
+        raise ArtifactTooLargeError(key, 100 * 1024 * 1024, 50 * 1024 * 1024)
+
+    conduit = AsyncMock()
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", conduit)
+
+    ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
+    result = await getattr(phabricator_handler, handler)().apply(params, ctx)
+
+    assert result.status == "failed"
+    assert "over the 50.0 MiB limit" in result.error
+    conduit.assert_not_called()
 
 
 async def test_submit_patch_conduit_error_fails(monkeypatch):

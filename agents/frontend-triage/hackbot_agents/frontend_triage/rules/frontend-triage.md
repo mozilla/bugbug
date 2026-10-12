@@ -15,7 +15,10 @@ frames out of them, so `download_attachment` refuses video, audio, and archive
 attachments rather than spend a large download on nothing. When the only evidence is
 a recording, triage from the description, the steps to reproduce, and the code, and
 say plainly in your comment that you did not view the recording. Do not imply you
-did.
+did. If the symptom is one only the recording shows well, a flash, a flicker, an
+animation or anything else about timing, your confidence is at most medium: the
+code can explain a symptom you have not seen in more than one way, and the
+recording is what tells them apart.
 
 **Install and update bugs look different, and that is not a reason to skip them.**
 An installer or updater bug is normally a _failure_ rather than a papercut: an update
@@ -48,10 +51,22 @@ Core, DevTools-internals, or build-system bug, and say which area it looks like.
    fixed (e.g. cannot reproduce on a newer version per comments, or the code path
    was changed), say so in the comment and propose marking accordingly instead of
    inventing a fix.
+   **Check that the behavior is not intended.** When blame or a linked bug shows
+   the reported behavior was asked for, the bug is not a defect: name the bug that
+   introduced it, suggest INVALID or WONTFIX for a human to apply, and set
+   `actionable` to false. Finding the change that introduced the behavior and then
+   proposing to revert it is the most common way these comments have been wrong.
 3. **Write a fix plan**: root cause, the specific files/functions/selectors to
    change, and the approach. Prefer a comprehensive fix at the right level over a
    spot fix. The full plan goes in the structured output; the comment carries only
    its conclusion.
+   - **Fix at the level the bug was filed at.** If the summary describes a general
+     problem and you find only one instance broken, say so as a finding, but do not
+     narrow the fix to that instance.
+   - **Build on what is already on the bug.** If comment 0 or a later comment
+     already gives the cause or the fix, confirm it from the code and add only what
+     is new. If an engineer proposed an approach, follow it or say why not, and never
+     credit them with a different one.
 4. **Assess severity** per the `severity-assessment` rules.
 
 ## Comment

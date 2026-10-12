@@ -185,6 +185,7 @@ class CodeReviewTool(GenerativeModelTool):
                 max_tokens=40_000,
                 temperature=None,
                 thinking={"type": "adaptive"},
+                effort="high",
             )
 
         if "patch_summarizer" not in kwargs:
@@ -223,7 +224,7 @@ class CodeReviewTool(GenerativeModelTool):
 
     async def generate_review_comments(
         self, patch: Patch, patch_summary: str
-    ) -> tuple[list[GeneratedReviewComment], list[dict]]:
+    ) -> tuple[AgentResponse, list[dict]]:
         external_context = ""
         manifest: list[dict] = []
         review_context_repo = self._review_context_repo
@@ -264,7 +265,7 @@ class CodeReviewTool(GenerativeModelTool):
         except GraphRecursionError as e:
             raise RecursionLimitError("The model could not complete the review") from e
 
-        return result["structured_response"].comments, manifest
+        return result["structured_response"], manifest
 
     async def assess_patch_scope(
         self, patch: Patch, patch_summary: str
@@ -289,10 +290,10 @@ class CodeReviewTool(GenerativeModelTool):
 
         patch_summary = self.patch_summarizer.run(patch)
 
-        (
-            unfiltered_suggestions,
-            external_content_manifest,
-        ) = await self.generate_review_comments(patch, patch_summary)
+        agent_response, external_content_manifest = await self.generate_review_comments(
+            patch, patch_summary
+        )
+        unfiltered_suggestions = agent_response.comments
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
 
@@ -313,6 +314,7 @@ class CodeReviewTool(GenerativeModelTool):
         return CodeReviewToolResponse(
             review_comments=inline_comments,
             patch_summary=patch_summary,
+            general_comment=agent_response.general_comment,
             details={
                 "model": self._agent_model_name,
                 "num_unfiltered_suggestions": len(unfiltered_suggestions),

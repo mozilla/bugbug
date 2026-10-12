@@ -31,7 +31,7 @@ _FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 # Author stamped on the synthetic commit that wraps any uncommitted remainder.
 _WIP_NAME = "Hackbot"
 _WIP_EMAIL = "hackbot@mozilla.tld"
-_WIP_MESSAGE = "Uncommitted agent changes"
+WIP_MESSAGE = "Uncommitted agent changes"
 
 # Record separator for parsing ``git log`` output (NUL avoids clashing with
 # anything in commit messages).
@@ -91,15 +91,6 @@ def has_changes(repo: Path, base: str) -> bool:
 
 def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
-
-
-def _wrap_uncommitted(repo: Path) -> bool:
-    """Commit any staged/unstaged/untracked changes into one synthetic commit.
-
-    Returns ``True`` if such a commit was created, ``False`` if the tree was
-    already clean.
-    """
-    return commit_all(repo, _WIP_MESSAGE)
 
 
 def commit_all(repo: Path, message: str, *, author: str | None = None) -> bool:
@@ -166,7 +157,7 @@ def _synthetic_commit(repo: Path, base: str) -> str:
     range).
     """
     tree = _git(repo, "rev-parse", "HEAD^{tree}").strip()
-    # Pass an explicit identity (as _wrap_uncommitted does): the synthetic
+    # Pass an explicit identity (as commit_all does): the synthetic
     # commit's author is throwaway — only its tree diff is used — but
     # `commit-tree` errors under `user.useConfigOnly=true` and otherwise
     # invents a `user@hostname` author when the container has no git identity
@@ -327,7 +318,7 @@ def build_try_push(repo: Path, base: str) -> dict | None:
     # Normally already done by `collect`; repeated here (it is a no-op on a
     # clean tree) so this does not silently drop the agent's uncommitted work if
     # it is ever called on its own.
-    _wrap_uncommitted(repo)
+    commit_all(repo, WIP_MESSAGE)
 
     revisions = _git(repo, "rev-list", "--reverse", f"{base}..HEAD").split()
     if not revisions:
@@ -346,7 +337,9 @@ def build_try_push(repo: Path, base: str) -> dict | None:
     }
 
 
-def collect(repo: Path, base: str, repo_url: str) -> ChangeSet | None:
+def collect(
+    repo: Path, base: str, repo_url: str, message: str = WIP_MESSAGE
+) -> ChangeSet | None:
     """Collect changes in ``repo`` since ``base`` as a patch plus metadata.
 
     Returns ``None`` when the agent made no changes at all (nothing committed and
@@ -359,7 +352,7 @@ def collect(repo: Path, base: str, repo_url: str) -> ChangeSet | None:
     handler, which needs to re-check-out this same base commit — knows where
     to clone from without re-deriving agent-specific config.
     """
-    wrapped = _wrap_uncommitted(repo)
+    wrapped = commit_all(repo, message)
     patch = _git_bytes(repo, "format-patch", "--stdout", "--binary", f"{base}..HEAD")
     if not patch.strip():
         return None

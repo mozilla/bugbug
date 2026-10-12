@@ -24,7 +24,7 @@ async def test_source_repo_without_declaration_raises(tmp_path):
 def test_firefox_without_declaration_raises(tmp_path):
     hb = _hb(tmp_path, HackbotConfig())
     with pytest.raises(RuntimeError, match="\\[firefox\\]"):
-        hb.firefox
+        _ = hb.firefox
 
 
 def test_firefox_disabled_raises(tmp_path):
@@ -33,7 +33,7 @@ def test_firefox_disabled_raises(tmp_path):
     )
     hb = _hb(tmp_path, cfg)
     with pytest.raises(RuntimeError, match="\\[firefox\\]"):
-        hb.firefox
+        _ = hb.firefox
 
 
 async def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):
@@ -122,6 +122,37 @@ async def test_prepare_repo_conflicting_ref_raises(tmp_path, monkeypatch):
         await hb.prepare_repo(ref="base9")
 
 
+async def test_checkout_moves_the_base_the_diff_is_taken_against(tmp_path, monkeypatch):
+    monkeypatch.delenv("SOURCE_REF", raising=False)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.ensure_source_repo", lambda *a, **k: None
+    )
+    checked_out = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.checkout_commit",
+        lambda path, ref: checked_out.append(ref),
+    )
+    heads = iter(["headcommit", "earliercommit"])
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.base_commit", lambda path: next(heads)
+    )
+    cfg = HackbotConfig(source=SourceConfig(repo_url="r", checkout_path=Path("/x")))
+    hb = _hb(tmp_path, cfg)
+    await hb.prepare_repo()
+    assert hb._source_base == "headcommit"
+
+    assert hb.checkout("earlier") == "earliercommit"
+    assert checked_out == ["earlier"]
+    # Both bases move: the diff and any try push are taken against the new one.
+    assert hb._source_base == hb._published_base == "earliercommit"
+
+
+def test_checkout_needs_a_prepared_repo(tmp_path):
+    hb = _hb(tmp_path, HackbotConfig())
+    with pytest.raises(RuntimeError, match="not prepared"):
+        hb.checkout("earlier")
+
+
 def test_results_plumbing(tmp_path):
     hb = _hb(tmp_path, HackbotConfig())
 
@@ -153,9 +184,60 @@ def _hb_with_source(tmp_path, monkeypatch):
     hb._repo_path = tmp_path / "src"
     monkeypatch.setattr(
         "hackbot_runtime.context.changes.collect",
-        lambda repo, base, repo_url: ChangeSet(patch=b"x", metadata={"base": base}),
+        lambda repo, base, repo_url, message: ChangeSet(
+            patch=b"x", metadata={"base": base}
+        ),
     )
     return hb
+
+
+@pytest.mark.parametrize(
+    ("actions", "message"),
+    [
+        # The try push is recorded first, as in mozilla/bugbug#6773.
+        (
+            [
+                ("try_server.push", {"tasks": ["t"], "title": "Bug 1 - verify"}),
+                ("phabricator.submit_patch", {"bug_id": 1, "title": "Bug 1 - Fix"}),
+            ],
+            "Bug 1 - Fix",
+        ),
+        (
+            [
+                ("phabricator.update_patch", {"revision_id": 42}),
+                ("try_server.push", {"tasks": ["t"], "title": "Bug 1 - verify"}),
+            ],
+            "Bug 1 - verify",
+        ),
+        (
+            [("try_server.push", {"tasks": ["t"], "title": None})],
+            "Uncommitted agent changes",
+        ),
+    ],
+)
+def test_publish_changes_names_the_agents_commit_after_a_recorded_title(
+    tmp_path, monkeypatch, actions, message
+):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    messages = []
+
+    def _collect(repo, base, repo_url, message):
+        messages.append(message)
+        return ChangeSet(patch=b"x", metadata={"base": base})
+
+    monkeypatch.setattr("hackbot_runtime.context.changes.collect", _collect)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_phabricator_diff", lambda *a: None
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_try_push", lambda *a: None
+    )
+    for action_type, params in actions:
+        hb.actions.record(action_type, params, reasoning="r")
+
+    hb.publish_changes()
+
+    assert messages == [message]
 
 
 @pytest.mark.parametrize(
@@ -197,7 +279,9 @@ def test_publish_changes_builds_try_push_when_action_recorded(tmp_path, monkeypa
         lambda repo, base: {"base_commit": base, "patches": ["cGF0Y2g="]},
     )
     hb.actions.record(
-        "try_server.push", {"tasks": ["build-linux64/opt"]}, reasoning="r"
+        "try_server.push",
+        {"tasks": ["build-linux64/opt"], "title": None},
+        reasoning="r",
     )
 
     hb.publish_changes()
@@ -235,7 +319,7 @@ def test_try_push_uses_the_published_base_not_a_local_one(tmp_path, monkeypatch)
         "hackbot_runtime.context.changes.base_commit", lambda repo: "localseededsha"
     )
     hb.record_source_base()
-    hb.actions.record("try_server.push", {"tasks": ["t"]}, reasoning="r")
+    hb.actions.record("try_server.push", {"tasks": ["t"], "title": None}, reasoning="r")
     hb.actions.record("phabricator.update_patch", {"revision_id": 1}, reasoning="r")
 
     hb.publish_changes()

@@ -13,7 +13,7 @@ def create_start_agent_run_button(
     label: str,
     *,
     agent_name: str,
-    params: dict[str, Any],
+    inputs: dict[str, Any],
     dedupe_key: str,
     apply_run_id: str | None = None,
     confirm: ConfirmObject | None = None,
@@ -36,7 +36,7 @@ def create_start_agent_run_button(
     """
     value: dict[str, Any] = {
         "agent_name": agent_name,
-        "params": params,
+        "inputs": inputs,
         "dedupe_key": dedupe_key,
     }
     if apply_run_id is not None:

@@ -23,27 +23,63 @@ component's code lives in. A bug handed to the agent by hand in some other compo
 (`Firefox :: Menus`, say) is triaged the same way and reports to nobody. The components,
 and the channel each reports to:
 
-| Component                            | Reports to                                 |
-| ------------------------------------ | ------------------------------------------ |
-| `Firefox :: New Tab Page`            | `#hnt-dev-triage`                          |
-| `Firefox :: Sidebar`                 | `#p10y-bots`                               |
-| `Firefox :: Site Permissions`        | `#privacy-team-automation`                 |
-| `Toolkit :: Data Sanitization`       | `#privacy-team-automation`                 |
-| `Firefox :: Settings UI`             | `#fx-recomp-bots`                          |
-| `Firefox :: Sharing`                 | `#content-sharing-automation`              |
-| `Firefox :: IP Protection`           | `#team-eng-ip-protection-triage`           |
-| `Firefox :: Messaging System`        | `#omc-triage`                              |
-| `Core :: Machine Learning: Frontend` | `#smart-window-bug-triage`                 |
-| `Core :: Machine Learning: Models`   | `#smart-window-bug-triage`                 |
-| `Core :: Machine Learning: General`  | `#smart-window-bug-triage`                 |
-| `Firefox for Android :: History`     | `#android-core-dev`                        |
-| `Firefox for Android :: Toolbar`     | `#android-core-dev`                        |
-| `Firefox for Android :: Homepage`    | `#android-core-dev`                        |
-| `Toolkit :: Application Update`      | `#installer-updater-bug-triage`            |
-| `Firefox :: Installer`               | `#installer-updater-bug-triage`            |
-| `Firefox :: General`                 | `#fx-toolkit-general-triage-notifications` |
-| `Toolkit :: General`                 | `#fx-toolkit-general-triage-notifications` |
-| `Firefox :: Untriaged`               | `#fx-toolkit-general-triage-notifications` |
+| Component                                                       | Reports to                                 |
+| --------------------------------------------------------------- | ------------------------------------------ |
+| `Firefox :: New Tab Page`                                       | `#hnt-dev-triage`                          |
+| `Firefox :: Sidebar`                                            | `#p10y-bots`                               |
+| `Firefox :: Site Permissions`                                   | `#privacy-team-automation`                 |
+| `Toolkit :: Data Sanitization`                                  | `#privacy-team-automation`                 |
+| `Firefox :: Settings UI`                                        | `#fx-recomp-bots`                          |
+| `Firefox :: Sharing`                                            | `#content-sharing-automation`              |
+| `Firefox :: IP Protection`                                      | `#team-eng-ip-protection-triage`           |
+| `Firefox :: Messaging System`                                   | `#omc-triage`                              |
+| `Core :: Machine Learning: Frontend`                            | `#smart-window-bug-triage`                 |
+| `Core :: Machine Learning: Models`                              | `#smart-window-bug-triage`                 |
+| `Core :: Machine Learning: General`                             | `#smart-window-bug-triage`                 |
+| `Firefox for Android :: History`                                | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Toolbar`                                | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Homepage`                               | `#firefox-android-dev-info`                |
+| `Toolkit :: Application Update`                                 | `#installer-updater-bug-triage`            |
+| `Firefox :: Installer`                                          | `#installer-updater-bug-triage`            |
+| `Firefox :: General`                                            | `#fx-toolkit-general-triage-notifications` |
+| `Toolkit :: General`                                            | `#fx-toolkit-general-triage-notifications` |
+| `Firefox :: Untriaged`                                          | `#fx-toolkit-general-triage-notifications` |
+| `Firefox :: PDF Viewer`                                         | `#pdfjs-triage`                            |
+| `Toolkit :: Password Manager`                                   | `#credential-management-bug-triage`        |
+| `Firefox :: about:logins`                                       | `#credential-management-bug-triage`        |
+| `Firefox for Android :: Downloads`                              | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Tabs`                                   | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Translations`                           | `#firefox-android-dev-info`                |
+| `Firefox for Android :: Experimentation and Telemetry`          | `#android-activation-and-trust`            |
+| `Firefox for Android :: Logins`                                 | `#android-activation-and-trust`            |
+| `Firefox for Android :: Onboarding`                             | `#android-activation-and-trust`            |
+| `Firefox for Android :: Privacy`                                | `#android-activation-and-trust`            |
+| `Firefox for Android :: QR`                                     | `#android-activation-and-trust`            |
+| `Firefox for Android :: Settings`                               | `#android-activation-and-trust`            |
+| `Firefox Build System :: Android Studio and Gradle Integration` | `#android-pie`                             |
+| `DevTools :: about:debugging`                                   | `#devtools-triage`                         |
+| `DevTools :: Application Panel`                                 | `#devtools-triage`                         |
+| `DevTools :: Console`                                           | `#devtools-triage`                         |
+| `DevTools :: Debugger`                                          | `#devtools-triage`                         |
+| `DevTools :: Documentation`                                     | `#devtools-triage`                         |
+| `DevTools :: DOM`                                               | `#devtools-triage`                         |
+| `DevTools :: Framework`                                         | `#devtools-triage`                         |
+| `DevTools :: General`                                           | `#devtools-triage`                         |
+| `DevTools :: Inspector`                                         | `#devtools-triage`                         |
+| `DevTools :: Inspector: Animations`                             | `#devtools-triage`                         |
+| `DevTools :: Inspector: Changes`                                | `#devtools-triage`                         |
+| `DevTools :: Inspector: Compatibility`                          | `#devtools-triage`                         |
+| `DevTools :: Inspector: Layout`                                 | `#devtools-triage`                         |
+| `DevTools :: Inspector: Rules`                                  | `#devtools-triage`                         |
+| `DevTools :: JSON Viewer`                                       | `#devtools-triage`                         |
+| `DevTools :: Memory`                                            | `#devtools-triage`                         |
+| `DevTools :: Netmonitor`                                        | `#devtools-triage`                         |
+| `DevTools :: Object Inspector`                                  | `#devtools-triage`                         |
+| `DevTools :: Responsive Design Mode`                            | `#devtools-triage`                         |
+| `DevTools :: Shared Components`                                 | `#devtools-triage`                         |
+| `DevTools :: Source Editor`                                     | `#devtools-triage`                         |
+| `DevTools :: Storage Inspector`                                 | `#devtools-triage`                         |
+| `DevTools :: Style Editor`                                      | `#devtools-triage`                         |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
@@ -126,16 +162,16 @@ Three bugs that exercise the classes this agent handles:
 Environment variables. `hackbot-api` derives them from the input schema; locally
 they come from `.env`, `compose.yml`, or the command line.
 
-| Env var             | Required | Meaning                                                                                                        |
-| ------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
-| `BUG_ID`            | yes      | The Bugzilla bug to triage                                                                                     |
-| `BROKER_URL`        | yes      | Bugzilla broker base URL; the agent appends `/mcp`. `compose.yml` sets it                                      |
-| `ANTHROPIC_API_KEY` | yes      | Drives the agent (billed per token)                                                                            |
-| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org/rest` — **broker container only**                                           |
-| `BUGZILLA_API_KEY`  | yes      | **Broker container only**; reads only. The agent never sees it                                                 |
-| `MODEL`             | no       | Defaults to `claude-opus-5` (`DEFAULT_MODEL` in `__main__.py`); pinned so runs are reproducible and comparable |
-| `MAX_TURNS`         | no       | Hard cap on loop iterations — a runaway guard, cut off if hit                                                  |
-| `EFFORT`            | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`; only passed when set                                          |
+| Env var             | Required | Meaning                                                                                                          |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `BUG_ID`            | yes      | The Bugzilla bug to triage                                                                                       |
+| `BROKER_URL`        | yes      | Bugzilla broker base URL; the agent appends `/mcp`. `compose.yml` sets it                                        |
+| `ANTHROPIC_API_KEY` | yes      | Drives the agent (billed per token)                                                                              |
+| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org/rest` — **broker container only**                                             |
+| `BUGZILLA_API_KEY`  | yes      | **Broker container only**; reads only. The agent never sees it                                                   |
+| `MODEL`             | no       | Defaults to `claude-opus-5-5` (`DEFAULT_MODEL` in `__main__.py`); pinned so runs are reproducible and comparable |
+| `MAX_TURNS`         | no       | Hard cap on loop iterations — a runaway guard, cut off if hit                                                    |
+| `EFFORT`            | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`; defaults to `high` (`DEFAULT_EFFORT` in `__main__.py`)          |
 
 ## Output
 
@@ -210,10 +246,16 @@ Two further hooks shape the comment text as it is recorded:
   checkout.
 - `feedback_tags_hook` (`agent.py`) appends the triage-specific tags a reader can
   add to categorize a problem: `ai-triage-wrong-file`, `ai-triage-wrong-cause`,
-  `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-wrong-fix`,
-  `ai-triage-shallow-fix`. The last two are about the fix plan rather than the
-  diagnosis: one for a fix that would not work, one for a fix that patches the
-  symptom instead of the cause the comment just named. The same hook closes the
+  `ai-triage-hallucination`, `ai-triage-out-of-scope`, `ai-triage-not-a-bug`,
+  `ai-triage-wrong-fix`, `ai-triage-shallow-fix`, `ai-triage-wrong-severity`.
+  `not-a-bug` is for intended behavior triaged as a defect, which is otherwise
+  filed under `out-of-scope` or `wrong-cause` and inflates both. `wrong-fix` and
+  `shallow-fix` are about the fix plan rather than the diagnosis: one for a fix
+  that would not work, one for a fix that patches the symptom instead of the cause
+  the comment just named. `wrong-severity` separates a bad severity suggestion
+  from a bad analysis, which a 👎 alone cannot do. The footer writes them as one
+  brace group, `ai-triage-{wrong-file, wrong-cause, …}`, so the list stays one
+  line as it grows. The same hook closes the
   comment by asking for a `needinfo?` on `hackbot@mozilla.tld`, which triggers a
   `bug-fix` run ([triggers.md](../../docs/hackbot/triggers.md)).
 
@@ -306,8 +348,9 @@ ScopedComponent(
 - **`trees`** is descriptive and may overlap another component. It drives the prompt's
   index and the docs lookup, so it is what makes the component triageable.
 - **`doc_trees`** is for the one case where a component's docs are not under its code,
-  and it **replaces** `trees` for the docs lookup rather than adding to it. Only
-  `Toolkit :: Data Sanitization` needs it: its article is registered by
+  and it **replaces** `trees` for the docs lookup rather than adding to it. The DevTools
+  panels need it because `devtools/moz.build` registers their docs once for all of
+  them. `Toolkit :: Data Sanitization` needs it because its article is registered by
   `toolkit/components/antitracking/moz.build`, and its own
   `browser/base/content/sanitize*` files otherwise resolve to `browser/base/`'s
   tabbrowser and sslerrorreport trees. Leave it empty unless `docs_for` returns a

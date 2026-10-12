@@ -18,6 +18,7 @@ class PhabricatorSettings(BaseModel):
     api_key: Annotated[str, Field(min_length=32, max_length=32)]
     url: str = "https://phabricator.services.mozilla.com"
     timeout_seconds: int = 60
+    edge_key: str | None = None
 
     @classmethod
     def from_env(cls) -> PhabricatorSettings:

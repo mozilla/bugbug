@@ -55,11 +55,13 @@ def resolve_xpi_url(slug: str) -> tuple[str, str]:
 
 
 def download(url: str, dest: Path) -> None:
-    with amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp:
-        with dest.open("wb") as f:
-            for chunk in resp.iter_content(chunk_size=64 * 1024):
-                if chunk:
-                    f.write(chunk)
+    with (
+        amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp,
+        dest.open("wb") as f,
+    ):
+        for chunk in resp.iter_content(chunk_size=64 * 1024):
+            if chunk:
+                f.write(chunk)
 
 
 def extract_extension_id(xpi: Path) -> str:
@@ -135,13 +137,12 @@ def warm_launch(
     except subprocess.TimeoutExpired:
         pass
     finally:
-        if proc.poll() is not None:
-            return
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
 
 def verify_registered(profile_dir: Path, ext_id: str) -> bool:

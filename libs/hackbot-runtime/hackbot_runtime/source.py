@@ -118,9 +118,19 @@ def ensure_source_repo(
         return
     log.info("cloning %s (shallow) to %s", repo_url, source_repo)
     subprocess.run(
-        ["git", "clone", "--depth=1", repo_url, str(source_repo)],
+        ["git", "clone", depth_flag, repo_url, str(source_repo)],
         check=True,
         stdout=sys.stderr,
         stderr=sys.stderr,
     )
     log.info("shallow clone complete")
+
+
+def checkout_commit(source_repo: Path, ref: str) -> None:
+    """Detach the checkout at ``ref``, which the shallow clone must already hold."""
+    subprocess.run(
+        ["git", "-C", str(source_repo), "checkout", "-q", "--detach", ref],
+        check=True,
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+    )

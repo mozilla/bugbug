@@ -9,6 +9,7 @@ import os
 import pickle
 import re
 import subprocess
+from collections import deque
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import cast
@@ -80,10 +81,7 @@ REVIEWERS_RE = re.compile(
 
 
 def replace_reviewers(commit_description, reviewers):
-    if not reviewers:
-        reviewers_str = ""
-    else:
-        reviewers_str = "r=" + ",".join(reviewers)
+    reviewers_str = "r=" + ",".join(reviewers) if reviewers else ""
 
     if commit_description == "":
         return reviewers_str
@@ -252,12 +250,11 @@ class CommitClassifier(object):
 
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
-        for commit in repository.get_commits():
-            pass
+        latest_commit = deque(repository.get_commits(), maxlen=1).pop()
 
         repository.download_commits(
             self.repo_dir,
-            rev_start="children({})".format(commit["node"]),
+            rev_start="children({})".format(latest_commit["node"]),
         )
 
     def has_revision(self, hg, revision):

@@ -1,9 +1,10 @@
-"""The Slack message an auto-applied run sends to the owning team's channel.
+"""The Slack message every triage run sends to the owning team's channel.
 
-Only a run that applies itself reports: at `confidence: high` its comment reaches the
-bug with nobody in between, and the team that owns the component has no other signal
-that it happened. A medium or low run wrote nothing to the bug, so there is nothing to
-tell anyone.
+Every run reports, whether or not it applied itself. At `confidence: high` its comment
+reaches the bug with nobody in between, and the team that owns the component has no
+other signal that it happened. Below that the comment is held, and the channel is the
+only place anyone learns there is an analysis waiting on a decision, so the message
+says so with `HELD_NOTE`.
 
 Recorded as a ``slack.post_message`` action rather than posted from the run, so it is
 visible in the hackbot UI before it lands and the apply step delivers it at most once
@@ -11,8 +12,8 @@ visible in the hackbot UI before it lands and the apply step delivers it at most
 
 Two lines: the bug, and the run. The channel already says which product and component
 this is, the analysis is on the bug, and the detail is in the run -- so neither is
-repeated here. Confidence is not reported either, since only a `high` run gets this
-far. An S1 is the one thing worth pulling out of the bug, as it is the level someone
+repeated here. Confidence is not reported either, beyond whether the run was held. An
+S1 is the one thing worth pulling out of the bug, as it is the level someone
 may need to act on today -- but only one the run is confident about, on the same
 threshold that decides whether the comment mentions severity at all.
 """
@@ -148,7 +149,7 @@ def _bug_fix_button(result: FrontendTriageResult, *, run_id: str) -> dict:
     return create_start_agent_run_button(
         label,
         agent_name="bug-fix",
-        params={"bug_id": result.bug_id},
+        inputs={"bug_id": result.bug_id},
         dedupe_key=f"frontend-triage-run:{run_id}",
         apply_run_id=run_id,
         confirm=ConfirmObject(
@@ -221,17 +222,10 @@ def record_notification(
 ) -> dict | None:
     """Record the run's Slack message, if it has one to send.
 
-    Returns the recorded action, or None when nothing is reported -- the run did not
-    mark itself safe to apply unattended, or its component has no channel. Lives here
+    Returns the recorded action, or None when the component has no channel. Lives here
     rather than in ``__main__`` so the whole decision is testable without a
     ``HackbotContext``.
     """
-    if not result.auto_apply:
-        logger.info(
-            "Bug %s: not auto-applied, so nothing to report to Slack", result.bug_id
-        )
-        return None
-
     channel = channel_for(result.product, result.component)
     if channel is None:
         logger.info(

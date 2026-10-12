@@ -72,8 +72,8 @@ _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 _FEEDBACK_TAGS = (
     "If you want to categorize your feedback you can add one of the following "
-    "tags: ai-triage-wrong-file, ai-triage-wrong-cause, ai-triage-hallucination, "
-    "ai-triage-out-of-scope, ai-triage-wrong-fix, ai-triage-shallow-fix."
+    "tags: ai-triage-{wrong-file, wrong-cause, hallucination, out-of-scope, "
+    "not-a-bug, wrong-fix, shallow-fix, wrong-severity}."
 )
 
 # Repeats the `bugzilla_webhook.bot_login` default in hackbot-api, which this agent
@@ -235,24 +235,24 @@ async def fetch_product_component(
         return None, None
 
     try:
-        async with streamablehttp_client(url) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                res = await session.call_tool(
-                    "get_bugs",
-                    # `id` is not optional: `get_bugs` diffs requested against
-                    # returned ids to report inaccessible bugs, so leaving it out
-                    # of `include_fields` makes the tool itself raise KeyError.
-                    {"ids": [bug], "include_fields": "id,product,component"},
-                )
-                if res.isError:
-                    raise RuntimeError(
-                        "".join(getattr(c, "text", "") for c in res.content)
-                    )
-                bugs = json.loads(res.content[0].text).get("bugs") or []
-                if not bugs:
-                    return None, None
-                return bugs[0].get("product"), bugs[0].get("component")
+        async with (
+            streamablehttp_client(url) as (read, write, _),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            res = await session.call_tool(
+                "get_bugs",
+                # `id` is not optional: `get_bugs` diffs requested against
+                # returned ids to report inaccessible bugs, so leaving it out
+                # of `include_fields` makes the tool itself raise KeyError.
+                {"ids": [bug], "include_fields": "id,product,component"},
+            )
+            if res.isError:
+                raise RuntimeError("".join(getattr(c, "text", "") for c in res.content))
+            bugs = json.loads(res.content[0].text).get("bugs") or []
+            if not bugs:
+                return None, None
+            return bugs[0].get("product"), bugs[0].get("component")
     except Exception as e:  # - see docstring; every failure fails open
         print(
             f"[frontend_triage] component lookup failed ({type(e).__name__}: {e}); "
@@ -362,9 +362,11 @@ triage agent pulled from it. Work only from what you can read on Bugzilla.
 
 1. **Search once**, scoped to the same product and component, using the best single term
    from the discriminating signal. Pass narrow fields:
-   `include_fields=id,summary,status,resolution,dupe_of`. Ask for at most 20. Request
-   `dupe_of` explicitly -- it is not in the default field set. Leave `description` out
-   here: you need it for one candidate, not twenty.
+   `include_fields=id,summary,status,resolution,dupe_of`. Ask for at most 20, and always
+   pass `order=bug_id DESC`: Bugzilla returns the oldest matches first, so without it
+   the limit keeps twenty bugs from years ago and drops the recent one you are looking
+   for. Request `dupe_of` explicitly -- it is not in the default field set. Leave
+   `description` out here: you need it for one candidate, not twenty.
 2. **Widen at most three times** if nothing plausible comes back: drop the term, try your
    second-best signal, keep the product and component scope. Then stop.
 3. **Verify only your single best candidate.** Ask for `description` in `include_fields`

@@ -2,6 +2,8 @@ import logging
 from datetime import datetime
 from typing import Literal
 
+from autowebcompat_tools.inputs import BugDataInput, BugIdInput
+from autowebcompat_tools.task import RunTracker, TaskConfig
 from hackbot_runtime import (
     HackbotAgentResult,
     HackbotContext,
@@ -11,10 +13,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import (
     AutowebcompatReproResult,
-    BugDataInput,
-    BugIdInput,
-    RunTracker,
-    TaskConfig,
     run_autowebcompat_repro,
 )
 

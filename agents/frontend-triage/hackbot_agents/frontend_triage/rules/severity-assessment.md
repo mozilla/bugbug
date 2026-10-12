@@ -24,6 +24,10 @@ You cannot set the `severity` field. The comment is a suggestion for a human to 
 - Frontend UI/UX papercuts are usually **S3** (or **S4** when purely cosmetic). Reserve
   **S1 / S2** for genuine breakage: crashes, data/state loss, or a broken core workflow
   with no easy workaround.
+- **Before suggesting S2, name the workaround you ruled out and who hits the bug.** A
+  UX problem with a workaround is S3 however visible it is, and so is a failure that
+  only a narrow population reaches. An S2 that a human lowered is the most common way
+  these suggestions have been wrong.
 - **Install and update failures do not default to S3.** "Papercut usually means S3" is a
   desktop-frontend heuristic and does not carry over: a user whose update does not apply
   is left on an older, unpatched build, and a user whose install fails does not have

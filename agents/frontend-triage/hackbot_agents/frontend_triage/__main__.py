@@ -17,7 +17,11 @@ TRIAGE_TASK = (
 )
 
 
-DEFAULT_MODEL = "claude-opus-5"
+# Opus 5.5's context window is natively 1M, so the bare id needs no `[1m]` suffix.
+DEFAULT_MODEL = "claude-opus-5-5"
+# Set explicitly: left unset, the CLI falls back to the model's own default, which
+# is `medium` for Opus 5.5.
+DEFAULT_EFFORT = "high"
 
 
 class AgentInputs(BaseSettings):
@@ -25,7 +29,7 @@ class AgentInputs(BaseSettings):
     broker_url: str
     model: str = DEFAULT_MODEL
     max_turns: int | None = None
-    effort: str | None = None
+    effort: str = DEFAULT_EFFORT
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -74,8 +78,8 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
         actions_recorder=ctx.actions,
     )
 
-    # Recorded last, so it applies after the Bugzilla writes it reports. Only an
-    # auto-applied run in a component with a channel records anything -- see notify.py.
+    # Recorded last, so it applies after the Bugzilla writes it reports. Only a run
+    # in a component with a channel records anything -- see notify.py.
     record_notification(ctx.actions, result, run_id=ctx.run_id)
     return result
 

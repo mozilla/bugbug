@@ -186,9 +186,9 @@ def test_serves_nothing_but_conduit_methods():
 def test_default_allow_list_holds_only_reads():
     # Pinned deliberately: this is what a caller can reach with the proxy's
     # Conduit key, so widening it should be a conscious edit.
-    assert phabricator_proxy.READ_ONLY_METHODS == {
+    assert {
         "differential.revision.search",
         "differential.querydiffs",
         "differential.getrawdiff",
         "diffusion.querycommits",
-    }
+    } == phabricator_proxy.READ_ONLY_METHODS
