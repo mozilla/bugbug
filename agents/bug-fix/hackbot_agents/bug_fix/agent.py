@@ -15,6 +15,7 @@ from shlex import quote
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox import FirefoxContext
+from agent_tools.registry import ToolError
 from claude_agent_sdk import (
     AgentDefinition,
     ClaudeAgentOptions,
@@ -25,6 +26,7 @@ from claude_agent_sdk import (
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
+from hackbot_runtime.actions.recorder import ActionHook
 from hackbot_runtime.claude import Reporter
 
 from .config import (
@@ -42,6 +44,24 @@ PROMPTS = HERE / "prompts"
 class BugFixResult(HackbotAgentResult):
     bug_id: int
     result: str | None = None
+
+
+def reject_stacked_submit(parent_revision_ids: list[int]) -> ActionHook:
+    """Refuse ``phabricator.submit_patch`` on a stacked revision.
+
+    The run's tree carries the unlanded parents, but a new revision's diff would
+    not, so it could depend on code that is not in mozilla-central.
+    """
+    parents = ", ".join(f"D{parent}" for parent in parent_revision_ids)
+
+    def hook(action: dict) -> None:
+        raise ToolError(
+            f"This revision is stacked on {parents}: submitting a new revision "
+            "from a stacked revision is not supported yet. Reply on the "
+            "revision with phabricator_add_comment instead."
+        )
+
+    return hook
 
 
 def render_prompt(name: str, **fields: object) -> str:
@@ -146,6 +166,7 @@ async def run_bug_fix(
     bug: int,
     comment: str | None = None,
     revision_id: int | None = None,
+    parent_revision_ids: list[int],
     bugzilla_needinfo_flag_id: int | None = None,
     rules_dir: Path | None = None,
     model: str | None = None,
@@ -185,6 +206,10 @@ async def run_bug_fix(
     actions_recorder, actions_server = actions_server_for(
         actions_recorder, types=BUG_FIX_ACTIONS
     )
+    if parent_revision_ids:
+        actions_recorder.add_hook(
+            "phabricator.submit_patch", reject_stacked_submit(parent_revision_ids)
+        )
     enabled_action_tools = actions_to_tool_names(BUG_FIX_ACTIONS)
 
     system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
