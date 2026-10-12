@@ -234,7 +234,7 @@ class ReviewData(ABC):
                 return False
 
             comment_lower = comment_content.lower()
-            if any(
+            return not any(
                 phrase in comment_lower
                 for phrase in [
                     "wdyt?",
@@ -242,10 +242,7 @@ class ReviewData(ABC):
                     "you explain",
                     "understand",
                 ]
-            ):
-                return False
-
-            return True
+            )
 
         from libmozdata.phabricator import ConduitError
         from unidiff.errors import UnidiffParseError
