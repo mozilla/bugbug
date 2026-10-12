@@ -24,6 +24,7 @@ a digest can't.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -35,6 +36,14 @@ LABEL_REVISION = "org.opencontainers.image.revision"
 LABEL_CREATED = "org.opencontainers.image.created"
 JOB_LABEL_CONFIG_HASH = "hackbot-config-hash"
 HISTORY_LIMIT = 10
+# A registry image pinned by digest. The host is plain DNS labels: no "#",
+# "@", ":" or "?", any of which could make a URL built from it reach another
+# host. Which hosts are trusted is the caller's call (see gcp.py).
+_IMAGE = re.compile(
+    r"(?P<host>[a-z0-9]+(?:[.-][a-z0-9]+)*)"
+    r"/(?P<path>[a-z0-9._-]+(?:/[a-z0-9._-]+)*)"
+    r"@(?P<digest>sha256:[0-9a-f]{64})"
+)
 
 # Deployed as Cloud Run services; everything else is an agent.
 SERVICES = ("hackbot-api", "hackbot-ui")
@@ -134,12 +143,23 @@ class Result:
     record: dict[str, Any] = field(default_factory=dict)
 
 
-def require_digest(image: str) -> str:
-    """Refuse anything not pinned by digest."""
+def split_image(image: str) -> tuple[str, str, str]:
+    """Return an image's registry host, repository path and digest.
+
+    Refuses anything not pinned by digest, or not a well-formed reference.
+    """
     if "@sha256:" not in image:
         raise DeployError(
             f"{image}: images must be pinned by digest (…@sha256:…), not by tag"
         )
+    match = _IMAGE.fullmatch(image)
+    if match is None:
+        raise DeployError(f"{image}: not a valid image reference (host/path@sha256:…)")
+    return match["host"], match["path"], match["digest"]
+
+
+def require_image(image: str) -> str:
+    split_image(image)
     return image
 
 
@@ -202,15 +222,12 @@ def _refuse_stale(
         )
 
 
-def _history(
-    current: dict[str, Any] | None, images: dict[str, str], *, rollback: bool
-) -> list[dict[str, Any]]:
+def _history(current: dict[str, Any] | None, *, rollback: bool) -> list[dict[str, Any]]:
     if rollback:
-        # The target leaves the history; the deployment being rolled back
-        # doesn't join it, so rolling back twice goes back two deployments.
-        return [
-            h for h in (current or {}).get("history", []) if h.get("images") != images
-        ]
+        # The target (always the latest entry) leaves the history; the
+        # deployment being rolled back doesn't join it, so rolling back twice
+        # goes back two deployments.
+        return (current or {}).get("history", [])[1:]
     return ([_summary(current)] + current.get("history", [])) if current else []
 
 
@@ -241,7 +258,7 @@ def _ship(
         "created": labels.get(LABEL_CREATED),
         "deployed_at": _now(),
         "deployed_by": actor,
-        "history": _history(current, images, rollback=rollback)[:HISTORY_LIMIT],
+        "history": _history(current, rollback=rollback)[:HISTORY_LIMIT],
     }
     action = "rolled back" if rollback else "deployed"
     if dry_run:
@@ -313,7 +330,7 @@ def deploy_agent(
         images = _rollback_target(current, agent, env)
     if not images or "agent" not in images:
         raise DeployError("an agent image is required")
-    images = {container: require_digest(ref) for container, ref in images.items()}
+    images = {container: require_image(ref) for container, ref in images.items()}
 
     applied = _applied(cloud, env, agent)
     image_hash, labels = _image_hash(cloud, images)
@@ -339,9 +356,9 @@ def deploy_agent(
     job_name = env.job_name(agent)
     job = cloud.get_job(env.project_id, REGION, job_name)
     job_hash = job.get("labels", {}).get(JOB_LABEL_CONFIG_HASH)
-    if job_hash and job_hash != applied["applied"]:
+    if job_hash != applied["applied"]:
         raise DeployError(
-            f"{job_name} is labelled {job_hash} but applied.json says {applied['applied']}; "
+            f"{job_name} is labelled {job_hash or 'with no config hash'} but applied.json says {applied['applied']}; "
             "a Terraform apply looks incomplete"
         )
     containers = {c["name"] for c in job["template"]["template"]["containers"]}
@@ -424,7 +441,7 @@ def deploy_service(
         images = {containers[0]: image}
     else:
         raise DeployError("an image is required")
-    images = {container: require_digest(ref) for container, ref in images.items()}
+    images = {container: require_image(ref) for container, ref in images.items()}
     if set(images) != set(containers):
         raise DeployError(
             f"{name} runs container {containers[0]}, but images were given for {sorted(images)}"

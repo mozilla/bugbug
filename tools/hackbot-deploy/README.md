@@ -91,13 +91,16 @@ works from Cloud Build, GitHub Actions and a laptop.
 
 What an agent deploy checks, in order:
 
-1. Images are pinned by digest, never a tag.
+1. Images are pinned by digest, never a tag, and are in Artifact Registry
+   (`<region>-docker.pkg.dev`): reading their labels sends credentials to that
+   host.
 2. The images carry `hackbot.config_hash` and agree on it.
 3. **The gate.** A forward deploy needs that hash to equal the shape applied in
    the environment (`applied.json` in its registry bucket). A rollback needs it
    in `compatible`.
-4. An older build doesn't replace a newer one (`--force` to override). Builds
-   aren't serialised, so this matters.
+4. An older build doesn't replace a newer one (`--force` to override). A build
+   stops if an older build of its trigger is still running (`check-build`), but
+   a manual deploy can still race one, so this matters.
 5. The Job's containers match the images given, and its config-hash label
    agrees with `applied.json` (catching an incomplete apply).
 

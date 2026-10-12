@@ -19,10 +19,12 @@ from google.auth.transport.requests import AuthorizedSession
 from google.cloud import run_v2, storage
 from google.cloud.devtools import cloudbuild_v1
 
-from hackbot_deploy.deploy import DeployError, StoredObject
+from hackbot_deploy.deploy import DeployError, StoredObject, split_image
 
 # Artifact Registry speaks the OCI distribution API, which has no client
-# library; image labels are read from it directly.
+# library; image labels are read from it directly, with the deploy's
+# credentials. So they only go to Artifact Registry hosts, in any region.
+_REGISTRY_HOST_SUFFIX = "-docker.pkg.dev"
 _MANIFEST_TYPES = ", ".join(
     [
         "application/vnd.oci.image.index.v1+json",
@@ -102,8 +104,13 @@ class GoogleCloud:
         return response.json()
 
     def image_labels(self, image: str) -> dict[str, str]:
-        reference, digest = image.split("@", 1)
-        host, path = reference.split("/", 1)
+        # split_image allows only DNS-label characters in the host, so a host
+        # with this suffix can only be under pkg.dev.
+        host, path, digest = split_image(image)
+        if not host.endswith(_REGISTRY_HOST_SUFFIX):
+            raise DeployError(
+                f"{image}: images must be in Artifact Registry (<region>{_REGISTRY_HOST_SUFFIX})"
+            )
         base = f"https://{host}/v2/{path}"
         accept = {"Accept": _MANIFEST_TYPES}
         manifest = self._registry_get(

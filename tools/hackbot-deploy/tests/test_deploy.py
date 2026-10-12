@@ -269,6 +269,22 @@ def test_rollback_goes_back_one_deployment_at_a_time(cloud: FakeCloud) -> None:
     assert third not in [h["images"] for h in cloud.record(DEV, "bug-fix")["history"]]
 
 
+def test_rollback_keeps_earlier_deployments_of_the_same_images(
+    cloud: FakeCloud,
+) -> None:
+    # A, B, C, B again (forced), D: the history is B, C, B, A.
+    a, b, c = (
+        ship(cloud, n, created=f"2026-10-09T1{n}:00:00Z").images for n in (1, 2, 3)
+    )
+    ship(cloud, 2, created="2026-10-09T12:00:00Z", force=True)
+    ship(cloud, 4, created="2026-10-09T14:00:00Z")
+
+    steps = [
+        deploy_agent(cloud, "bug-fix", DEV, rollback=True).images for _ in range(4)
+    ]
+    assert steps == [b, c, b, a]
+
+
 def test_rollback_refuses_explicit_images(cloud: FakeCloud) -> None:
     first = ship(cloud, 1).images
     ship(cloud, 2, created="2026-10-09T11:00:00Z")
@@ -505,3 +521,40 @@ def test_a_build_started_by_hand_is_never_stopped() -> None:
         build("this", "2026-10-10T13:25:40Z", trigger=None),
     ]
     assert deploy.older_builds(fake, "p", "us-west1", "this") == []
+
+
+D = "sha256:" + "0" * 64
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [
+        f"evil.example#.us-docker.pkg.dev/x@{D}",
+        f"us-west1-docker.pkg.dev@evil.example/x@{D}",
+        f"us-docker.pkg.dev:443@evil.example/x@{D}",
+        f"user@us-docker.pkg.dev/x@{D}",
+        f"us-docker.pkg.dev/x@{D}@evil.example",
+        f"us-docker.pkg.dev/x?y@{D}",
+        "us-docker.pkg.dev/x@sha256:abc",
+    ],
+)
+def test_malformed_image_references_are_refused(ref: str) -> None:
+    with pytest.raises(DeployError, match="not a valid image reference"):
+        deploy.split_image(ref)
+
+
+def test_image_references_split_into_host_path_and_digest() -> None:
+    assert deploy.split_image(f"us-west1-docker.pkg.dev/p/r/agent@{D}") == (
+        "us-west1-docker.pkg.dev",
+        "p/r/agent",
+        D,
+    )
+
+
+def test_a_job_without_the_config_hash_label_is_an_incomplete_apply(
+    cloud: FakeCloud,
+) -> None:
+    cloud.job(DEV, "bug-fix", ["agent", "broker"])
+    with pytest.raises(DeployError, match="no config hash"):
+        ship(cloud, 1)
+    assert cloud.updates == []
