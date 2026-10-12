@@ -1,10 +1,15 @@
 """The ``[deploy]`` table of an agent's ``hackbot.toml``.
 
-It describes the infrastructure an agent runs on: its runtime, its sizing, any
-extra environment, and an optional broker and workspace disk. Everything here
+It describes the infrastructure an agent runs on: its runtime, its sizing, the
+secrets it reads, and an optional broker and workspace disk. Everything here
 is part of the agent's *shape*. Terraform applies it, so changing any field
 changes the agent's ``config_hash`` and goes through an infra PR. The image is
 deliberately absent: it ships on its own, without one.
+
+There is no plain environment here. A constant belongs in the image (an ``ENV``
+in its Dockerfile), and anything that differs per environment comes from the
+variables Terraform gives every agent. Secrets are here because only
+infrastructure can grant access to them.
 """
 
 from __future__ import annotations
@@ -33,15 +38,10 @@ Cpu = Annotated[
 Memory = Annotated[str, Field(pattern=r"^\d+(Mi|Gi)$")]
 
 
-def _check_env(env: dict[str, str]) -> dict[str, str]:
-    bad = [name for name in env if not _ENV_NAME.match(name)]
+def _check_secret_env(secret_env: dict[str, str]) -> dict[str, str]:
+    bad = [name for name in secret_env if not _ENV_NAME.match(name)]
     if bad:
         raise ValueError(f"not valid environment variable names: {', '.join(bad)}")
-    return env
-
-
-def _check_secret_env(secret_env: dict[str, str]) -> dict[str, str]:
-    _check_env(secret_env)
     bad = [secret for secret in secret_env.values() if not _SECRET_NAME.match(secret)]
     if bad:
         raise ValueError(f"not valid Secret Manager secret names: {', '.join(bad)}")
@@ -71,9 +71,7 @@ class Broker(_Strict):
     memory: Memory = "512Mi"
     # Environment variable -> Secret Manager secret name. Names, never values.
     secret_env: dict[str, str] = Field(default_factory=dict)
-    env: dict[str, str] = Field(default_factory=dict)
 
-    _validate_env = field_validator("env")(_check_env)
     _validate_secret_env = field_validator("secret_env")(_check_secret_env)
 
 
@@ -84,14 +82,11 @@ class DeployConfig(_Strict):
     cpu: Cpu
     memory: Memory
     timeout_seconds: Annotated[int, Field(gt=0)] = 7200
-    # Static environment on top of what every agent gets. Per-run inputs are
-    # not here; the API sends those with each execution.
-    env: dict[str, str] = Field(default_factory=dict)
+    # Environment variable -> Secret Manager secret name. Names, never values.
     secret_env: dict[str, str] = Field(default_factory=dict)
     workspace: Workspace | None = None
     broker: Broker | None = None
 
-    _validate_env = field_validator("env")(_check_env)
     _validate_secret_env = field_validator("secret_env")(_check_secret_env)
 
     def manifest_entry(self) -> dict[str, Any]:
@@ -107,8 +102,6 @@ class DeployConfig(_Strict):
             "memory": self.memory,
             "timeout_seconds": self.timeout_seconds,
         }
-        if self.env:
-            entry["env"] = dict(sorted(self.env.items()))
         if self.secret_env:
             entry["secret_env"] = dict(sorted(self.secret_env.items()))
         if self.workspace is not None:
@@ -120,7 +113,5 @@ class DeployConfig(_Strict):
             }
             if self.broker.secret_env:
                 broker["secret_env"] = dict(sorted(self.broker.secret_env.items()))
-            if self.broker.env:
-                broker["env"] = dict(sorted(self.broker.env.items()))
             entry["broker"] = broker
         return entry

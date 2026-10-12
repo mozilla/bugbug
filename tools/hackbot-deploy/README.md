@@ -19,9 +19,6 @@ cpu = "6"
 memory = "24Gi"
 timeout_seconds = 7200      # default
 
-[deploy.env]                # optional static environment
-SOME_SETTING = "value"
-
 [deploy.secret_env]         # optional: env var -> Secret Manager secret *name*
 SOME_KEY = "some-secret"
 
@@ -37,6 +34,9 @@ SOME_OTHER_KEY = "some-other-secret"
 ```
 
 Unknown keys are errors, so a typo fails instead of falling back to a default.
+There is no plain `env`: a constant belongs in the image's Dockerfile, and
+anything that differs per environment comes from the variables Terraform gives
+every agent. Only secrets need infrastructure.
 An agent with no `[deploy]` table isn't deployed and is left out of the
 manifest. The runtime ignores the table (`libs/hackbot-runtime` has a test
 pinning that).
@@ -56,14 +56,15 @@ uv run --package hackbot-deploy python -m hackbot_deploy manifest \
 shapes a rollback can still reach) is carried forward from it. The summary on
 stderr classifies every agent:
 
-| change                            | meaning                                                            | rollback                         |
-| --------------------------------- | ------------------------------------------------------------------ | -------------------------------- |
-| `expand`                          | sizing, timeout, added env, added workspace                        | still possible onto older images |
-| `contract`                        | runtime changed, broker added or removed, env or workspace removed | cut off                          |
-| `added` / `removed` / `unchanged` | as named                                                           |                                  |
+| change                            | meaning                                                                                 | rollback                         |
+| --------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------- |
+| `expand`                          | sizing, timeout, added secret, added workspace                                          | still possible onto older images |
+| `contract`                        | runtime changed, broker added or removed, secret or workspace removed, secret repointed | cut off                          |
+| `added` / `removed` / `unchanged` | as named                                                                                |                                  |
 
 A removal is a contract because an image built for the old shape may read
-what's gone. A broker either way changes the container set. Ship a removal in
+what's gone. So is pointing an existing variable at a different secret: the
+old image was never run against it. A broker either way changes the container set. Ship a removal in
 two releases: first stop depending on it, then remove it.
 
 `config_hash` is sha256 over the canonical JSON of the entry (sorted keys, no

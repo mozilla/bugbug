@@ -67,12 +67,12 @@ def test_the_hash_includes_the_agent_name() -> None:
 
 def test_an_empty_table_hashes_like_a_missing_one() -> None:
     assert config_hash("a", config().manifest_entry()) == config_hash(
-        "a", config(env={}).manifest_entry()
+        "a", config(secret_env={}).manifest_entry()
     )
 
 
 def test_the_hash_ignores_bookkeeping_and_key_order() -> None:
-    entry = config(env={"B": "2", "A": "1"}).manifest_entry()
+    entry = config(secret_env={"B": "b-secret", "A": "a-secret"}).manifest_entry()
     reordered = {
         **dict(reversed(list(entry.items()))),
         "config_hash": "x",
@@ -86,15 +86,39 @@ def test_the_hash_ignores_bookkeeping_and_key_order() -> None:
     [
         ({}, {"cpu": "8", "memory": "32Gi"}, Change.EXPAND),
         ({}, {"timeout_seconds": 3600}, Change.EXPAND),
-        ({}, {"env": {"NEW": "1"}}, Change.EXPAND),
+        ({}, {"secret_env": {"NEW": "new-secret"}}, Change.EXPAND),
+        (
+            {"secret_env": {"A": "a-secret"}},
+            {"secret_env": {"A": "a-secret", "B": "b-secret"}},
+            Change.EXPAND,
+        ),
         ({}, {"workspace": {"size": "40Gi"}}, Change.EXPAND),
-        ({"env": {"OLD": "1"}}, {}, Change.CONTRACT),
         ({"secret_env": {"KEY": "some-secret"}}, {}, Change.CONTRACT),
+        # The same variable pointed at another secret.
+        (
+            {"secret_env": {"KEY": "some-secret"}},
+            {"secret_env": {"KEY": "other-secret"}},
+            Change.CONTRACT,
+        ),
         ({"workspace": {"size": "40Gi"}}, {}, Change.CONTRACT),
         # A broker either way changes the container set.
         ({}, {"broker": {}}, Change.CONTRACT),
         ({"broker": {}}, {}, Change.CONTRACT),
-        ({"broker": {"env": {"A": "1"}}}, {"broker": {}}, Change.CONTRACT),
+        (
+            {"broker": {"secret_env": {"KEY": "some-secret"}}},
+            {"broker": {}},
+            Change.CONTRACT,
+        ),
+        (
+            {"broker": {"secret_env": {"KEY": "some-secret"}}},
+            {"broker": {"secret_env": {"KEY": "other-secret"}}},
+            Change.CONTRACT,
+        ),
+        (
+            {"broker": {}},
+            {"broker": {"secret_env": {"KEY": "some-secret"}}},
+            Change.EXPAND,
+        ),
         ({"broker": {}}, {"broker": {"cpu": "2", "memory": "4Gi"}}, Change.EXPAND),
     ],
 )
@@ -157,5 +181,4 @@ def test_a_previous_manifest_of_another_schema_version_is_refused() -> None:
 
 
 def test_dumps_escapes_non_ascii_like_the_infra_hook() -> None:
-    generated, _ = build_manifest({"a": config(env={"GREETING": "héllo"})})
-    assert "h\\u00e9llo" in manifest.dumps(generated)
+    assert "h\\u00e9llo" in manifest.dumps({"greeting": "héllo"})

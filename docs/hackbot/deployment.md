@@ -40,7 +40,7 @@ Registering the agent in `AGENT_REGISTRY` requires the Job to exist under the `j
 given there.
 
 The Job's infrastructure is declared in the agent's own `hackbot.toml`, under `[deploy]`
-(runtime, sizing, broker, workspace, extra env and secrets), and applied by Terraform in
+(runtime, sizing, broker, workspace and secrets), and applied by Terraform in
 mozilla/webservices-infra. Images ship separately and never need an infra PR. See
 [tools/hackbot-deploy](../../tools/hackbot-deploy/README.md).
 

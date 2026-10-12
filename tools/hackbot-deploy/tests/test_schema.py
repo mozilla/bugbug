@@ -23,7 +23,10 @@ def test_a_numeric_cpu_is_accepted_as_a_string() -> None:
         {"memory": "24GB"},
         {"cpu": "six"},
         {"timeout_seconds": 0},
-        {"env": {"lower-case": "x"}},
+        {"secret_env": {"lower-case": "some-secret"}},
+        # Constants belong in the image; only secrets need infrastructure.
+        {"env": {"SOME_SETTING": "value"}},
+        {"broker": {"env": {"SOME_SETTING": "value"}}},
         {"secret_env": {"KEY": "Not_A_Secret_Name"}},
         {"broker": {"memory": "lots"}},
         {"workspace": {}},
@@ -36,7 +39,11 @@ def test_invalid_tables_are_rejected(fields: dict) -> None:
 
 def test_manifest_entry_order_and_omissions() -> None:
     config = DeployConfig.model_validate(
-        {**JOB, "broker": {"env": {"Z": "1", "A": "2"}}, "workspace": {"size": "40Gi"}}
+        {
+            **JOB,
+            "broker": {"secret_env": {"Z": "z-secret", "A": "a-secret"}},
+            "workspace": {"size": "40Gi"},
+        }
     )
     entry = config.manifest_entry()
     assert list(entry) == [
@@ -47,5 +54,5 @@ def test_manifest_entry_order_and_omissions() -> None:
         "workspace",
         "broker",
     ]
-    assert list(entry["broker"]) == ["cpu", "memory", "env"]
-    assert list(entry["broker"]["env"]) == ["A", "Z"]
+    assert list(entry["broker"]) == ["cpu", "memory", "secret_env"]
+    assert list(entry["broker"]["secret_env"]) == ["A", "Z"]

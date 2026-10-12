@@ -97,8 +97,9 @@ def classify(previous: dict[str, Any], current: dict[str, Any]) -> Change:
 
     A contract is anything an image built for the old shape might not survive:
     a different runtime, a different container set (a broker added or removed),
-    a workspace taken away, or an environment variable it may read taken away.
-    Everything else, sizing included, is an expand.
+    a workspace taken away, or a secret it may read taken away or pointed at a
+    different secret. Everything else, sizing and added secrets included, is an
+    expand.
     """
     if previous.get("runtime") != current.get("runtime"):
         return Change.CONTRACT
@@ -107,14 +108,14 @@ def classify(previous: dict[str, Any], current: dict[str, Any]) -> Change:
     if "workspace" in previous and "workspace" not in current:
         return Change.CONTRACT
 
-    def removed_keys(old: dict[str, Any], new: dict[str, Any], key: str) -> bool:
-        return bool(set(old.get(key, {})) - set(new.get(key, {})))
+    def secret_removed_or_changed(old: dict[str, Any], new: dict[str, Any]) -> bool:
+        before, after = old.get("secret_env", {}), new.get("secret_env", {})
+        return any(after.get(name) != secret for name, secret in before.items())
 
-    for key in ("env", "secret_env"):
-        if removed_keys(previous, current, key):
-            return Change.CONTRACT
-        if removed_keys(previous.get("broker", {}), current.get("broker", {}), key):
-            return Change.CONTRACT
+    if secret_removed_or_changed(previous, current):
+        return Change.CONTRACT
+    if secret_removed_or_changed(previous.get("broker", {}), current.get("broker", {})):
+        return Change.CONTRACT
     return Change.EXPAND
 
 
