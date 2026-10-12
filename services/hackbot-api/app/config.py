@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     db_name: str = "hackbot"
 
     # Cloud Run Jobs
+    # Appended to every agent's Job name. Dev and stage share a project, so
+    # their Jobs are named hackbot-agent-<agent>-dev / -stage; prod has none.
+    agent_job_suffix: str = ""
     job_execution_timeout_seconds: int = 8 * 60 * 60
     signed_policy_max_bytes: int = 5 * 1024 * 1024 * 1024
     signed_policy_grace_seconds: int = 60 * 60
