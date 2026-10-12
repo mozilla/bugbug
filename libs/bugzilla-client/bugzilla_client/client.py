@@ -18,7 +18,6 @@ import logging
 from typing import Any
 
 import httpx
-from pydantic import BaseModel
 from tenacity import (
     RetryCallState,
     before_sleep_log,
@@ -28,15 +27,6 @@ from tenacity import (
 )
 
 from bugzilla_client.config import BugzillaSettings
-from bugzilla_client.models import (
-    Attachment,
-    Bug,
-    BugUpdate,
-    Comment,
-    FieldChange,
-    NewAttachment,
-    NewBug,
-)
 
 log = logging.getLogger(__name__)
 
@@ -149,7 +139,7 @@ class BugzillaClient:
 
     async def get_bugs(
         self, ids: list[int], *, include_fields: str | None = None
-    ) -> list[Bug]:
+    ) -> list[dict[str, Any]]:
         """Fetch bugs by id in one request.
 
         Bugs the API key cannot see are left out of the result rather than
@@ -162,12 +152,12 @@ class BugzillaClient:
             params["include_fields"] = include_fields
         return await self.search_bugs(params)
 
-    async def search_bugs(self, params: dict[str, Any]) -> list[Bug]:
+    async def search_bugs(self, params: dict[str, Any]) -> list[dict[str, Any]]:
         """Search with raw ``GET /bug`` query parameters."""
         result = await self.request("GET", "bug", params=params)
-        return [Bug.model_validate(bug) for bug in result.get("bugs", [])]
+        return result["bugs"]
 
-    async def get_comments(self, bug_ids: list[int]) -> dict[int, list[Comment]]:
+    async def get_comments(self, bug_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
         """Map each bug id to its comments, fetched in one request."""
         if not bug_ids:
             return {}
@@ -176,29 +166,26 @@ class BugzillaClient:
         params = {"ids": ",".join(str(i) for i in rest)} if rest else None
         result = await self.request("GET", f"bug/{first}/comment", params=params)
         return {
-            int(bug_id): [Comment.model_validate(c) for c in data["comments"]]
-            for bug_id, data in result.get("bugs", {}).items()
+            int(bug_id): data["comments"] for bug_id, data in result["bugs"].items()
         }
 
     async def get_attachments(
         self, bug_id: int, *, include_data: bool = False
-    ) -> list[Attachment]:
+    ) -> list[dict[str, Any]]:
         """The attachments on a bug, without their content unless asked."""
         params = None if include_data else {"exclude_fields": "data"}
         result = await self.request("GET", f"bug/{bug_id}/attachment", params=params)
-        attachments = result["bugs"].get(str(bug_id), [])
-        return [Attachment.model_validate(a) for a in attachments]
+        return result["bugs"][str(bug_id)]
 
     async def get_attachment(
         self, attachment_id: int, *, include_data: bool = True
-    ) -> Attachment | None:
+    ) -> dict[str, Any] | None:
         """One attachment, or ``None`` if Bugzilla did not return it."""
         params = None if include_data else {"exclude_fields": "data"}
         result = await self.request(
             "GET", f"bug/attachment/{attachment_id}", params=params
         )
-        raw = result["attachments"].get(str(attachment_id))
-        return Attachment.model_validate(raw) if raw is not None else None
+        return result["attachments"].get(str(attachment_id))
 
     async def is_user_in_group(self, login: str, group: str) -> bool:
         """Whether a Bugzilla account exists and belongs to ``group``."""
@@ -214,47 +201,55 @@ class BugzillaClient:
                 "permissive": "1",
             },
         )
-        return bool(result.get("users"))
+        return bool(result["users"])
 
     # Writes
 
     async def update_bug(
-        self, bug_id: int, update: BugUpdate
-    ) -> dict[str, FieldChange]:
+        self, bug_id: int, changes: dict[str, Any]
+    ) -> dict[str, dict[str, str]]:
         """Apply field changes and/or a comment in one ``PUT /bug/{id}``.
 
         Bugzilla applies the whole body as a single transaction (one bugmail,
         one history entry). Returns what actually changed, by field name; empty
         when every field already had its value (a comment is not a change).
         """
-        result = await self.request("PUT", f"bug/{bug_id}", json=_body(update))
+        result = await self.request("PUT", f"bug/{bug_id}", json=changes)
         (bug,) = result["bugs"]
-        return {
-            field: FieldChange.model_validate(change)
-            for field, change in bug["changes"].items()
-        }
+        return bug["changes"]
 
-    async def create_bug(self, bug: NewBug) -> int:
+    async def create_bug(self, fields: dict[str, Any]) -> int:
         """File a bug and return its id."""
-        result = await self.request("POST", "bug", json=_body(bug))
+        result = await self.request("POST", "bug", json=fields)
         return result["id"]
 
-    async def add_attachment(self, bug_id: int, attachment: NewAttachment) -> int:
+    async def add_attachment(
+        self,
+        bug_id: int,
+        *,
+        data: bytes,
+        file_name: str,
+        summary: str,
+        content_type: str,
+        is_patch: bool = False,
+        comment: str | None = None,
+    ) -> int:
         """Attach a file to a bug and return the new attachment id."""
-        # ``data`` is left out of the dump: JSON can't hold raw (binary) bytes.
-        body = attachment.model_dump(mode="json", exclude={"data"}, exclude_none=True)
-        body["ids"] = [bug_id]
-        body["data"] = base64.b64encode(attachment.data).decode("ascii")
+        body: dict[str, Any] = {
+            "ids": [bug_id],
+            "data": base64.b64encode(data).decode("ascii"),
+            "file_name": file_name,
+            "summary": summary,
+            "content_type": content_type,
+            "is_patch": is_patch,
+        }
+        if comment is not None:
+            body["comment"] = comment
         result = await self.request("POST", f"bug/{bug_id}/attachment", json=body)
         ids = [int(a["id"]) for a in result["attachments"].values()]
         if len(ids) != 1:
             raise BugzillaError(f"Expected one new attachment id, got {ids}")
         return ids[0]
-
-
-def _body(model: BaseModel) -> dict[str, Any]:
-    """The JSON body for a write model; unset fields are left out, not ``null``."""
-    return model.model_dump(mode="json", exclude_none=True)
 
 
 def _parse(response: httpx.Response) -> dict[str, Any]:
@@ -271,9 +266,7 @@ def _parse(response: httpx.Response) -> dict[str, Any]:
 
     if isinstance(data, dict) and data.get("error"):
         raise BugzillaError(
-            data.get("message") or "Unknown Bugzilla error",
-            code=data.get("code"),
-            status=response.status_code,
+            data["message"], code=data["code"], status=response.status_code
         )
     if response.is_error or not isinstance(data, dict):
         raise BugzillaError(
