@@ -204,11 +204,24 @@ async def create_bug(
             ),
         ),
     ] = None,
+    ref: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional label for this action so a later action in the same "
+                "run can reference the new bug once filed, via "
+                "{{actions.<ref>.bug_id}}."
+            ),
+        ),
+    ] = None,
 ) -> str:
     """Record an intended new-bug filing.
 
     The description becomes comment 0 and is rendered as Markdown. Recorded into
     the run summary for human review — does not file in Bugzilla.
+
+    Set `ref` if another action in the same run needs the new bug's ID, written
+    as `{{actions.<ref>.bug_id}}`.
     """
     body: dict[str, Any] = {
         "product": product,
@@ -220,7 +233,7 @@ async def create_bug(
     for k, v in (extra or {}).items():
         body.setdefault(k, v)
 
-    action = recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
+    action = recorder.record("bugzilla.create_bug", body, reasoning=reasoning, ref=ref)
     return confirmation(action)
 
 
