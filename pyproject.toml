@@ -128,6 +128,10 @@ include = ["/bugbug", "/scripts", "/VERSION"]
 [tool.hatch.build.targets.wheel]
 packages = ["bugbug", "scripts"]
 
+[tool.uv]
+# xgboost pulls in NCCL (~300 MB) for multi-GPU training, which we never use.
+override-dependencies = ["nvidia-nccl-cu13; sys_platform == 'never'"]
+
 [tool.uv.workspace]
 members = ["http_service", "agents/*", "libs/*", "services/*", "tools/*"]
 exclude = [
