@@ -9,6 +9,9 @@ the shape itself:
   infrastructure whose applied hash matches.
 - ``compatible`` lists the shapes the current infrastructure can still run.
   A rollback is allowed onto any image whose hash is in it.
+- ``images``, when present, are the image digests built for this shape, by
+  container. Terraform puts them on an environment in the same apply that
+  moves it to this shape, so infrastructure and image change together.
 
 An agent without a ``[deploy]`` table isn't deployed yet and is left out.
 """
@@ -24,6 +27,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from hackbot_deploy.deploy import split_image
 from hackbot_deploy.schema import DeployConfig
 
 SCHEMA_VERSION = 1
@@ -34,7 +38,7 @@ GENERATOR = "hackbot-deploy"
 # contract resets the list. Older shapes fall off the front.
 MAX_COMPATIBLE = 20
 
-_BOOKKEEPING = ("config_hash", "compatible")
+_BOOKKEEPING = ("config_hash", "compatible", "images")
 
 
 class ManifestError(Exception):
@@ -119,23 +123,54 @@ def classify(previous: dict[str, Any], current: dict[str, Any]) -> Change:
     return Change.EXPAND
 
 
+def _agents_of(manifest: dict[str, Any] | None, what: str) -> dict[str, Any]:
+    if manifest is None:
+        return {}
+    if manifest.get("schema_version") != SCHEMA_VERSION:
+        raise ManifestError(
+            f"{what} manifest has schema_version {manifest.get('schema_version')}; expected {SCHEMA_VERSION}"
+        )
+    return manifest.get("agents", {})
+
+
+def _check_images(name: str, entry: dict[str, Any], images: dict[str, str]) -> None:
+    containers = {"agent", "broker"} if "broker" in entry else {"agent"}
+    if set(images) != containers:
+        raise ManifestError(
+            f"{name} runs containers {sorted(containers)}, but images were given for {sorted(images)}"
+        )
+    for image in images.values():
+        split_image(image)
+
+
 def build_manifest(
     configs: dict[str, DeployConfig],
     previous: dict[str, Any] | None = None,
+    *,
+    pending: dict[str, Any] | None = None,
+    images: dict[str, dict[str, str]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Change]]:
     """Build ``agents.json`` and say what changed for each agent.
 
     ``previous`` is the manifest currently in webservices-infra. It is needed
     to carry each agent's ``compatible`` list forward; without it every agent
     starts fresh, which is only right the first time.
+
+    ``images`` are digests just built, by agent and container, and ``pending``
+    is the manifest of the open bot PR, if there is one. An agent whose shape
+    differs from ``previous`` takes its images from ``images``, or else keeps
+    the ones ``pending`` already pinned for that same shape. An agent whose
+    shape hasn't changed keeps what ``previous`` has: a new image for an
+    unchanged shape is the deploy pipeline's to ship, not Terraform's.
     """
-    previous_agents: dict[str, Any] = {}
-    if previous is not None:
-        if previous.get("schema_version") != SCHEMA_VERSION:
-            raise ManifestError(
-                f"previous manifest has schema_version {previous.get('schema_version')}; expected {SCHEMA_VERSION}"
-            )
-        previous_agents = previous.get("agents", {})
+    previous_agents = _agents_of(previous, "previous")
+    pending_agents = _agents_of(pending, "pending")
+    images = images or {}
+    unknown = images.keys() - configs.keys()
+    if unknown:
+        raise ManifestError(
+            f"images were given for {', '.join(sorted(unknown))}, which has no [deploy] table"
+        )
 
     agents: dict[str, Any] = {}
     changes: dict[str, Change] = {}
@@ -156,7 +191,20 @@ def build_manifest(
             else:
                 compatible = [digest]
 
+        if change is Change.UNCHANGED:
+            pinned = before.get("images")
+        elif name in images:
+            pinned = images[name]
+        else:
+            waiting = pending_agents.get(name, {})
+            pinned = (
+                waiting.get("images") if waiting.get("config_hash") == digest else None
+            )
+
         agents[name] = {**entry, "config_hash": digest, "compatible": compatible}
+        if pinned:
+            _check_images(name, entry, pinned)
+            agents[name]["images"] = dict(sorted(pinned.items()))
         changes[name] = change
 
     for name in previous_agents.keys() - configs.keys():

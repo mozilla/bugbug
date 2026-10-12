@@ -30,6 +30,7 @@ class FakeCloud:
         self.updates: list[tuple[str, dict[str, str]]] = []
         self.revisions_fail = False
         self.builds: list[dict[str, Any]] = []
+        self.tags: dict[str, str] = {}
 
     # --- setup helpers ---
     def apply(
@@ -38,16 +39,16 @@ class FakeCloud:
         agent: str,
         applied: str,
         compatible: list[str] | None = None,
+        images: dict[str, str] | None = None,
     ) -> None:
-        body = {
-            "agents": {
-                agent: {
-                    "runtime": "cloud_run_job",
-                    "applied": applied,
-                    "compatible": compatible or [applied],
-                }
-            }
+        entry: dict[str, Any] = {
+            "runtime": "cloud_run_job",
+            "applied": applied,
+            "compatible": compatible or [applied],
         }
+        if images:
+            entry["images"] = images
+        body = {"agents": {agent: entry}}
         self.put(env.registry_bucket, "applied.json", body)
 
     def job(
@@ -135,6 +136,9 @@ class FakeCloud:
         if not self.revisions_fail:
             svc["latestReadyRevision"] = f"r{n}"
         self.updates.append((name, images))
+
+    def image_digest(self, image: str) -> str:
+        return self.tags[image]
 
     def get_build(self, project: str, location: str, build_id: str) -> dict[str, Any]:
         return next(b for b in self.builds if b["id"] == build_id)
@@ -609,3 +613,79 @@ def test_deployed_by(
     for var, value in env.items():
         monkeypatch.setenv(var, value)
     assert cli._actor(SignedIn()) == actor  # type: ignore[arg-type]
+
+
+def test_built_images_are_pinned_by_digest() -> None:
+    fake = FakeCloud()
+    for container, n in (("agent", 1), ("broker", 2)):
+        fake.tags[f"{REPO}/bug-fix-{container}:abc"] = fake.build(
+            image(f"bug-fix-{container}", n), "h2"
+        )
+    images = deploy.built_images(fake, REPO, "bug-fix", "abc", "h2", has_broker=True)
+    assert images == {
+        "agent": image("bug-fix-agent", 1),
+        "broker": image("bug-fix-broker", 2),
+    }
+
+
+def test_images_built_for_an_older_shape_are_not_pinned() -> None:
+    fake = FakeCloud()
+    fake.tags[f"{REPO}/bug-fix-agent:abc"] = fake.build(image("bug-fix-agent", 1), "h1")
+    assert (
+        deploy.built_images(fake, REPO, "bug-fix", "abc", "h2", has_broker=False)
+        is None
+    )
+
+
+def terraform_moves_to_a_new_shape(cloud: FakeCloud, n: int) -> dict[str, str]:
+    """What an apply does: the new shape, with the images pinned for it."""
+    pinned = {
+        "agent": cloud.build(image("bug-fix-agent", n), "h3"),
+        "broker": cloud.build(image("bug-fix-broker", n), "h3"),
+    }
+    cloud.apply(DEV, "bug-fix", "h3", ["h2", "h3"], images=pinned)
+    cloud.job(DEV, "bug-fix", ["agent", "broker"], label="h3")
+    cloud.set_job_images(DEV.project_id, deploy.REGION, DEV.job_name("bug-fix"), pinned)
+    return pinned
+
+
+def test_images_terraform_put_on_are_recorded(cloud: FakeCloud) -> None:
+    ship(cloud, 1)
+    pinned = terraform_moves_to_a_new_shape(cloud, 3)
+
+    result = ship(cloud, 3, config_hash="h3")
+    assert result.action == "unchanged"
+    record = cloud.record(DEV, "bug-fix")
+    assert record["images"] == pinned
+    assert record["deployed_by"] == "terraform"
+    assert [h["images"]["agent"] for h in record["history"]] == [
+        image("bug-fix-agent", 1)
+    ]
+
+
+def test_rollback_after_terraform_goes_back_to_what_ran_before(
+    cloud: FakeCloud,
+) -> None:
+    ship(cloud, 1)
+    terraform_moves_to_a_new_shape(cloud, 3)
+    result = deploy_agent(cloud, "bug-fix", DEV, rollback=True, actor="test")
+    assert result.images["agent"] == image("bug-fix-agent", 1)
+
+
+def test_a_deploy_after_terraform_keeps_its_images_in_history(cloud: FakeCloud) -> None:
+    ship(cloud, 1)
+    pinned = terraform_moves_to_a_new_shape(cloud, 3)
+    ship(cloud, 4, config_hash="h3", created="2026-10-09T11:00:00Z")
+    history = cloud.record(DEV, "bug-fix")["history"]
+    assert [h["images"] for h in history][:2] == [pinned, ship_images(1)]
+
+
+def test_a_dry_run_records_nothing_terraform_did(cloud: FakeCloud) -> None:
+    ship(cloud, 1)
+    terraform_moves_to_a_new_shape(cloud, 3)
+    ship(cloud, 4, config_hash="h3", created="2026-10-09T11:00:00Z", dry_run=True)
+    assert cloud.record(DEV, "bug-fix")["images"] == ship_images(1)
+
+
+def ship_images(n: int) -> dict[str, str]:
+    return {"agent": image("bug-fix-agent", n), "broker": image("bug-fix-broker", n)}

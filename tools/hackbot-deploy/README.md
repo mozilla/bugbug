@@ -64,14 +64,48 @@ stderr classifies every agent:
 
 A removal is a contract because an image built for the old shape may read
 what's gone. So is pointing an existing variable at a different secret: the
-old image was never run against it. A broker either way changes the container set. Ship a removal in
-two releases: first stop depending on it, then remove it.
+old image was never run against it. A broker either way changes the container
+set. A contract still ships in one change, because the apply that moves an
+environment to the new shape also puts on the images built for it (see
+[Pinned images](#pinned-images)).
 
 `config_hash` is sha256 over the canonical JSON of the entry (sorted keys, no
-whitespace, UTF-8) with the agent's name added and `config_hash`/`compatible`
-removed, first 16 hex characters. webservices-infra documents the same
+whitespace, UTF-8) with the agent's name added and the bookkeeping keys
+(`config_hash`, `compatible`, `images`) removed, first 16 hex characters. webservices-infra documents the same
 algorithm; the two must not drift. The file is written with 4-space indent and
 non-ASCII escaped, exactly as that repo's `pretty-format-json` hook wants.
+
+## Pinned images
+
+An entry can carry `images`: the digests built for that shape, by container.
+In each environment, Terraform leaves the images alone while the shape is the
+one it has applied, and the deploy pipeline owns them. When an apply moves the
+environment to a new shape (or creates the agent), it puts on the pinned images
+in the same update, so the infrastructure and the image never disagree, not
+even in prod before a promotion. Apply the PR one environment at a time (dev,
+check, then stage, then prod) to control when each moves.
+
+The manifest sync workflow fills them in once the build for a commit has
+finished:
+
+```sh
+hackbot-deploy resolve-images bug-fix --tag <commit> \
+    --repository us-docker.pkg.dev/moz-fx-hackbot-prod/hackbot-prod --output images.json
+hackbot-deploy manifest --previous <infra main's agents.json> \
+    --pending <the open bot PR's agents.json> --images images.json --output agents.json
+```
+
+`resolve-images` pins the build's `:<commit>` tags to digests, and writes `{}`
+when the images were built for a shape the agent no longer has. `manifest`
+pins images only for an agent whose shape differs from `--previous`; it keeps
+what `--pending` pinned for the same shape, and drops them once the shape moves
+on. An unchanged shape keeps what it had: a new image for it is the deploy
+pipeline's to ship.
+
+The deploy script notices when Terraform has put the pinned images on (the Job
+runs `images` from `applied.json` but the record names something else) and
+records that as a deployment by `terraform` before doing anything else, so
+rollback and history include it.
 
 ## Deploying
 
