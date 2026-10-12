@@ -58,8 +58,10 @@ class AgentInputs(BaseSettings):
 async def main(ctx: HackbotContext) -> BugFixResult:
     inputs = AgentInputs()
 
+    parent_revision_ids: list[int] = []
     if inputs.revision_id:
-        await checkout_revision(ctx, inputs.revision_id, inputs.broker_url)
+        stack = await checkout_revision(ctx, inputs.revision_id, inputs.broker_url)
+        parent_revision_ids = [patch.revision_id for patch in stack.ancestors]
     else:
         await ctx.prepare_repo()
 
@@ -76,6 +78,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         fx_ctx=ctx.firefox,
         bug=inputs.bug_id,
         revision_id=inputs.revision_id,
+        parent_revision_ids=parent_revision_ids,
         comment=inputs.comment,
         bugzilla_needinfo_flag_id=inputs.bugzilla_needinfo_flag_id,
         model=inputs.model,
