@@ -30,14 +30,10 @@ from pydantic import BaseModel
 
 from .browser import FirefoxBrowsers
 from .config import (
-    ALLOWED_CHANGE_PATHS,
     BUGZILLA_READ_TOOLS,
     DEVTOOLS_TOOLS,
     FIREFOX_BUILD_TOOLS,
     INTERVENTION_ACTIONS,
-    INTERVENTION_TESTS_DIR,
-    INTERVENTIONS_DIR,
-    SOURCE_WRITE_TOOLS,
 )
 from .mcp_servers import build_firefox_devtools_server
 from .result import (
@@ -119,6 +115,14 @@ def changed_files(repo: Path, base: str) -> list[str]:
     tracked = git(repo, "diff", "--name-only", base).splitlines()
     untracked = git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
     return sorted(set(tracked + untracked))
+
+
+# An intervention patch may only touch the webcompat add-on and its tests;
+# anything else is rejected at submit_patch and drops the patch at the end.
+ALLOWED_CHANGE_PATHS = (
+    "browser/extensions/webcompat/",
+    "testing/webcompat/",
+)
 
 
 def unexpected_changes(changed: list[str]) -> list[str]:
@@ -292,7 +296,7 @@ class Intervention(StructuredTask[InterventionResult]):
         )
 
         self.add_mcp_server(ACTIONS_SERVER_NAME, actions_server, action_tools)
-        self.allowed_tools.extend(SOURCE_WRITE_TOOLS)
+        self.allowed_tools.extend(["Write", "Edit"])
 
     def subject(self) -> Any:
         return self.plan_result.url
@@ -303,9 +307,9 @@ class Intervention(StructuredTask[InterventionResult]):
         return options
 
     def user_prompt(self) -> str:
-        interventions_dir = self.source_repo / INTERVENTIONS_DIR
-        webcompat_dir = interventions_dir.parent.parent
-        tests_dir = self.source_repo / INTERVENTION_TESTS_DIR
+        webcompat_dir = self.source_repo / "browser/extensions/webcompat"
+        interventions_dir = webcompat_dir / "data/interventions"
+        tests_dir = self.source_repo / "testing/webcompat/interventions/tests"
         bug = self.bug_id if self.bug_id is not None else "<bug>"
         headless_env = "HEADLESS=1 " if self.task_config.headless else ""
         headless_flag = " --headless" if self.task_config.headless else ""
@@ -446,7 +450,7 @@ async def run_autowebcompat_intervention(
             if unexpected:
                 raise ToolError(
                     "An intervention patch may only change files under "
-                    "browser/extensions/webcompat/ and testing/webcompat/. "
+                    f"{' and '.join(ALLOWED_CHANGE_PATHS)}. "
                     f"These are outside it: {', '.join(unexpected)}. Revert them, "
                     "then either fix the issue with an intervention within allowed "
                     "directories or report `no_intervention_possible` without submitting a patch."
