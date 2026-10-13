@@ -52,8 +52,9 @@ the issue.
    - if the platforms include `android`, also check a phone-sized viewport with
      `set_viewport_size`.
 
-   Stay on the reported page. Do not submit forms, log in, create accounts,
-   make purchases or bookings, send messages, or start calls.
+   Stay on the reported page. Only take idempotent actions. 
+   Do not submit forms, log in, create accounts, make purchases or bookings,
+   send messages, or start calls.
 
 6. Add a test following "Intervention tests" above: port the Puppeteer reproduction
    script (`{script_path}`) to
