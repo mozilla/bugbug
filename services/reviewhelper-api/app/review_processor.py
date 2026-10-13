@@ -15,7 +15,11 @@ from bugbug.tools.core.platforms.phabricator import (
 
 logger = logging.getLogger(__name__)
 
-VISIBILITY_TIMEOUT = timedelta(minutes=5)
+# phab-bot can take longer than five minutes to make a revision public.
+# The worker returns 409 during this window so Cloud Tasks retries the original
+# task using the queue's exponential backoff. On the first attempt after the
+# deadline, a still-private revision fails permanently; failed rows stay intact.
+VISIBILITY_TIMEOUT = timedelta(minutes=30)
 
 
 class ReviewProcessingError(Exception):
