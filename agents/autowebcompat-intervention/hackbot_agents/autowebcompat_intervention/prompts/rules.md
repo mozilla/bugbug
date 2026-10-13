@@ -14,6 +14,6 @@
 
 # Reporting your result
 
-When your task is complete, call `submit_result` exactly once. This is how your
-result is captured — a prose message is not enough. See the tool's parameter
-descriptions for what each field must contain.
+When your task is complete, end with your result as structured output matching
+the result schema. This is how your result is captured — a prose message is not
+enough. See the schema's field descriptions for what each field must contain.

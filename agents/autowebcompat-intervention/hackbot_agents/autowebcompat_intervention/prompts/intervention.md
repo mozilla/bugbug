@@ -78,4 +78,4 @@ the issue.
    as the audit note for the submission. In `test_plan`, list what
    you verified in steps 4–6 and what you couldn't check or test, and why.
 
-9. Submit your findings via `submit_result` (see "Reporting your result").
+9. Report your findings (see "Reporting your result").

@@ -7,9 +7,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-# Name of the in-process MCP server that exposes `submit_result`.
-RESULT_SERVER_NAME = "autowebcompat-intervention"
-
 
 class ReproScriptResult(BaseModel):
     """The verdict from running the report's reproduction script.

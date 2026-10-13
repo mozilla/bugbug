@@ -28,4 +28,4 @@ Follow these steps:
      reporters often test just one OS. Otherwise list all three desktop OSes.
    - If it affects every platform, list ["windows", "mac", "linux", "android"].
 
-5. Submit your findings via `submit_result` (see "Reporting your result").
+5. Report your findings (see "Reporting your result").

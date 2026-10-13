@@ -20,7 +20,7 @@ from agent_tools.firefox import FirefoxContext
 from agent_tools.registry import ToolError
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
-from autowebcompat_tools.task import RunTracker, Task, TaskConfig
+from autowebcompat_tools.task import RunTracker, StructuredTask, TaskConfig
 from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 from claude_agent_sdk.types import SystemPromptPreset
 from hackbot_runtime import ActionsRecorder
@@ -41,7 +41,6 @@ from .config import (
 )
 from .mcp_servers import build_firefox_devtools_server
 from .result import (
-    RESULT_SERVER_NAME,
     InterventionPlanResult,
     InterventionResult,
     ReproScriptResult,
@@ -193,12 +192,11 @@ def run_confirmation_script(
     )
 
 
-class InterventionPlan(Task[InterventionPlanResult]):
+class InterventionPlan(StructuredTask[InterventionPlanResult]):
     """Read the bug, download its repro script, and propose an intervention type."""
 
     name = "intervention_plan"
     result_cls = InterventionPlanResult
-    result_server_name = RESULT_SERVER_NAME
 
     def system_prompt(self) -> SystemPromptPreset:
         return SYSTEM_PROMPT
@@ -233,10 +231,9 @@ class InterventionPlan(Task[InterventionPlanResult]):
         )
 
 
-class Intervention(Task[InterventionResult]):
+class Intervention(StructuredTask[InterventionResult]):
     name = "intervention"
     result_cls = InterventionResult
-    result_server_name = RESULT_SERVER_NAME
 
     def system_prompt(self) -> SystemPromptPreset:
         return SYSTEM_PROMPT

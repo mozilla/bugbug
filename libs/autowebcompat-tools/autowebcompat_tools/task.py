@@ -1,4 +1,4 @@
-"""One Claude session per task, ending in a ``submit_result`` payload."""
+"""One Claude session per task, ending in a validated result."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk.types import SystemPromptPreset
 from hackbot_runtime import AgentError
 from hackbot_runtime.claude import Reporter
+from pydantic import ValidationError
 
 from autowebcompat_tools.result import (
     ResultCollector,
@@ -93,6 +94,20 @@ class RunTracker:
         )
 
 
+async def last_result(
+    client: ClaudeSDKClient, reporter: Reporter, subject: Any
+) -> ResultMessage:
+    """Drain the response to the last query and return its ResultMessage."""
+    result_msg: ResultMessage | None = None
+    async for msg in client.receive_response():
+        reporter.message(msg)
+        if isinstance(msg, ResultMessage):
+            result_msg = msg
+    if result_msg is None:
+        raise AgentError(f"{subject}: agent produced no result message")
+    return result_msg
+
+
 class Task(ABC, Generic[ResultT]):
     """One Claude session, ending in a validated ``submit_result`` payload.
 
@@ -110,24 +125,24 @@ class Task(ABC, Generic[ResultT]):
         self.task_config = task_config
         self.run_tracker = run_tracker
         self.result_collector = ResultCollector(self.result_cls)
-        self.allowed_tools: list[str] = [
-            "Read",
-            "Grep",
-            "Glob",
-            "Bash",
-            submit_result_tool_name(self.result_server_name),
-        ]
-        self.mcp_servers: dict[str, McpServerConfig] = {
-            self.result_server_name: build_result_server(
-                self.result_server_name, self.result_collector
+        self.allowed_tools: list[str] = ["Read", "Grep", "Glob", "Bash"]
+        self.mcp_servers: dict[str, McpServerConfig] = {}
+        result_server = self.result_server()
+        if result_server is not None:
+            self.add_mcp_server(
+                self.result_server_name,
+                result_server,
+                [submit_result_tool_name(self.result_server_name)],
             )
-        }
 
     def add_mcp_server(
         self, name: str, server: McpServerConfig, tools: list[str]
     ) -> None:
         self.mcp_servers[name] = server
         self.allowed_tools.extend(tools)
+
+    def result_server(self) -> McpServerConfig | None:
+        return build_result_server(self.result_server_name, self.result_collector)
 
     def system_prompt(self) -> str | SystemPromptPreset:
         return {"type": "preset", "preset": "claude_code"}
@@ -161,7 +176,6 @@ class Task(ABC, Generic[ResultT]):
             preview = f"{preview[:200]}..."
         logger.info("Running %s with %s", self.__class__.__name__, preview)
 
-        result_msg: ResultMessage | None = None
         with Reporter(
             verbose=self.task_config.verbose, log_path=self.task_config.log
         ) as reporter:
@@ -169,13 +183,8 @@ class Task(ABC, Generic[ResultT]):
 
             async with ClaudeSDKClient(options=self.agent_options()) as client:
                 await client.query(self.user_prompt())
-                async for msg in client.receive_response():
-                    reporter.message(msg)
-                    if isinstance(msg, ResultMessage):
-                        result_msg = msg
+                result_msg = await last_result(client, reporter, subject)
 
-        if result_msg is None:
-            raise AgentError(f"{subject}: agent produced no result message")
         self.run_tracker.end_task(self.name, result_msg)
         if result_msg.is_error:
             raise AgentError(
@@ -187,3 +196,49 @@ class Task(ABC, Generic[ResultT]):
                 f"{subject}: agent finished without submitting a result via submit_result"
             )
         return self.result_collector.result
+
+
+class StructuredTask(Task[ResultT]):
+    """A Task whose result is the session's structured output.
+
+    The CLI retries output that doesn't match the JSON schema; a result that then
+    fails the Pydantic validators gets one follow-up asking for a fix.
+    """
+
+    def result_server(self) -> McpServerConfig | None:
+        return None
+
+    def agent_options(self) -> ClaudeAgentOptions:
+        options = super().agent_options()
+        options.output_format = {
+            "type": "json_schema",
+            "schema": self.result_cls.model_json_schema(),
+        }
+        return options
+
+    async def run(self) -> ResultT:
+        self.run_tracker.start_task(self.name)
+        subject = self.subject()
+        logger.info("Running %s with %s", self.__class__.__name__, str(subject)[:200])
+
+        with Reporter(
+            verbose=self.task_config.verbose, log_path=self.task_config.log
+        ) as reporter:
+            reporter.header(subject)
+            async with ClaudeSDKClient(options=self.agent_options()) as client:
+                await client.query(self.user_prompt())
+                msg = await last_result(client, reporter, subject)
+                try:
+                    result = self.result_cls.model_validate(msg.structured_output)
+                except ValidationError as exc:
+                    if msg.is_error:
+                        raise AgentError(
+                            f"{subject}: {self.name} failed: "
+                            f"{msg.result or msg.subtype}"
+                        ) from exc
+                    await client.query(f"Invalid result: {exc}. Fix it and resubmit.")
+                    msg = await last_result(client, reporter, subject)
+                    result = self.result_cls.model_validate(msg.structured_output)
+
+        self.run_tracker.end_task(self.name, msg)
+        return result
