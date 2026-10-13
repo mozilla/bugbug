@@ -76,6 +76,7 @@ async def expand_context(
     file_path: str,
     start_line: Optional[int] = None,
     end_line: Optional[int] = None,
+    before_patch: bool = False,
 ) -> str:
     """Retrieve the content of a file, optionally restricted to a line range.
 
@@ -87,6 +88,8 @@ async def expand_context(
         file_path: Repository-relative path, e.g. 'dom/media/webaudio/AudioNode.h'.
         start_line: Starting line number (1-based). Omit to start from the beginning.
         end_line: Ending line number (inclusive). Omit to read to the end of the file.
+        before_patch: Read the file before this patch, including deleted code.
+            Defaults to False, which reads the file after this patch.
 
     Returns:
         The file content, with line numbers prefixed.
@@ -96,34 +99,37 @@ async def expand_context(
 
     warning = None
     try:
-        patch_stack = patch.patch_stack
-        base_patch = patch.stack_base_patch
-    except ValueError as e:
-        warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
-        patch_stack = [patch.patch_set]
-        base_patch = patch
+        if isinstance(patch, PhabricatorPatch):
+            try:
+                stack = patch._stack_patches
+            except ValueError as e:
+                warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
+                stack = [patch]
+            file_content = await patch.get_file_from_stack(
+                file_path, stack, before_patch=before_patch
+            )
+        else:
+            try:
+                patch_stack = patch.patch_stack
+                base_patch = patch.stack_base_patch
+            except ValueError as e:
+                warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
+                patch_stack = [patch.patch_set]
+                base_patch = patch
+            revision = await base_patch.get_base_revision()
+            client = _get_client()
 
-    base_error = None
-    if isinstance(base_patch, PhabricatorPatch):
-        try:
-            revision = await base_patch.get_base_commit_hash()
-        except Exception as e:
-            revision, base_error = None, e
-    else:
-        revision = await base_patch.get_base_revision()
-    client = _get_client()
+            async def fetch(path: str) -> str:
+                return await _fetch_file(path, revision, client, base_patch)
 
-    async def fetch(path: str) -> str:
-        # Without a base, Phabricator files would be read at the latest
-        # revision, which may not match the patch.
-        if base_error is not None:
-            raise base_error
-        return await _fetch_file(path, revision, client, base_patch)
-
-    try:
-        file_content = await get_file_after_stack(patch_stack, file_path, fetch)
+            if before_patch:
+                file_content = await get_file_after_stack(
+                    patch_stack[:-1], file_path, fetch
+                )
+            else:
+                file_content = await get_file_after_stack(patch_stack, file_path, fetch)
     except FileNotFoundError:
-        return f"Warning: {file_path} was removed by the patch stack."
+        return f"Warning: {file_path} does not exist in the requested patch view."
     except Exception as e:
         return f"Warning: could not retrieve {file_path}: {e}."
 
