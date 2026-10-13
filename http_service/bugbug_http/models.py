@@ -60,7 +60,14 @@ redis = Redis(
 
 
 def load_model(model_name: str) -> Model:
-    """Load a model using the implementation registered for its name."""
+    """Load a model using the implementation registered for its name.
+
+    The base ``Model.load`` unpickles ``model.pkl``, which works for every
+    sklearn-based model because the pickle records the concrete class. Models
+    stored in other formats (e.g. a Hugging Face checkpoint) override
+    ``load``, and that override is only reached when ``load`` is called on
+    the registered class rather than on ``Model`` itself.
+    """
     return get_model_class(model_name).load(f"{model_name}model")
 
 
