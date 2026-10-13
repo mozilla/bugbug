@@ -18,7 +18,7 @@ from bugbug.tools.core.platforms import phabricator as phab_platform
 @pytest.fixture
 def github_token(monkeypatch):
     monkeypatch.delenv("TC_SECRET_ID", raising=False)
-    monkeypatch.setenv("BUGBUG_GITHUB_TOKEN", "secret-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
     connection.get_github_api_headers.cache_clear()
     yield
     connection.get_github_api_headers.cache_clear()
@@ -26,7 +26,7 @@ def github_token(monkeypatch):
 
 def test_github_api_headers_without_token(monkeypatch) -> None:
     monkeypatch.delenv("TC_SECRET_ID", raising=False)
-    monkeypatch.delenv("BUGBUG_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     connection.get_github_api_headers.cache_clear()
     assert connection.get_github_api_headers() == {}
     connection.get_github_api_headers.cache_clear()

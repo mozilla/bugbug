@@ -10,8 +10,6 @@ from functools import cache
 
 import httpx
 
-from bugbug.utils import get_secret
-
 
 def get_user_agent() -> str:
     """Get the User-Agent string from environment or default."""
@@ -21,7 +19,7 @@ def get_user_agent() -> str:
 @cache
 def get_github_api_headers() -> dict[str, str]:
     """Return headers authenticating GitHub API requests, if a token is configured."""
-    token = get_secret("GITHUB_TOKEN", default_value="")
+    token = os.getenv("GITHUB_TOKEN", "")
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 

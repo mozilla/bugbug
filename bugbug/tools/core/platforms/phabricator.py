@@ -67,7 +67,9 @@ PHABRICATOR_REPO_TO_GITHUB = {
 }
 
 # Subjects of autoland-to-mozilla-central merges, the most recent landed
-# revisions on mozilla-central. Mirrors moz-phab's LANDING_MERGE_MESSAGE_PATTERNS.
+# revisions on mozilla-central. These merges mark when autoland changes became
+# available on central, matching moz-phab's LANDING_MERGE_MESSAGE_PATTERNS.
+# This is an approximate base for older submissions without firstPublicParent.
 LANDING_MERGE_SUBJECTS = (
     "Merge autoland to mozilla-central",
     "Merge firefox-autoland to firefox-main",
@@ -487,6 +489,48 @@ class PhabricatorPatch(Patch):
     async def get_new_file(self, file_path: str) -> str:
         return await self._get_file(file_path, is_before_patch=False)
 
+    async def get_file_from_stack(
+        self,
+        file_path: str,
+        stack: list["PhabricatorPatch"] | None = None,
+        *,
+        before_patch: bool = False,
+    ) -> str:
+        """Read a changeset view, or the stack base for untouched files.
+
+        before_patch returns the file immediately before this patch, including
+        changes from its ancestors. The default includes this patch as well.
+        """
+        if file_path.startswith(("a/", "b/")):
+            file_path = file_path[2:]
+        patches = self._stack_patches if stack is None else stack
+        for patch in reversed(patches):
+            old_view = before_patch and patch is self
+            for patched_file in patch.patch_set:
+                path = (
+                    patched_file.source_file.removeprefix("a/")
+                    if old_view
+                    else patched_file.path
+                )
+                if path == file_path:
+                    if not old_view and patched_file.is_removed_file:
+                        raise FileNotFoundError("File is removed by the patch stack")
+                    return await patch._get_file_from_patch(
+                        patched_file.path, is_before_patch=old_view
+                    )
+                if (
+                    old_view
+                    and patched_file.path == file_path
+                    and (patched_file.is_added_file or patched_file.is_rename)
+                ):
+                    raise FileNotFoundError("File does not exist before this patch")
+                if not old_view and patched_file.source_file == f"a/{file_path}":
+                    raise FileNotFoundError("File is renamed by the patch stack")
+        base_patch = patches[0]
+        return await base_patch._get_file_from_repo(
+            file_path, commit_hash=await base_patch.get_base_commit_hash()
+        )
+
     @cached_property
     def _changesets(self) -> list[dict]:
         phabricator = get_phabricator_client()
@@ -570,10 +614,10 @@ class PhabricatorPatch(Patch):
             str(self.diff_id)
         ]
         # Conduit encodes an empty property map as an empty list.
-        local_commits = (diff["properties"] or {}).get("local:commits", {})
+        local_commits = (diff.get("properties") or {}).get("local:commits", {})
         for commit in local_commits.values():
-            if commit.get("firstPublicParent"):
-                return commit["firstPublicParent"]
+            if public_parent := commit.get("firstPublicParent"):
+                return public_parent
 
         return None
 

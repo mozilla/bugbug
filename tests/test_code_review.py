@@ -524,6 +524,7 @@ def make_phabricator_stack(
     repo_files=None,
     landing_merges=(),
     first_public_parent=None,
+    new_files=None,
 ):
     """Build a stack of real PhabricatorPatch objects backed by fake Conduit/HTTP.
 
@@ -580,6 +581,12 @@ def make_phabricator_stack(
         for phid, (_, _, old_files) in by_phid.items()
         for path, text in old_files.items()
     }
+    responses.update(
+        {
+            f"{phab_platform._base_url()}/differential/changeset/?view=new&ref={phids[i]}:{path}": text
+            for (i, path), text in (new_files or {}).items()
+        }
+    )
     responses.update({f"{COMMITS_API}/{commit}": commit for commit in upstream})
     responses.update(
         {
@@ -628,7 +635,7 @@ def make_phabricator_stack(
     return FakeStackPatch(revision_phid=phids[-1]), requests
 
 
-def run_expand_context(monkeypatch, patch, file_path):
+def run_expand_context(monkeypatch, patch, file_path, **kwargs):
     searchfox = SimpleNamespace(
         get_file=AsyncMock(return_value="searchfox latest\n"),
         get_file_at_revision=AsyncMock(return_value="searchfox at revision\n"),
@@ -639,7 +646,7 @@ def run_expand_context(monkeypatch, patch, file_path):
         lambda _: SimpleNamespace(context=SimpleNamespace(patch=patch)),
     )
     monkeypatch.setattr(langchain_tools, "_get_client", lambda: searchfox)
-    result = asyncio.run(langchain_tools.expand_context.coroutine(file_path))
+    result = asyncio.run(langchain_tools.expand_context.coroutine(file_path, **kwargs))
     return result, searchfox
 
 
@@ -656,33 +663,32 @@ def landing_search(before="2026-10-05T12:00:00Z"):
     )
 
 
-def test_expand_context_uses_bottom_revision_base_for_stack(monkeypatch):
+def test_expand_context_reads_current_changeset_without_base_lookup(monkeypatch):
     patch, requests = make_phabricator_stack(
         monkeypatch,
-        [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
-        repo_files={(CENTRAL, "b.txt"): "one\ntwo\n"},
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        new_files={(1, "b.txt"): "one\nTWO\n"},
     )
-
     result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
-
     assert result == "1| one\n2| TWO"
-    assert requests == [f"{COMMITS_API}/{CENTRAL}", f"{GITHUB}/{CENTRAL}/b.txt"]
-    searchfox.get_file_at_revision.assert_not_awaited()
+    assert requests == [
+        f"{phab_platform._base_url()}/differential/changeset/?view=new&ref=PHID-DREV-1:b.txt"
+    ]
     searchfox.get_file.assert_not_awaited()
 
 
-def test_expand_context_applies_whole_stack_to_bottom_old_file(monkeypatch):
+def test_expand_context_reads_latest_changeset_in_stack(monkeypatch):
     top_diff = "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-A\n+AA\n"
     patch, requests = make_phabricator_stack(
         monkeypatch,
         [(CENTRAL, A_DIFF, {"a.txt": "a\n"}), (LOCAL_PARENT, top_diff, {})],
+        new_files={(1, "a.txt"): "AA\n"},
     )
-
     result, _ = run_expand_context(monkeypatch, patch, "a.txt")
-
     assert result == "1| AA"
-    assert len(requests) == 2
-    assert "differential/changeset/?view=old&ref=PHID-DREV-0:a.txt" in requests[1]
+    assert requests == [
+        f"{phab_platform._base_url()}/differential/changeset/?view=new&ref=PHID-DREV-1:a.txt"
+    ]
 
 
 def test_expand_context_reads_untouched_file_at_bottom_base(monkeypatch):
@@ -703,12 +709,15 @@ def test_expand_context_file_added_in_stack_needs_no_base(monkeypatch):
     patch, requests = make_phabricator_stack(
         monkeypatch,
         [(CENTRAL, added, {}), (LOCAL_PARENT, B_DIFF, {})],
+        new_files={(0, "new.txt"): "new\n"},
     )
 
     result, _ = run_expand_context(monkeypatch, patch, "new.txt")
 
     assert result == "1| new"
-    assert requests == [f"{COMMITS_API}/{CENTRAL}"]
+    assert requests == [
+        f"{phab_platform._base_url()}/differential/changeset/?view=new&ref=PHID-DREV-0:new.txt"
+    ]
 
 
 def test_expand_context_does_not_guess_when_base_file_is_missing(monkeypatch):
@@ -718,11 +727,11 @@ def test_expand_context_does_not_guess_when_base_file_is_missing(monkeypatch):
         landing_merges=[(LANDING, "Merge autoland to mozilla-central a=merge")],
     )
 
-    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+    result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
 
-    assert result.startswith("Warning: could not retrieve b.txt")
+    assert result.startswith("Warning: could not retrieve c.txt")
     assert f"Git base {CENTRAL}" in result
-    assert requests == [f"{COMMITS_API}/{CENTRAL}", f"{GITHUB}/{CENTRAL}/b.txt"]
+    assert requests == [f"{COMMITS_API}/{CENTRAL}", f"{GITHUB}/{CENTRAL}/c.txt"]
     searchfox.get_file_at_revision.assert_not_awaited()
     searchfox.get_file.assert_not_awaited()
 
@@ -732,19 +741,19 @@ def test_expand_context_uses_first_public_parent(monkeypatch):
     patch, requests = make_phabricator_stack(
         monkeypatch,
         [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
-        repo_files={(CENTRAL, "b.txt"): "one\ntwo\n"},
+        repo_files={(CENTRAL, "c.txt"): "one\ntwo\n"},
         landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
         first_public_parent=CENTRAL,
     )
 
-    result, _ = run_expand_context(monkeypatch, patch, "b.txt")
+    result, _ = run_expand_context(monkeypatch, patch, "c.txt")
 
-    assert result == "1| one\n2| TWO"
+    assert result == "1| one\n2| two"
     assert requests == [
         f"{COMMITS_API}/{LOCAL_PARENT}",
         ("differential.querydiffs", [1]),
         f"{COMMITS_API}/{CENTRAL}",
-        f"{GITHUB}/{CENTRAL}/b.txt",
+        f"{GITHUB}/{CENTRAL}/c.txt",
     ]
 
 
@@ -753,20 +762,20 @@ def test_expand_context_skips_first_public_parent_missing_upstream(monkeypatch):
     patch, requests = make_phabricator_stack(
         monkeypatch,
         [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
-        repo_files={(LANDING, "b.txt"): "one\ntwo\n"},
+        repo_files={(LANDING, "c.txt"): "one\ntwo\n"},
         landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
         first_public_parent=unknown,
     )
 
-    result, _ = run_expand_context(monkeypatch, patch, "b.txt")
+    result, _ = run_expand_context(monkeypatch, patch, "c.txt")
 
-    assert result == "1| one\n2| TWO"
+    assert result == "1| one\n2| two"
     assert requests == [
         f"{COMMITS_API}/{LOCAL_PARENT}",
         ("differential.querydiffs", [1]),
         f"{COMMITS_API}/{unknown}",
         landing_search(),
-        f"{GITHUB}/{LANDING}/b.txt",
+        f"{GITHUB}/{LANDING}/c.txt",
     ]
 
 
@@ -774,7 +783,7 @@ def test_expand_context_falls_back_to_landed_revision(monkeypatch):
     patch, requests = make_phabricator_stack(
         monkeypatch,
         [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
-        repo_files={(LANDING, "b.txt"): "one\ntwo\n"},
+        repo_files={(LANDING, "c.txt"): "one\ntwo\n"},
         landing_merges=[
             # Commit search matches anywhere in the message, not just the subject.
             ("b" * 40, 'Revert "Merge autoland to mozilla-central"'),
@@ -782,14 +791,14 @@ def test_expand_context_falls_back_to_landed_revision(monkeypatch):
         ],
     )
 
-    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+    result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
 
-    assert result == "1| one\n2| TWO"
+    assert result == "1| one\n2| two"
     assert requests == [
         f"{COMMITS_API}/{LOCAL_PARENT}",
         ("differential.querydiffs", [1]),
         landing_search(),
-        f"{GITHUB}/{LANDING}/b.txt",
+        f"{GITHUB}/{LANDING}/c.txt",
     ]
     searchfox.get_file_at_revision.assert_not_awaited()
     searchfox.get_file.assert_not_awaited()
@@ -813,34 +822,15 @@ def test_expand_context_falls_back_to_landed_revision_without_base(monkeypatch):
     ]
 
 
-def test_expand_context_rejects_patch_that_does_not_apply_to_fallback(monkeypatch):
-    patch, requests = make_phabricator_stack(
-        monkeypatch,
-        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
-        repo_files={(LANDING, "b.txt"): "one\nchanged since\n"},
-        landing_merges=[(LANDING, "Merge autoland to mozilla-central")],
-    )
-
-    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
-
-    assert requests[-1] == f"{GITHUB}/{LANDING}/b.txt"
-    searchfox.get_file_at_revision.assert_not_awaited()
-
-    assert result == (
-        "Warning: could not retrieve b.txt: Patch does not apply to b.txt: "
-        'context line 2, "two" does not match "changed since", in hunk #1.'
-    )
-
-
 def test_expand_context_reports_missing_base_and_landing(monkeypatch):
     patch, requests = make_phabricator_stack(
         monkeypatch,
         [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
     )
 
-    result, searchfox = run_expand_context(monkeypatch, patch, "b.txt")
+    result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
 
-    assert result.startswith("Warning: could not retrieve b.txt")
+    assert result.startswith("Warning: could not retrieve c.txt")
     assert "no landed mozilla-central revision" in result
     assert requests == [
         f"{COMMITS_API}/{LOCAL_PARENT}",
@@ -868,17 +858,16 @@ def test_expand_context_does_not_read_latest_when_base_lookup_fails(monkeypatch)
     searchfox.get_file.assert_not_awaited()
 
 
-def test_expand_context_falls_back_to_searchfox_at_exact_base(monkeypatch):
+def test_expand_context_reports_github_error_without_reading_latest(monkeypatch):
     patch, _ = make_phabricator_stack(
         monkeypatch,
         [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
         repo_files={(CENTRAL, "c.txt"): 503},
     )
-
     result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
-
-    assert result == "1| searchfox at revision"
-    searchfox.get_file_at_revision.assert_awaited_once_with("c.txt", CENTRAL)
+    assert result.startswith("Warning: could not retrieve c.txt")
+    searchfox.get_file_at_revision.assert_not_awaited()
+    searchfox.get_file.assert_not_awaited()
 
 
 def test_expand_context_nonlinear_stack_uses_own_base(monkeypatch):
@@ -1944,3 +1933,85 @@ def test_generate_review_comments_reports_missing_structured_response():
     tool.agent = SimpleNamespace(astream=fake_astream)
     with pytest.raises(ValueError, match="no structured response"):
         asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
+
+
+@pytest.mark.parametrize(
+    "before_patch,expected", [(True, "1| deleted"), (False, "1| kept")]
+)
+def test_expand_context_can_read_deleted_code(monkeypatch, before_patch, expected):
+    raw_diff = "--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-deleted\n+kept\n"
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, raw_diff, {"f.txt": "deleted\n"})],
+        new_files={(0, "f.txt"): "kept\n"},
+    )
+    result, _ = run_expand_context(
+        monkeypatch, patch, "f.txt", before_patch=before_patch
+    )
+    assert result == expected
+    view = "old" if before_patch else "new"
+    assert requests == [
+        f"{phab_platform._base_url()}/differential/changeset/?view={view}&ref=PHID-DREV-0:f.txt"
+    ]
+
+
+def test_expand_context_reads_deleted_file_before_patch(monkeypatch):
+    removed = "--- a/f.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-deleted\n"
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, removed, {"f.txt": "deleted\n"})],
+    )
+    result, _ = run_expand_context(monkeypatch, patch, "f.txt", before_patch=True)
+    assert result == "1| deleted"
+    requests.clear()
+    result, _ = run_expand_context(monkeypatch, patch, "f.txt")
+    assert "does not exist" in result
+    assert requests == []
+
+
+def test_expand_context_before_patch_preserves_ancestor_changes(monkeypatch):
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
+        new_files={(0, "a.txt"): "A\n"},
+    )
+    result, _ = run_expand_context(monkeypatch, patch, "a.txt", before_patch=True)
+    assert result == "1| A"
+    assert requests == [
+        f"{phab_platform._base_url()}/differential/changeset/?view=new&ref=PHID-DREV-0:a.txt"
+    ]
+
+
+def test_expand_context_added_file_does_not_exist_before_patch(monkeypatch):
+    added = "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+new\n"
+    patch, requests = make_phabricator_stack(monkeypatch, [(LOCAL_PARENT, added, {})])
+    result, _ = run_expand_context(monkeypatch, patch, "new.txt", before_patch=True)
+    assert "does not exist" in result
+    assert requests == []
+
+
+@pytest.mark.parametrize(
+    "before_patch,path,expected",
+    [
+        (True, "old.txt", "1| before"),
+        (False, "new.txt", "1| after"),
+        (True, "new.txt", None),
+        (False, "old.txt", None),
+    ],
+)
+def test_expand_context_handles_renamed_file_views(
+    monkeypatch, before_patch, path, expected
+):
+    renamed = "--- a/old.txt\n+++ b/new.txt\n@@ -1 +1 @@\n-before\n+after\n"
+    patch, requests = make_phabricator_stack(
+        monkeypatch,
+        [(LOCAL_PARENT, renamed, {"new.txt": "before\n"})],
+        new_files={(0, "new.txt"): "after\n"},
+    )
+    result, _ = run_expand_context(monkeypatch, patch, path, before_patch=before_patch)
+    if expected is None:
+        assert "does not exist" in result
+        assert requests == []
+    else:
+        assert result == expected
+        assert len(requests) == 1
