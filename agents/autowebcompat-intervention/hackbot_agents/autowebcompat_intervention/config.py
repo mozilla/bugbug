@@ -68,4 +68,4 @@ ALLOWED_CHANGE_PATHS = (
 # Artifact builds download the binaries of the nearest ancestor commit that was
 # built on CI. The tip is sometimes a DONTBUILD push, so increasing depth ensures
 # there are built ancestors available.
-CHECKOUT_DEPTH = 100
+CHECKOUT_DEPTH = 500
