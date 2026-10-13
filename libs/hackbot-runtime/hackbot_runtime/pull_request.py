@@ -37,9 +37,9 @@ async def checkout_pull_request(
 
     ``base`` is the branch or commit the PR targets (its ``base.ref`` or
     ``base.sha``). It is fetched with enough history on both sides for git to
-    find the commit the PR branched from, so ``git diff <base>...HEAD`` shows the
-    same change as GitHub's "Files changed" tab, and ``git log <base>..HEAD``
-    lists the PR's commits.
+    find the commit the PR branched from. Use the returned merge base with
+    ``git diff <merge-base> HEAD`` to see the same change as GitHub's "Files
+    changed" tab, or ``git log <merge-base>..HEAD`` to list the PR's commits.
 
     ``head_sha``, when given, is the full sha the caller saw the PR at (for
     example when the run was requested). If the PR has been pushed to since, this
@@ -72,6 +72,11 @@ async def checkout_pull_request(
             "to after this run was requested. Request a new run to work on the "
             "new head."
         )
+
+    # prepare_repo resets tracked files, but reused checkouts can retain untracked files.
+    _git(repo, "clean", "-fd")
+    if _git(repo, "status", "--porcelain"):
+        raise RuntimeError(f"Pull request #{number} checkout is not clean")
 
     # Fetching the base with --depth on a full clone would truncate its history,
     # so only stay shallow if the checkout already is.

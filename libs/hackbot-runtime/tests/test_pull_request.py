@@ -145,11 +145,9 @@ async def test_the_base_gives_the_same_change_github_shows(tmp_path, base):
 
     assert merge_base == origin.fork_point
     # Only the PR's own change, not everything that landed on main since.
-    assert _git(ctx.repo_path, "diff", "--name-only", f"{origin.base}...HEAD") == (
-        "pr.txt"
-    )
+    assert _git(ctx.repo_path, "diff", "--name-only", merge_base, "HEAD") == "pr.txt"
     # One commit per PR commit, so the agent can read the PR's history.
-    assert _git(ctx.repo_path, "log", "--format=%s", f"{origin.base}..HEAD") == (
+    assert _git(ctx.repo_path, "log", "--format=%s", f"{merge_base}..HEAD") == (
         "PR commit 3\nPR commit 2\nPR commit 1"
     )
 
@@ -189,6 +187,23 @@ async def test_an_existing_checkout_is_moved_to_the_pr(tmp_path):
 
     assert _git(ctx.repo_path, "rev-parse", "HEAD") == origin.head
     assert merge_base == origin.fork_point
+
+
+async def test_an_existing_checkout_discards_untracked_files(tmp_path):
+    origin = _origin(tmp_path)
+    checkout = tmp_path / "checkout"
+    ensure_source_repo(checkout, origin.path.as_uri())
+    (checkout / "leftover.txt").write_text("from an earlier run")
+    (checkout / "leftover_dir").mkdir()
+    (checkout / "leftover_dir" / "file.txt").write_text("from an earlier run")
+    ctx = _ctx(tmp_path, origin)
+
+    await checkout_pull_request(ctx, PR, "main")
+
+    assert _git(ctx.repo_path, "status", "--porcelain") == ""
+    assert ctx.source_changed is False
+    assert not (checkout / "leftover.txt").exists()
+    assert not (checkout / "leftover_dir").exists()
 
 
 async def test_a_pr_pushed_to_since_the_request_is_refused(tmp_path):
