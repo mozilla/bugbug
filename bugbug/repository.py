@@ -725,6 +725,14 @@ def set_commit_metrics(
         )
 
 
+def get_commit_patch(hg: hglib.client, rev: bytes) -> bytes:
+    """Export a revision as a git-formatted patch (``hg export --git``).
+
+    The payload carries the commit message header followed by the diff.
+    """
+    return hg.export(revs=[rev], git=True)
+
+
 def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     hg_modified_files(hg, commit)
 
@@ -738,7 +746,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     test_sizes = []
     metrics_file_count = 0
 
-    patch = hg.export(revs=[commit.node.encode("ascii")], git=True)
+    patch = get_commit_patch(hg, commit.node.encode("ascii"))
     try:
         patch_data = rs_parsepatch.get_lines(patch)
     except Exception:
@@ -1598,13 +1606,9 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
 
 
 def get_commit_patches(repo_dir: str, revs: list[bytes]) -> list[bytes]:
-    """Export each revision as its own git-formatted patch.
-
-    Each patch is a full ``hg export`` payload, i.e. it carries the commit
-    message header followed by the diff.
-    """
+    """Export each revision as its own git-formatted patch (see get_commit_patch)."""
     with hglib.open(repo_dir) as hg:
-        return [hg.export(revs=[rev], git=True) for rev in revs]
+        return [get_commit_patch(hg, rev) for rev in revs]
 
 
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
