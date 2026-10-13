@@ -668,10 +668,7 @@ class Model:
         assert isinstance(items[0], (dict, tuple))
 
         X = self.extraction_pipeline.transform(lambda: items)
-        if probabilities:
-            classes = self.clf.predict_proba(X)
-        else:
-            classes = self.clf.predict(X)
+        classes = self.clf.predict_proba(X) if probabilities else self.clf.predict(X)
 
         classes = self.overwrite_classes(items, classes, probabilities)
 

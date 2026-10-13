@@ -221,7 +221,7 @@ def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
     assert not ACTION_TOOLS & set(analysis_opts.allowed_tools)
     assert "actions" not in analysis_opts.mcp_servers
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "actions" in fix_opts.mcp_servers
     assert "bugzilla" in fix_opts.mcp_servers
 
@@ -247,7 +247,7 @@ def test_the_pushs_bug_stands_in_for_an_unset_bug_id(tmp_path, monkeypatch):
         push_bug=2063979,
     )
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "bug_id=2063979" in fix_prompt
     assert '"Bug 2063979 - ' in fix_prompt
     assert result.bug_id == 2063979
@@ -343,7 +343,7 @@ def test_an_earlier_pushs_culprit_gets_its_bug_from_the_checkout(tmp_path, monke
         blame=earlier,
     )
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "bug_id=555" in fix_prompt
     assert result.bug_id == 555
     assert result.blamed_commit == earlier

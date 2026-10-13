@@ -611,8 +611,8 @@ def calculate_maintenance_effectiveness_indicator(
 
         return params
 
-    for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
-        for query_type in data.keys():
+    for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS:
+        for query_type in data:
             params = build_query(severity, query_type)
 
             r = utils.get_session("bugzilla").get(
@@ -628,10 +628,10 @@ def calculate_maintenance_effectiveness_indicator(
             data[query_type][severity] = r.json()["bug_count"]
 
     # Calculate number of bugs without severity set.
-    for query_type in data.keys():
+    for query_type in data:
         data[query_type]["--"] = data[query_type]["--"] - sum(
             data[query_type][s]
-            for s in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys()
+            for s in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS
             if s != "--"
         )
 
@@ -642,7 +642,7 @@ def calculate_maintenance_effectiveness_indicator(
     print("Before applying weights:")
     print(data)
 
-    for query_type in data.keys():
+    for query_type in data:
         # Apply weights.
         for (
             severity,

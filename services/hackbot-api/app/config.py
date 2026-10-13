@@ -61,9 +61,17 @@ class Settings(BaseSettings):
     db_name: str = "hackbot"
 
     # Cloud Run Jobs
+    # Appended to every agent's Job name. Dev and stage share a project, so
+    # their Jobs are named hackbot-agent-<agent>-dev / -stage; prod has none.
+    agent_job_suffix: str = ""
     job_execution_timeout_seconds: int = 8 * 60 * 60
     signed_policy_max_bytes: int = 5 * 1024 * 1024 * 1024
     signed_policy_grace_seconds: int = 60 * 60
+
+    # Largest run artifact an action handler downloads unless it asks for a
+    # different limit. Guards against loading something like a multi-GB patch
+    # into memory, which can take the service down.
+    action_apply_max_bytes: int = 100 * 1024 * 1024
 
     # API auth
     external_api_key: str = ""

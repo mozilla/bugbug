@@ -520,7 +520,10 @@ def _open_intermittent_bugs(suggestion: dict) -> list[int]:
     matched = []
     for bug in (bugs.get("open_recent") or []) + (bugs.get("all_others") or []):
         keywords = (bug.get("keywords") or "").split(",")
-        if bug.get("id") and not bug.get("resolution"):
-            if _INTERMITTENT_KEYWORD in [k.strip() for k in keywords]:
-                matched.append(bug["id"])
+        if (
+            bug.get("id")
+            and not bug.get("resolution")
+            and _INTERMITTENT_KEYWORD in [k.strip() for k in keywords]
+        ):
+            matched.append(bug["id"])
     return matched

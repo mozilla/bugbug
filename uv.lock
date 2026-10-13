@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -34,6 +34,7 @@ members = [
     "hackbot-agent-uplift-resolve",
     "hackbot-api",
     "hackbot-client",
+    "hackbot-deploy",
     "hackbot-pulse-listener",
     "hackbot-runtime",
     "lando-client",
@@ -42,6 +43,7 @@ members = [
     "reviewhelper-api",
     "testrail-client",
 ]
+overrides = [{ name = "nvidia-nccl-cu13", marker = "sys_platform == 'never'" }]
 
 [[package]]
 name = "abnf"
@@ -644,7 +646,6 @@ dependencies = [
     { name = "async-lru" },
     { name = "beautifulsoup4" },
     { name = "boto3" },
-    { name = "claude-agent-sdk" },
     { name = "httpx" },
     { name = "imbalanced-learn" },
     { name = "langchain" },
@@ -722,7 +723,6 @@ requires-dist = [
     { name = "async-lru", specifier = "~=2.3.0" },
     { name = "beautifulsoup4", specifier = ">=4.14.3,<4.16.0" },
     { name = "boto3", specifier = ">=1.42.78,<1.44.0" },
-    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "httpx", specifier = "~=0.28.1" },
     { name = "imbalanced-learn", specifier = "~=0.14.1" },
     { name = "langchain", specifier = "~=1.3.15" },
@@ -2113,6 +2113,23 @@ requests = [
 ]
 
 [[package]]
+name = "google-cloud-build"
+version = "3.40.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpc-google-iam-v1" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/11/88/cc16df80e48cf202e1a1c2ecacc38aa2c3a1f43b9b4f62c947ddd0ca4a6e/google_cloud_build-3.40.0.tar.gz", hash = "sha256:ee46dfe09bf8dbbac93b93aa2f45a00586d9321adb30cb9b53a173e3e2cd6cf6", size = 240586, upload-time = "2026-10-01T18:15:23.01Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/53/c3/964a0cb52287094422d735a6da0b42886a7c2887f187ad96d198a23e1d85/google_cloud_build-3.40.0-py3-none-any.whl", hash = "sha256:19d4e21220ae898750b2c606d40c869c386ecc9ce1f220e36edbbe11375452f0", size = 187807, upload-time = "2026-10-01T18:08:50.649Z" },
+]
+
+[[package]]
 name = "google-cloud-core"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2916,6 +2933,38 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "hackbot-deploy"
+version = "0.1.0"
+source = { editable = "tools/hackbot-deploy" }
+dependencies = [
+    { name = "google-auth" },
+    { name = "google-cloud-build" },
+    { name = "google-cloud-run" },
+    { name = "google-cloud-storage" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "google-auth", specifier = ">=2.0.0" },
+    { name = "google-cloud-build", specifier = ">=3.0.0" },
+    { name = "google-cloud-run", specifier = ">=0.10.0" },
+    { name = "google-cloud-storage", specifier = ">=2.16.0" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "requests", specifier = ">=2.32.0" },
+    { name = "typer", specifier = ">=0.12.0" },
 ]
 provides-extras = ["dev"]
 
@@ -4921,10 +4970,6 @@ wheels = [
 name = "nvidia-nccl-cu13"
 version = "2.31.2"
 source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/a0/530efd7db8857c0436868bb7df9764f09fde2bd4d1f0bae546eec9fc40d0/nvidia_nccl_cu13-2.31.2-py3-none-manylinux_2_18_aarch64.whl", hash = "sha256:b5563f8e2534f363d93ace022670ba016d3717e190ac4eba564d05fbbe8495b1", size = 252479893, upload-time = "2026-08-11T23:22:01.53Z" },
-    { url = "https://files.pythonhosted.org/packages/14/fb/94933e00bb3dcfdf66ea3456739c6a51d322353f7cc64fa1f5f660e695ac/nvidia_nccl_cu13-2.31.2-py3-none-manylinux_2_18_x86_64.whl", hash = "sha256:0bcaf0308854cb55fcc35af72e2c83143f3b71e65a4e865e2c586b1cdcdb5ae0", size = 252442223, upload-time = "2026-08-11T23:22:40.341Z" },
-]
 
 [[package]]
 name = "openai"
@@ -8130,7 +8175,7 @@ version = "3.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
-    { name = "nvidia-nccl-cu13", marker = "sys_platform == 'linux'" },
+    { name = "nvidia-nccl-cu13", marker = "sys_platform == 'never'" },
     { name = "scipy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7d/11/2b1de4cb9b7eeb042ca49c7d3b3ed2b77e7645ee6c0f99cf616716f3e8d7/xgboost-3.4.0.tar.gz", hash = "sha256:a6b5d114e7186b5a68c5b08b42297fc76c8c5d7292294220cdb12a6efd59977e", size = 1231819, upload-time = "2026-08-04T11:14:57.216Z" }
