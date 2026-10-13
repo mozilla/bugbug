@@ -46,7 +46,6 @@ MODELS_NAMES = [
     "fenixcomponent",
     "perfregressionpredictor",
 ]
-PERF_REGRESSION_LOG_PREFIX = "[perf-regression-predictor]"
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
@@ -247,10 +246,12 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
 
+    log_prefix = "[perf-regression-predictor]"
+
     job = JobInfo(classify_perf_regression, branch, rev)
     LOGGER.info(
         "%s Processing prediction for %s @ %s",
-        PERF_REGRESSION_LOG_PREFIX,
+        log_prefix,
         branch,
         rev,
     )
@@ -258,21 +259,21 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     # Pull the revision to the local repository.
     LOGGER.info(
         "%s Pulling commits from the remote repository...",
-        PERF_REGRESSION_LOG_PREFIX,
+        log_prefix,
     )
     repository.pull(REPO_DIR, branch, rev, update=False)
 
     # Load the full stack of patches leading to that revision.
     LOGGER.info(
         "%s Loading commits to analyze using automationrelevance...",
-        PERF_REGRESSION_LOG_PREFIX,
+        log_prefix,
     )
     try:
         revs = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning(
             "%s Push not found for %s @ %s!",
-            PERF_REGRESSION_LOG_PREFIX,
+            log_prefix,
             branch,
             rev,
         )
@@ -282,7 +283,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     if not revs:
         LOGGER.warning(
             "%s No commits to analyze for %s @ %s",
-            PERF_REGRESSION_LOG_PREFIX,
+            log_prefix,
             branch,
             rev,
         )
@@ -334,7 +335,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     setkey(job.result_key, orjson.dumps(data), compress=True)
     LOGGER.info(
         "%s Finished prediction for %s @ %s, commit_count=%d, risk_score=%f",
-        PERF_REGRESSION_LOG_PREFIX,
+        log_prefix,
         branch,
         rev,
         len(commits),
