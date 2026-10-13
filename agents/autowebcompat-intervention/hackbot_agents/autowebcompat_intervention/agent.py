@@ -53,19 +53,24 @@ HERE = Path(__file__).resolve().parent
 WORK_DIR = Path("/app/autowebcompat-intervention")
 NODE_MODULES = WORK_DIR / "node_modules"
 
-PROMPTS = HERE / "prompts"
 
-# Claude Code's system prompt for coding agents plus some rules and reporting
-SYSTEM_PROMPT: SystemPromptPreset = {
-    "type": "preset",
-    "preset": "claude_code",
-    "append": (PROMPTS / "rules.md").read_text(),
-}
+class PromptLibrary:
+    def __init__(self, base: Path = HERE / "prompts"):
+        self.base = base
+
+    @property
+    def system(self) -> SystemPromptPreset:
+        return {
+            "type": "preset",
+            "preset": "claude_code",
+            "append": (self.base / "rules.md").read_text(),
+        }
+
+    def get(self, name: str, **fields: object) -> str:
+        return (self.base / name).read_text().format(**fields)
 
 
-def render_prompt(name: str, **fields: object) -> str:
-    """Render a prompt template from ``prompts/`` via ``str.format``."""
-    return (PROMPTS / name).read_text().format(**fields)
+PROMPTS = PromptLibrary()
 
 
 def render_report(input_data: AutoWebcompatInput, fetch_instructions: str) -> str:
@@ -199,7 +204,7 @@ class InterventionPlan(StructuredTask[InterventionPlanResult]):
     result_cls = InterventionPlanResult
 
     def system_prompt(self) -> SystemPromptPreset:
-        return SYSTEM_PROMPT
+        return PROMPTS.system
 
     work_dir = WORK_DIR
 
@@ -220,7 +225,7 @@ class InterventionPlan(StructuredTask[InterventionPlanResult]):
         return self.input_data.subject()
 
     def user_prompt(self) -> str:
-        return render_prompt(
+        return PROMPTS.get(
             "plan.md",
             report=render_report(
                 self.input_data,
@@ -236,7 +241,7 @@ class Intervention(StructuredTask[InterventionResult]):
     result_cls = InterventionResult
 
     def system_prompt(self) -> SystemPromptPreset:
-        return SYSTEM_PROMPT
+        return PROMPTS.system
 
     work_dir = WORK_DIR
 
@@ -313,7 +318,7 @@ class Intervention(StructuredTask[InterventionResult]):
             f"--bugs {bug}{headless_flag}"
         )
 
-        return render_prompt(
+        return PROMPTS.get(
             "intervention.md",
             url=self.plan_result.url,
             report=render_report(
