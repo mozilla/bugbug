@@ -52,7 +52,7 @@ the issue.
    - if the platforms include `android`, also check a phone-sized viewport with
      `set_viewport_size`.
 
-   Stay on the reported page. Only take idempotent actions. 
+   Stay on the reported page. Only take idempotent actions.
    Do not submit forms, log in, create accounts, make purchases or bookings,
    send messages, or start calls.
 
@@ -61,7 +61,9 @@ the issue.
    `{tests_dir}/test_{bug}_<domain_with_underscores>.py`. The existing script already tells
    the broken and working states apart, so reuse its URL, steps, selectors where possible
    and check rather than rediscovering them. Existing tests in
-   {tests_dir} are useful as a reference. Then run it against your build:
+   {tests_dir} are useful as a reference. Tests are reviewed by a human and rejected if they are overly complicated
+   or fragile; aim for a minimal, reliable check that the issue is still present.
+   Run the test against your build:
    {run_tests}
    It runs the test with interventions disabled and enabled; both must pass.
    If a test is not possible (see "When a test is not possible"), do not add
