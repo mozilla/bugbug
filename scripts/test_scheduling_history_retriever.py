@@ -44,8 +44,9 @@ class Retriever(object):
 
         # We use the actual date instead of 'today-X' aliases to avoid mozci caching
         # this query.
-        from_date = datetime.now(timezone.utc) - relativedelta(months=from_months)
-        to_date = datetime.now(timezone.utc) - relativedelta(days=3)
+        now = datetime.now(timezone.utc)
+        from_date = now - relativedelta(months=from_months)
+        to_date = now - relativedelta(days=3)
 
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
