@@ -44,6 +44,7 @@ MODELS_NAMES = [
     "performancebug",
     "worksforme",
     "fenixcomponent",
+    "perfregressionpredictor",
 ]
 PERF_REGRESSION_LOG_PREFIX = "[perf-regression-predictor]"
 
@@ -347,9 +348,6 @@ def classify_perf_regression(branch: str, rev: str) -> str:
 PUSH_CLASSIFIERS = {
     PERF_REGRESSION_PREDICTOR: classify_perf_regression,
 }
-
-# Every model served by an endpoint must be downloaded at startup.
-MODELS_TO_DOWNLOAD = [*MODELS_NAMES, *PUSH_CLASSIFIERS]
 
 
 @lru_cache(maxsize=None)

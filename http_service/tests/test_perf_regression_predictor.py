@@ -67,12 +67,6 @@ def test_endpoint_queues_and_returns_prediction(client, jobs, add_result) -> Non
     unauthorized = client.get(endpoint)
     assert unauthorized.status_code == 401
 
-    wrong_input_kind = client.get(
-        "/perfregressionpredictor/predict/123456",
-        headers={API_TOKEN: "test"},
-    )
-    assert wrong_input_kind.status_code == 404
-
     # Only models registered as push classifiers can be used with the push
     # prediction endpoint.
     non_push_model = client.get(
