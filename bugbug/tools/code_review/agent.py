@@ -252,19 +252,7 @@ class CodeReviewTool(GenerativeModelTool):
             )
         ]
         for attempt in range(2):
-            result = None
-            try:
-                async for chunk in self.agent.astream(
-                    {"messages": messages},
-                    context=CodeReviewContext(patch=patch),
-                    stream_mode="values",
-                    config={"recursion_limit": 500},
-                ):
-                    result = chunk
-            except GraphRecursionError as e:
-                raise RecursionLimitError(
-                    "The model could not complete the review"
-                ) from e
+            result = await self._invoke_review_agent(patch, messages)
 
             if result is not None and result.get("structured_response") is not None:
                 return result["structured_response"], manifest
@@ -280,6 +268,21 @@ class CodeReviewTool(GenerativeModelTool):
                 ]
 
         raise ValueError("Review agent returned no structured response")
+
+    async def _invoke_review_agent(self, patch: Patch, messages: list) -> dict | None:
+        """Run the review agent and return its final streamed state."""
+        result = None
+        try:
+            async for chunk in self.agent.astream(
+                {"messages": messages},
+                context=CodeReviewContext(patch=patch),
+                stream_mode="values",
+                config={"recursion_limit": 500},
+            ):
+                result = chunk
+        except GraphRecursionError as e:
+            raise RecursionLimitError("The model could not complete the review") from e
+        return result
 
     async def assess_patch_scope(
         self, patch: Patch, patch_summary: str
