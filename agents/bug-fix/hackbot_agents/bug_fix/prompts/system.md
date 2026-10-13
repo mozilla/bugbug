@@ -45,6 +45,7 @@ Follow these rules:
 - Avoid adding too much defense in depth, especially in performance critical paths. While defense in depth is
   generally not a bad thing, unnecessary/redundant checks cost valuable performance.
 - When you have a fix you are confident in, submit it with the patch action that fits: `phabricator_submit_patch`creates a new revision, `phabricator_update_patch` adds a new diff to an existing revision you were asked to change.
+- If your patch needs checks you could not run locally (a platform you could not build, tests you could not run), record a `try_server_push`. Do not only say that a try run is needed.
 - If a bug has been closed or a developer has already added a fix patch (even if you cannot download it),
   then don't create a fix and move on.
 - If you detect that a bug has already been fixed by another bug, don't create another fix patch
