@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -129,6 +130,24 @@ def unexpected_changes(changed: list[str]) -> list[str]:
     return [path for path in changed if not path.startswith(ALLOWED_CHANGE_PATHS)]
 
 
+def script_command(
+    script_path: Path, firefox_path: Path, headless: bool
+) -> tuple[list[str], dict[str, str]]:
+    env = {
+        "NODE_PATH": str(NODE_MODULES),
+        "BROWSER": "firefox",
+        "BROWSER_BIN": str(firefox_path),
+    }
+    if headless:
+        env["HEADLESS"] = "1"
+    return ["node", str(script_path)], env
+
+
+def as_shell(cmd: list[str], env: dict[str, str], cwd: Path) -> str:
+    assignments = " ".join(f"{key}={shlex.quote(value)}" for key, value in env.items())
+    return f"cd {shlex.quote(str(cwd))} && {assignments} {shlex.join(cmd)}"
+
+
 def run_script(script_path: Path, firefox_path: Path, headless: bool) -> int | None:
     """Run the reproduction script against one Firefox; return its exit code.
 
@@ -137,22 +156,14 @@ def run_script(script_path: Path, firefox_path: Path, headless: bool) -> int | N
     Otherwise, follows the repro-script contract used across the autowebcompat
     agents: 0 = the functionality worked, 1 = the breakage reproduced.
     """
-    env = {
-        **os.environ,
-        "NODE_PATH": str(NODE_MODULES),
-        "BROWSER": "firefox",
-        "BROWSER_BIN": str(firefox_path),
-    }
-    if headless:
-        env["HEADLESS"] = "1"
-
+    cmd, env = script_command(script_path, firefox_path, headless)
     script_timeout = 5 * 60
 
     try:
         proc = subprocess.run(
-            ["node", str(script_path)],
+            cmd,
             cwd=script_path.parent,
-            env=env,
+            env={**os.environ, **env},
             capture_output=True,
             text=True,
             timeout=script_timeout,
@@ -311,11 +322,12 @@ class Intervention(StructuredTask[InterventionResult]):
         interventions_dir = webcompat_dir / "data/interventions"
         tests_dir = self.source_repo / "testing/webcompat/interventions/tests"
         bug = self.bug_id if self.bug_id is not None else "<bug>"
-        headless_env = "HEADLESS=1 " if self.task_config.headless else ""
         headless_flag = " --headless" if self.task_config.headless else ""
-        run_script = (
-            f"cd {self.work_dir} && BROWSER=firefox "
-            f"BROWSER_BIN={self.fx_ctx.binary} {headless_env}node {self.script_path}"
+        run_script = as_shell(
+            *script_command(
+                self.script_path, self.fx_ctx.binary, self.task_config.headless
+            ),
+            cwd=self.script_path.parent,
         )
         run_tests = (
             f"./mach test-interventions --binary {self.fx_ctx.binary} "
