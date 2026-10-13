@@ -1,15 +1,3 @@
-"""Download a released Firefox to reproduce against.
-
-The planning stage runs the bug's repro script against a downloaded Nightly,
-not against the tree: reproducing is the gate that decides whether building is
-worth it at all, so it has to come first. The artifact build happens later, only
-once the bug is confirmed.
-
-Firefox-only -- unlike autowebcompat-repro there is no Chrome cross-check here;
-the comparison this agent cares about is the same Firefox with the intervention
-on versus off.
-"""
-
 import logging
 import platform
 import tempfile
@@ -62,11 +50,6 @@ def install_firefox(
 
 
 class FirefoxBrowsers:
-    """Lazily-downloaded Firefox builds, one per channel.
-
-    Downloading is slow, so each channel is fetched on first access and reused.
-    """
-
     def __init__(self) -> None:
         self._nightly: Path | None = None
         self._stable: Path | None = None
