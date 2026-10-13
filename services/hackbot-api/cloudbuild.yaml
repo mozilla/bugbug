@@ -1,0 +1,91 @@
+# Build hackbot-api once and ship it to dev, then stage.
+#
+# Its trigger (webservices-infra, hackbot/tf/modules/resources/build.tf) runs
+# this on a push to main touching the API or the libraries it's built from. Prod is a separate, approved
+# promotion; nothing here reaches it. services/cloudbuild.yaml is hackbot-dev's
+# older config and goes away at cutover.
+#
+# Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
+# build on unknown ones, so shell variables below are written `$$name`.
+
+steps:
+  # Before anything else: if an older build of this trigger is still going,
+  # stop here rather than deploy over it.
+  - id: One at a time
+    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    entrypoint: bash
+    args:
+      - -c
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy check-build "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION"
+
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        image="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/hackbot-api:$COMMIT_SHA"
+        docker build --no-cache -f services/hackbot-api/Dockerfile \
+          --build-arg "SENTRY_RELEASE=hackbot-api@$COMMIT_SHA" \
+          --label "org.opencontainers.image.revision=$COMMIT_SHA" \
+          --label "org.opencontainers.image.created=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          -t "$$image" .
+        docker push "$$image"
+        docker inspect --format='{{index .RepoDigests 0}}' "$$image" > /workspace/image.digest
+
+  # Same digest to dev, then stage. Services have no shape gate: their
+  # infrastructure is written by hand in webservices-infra and changes there
+  # first.
+  - id: Deploy
+    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    entrypoint: bash
+    # Recorded as deployed_by: whoever pushed, or the build when the trigger
+    # is run by hand. Substitutions aren't in a step's environment otherwise.
+    env:
+      - GITHUB_ACTOR=${_PUSHER}
+      - BUILD_ID=$BUILD_ID
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        for env in dev stage; do
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy hackbot-api --env "$$env" --image "$$(cat /workspace/image.digest)"
+        done
+
+  # After the deploy, so a Sentry outage can't hold one up.
+  - id: Sentry release
+    name: getsentry/sentry-cli
+    secretEnv:
+      - SENTRY_AUTH_TOKEN
+    args: ["releases", "new", "hackbot-api@$COMMIT_SHA", "--finalize"]
+  - id: Sentry commits
+    name: getsentry/sentry-cli
+    secretEnv:
+      - SENTRY_AUTH_TOKEN
+    args:
+      [
+        "releases",
+        "set-commits",
+        "hackbot-api@$COMMIT_SHA",
+        "--commit",
+        "mozilla/bugbug@$COMMIT_SHA",
+      ]
+
+# The trigger sets it from the push event; empty when run any other way.
+substitutions:
+  _PUSHER: ""
+
+options:
+  substitutionOption: MUST_MATCH
+  logging: CLOUD_LOGGING_ONLY
+  env:
+    - SENTRY_ORG=mozilla
+    - SENTRY_PROJECT=hackbot-api
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/${_SENTRY_AUTH_TOKEN_SECRET}/versions/latest
+      env: SENTRY_AUTH_TOKEN

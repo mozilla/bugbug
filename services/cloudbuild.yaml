@@ -1,3 +1,6 @@
+# hackbot-dev only: its deploy/hackbot-api and deploy/hackbot-ui triggers
+# build from this file. The MozCloud projects build each service from its own
+# services/<service>/cloudbuild.yaml instead. Remove this at cutover.
 steps:
   - name: gcr.io/cloud-builders/docker
     id: Build

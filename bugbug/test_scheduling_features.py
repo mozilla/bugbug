@@ -370,9 +370,7 @@ class Arch(object):
         ):
             for a in arcs:
                 if a in test_job["name"][: test_job["name"].index("/")]:
-                    if a == "64" and "aarch64" in archs:
-                        continue
-                    elif a == "x86" and "64" in archs:
+                    if a == "64" and "aarch64" in archs or a == "x86" and "64" in archs:
                         continue
                     archs.add(arcs[0])
         assert len(archs) == 1, "Wrong architectures ({}) in {}".format(
