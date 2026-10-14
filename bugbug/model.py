@@ -626,6 +626,15 @@ class Model:
     @staticmethod
     def load(model_directory: str) -> "Model":
         model_path = path.join(model_directory, "model.pkl")
+
+        if not path.exists(model_path):
+            # Models stored in another format (e.g. a Hugging Face checkpoint)
+            # override load(). Dispatch to the class registered for this
+            # directory, whose name follows the `{model_name}model` convention.
+            model_class = Model._registered_class(model_directory)
+            if model_class is not None and model_class.load is not Model.load:
+                return model_class.load(model_directory)
+
         with open(model_path, "rb") as f:
             model = pickle.load(f)
 
@@ -634,6 +643,21 @@ class Model:
             model.clf.named_steps["estimator"].load_model(xgboost_model_path)
 
         return model
+
+    @staticmethod
+    def _registered_class(model_directory: str) -> "type[Model] | None":
+        """Return the model class registered for a `{model_name}model` directory."""
+        # Imported here to avoid a circular import (bugbug.models imports us).
+        from bugbug.models import get_model_class
+
+        model_name = path.basename(path.normpath(model_directory))
+        if model_name.endswith("model"):
+            model_name = model_name[: -len("model")]
+
+        try:
+            return get_model_class(model_name)
+        except ValueError:
+            return None
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes

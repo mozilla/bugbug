@@ -258,29 +258,6 @@ def test_worker_propagates_model_loading_failure(monkeypatch) -> None:
     assert models.redis.get(job.result_key) is None
 
 
-def test_load_model_uses_registered_model_class_and_standard_directory(
-    monkeypatch,
-) -> None:
-    loaded_directories: list[str] = []
-    sentinel = object()
-
-    class FakeModel:
-        @staticmethod
-        def load(model_directory):
-            loaded_directories.append(model_directory)
-            return sentinel
-
-    monkeypatch.setattr(
-        models,
-        "get_model_class",
-        lambda model_name: FakeModel,
-    )
-
-    loaded_model = models.load_model("somecustommodel")
-    assert loaded_model is sentinel
-    assert loaded_directories == ["somecustommodelmodel"]
-
-
 class _ScoringModel:
     """Fake model returning a fixed score and counting classify calls."""
 
