@@ -50,6 +50,10 @@ class TaskRun:
     total_cost_usd: float | None
 
 
+class RetryResultError(Exception):
+    """Raised by ``handle_result`` to ask the agent to fix and resubmit."""
+
+
 class RunTracker:
     """Accumulates per-task turn counts and costs across the run's stages."""
 
@@ -168,6 +172,13 @@ class Task(ABC, Generic[ResultT]):
             effort=self.task_config.effort,
         )
 
+    def handle_result(self, msg: ResultMessage) -> ResultT:
+        if self.result_collector.result is None:
+            raise AgentError(
+                f"{self.subject()}: agent finished without submitting a result via submit_result"
+            )
+        return self.result_collector.result
+
     async def run(self) -> ResultT:
         self.run_tracker.start_task(self.name)
         subject = self.subject()
@@ -176,33 +187,54 @@ class Task(ABC, Generic[ResultT]):
             preview = f"{preview[:200]}..."
         logger.info("Running %s with %s", self.__class__.__name__, preview)
 
-        with Reporter(
-            verbose=self.task_config.verbose, log_path=self.task_config.log
-        ) as reporter:
-            reporter.header(subject)
+        msg: ResultMessage | None = None
+        try:
+            with Reporter(
+                verbose=self.task_config.verbose, log_path=self.task_config.log
+            ) as reporter:
+                reporter.header(subject)
 
-            async with ClaudeSDKClient(options=self.agent_options()) as client:
-                await client.query(self.user_prompt())
-                result_msg = await last_result(client, reporter, subject)
+                async with ClaudeSDKClient(options=self.agent_options()) as client:
+                    await client.query(self.user_prompt())
+                    msg = await last_result(client, reporter, subject)
+                    self.check_error(msg, subject)
+                    try:
+                        result = self.handle_result(msg)
+                    except RetryResultError as exc:
+                        # One follow-up turn for StructuredTask
+                        await client.query(
+                            f"Invalid result: {exc}. Fix it and resubmit."
+                        )
+                        msg = await last_result(client, reporter, subject)
+                        self.check_error(msg, subject)
+                        try:
+                            result = self.handle_result(msg)
+                        except RetryResultError as retry_exc:
+                            raise AgentError(
+                                f"{subject}: {self.name} failed: {retry_exc}"
+                            ) from retry_exc
+        finally:
+            if msg is not None:
+                self.run_tracker.end_task(self.name, msg)
+        return result
 
-        self.run_tracker.end_task(self.name, result_msg)
-        if result_msg.is_error:
+    def check_error(self, msg: ResultMessage, subject: Any) -> None:
+        if msg.is_error:
             raise AgentError(
-                f"{subject}: {self.name} failed: "
-                f"{result_msg.result or result_msg.subtype}"
+                f"{subject}: {self.name} failed: {msg.result or msg.subtype}"
             )
-        if self.result_collector.result is None:
-            raise AgentError(
-                f"{subject}: agent finished without submitting a result via submit_result"
-            )
-        return self.result_collector.result
 
 
 class StructuredTask(Task[ResultT]):
     """A Task whose result is the session's structured output.
 
-    The CLI retries output that doesn't match the JSON schema; a result that then
-    fails the Pydantic validators gets one follow-up asking for a fix.
+    Invalid output is retried in two layers:
+
+    - The CLI checks the output against the JSON schema and lets the agent retry
+      within the turn, up to 5 times by default (``MAX_STRUCTURED_OUTPUT_RETRIES``).
+    - Output that passes the schema but fails a Pydantic validator the schema
+      can't express (e.g. "this file exists") gets one follow-up turn asking for
+      a fix.
     """
 
     def result_server(self) -> McpServerConfig | None:
@@ -216,29 +248,8 @@ class StructuredTask(Task[ResultT]):
         }
         return options
 
-    async def run(self) -> ResultT:
-        self.run_tracker.start_task(self.name)
-        subject = self.subject()
-        logger.info("Running %s with %s", self.__class__.__name__, str(subject)[:200])
-
-        with Reporter(
-            verbose=self.task_config.verbose, log_path=self.task_config.log
-        ) as reporter:
-            reporter.header(subject)
-            async with ClaudeSDKClient(options=self.agent_options()) as client:
-                await client.query(self.user_prompt())
-                msg = await last_result(client, reporter, subject)
-                try:
-                    result = self.result_cls.model_validate(msg.structured_output)
-                except ValidationError as exc:
-                    if msg.is_error:
-                        raise AgentError(
-                            f"{subject}: {self.name} failed: "
-                            f"{msg.result or msg.subtype}"
-                        ) from exc
-                    await client.query(f"Invalid result: {exc}. Fix it and resubmit.")
-                    msg = await last_result(client, reporter, subject)
-                    result = self.result_cls.model_validate(msg.structured_output)
-
-        self.run_tracker.end_task(self.name, msg)
-        return result
+    def handle_result(self, msg: ResultMessage) -> ResultT:
+        try:
+            return self.result_cls.model_validate(msg.structured_output)
+        except ValidationError as exc:
+            raise RetryResultError(str(exc)) from exc

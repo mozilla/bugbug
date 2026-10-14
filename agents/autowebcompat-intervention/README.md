@@ -4,53 +4,12 @@ Writes a Firefox webcompat intervention for a broken-site bug: confirms the
 breakage reproduces, adds the intervention and a test, verifies the fix, and
 records a Phabricator patch.
 
-## Stages
-
-1. **Plan** (Claude): reads the bug, downloads its Puppeteer reproduction
-   script, and works out the affected platforms.
-2. **Reproduce** (Python): runs the script against Firefox Nightly; exit 1
-   means the breakage reproduces.
-3. **Intervention** (Claude, in a Firefox checkout): writes the intervention,
-   does an artifact build, re-runs the script, checks the page with the
-   DevTools MCP, adds a test, lints, and records `phabricator.submit_patch`.
-4. **Verify** (Python): if the agent claims a fix, re-runs the script against
-   the build. The patch is dropped if the script doesn't exit 0
-   (`verification_failed`), or if any changed file is outside
-   `browser/extensions/webcompat/` and `testing/webcompat/`
-   (`unexpected_changes`). The same path check also runs when the patch is
-   recorded, so the agent can retry.
-
-The run stops early, with a `failure_reason`, when:
-
-- Linux isn't among the affected platforms, as interventions are verified
-  on Linux desktop: `unsupported_ios` (iOS only), `unsupported_android`
-  (Android only) or `unsupported_desktop_os` (e.g. Windows or macOS only);
-- the bug has no reproduction script (`no_puppeteer_script`);
-- the script doesn't reproduce the breakage, or gives no verdict
-  (`not_reproducible`).
-
-The intervention rules come from the Firefox tree:
-`browser/extensions/webcompat/AGENTS.md` is inserted into the Intervention
-prompt.
-
 ## Input
 
 - `BUG_ID` or `BUG_DATA`: a Bugzilla bug, or the report as inline text. At
   least one is required.
 - `MODEL`, `MAX_TURNS`, `EFFORT` (optional): Claude settings.
 - `HEADLESS` (optional, default `false`): run Firefox without Xvfb.
-
-## Output
-
-The run summary's `result` contains:
-
-- `wrote_intervention`, `fixed_with_intervention`, `build_succeeded`,
-  `failure_reason`, `summary`;
-- `plan_result`: `url`, `affected_platforms`, `script_path`;
-- `files_changed`: taken from `git`, not reported by the model.
-
-The recorded patch is the checkout's final diff, published as
-`changes/changes.patch`.
 
 ## Run locally
 

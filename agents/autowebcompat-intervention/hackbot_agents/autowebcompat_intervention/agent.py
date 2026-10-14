@@ -219,11 +219,10 @@ class InterventionPlan(StructuredTask[InterventionPlanResult]):
 
     name = "intervention_plan"
     result_cls = InterventionPlanResult
+    work_dir = WORK_DIR
 
     def system_prompt(self) -> SystemPromptPreset:
         return PROMPTS.system
-
-    work_dir = WORK_DIR
 
     def __init__(
         self,
@@ -256,11 +255,10 @@ class InterventionPlan(StructuredTask[InterventionPlanResult]):
 class Intervention(StructuredTask[InterventionResult]):
     name = "intervention"
     result_cls = InterventionResult
+    work_dir = WORK_DIR
 
     def system_prompt(self) -> SystemPromptPreset:
         return PROMPTS.system
-
-    work_dir = WORK_DIR
 
     def __init__(
         self,
