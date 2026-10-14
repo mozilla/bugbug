@@ -61,7 +61,7 @@ services:
       - redis
 
   redis:
-    image: redis:7
+    image: redis:4
     ports:
       - target: 6379
         published: 6379
