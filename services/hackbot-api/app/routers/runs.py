@@ -179,6 +179,7 @@ async def create_run(
             "RESULTS_PREFIX": results_prefix,
             "RESULTS_POLICY_URL": policy["url"],
             "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
+            "SENTRY_DSN": settings.agent_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
         }
         execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)

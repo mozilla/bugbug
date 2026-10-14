@@ -14,6 +14,7 @@ os.environ.setdefault("BUGZILLA_API_KEY", "test-bugzilla-api-key")
 os.environ.setdefault("SLACK_SIGNING_SECRET", "test-signing-secret")
 os.environ.setdefault("SENDGRID_API_KEY", "test-sendgrid-api-key")
 os.environ.setdefault("NOTIFICATION_SENDER", "hackbot@mozilla.tld")
+os.environ.setdefault("AGENT_SENTRY_DSN", "https://key@sentry.example/1")
 # Not a setting, so not validated above, but Bolt refuses to build an app without
 # one and every test that reaches the Slack receiver builds one.
 os.environ.setdefault("SLACK_BOT_TOKEN", "xoxb-test-token")
