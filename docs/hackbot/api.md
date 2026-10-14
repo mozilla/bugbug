@@ -7,16 +7,17 @@ component that knows the agent catalog, and the only writer of run state.
 
 ### Public — `X-API-Key`
 
-| Method | Path                              | Does                                                                 |
-| ------ | --------------------------------- | -------------------------------------------------------------------- |
-| GET    | `/agents`                         | The catalog, each with its input JSON schema                         |
-| POST   | `/agents/{agent}/runs`            | Validate inputs, create a run, start an execution                    |
-| GET    | `/runs`                           | List runs; filter by `agent`, `status`, `requested_by`, `dedupe_key` |
-| GET    | `/runs/{run_id}`                  | One run: status, inputs, summary, artifacts                          |
-| GET    | `/runs/{run_id}/artifacts/{path}` | A short-lived signed GCS download URL                                |
-| GET    | `/runs/{run_id}/actions`          | Recorded actions and their apply state                               |
-| POST   | `/runs/{run_id}/actions/apply`    | Apply all pending actions (idempotent)                               |
-| GET    | `/health`                         | Health check                                                         |
+| Method | Path                                 | Does                                                                    |
+| ------ | ------------------------------------ | ----------------------------------------------------------------------- |
+| GET    | `/agents`                            | The catalog, each with its input JSON schema                            |
+| POST   | `/agents/{agent}/runs`               | Validate inputs, create a run, start an execution                       |
+| GET    | `/runs`                              | List runs; filter by `agent`, `status`, `requested_by`, `dedupe_key`    |
+| GET    | `/runs/{run_id}`                     | One run: status, inputs, summary, artifacts                             |
+| GET    | `/runs/{run_id}/artifacts/{path}`    | A short-lived signed GCS download URL                                   |
+| GET    | `/runs/{run_id}/actions`             | Recorded actions and their apply state                                  |
+| POST   | `/runs/{run_id}/actions/apply`       | Apply all pending actions (idempotent)                                  |
+| POST   | `/runs/{run_id}/actions/{idx}/apply` | Apply one action (idempotent; 409 if it references an unapplied action) |
+| GET    | `/health`                            | Health check                                                            |
 
 `POST /agents/{agent}/runs` accepts an `X-On-Behalf-Of` header carrying the requesting
 user's email, stored as `requested_by` — the caller is a trusted service (the UI), so this

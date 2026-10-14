@@ -113,6 +113,17 @@ export function applyRunActions(runId: string): Promise<RunAction[]> {
   );
 }
 
+// Manually apply one of a run's actions; returns all actions' updated state.
+export function applyRunAction(
+  runId: string,
+  idx: number
+): Promise<RunAction[]> {
+  return request<RunAction[]>(
+    `/runs/${encodeURIComponent(runId)}/actions/${idx}/apply`,
+    { method: "POST" }
+  );
+}
+
 // Ask hackbot-api for a short-lived signed download URL for one artifact.
 // `artifactName` may contain slashes; each segment is encoded individually so
 // the upstream `{artifact_path:path}` route still sees the directory structure.

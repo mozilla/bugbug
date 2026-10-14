@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
 from app.action_handlers.registry import PATCH_ACTION_TYPES
-from app.actions_applier import apply_all_pending
+from app.actions_applier import (
+    ActionNotFound,
+    UnappliedDependency,
+    apply_all_pending,
+    apply_one,
+)
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
 from app.config import settings
@@ -308,6 +313,23 @@ async def apply_run_actions(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     await apply_all_pending(db, run)
+    return await _list_actions(db, run_id)
+
+
+@router.post("/runs/{run_id}/actions/{idx}/apply")
+async def apply_run_action(
+    run_id: uuid.UUID, idx: int, db: Annotated[AsyncSession, Depends(get_db)]
+) -> list[RunActionDoc]:
+    """Manually apply one of a run's actions. Returns all actions' updated state."""
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    try:
+        await apply_one(db, run, idx)
+    except ActionNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except UnappliedDependency as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return await _list_actions(db, run_id)
 
 

@@ -10,6 +10,7 @@ import uuid
 from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 
+import pytest
 from app import actions_applier
 from app.actions_applier import (
     apply_all_pending,
@@ -691,3 +692,53 @@ def test_build_repair_mails_unattended_but_holds_the_revision():
     run = _run_with_findings()
     assert _action_auto_applies(spec, run, "email.send")
     assert not _action_auto_applies(spec, run, "phabricator.submit_patch")
+
+
+# --- apply_one: single manual apply ----------------------------------- #
+
+
+def _patch_ensure(monkeypatch, rows):
+    async def fake_ensure(db, run):
+        return rows
+
+    monkeypatch.setattr(actions_applier, "ensure_action_rows", fake_ensure)
+
+
+async def test_apply_one_applies_only_target_with_applied_refs(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"ok": 1}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+    patch = _row(0, "applied", ref="patch", result={"url": "D1"})
+    comment = _row(1, "pending", params={"text": "{{actions.patch.url}}"})
+    other = _row(2, "pending")
+    _patch_ensure(monkeypatch, [(patch, []), (comment, []), (other, [])])
+
+    await actions_applier.apply_one(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), 1
+    )
+
+    assert handler.calls == [{"text": "D1"}]
+    assert comment.status == "applied"
+    assert other.status == "pending"
+
+
+async def test_apply_one_refuses_unapplied_dependency(monkeypatch):
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: None)
+    patch = _row(0, "pending", ref="patch")
+    comment = _row(1, "pending", params={"text": "{{actions.patch.url}}"})
+    _patch_ensure(monkeypatch, [(patch, []), (comment, [])])
+
+    with pytest.raises(actions_applier.UnappliedDependency):
+        await actions_applier.apply_one(
+            _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), 1
+        )
+    assert comment.status == "pending"
+
+
+async def test_apply_one_unknown_idx(monkeypatch):
+    _patch_ensure(monkeypatch, [(_row(0, "pending"), [])])
+    with pytest.raises(actions_applier.ActionNotFound):
+        await actions_applier.apply_one(
+            _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), 5
+        )
