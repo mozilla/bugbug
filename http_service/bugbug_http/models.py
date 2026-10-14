@@ -580,6 +580,21 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     return "OK"
 
 
+def _normalize_group(group: str) -> str:
+    """Convert a group name from Treeherder to the name used by the group model."""
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci.task import wpt_workaround
+
+    # WPT groups are relative to the root of the WPT suite (sometimes prefixed with
+    # ":"), while the group model uses the names normalized by mozci.
+    if group.startswith(("/", ":/")):
+        return wpt_workaround(group)
+
+    # Manifests included by another manifest are reported as "manifest:parent".
+    return group.split(":")[0]
+
+
 def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
     """Get the tasks and manifests which failed recently on a Treeherder project.
 
@@ -663,11 +678,7 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
             for task in map(test_scheduling.rename_task, tasks)
             if task in known_tasks
         },
-        {
-            group
-            for group in (group.split(":")[0] for group in groups)
-            if group in known_groups
-        },
+        {group for group in map(_normalize_group, groups) if group in known_groups},
     )
 
 

@@ -12,6 +12,7 @@ import responses
 import zstandard
 from responses import matchers
 
+from bugbug import test_scheduling
 from bugbug.models import testselect
 from bugbug_http import models
 
@@ -228,7 +229,12 @@ def mock_treeherder_recent_failures() -> None:
         "https://treeherder.mozilla.org/api/project/autoland/push/group_results/",
         match=[matchers.query_param_matcher({"revision": "rev1"})],
         json={
-            "task1": {"test-group1:test-group-parent": False, "test-group2": True},
+            "task1": {
+                "test-group1:test-group-parent": False,
+                "test-group2": True,
+                "/wpt-dir": False,
+                ":/_mozilla/wpt-dir": False,
+            },
             "task2": {"test-group2": False},
             "task5": {"test-group2": False},
             "task6": {"test-group2": False},
@@ -245,15 +251,44 @@ def mock_treeherder_recent_failures() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "group, expected",
+    [
+        ("test-group1", "test-group1"),
+        ("test-group1:test-group-parent", "test-group1"),
+        ("/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
+        (":/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
+        (
+            "/_mozilla/fetch/api/request",
+            "testing/web-platform/mozilla/tests/fetch/api/request",
+        ),
+    ],
+)
+def test_normalize_group(group: str, expected: str) -> None:
+    assert models._normalize_group(group) == expected
+
+
 def test_get_recent_failures(
     mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
 ) -> None:
+    past_failures_data = test_scheduling.PastFailures("group", False)
+    past_failures_data.all_runnables = [
+        *past_failures_data.all_runnables,
+        "testing/web-platform/tests/wpt-dir",
+        "testing/web-platform/mozilla/tests/wpt-dir",
+    ]
+    past_failures_data.close()
+
     mock_treeherder_recent_failures()
 
     tasks, groups = models._get_recent_failures("autoland", "rev")
 
     assert tasks == {"test-linux1804-64-opt-label1"}
-    assert groups == {"test-group1"}
+    assert groups == {
+        "test-group1",
+        "testing/web-platform/tests/wpt-dir",
+        "testing/web-platform/mozilla/tests/wpt-dir",
+    }
 
 
 def add_backout(remote_repo_dir: str) -> bytes:
