@@ -330,9 +330,30 @@ class PerfRegressionPredictorModel(Model):
 
     @property
     def max_length(self) -> int:
+        """Longest token sequence the checkpoint can embed.
+
+        The tokenizer's declared limit is preferred, but it is capped by the
+        number of positions the model can actually embed: a tokenizer without
+        a declared limit reports a huge sentinel, and ``max_position_embeddings``
+        alone overstates the limit for RoBERTa-style models.
+        """
         tokenizer_limit = int(self.tokenizer.model_max_length)
-        model_limit = int(self.transformer_model.config.max_position_embeddings)
-        return min(tokenizer_limit, model_limit)
+        return min(tokenizer_limit, self._usable_positions())
+
+    def _usable_positions(self) -> int:
+        """Number of input tokens the model's position embeddings can hold.
+
+        RoBERTa-style models (CodeBERT included) number positions from
+        ``padding_idx + 1`` and expose that index on their embeddings module,
+        so a 514-entry table only embeds 512 tokens. BERT-style models start
+        at 0 and have no ``padding_idx``, so every entry is usable.
+        """
+        positions = int(self.transformer_model.config.max_position_embeddings)
+        embeddings = getattr(self.transformer_model.base_model, "embeddings", None)
+        padding_idx = getattr(embeddings, "padding_idx", None)
+        if padding_idx is not None:
+            positions -= int(padding_idx) + 1
+        return positions
 
     def classify(
         self,

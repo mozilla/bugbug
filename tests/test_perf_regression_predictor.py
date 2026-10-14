@@ -3,6 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from types import SimpleNamespace
+
+import pytest
+
 from bugbug.models.perf_regression_predictor import (
     CommitMessageCleaner,
     DiffStructurer,
@@ -218,3 +222,47 @@ diff -r def -r abc widget.py
     assert extract_commit_message_from_patch(patch) == (
         "Speed up rendering\n\nAvoid unnecessary work in the hot path."
     )
+
+
+# Tokenizers without a declared limit report this sentinel instead of a size.
+_NO_TOKENIZER_LIMIT = int(1e30)
+
+
+def _model_with_limits(
+    tokenizer_limit: int, position_embeddings: int, padding_idx: int | None
+) -> PerfRegressionPredictorModel:
+    model = PerfRegressionPredictorModel()
+    model.tokenizer = SimpleNamespace(model_max_length=tokenizer_limit)
+    embeddings = (
+        SimpleNamespace(padding_idx=padding_idx)
+        if padding_idx is not None
+        else SimpleNamespace()
+    )
+    model.transformer_model = SimpleNamespace(
+        config=SimpleNamespace(max_position_embeddings=position_embeddings),
+        base_model=SimpleNamespace(embeddings=embeddings),
+    )
+    return model
+
+
+@pytest.mark.parametrize(
+    "tokenizer_limit, position_embeddings, padding_idx, expected",
+    [
+        # The published CodeBERT checkpoint: RoBERTa numbers positions from
+        # padding_idx + 1, so a 514-entry table embeds 512 tokens.
+        (512, 514, 1, 512),
+        # No declared tokenizer limit must not let the raw table size win.
+        (_NO_TOKENIZER_LIMIT, 514, 1, 512),
+        # A tokenizer that overstates the limit is capped the same way.
+        (514, 514, 1, 512),
+        # A tighter tokenizer limit is honoured.
+        (256, 514, 1, 256),
+        # BERT-style embeddings start at 0, so every position is usable.
+        (_NO_TOKENIZER_LIMIT, 512, None, 512),
+    ],
+)
+def test_max_length_never_exceeds_usable_positions(
+    tokenizer_limit, position_embeddings, padding_idx, expected
+) -> None:
+    model = _model_with_limits(tokenizer_limit, position_embeddings, padding_idx)
+    assert model.max_length == expected
