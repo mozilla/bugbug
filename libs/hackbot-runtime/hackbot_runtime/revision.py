@@ -43,20 +43,25 @@ class Patch(NamedTuple):
     raw_diff: str
     author: str | None
 
-    @property
-    def commit_message(self) -> str:
+    def commit_message(self, is_target: bool = False) -> str:
         """A message that says which revision the change came from, and why.
 
-        The revisions below the target get a commit each rather than one
-        squashed lump, so that reading `git log` or `git blame` in the checkout
-        attributes each change to the revision it came from instead of to
-        hackbot.
+        Every revision in the stack, the target included, gets a commit of its
+        own rather than one squashed lump, so that reading `git log` or `git
+        blame` in the checkout attributes each change to the revision it came
+        from instead of to hackbot.
         """
-        return (
-            f"D{self.revision_id}: {self.title}\n\n"
-            "Replayed by hackbot from Phabricator to rebuild the base of the "
-            "revision it was asked to work on. Not the original commit."
-        )
+        if is_target:
+            reason = (
+                "Checked out by hackbot from Phabricator as the existing state "
+                "of the revision it was asked to follow up on."
+            )
+        else:
+            reason = (
+                "Replayed by hackbot from Phabricator to rebuild the base of the "
+                "revision it was asked to work on."
+            )
+        return f"D{self.revision_id}: {self.title}\n\n{reason} Not the original commit."
 
 
 class Stack(NamedTuple):
@@ -105,10 +110,14 @@ async def checkout_revision(
         for patch in stack.ancestors:
             _apply(repo, patch)
 
-    # Whatever was seeded above is the agent's starting point, not its work.
-    ctx.record_source_base()
+    # Exclude earlier revisions from the Phabricator update.
+    ctx.record_diff_base()
 
-    _apply(repo, stack.target, should_commit=False)
+    # Apply and commit the existing revision.
+    _apply(repo, stack.target, is_target=True)
+
+    # Exclude the existing revision from changes.patch.
+    ctx.record_source_base()
 
 
 async def _resolve_stack(client: PhabricatorClient, revision_id: int) -> Stack:
@@ -216,8 +225,8 @@ async def _live_ancestors(client: PhabricatorClient, target: dict) -> list[dict]
     ]
 
 
-def _apply(repo: Path, patch: Patch, should_commit: bool = True) -> None:
-    """Apply one revision's diff to ``repo``'s working tree."""
+def _apply(repo: Path, patch: Patch, is_target: bool = False) -> None:
+    """Apply one revision's diff to ``repo`` and commit it."""
     result = subprocess.run(
         ["git", "-C", str(repo), "apply"],
         input=patch.raw_diff.encode(),
@@ -235,5 +244,6 @@ def _apply(repo: Path, patch: Patch, should_commit: bool = True) -> None:
             "to be rebased before hackbot can reproduce it."
         )
 
-    if should_commit:
-        changes.commit_all(repo, patch.commit_message, author=patch.author)
+    changes.commit_all(
+        repo, patch.commit_message(is_target=is_target), author=patch.author
+    )

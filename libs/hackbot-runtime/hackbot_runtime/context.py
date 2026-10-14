@@ -97,6 +97,10 @@ class HackbotContext(BaseSettings):
     # and consumers that hand a base to another service — Lando, for a try push
     # — need this one rather than a sha that only exists in this container.
     _published_base: str | None = PrivateAttr(default=None)
+    # Starting commit for the complete Phabricator update.
+    # Keep it before the existing revision so the update
+    # includes both the revision's original changes and the agent's new edits.
+    _diff_base: str | None = PrivateAttr(default=None)
     # The prepared checkout path + the ref it was prepared at, so the source is
     # prepared exactly once and a conflicting re-prepare is caught.
     _repo_path: Path | None = PrivateAttr(default=None)
@@ -154,7 +158,9 @@ class HackbotContext(BaseSettings):
         # diff the final tree against it. Best-effort: a failure here must not
         # break the agent's access to source — it only disables change capture.
         try:
-            self._source_base = self._published_base = changes.base_commit(path)
+            self._source_base = self._published_base = self._diff_base = (
+                changes.base_commit(path)
+            )
         except Exception:
             log.warning("Could not record source base commit at %s", path)
         self._repo_path = path
@@ -165,12 +171,21 @@ class HackbotContext(BaseSettings):
         """Re-record the commit the agent starts editing from (current HEAD).
 
         :meth:`prepare_repo` records it at checkout time. A caller that then
-        seeds the checkout with commits that are not the agent's work — e.g. the
-        unlanded ancestors of a stacked Phabricator revision, see
+        seeds the checkout with commits that are not the agent's work — e.g. an
+        existing Phabricator revision and its unlanded ancestors, see
         ``revision.checkout_revision`` — calls this afterwards so
         :meth:`publish_changes` collects only what the agent itself did.
         """
         self._source_base = changes.base_commit(self.repo_path)
+
+    def record_diff_base(self) -> None:
+        """Re-record the commit the Phabricator diff is taken from (current HEAD).
+
+        :meth:`prepare_repo` records it at checkout time. A caller that then
+        seeds the checkout with commits that the diff must not include — e.g. the
+        unlanded ancestors of a stacked revision — calls this afterwards.
+        """
+        self._diff_base = changes.base_commit(self.repo_path)
 
     def checkout(self, ref: str) -> str:
         """Move the prepared checkout to ``ref`` and start the agent's edits there.
@@ -186,7 +201,9 @@ class HackbotContext(BaseSettings):
         revision from its Phabricator diffs so the agent can revise it.
         """
         checkout_commit(self.repo_path, ref)
-        self._source_base = self._published_base = changes.base_commit(self.repo_path)
+        self._source_base = self._published_base = self._diff_base = (
+            changes.base_commit(self.repo_path)
+        )
         return self._source_base
 
     @property
@@ -293,22 +310,22 @@ class HackbotContext(BaseSettings):
             self._config.source.repo_url,
             message=_wip_commit_message(self.actions.actions),
         )
-        if change_set is None:
-            return None
-        artifacts.publish_bytes(
-            self.uploader,
-            self.run_artifacts_dir,
-            patch_key,
-            change_set.patch,
-            "text/x-patch",
-        )
-        self.publish_json(meta_key, change_set.metadata)
+        if change_set is not None:
+            artifacts.publish_bytes(
+                self.uploader,
+                self.run_artifacts_dir,
+                patch_key,
+                change_set.patch,
+                "text/x-patch",
+            )
+            self.publish_json(meta_key, change_set.metadata)
 
+        # There may be something to submit even when the agent changed nothing.
         recorded_types = {action["type"] for action in self.actions.actions}
 
         if recorded_types & PATCH_ACTION_TYPES:
             diff_payload = changes.build_phabricator_diff(
-                self.repo_path, self._source_base, self._config.source.repo_url
+                self.repo_path, self._diff_base, self._config.source.repo_url
             )
             if diff_payload is not None:
                 self.publish_json(phabricator_diff_key, diff_payload)
@@ -322,4 +339,4 @@ class HackbotContext(BaseSettings):
             if try_payload is not None:
                 self.publish_json(try_push_key, try_payload)
 
-        return patch_key
+        return patch_key if change_set is not None else None
