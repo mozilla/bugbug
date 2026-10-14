@@ -23,6 +23,9 @@ export function TriggerForm() {
   );
   const [bugId, setBugId] = useState(() => params.get("bug_id") ?? "");
   const [bugData, setBugData] = useState(() => params.get("bug_data") ?? "");
+  const [requireReview, setRequireReview] = useState(
+    () => params.get("require_review") === "true"
+  );
   const [gitCommit, setGitCommit] = useState(
     () => params.get("git_commit") ?? ""
   );
@@ -64,7 +67,10 @@ export function TriggerForm() {
     e.preventDefault();
     setError(null);
 
-    const inputs: Record<string, unknown> = {};
+    // uplift-resolve's inputs have no `require_review`.
+    const inputs: Record<string, unknown> = isUpliftAgent
+      ? {}
+      : { require_review: requireReview };
 
     const parsedBugId = parseBugId(bugId);
     const hasBugId = parsedBugId !== null;
@@ -420,6 +426,19 @@ export function TriggerForm() {
           </div>
         )}
       </div>
+
+      {!isUpliftAgent && (
+        <div className="field checkbox-field">
+          <label>
+            <input
+              type="checkbox"
+              checked={requireReview}
+              onChange={(e) => setRequireReview(e.target.checked)}
+            />
+            Review before publishing
+          </label>
+        </div>
+      )}
 
       <button type="submit" disabled={submitting}>
         {submitting ? "Triggering…" : `Trigger ${agent} agent`}

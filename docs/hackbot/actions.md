@@ -96,7 +96,10 @@ Triggered by the `run.completed` event, on a subscription filtered to **succeede
    `run_actions` row (`pending`), keyed `(run_id, idx)`. This happens for _all_ succeeded
    runs, whether or not the agent auto-applies, so the UI can always show and apply them.
 2. **Apply, if opted in.** With `auto_apply_actions=True` on the agent's registry entry,
-   pending rows are applied immediately. Otherwise they wait for a human to click apply.
+   pending rows are applied immediately, once any agent-specific consent check passes.
+   `require_review=true` on the run holds them instead. Otherwise they wait for a human
+   to click apply. The agent's `always_apply_actions` and `never_apply_actions` override
+   this per action type, even on a run with `require_review=true`.
 3. **Dispatch.** Each row's `type` selects a handler from hackbot-api's registry. The
    handler gets the params and an `ApplyContext` — which can `download_artifact(key)`
    without knowing GCS is behind it.

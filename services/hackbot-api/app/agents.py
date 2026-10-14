@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from app.schemas import (
+    AgentInputs,
     AutowebcompatDiagnosisInputs,
     AutowebcompatReproInputs,
     BugFixInputs,
@@ -14,6 +15,9 @@ from app.schemas import (
     TestRepairInputs,
     UpliftInputs,
 )
+
+# Shared run fields are not forwarded to the agent environment.
+_PLATFORM_FIELDS = frozenset(AgentInputs.model_fields)
 
 
 @dataclass(frozen=True)
@@ -53,11 +57,11 @@ def model_to_env(inputs: BaseModel) -> dict[str, str]:
     ``pydantic_settings.BaseSettings`` (which upper-cases field names by
     default). Lists/dicts are JSON-encoded. Deploy-time constants (e.g. the
     broker loopback URL) are NOT inputs — they belong in the Job's static env
-    config, not here.
+    config, not here. Shared run fields are skipped.
     """
     env: dict[str, str] = {}
     for name, value in inputs.model_dump(mode="json").items():
-        if value is None:
+        if value is None or name in _PLATFORM_FIELDS:
             continue
         if isinstance(value, str):
             env[name.upper()] = value
