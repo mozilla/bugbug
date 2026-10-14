@@ -13,7 +13,10 @@ bracketed tags, parenthesized tags, and prefixes such as `Bug 123456` or
 `Bug #123456` are removed from the first non-empty line of the commit message.
 The diff is converted to the structured representation used to train the
 checkpoint. The combined text is truncated to the checkpoint's context window
-(512 tokens for the current CodeBERT checkpoint).
+(512 tokens for the current CodeBERT checkpoint). Since nothing past a few
+dozen characters per token can reach that window, the model drops the tail of
+a large diff (beyond `max_input_chars`) before structuring and tokenizing it,
+and the service exports one patch at a time.
 
 Some commits in a push are not meaningful to score and are skipped: backouts,
 merges, automated `wptsync` imports and commits marked `ignore-this-changeset`.

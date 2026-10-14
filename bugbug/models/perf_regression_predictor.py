@@ -121,6 +121,11 @@ class _DiffParseState:
 # Line prefixes that announce a binary change, see DiffStructurer.__call__.
 _BINARY_MARKERS = ("Binary files ", "GIT binary patch", "Binary file ")
 
+# Generous upper bound on the characters a single token can cover. Byte-level
+# BPE vocabularies top out at a few dozen characters per token, so text past
+# ``max_length * MAX_CHARS_PER_TOKEN`` characters can never reach the model.
+MAX_CHARS_PER_TOKEN = 64
+
 
 class DiffStructurer:
     """Convert a Git or Mercurial diff to the model's structured format.
@@ -355,6 +360,21 @@ class PerfRegressionPredictorModel(Model):
         tokenizer_limit = int(self.tokenizer.model_max_length)
         return min(tokenizer_limit, self._usable_positions())
 
+    @property
+    def max_input_chars(self) -> int:
+        """Characters of input beyond which nothing can fit in the token window.
+
+        Callers holding large patches can drop everything past this point
+        before handing them over, without changing what the model sees.
+        """
+        return self.max_length * MAX_CHARS_PER_TOKEN
+
+    def _build_prompt(self, item: dict[str, Any]) -> str:
+        # Structuring and tokenizing a multi-megabyte diff in full is wasted
+        # work: only the first max_length tokens survive truncation.
+        diff = item["diff"][: self.max_input_chars]
+        return self.build_model_input(item.get("commit_message"), diff)
+
     def _usable_positions(self) -> int:
         """Number of input tokens the model's position embeddings can hold.
 
@@ -388,10 +408,7 @@ class PerfRegressionPredictorModel(Model):
         if not items:
             return np.empty((0, 2)) if probabilities else np.empty((0,), dtype=int)
 
-        prompts = [
-            self.build_model_input(item.get("commit_message"), item["diff"])
-            for item in items
-        ]
+        prompts = [self._build_prompt(item) for item in items]
         encoded = self.tokenizer(
             prompts,
             truncation=True,

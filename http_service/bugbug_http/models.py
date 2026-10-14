@@ -344,7 +344,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
             LOGGER.info("%s Ignoring commit %s (%s)", log_prefix, node, ignored_reason)
 
     # Export each commit to score as its own patch (commit message + diff)
-    # from the local clone.
+    # from the local clone. Patches are exported lazily, one at a time.
     revs = [node for _, node in to_score]
     patches = repository.get_commit_patches(REPO_DIR, revs) if revs else []
 

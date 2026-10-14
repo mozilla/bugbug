@@ -1605,10 +1605,15 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
     trigger_pull()
 
 
-def get_commit_patches(repo_dir: str, revs: list[bytes]) -> list[bytes]:
-    """Export each revision as its own git-formatted patch (see get_commit_patch)."""
+def get_commit_patches(repo_dir: str, revs: list[bytes]) -> Iterator[bytes]:
+    """Export each revision as its own git-formatted patch (see get_commit_patch).
+
+    Patches are exported lazily, one per iteration, so callers processing a
+    push commit by commit never hold more than one patch in memory.
+    """
     with hglib.open(repo_dir) as hg:
-        return [get_commit_patch(hg, rev) for rev in revs]
+        for rev in revs:
+            yield get_commit_patch(hg, rev)
 
 
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:

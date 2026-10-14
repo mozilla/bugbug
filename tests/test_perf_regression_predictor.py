@@ -382,3 +382,29 @@ def test_diff_to_structured_text_ignores_git_format_patch_signature() -> None:
   </ADDED>
 </FILE>"""
     )
+
+
+def test_build_prompt_drops_text_beyond_the_token_window() -> None:
+    model = _model_with_limits(512, 514, 1)
+    assert model.max_input_chars == 512 * 64
+
+    # A diff far larger than anything 512 tokens could cover.
+    huge_diff = "diff --git a/big.py b/big.py\n@@ -1 +1 @@\n" + "".join(
+        f"+line {i}\n" for i in range(50_000)
+    )
+    assert len(huge_diff) > 10 * model.max_input_chars
+
+    prompt = model._build_prompt({"commit_message": "Bug 1 - Big", "diff": huge_diff})
+
+    # The prompt is bounded (structuring adds tags and indentation, so allow
+    # for that), and it still starts with the same text as the full input.
+    assert len(prompt) < 2 * model.max_input_chars
+    assert prompt.startswith(
+        "<COMMIT_MESSAGE>\nBig\n</COMMIT_MESSAGE>\n<FILE>\n  big.py\n  <ADDED>\n      line 0\n"
+    )
+
+    # A small diff is passed through unchanged.
+    small = "diff --git a/a.py b/a.py\n@@ -1 +1 @@\n-x\n+y\n"
+    assert model._build_prompt({"commit_message": None, "diff": small}) == (
+        model.build_model_input(None, small)
+    )
