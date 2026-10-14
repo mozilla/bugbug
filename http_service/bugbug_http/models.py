@@ -300,14 +300,17 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     try:
         changesets = get_hgmo_stack_changesets(branch, rev)
     except requests.exceptions.RequestException:
+        # Store nothing so the client's next poll
+        # schedules a new attempt: the pull above already found the
+        # revision, so a failure here is almost always transient (a lagging
+        # mirror, a server error, a timeout).
         LOGGER.warning(
-            "%s Push not found for %s @ %s!",
+            "%s Could not load the stack for %s @ %s, will retry on the next request",
             log_prefix,
             branch,
             rev,
         )
-        setkey(job.result_key, orjson.dumps({"available": False}))
-        return "OK"
+        return "NOK"
 
     if not changesets:
         LOGGER.warning(

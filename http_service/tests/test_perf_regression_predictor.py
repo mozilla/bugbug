@@ -206,24 +206,23 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
     ]
 
 
-def test_worker_marks_missing_push_unavailable(monkeypatch) -> None:
+def test_worker_does_not_cache_hgmo_errors(monkeypatch) -> None:
     monkeypatch.setattr(models.repository, "pull", lambda *args, **kwargs: None)
 
-    def raise_not_found(branch, rev):
-        raise requests.exceptions.HTTPError("not found")
+    def raise_hgmo_error(branch, rev):
+        raise requests.exceptions.HTTPError("service unavailable")
 
-    monkeypatch.setattr(models, "get_hgmo_stack_changesets", raise_not_found)
+    monkeypatch.setattr(models, "get_hgmo_stack_changesets", raise_hgmo_error)
 
     def unexpected_model(model_name):
-        raise AssertionError("model should not be loaded for a missing push")
+        raise AssertionError("model should not be loaded when the stack is unknown")
 
     monkeypatch.setattr(models.MODEL_CACHE, "get", unexpected_model)
 
-    assert models.classify_perf_regression("try", "deadbeef") == "OK"
+    # Like schedule_tests: nothing is stored, so the next poll retries the job.
+    assert models.classify_perf_regression("try", "deadbeef") == "NOK"
     job = JobInfo(models.classify_perf_regression, "try", "deadbeef")
-    stored = models.redis.get(job.result_key)
-    assert stored is not None
-    assert orjson.loads(stored) == {"available": False}
+    assert models.redis.get(job.result_key) is None
 
 
 def test_worker_marks_empty_stack_unavailable(monkeypatch) -> None:

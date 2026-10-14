@@ -83,7 +83,10 @@ X-Api-Key: ...
 is a changeset in that push. The first request normally returns
 `202 {"ready": false}`. Poll the same URL until it returns `200`. The worker
 resolves the push from its own local hg clone, so no Phabricator credentials are
-needed; if the push cannot be found the result is `{"available": false}`.
+needed. If hg.mozilla.org cannot provide the push's stack (for example a
+transient error or a lagging mirror) nothing is cached and the next poll
+schedules a new attempt, like the test scheduling endpoint. A push with no
+commits to analyze yields `{"available": false}`.
 
 See [HTTP service local development](../../http_service/README.perf-regression-predictor.md)
 for the complete Docker Compose setup, including the local model mount.
