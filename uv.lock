@@ -779,7 +779,7 @@ source = { editable = "http_service" }
 dependencies = [
     { name = "apispec", extra = ["yaml"] },
     { name = "apispec-webframeworks" },
-    { name = "bugbug", extra = ["perf-regression-predictor"] },
+    { name = "bugbug" },
     { name = "cerberus" },
     { name = "flask" },
     { name = "flask-apispec" },
@@ -792,11 +792,17 @@ dependencies = [
     { name = "sentry-sdk", extra = ["flask"] },
 ]
 
+[package.optional-dependencies]
+perf-regression-predictor = [
+    { name = "bugbug", extra = ["perf-regression-predictor"] },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "apispec", extras = ["yaml"], specifier = "~=6.10.0" },
     { name = "apispec-webframeworks", specifier = "~=1.2.0" },
-    { name = "bugbug", extras = ["perf-regression-predictor"], editable = "." },
+    { name = "bugbug", editable = "." },
+    { name = "bugbug", extras = ["perf-regression-predictor"], marker = "extra == 'perf-regression-predictor'", editable = "." },
     { name = "cerberus", specifier = "~=1.3.8" },
     { name = "flask", specifier = "~=3.1.3" },
     { name = "flask-apispec", specifier = "~=0.11.4" },
@@ -808,6 +814,7 @@ requires-dist = [
     { name = "rq-dashboard", specifier = ">=0.8.6,<0.10.0" },
     { name = "sentry-sdk", extras = ["flask"], specifier = ">=2.60.0" },
 ]
+provides-extras = ["perf-regression-predictor"]
 
 [[package]]
 name = "bugbug-mcp"

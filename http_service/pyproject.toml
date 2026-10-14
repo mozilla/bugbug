@@ -17,7 +17,7 @@ classifiers = [
 dependencies = [
     "apispec-webframeworks~=1.2.0",
     "apispec[yaml]~=6.10.0",
-    "bugbug[perf-regression-predictor]",
+    "bugbug",
     "cerberus~=1.3.8",
     "Flask~=3.1.3",
     "flask-apispec~=0.11.4",
@@ -29,6 +29,11 @@ dependencies = [
     "rq-dashboard>=0.8.6,<0.10.0",
     "sentry-sdk[flask]>=2.60.0",
 ]
+
+[project.optional-dependencies]
+# Only the background worker runs model inference; the web image does not
+# install this extra (see Dockerfile.bg_worker).
+perf-regression-predictor = ["bugbug[perf-regression-predictor]"]
 
 [project.scripts]
 bugbug-http-worker = "bugbug_http.worker:main"

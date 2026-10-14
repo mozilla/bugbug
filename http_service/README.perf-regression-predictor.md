@@ -130,7 +130,10 @@ docker compose down
 ## Perf Regression Predictor Setup
 
 The Perf Regression Predictor uses the same HTTP service and background
-worker. While the model artifact is unpublished, the only extra
+worker. Only the worker runs inference, so PyTorch and Transformers are
+installed only in the worker image, through the `perf-regression-predictor`
+extra of `bugbug-http-service` enabled in `Dockerfile.bg_worker`; the web image
+does not ship them. While the model artifact is unpublished, the only extra
 local-development piece it needs is a local Hugging Face checkpoint mounted at
 the standard model directory.
 
