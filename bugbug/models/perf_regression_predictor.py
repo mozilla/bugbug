@@ -118,6 +118,10 @@ class _DiffParseState:
     pending_rename: bool = False
 
 
+# Line prefixes that announce a binary change, see DiffStructurer.__call__.
+_BINARY_MARKERS = ("Binary files ", "GIT binary patch", "Binary file ")
+
+
 class DiffStructurer:
     """Convert a Git or Mercurial diff to the model's structured format.
 
@@ -137,7 +141,13 @@ class DiffStructurer:
         state.output.extend(("<FILE>", f"  {file_name}"))
 
     def _flush_block(self, state: _DiffParseState) -> None:
-        if state.current_block_type and state.current_block_lines:
+        # Lines outside any file (e.g. after a binary file was closed) are
+        # dropped rather than emitted as an orphan block.
+        if (
+            state.current_file
+            and state.current_block_type
+            and state.current_block_lines
+        ):
             state.output.append(f"  <{state.current_block_type.upper()}>")
             state.output.extend(f"      {line}" for line in state.current_block_lines)
             state.output.append(f"  </{state.current_block_type.upper()}>")
@@ -170,6 +180,11 @@ class DiffStructurer:
                 else:
                     continue
 
+            if line == "-- ":
+                # `git format-patch` ends with a signature ("-- " then the
+                # git version), which is not part of the diff.
+                break
+
             if line.startswith("diff -r"):
                 self._flush_file(state)
                 parts = line.split()
@@ -193,7 +208,7 @@ class DiffStructurer:
                 pass
             elif line.startswith("+++ "):
                 pass
-            elif line.startswith("Binary files "):
+            elif line.startswith(_BINARY_MARKERS):
                 self._flush_block(state)
                 state.pending_binary_status = "changed"
                 self._flush_file(state)

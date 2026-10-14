@@ -161,13 +161,100 @@ rename to new_widget.py
     )
 
 
-def test_diff_to_structured_text_binary_file() -> None:
-    assert (
-        diff_to_structured_text(BINARY_DIFF)
-        == """\
+# `hg export --git` (what the http service feeds the model) and
+# `git format-patch` both write the binary payload as base85 after a
+# "GIT binary patch" line instead of git diff's "Binary files ... differ".
+HG_GIT_BINARY_EXPORT = """\
+# HG changeset patch
+# User Developer <developer@example.com>
+# Date 1600000000 0
+# Node ID node1hash
+# Parent  node0hash
+Bug 123456 - Update the icon
+
+diff --git a/image.png b/image.png
+index 6b96b519f4a23610bd13394d59ee479819ef03b6..286513b75d88656e0300bac45ea6c656b57c80ea
+GIT binary patch
+literal 25
+gc%17D@N?(olHy|E<Y3P)$w)0?NUAJJEoS%+081_h3IG5A
+
+diff --git a/loop.py b/loop.py
+--- a/loop.py
++++ b/loop.py
+@@ -1 +1 @@
+-slow()
++fast()
+"""
+
+HG_GIT_NEW_BINARY_EXPORT = """\
+diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b96b519f4a23610bd13394d59ee479819ef03b6
+GIT binary patch
+literal 23
+ec%17D@N?(olHy`uWMWRr%u6h)WJpOYNdy2quLaKl
+
+"""
+
+# Built from lines so the signature separator keeps its trailing space.
+GIT_FORMAT_PATCH_BINARY = "\n".join(
+    [
+        "diff --git a/image.png b/image.png",
+        "index 6b96b519f4a23610bd13394d59ee479819ef03b6..286513b75d88656e0300bac45ea6c656b57c80ea 100644",
+        "GIT binary patch",
+        "literal 25",
+        "gcmeAS@N?(olHy|E<Y3P)$w)0?NUAJJEoS%+081_h3IG5A",
+        "",
+        "literal 23",
+        "ecmeAS@N?(olHy`uWMWRr%u6h)WJpOYNdy2quLaKl",
+        "",
+        "-- ",
+        "2.43.0",
+        "",
+    ]
+)
+
+HG_PLAIN_BINARY_EXPORT = """\
+diff -r 6815d1c9fb30 -r 430f3d6416e9 image.png
+Binary file image.png has changed
+"""
+
+BINARY_FILE_BLOCK = """\
 <FILE>
   image.png
   Binary file changed.
+</FILE>"""
+
+
+def test_diff_to_structured_text_binary_file() -> None:
+    assert diff_to_structured_text(BINARY_DIFF) == BINARY_FILE_BLOCK
+
+
+@pytest.mark.parametrize(
+    "diff",
+    [HG_GIT_NEW_BINARY_EXPORT, GIT_FORMAT_PATCH_BINARY, HG_PLAIN_BINARY_EXPORT],
+    ids=["hg-export-git-new-file", "git-format-patch", "hg-export-plain"],
+)
+def test_diff_to_structured_text_binary_file_other_formats(diff) -> None:
+    # Every tool's binary notation maps to the marker the model was trained on.
+    assert diff_to_structured_text(diff) == BINARY_FILE_BLOCK
+
+
+def test_diff_to_structured_text_binary_payload_does_not_leak() -> None:
+    # The base85 payload after "GIT binary patch" is dropped, and the text
+    # file that follows it is still parsed normally.
+    assert (
+        diff_to_structured_text(HG_GIT_BINARY_EXPORT)
+        == BINARY_FILE_BLOCK
+        + """
+<FILE>
+  loop.py
+  <REMOVED>
+      slow()
+  </REMOVED>
+  <ADDED>
+      fast()
+  </ADDED>
 </FILE>"""
     )
 
@@ -266,3 +353,32 @@ def test_max_length_never_exceeds_usable_positions(
 ) -> None:
     model = _model_with_limits(tokenizer_limit, position_embeddings, padding_idx)
     assert model.max_length == expected
+
+
+def test_diff_to_structured_text_ignores_git_format_patch_signature() -> None:
+    patch = "\n".join(
+        [
+            "diff --git a/loop.py b/loop.py",
+            "--- a/loop.py",
+            "+++ b/loop.py",
+            "@@ -1 +1 @@",
+            "-slow()",
+            "+fast()",
+            "-- ",
+            "2.43.0",
+            "",
+        ]
+    )
+    assert (
+        diff_to_structured_text(patch)
+        == """\
+<FILE>
+  loop.py
+  <REMOVED>
+      slow()
+  </REMOVED>
+  <ADDED>
+      fast()
+  </ADDED>
+</FILE>"""
+    )
