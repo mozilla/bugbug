@@ -28,13 +28,11 @@ from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_to
 from hackbot_runtime.claude import Reporter
 
 from .config import (
-    BUGZILLA_NEEDINFO_ACTIONS,
+    BUG_FIX_ACTIONS,
     BUGZILLA_READ_TOOLS,
     FIREFOX_TOOLS,
-    PHABRICATOR_FOLLOW_UP_ACTIONS,
     PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
-    TRIAGE_AND_FIX_ACTIONS,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -64,17 +62,15 @@ def select_workflow(
     comment: str | None,
     bugzilla_needinfo_flag_id: int | None,
     rules_dir: Path,
-) -> tuple[list[str], str]:
-    """Select actions and prompt for exactly one of the three bug-fix modes."""
+) -> str:
+    """Select the prompt for exactly one of the three bug-fix modes."""
     if bugzilla_needinfo_flag_id is not None:
-        return BUGZILLA_NEEDINFO_ACTIONS, render_prompt(
-            "bugzilla-needinfo.md", bug_id=bug, comment=comment
-        )
+        return render_prompt("bugzilla-needinfo.md", bug_id=bug, comment=comment)
     if revision_id:
-        return PHABRICATOR_FOLLOW_UP_ACTIONS, render_prompt(
+        return render_prompt(
             "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
         )
-    return TRIAGE_AND_FIX_ACTIONS, render_prompt(
+    return render_prompt(
         "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
     )
 
@@ -175,7 +171,7 @@ async def run_bug_fix(
     _write_mozconfig(fx_ctx)
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
-    action_types, user_prompt = select_workflow(
+    user_prompt = select_workflow(
         bug=bug,
         revision_id=revision_id,
         comment=comment,
@@ -187,9 +183,9 @@ async def run_bug_fix(
     # actions_recorder=None and get a local recorder that copies attachments
     # under ./artifacts (no uploader).
     actions_recorder, actions_server = actions_server_for(
-        actions_recorder, types=action_types
+        actions_recorder, types=BUG_FIX_ACTIONS
     )
-    enabled_action_tools = actions_to_tool_names(action_types)
+    enabled_action_tools = actions_to_tool_names(BUG_FIX_ACTIONS)
 
     system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
 

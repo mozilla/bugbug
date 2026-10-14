@@ -63,7 +63,7 @@ def permalink_prefix(rev: str | None) -> str:
 
 
 async def resolve_index_revision(
-    *, client=None, timeout: float = 10.0  # noqa: ASYNC109
+    *, client=None, timeout_sec: float = 10.0
 ) -> str | None:
     """Return the git SHA Searchfox's index is pinned to, or ``None``.
 
@@ -85,7 +85,7 @@ async def resolve_index_revision(
             import httpx
 
             async with httpx.AsyncClient(
-                timeout=timeout, follow_redirects=True
+                timeout=timeout_sec, follow_redirects=True
             ) as owned:
                 resp = await owned.get(_PROBE_URL, headers={"User-Agent": _USER_AGENT})
         else:

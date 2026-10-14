@@ -10,7 +10,7 @@ import pickle
 import re
 import subprocess
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import cast
 
@@ -81,10 +81,7 @@ REVIEWERS_RE = re.compile(
 
 
 def replace_reviewers(commit_description, reviewers):
-    if not reviewers:
-        reviewers_str = ""
-    else:
-        reviewers_str = "r=" + ",".join(reviewers)
+    reviewers_str = "r=" + ",".join(reviewers) if reviewers else ""
 
     if commit_description == "":
         return reviewers_str
@@ -719,7 +716,7 @@ class CommitClassifier(object):
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.
         stop_hash = None
-        four_months_ago = datetime.now(timezone.utc) - relativedelta(months=4)
+        four_months_ago = datetime.utcnow() - relativedelta(months=4)
         for commit in repository.get_commits():
             if dateutil.parser.parse(commit["pushdate"]) >= four_months_ago:
                 stop_hash = tuple(

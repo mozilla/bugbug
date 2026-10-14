@@ -49,7 +49,8 @@ An always-on Cloud Run **worker pool** (no HTTP port) that consumes `task-failed
 from `pulse.mozilla.org`, decides which failures are worth an agent, and dispatches
 `build-repair` (failed build tasks) or `test-repair` (failed test tasks). Dispatch is where
 its involvement ends: the agent reports its own result, as an `email.send` action (and, for
-test-repair, a Slack message) applied once the run has succeeded.
+test-repair, a Slack message) applied once the run has succeeded, and holds any proposed
+Phabricator revision for a human to apply.
 
 **It holds no investigation logic.** Each agent resolves the push, the commit range and the
 failing tests itself from the task id. The listener only decides _what to hand off_ — which
@@ -128,9 +129,9 @@ Guards, each closing a specific failure mode:
 - **Private bugs are never processed** — the check is `is_private is not False`, so a
   missing or non-boolean value fails closed.
 - **Dedupe** — retried deliveries are deduped by the **needinfo flag id**, which is globally
-  unique, so a later needinfo on the same bug gets a new id and still triggers. As on the
-  Phabricator side, the key is claimed **only after a successful trigger**, keeping a
-  transient failure retryable by BMO.
+  unique, so a later needinfo on the same bug gets a new id and still triggers. The flag id
+  is used as the run's database dedupe key, so retries reuse the existing run even after a
+  service restart.
 - **Latest flag wins** — BMO orders flags by id, so the last matching one is the newly
   requested one.
 

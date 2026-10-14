@@ -71,8 +71,10 @@ async def submit_patch(
         str | None,
         Field(
             description=(
-                "Revision summary/description. Keep test and verification details "
-                "in test_plan instead."
+                "Revision summary/description. Keep it concise and useful for permanent "
+                "history. Do not restate the bug, narrate the investigation or "
+                "implementation process. Keep test and verification details in "
+                "test_plan instead."
             ),
         ),
     ] = None,
@@ -84,6 +86,15 @@ async def submit_patch(
                 "bugzilla.add_comment in the same run) can reference its "
                 "result once applied, via {{actions.<ref>.url}} in that "
                 "action's text."
+            ),
+        ),
+    ] = None,
+    parent_revision_id: Annotated[
+        int | None,
+        Field(
+            description=(
+                "The revision this patch stacks on (the number after D), when it "
+                "belongs on top of an existing revision rather than on its own."
             ),
         ),
     ] = None,
@@ -106,16 +117,16 @@ async def submit_patch(
     bug comment).
     """
     _validate_summary(summary)
+    params: dict = {
+        "bug_id": bug_id,
+        "title": title,
+        "summary": summary,
+        "test_plan": test_plan,
+    }
+    if parent_revision_id is not None:
+        params["parent_revision_id"] = parent_revision_id
     action = recorder.record(
-        "phabricator.submit_patch",
-        {
-            "bug_id": bug_id,
-            "title": title,
-            "summary": summary,
-            "test_plan": test_plan,
-        },
-        reasoning=reasoning,
-        ref=ref,
+        "phabricator.submit_patch", params, reasoning=reasoning, ref=ref
     )
     return confirmation(action)
 

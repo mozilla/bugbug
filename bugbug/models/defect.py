@@ -107,9 +107,8 @@ class DefectModel(BugModel):
             elif kind == "regression":
                 if category == "False":
                     classes[int(bug_id)] = 0
-            elif kind == "defect_enhancement_task":
-                if category == "True":
-                    classes[int(bug_id)] = "defect"
+            elif kind == "defect_enhancement_task" and category == "True":
+                classes[int(bug_id)] = "defect"
 
         for bug_id, category in labels.get_labels("regression_bug_nobug"):
             assert category in [
@@ -125,9 +124,8 @@ class DefectModel(BugModel):
                     continue
 
                 classes[int(bug_id)] = 1 if category == "regression" else 0
-            elif kind == "defect_enhancement_task":
-                if category != "nobug":
-                    classes[int(bug_id)] = "defect"
+            elif kind == "defect_enhancement_task" and category != "nobug":
+                classes[int(bug_id)] = "defect"
 
         defect_enhancement_task_e = dict(labels.get_labels("defect_enhancement_task_e"))
         defect_enhancement_task_p = dict(labels.get_labels("defect_enhancement_task_p"))
@@ -239,16 +237,12 @@ class DefectModel(BugModel):
 
             if can_use_type:
                 if bug["type"] == "enhancement":
-                    if kind == "bug":
-                        classes[bug_id] = 0
-                    elif kind == "regression":
+                    if kind == "bug" or kind == "regression":
                         classes[bug_id] = 0
                     elif kind == "defect_enhancement_task":
                         classes[bug_id] = "enhancement"
                 elif bug["type"] == "task":
-                    if kind == "bug":
-                        classes[bug_id] = 0
-                    elif kind == "regression":
+                    if kind == "bug" or kind == "regression":
                         classes[bug_id] = 0
                     elif kind == "defect_enhancement_task":
                         classes[bug_id] = "task"

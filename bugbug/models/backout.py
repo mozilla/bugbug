@@ -4,8 +4,9 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
+import dateutil.parser
 import xgboost
 from dateutil.relativedelta import relativedelta
 from imblearn.pipeline import Pipeline as ImblearnPipeline
@@ -115,15 +116,12 @@ class BackoutModel(CommitModel):
     def get_labels(self):
         classes = {}
 
-        two_years_and_six_months_ago = datetime.now(timezone.utc) - relativedelta(
+        two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
             years=2, months=6
         )
 
         for commit_data in repository.get_commits():
-            pushdate = datetime.fromisoformat(commit_data["pushdate"])
-            if pushdate.tzinfo is None:
-                pushdate = pushdate.replace(tzinfo=timezone.utc)
-
+            pushdate = dateutil.parser.parse(commit_data["pushdate"])
             if pushdate < two_years_and_six_months_ago:
                 continue
 

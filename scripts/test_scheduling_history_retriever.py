@@ -5,11 +5,12 @@
 
 import argparse
 import concurrent.futures
+import contextlib
 import math
 import os
 import random
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Any, Generator
 
@@ -43,8 +44,8 @@ class Retriever(object):
 
         # We use the actual date instead of 'today-X' aliases to avoid mozci caching
         # this query.
-        from_date = datetime.now(timezone.utc) - relativedelta(months=from_months)
-        to_date = datetime.now(timezone.utc) - relativedelta(days=3)
+        from_date = datetime.utcnow() - relativedelta(months=from_months)
+        to_date = datetime.utcnow() - relativedelta(days=3)
 
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
@@ -153,39 +154,41 @@ class Retriever(object):
 
         total_pushes = last_push_id - first_push_id + 1
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            with tqdm(total=total_pushes) as progress_bar:
-                # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
-                # consume a lot of memory, and they all have references to each other through "parent"
-                # and "child" links so they are basically never released while we run this).
-                while from_date < to_date:
-                    next_from_date = from_date + relativedelta(days=7)
-                    if next_from_date > to_date:
-                        next_from_date = to_date
+        with (
+            concurrent.futures.ThreadPoolExecutor() as executor,
+            tqdm(total=total_pushes) as progress_bar,
+        ):
+            # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
+            # consume a lot of memory, and they all have references to each other through "parent"
+            # and "child" links so they are basically never released while we run this).
+            while from_date < to_date:
+                next_from_date = from_date + relativedelta(days=7)
+                if next_from_date > to_date:
+                    next_from_date = to_date
 
-                    logger.info(
-                        "Retrieving pushes from %s to %s...", from_date, next_from_date
-                    )
+                logger.info(
+                    "Retrieving pushes from %s to %s...", from_date, next_from_date
+                )
 
-                    pushes = mozci.push.make_push_objects(
-                        from_date=from_date.strftime("%Y-%m-%d"),
-                        to_date=next_from_date.strftime("%Y-%m-%d"),
-                        branch="autoland",
-                    )
+                pushes = mozci.push.make_push_objects(
+                    from_date=from_date.strftime("%Y-%m-%d"),
+                    to_date=next_from_date.strftime("%Y-%m-%d"),
+                    branch="autoland",
+                )
 
-                    futures = [
-                        executor.submit(retrieve_from_cache, push) for push in pushes
-                    ]
+                futures = [
+                    executor.submit(retrieve_from_cache, push) for push in pushes
+                ]
 
-                    try:
-                        db.append(push_data_db, generate(progress_bar, pushes, futures))
-                    except Exception:
-                        for f in futures:
-                            f.cancel()
+                try:
+                    db.append(push_data_db, generate(progress_bar, pushes, futures))
+                except Exception:
+                    for f in futures:
+                        f.cancel()
 
-                        raise
+                    raise
 
-                    from_date = next_from_date
+                from_date = next_from_date
 
         zstd_compress(push_data_db)
 
@@ -270,7 +273,17 @@ class Retriever(object):
             skipped_no_runnables = 0
 
             if granularity in ("group", "config_group"):
-                update_touched_together_gen = test_scheduling.update_touched_together()
+                # The co-changes of source directories with the runnables' directories are counted too.
+                runnable_dirs = {
+                    runnable_dir
+                    for runnable in all_runnables
+                    for runnable_dir in test_scheduling.get_runnable_dirs(
+                        runnable[1] if isinstance(runnable, tuple) else runnable
+                    )
+                }
+                update_touched_together_gen = test_scheduling.update_touched_together(
+                    runnable_dirs
+                )
                 next(update_touched_together_gen)
 
             for (
@@ -378,10 +391,8 @@ class Retriever(object):
                     }
 
             if granularity == "group":
-                try:
+                with contextlib.suppress(StopIteration):
                     update_touched_together_gen.send(None)
-                except StopIteration:
-                    pass
 
             logger.info("saved push data nodes: %d", len(saved_nodes))
             logger.info("skipped %d (no commits in our DB)", skipped_no_commits)

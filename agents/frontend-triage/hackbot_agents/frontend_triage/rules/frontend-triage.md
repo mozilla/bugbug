@@ -146,6 +146,8 @@ checkable against your draft before you record it.
   for belong in `reasoning`.
 - **Say the thing once.** If the root cause is in the first sentence, the fix does
   not restate it and the severity rationale does not restate it again.
+- **A bug is `bug 1234567`, not a link.** Bugzilla links it itself and shows the
+  bug's status and summary on hover. A Markdown link to `show_bug.cgi` loses both.
 - **American English.** "behavior", "initialize", "generalize", "license", never
   "behaviour", "initialise", "generalise", "licence".
 
