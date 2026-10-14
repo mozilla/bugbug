@@ -12,6 +12,7 @@ class BugzillaNeedinfoEvent:
     bug_id: int
     flag_id: int
     comment: str
+    user_login: str
 
 
 def detect_needinfo_request(
@@ -40,9 +41,11 @@ def detect_needinfo_request(
     if actor_login == bot_login:
         return None
 
-    expected_added = f"? ({bot_login})"
+    # FIXME: Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=2079991
+    # (`changes` keeps only the last needinfo per update), so `added` may not
+    # name the bot; it is matched via `bug.flags` below instead.
     if not any(
-        change["field"] == "flag.needinfo" and change["added"] == expected_added
+        change["field"] == "flag.needinfo" and change["added"].startswith("?")
         for change in event["changes"]
     ):
         return None
@@ -71,4 +74,6 @@ def detect_needinfo_request(
         "A needinfo may be requested without a comment, so use the surrounding "
         "bug context if none exists."
     )
-    return BugzillaNeedinfoEvent(bug_id=bug_id, flag_id=flag_id, comment=comment)
+    return BugzillaNeedinfoEvent(
+        bug_id=bug_id, flag_id=flag_id, comment=comment, user_login=actor_login
+    )

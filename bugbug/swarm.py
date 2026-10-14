@@ -57,7 +57,7 @@ def get_review(instance, rev_id, version_num, auth):
         filename1 = file["fromFile"] if "fromFile" in file else file["depotFile"]
         filename2 = file["depotFile"]
         commit_id1 = file["diffFrom"] if "diffFrom" in file else f"#{file['rev']}"
-        commit_id2 = file["diffTo"] if "diffTo" in file else f"@={commit_id}"
+        commit_id2 = file.get("diffTo", f"@={commit_id}")
 
         diffs[filename2] = "\n".join(
             p4.run(
@@ -78,7 +78,7 @@ def get(
     AUTH,
     rev_ids: Collection[int] | None = None,
     modified_start: datetime | None = None,
-    version_l=[0, 1],
+    version_l=(0, 1),
 ):
     data = []
     instance = AUTH["instance"]

@@ -39,6 +39,11 @@ copied into the image's working directory, where the runtime discovers it.
 Registering the agent in `AGENT_REGISTRY` requires the Job to exist under the `job_name`
 given there.
 
+The Job's infrastructure is declared in the agent's own `hackbot.toml`, under `[deploy]`
+(runtime, sizing, broker, workspace and secrets), and applied by Terraform in
+mozilla/webservices-infra. Images ship separately and never need an infra PR. See
+[tools/hackbot-deploy](../../tools/hackbot-deploy/README.md).
+
 ## Environments
 
 `ENVIRONMENT` (`development` / `production`) selects the Sentry environment and, in the
@@ -67,11 +72,6 @@ Two things those files do not tell you:
   `PHABRICATOR_API_KEY` → `phabricator.api_key`, `WEBHOOK_SECRET` → `webhook.secret`,
   `BUGZILLA_WEBHOOK_SECRET` → `bugzilla_webhook.secret`, `SLACK_SIGNING_SECRET` →
   `slack.signing_secret`.
-- **A prefix does not make a var a setting.** `SLACK_BOT_TOKEN` is not part of that nested
-  model: the apply-side handler in `hackbot-runtime` reads it straight from the environment.
-  The two sit side by side on hackbot-api and point opposite ways — the token posts
-  messages, the signing secret verifies clicks coming back — so a deployment that posts fine
-  can still reject every interaction.
 - **An agent container's env arrives from three places.** Per-execution overrides from the
   API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
@@ -82,7 +82,7 @@ The listener also honours `DRY_RUN=true`, which logs intended calls without POST
 
 ## Running locally
 
-The repo is a `uv` workspace (`agents/*`, `libs/*`, `services/*`), so everything shares one
+The repo is a `uv` workspace (`agents/*`, `libs/*`, `services/*`, `tools/*`), so everything shares one
 lockfile.
 
 **An agent**, exactly as it ships, via its `compose.yml`:

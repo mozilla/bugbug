@@ -26,7 +26,9 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Protect everything except the auth endpoints, the login page, and static
-  // assets.
-  matcher: ["/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)"],
+  // Protect everything except the auth endpoints, the login page, static
+  // assets, and `/monitoring` (the Sentry tunnel from next.config.mjs).
+  matcher: [
+    "/((?!api/auth|login|monitoring|_next/static|_next/image|favicon.ico).*)",
+  ],
 };

@@ -5,12 +5,16 @@
 
 """Models and tool allowlist for the build-repair agent."""
 
-ANALYSIS_MODEL = "claude-opus-4-8"
-FIX_MODEL = "claude-opus-4-8"
+ANALYSIS_MODEL = "claude-opus-5-5"
+FIX_MODEL = "claude-opus-5-5"
 
 # A run that proposed no patch is a transient or not-to-blame failure; emailing the
 # developer about it is noise.
 NOTIFY_ONLY_WITH_PATCH = True
+
+# Commits the shallow checkout reaches back, so the agent can inspect the pushes
+# before the failing one when the job did not run on every push.
+CHECKOUT_DEPTH = 500
 
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
@@ -32,6 +36,13 @@ FIREFOX_TOOLS = [
 
 # Optional try-server tool, wired only when run_try_push is enabled.
 TRY_PUSH_TOOL = "mcp__firefox__submit_try_push"
+
+# Recordable action types the agent may take, by dotted id. Submitting the fix
+# for review is the only one: the developer reviews the patch in the Hackbot UI
+# and then in Phabricator, so the agent posts nothing to the bug itself. Needs a
+# bug to file the revision against, so it is wired only when the run has a bug id
+# (see run_build_repair).
+ENABLED_ACTION_TYPES = ["phabricator.submit_patch"]
 
 # The agent always runs inside an isolated Docker container, so there is no
 # sandbox and tools run without per-command permission prompts (see

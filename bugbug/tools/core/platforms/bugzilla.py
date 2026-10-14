@@ -134,7 +134,7 @@ def _is_before_trust_cutoff(timestamp_str: str) -> bool:
     try:
         timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
         return timestamp < TRUST_BEFORE_DATE
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return False
 
 

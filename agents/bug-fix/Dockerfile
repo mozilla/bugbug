@@ -1,4 +1,4 @@
-FROM python:3.12 AS builder
+FROM python:3.14 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
     uv sync --locked --no-dev --no-editable --package hackbot-agent-bug-fix
 
-FROM python:3.12 AS base
+FROM python:3.14 AS base
 
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
@@ -30,7 +30,11 @@ FROM base AS agent
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        # Firefox runtime deps.
+        libgtk-3-0 libasound2t64 \
         ffmpeg \
+        fluxbox \
+        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
@@ -40,6 +44,10 @@ COPY agents/bug-fix/hackbot.toml /app/hackbot.toml
 RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
+
+# `mach bootstrap` installs the toolchain here at runtime; put it on PATH so the
+# agent's own `./mach build` (and the build_firefox tool) find rustc/clang.
+ENV PATH="/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:${PATH}"
 
 USER agent
 

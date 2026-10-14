@@ -19,14 +19,26 @@ import logging
 import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from opentelemetry import trace as otel_trace
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 
 from hackbot_runtime import wandb_wif
+
+if TYPE_CHECKING:
+    from opentelemetry.context import Context
+    from opentelemetry.sdk.trace import Span
 
 log = logging.getLogger("hackbot_runtime")
 
 # Weave project traces land in when the deploy doesn't set WEAVE_PROJECT. Accepts
 # either "project" or "entity/project".
 DEFAULT_WEAVE_PROJECT = "hackbot-test"
+
+# Weave's tagging namespace: the server surfaces this as `attributes.hackbot.run_id`
+# on every call, which the Hackbot UI uses to link a run to its traces.
+RUN_ID_SPAN_ATTRIBUTE = "wandb.attributes.hackbot.run_id"
 
 
 def resolve_agent_name(entrypoint: Callable) -> str:
@@ -64,9 +76,23 @@ def _init_weave() -> bool:
         return False
 
 
+class _RunIdSpanProcessor(SpanProcessor):
+    def __init__(self, run_id: str) -> None:
+        self._run_id = run_id
+
+    def on_start(self, span: "Span", parent_context: "Context | None" = None) -> None:
+        span.set_attribute(RUN_ID_SPAN_ATTRIBUTE, self._run_id)
+
+
+def _tag_spans_with_run_id(run_id: str) -> None:
+    provider = otel_trace.get_tracer_provider()
+    if isinstance(provider, TracerProvider):
+        provider.add_span_processor(_RunIdSpanProcessor(run_id))
+
+
 @contextlib.contextmanager
-def trace_agent(entrypoint: Callable) -> Iterator[None]:
-    """Trace the agent run and label its Weave spans with the agent's name.
+def trace_agent(entrypoint: Callable, run_id: str) -> Iterator[None]:
+    """Trace the agent run, labelled with the agent's name and tagged with the run id.
 
     A no-op when tracing isn't configured (no W&B credentials).
     """
@@ -76,6 +102,7 @@ def trace_agent(entrypoint: Callable) -> Iterator[None]:
 
     from weave.conversation import agent_name_override
 
+    _tag_spans_with_run_id(run_id)
     agent = resolve_agent_name(entrypoint)
     log.info("Enabled Weave tracing for agent %s", agent)
     with agent_name_override(agent):

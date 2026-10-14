@@ -2,6 +2,8 @@ import logging
 from datetime import datetime
 from typing import Literal
 
+from autowebcompat_tools.inputs import BugDataInput, BugIdInput
+from autowebcompat_tools.task import RunTracker, TaskConfig
 from hackbot_runtime import (
     HackbotAgentResult,
     HackbotContext,
@@ -11,10 +13,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import (
     AutowebcompatDiagnosisResult,
-    BugDataInput,
-    BugIdInput,
-    RunTracker,
-    TaskConfig,
     run_autowebcompat_diagnosis,
 )
 
@@ -35,6 +33,8 @@ class AgentInputs(BaseSettings):
         | Literal["max"]
         | None
     ) = None
+
+    headless: bool = False
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -66,6 +66,7 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
             effort=inputs.effort,
             log=ctx.log_path,
             verbose=True,
+            headless=inputs.headless,
         ),
         tracker,
         input_data,

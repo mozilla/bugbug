@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import contextlib
 from datetime import datetime
 from logging import getLogger
 
@@ -21,10 +22,8 @@ class Retriever(object):
         db.download(bugzilla.BUGS_DB)
 
         # Get IDs of bugs changed since last run.
-        try:
+        with contextlib.suppress(db.LastModifiedNotAvailable):
             last_modified = db.last_modified(bugzilla.BUGS_DB)
-        except db.LastModifiedNotAvailable:
-            pass
 
         if last_modified is not None:
             logger.info(
@@ -147,7 +146,7 @@ class Retriever(object):
         new_bugs = bugzilla.download_bugs(all_ids)
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
-        for i in range(7):
+        for _ in range(7):
             regression_related_ids = list(
                 set(
                     sum(
@@ -177,7 +176,7 @@ class Retriever(object):
             include_invalid=True,
             include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
         )
-        for i in range(2):
+        for _ in range(2):
             # We look for inconsistencies in all bugs first, then, on following passes,
             # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
             inconsistent_bugs = bug_snapshot.get_inconsistencies(inconsistent_bugs)
@@ -190,7 +189,7 @@ class Retriever(object):
                 "Re-downloading %d bugs, as they were inconsistent",
                 len(inconsistent_bug_ids),
             )
-            bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
+            bugzilla.delete_bugs(lambda bug, ids=inconsistent_bug_ids: bug["id"] in ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
         # TODO: Figure out why we have missing fields in the first place.

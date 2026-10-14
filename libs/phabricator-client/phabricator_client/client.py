@@ -48,13 +48,11 @@ def _select_full_commit(ref: str, result: dict) -> str:
         return ref
     data = result.get("data") or {}
     commit_phid = (result.get("identifierMap") or {}).get(ref)
-    if commit_phid in data:
-        commits = [data[commit_phid]]
-    else:
-        # ``identifierMap`` only maps unambiguous commits, and a firefox
-        # commit is mirrored to autoland, beta, release, etc. Thus, the same
-        # hash can appear in multiple repos with different PHIDs.
-        commits = data.values()
+
+    # ``identifierMap`` only maps unambiguous commits, and a firefox
+    # commit is mirrored to autoland, beta, release, etc. Thus, the same
+    # hash can appear in multiple repos with different PHIDs.
+    commits = [data[commit_phid]] if commit_phid in data else data.values()
 
     identifiers = {
         commit["identifier"]
@@ -103,6 +101,8 @@ class PhabricatorClient:
         """
         payload = {**params, "__conduit__": {"token": self.settings.api_key}}
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
+            if self.settings.edge_key:
+                client.headers["Mozilla-Edge-Key"] = self.settings.edge_key
             response = await client.post(
                 f"{self.base_url}/api/{method}",
                 data={"params": json.dumps(payload), "output": "json"},
@@ -119,10 +119,14 @@ class PhabricatorClient:
             )
         return data["result"]
 
-    async def search_transactions(self, object_phid: str) -> list[dict]:
+    async def search_transactions(
+        self, object_identifier: str, constraints: dict | None = None
+    ) -> list[dict]:
         """Return the transactions (comments, status changes, ...) on an object."""
         result = await self.conduit_request(
-            "transaction.search", objectIdentifier=object_phid
+            "transaction.search",
+            objectIdentifier=object_identifier,
+            constraints=constraints or {},
         )
         return result.get("data") or []
 

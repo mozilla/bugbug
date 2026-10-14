@@ -50,19 +50,21 @@ or code.
 
 ## The catalog
 
-| Agent                 | Does                                                                                                                                                                        | Source | Firefox build | Auto-applies actions |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | :-----------: | :------------------: |
-| `bug-fix`             | Triage a Bugzilla bug and produce a candidate fix as a Phabricator revision. Also handles `@hackbot` follow-ups on an existing revision, and Bugzilla `needinfo?` requests. |  yes   |      yes      |       **yes**        |
-| `test-repair`         | Classify a CI test failure as regression or intermittent, blame the culprit commit, propose a fix.                                                                          |  yes   |      yes      |       **yes**        |
-| `build-repair`        | Analyze a Firefox build failure at a specific commit and produce a candidate fix.                                                                                           |  yes   |      yes      |          no          |
-| `frontend-triage`     | Read-only root-cause analysis and fix plan for a desktop frontend bug.                                                                                                      |  yes   |      no       |          no          |
-| `autowebcompat-repro` | Reproduce a web-compatibility report in headless Firefox via DevTools MCP.                                                                                                  |   no   |      no       |          no          |
-| `test-plan-generator` | Generate Firefox QA test cases, run them through DevTools MCP, report results.                                                                                              |   no   |      no       |          no          |
+| Agent                     | Does                                                                                                                                                                        | Source | Firefox build | Auto-applies actions |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | :-----------: | :------------------: |
+| `bug-fix`                 | Triage a Bugzilla bug and produce a candidate fix as a Phabricator revision. Also handles `@hackbot` follow-ups on an existing revision, and Bugzilla `needinfo?` requests. |  yes   |      yes      |       **yes**        |
+| `test-repair`             | Classify a CI test failure as regression or intermittent, blame the culprit commit, propose a fix.                                                                          |  yes   |      yes      |       **yes**        |
+| `build-repair`            | Analyze a Firefox build failure at a specific commit and produce a candidate fix.                                                                                           |  yes   |      yes      |          no          |
+| `frontend-triage`         | Read-only root-cause analysis and fix plan for a desktop frontend bug.                                                                                                      |  yes   |      no       |          no          |
+| `autowebcompat-repro`     | Reproduce a web-compatibility report in headless Firefox via DevTools MCP.                                                                                                  |   no   |      no       |          no          |
+| `autowebcompat-diagnosis` | Diagnose the root cause of a reproduced web-compatibility issue by comparing Firefox and Chrome via DevTools MCP, and produce a reduced HTML testcase.                      |   no   |      no       |          no          |
+| `test-plan-generator`     | Generate Firefox QA test cases, run them through DevTools MCP, report results.                                                                                              |   no   |      no       |          no          |
+| `uplift-resolve`          | Resolve the merge conflicts from cherry-picking patches onto a stable uplift branch, and return the resolved patch with a confidence level.                                 |  yes   |      no       |          no          |
 
 Two shapes recur. **Source agents** (`bug-fix`, `test-repair`, `build-repair`) check out
 Firefox, often build it, edit the tree, and let the runtime capture the diff. **Browser
-agents** (`autowebcompat-repro`, `test-plan-generator`) need no checkout; they drive a
-Firefox binary through the DevTools MCP server.
+agents** (`autowebcompat-repro`, `autowebcompat-diagnosis`, `test-plan-generator`) need
+no checkout; they drive a Firefox binary through the DevTools MCP server.
 
 Several agents run in **two stages** — a read-only analysis stage that reaches a verdict,
 then a fix stage that only runs if the verdict warrants it. The two stages often use

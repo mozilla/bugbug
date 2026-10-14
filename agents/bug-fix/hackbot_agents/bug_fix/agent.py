@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from shlex import quote
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
@@ -19,24 +20,19 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
     McpServerConfig,
+    ResultMessage,
 )
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
-from hackbot_runtime.claude import (
-    Reporter,
-    UnsettledResponseError,
-    receive_settled_response,
-)
+from hackbot_runtime.claude import Reporter
 
 from .config import (
-    BUGZILLA_NEEDINFO_ACTIONS,
+    BUG_FIX_ACTIONS,
     BUGZILLA_READ_TOOLS,
     FIREFOX_TOOLS,
-    PHABRICATOR_FOLLOW_UP_ACTIONS,
     PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
-    TRIAGE_AND_FIX_ACTIONS,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -66,17 +62,15 @@ def select_workflow(
     comment: str | None,
     bugzilla_needinfo_flag_id: int | None,
     rules_dir: Path,
-) -> tuple[list[str], str]:
-    """Select actions and prompt for exactly one of the three bug-fix modes."""
+) -> str:
+    """Select the prompt for exactly one of the three bug-fix modes."""
     if bugzilla_needinfo_flag_id is not None:
-        return BUGZILLA_NEEDINFO_ACTIONS, render_prompt(
-            "bugzilla-needinfo.md", bug_id=bug, comment=comment
-        )
+        return render_prompt("bugzilla-needinfo.md", bug_id=bug, comment=comment)
     if revision_id:
-        return PHABRICATOR_FOLLOW_UP_ACTIONS, render_prompt(
+        return render_prompt(
             "follow-up.md", revision_id=revision_id, bug_id=bug, comment=comment
         )
-    return TRIAGE_AND_FIX_ACTIONS, render_prompt(
+    return render_prompt(
         "triage-and-fix.md", bug_id=bug, rules_path=str(rules_dir.resolve())
     )
 
@@ -125,6 +119,24 @@ def make_investigator() -> AgentDefinition:
     )
 
 
+def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
+    """Write a debug browser config, preserving any existing config.
+
+    ``--enable-debug`` turns on assertions that catch a whole class of mistakes
+    during development, and ``--enable-clang-plugin`` adds Mozilla's own static
+    analysis on top.
+    """
+    if fx_ctx.mozconfig.exists():
+        return
+    fx_ctx.mozconfig.write_text(
+        "ac_add_options --enable-application=browser\n"
+        "ac_add_options --enable-debug\n"
+        "ac_add_options --enable-optimize\n"
+        "ac_add_options --enable-clang-plugin\n"
+        f"mk_add_options MOZ_OBJDIR={quote(str(fx_ctx.objdir))}\n"
+    )
+
+
 async def run_bug_fix(
     *,
     bugzilla_mcp_server: McpServerConfig,
@@ -142,7 +154,6 @@ async def run_bug_fix(
     verbose: bool = False,
     log: Path | None = None,
     actions_recorder: ActionsRecorder | None = None,
-    background_task_timeout_s: float = 3 * 60 * 60,
 ) -> BugFixResult:
     """Triage and fix a single Bugzilla bug with a claude-agent-sdk agent.
 
@@ -156,10 +167,11 @@ async def run_bug_fix(
 
     # Firefox build/eval MCP server (in-process; no tokens). The runtime
     # derives fx_ctx from the prepared source checkout and the agent's
-    # hackbot.toml; here we only wrap its tools as an MCP server.
+    # hackbot.toml. Provision the config before the session can call build tools.
+    _write_mozconfig(fx_ctx)
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
-    action_types, user_prompt = select_workflow(
+    user_prompt = select_workflow(
         bug=bug,
         revision_id=revision_id,
         comment=comment,
@@ -171,9 +183,9 @@ async def run_bug_fix(
     # actions_recorder=None and get a local recorder that copies attachments
     # under ./artifacts (no uploader).
     actions_recorder, actions_server = actions_server_for(
-        actions_recorder, types=action_types
+        actions_recorder, types=BUG_FIX_ACTIONS
     )
-    enabled_action_tools = actions_to_tool_names(action_types)
+    enabled_action_tools = actions_to_tool_names(BUG_FIX_ACTIONS)
 
     system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
 
@@ -207,19 +219,18 @@ async def run_bug_fix(
         setting_sources=[],
     )
 
+    result_msg: ResultMessage | None = None
     with Reporter(verbose=verbose, log_path=log) as reporter:
         reporter.header(f"bug {bug}")
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
-            try:
-                result_msg = await receive_settled_response(
-                    client,
-                    on_message=reporter.message,
-                    timeout_s=background_task_timeout_s,
-                )
-            except UnsettledResponseError as exc:
-                raise AgentError(f"bug {bug}: agent run did not settle: {exc}") from exc
+            async for msg in client.receive_response():
+                reporter.message(msg)
+                if isinstance(msg, ResultMessage):
+                    result_msg = msg
 
+    if result_msg is None:
+        raise AgentError(f"bug {bug}: agent produced no result message")
     if result_msg.is_error:
         raise AgentError(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"

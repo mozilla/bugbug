@@ -61,7 +61,7 @@ def recipients(push: PushInfo, blamed_author: str | None) -> list[str]:
 
 
 def _why_section(
-    push: PushInfo, blamed_commit: str | None, author: str | None
+    push: PushInfo, blamed_commit: str | None, author: str | None, has_patch: bool
 ) -> list[str]:
     """Explain why each recipient is on the email."""
     notes = []
@@ -74,8 +74,41 @@ def _why_section(
         link = _link(
             GIT_COMMIT_URL.format(sha=blamed_commit), f"`{blamed_commit[:12]}`"
         )
-        notes.append(f"- {who} {link}, which introduced the failure.")
+        reland = (
+            " The patch below is for you to fold into it and reland, not to land"
+            " on its own."
+            if has_patch
+            else ""
+        )
+        notes.append(f"- {who} {link}, which introduced the failure.{reland}")
     return ["", "## Why you're receiving this", "", *notes] if notes else []
+
+
+def _reland_steps(
+    bug_id: int | None, run_url: str, parent_revision: int | None
+) -> list[str]:
+    """How the author gets the pending revision into their own patch."""
+    run_page = _link(run_url, "run page")
+    if parent_revision is None:
+        bug = _link(BUG_URL.format(bug_id=bug_id), f"bug {bug_id}")
+        return [
+            f"**Phabricator:** *Apply pending actions* on the {run_page} files this"
+            f" patch as a WIP revision on {bug}. Apply it on top of your patch with"
+            " `moz-phab patch D<new> --apply-to @`, squash, and `moz-phab submit`.",
+        ]
+    parent = f"D{parent_revision}"
+    return [
+        f"**Phabricator:** *Apply pending actions* on the {run_page} files this patch"
+        f" as a child revision of {parent}. To reland:",
+        "",
+        "```",
+        f"moz-phab patch {parent}",
+        "moz-phab patch D<new> --apply-to @",
+        "git rebase -i @~1   # squash the fix into your patch",
+        "moz-phab patch D<next> --skip-dependencies   # each later patch in your stack",
+        "moz-phab submit",
+        "```",
+    ]
 
 
 def _analysis_sections(result: BuildRepairResult) -> list[str]:
@@ -93,9 +126,16 @@ def build_email(
     task_id: str,
     run_id: str,
     has_patch: bool = False,
+    revision_pending: bool = False,
+    parent_revision: int | None = None,
     blamed_author: str | None = None,
 ) -> tuple[str, str]:
-    """The subject and markdown body of the build-failure email."""
+    """The subject and markdown body of the build-failure email.
+
+    ``revision_pending`` means the run recorded a ``phabricator.submit_patch``
+    action that is waiting for approval, so the email says how to apply it;
+    ``parent_revision`` is the blamed commit's revision it stacks on, when known.
+    """
     failure_commit = push.git_commits[0]
     subject = (
         f"[build-repair] Build failure analysis for "
@@ -129,6 +169,9 @@ def build_email(
 
     if result.blamed_commit:
         by = f" by {blamed_author}" if blamed_author else ""
+        where = (
+            "" if result.blamed_commit in push.git_commits else ", from an earlier push"
+        )
         lines.append(
             "- **Likely culprit:** "
             + _link(
@@ -136,6 +179,7 @@ def build_email(
                 f"`{result.blamed_commit[:12]}`",
             )
             + by
+            + where
         )
     else:
         lines.append(
@@ -149,7 +193,7 @@ def build_email(
         )
     lines.append("- **Run details:** " + RUN_URL.format(run_id=run_id))
 
-    lines += _why_section(push, result.blamed_commit, blamed_author)
+    lines += _why_section(push, result.blamed_commit, blamed_author, has_patch)
     lines += _analysis_sections(result)
 
     if result.local_build_verified is not None:
@@ -157,7 +201,16 @@ def build_email(
             "",
             "## Verification",
             "",
-            f"- Local build verified: {result.local_build_verified}",
+            f"- Local build on Linux only: {'passed' if result.local_build_verified else 'failed'}",
+        ]
+    if revision_pending:
+        lines += [
+            "",
+            "## Relanding with the fix",
+            "",
+            *_reland_steps(
+                result.bug_id, RUN_URL.format(run_id=run_id), parent_revision
+            ),
         ]
     if has_patch:
         # The diff itself is substituted for the placeholder when the mail is sent,

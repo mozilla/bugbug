@@ -85,6 +85,23 @@ def test_the_culprit_and_its_author_are_named():
     assert "**author@mozilla.com** authored" in body
 
 
+def test_a_culprit_from_an_earlier_push_is_marked_as_such():
+    earlier = "91b3a385edd8f0e3c2b1a09d8c7e6f5a4b3c2d1e"
+    _, body = _email(
+        result=_result(blamed_commit=earlier), blamed_author="author@mozilla.com"
+    )
+    assert (
+        f"**Likely culprit:** [`{earlier[:12]}`]"
+        f"(https://github.com/mozilla-firefox/firefox/commit/{earlier})"
+        " by author@mozilla.com, from an earlier push" in body
+    )
+
+
+def test_a_culprit_in_the_push_is_not_marked_as_earlier():
+    _, body = _email(blamed_author="author@mozilla.com")
+    assert "earlier push" not in body
+
+
 def test_a_push_the_agent_cleared_says_so():
     _, body = _email(result=_result(blamed_commit=None))
     assert "Not caused by this push" in body
@@ -104,7 +121,7 @@ def test_agent_prose_nests_under_the_email_headings():
 
 def test_the_local_build_verification_is_reported_when_known():
     _, body = _email(result=_result(local_build_verified=True))
-    assert "- Local build verified: True" in body
+    assert "- Local build on Linux only: passed" in body
 
 
 def test_no_verification_section_without_a_verdict():
@@ -121,3 +138,44 @@ def test_no_patch_section_without_a_patch():
     _, body = _email()
     assert "Proposed patch" not in body
     assert "{patch}" not in body
+
+
+def test_a_stacked_revision_comes_with_the_reland_recipe():
+    _, body = _email(
+        _result(bug_id=2063979),
+        has_patch=True,
+        revision_pending=True,
+        parent_revision=325120,
+    )
+    assert "## Relanding with the fix" in body
+    assert (
+        "*Apply pending actions* on the "
+        "[run page](https://hackbot.moz.tools/runs/1218e630-78c8) files this patch as"
+        " a child revision of D325120. To reland:" in body
+    )
+    assert "moz-phab patch D325120\nmoz-phab patch D<new> --apply-to @\n" in body
+    assert "git rebase -i @~1" in body
+    assert "--skip-dependencies" in body
+    # Instructions come before the diff, which can run long.
+    assert body.index("Relanding with the fix") < body.index("## Proposed patch")
+
+
+def test_an_unstacked_revision_says_how_to_pull_it_onto_the_patch():
+    _, body = _email(_result(bug_id=2063979), has_patch=True, revision_pending=True)
+    assert (
+        "files this patch as a WIP revision on "
+        "[bug 2063979](https://bugzilla.mozilla.org/show_bug.cgi?id=2063979)." in body
+    )
+    assert "To reland:" not in body
+
+
+def test_no_reland_section_without_a_pending_revision():
+    _, body = _email(has_patch=True)
+    assert "Relanding with the fix" not in body
+
+
+def test_the_author_is_told_the_patch_is_for_the_reland():
+    _, body = _email(blamed_author="author@mozilla.com", has_patch=True)
+    assert "fold into it and reland, not to land on its own" in body
+    _, body = _email(blamed_author="author@mozilla.com")
+    assert "fold into it" not in body

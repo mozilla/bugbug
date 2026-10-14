@@ -19,7 +19,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
@@ -30,10 +30,6 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
     re.IGNORECASE | re.MULTILINE,
 )
-
-
-def _confirm(recorder: ActionsRecorder, action_type: str) -> str:
-    return f"Recorded {action_type} (#{len(recorder.actions) - 1})."
 
 
 def _validate_summary(summary: str | None) -> None:
@@ -58,7 +54,9 @@ async def submit_patch(
         Field(
             description=(
                 "Title for the new revision: a single line describing the fix, "
-                "as you would write a commit message subject."
+                "as you would write a commit message subject. Do not include "
+                "reviewer annotations (r=... or r?...): reviewer selection is "
+                "handled on the Phabricator side."
             )
         ),
     ],
@@ -67,27 +65,36 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(default=None, description="Revision test plan."),
+        Field(description="Revision test plan."),
     ] = None,
     summary: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
-                "Revision summary/description. Keep test and verification details "
-                "in test_plan instead."
+                "Revision summary/description. Keep it concise and useful for permanent "
+                "history. Do not restate the bug, narrate the investigation or "
+                "implementation process. Keep test and verification details in "
+                "test_plan instead."
             ),
         ),
     ] = None,
     ref: Annotated[
         str | None,
         Field(
-            default=None,
             description=(
                 "Optional label for this action so a later action (e.g. a "
                 "bugzilla.add_comment in the same run) can reference its "
                 "result once applied, via {{actions.<ref>.url}} in that "
                 "action's text."
+            ),
+        ),
+    ] = None,
+    parent_revision_id: Annotated[
+        int | None,
+        Field(
+            description=(
+                "The revision this patch stacks on (the number after D), when it "
+                "belongs on top of an existing revision rather than on its own."
             ),
         ),
     ] = None,
@@ -110,18 +117,18 @@ async def submit_patch(
     bug comment).
     """
     _validate_summary(summary)
-    recorder.record(
-        "phabricator.submit_patch",
-        {
-            "bug_id": bug_id,
-            "title": title,
-            "summary": summary,
-            "test_plan": test_plan,
-        },
-        reasoning=reasoning,
-        ref=ref,
+    params: dict = {
+        "bug_id": bug_id,
+        "title": title,
+        "summary": summary,
+        "test_plan": test_plan,
+    }
+    if parent_revision_id is not None:
+        params["parent_revision_id"] = parent_revision_id
+    action = recorder.record(
+        "phabricator.submit_patch", params, reasoning=reasoning, ref=ref
     )
-    return _confirm(recorder, "phabricator.submit_patch")
+    return confirmation(action)
 
 
 @tool
@@ -156,12 +163,12 @@ async def update_patch(
     Only the diff changes: the revision keeps its title, summary, and bug
     association exactly as they are.
     """
-    recorder.record(
+    action = recorder.record(
         "phabricator.update_patch",
         {"revision_id": revision_id},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "phabricator.update_patch")
+    return confirmation(action)
 
 
 @tool
@@ -182,12 +189,12 @@ async def add_comment(
     changes, use ``submit_patch`` instead. Recorded into the run summary for
     human review; nothing is posted to Phabricator during the run.
     """
-    recorder.record(
+    action = recorder.record(
         "phabricator.add_comment",
         {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
-    return _confirm(recorder, "phabricator.add_comment")
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)

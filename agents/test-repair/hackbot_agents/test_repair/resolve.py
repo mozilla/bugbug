@@ -165,15 +165,15 @@ def sheriff_classification(project: str, task_id: str) -> str | None:
     """How a sheriff classified this failure while the run worked, if they did.
 
     A run takes long enough that the tree is often dealt with before it reports.
-    Best effort: None on any error, so the report goes out unmarked rather than
-    not at all.
+    Best effort: None on any error, so the report goes out as unclassified rather
+    than not at all.
     """
     try:
         jobs = (
             _get_json(f"{_TREEHERDER}/{project}/jobs/?task_id={task_id}").get("results")
             or []
         )
-    except (requests.exceptions.RequestException, ValueError):
+    except requests.exceptions.RequestException, ValueError:
         logger.warning("Could not re-read the classification of task %s", task_id)
         return None
     if not jobs:
@@ -187,9 +187,12 @@ def _open_intermittent_bugs(suggestion: dict) -> list[int]:
     matched = []
     for bug in (bugs.get("open_recent") or []) + (bugs.get("all_others") or []):
         keywords = [k.strip() for k in (bug.get("keywords") or "").split(",")]
-        if bug.get("id") and not bug.get("resolution"):
-            if _INTERMITTENT_KEYWORD in keywords:
-                matched.append(bug["id"])
+        if (
+            bug.get("id")
+            and not bug.get("resolution")
+            and _INTERMITTENT_KEYWORD in keywords
+        ):
+            matched.append(bug["id"])
     return matched
 
 
@@ -208,7 +211,7 @@ def _known_intermittent_bugs(project: str, task_id: str) -> list[int]:
         suggestions = _get_json(
             f"{_TREEHERDER}/{project}/jobs/{jobs[0]['id']}/bug_suggestions/"
         )
-    except (requests.exceptions.RequestException, ValueError, KeyError):
+    except requests.exceptions.RequestException, ValueError, KeyError:
         logger.warning("Could not read bug suggestions for task %s", task_id)
         return []
 

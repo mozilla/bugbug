@@ -24,7 +24,7 @@ class PatchSummarizationTool(GenerativeModelTool):
         component will be created and used.
         """
         if "llm" not in kwargs:
-            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL)
+            kwargs["llm"] = init_chat_model(DEFAULT_ANTHROPIC_MODEL, effort="high")
 
         return cls(**kwargs)
 
@@ -45,7 +45,7 @@ class PatchSummarizationTool(GenerativeModelTool):
             }
         )
 
-        summary = result["messages"][-1].content
+        summary = result["messages"][-1].text
 
         # FIXME(#5705): This is a temporary workaround until we have a more
         # robust way to handle token budgets in the agent's output

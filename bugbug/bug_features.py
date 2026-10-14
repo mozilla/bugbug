@@ -54,7 +54,11 @@ class HasCrashSignature(SingleBugFeature):
 
 
 class Keywords(SingleBugFeature):
-    def __init__(self, to_ignore=set(), prefixes_to_ignore=set()):
+    def __init__(self, to_ignore=None, prefixes_to_ignore=None):
+        if prefixes_to_ignore is None:
+            prefixes_to_ignore = set()
+        if to_ignore is None:
+            to_ignore = set()
         self.to_ignore = to_ignore
         self.prefixes_to_ignore = prefixes_to_ignore
 
@@ -742,10 +746,7 @@ class IsPerformanceBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsMemoryBug(SingleBugFeature):
@@ -778,10 +779,7 @@ class IsMemoryBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsPowerBug(SingleBugFeature):
@@ -805,10 +803,7 @@ class IsPowerBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsSecurityBug(SingleBugFeature):
@@ -833,10 +828,7 @@ class IsSecurityBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsCrashBug(SingleBugFeature):
@@ -857,14 +849,11 @@ class IsCrashBug(SingleBugFeature):
         if bug.get("cf_crash_signature") and "[@" in bug["cf_crash_signature"]:
             return True
 
-        if any(
+        return any(
             keyword.startswith(prefix)
             for keyword in bug["keywords"]
             for prefix in self.keyword_prefixes
-        ):
-            return True
-
-        return False
+        )
 
 
 class BugTypes(SingleBugFeature):

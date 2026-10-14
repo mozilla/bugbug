@@ -7,7 +7,11 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
-from phabricator_client import PhabricatorClient, PhabricatorSettings
+from phabricator_client import (
+    PhabricatorClient,
+    PhabricatorSettings,
+    UnresolvedCommitError,
+)
 
 from hackbot_runtime import changes
 
@@ -131,7 +135,19 @@ async def _resolve_stack(client: PhabricatorClient, revision_id: int) -> Stack:
                 )
             # Expand it: moz-phab records an abbreviated hash for a repo the
             # size of firefox, and git can only fetch a full object id.
-            base = await client.resolve_commit(diff.base_commit)
+            try:
+                base = await client.resolve_commit(diff.base_commit)
+            except UnresolvedCommitError:
+                if not diff.first_public_parent:
+                    raise
+                log.info(
+                    "D%s base %s is not imported; using first public parent %s.",
+                    revision["id"],
+                    diff.base_commit,
+                    diff.first_public_parent,
+                )
+                base = await client.resolve_commit(diff.first_public_parent)
+
         patches.append(
             Patch(
                 revision_id=revision["id"],

@@ -21,7 +21,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 ACTION_TYPE = "email.send"
 
@@ -99,10 +99,10 @@ async def send(
 
     Recorded into the run summary for human review -- does not send any mail.
     """
-    recorder.record(
+    action = recorder.record(
         ACTION_TYPE, _params(to, subject, body_markdown), reasoning=reasoning
     )
-    return f"Recorded {ACTION_TYPE} (#{len(recorder.actions) - 1})."
+    return confirmation(action)
 
 
 def record_email(

@@ -1,7 +1,7 @@
 # Severity assessment
 
 Assess an appropriate Mozilla severity for the bug. Record it in **both** the
-`severity_assessment` structured-output object and the severity block at the end of your
+`severity_assessment` structured-output object and the closing severity sentence of your
 comment (see **Severity in the comment** in the system prompt). Base the judgment on
 **user impact and reach** as evidenced by the bug report and the code you investigated —
 how badly the user is affected, how many users hit it, and whether a workaround exists.
@@ -24,6 +24,10 @@ You cannot set the `severity` field. The comment is a suggestion for a human to 
 - Frontend UI/UX papercuts are usually **S3** (or **S4** when purely cosmetic). Reserve
   **S1 / S2** for genuine breakage: crashes, data/state loss, or a broken core workflow
   with no easy workaround.
+- **Before suggesting S2, name the workaround you ruled out and who hits the bug.** A
+  UX problem with a workaround is S3 however visible it is, and so is a failure that
+  only a narrow population reaches. An S2 that a human lowered is the most common way
+  these suggestions have been wrong.
 - **Install and update failures do not default to S3.** "Papercut usually means S3" is a
   desktop-frontend heuristic and does not carry over: a user whose update does not apply
   is left on an older, unpatched build, and a user whose install fails does not have
@@ -59,8 +63,8 @@ It decides whether the comment mentions severity at all:
 
 - **High** — impact is clear-cut (clearly cosmetic, or clearly a crash/data-loss).
 - **Medium** — the level is a reasonable read but the impact or reach is arguable.
-- **Low, or you could not assess it** — **omit the severity block from the comment
-  entirely**, horizontal rule included, and set `confidence` accordingly (or the whole
+- **Low, or you could not assess it** — **omit the severity sentence from the comment
+  entirely**, and set `confidence` accordingly (or the whole
   `severity_assessment` object to null). Say nothing rather than guess: a level you are
   unsure of still reads as a judgment an engineer may act on, and being wrong there costs
   trust in the rest of your comment.

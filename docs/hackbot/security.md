@@ -25,13 +25,17 @@ exposes them as capabilities over loopback (`BROKER_URL`, e.g. `http://127.0.0.1
 - `/{bugzilla,phabricator}/mcp` — read-only MCP tool servers, live during the run.
 - `GET /phabricator/revision/{id}/patch` — a revision's base commit and raw diff, so a
   follow-up run can reproduce the revision's tree without a Conduit key.
+- `/phabricator/api` — a Conduit proxy allow-listing a few read methods and substituting
+  the real key, for agent code that has to call Conduit directly (`uplift-resolve` fetches each
+  source's raw diff this way before rendering its prompt).
 
 It exposes only what a run legitimately needs, and only reads — every write goes through the
 recorded-actions path instead. **Per-execution env overrides target the `agent` container by
 name**, which is what stops a run's inputs from reaching or altering the broker's
 environment.
 
-Today `bug-fix`, `build-repair`, `frontend-triage` and `autowebcompat-repro` run a broker.
+Today `bug-fix`, `build-repair`, `frontend-triage`, `autowebcompat-repro`,
+`autowebcompat-diagnosis` and `uplift-resolve` run a broker.
 `test-repair` reaches an MCP server via an injected `BUGZILLA_MCP_URL` instead, and
 `test-plan-generator` needs no credentialed reads at all. The invariant holds in every case:
 **the key is never in the agent container.**
@@ -76,15 +80,8 @@ Four distinct schemes, one per class of caller:
 | --------------------------- | -------------------------------------------------------------------------------------- |
 | UI, pulse listener, scripts | `X-API-Key`, compared in constant time                                                 |
 | Phabricator                 | HMAC-SHA256 over the raw body, constant-time compared                                  |
-| Slack                       | HMAC-SHA256 over `v0:{timestamp}:{raw body}`, plus a 5-minute timestamp window         |
+| Slack                       | HMAC-SHA256 over `v0:{timestamp}:{raw body}`, plus a 5-minute timestamp window (Bolt)  |
 | Eventarc / Pub/Sub push     | Google-signed OIDC bearer token, verified for audience **and** issuing service account |
-
-The two HMAC schemes are not interchangeable: Slack's base string includes the delivery's
-timestamp and that timestamp is checked against the clock, so a captured delivery cannot be
-replayed. Phabricator's covers the body alone, which is why the Slack receiver has its own
-verifier ([auth.py](../../services/hackbot-api/app/auth.py)). Neither key is optional, and
-the Slack one must also be non-blank, so a deployment without a usable key fails to start
-rather than quietly rejecting every delivery.
 
 The push-token check is not redundant with platform IAM. The service allows unauthenticated
 invocations — that is how API-key callers reach it at all — so IAM on the subscription does
@@ -106,11 +103,7 @@ project. [triggers.md](triggers.md) covers that check and the other guards on th
 ## Authorizing Slack clicks
 
 The same split applies, and the second half is not built yet: a valid signature proves the
-delivery came from the Slack app, not _who_ clicked, and a Slack user id is not an identity
-this platform trusts. Resolving one to a `@mozilla.com` address (`users.info`, needing the
-`users:read` and `users:read.email` scopes) and checking the workspace is what a click needs
-before it can cause anything. Until then the receiver is inert by design, so no interactive
-element exists ahead of the check that guards it.
+delivery came from the Slack app, not _who_ clicked.
 
 ## Recorded actions as a review gate
 

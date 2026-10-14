@@ -14,15 +14,30 @@ import {
 } from "@/lib/types";
 import { FindingsView } from "./FindingsView";
 import { Markdown } from "./Markdown";
+import { PATCH_ARTIFACT, PatchView } from "./PatchView";
 import { StatusBadge } from "./StatusBadge";
 import { parseTestPlan, TestPlanView } from "./TestPlanView";
 
-// Proposed bugzilla.add_comment actions carry the comment body in params.text;
-// pull it out so we can preview what would be posted to the bug.
-function commentPreview(a: RunAction): string | null {
-  if (a.type !== "bugzilla.add_comment") return null;
-  const text = a.params?.text;
-  return typeof text === "string" && text.trim() ? text : null;
+// What a proposed action would write, rendered under its row so the reviewer
+// approves the actual text and not just an action type. A comment carries its
+// body in params.text; a Phabricator submission carries the title and summary of
+// the revision it would open for the patch (previewed by PatchView).
+function actionPreview(
+  action: RunAction
+): { label: string; text: string } | null {
+  const text = (v: unknown): string =>
+    typeof v === "string" && v.trim() ? v : "";
+  if (action.type === "bugzilla.add_comment") {
+    const body = text(action.params?.text);
+    return body ? { label: "Comment preview", text: body } : null;
+  }
+  if (action.type === "phabricator.submit_patch") {
+    const body = [text(action.params?.title), text(action.params?.summary)]
+      .filter(Boolean)
+      .join("\n\n");
+    return body ? { label: "Revision preview", text: body } : null;
+  }
+  return null;
 }
 
 const POLL_MS = 4000;
@@ -53,7 +68,13 @@ function extractLog(run: RunDoc): string | null {
   return null;
 }
 
-export function RunDetail({ runId }: { runId: string }) {
+export function RunDetail({
+  runId,
+  tracesUrl,
+}: {
+  runId: string;
+  tracesUrl: string;
+}) {
   const router = useRouter();
   const [run, setRun] = useState<RunDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -173,15 +194,17 @@ export function RunDetail({ runId }: { runId: string }) {
   // Both pending and failed actions are (re)applied by the apply endpoint — it
   // skips only already-applied ones — so one button covers applying and retry.
   const pendingActions =
-    actions?.filter((a) => a.status === "pending").length ?? 0;
+    actions?.filter((action) => action.status === "pending").length ?? 0;
   const failedActions =
-    actions?.filter((a) => a.status === "failed").length ?? 0;
+    actions?.filter((action) => action.status === "failed").length ?? 0;
   const applyLabel =
     pendingActions && failedActions
       ? "Apply pending & retry failed actions"
       : failedActions
         ? "Retry failed actions"
         : "Apply pending actions";
+
+  const hasPatch = run.artifacts.some((a) => a.name === PATCH_ARTIFACT);
 
   const canRetrigger = isFailed(run.status);
   const retriggerLabel = retriggering
@@ -232,6 +255,12 @@ export function RunDetail({ runId }: { runId: string }) {
               <dd>{run.execution_name}</dd>
             </>
           )}
+          <dt>Traces</dt>
+          <dd>
+            <a href={tracesUrl} target="_blank" rel="noreferrer">
+              Weave
+            </a>
+          </dd>
         </dl>
         <button
           type="button"
@@ -269,19 +298,32 @@ export function RunDetail({ runId }: { runId: string }) {
           <h2>Actions ({actions.length})</h2>
           {applyError && <div className="error-banner">{applyError}</div>}
           <ul className="action-list">
-            {actions.map((a) => {
-              const preview = commentPreview(a);
+            {actions.map((action) => {
+              const preview = actionPreview(action);
+              const url =
+                typeof action.result?.url === "string"
+                  ? action.result.url
+                  : null;
               return (
-                <li key={a.idx}>
+                <li key={action.idx}>
                   <div className="action-row">
-                    <span className={`badge ${a.status}`}>{a.status}</span>
-                    <code>{a.type}</code>
-                    {a.error && <span className="muted">{a.error}</span>}
+                    <span className={`badge ${action.status}`}>
+                      {action.status}
+                    </span>
+                    <code>{action.type}</code>
+                    {url && (
+                      <a href={url} target="_blank" rel="noreferrer">
+                        Open
+                      </a>
+                    )}
+                    {action.error && (
+                      <span className="muted">{action.error}</span>
+                    )}
                   </div>
                   {preview && (
                     <div className="action-preview">
-                      <span className="muted">Comment preview</span>
-                      <Markdown text={preview} />
+                      <span className="muted">{preview.label}</span>
+                      <Markdown text={preview.text} />
                     </div>
                   )}
                 </li>
@@ -321,6 +363,8 @@ export function RunDetail({ runId }: { runId: string }) {
           </ul>
         )}
       </div>
+
+      {hasPatch && <PatchView runId={run.run_id} />}
     </>
   );
 }

@@ -124,7 +124,7 @@ class TestFailureModel(CommitModel):
 
         assert len(commit_map) > 0
 
-        for revs, test_datas in test_scheduling.get_test_scheduling_history("label"):
+        for revs, _test_datas in test_scheduling.get_test_scheduling_history("label"):
             if revs[0] not in classes:
                 continue
 
@@ -306,7 +306,7 @@ class TestConfigModel(CommitModel):
                 likely_regressions if likely_regressions else possible_regressions
             )
             failing_platforms = set()
-            for config, group in regressions:
+            for config, _group in regressions:
                 platform = get_platform(config)
                 if platform is not None:
                     failing_platforms.add(platform)

@@ -105,7 +105,7 @@ def fetch(commit_hash: str) -> str:
         if folder.startswith(commit_hash):
             return os.path.join(SEARCHFOX_STORAGE_DATA, folder)
 
-    assert False
+    raise AssertionError()
 
 
 if __name__ == "__main__":

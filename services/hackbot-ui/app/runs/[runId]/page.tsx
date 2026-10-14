@@ -1,4 +1,5 @@
 import { RunDetail } from "@/components/RunDetail";
+import { weaveProject, weaveRunTracesUrl } from "@/lib/weave";
 
 export default async function RunPage({
   params,
@@ -7,5 +8,11 @@ export default async function RunPage({
 }) {
   const { runId } = await params;
 
-  return <RunDetail key={runId} runId={runId} />;
+  return (
+    <RunDetail
+      key={runId}
+      runId={runId}
+      tracesUrl={weaveRunTracesUrl(weaveProject(), runId)}
+    />
+  );
 }

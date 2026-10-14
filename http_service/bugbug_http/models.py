@@ -5,6 +5,7 @@
 
 import logging
 import os
+from collections import defaultdict
 from datetime import timedelta
 from functools import lru_cache
 from typing import Any, Callable, Sequence
@@ -14,6 +15,7 @@ import orjson
 import requests
 import zstandard
 from redis import Redis
+from urllib3.util.retry import Retry
 
 from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
@@ -48,13 +50,19 @@ MODELS_NAMES = [
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
+
+TREEHERDER_API_URL = "https://treeherder.mozilla.org/api"
+# "expected fail", "intermittent", "infra", "autoclassified intermittent" and
+# "intermittent needs bugid".
+IGNORED_CLASSIFICATION_IDS = {3, 4, 5, 7, 8}
+
 url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
 assert url.hostname is not None
 redis = Redis(
     host=url.hostname,
     port=url.port if url.port is not None else 6379,
     password=url.password,
-    ssl=True if url.scheme == "rediss" else False,
+    ssl=(url.scheme == "rediss"),
     ssl_cert_reqs=None,
 )
 
@@ -187,6 +195,62 @@ def classify_issue(
 
         # Save the bug last change
         setkey(job.change_time_key, issues[issue_id]["updated_at"].encode())
+
+    return "OK"
+
+
+def classify_comment(
+    model_name: str, comment_ids: Sequence[int], bugzilla_token: str
+) -> str:
+    from bugbug_http.app import JobInfo
+
+    # This should be called in a process worker so it should be safe to set
+    # the token here
+    comment_ids_set = set(map(int, comment_ids))
+    bugzilla.set_token(bugzilla_token)
+
+    comments = bugzilla.get_comments(comment_ids_set)
+
+    missing_comments = comment_ids_set.difference(comments.keys())
+
+    for comment_id in missing_comments:
+        job = JobInfo(classify_comment, model_name, comment_id)
+
+        # TODO: Find a better error format
+        setkey(job.result_key, orjson.dumps({"available": False}))
+
+    if not comments:
+        return "NOK"
+
+    model = MODEL_CACHE.get(model_name)
+
+    if not model:
+        LOGGER.info("Missing model %r, aborting", model_name)
+        return "NOK"
+
+    model_extra_data = model.get_extra_data()
+
+    probs = model.classify(list(comments.values()), True)
+    indexes = probs.argmax(axis=-1)
+    suggestions = model.le.inverse_transform(indexes)
+
+    probs_list = probs.tolist()
+    indexes_list = indexes.tolist()
+    suggestions_list = suggestions.tolist()
+
+    for i, comment_id in enumerate(comments.keys()):
+        data = {
+            "prob": probs_list[i],
+            "index": indexes_list[i],
+            "class": suggestions_list[i],
+            "extra_data": model_extra_data,
+        }
+
+        job = JobInfo(classify_comment, model_name, comment_id)
+        setkey(job.result_key, orjson.dumps(data), compress=True)
+
+        bug, _ = comments[comment_id]
+        setkey(job.change_time_key, bug["last_change_time"].encode())
 
     return "OK"
 
@@ -416,6 +480,13 @@ def get_known_tasks() -> tuple[str, ...]:
 
 
 def schedule_tests(branch: str, rev: str) -> str:
+    """Select the tasks and manifests to run for a push and store the result in Redis.
+
+    The push is identified by the head revision `rev` on the hg.mozilla.org
+    repository `branch` (e.g. "integration/autoland" or "try"). When the push
+    contains backouts, the tasks and manifests which failed recently on the
+    corresponding Treeherder project are selected too.
+    """
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
 
@@ -436,12 +507,13 @@ def schedule_tests(branch: str, rev: str) -> str:
 
     # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
     # On other repos, only consider "default" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
-    if branch == "try":
-        repo_branch = None
-    else:
-        repo_branch = "default"
+    repo_branch = None if branch == "try" else "default"
 
-    data = _analyze_patch(revs, repo_branch)
+    # On "try", recent failures are specific to each developer's push, so they are
+    # not relevant for backouts.
+    treeherder_project = None if branch == "try" else branch.split("/")[-1]
+
+    data = _analyze_patch(revs, repo_branch, treeherder_project)
 
     setkey(job.result_key, orjson.dumps(data), compress=True)
 
@@ -508,18 +580,143 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     return "OK"
 
 
-def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
+def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
+    """Get the tasks and manifests which failed recently on a Treeherder project.
+
+    Failures classified as intermittent, infra or expected are ignored, and only
+    tasks and manifests known to the label and group models are returned.
+    """
+    # Retry only a few times, so that an unavailable Treeherder doesn't stall the
+    # scheduling for long.
+    session = requests.Session()
+    session.mount(
+        "https://",
+        requests.adapters.HTTPAdapter(
+            max_retries=Retry(
+                total=2, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
+            )
+        ),
+    )
+    headers = {"User-Agent": utils.get_user_agent()}
+
+    response = session.get(
+        f"{TREEHERDER_API_URL}/project/{project}/push/",
+        params={
+            "count": os.environ.get("BACKOUT_RECENT_PUSHES_COUNT", "20"),
+            "tochange": rev,
+        },
+        headers=headers,
+        timeout=30,
+    )
+    response.raise_for_status()
+    push_revs = {push["id"]: push["revision"] for push in response.json()["results"]}
+    if not push_revs:
+        return set(), set()
+
+    tasks: set[str] = set()
+    task_ids_by_push: dict[int, set[str]] = defaultdict(set)
+    # Push IDs are unique across all Treeherder projects, so filtering by them
+    # already restricts the jobs to the pushes of the given project.
+    url: str | None = f"{TREEHERDER_API_URL}/jobs/"
+    params: dict[str, str | int] | None = {
+        "push_id__in": ",".join(str(push_id) for push_id in push_revs),
+        "result": "testfailed",
+        "count": 2000,
+    }
+    while url is not None:
+        response = session.get(url, params=params, headers=headers, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        for values in data["results"]:
+            job = dict(zip(data["job_property_names"], values))
+            if job["failure_classification_id"] in IGNORED_CLASSIFICATION_IDS:
+                continue
+
+            tasks.add(job["job_type_name"])
+            task_ids_by_push[job["push_id"]].add(job["task_id"])
+
+        # The "next" URL already contains the query parameters.
+        url = data["next"]
+        params = None
+
+    groups: set[str] = set()
+    for push_id, task_ids in task_ids_by_push.items():
+        response = session.get(
+            f"{TREEHERDER_API_URL}/project/{project}/push/group_results/",
+            params={"revision": push_revs[push_id]},
+            headers=headers,
+            timeout=30,
+        )
+        response.raise_for_status()
+        group_results = response.json()
+        for task_id in task_ids:
+            groups.update(
+                group for group, ok in group_results.get(task_id, {}).items() if not ok
+            )
+
+    known_tasks = set(test_scheduling.PastFailures("label", True).all_runnables)
+    known_groups = set(test_scheduling.PastFailures("group", True).all_runnables)
+
+    return (
+        {
+            task
+            for task in map(test_scheduling.rename_task, tasks)
+            if task in known_tasks
+        },
+        {
+            group
+            for group in (group.split(":")[0] for group in groups)
+            if group in known_groups
+        },
+    )
+
+
+def _analyze_patch(
+    revs: list[bytes], branch: str | None, treeherder_project: str | None = None
+) -> dict:
+    """Select the tasks and manifests to run for a stack of revisions.
+
+    Backout commits are not analyzed by the test selection models. Instead, if
+    `treeherder_project` is set and the stack contains backouts, the tasks and
+    manifests which failed recently on that project are selected with maximum
+    confidence, as the failures might have been caused by the backed-out commits.
+    """
     from bugbug_http import REPO_DIR
 
-    commits = repository.download_commits(
+    all_commits = repository.download_commits(
         REPO_DIR,
         revs=revs,
         branch=branch,
         save=False,
         include_no_bug=True,
+        include_backouts=True,
     )
+    commits = [commit for commit in all_commits if not commit["backsout"]]
 
-    if not commits:
+    # On backouts, select the tasks and manifests which failed recently, as they
+    # might have been caused by the backed-out commits.
+    backout_tasks: set[str] = set()
+    backout_groups: set[str] = set()
+    if treeherder_project is not None and len(commits) < len(all_commits):
+        try:
+            # The last revision is the head of the push.
+            backout_tasks, backout_groups = _get_recent_failures(
+                treeherder_project, revs[-1].decode("ascii")
+            )
+        except Exception:
+            # Treeherder failures should not prevent the scheduling of tests, so
+            # consider there are no recent failures.
+            LOGGER.warning(
+                "Could not retrieve recent failures from Treeherder", exc_info=True
+            )
+        else:
+            LOGGER.info(
+                "Selecting %d tasks and %d manifests which failed recently",
+                len(backout_tasks),
+                len(backout_groups),
+            )
+
+    if not commits and not backout_tasks and not backout_groups:
         return {
             "tasks": {},
             "groups": {},
@@ -527,6 +724,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
             "reduced_tasks": {},
             "reduced_tasks_higher": {},
             "known_tasks": get_known_tasks(),
+            "confidence_thresholds": {},
         }
 
     test_selection_threshold = float(
@@ -536,25 +734,66 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
     testlabelselect_model = MODEL_CACHE.get("testlabelselect")
     testgroupselect_model = MODEL_CACHE.get("testgroupselect")
 
+    # The confidence thresholds computed when training the models for the low/medium/high levels
+    # used by the taskgraph, as the scale of the confidences depends on the models.
+    confidence_thresholds = {
+        key: model.confidence_thresholds
+        for key, model in (
+            ("tasks", testlabelselect_model),
+            ("groups", testgroupselect_model),
+        )
+        if getattr(model, "confidence_thresholds", None)
+    }
+    tasks_thresholds = confidence_thresholds.get("tasks", {})
+    groups_thresholds = confidence_thresholds.get("groups", {})
+
     known_tasks = get_known_tasks()
     modified_paths = list(set(path for commit in commits for path in commit["files"]))
 
-    tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+    tasks = (
+        testlabelselect_model.select_tests(
+            commits, min([test_selection_threshold, *tasks_thresholds.values()])
+        )
+        if commits
+        else {}
+    )
     for task in test_scheduling.find_tasks_for_paths(
         REPO_DIR, known_tasks, modified_paths
     ):
         tasks[task] = 1.0
+    for task in backout_tasks:
+        tasks[task] = 1.0
 
-    reduced = testselect.reduce_configs(
-        set(t for t, c in tasks.items() if c >= 0.8), 1.0
+    # The recently failing tasks are kept as they are, as the failures might be
+    # specific to their configuration.
+    reduced = (
+        testselect.reduce_configs(
+            set(
+                t for t, c in tasks.items() if c >= tasks_thresholds.get("medium", 0.8)
+            ),
+            1.0,
+        )
+        | backout_tasks
     )
 
-    reduced_higher = testselect.reduce_configs(
-        set(t for t, c in tasks.items() if c >= 0.9), 1.0
+    reduced_higher = (
+        testselect.reduce_configs(
+            set(t for t, c in tasks.items() if c >= tasks_thresholds.get("high", 0.9)),
+            1.0,
+        )
+        | backout_tasks
     )
 
-    groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+    groups = (
+        testgroupselect_model.select_tests(
+            commits, min([test_selection_threshold, *groups_thresholds.values()])
+        )
+        if commits
+        else {}
+    )
     for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
+        groups[group] = 1.0
+    for group in backout_groups:
         groups[group] = 1.0
 
     config_groups = testselect.select_configs(groups, 0.9)
@@ -566,6 +805,7 @@ def _analyze_patch(revs: list[bytes], branch: str | None) -> dict:
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
         "known_tasks": known_tasks,
+        "confidence_thresholds": confidence_thresholds,
     }
 
     return data

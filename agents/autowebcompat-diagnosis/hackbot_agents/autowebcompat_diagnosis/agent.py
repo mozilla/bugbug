@@ -2,26 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
 import tempfile
-from abc import ABC, abstractmethod
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Generic, Literal
+from typing import Any
 
-from claude_agent_sdk import (
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-    McpServerConfig,
-    ResultMessage,
-)
-from hackbot_runtime import AgentError
-from hackbot_runtime.claude import Reporter
+from autowebcompat_tools.environment import Environment
+from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
+from autowebcompat_tools.result import ResultT
+from autowebcompat_tools.task import RunTracker, TaskConfig
+from autowebcompat_tools.task import Task as BaseTask
+from claude_agent_sdk import McpServerConfig
 from pydantic import BaseModel
 
 from .browser import ChromeBrowsers, FirefoxBrowsers
@@ -29,13 +25,10 @@ from .config import BUGZILLA_READ_TOOLS, CHROME_DEVTOOLS_TOOLS, DEVTOOLS_TOOLS
 from .mcp_servers import build_chrome_devtools_server, build_firefox_devtools_server
 from .result import (
     RESULT_SERVER_NAME,
-    SUBMIT_RESULT_TOOL,
     DiagnosisPlanResult,
     DiagnosisResult,
+    DiagnosisText,
     ReproScriptResult,
-    ResultCollector,
-    ResultT,
-    build_result_server,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -57,27 +50,6 @@ class FirefoxChannel(Enum):
     esr = "esr"
 
 
-@dataclass
-class BugIdInput:
-    bug_id: int
-    type: Literal["bug_id"] = "bug_id"
-
-    def subject(self) -> str:
-        return f" bug {self.bug_id}"
-
-
-@dataclass
-class BugDataInput:
-    bug_data: str
-    type: Literal["bug_data"] = "bug_data"
-
-    def subject(self) -> str:
-        return self.bug_data
-
-
-AutoWebcompatInput = BugIdInput | BugDataInput
-
-
 class AutowebcompatDiagnosisResult(BaseModel):
     reproduced: bool
     failure_reason: str | None
@@ -86,181 +58,38 @@ class AutowebcompatDiagnosisResult(BaseModel):
     testcase_url: str | None
 
 
-@dataclass
-class TaskConfig:
-    model: str | None = None
-    max_turns: int | None = None
-    effort: (
-        Literal["low"]
-        | Literal["medium"]
-        | Literal["high"]
-        | Literal["xhigh"]
-        | Literal["max"]
-        | None
-    ) = None
-    log: Path | None = None
-    verbose: bool = True
-
-
-@dataclass
-class TaskRun:
-    name: str
-    start_time: datetime
-    end_time: datetime
-    num_turns: int
-    total_cost_usd: float | None
-
-
-class RunTracker:
-    def __init__(self) -> None:
-        self.task_runs: list[TaskRun] = []
-        self.current_task: tuple[str, datetime] | None = None
-
-    @property
-    def num_turns(self) -> int:
-        return sum(item.num_turns for item in self.task_runs)
-
-    @property
-    def total_cost_usd(self) -> float:
-        return sum(
-            item.total_cost_usd
-            for item in self.task_runs
-            if item.total_cost_usd is not None
-        )
-
-    def start_task(self, name: str) -> None:
-        self.current_task = name, datetime.now()
-
-    def end_task(self, name: str, result_msg: ResultMessage) -> None:
-        if self.current_task is None:
-            logger.warning("Got end_task without start_task")
-            return
-        current_name, start_time = self.current_task
-        if current_name != name:
-            logger.warning(
-                "Got end_task with name %s but current_task was %s", name, current_name
-            )
-            self.current_task = None
-            return
-        self.task_runs.append(
-            TaskRun(
-                name=name,
-                start_time=start_time,
-                end_time=datetime.now(),
-                num_turns=result_msg.num_turns,
-                total_cost_usd=result_msg.total_cost_usd,
-            )
-        )
-
-
-class Task(ABC, Generic[ResultT]):
-    name: str = "unnamed-task"
-    result_server_name: str = RESULT_SERVER_NAME
-    submit_result_tool: str = SUBMIT_RESULT_TOOL
-    result_cls: type[ResultT]
+class Task(BaseTask[ResultT]):
+    result_server_name = RESULT_SERVER_NAME
 
     def __init__(self, task_config: TaskConfig, run_tracker: RunTracker):
-        self.task_config = task_config
-        self.run_tracker = run_tracker
-        self.allowed_tools = [
-            "Read",
-            "Write",
-            "Grep",
-            "Glob",
-            "Bash",
-            self.submit_result_tool,
-        ]
-
-        self.result_collector = ResultCollector(self.result_cls)
-        self.mcp_servers = {}
-
-        result_server = self.result_server()
-        if result_server is not None:
-            self.mcp_servers[self.result_server_name] = result_server
-
-    def add_mcp_server(
-        self, name: str, server: McpServerConfig, tools: list[str]
-    ) -> None:
-        self.mcp_servers[name] = server
-        self.allowed_tools.extend(tools)
-
-    def result_server(self) -> McpServerConfig | None:
-        return build_result_server(self.result_collector)
+        super().__init__(task_config, run_tracker)
+        self.allowed_tools.insert(1, "Write")
 
     def system_prompt(self) -> str:
         return (HERE / "prompts" / "system.md").read_text()
 
-    @abstractmethod
-    def user_prompt(self) -> str: ...
 
-    @abstractmethod
-    def subject(self) -> Any: ...
-
-    def agent_options(self) -> ClaudeAgentOptions:
-        return ClaudeAgentOptions(
-            system_prompt=self.system_prompt(),
-            mcp_servers=self.mcp_servers,
-            permission_mode="bypassPermissions",
-            allowed_tools=self.allowed_tools,
-            model=self.task_config.model,
-            max_turns=self.task_config.max_turns,
-            setting_sources=[],
-            # DevTools snapshots of complex pages serialize to JSON that can
-            # exceed the SDK's default 1 MiB message buffer (the reader dies
-            # fatally if it does). Raise it well above that ceiling.
-            max_buffer_size=10 * 1024 * 1024,
-            effort=self.task_config.effort,
-        )
-
-    async def run(self) -> ResultT:
-        self.run_tracker.start_task(self.name)
-        subject = self.subject()
-        preview = str(subject)
-        if len(preview) > 200:
-            preview = f"{preview[:200]}..."
-        logger.info("Running %s with %s", self.__class__.__name__, preview)
-
-        result_msg: ResultMessage | None = None
-        with Reporter(
-            verbose=self.task_config.verbose, log_path=self.task_config.log
-        ) as reporter:
-            reporter.header(subject)
-            async with ClaudeSDKClient(options=self.agent_options()) as client:
-                await client.query(self.user_prompt())
-                async for msg in client.receive_response():
-                    reporter.message(msg)
-                    if isinstance(msg, ResultMessage):
-                        result_msg = msg
-
-        if result_msg is None:
-            raise AgentError(f"{subject}: agent produced no result message")
-        self.run_tracker.end_task(self.name, result_msg)
-        if result_msg.is_error:
-            raise AgentError(
-                f"{subject} diagnosis failed: {result_msg.result or result_msg.subtype}"
-            )
-        if self.result_collector.result is None:
-            raise AgentError(
-                f"{subject}: agent finished without submitting a result via submit_result"
-            )
-        return self.result_collector.result
-
-
-def run_script(script_path: Path, browser: str, browser_path: Path) -> int | None:
+def run_script(
+    script_path: Path, browser: str, browser_path: Path, headless: bool
+) -> int | None:
     """Run the reproduction script in one browser; return its exit code.
 
     Returns ``None`` if the script timed out, i.e. gave no verdict.
     """
     script_timeout = 5 * 60
+    env = {
+        **os.environ,
+        "NODE_PATH": str(NODE_MODULES),
+        "BROWSER": browser,
+        "BROWSER_BIN": str(browser_path),
+    }
+    if headless:
+        env["HEADLESS"] = "1"
+
     try:
         proc = subprocess.run(
             ["node", str(script_path)],
-            env={
-                **os.environ,
-                "NODE_PATH": str(NODE_MODULES),
-                "BROWSER": browser,
-                "BROWSER_BIN": str(browser_path),
-            },
+            env=env,
             capture_output=True,
             text=True,
             timeout=script_timeout,
@@ -280,7 +109,7 @@ def run_script(script_path: Path, browser: str, browser_path: Path) -> int | Non
 
 
 def run_confirmation_script(
-    script_path: Path, firefox_path: Path, chrome_path: Path
+    script_path: Path, firefox_path: Path, chrome_path: Path, headless: bool
 ) -> ReproScriptResult | None:
     """Check the script still demonstrates the difference, without an agent.
 
@@ -289,10 +118,10 @@ def run_confirmation_script(
     outcome — wrong exit codes, a script error, or a timeout — so the caller
     can fall back to the agent task.
     """
-    firefox_code = run_script(script_path, "firefox", firefox_path)
+    firefox_code = run_script(script_path, "firefox", firefox_path, headless)
     if firefox_code != 1:
         return None
-    chrome_code = run_script(script_path, "chrome", chrome_path)
+    chrome_code = run_script(script_path, "chrome", chrome_path, headless)
     if chrome_code != 0:
         return None
 
@@ -398,7 +227,7 @@ class ReproScript(Task):
             "firefox-devtools",
             build_firefox_devtools_server(
                 firefox_path=firefox_path,
-                headless=True,
+                headless=task_config.headless,
                 enable_script=True,
                 enable_privileged_context=False,
             ),
@@ -406,7 +235,9 @@ class ReproScript(Task):
         )
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(chrome_path=chrome_path, headless=True),
+            build_chrome_devtools_server(
+                chrome_path=chrome_path, headless=task_config.headless
+            ),
             CHROME_DEVTOOLS_TOOLS,
         )
 
@@ -432,8 +263,8 @@ You are establishing whether the issue still reproduces, and getting a Puppeteer
 script that demonstrates it. Do not investigate why the difference happens.
 
 1. Confirm the issue: run the reproduction steps against the reported
-   site in Firefox with the Firefox DevTools MCP (headless, as is every browser
-   on this system), then run the same steps in Chrome with the Chrome DevTools
+   site in Firefox with the Firefox DevTools MCP, then run the same steps
+   in Chrome with the Chrome DevTools
    MCP.
    - A genuine web-compat issue reproduces in Firefox but not in Chrome. If the
      behavior is identical in both, your steps may be wrong; refine the steps
@@ -492,11 +323,12 @@ class Diagnosis(Task):
         self.plan_result = plan_result
         self.repro_result = repro_result
         self.testcase_path = make_empty_temp_file(self.work_dir, "testcase=", ".html")
+        self.diagnosis_path = self.work_dir / "diagnosis.json"
         self.add_mcp_server(
             "firefox-devtools",
             build_firefox_devtools_server(
                 firefox_path=firefox_path,
-                headless=True,
+                headless=task_config.headless,
                 enable_script=True,
                 enable_privileged_context=False,
             ),
@@ -504,7 +336,9 @@ class Diagnosis(Task):
         )
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(chrome_path=chrome_path, headless=True),
+            build_chrome_devtools_server(
+                chrome_path=chrome_path, headless=task_config.headless
+            ),
             CHROME_DEVTOOLS_TOOLS,
         )
 
@@ -555,8 +389,11 @@ as your starting evidence.
    reproduces the same difference; if it does not, revise it until it does. If
    you cannot produce the testcase, leave `testcase_path` null.
 
-4. Submit your diagnosis via `submit_result` (see "Reporting your result"). Do
-   not propose a fix.
+5. Write your diagnosis to exactly {self.diagnosis_path} as a JSON object
+   matching this schema:
+{json.dumps(DiagnosisText.model_json_schema(), indent=2)}
+
+6. Submit your diagnosis via `submit_result` (see "Reporting your result").
 """
             )
         )
@@ -576,6 +413,12 @@ class DiagnosisResults:
         self.diagnosis_result: DiagnosisResult | None = None
 
     @property
+    def diagnosis(self) -> DiagnosisText | None:
+        if self.diagnosis_result is None:
+            return None
+        return self.diagnosis_result.diagnosis
+
+    @property
     def testcase_url(self) -> str | None:
         if self.diagnosis_result is None or self.diagnosis_result.testcase_path is None:
             return None
@@ -589,7 +432,7 @@ class DiagnosisResults:
         self.diagnosis_result = result
 
     def into_result(self) -> AutowebcompatDiagnosisResult:
-        diagnosis = self.diagnosis_result
+        diagnosis = self.diagnosis
         return AutowebcompatDiagnosisResult(
             reproduced=self.repro_result.reproduced,
             failure_reason=self.repro_result.failure_reason,
@@ -607,52 +450,56 @@ async def run_autowebcompat_diagnosis(
     publish_file: PublishFile,
 ) -> AutowebcompatDiagnosisResult:
     """Confirm a web-compat issue reproduces, then diagnose why."""
-    firefox_browser = FirefoxBrowsers()
-    chrome_browser = ChromeBrowsers()
+    with Environment() as env:
+        if not config.headless:
+            env.start_xvfb()
 
-    plan_task = DiagnosisPlan(config, tracker, input_data, bugzilla_mcp_server)
-    plan_result = await plan_task.run()
+        firefox_browser = FirefoxBrowsers()
+        chrome_browser = ChromeBrowsers()
 
-    channel = FirefoxChannel(plan_result.firefox_channel)
-    logger.info(
-        "Diagnosing on Firefox %s: %s", channel.value, plan_result.channel_rationale
-    )
-    firefox_path = getattr(firefox_browser, channel.value)
-    chrome_path = chrome_browser.stable
+        plan_task = DiagnosisPlan(config, tracker, input_data, bugzilla_mcp_server)
+        plan_result = await plan_task.run()
 
-    # If the attached script still demonstrates the difference, that settles the
-    # reproduction without spending an agent task on it.
-    repro_result = None
-    if plan_result.script_path is not None:
-        repro_result = run_confirmation_script(
-            plan_result.script_path, firefox_path, chrome_path
-        )
-        if repro_result is None:
-            logger.info(
-                "Attached script did not demonstrate the difference; "
-                "falling back to the reproduction task"
-            )
-    if repro_result is None:
-        repro_task = ReproScript(
-            config, tracker, firefox_path, chrome_path, plan_result
-        )
-        repro_result = await repro_task.run()
-
-    results = DiagnosisResults(publish_file, repro_result)
-
-    if not repro_result.reproduced:
+        channel = FirefoxChannel(plan_result.firefox_channel)
         logger.info(
-            "Issue did not reproduce (%s); skipping diagnosis",
-            repro_result.failure_reason,
+            "Diagnosing on Firefox %s: %s", channel.value, plan_result.channel_rationale
         )
+        firefox_path = getattr(firefox_browser, channel.value)
+        chrome_path = chrome_browser.stable
+
+        # If the attached script still demonstrates the difference, that settles the
+        # reproduction without spending an agent task on it.
+        repro_result = None
+        if plan_result.script_path is not None:
+            repro_result = run_confirmation_script(
+                plan_result.script_path, firefox_path, chrome_path, config.headless
+            )
+            if repro_result is None:
+                logger.info(
+                    "Attached script did not demonstrate the difference; "
+                    "falling back to the reproduction task"
+                )
+        if repro_result is None:
+            repro_task = ReproScript(
+                config, tracker, firefox_path, chrome_path, plan_result
+            )
+            repro_result = await repro_task.run()
+
+        results = DiagnosisResults(publish_file, repro_result)
+
+        if not repro_result.reproduced:
+            logger.info(
+                "Issue did not reproduce (%s); skipping diagnosis",
+                repro_result.failure_reason,
+            )
+            return results.into_result()
+
+        if repro_result.script_path is None:
+            logger.info("No validated script; diagnosing from the reproduction steps")
+
+        diagnosis_task = Diagnosis(
+            config, tracker, firefox_path, chrome_path, plan_result, repro_result
+        )
+        results.set_diagnosis(await diagnosis_task.run())
+
         return results.into_result()
-
-    if repro_result.script_path is None:
-        logger.info("No validated script; diagnosing from the reproduction steps")
-
-    diagnosis_task = Diagnosis(
-        config, tracker, firefox_path, chrome_path, plan_result, repro_result
-    )
-    results.set_diagnosis(await diagnosis_task.run())
-
-    return results.into_result()

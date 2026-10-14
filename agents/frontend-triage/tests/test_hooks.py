@@ -7,6 +7,11 @@ hackbot_agents/frontend_triage/hooks.py.
 
 import pytest
 from agent_tools.registry import ToolError
+from hackbot_agents.frontend_triage.agent import (
+    _FEEDBACK_TAGS,
+    _PATCH_REQUEST,
+    feedback_tags_hook,
+)
 from hackbot_agents.frontend_triage.config import ENABLED_ACTION_TYPES
 from hackbot_agents.frontend_triage.hooks import (
     add_comment_hook,
@@ -84,7 +89,7 @@ def test_a_refused_comment_does_not_use_up_the_allowance():
 
 def test_a_comment_may_declare_its_severity_only_once():
     plan = "Root cause is a stale selector in content-area.css."
-    block = "\n\n---\n\nSuggested severity: S4\nCosmetic only, no functional impact."
+    block = "\n\nSuggested severity: S4. Cosmetic only, no functional impact."
 
     # Absent is deliberate — a run with low severity confidence omits the block.
     severity_block_hook({"params": {"text": plan}})
@@ -145,3 +150,11 @@ def test_a_comment_citing_no_owned_path_passes():
     # and Searchfox. Refusing here would fail the run over something the agent cannot
     # satisfy -- it would retry forever against guidance that does not exist.
     _guidance_hook("Firefox :: New Tab Page")(_cite("gfx/thebes/gfxPlatform.cpp"))
+
+
+def test_the_footer_asks_for_a_patch_needinfo_in_its_own_paragraph():
+    action = {"params": {"bug_id": BUG, "text": "Fix plan.\n\n---\n\nreaction footer"}}
+    feedback_tags_hook(action)
+    assert action["params"]["text"] == (
+        f"Fix plan.\n\n---\n\nreaction footer\n{_FEEDBACK_TAGS}\n\n{_PATCH_REQUEST}"
+    )

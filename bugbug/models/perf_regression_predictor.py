@@ -209,9 +209,7 @@ class DiffStructurer:
                 state.rename_to = line[len("rename to ") :].strip()
                 if not state.current_file:
                     self._start_file(state, state.rename_to)
-            elif line.startswith("--- "):
-                pass
-            elif line.startswith("+++ "):
+            elif line.startswith(("--- ", "+++ ")):
                 pass
             elif line.startswith(_BINARY_MARKERS):
                 self._flush_block(state)

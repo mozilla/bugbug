@@ -27,25 +27,26 @@ container.
 ### The catalog
 
 Each action type has a declaration the agent calls and a handler that applies it.
-[actions/handlers/registry.py](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/registry.py) is the authoritative type → handler map.
+Declarations live in the runtime; handlers live in hackbot-api.
+[app/action_handlers/registry.py](../../services/hackbot-api/app/action_handlers/registry.py) is the authoritative type → handler map.
 
 As with read tools, nothing is exposed by default: an agent lists the dotted types it may
 record in its `config.py` and passes them to `actions_server_for`, which builds a server
 carrying only those. `bug-fix`, for instance, allows `phabricator.submit_patch` on a fresh
 triage run but swaps it for `phabricator.update_patch` on a follow-up.
 
-| Action type                 | Records the intent to…                     | Params                                    |
-| --------------------------- | ------------------------------------------ | ----------------------------------------- |
-| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                       |
-| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`            |
-| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment           |
-| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields                      |
-| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan` |
-| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                             |
-| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                     |
-| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases        |
-| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                         |
-| `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`          |
+| Action type                 | Records the intent to…                     | Params                                                          |
+| --------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
+| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                                             |
+| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`                                  |
+| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
+| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields                                            |
+| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
+| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                                                   |
+| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                           |
+| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
+| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
+| `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. `phabricator.submit_patch`
@@ -62,8 +63,8 @@ be turned back on for a recorded message by passing `unfurl=True` to `record_mes
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.
 
-Adding a type is a declaration in the domain module plus one line in the handler registry.
-The dispatch loop never changes.
+Adding a type is a declaration in the runtime's domain module plus one line in hackbot-api's
+handler registry. The dispatch loop never changes.
 
 ### The two patch actions
 
@@ -96,9 +97,9 @@ Triggered by the `run.completed` event, on a subscription filtered to **succeede
    runs, whether or not the agent auto-applies, so the UI can always show and apply them.
 2. **Apply, if opted in.** With `auto_apply_actions=True` on the agent's registry entry,
    pending rows are applied immediately. Otherwise they wait for a human to click apply.
-3. **Dispatch.** Each row's `type` selects a handler from the registry. The handler gets
-   the params and an `ApplyContext` — which can `download_artifact(key)` without knowing
-   GCS is behind it, keeping the runtime library free of a storage dependency.
+3. **Dispatch.** Each row's `type` selects a handler from hackbot-api's registry. The
+   handler gets the params and an `ApplyContext` — which can `download_artifact(key)`
+   without knowing GCS is behind it.
 4. **Stamp.** The row records `applied` or `failed`, its result, and its error. Only a real
    success sets `applied_at`.
 
@@ -141,9 +142,9 @@ result).
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Recording mechanics, hooks       | [libs/hackbot-runtime/hackbot_runtime/actions/recorder.py](../../libs/hackbot-runtime/hackbot_runtime/actions/recorder.py) |
 | Action declarations (per domain) | [hackbot_runtime/actions/](../../libs/hackbot-runtime/hackbot_runtime/actions/)                                            |
-| Apply-side handlers              | [libs/hackbot-runtime/hackbot_runtime/actions/handlers/](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/)     |
-| Type → handler map               | [actions/handlers/registry.py](../../libs/hackbot-runtime/hackbot_runtime/actions/handlers/registry.py)                    |
+| Apply-side handlers              | [services/hackbot-api/app/action_handlers/](../../services/hackbot-api/app/action_handlers/)                               |
+| Type → handler map               | [app/action_handlers/registry.py](../../services/hackbot-api/app/action_handlers/registry.py)                              |
 | Orchestration, refs, coalescing  | [services/hackbot-api/app/actions_applier.py](../../services/hackbot-api/app/actions_applier.py)                           |
 
-Record side and apply side deliberately live in the **same library**, so the set of
-actions an agent can request and the set the platform can apply cannot drift apart.
+Record side and apply side live in **different packages**: declarations ship in the agent
+container with `hackbot-runtime`, handlers run in hackbot-api.

@@ -126,7 +126,12 @@ async def process_review_request(
 
         try:
             try:
-                comments, patch_summary, details = await process_review(review_request)
+                (
+                    comments,
+                    patch_summary,
+                    general_comment,
+                    details,
+                ) = await process_review(review_request)
             finally:
                 # Re-associate since the identity map was cleared when we closed
                 # the connection.
@@ -149,6 +154,7 @@ async def process_review_request(
             return Response(status_code=status.HTTP_204_NO_CONTENT)
         db.add_all(comments)
         review_request.summary = patch_summary
+        review_request.general_comment = general_comment
         review_request.details = details
         await db.commit()
 

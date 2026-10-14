@@ -13,6 +13,15 @@ It is **opt-in**: the runtime only traces when it has W&B credentials, and never
 fails a run if Weave can't start. `WEAVE_PROJECT` picks the destination project
 (a bare `project` or `entity/project`; defaults to `hackbot-test`).
 
+## Linking a run to its traces
+
+The runtime tags every span with the hackbot run id (surfaced by Weave as
+`attributes.hackbot.run_id`, see [tracing.py](../../libs/hackbot-runtime/hackbot_runtime/tracing.py)).
+The Hackbot UI links each run page to the Weave **Agents** view filtered on that
+attribute, so all of a run's conversations show up together. The UI's
+`WEAVE_PROJECT` (`entity/project`, default `moz-bugbug/hackbot-dev`) must point at
+the project the agents trace into.
+
 **Locally**, add the key to your root `.env`; the agent's `compose.yml` should
 pass `WANDB_API_KEY` through to the agent container.
 

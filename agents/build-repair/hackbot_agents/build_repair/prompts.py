@@ -5,13 +5,37 @@
 
 """Prompt templates for the build-repair agent."""
 
+SYSTEM_PROMPT_APPEND = """\
+# Unattended run
+
+You run in an isolated container as part of Mozilla's automated CI repair. No human
+is watching or can answer, so do not ask questions or wait for replies: finish the
+task and state the outcome in your final message. Do not propose good first bugs.
+
+# Tools
+
+`searchfox-cli`, `rg` and the `moz` MCP server are not available here; do not run
+`./mach bootstrap` to get them. Search the tree with `git grep`, restricted to paths
+where you can, never `grep -r`, which hits the Bash timeout on a tree this big. Use
+the Bugzilla and Phabricator tools you were given.
+
+# Working in the tree
+
+- Stay in your working directory, the source tree: write scratch files by absolute
+  path rather than `cd`-ing elsewhere. If a command reports "not a git repository",
+  you have moved -- run `git -C <tree>` rather than hunting for the tree.
+- Review your edits with `git diff --stat` and `git diff -- <path>`, never
+  `git status`: after a build the objdir adds millions of untracked files and the
+  output runs to tens of MB.
+- Never read or cat a whole CI log; they run to six figures of lines. Read a window
+  with `sed -n`, and clip the width as well as the line count with `| cut -c1-200`,
+  because a single log line can be 10 KB.
+"""
+
 ANALYSIS_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing and fixing a build failure.
 
 Investigate why the {target_software} build broke at commit {git_commit}. The source
-tree is at {source_repo} (your working directory), checked out at that commit. Stay
-in it: write scratch files by absolute path rather than `cd`-ing elsewhere. If a
-command reports "not a git repository" you have moved -- run `git -C {source_repo}`
-rather than hunting for the tree.
+tree is at {source_repo} (your working directory), checked out at that commit.
 {push_context}{bug_context}
 Analyze the following:
 1. The git diff of commit {git_commit} (use `git show {git_commit}`).
@@ -28,19 +52,31 @@ Create these documents:
    at, and do not narrate the steps you took to get here.
 2. {scratch_out}/planning.md with the fix as a short numbered list of edits
 3. {scratch_out}/summary.md -- 2-3 sentences of plain prose, no headings or lists.
-   Open with whether a commit in this push broke the build and which one, then
-   give the error and the fix in a clause each.
+   Open by naming the commit that broke the build, or saying that no commit in
+   this push did, as a statement rather than an answer (no leading "Yes" or "No"),
+   then give the error and the fix in a clause each.
 {blame_step}
-Do not prompt to edit those documents. Do not write any code yet. Work fully
-autonomously and do not ask any questions.
+Do not write any code yet.
 """
 
 PUSH_CONTEXT = """
-This commit landed in the same push as the commits below. Any of them may have
-introduced the failure -- the checked-out commit is not necessarily the culprit:
+This push consists of exactly these commits, the checked-out one first. Any of
+them may have introduced the failure -- the checked-out commit is not necessarily
+the culprit:
 {commit_lines}
 Inspect each commit (`git show <commit>`) and correlate with the failure logs to
 determine which single commit introduced the build failure.
+{checkout_history}"""
+
+SINGLE_COMMIT_CONTEXT = """
+This push consists of commit {commit} alone.
+{checkout_history}"""
+
+CHECKOUT_HISTORY = """\
+The history behind it belongs to earlier pushes; the checkout is shallow and
+reaches about {depth} commits back. Its oldest commit is a graft, so `git show`
+lists the whole tree as added and `git blame` marks its lines with `^`; neither
+says what that commit changed.
 """
 
 PUSH_COMMIT_LINE = "- {commit}"
@@ -58,11 +94,7 @@ TREEHERDER_STEP = r"""\
    to get the whole diagnostic:
    `sed -n '165280,165320p' {scratch_out}/logs/job_<id>/live_backing_log.log | cut -c1-200`
    An `ERROR -` line is usually only the first line of a compiler error -- the
-   offending source and the `^` caret follow it. Never read or cat a whole log;
-   they run to six figures of lines.
-   Clip the width as well as the line count: log lines run to thousands of
-   characters, so append `| cut -c1-200` to any grep or sed over a log -- 40 wpt
-   lines alone came to 38 KB without it.
+   offending source and the `^` caret follow it.
    Two things can stop that command finding the job, and both are recoverable:
    - Treeherder sometimes returns a malformed response ("error decoding response
      body"). Retry the same command once; it usually succeeds.
@@ -77,9 +109,14 @@ TREEHERDER_STEP = r"""\
    artifact can be a passing run's log, so a wrong log is worse than none. The run
    is meant to fail here.
 
-   The same command answers CI questions about the push. `--compare <revision>`
-   says whether the failure is new here or was already failing earlier;
-   `--lookback 50 --suspects` finds the push window a failure started in;
+   The same command answers CI questions about the push. Before blaming a commit,
+   confirm the failure started here: `--lookback 50 --suspects` prints the push
+   where the job first failed and the last one where it passed. If it first failed
+   on an earlier push the culprit landed there, not here -- find it in the history
+   (see blame.json below). A build job is not scheduled on every push: a neighbouring
+   push that reports no failure may simply not have run it, and `--match-filter
+   all` on that push lists the job only if it did. `--compare <revision>` says
+   whether the failure is new relative to a push that ran the job;
    `--similar-history <job id>` gives a job's recent pass rate, which separates a
    real bustage from infrastructure flakiness.
 
@@ -105,11 +142,13 @@ TREEHERDER_STEP_NO_PUSH = """\
 
 
 BLAME_STEP = """4. {scratch_out}/blame.json naming the commit that introduced the failure, as JSON:
-   {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Use one of the
-   push commits listed above when there are several, otherwise the checked-out
-   commit. Set "blamed_commit" to null if none of them caused the failure -- it is
-   infrastructure, a toolchain or fetch problem, or it already failed before this
-   push -- rather than naming the least implausible commit.
+   {{"blamed_commit": "<full git sha>", "reason": "<one sentence>"}}. Name one of the
+   push commits listed above, or, when the failure started in an earlier push, the
+   commit there that introduced it (`git log -S<symbol> -- <file>` finds it), and
+   say in the Verdict and the summary that it landed before this push. Set
+   "blamed_commit" to null when no commit is to blame -- it is infrastructure, a
+   toolchain or fetch problem -- or you cannot tell which earlier commit it was,
+   rather than naming the least implausible one.
 """
 
 BUG_CONTEXT = "\nThe commit attempted to fix Bugzilla bug {bug_id}.\n"
@@ -127,30 +166,43 @@ Read your earlier analysis and implement the fix directly in the source tree:
 2. {scratch_out}/planning.md -- your fixing plan
 
 Edit the source files in {source_repo} (your working directory) to repair the build.
-Editing: use Edit on a file that already exists -- Write refuses until the file has
+{blame_note}Editing: use Edit on a file that already exists -- Write refuses until the file has
 been read, which costs a turn. To see how a commit handled comparable files, run
 `git show <sha> -- <dir>` rather than guessing a sibling's name.
 
-Working in this tree: review your own edits with `git diff --stat` and `git diff --
-<path>`, never `git status` -- after a build the objdir adds millions of untracked
-files and the output runs to tens of MB. Logs already fetched sit under
-{scratch_out}/logs; when you grep or sed one, cap the width as well as the line
-count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB.
- A mozconfig
-that mirrors the failing CI configuration (release milestone, warnings-as-errors)
+Logs already fetched sit under {scratch_out}/logs. A mozconfig that mirrors the failing CI configuration (release milestone, warnings-as-errors)
 is already set up. Verify the fix compiles with the build_firefox tool, passing
 the directory of the file you changed as `target` (e.g. 'docshell/base') for a
 fast, focused build -- prefer this over a full tree build. If the build reports a
 missing toolchain (e.g. rustc or clang), run the bootstrap_firefox tool once and
 then build again. Verify via the build_firefox tool rather than a raw `./mach
 build` so the build result is recorded.
-{try_push}
-
-Do not prompt to edit files. Work fully autonomously, do not ask any questions.
-Use all allowed tools without prompting.
-"""
+{try_push}{report}"""
 
 TRY_PUSH_INSTRUCTIONS = """
 Once the fix builds locally, validate it on CI: call the submit_try_push tool with the
 failing task name ('{task_name}') to push to the try server and report the build result.
+"""
+
+BLAME_NOTE = """\
+Commit {blamed_commit} broke the build{tree}. Sheriffs back it out, so the fix is for
+its author to fold into that commit and reland: write it as a change to that commit,
+not a follow-up on top of it.
+"""
+
+TREE_AT_BLAME = " and the tree is checked out at it"
+
+PARENT_REVISION_ARG = (
+    " parent_revision_id={revision} (the busted commit's own revision, D{revision}),"
+)
+
+REPORT_INSTRUCTIONS = """
+Once the build is verified, submit the fix with the `phabricator_submit_patch`
+action: bug_id={bug_id},{parent} a title of the form "Bug {bug_id} - <what the fix
+does>", and a summary naming the busted commit, the failing task and the root cause
+and saying the fix is for the author to fold into that commit and reland. The test
+plan says what you built and that it ran locally on Linux only; when the failing
+task is for another platform, say the local build does not show the fix builds there.
+If the fix does not build, or you are not confident in it, record nothing and say
+so in your final message.
 """

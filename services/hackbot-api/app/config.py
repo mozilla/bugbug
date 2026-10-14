@@ -25,8 +25,6 @@ class WebhookSettings(BaseModel):
     bot_phid: str = ""
     # The mention that triggers a bug-fix follow-up run.
     mention_token: str = "@hackbot"
-    # Best-effort in-memory dedupe of retried deliveries, by transaction.
-    dedupe_ttl_seconds: int = 6 * 60 * 60
 
 
 class BugzillaWebhookSettings(BaseModel):
@@ -36,8 +34,6 @@ class BugzillaWebhookSettings(BaseModel):
     secret: str
     # The Bugzilla account to which the needinfo request must be directed.
     bot_login: str = "hackbot@mozilla.tld"
-    # Best-effort in-memory dedupe of retried bug-modification deliveries.
-    dedupe_ttl_seconds: int = 6 * 60 * 60
 
 
 class SlackSettings(BaseModel):
@@ -49,6 +45,7 @@ class SlackSettings(BaseModel):
     # Slack's app-level signing secret, verifying the HMAC on every interaction
     # delivery.
     signing_secret: HmacSecret
+    bot_token: str
 
 
 class Settings(BaseSettings):
@@ -64,9 +61,17 @@ class Settings(BaseSettings):
     db_name: str = "hackbot"
 
     # Cloud Run Jobs
+    # Appended to every agent's Job name. Dev and stage share a project, so
+    # their Jobs are named hackbot-agent-<agent>-dev / -stage; prod has none.
+    agent_job_suffix: str = ""
     job_execution_timeout_seconds: int = 8 * 60 * 60
     signed_policy_max_bytes: int = 5 * 1024 * 1024 * 1024
     signed_policy_grace_seconds: int = 60 * 60
+
+    # Largest run artifact an action handler downloads unless it asks for a
+    # different limit. Guards against loading something like a multi-GB patch
+    # into memory, which can take the service down.
+    action_apply_max_bytes: int = 100 * 1024 * 1024
 
     # API auth
     external_api_key: str = ""
@@ -75,14 +80,16 @@ class Settings(BaseSettings):
 
     # Inbound webhook receiver config, embedded as a nested model and populated
     # from WEBHOOK_<FIELD> env vars in this single parse (WEBHOOK_SECRET,
-    # WEBHOOK_BOT_PHID, WEBHOOK_MENTION_TOKEN, WEBHOOK_DEDUPE_TTL_SECONDS).
+    # WEBHOOK_BOT_PHID, WEBHOOK_MENTION_TOKEN).
     # Required via its `secret` field, so WEBHOOK_SECRET must be set at startup.
     webhook: WebhookSettings
 
     # Bugzilla uses a separate shared-secret header and bot identity. These map
-    # from BUGZILLA_WEBHOOK_SECRET, BUGZILLA_WEBHOOK_BOT_LOGIN, and
-    # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
+
+    bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
+    bugzilla_api_key: str
+    bugzilla_edge_key: str | None = None
 
     slack: SlackSettings
 
@@ -91,6 +98,7 @@ class Settings(BaseSettings):
     # is just a matter of repointing this at the remote API. While co-located,
     # this is a loopback call to the same service, authed with external_api_key.
     hackbot_api_url: str = "http://localhost:8080"
+    hackbot_ui_url: str = "https://hackbot.moz.tools"
 
     # Internal event routes (Eventarc / Pub/Sub push targets).
     # Event topics follow a per-domain convention, `<domain>-events` (the GCP
@@ -100,6 +108,10 @@ class Settings(BaseSettings):
     run_events_topic: str = "agent-run-events"
     push_auth_audience: str = ""
     push_auth_service_account: str = ""
+
+    # Run-completion email settings (see app/notifications.py).
+    sendgrid_api_key: str
+    notification_sender: str
 
     # Server
     port: int = 8080
