@@ -205,6 +205,10 @@ def mock_treeherder_recent_failures() -> None:
                 [5, "test-linux1804-64/opt", 1, "task5"],
                 # Classified as expected fail.
                 [3, "test-linux1804-64/opt", 1, "task6"],
+                # Not classified, without group results.
+                [1, "test-linux1804-64/opt-mochitest-1", 1, "task7"],
+                # Not classified, without group results nor test paths.
+                [1, "build-linux64/opt", 1, "task8"],
             ],
             "next": "https://treeherder.mozilla.org/api/jobs/?page=2",
         },
@@ -249,6 +253,34 @@ def mock_treeherder_recent_failures() -> None:
             "task4": {"test-group2": False},
         },
     )
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/task7/artifacts",
+        json={
+            "artifacts": [
+                {"name": "public/logs/live_backing.log"},
+                {"name": "public/test_info/mochitest-plain_errorsummary.log"},
+            ]
+        },
+    )
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/task7/artifacts/public/test_info/mochitest-plain_errorsummary.log",
+        body=b"\n".join(
+            orjson.dumps(line)
+            for line in [
+                # Groups which did not fail are not selected.
+                {"action": "test_groups", "groups": ["test-group2", "test-group3"]},
+                {
+                    "action": "test_result",
+                    "test": "test1.html",
+                    "group": "test-group2",
+                    "status": "FAIL",
+                    "expected": "PASS",
+                },
+            ]
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -274,6 +306,7 @@ def test_get_recent_failures(
     past_failures_data = test_scheduling.PastFailures("group", False)
     past_failures_data.all_runnables = [
         *past_failures_data.all_runnables,
+        "test-group3",
         "testing/web-platform/tests/wpt-dir",
         "testing/web-platform/mozilla/tests/wpt-dir",
     ]
@@ -286,6 +319,7 @@ def test_get_recent_failures(
     assert tasks == {"test-linux1804-64-opt-label1"}
     assert groups == {
         "test-group1",
+        "test-group2",
         "testing/web-platform/tests/wpt-dir",
         "testing/web-platform/mozilla/tests/wpt-dir",
     }

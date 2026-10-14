@@ -601,6 +601,10 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
     Failures classified as intermittent, infra or expected are ignored, and only
     tasks and manifests known to the label and group models are returned.
     """
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci.task import Task, TestTask
+
     # Retry only a few times, so that an unavailable Treeherder doesn't stall the
     # scheduling for long.
     session = requests.Session()
@@ -629,7 +633,7 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
         return set(), set()
 
     tasks: set[str] = set()
-    task_ids_by_push: dict[int, set[str]] = defaultdict(set)
+    labels_by_push: dict[int, dict[str, str]] = defaultdict(dict)
     # Push IDs are unique across all Treeherder projects, so filtering by them
     # already restricts the jobs to the pushes of the given project.
     url: str | None = f"{TREEHERDER_API_URL}/jobs/"
@@ -648,14 +652,14 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
                 continue
 
             tasks.add(job["job_type_name"])
-            task_ids_by_push[job["push_id"]].add(job["task_id"])
+            labels_by_push[job["push_id"]][job["task_id"]] = job["job_type_name"]
 
         # The "next" URL already contains the query parameters.
         url = data["next"]
         params = None
 
     groups: set[str] = set()
-    for push_id, task_ids in task_ids_by_push.items():
+    for push_id, labels in labels_by_push.items():
         response = session.get(
             f"{TREEHERDER_API_URL}/project/{project}/push/group_results/",
             params={"revision": push_revs[push_id]},
@@ -664,10 +668,21 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
         )
         response.raise_for_status()
         group_results = response.json()
-        for task_id in task_ids:
-            groups.update(
-                group for group, ok in group_results.get(task_id, {}).items() if not ok
-            )
+        for task_id, label in labels.items():
+            if task_id in group_results:
+                groups.update(
+                    group for group, ok in group_results[task_id].items() if not ok
+                )
+                continue
+
+            # The group results are missing when the task did not report them (e.g.
+            # when it was aborted), or when Treeherder did not ingest them yet. In
+            # this case, take the groups of the failing tests from the errorsummary
+            # artifacts of the task. They are not used in general, as they also
+            # contain failures which passed on retry.
+            task = Task.create(id=task_id, label=label)
+            if isinstance(task, TestTask):
+                groups.update(task.failure_types)
 
     known_tasks = set(test_scheduling.PastFailures("label", True).all_runnables)
     known_groups = set(test_scheduling.PastFailures("group", True).all_runnables)
