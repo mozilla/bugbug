@@ -44,9 +44,9 @@ prompt.
 
 The run summary's `result` contains:
 
-- `plan`: `url`, `affected_platforms`, `script_path`;
-- `result`: `wrote_intervention`, `build_succeeded`,
-  `fixed_with_intervention`, `failure_reason`, `summary`;
+- `wrote_intervention`, `fixed_with_intervention`, `build_succeeded`,
+  `failure_reason`, `summary`;
+- `plan_result`: `url`, `affected_platforms`, `script_path`;
 - `files_changed`: taken from `git`, not reported by the model.
 
 The recorded patch is the checkout's final diff, published as

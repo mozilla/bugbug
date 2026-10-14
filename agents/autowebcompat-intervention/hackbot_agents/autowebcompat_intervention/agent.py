@@ -83,10 +83,12 @@ def render_report(input_data: AutoWebcompatInput, fetch_instructions: str) -> st
 
 
 class AutowebcompatInterventionResult(BaseModel):
-    # None for an inline bug_data run, which has no Bugzilla bug behind it.
-    bug_id: int | None
-    plan: InterventionPlanResult
-    result: InterventionResult
+    wrote_intervention: bool
+    fixed_with_intervention: bool
+    build_succeeded: bool
+    failure_reason: str | None
+    summary: str
+    plan_result: InterventionPlanResult
     files_changed: list[str] = []
 
 
@@ -355,8 +357,7 @@ class Intervention(StructuredTask[InterventionResult]):
 
 
 class InterventionResults:
-    def __init__(self, bug_id: int | None, plan_result: InterventionPlanResult):
-        self.bug_id = bug_id
+    def __init__(self, plan_result: InterventionPlanResult):
         self.plan_result = plan_result
         self.intervention_result: InterventionResult | None = None
         self.files_changed: list[str] = []
@@ -376,9 +377,12 @@ class InterventionResults:
                 summary="",
             )
         return AutowebcompatInterventionResult(
-            bug_id=self.bug_id,
-            plan=self.plan_result,
-            result=intervention,
+            wrote_intervention=intervention.wrote_intervention,
+            fixed_with_intervention=intervention.fixed_with_intervention,
+            build_succeeded=intervention.build_succeeded,
+            failure_reason=intervention.failure_reason,
+            summary=intervention.summary,
+            plan_result=self.plan_result,
             files_changed=self.files_changed,
         )
 
@@ -402,19 +406,18 @@ async def run_autowebcompat_intervention(
         plan_task = InterventionPlan(config, tracker, input_data, bugzilla_mcp_server)
         plan_result = await plan_task.run()
 
-        bug_id = input_data.bug_id if isinstance(input_data, BugIdInput) else None
-        results = InterventionResults(bug_id, plan_result)
+        results = InterventionResults(plan_result)
 
         platforms = plan_result.affected_platforms
         if "linux" not in platforms:
             result = results.into_result()
             if platforms == ["ios"]:
-                result.result.failure_reason = "unsupported_ios"
+                result.failure_reason = "unsupported_ios"
             elif platforms == ["android"]:
-                result.result.failure_reason = "unsupported_android"
+                result.failure_reason = "unsupported_android"
             else:
-                result.result.failure_reason = "unsupported_desktop_os"
-            result.result.summary = (
+                result.failure_reason = "unsupported_desktop_os"
+            result.summary = (
                 f"The issue affects {', '.join(platforms)}; this agent can only "
                 "verify interventions on Linux desktop at the moment"
             )
@@ -422,8 +425,8 @@ async def run_autowebcompat_intervention(
 
         if plan_result.script_path is None:
             result = results.into_result()
-            result.result.summary = "The report has no Puppeteer reproduction script"
-            result.result.failure_reason = "no_puppeteer_script"
+            result.summary = "The report has no Puppeteer reproduction script"
+            result.failure_reason = "no_puppeteer_script"
             return result
 
         firefox_browser = FirefoxBrowsers()
@@ -432,8 +435,8 @@ async def run_autowebcompat_intervention(
         )
         if not repro_result.reproduced:
             result = results.into_result()
-            result.result.summary = repro_result.summary
-            result.result.failure_reason = "not_reproducible"
+            result.summary = repro_result.summary
+            result.failure_reason = "not_reproducible"
             return result
 
         write_mozconfig(fx_ctx)
