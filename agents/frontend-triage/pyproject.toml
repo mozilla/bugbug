@@ -9,6 +9,8 @@ dependencies = [
     "bugsy",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
+    # `--prompt` mode (mozilla/mozregression#2197) is not released yet.
+    "mozregression",
     "starlette>=0.36.0",
     "uvicorn>=0.27.0",
 ]
@@ -19,6 +21,7 @@ dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
+mozregression = { git = "https://github.com/msujaws/mozregression.git", rev = "fdf6bd4f3ea4ad47219bcce058c744f559ac0400" }
 
 [build-system]
 requires = ["hatchling"]

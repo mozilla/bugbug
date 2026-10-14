@@ -166,6 +166,8 @@ class FrontendTriageInputs(BaseModel):
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
+    # Off skips the mozregression bisection of an unranged regression.
+    bisect: bool | None = None
 
 
 class TestPlanGeneratorInputs(BaseModel):

@@ -17,6 +17,7 @@ from hackbot_agents.frontend_triage.hooks import (
     add_comment_hook,
     component_guidance_hook,
     severity_block_hook,
+    update_bug_hook,
 )
 from hackbot_runtime.actions import ActionsRecorder
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
@@ -44,6 +45,70 @@ def test_the_agent_is_given_no_tool_that_changes_a_bug_field():
     assert ENABLED_ACTION_TYPES == ["bugzilla.add_comment"]
     tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
     assert not [t for t in tools if "update_bug" in t], tools
+
+
+def _update(rec, changes, bug_id=BUG):
+    return rec.record(
+        "bugzilla.update_bug",
+        {"bug_id": bug_id, "changes": changes},
+        reasoning="bisected",
+    )
+
+
+def _update_recorder():
+    rec = ActionsRecorder()
+    rec.add_hook("bugzilla.update_bug", update_bug_hook(rec, BUG))
+    return rec
+
+
+def test_the_regression_range_fields_are_recorded():
+    rec = _update_recorder()
+    _update(
+        rec,
+        {
+            "cf_has_regression_range": "yes",
+            "regressed_by": {"add": [1899999]},
+            "keywords": {"remove": ["regressionwindow-wanted"]},
+        },
+    )
+    assert len(rec.actions) == 1
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {},
+        {"severity": "S2"},
+        {"cf_has_regression_range": "no"},
+        {"regressed_by": {"set": [1]}},
+        {"regressed_by": {"add": [1], "remove": [2]}},
+        {"regressed_by": {"add": ["1"]}},
+        {"regressed_by": {"add": [True]}},
+        {"regressed_by": 1},
+        {"keywords": {"remove": ["regression"]}},
+        {"keywords": {"add": ["regressionwindow-wanted"]}},
+        {"cf_has_regression_range": "yes", "status": "RESOLVED"},
+    ],
+)
+def test_a_change_outside_the_regression_range_fields_is_refused(changes):
+    rec = _update_recorder()
+    with pytest.raises(ToolError):
+        _update(rec, changes)
+    assert rec.actions == []
+
+
+def test_a_field_change_on_another_bug_is_refused():
+    rec = _update_recorder()
+    with pytest.raises(ToolError):
+        _update(rec, {"cf_has_regression_range": "yes"}, bug_id=BUG + 1)
+
+
+def test_a_second_field_change_is_refused():
+    rec = _update_recorder()
+    _update(rec, {"cf_has_regression_range": "yes"})
+    with pytest.raises(ToolError):
+        _update(rec, {"regressed_by": {"add": [1]}})
+    assert len(rec.actions) == 1
 
 
 def test_a_private_comment_is_refused():
