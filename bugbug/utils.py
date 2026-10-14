@@ -596,8 +596,12 @@ def get_automationrelevance(branch: str, revision: str) -> dict:
     return response.json()
 
 
-def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
-    """Load descriptions of patches in the stack for a given revision."""
+def get_hgmo_stack_changesets(branch: str, revision: str) -> list[dict]:
+    """Load the automationrelevance changesets in the stack for a given revision.
+
+    Each item is the raw hg.mozilla.org changeset object (``node``, ``desc``,
+    ``author``, ``parents``, ``backsoutnodes``, ...).
+    """
     automation_relevance = get_automationrelevance(branch, revision)
 
     def should_skip(changeset):
@@ -620,10 +624,13 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
 
         return False
 
+    return [c for c in automation_relevance["changesets"] if not should_skip(c)]
+
+
+def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
+    """Load the nodes of patches in the stack for a given revision."""
     return [
-        c["node"].encode("ascii")
-        for c in automation_relevance["changesets"]
-        if not should_skip(c)
+        c["node"].encode("ascii") for c in get_hgmo_stack_changesets(branch, revision)
     ]
 
 

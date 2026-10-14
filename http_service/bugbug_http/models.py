@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import timedelta
 from functools import lru_cache
-from typing import Sequence
+from typing import Any, Callable, Sequence
 from urllib.parse import urlparse
 
 import orjson
@@ -23,7 +23,7 @@ from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
 from bugbug.models.perf_regression_predictor import PatchCommitMessageExtractor
-from bugbug.utils import get_hgmo_stack
+from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
@@ -243,12 +243,46 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
     return "OK"
 
 
+# Commits the perf regression predictor must not score, keyed by the reason
+# reported to the client. Rules are evaluated in order and the first match
+# wins. Each predicate receives a hg.mozilla.org automationrelevance changeset.
+PERF_REGRESSION_IGNORED_COMMIT_RULES: dict[str, Callable[[dict], bool]] = {
+    # Backouts revert an earlier patch, so their diff mirrors the original
+    # change and tells nothing about new regressions.
+    "backout": lambda changeset: len(changeset.get("backsoutnodes", [])) > 0,
+    # Merges (e.g. mozilla-central into autoland) carry no change of their own.
+    "merge": lambda changeset: len(changeset.get("parents", [])) > 1,
+    # Automated web-platform-tests imports from upstream.
+    "wptsync": lambda changeset: repository.is_wptsync(
+        {
+            "author_email": changeset.get("author", ""),
+            "desc": changeset.get("desc", ""),
+        }
+    ),
+    # Large mechanical changes (e.g. reformatting) excluded from blame.
+    "ignore-this-changeset": lambda changeset: (
+        "ignore-this-changeset" in changeset.get("desc", "")
+    ),
+}
+
+
+def get_perf_regression_ignore_reason(changeset: dict) -> str | None:
+    """Return why the perf regression predictor skips a commit, or None to score it."""
+    for reason, matches in PERF_REGRESSION_IGNORED_COMMIT_RULES.items():
+        if matches(changeset):
+            return reason
+    return None
+
+
 def classify_perf_regression(branch: str, rev: str) -> str:
     """Predict performance-regression risk for a push.
 
     Mirrors :func:`schedule_tests`: the push is resolved server-side against
-    the service's own local hg clone. Every commit in the push is scored
-    separately and the top-level ``risk_score`` is the maximum across commits.
+    the service's own local hg clone. Commits matching one of
+    ``PERF_REGRESSION_IGNORED_COMMIT_RULES`` are listed with their
+    ``ignored_reason`` but not scored. Every other commit is scored
+    separately and the top-level ``risk_score`` is the maximum across the
+    scored commits, or ``None`` when every commit in the push was ignored.
     """
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
@@ -276,7 +310,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
         log_prefix,
     )
     try:
-        revs = get_hgmo_stack(branch, rev)
+        changesets = get_hgmo_stack_changesets(branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning(
             "%s Push not found for %s @ %s!",
@@ -287,7 +321,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
         setkey(job.result_key, orjson.dumps({"available": False}))
         return "OK"
 
-    if not revs:
+    if not changesets:
         LOGGER.warning(
             "%s No commits to analyze for %s @ %s",
             log_prefix,
@@ -297,17 +331,38 @@ def classify_perf_regression(branch: str, rev: str) -> str:
         setkey(job.result_key, orjson.dumps({"available": False}))
         return "OK"
 
-    # Export each commit as its own patch (commit message + diff) from the
-    # local clone.
-    patches = repository.get_commit_patches(REPO_DIR, revs)
+    # Decide which commits to score. Ignored commits are still listed in the
+    # result, with the reason they were skipped and no score.
+    commits: list[dict[str, Any]] = []
+    to_score: list[tuple[int, bytes]] = []
+    for changeset in changesets:
+        node = changeset["node"]
+        ignored_reason = get_perf_regression_ignore_reason(changeset)
+        commits.append(
+            {
+                "node": node,
+                "prob": None,
+                "class": None,
+                "risk_score": None,
+                "ignored_reason": ignored_reason,
+            }
+        )
+        if ignored_reason is None:
+            to_score.append((len(commits) - 1, node.encode("ascii")))
+        else:
+            LOGGER.info("%s Ignoring commit %s (%s)", log_prefix, node, ignored_reason)
+
+    # Export each commit to score as its own patch (commit message + diff)
+    # from the local clone.
+    revs = [node for _, node in to_score]
+    patches = repository.get_commit_patches(REPO_DIR, revs) if revs else []
 
     model = MODEL_CACHE.get(PERF_REGRESSION_PREDICTOR)
 
     # Score each commit separately. The service runs inference on CPU,
     # so we classify one at a time to keep memory flat.
     extract_commit_message = PatchCommitMessageExtractor()
-    commits = []
-    for rev_node, patch in zip(revs, patches):
+    for (index, _), patch in zip(to_score, patches):
         patch_text = patch.decode("utf-8", "replace")
         commit_probabilities = model.classify(
             [
@@ -318,16 +373,18 @@ def classify_perf_regression(branch: str, rev: str) -> str:
             ],
             probabilities=True,
         )[0]
-        commits.append(
+        commits[index].update(
             {
-                "node": rev_node.decode("ascii"),
                 "prob": commit_probabilities.tolist(),
                 "class": int(commit_probabilities.argmax()),
                 "risk_score": float(commit_probabilities[1]),
             }
         )
 
-    risk_score = max(commit["risk_score"] for commit in commits)
+    scored_risk_scores = [
+        commit["risk_score"] for commit in commits if commit["ignored_reason"] is None
+    ]
+    risk_score = max(scored_risk_scores) if scored_risk_scores else None
 
     data = {
         "branch": branch,
@@ -337,15 +394,18 @@ def classify_perf_regression(branch: str, rev: str) -> str:
         "extra_data": {
             **model.get_extra_data(),
             "commit_count": len(commits),
+            "ignored_commit_count": len(commits) - len(scored_risk_scores),
         },
     }
     setkey(job.result_key, orjson.dumps(data), compress=True)
     LOGGER.info(
-        "%s Finished prediction for %s @ %s, commit_count=%d, risk_score=%f",
+        "%s Finished prediction for %s @ %s, commit_count=%d, "
+        "ignored_commit_count=%d, risk_score=%s",
         log_prefix,
         branch,
         rev,
         len(commits),
+        len(commits) - len(scored_risk_scores),
         risk_score,
     )
     return "OK"

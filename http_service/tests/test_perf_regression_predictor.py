@@ -53,12 +53,37 @@ def _response_json(response):
     return response.json
 
 
-def _mock_repo(monkeypatch, revs, patches):
+def _changeset(
+    node: str,
+    desc: str = "Bug 123456 - Change something",
+    author: str = "Developer <developer@example.com>",
+    parents: list[str] | None = None,
+    backsoutnodes: list[str] | None = None,
+) -> dict:
+    """Build a minimal hg.mozilla.org automationrelevance changeset."""
+    return {
+        "node": node,
+        "desc": desc,
+        "author": author,
+        "parents": parents if parents is not None else ["parentnode"],
+        "backsoutnodes": backsoutnodes or [],
+    }
+
+
+def _mock_repo(monkeypatch, changesets, patches_by_node):
+    """Mock the push resolution; records the revs exported from the clone."""
+    exported_revs: list[list[bytes]] = []
     monkeypatch.setattr(models.repository, "pull", lambda *args, **kwargs: None)
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, rev: revs)
     monkeypatch.setattr(
-        models.repository, "get_commit_patches", lambda repo_dir, r: patches
+        models, "get_hgmo_stack_changesets", lambda branch, rev: changesets
     )
+
+    def get_commit_patches(repo_dir, revs):
+        exported_revs.append(list(revs))
+        return [patches_by_node[rev] for rev in revs]
+
+    monkeypatch.setattr(models.repository, "get_commit_patches", get_commit_patches)
+    return exported_revs
 
 
 def test_endpoint_queues_and_returns_prediction(client, jobs, add_result) -> None:
@@ -89,9 +114,14 @@ def test_endpoint_queues_and_returns_prediction(client, jobs, add_result) -> Non
                 "prob": [0.2, 0.8],
                 "class": 1,
                 "risk_score": 0.8,
+                "ignored_reason": None,
             }
         ],
-        "extra_data": {"calibrated": False, "commit_count": 1},
+        "extra_data": {
+            "calibrated": False,
+            "commit_count": 1,
+            "ignored_commit_count": 0,
+        },
     }
     keys = next(iter(jobs.values()))
     add_result(keys[0], prediction)
@@ -123,7 +153,11 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
             return {"calibrated": False}
 
     fake_model = FakeModel()
-    _mock_repo(monkeypatch, [b"node1hash", b"node2hash"], [PATCH_ONE, PATCH_TWO])
+    _mock_repo(
+        monkeypatch,
+        [_changeset("node1hash"), _changeset("node2hash")],
+        {b"node1hash": PATCH_ONE, b"node2hash": PATCH_TWO},
+    )
     monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: fake_model)
 
     assert (
@@ -153,9 +187,22 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
     # Top-level risk score is the max across commits.
     assert result["risk_score"] == 0.8
     assert result["extra_data"]["commit_count"] == 2
+    assert result["extra_data"]["ignored_commit_count"] == 0
     assert result["commits"] == [
-        {"node": "node1hash", "prob": [0.2, 0.8], "class": 1, "risk_score": 0.8},
-        {"node": "node2hash", "prob": [0.9, 0.1], "class": 0, "risk_score": 0.1},
+        {
+            "node": "node1hash",
+            "prob": [0.2, 0.8],
+            "class": 1,
+            "risk_score": 0.8,
+            "ignored_reason": None,
+        },
+        {
+            "node": "node2hash",
+            "prob": [0.9, 0.1],
+            "class": 0,
+            "risk_score": 0.1,
+            "ignored_reason": None,
+        },
     ]
 
 
@@ -165,7 +212,7 @@ def test_worker_marks_missing_push_unavailable(monkeypatch) -> None:
     def raise_not_found(branch, rev):
         raise requests.exceptions.HTTPError("not found")
 
-    monkeypatch.setattr(models, "get_hgmo_stack", raise_not_found)
+    monkeypatch.setattr(models, "get_hgmo_stack_changesets", raise_not_found)
 
     def unexpected_model(model_name):
         raise AssertionError("model should not be loaded for a missing push")
@@ -180,7 +227,7 @@ def test_worker_marks_missing_push_unavailable(monkeypatch) -> None:
 
 
 def test_worker_marks_empty_stack_unavailable(monkeypatch) -> None:
-    _mock_repo(monkeypatch, [], [])
+    _mock_repo(monkeypatch, [], {})
 
     def unexpected_model(model_name):
         raise AssertionError("model should not be loaded for an empty stack")
@@ -195,7 +242,7 @@ def test_worker_marks_empty_stack_unavailable(monkeypatch) -> None:
 
 
 def test_worker_propagates_model_loading_failure(monkeypatch) -> None:
-    _mock_repo(monkeypatch, [b"node1hash"], [PATCH_ONE])
+    _mock_repo(monkeypatch, [_changeset("node1hash")], {b"node1hash": PATCH_ONE})
 
     def raise_missing_model(model_name):
         raise FileNotFoundError("missing checkpoint")
@@ -232,3 +279,149 @@ def test_load_model_uses_registered_model_class_and_standard_directory(
     loaded_model = models.load_model("somecustommodel")
     assert loaded_model is sentinel
     assert loaded_directories == ["somecustommodelmodel"]
+
+
+class _ScoringModel:
+    """Fake model returning a fixed score and counting classify calls."""
+
+    def __init__(self, probabilities):
+        self.probabilities = probabilities
+        self.calls = 0
+
+    def classify(self, items, probabilities=False):
+        self.calls += 1
+        return self.probabilities
+
+    def get_extra_data(self):
+        return {"calibrated": False}
+
+
+@pytest.mark.parametrize(
+    "changeset, expected_reason",
+    [
+        (_changeset("n"), None),
+        (
+            _changeset(
+                "n",
+                desc="Backed out changeset abc123 for perf regressions",
+                backsoutnodes=["abc123"],
+            ),
+            "backout",
+        ),
+        (_changeset("n", parents=["p1", "p2"]), "merge"),
+        (
+            _changeset(
+                "n",
+                desc="Bug 1 [wpt PR 42] - Sync tests, a=testonly",
+                author="moz-wptsync-bot <wptsync@mozilla.com>",
+            ),
+            "wptsync",
+        ),
+        (_changeset("n", desc="Bug 1 - Sync tests\n\nwpt-pr: 42"), "wptsync"),
+        (
+            _changeset("n", desc="Bug 1 - Reformat tree. # ignore-this-changeset"),
+            "ignore-this-changeset",
+        ),
+        # Rules are evaluated in order: a backout of a wpt sync is a backout.
+        (
+            _changeset(
+                "n",
+                desc="Backed out changeset abc123\n\nwpt-pr: 42",
+                backsoutnodes=["abc123"],
+            ),
+            "backout",
+        ),
+    ],
+)
+def test_ignore_reason_rules(changeset, expected_reason) -> None:
+    assert models.get_perf_regression_ignore_reason(changeset) == expected_reason
+
+
+def test_worker_skips_ignored_commits_with_reason(monkeypatch) -> None:
+    fake_model = _ScoringModel(np.array([[0.3, 0.7]]))
+    exported_revs = _mock_repo(
+        monkeypatch,
+        [
+            _changeset("backouthash", backsoutnodes=["node0hash"]),
+            _changeset("node1hash"),
+            _changeset("wptsynchash", author="moz-wptsync-bot <wptsync@mozilla.com>"),
+        ],
+        {b"node1hash": PATCH_ONE},
+    )
+    monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: fake_model)
+
+    assert (
+        models.classify_perf_regression("integration/autoland", "abc123def456") == "OK"
+    )
+
+    # Only the commit to score is exported from the clone and classified.
+    assert exported_revs == [[b"node1hash"]]
+    assert fake_model.calls == 1
+
+    job = JobInfo(
+        models.classify_perf_regression, "integration/autoland", "abc123def456"
+    )
+    result = orjson.loads(
+        zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
+    )
+    # Ignored commits keep their place in the push, carry a reason and no score,
+    # and do not take part in the push-level risk score.
+    assert result["risk_score"] == 0.7
+    assert result["extra_data"]["commit_count"] == 3
+    assert result["extra_data"]["ignored_commit_count"] == 2
+    assert result["commits"] == [
+        {
+            "node": "backouthash",
+            "prob": None,
+            "class": None,
+            "risk_score": None,
+            "ignored_reason": "backout",
+        },
+        {
+            "node": "node1hash",
+            "prob": [0.3, 0.7],
+            "class": 1,
+            "risk_score": 0.7,
+            "ignored_reason": None,
+        },
+        {
+            "node": "wptsynchash",
+            "prob": None,
+            "class": None,
+            "risk_score": None,
+            "ignored_reason": "wptsync",
+        },
+    ]
+
+
+def test_worker_reports_fully_ignored_push_without_score(monkeypatch) -> None:
+    fake_model = _ScoringModel(np.array([[0.3, 0.7]]))
+    exported_revs = _mock_repo(
+        monkeypatch,
+        [
+            _changeset("backouthash", backsoutnodes=["node0hash"]),
+            _changeset("mergehash", parents=["p1", "p2"]),
+        ],
+        {},
+    )
+    monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: fake_model)
+
+    assert (
+        models.classify_perf_regression("integration/autoland", "abc123def456") == "OK"
+    )
+
+    # Nothing is exported or classified, but the client still learns why.
+    assert exported_revs == []
+    assert fake_model.calls == 0
+
+    job = JobInfo(
+        models.classify_perf_regression, "integration/autoland", "abc123def456"
+    )
+    result = orjson.loads(
+        zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
+    )
+    assert result["risk_score"] is None
+    assert result["extra_data"]["commit_count"] == 2
+    assert result["extra_data"]["ignored_commit_count"] == 2
+    assert [c["ignored_reason"] for c in result["commits"]] == ["backout", "merge"]
+    assert all(c["risk_score"] is None for c in result["commits"])

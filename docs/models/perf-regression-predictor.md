@@ -15,8 +15,18 @@ The diff is converted to the structured representation used to train the
 checkpoint. The combined text is truncated to the checkpoint's context window
 (512 tokens for the current CodeBERT checkpoint).
 
-Each commit gets its own `risk_score`; the push-level `risk_score` is the
-maximum across the commits in the stack.
+Some commits in a push are not meaningful to score and are skipped: backouts,
+merges, automated `wptsync` imports and commits marked `ignore-this-changeset`.
+They are still listed in the result with an `ignored_reason` and `null` scores.
+The rules live in `PERF_REGRESSION_IGNORED_COMMIT_RULES` in
+`http_service/bugbug_http/models.py`; to ignore another kind of commit, add an
+entry mapping the reason to a predicate over the hg.mozilla.org
+`automationrelevance` changeset. Rules are evaluated in order and the first
+match wins.
+
+Each scored commit gets its own `risk_score`; the push-level `risk_score` is
+the maximum across the scored commits, or `null` when every commit in the push
+was ignored.
 
 The `risk_score` is the uncalibrated softmax probability for positive class
 `1`. It must not be interpreted as a calibrated probability for operational
@@ -90,7 +100,15 @@ Example result:
       "node": "76383a875678",
       "prob": [0.25, 0.75],
       "class": 1,
-      "risk_score": 0.75
+      "risk_score": 0.75,
+      "ignored_reason": null
+    },
+    {
+      "node": "0c1d2e3f4a5b",
+      "prob": null,
+      "class": null,
+      "risk_score": null,
+      "ignored_reason": "backout"
     }
   ],
   "extra_data": {
@@ -98,13 +116,17 @@ Example result:
     "model_version": null,
     "max_length": 512,
     "calibrated": false,
-    "commit_count": 1
+    "commit_count": 2,
+    "ignored_commit_count": 1
   }
 }
 ```
 
 The push-level `risk_score` is the maximum of the per-commit `risk_score`
-values in `commits`.
+values of the scored commits in `commits`. Ignored commits have
+`ignored_reason` set and `null` for `prob`, `class` and `risk_score`; a `null`
+means "not scored", not "no risk". When every commit was ignored the push-level
+`risk_score` is `null` too.
 
 ## Model artifact
 
