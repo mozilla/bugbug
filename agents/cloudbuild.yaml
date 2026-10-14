@@ -3,14 +3,14 @@ steps:
   # Before anything else: if an older build of this trigger is still going,
   # stop here rather than deploy over it.
   - id: One at a time
-    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     args:
       - -c
       - uv run --frozen --package hackbot-deploy python -m hackbot_deploy check-build "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION"
 
   - id: Shape
-    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     args:
       - -c
@@ -46,7 +46,7 @@ steps:
   # yet (exit 3), stop without failing: the deploy is rerun once the infra PR
   # for this change is applied.
   - id: Deploy
-    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     # Recorded as deployed_by: whoever pushed, or the build when the trigger
     # is run by hand. Substitutions aren't in a step's environment otherwise.

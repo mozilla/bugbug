@@ -84,7 +84,7 @@ class GoogleCloud:
             response = requests.get(
                 _TOKENINFO, params={"access_token": self.credentials.token}, timeout=10
             )
-        except (GoogleAuthError, requests.RequestException):
+        except GoogleAuthError, requests.RequestException:
             return None
         return response.json().get("email") if response.ok else None
 

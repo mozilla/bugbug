@@ -2,7 +2,7 @@
 name = "hackbot-runtime"
 version = "0.1.0"
 description = "Agent-side runtime for hackbot-api: signed-policy upload, summary contract, exception handling"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "requests>=2.32.0",
     "httpx>=0.26.0",

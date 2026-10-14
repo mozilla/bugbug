@@ -1,4 +1,4 @@
-FROM python:3.12 AS builder
+FROM python:3.14 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # treeherder-cli (MPL-2.0) lets the agent query Firefox CI: what failed on a push,
 # when a failure started, how often a job passes. Built from source because upstream
 # only ships prebuilt Linux binaries for x86_64, and `cargo install` also works for an
-# arm64 developer build. A bookworm builder is safe against either python:3.12 base
+# arm64 developer build. A bookworm builder is safe against either python:3.14 base
 # (same glibc, or older building for newer); rustls means no OpenSSL to link.
 # Built from the evgenyrp fork until the User-Agent fix (Treeherder rejects requests
 # without one) is released upstream: https://github.com/padenot/treeherder-cli/pull/12
@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     CARGO_TARGET_DIR=/build/target/${TREEHERDER_CLI_REV} \
     cargo install --git ${TREEHERDER_CLI_GIT} --rev ${TREEHERDER_CLI_REV} --locked --root /out treeherder-cli
 
-FROM python:3.12 AS base
+FROM python:3.14 AS base
 
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app

@@ -7,10 +7,10 @@ name = "bugbug-http-service"
 dynamic = ["version"]
 description = "ML tools for Mozilla projects"
 license = "MPL-2.0"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 authors = [{ name = "Marco Castelluccio", email = "mcastelluccio@mozilla.com" }]
 classifiers = [
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
     "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
 ]
