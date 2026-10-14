@@ -1044,7 +1044,12 @@ def calculate_experiences(
             previous = experiences[key]
             if previous.tzinfo is None:
                 previous = previous.replace(tzinfo=timezone.utc)
-            time_lapse = commit.pushdate - previous
+
+            pushdate = commit.pushdate
+            if pushdate.tzinfo is None:
+                pushdate = pushdate.replace(tzinfo=timezone.utc)
+
+            time_lapse = pushdate - previous
             commit.seniority_author = time_lapse.total_seconds()
 
     logger.info("Analyzing experiences from %d commits...", len(commits))
