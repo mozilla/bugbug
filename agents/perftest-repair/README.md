@@ -12,8 +12,9 @@ no patches. Agent logic is in `hackbot_agents/perftest_repair/`.
 
 First, `recent.py` checks Treeherder's intermittent failure data (what the
 Intermittent Failures / OrangeFactor graph shows). A bug with no failures in the
-last 7 days is skipped: no session, no try push, no Slack message. If Treeherder
-cannot answer, the run goes ahead.
+last 7 days is skipped: no session, no try push, no Slack message. If it stays
+gone it stays quiet; if it comes back, the robot's next failure comment triggers a
+new run. If Treeherder cannot answer, the run goes ahead.
 
 Otherwise, one session, driven by `prompts/investigate-and-fix.md`:
 
@@ -66,7 +67,13 @@ restricted bugs.
 
 ## Trigger
 
-A run is started by hand from the Hackbot UI or the API.
+hackbot-api starts a run when the Intermittent Failures Robot
+(`orangefactor@bots.tld`) posts its failure count on an open, public bug with the
+`intermittent-failure` keyword in Testing :: AWSY, Raptor, Talos or mozperftest. A new
+bug is not picked up on filing, but once the robot first reports failures on it.
+See the Bugzilla webhook section of
+[docs/hackbot/triggers.md](../../docs/hackbot/triggers.md). A run can also be
+started by hand from the Hackbot UI.
 
 ## Input
 
