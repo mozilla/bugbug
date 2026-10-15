@@ -10,7 +10,7 @@ dependencies = [
     "phabricator-client",
     "phabricator-proxy",
     "bugsy",
-    "claude-agent-sdk>=0.1.30",
+    "claude-agent-sdk>=0.2.165",
     "mcp>=1.0.0",
     "mozdownload",
     "mozinstall",
