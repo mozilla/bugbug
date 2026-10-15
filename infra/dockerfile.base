@@ -1,4 +1,4 @@
-FROM python:3.14.7-slim
+FROM python:3.14.8-slim
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -6,6 +6,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 ENV VIRTUAL_ENV="/opt/venv"
 ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
 ENV UV_NO_CACHE=1
+# Ship bytecode, as the non-root runtime user can't write it and would recompile on every start
+ENV UV_COMPILE_BYTECODE=1
 
 # Setup dependencies in a cacheable step
 RUN --mount=type=bind,source=pyproject.toml,target=/tmp/bugbug/pyproject.toml \

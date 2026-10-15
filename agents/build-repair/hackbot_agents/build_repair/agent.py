@@ -524,7 +524,7 @@ def _bug_from_commit(repo: Path, sha: str) -> int | None:
             capture_output=True,
             text=True,
         ).stdout
-    except (subprocess.CalledProcessError, OSError):
+    except subprocess.CalledProcessError, OSError:
         return None
     return _bug_from_desc(subject)
 
@@ -545,7 +545,7 @@ def _revision_from_commit(repo: Path, sha: str) -> int | None:
             capture_output=True,
             text=True,
         ).stdout
-    except (subprocess.CalledProcessError, OSError):
+    except subprocess.CalledProcessError, OSError:
         return None
     match = _REVISION_RE.search(body)
     return int(match.group(1)) if match else None
@@ -582,7 +582,7 @@ def _read_blame(scratch_out: Path) -> dict:
         return {}
     try:
         blame = json.loads(path.read_text())
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return {}
     return blame if isinstance(blame, dict) else {}
 
