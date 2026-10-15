@@ -7,7 +7,7 @@ repos:
         # webservices-infra, which formats JSON differently.
         exclude: ^tests/fixtures/|^tools/hackbot-deploy/tests/fixtures/
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
+    rev: v0.17.0
     hooks:
       - id: ruff-check
         args: [--fix]
