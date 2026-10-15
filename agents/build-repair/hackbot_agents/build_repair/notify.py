@@ -14,8 +14,6 @@ blamed; the team address is added apply-side. Every identifier a recipient would
 otherwise have to look up -- revisions, task, bug, run -- is a link.
 """
 
-from __future__ import annotations
-
 import subprocess
 from pathlib import Path
 

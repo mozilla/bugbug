@@ -12,8 +12,6 @@ failure commit (via ``SOURCE_REF``) and collects the agent's edits into
 analysis artifacts.
 """
 
-from __future__ import annotations
-
 import contextlib
 import json
 import re

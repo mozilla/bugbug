@@ -6,8 +6,6 @@ and reaches Bugzilla via an out-of-process MCP broker (HTTP transport)
 that holds the Bugzilla token — the agent process itself never sees it.
 """
 
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 from shlex import quote

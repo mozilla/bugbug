@@ -1,7 +1,5 @@
 """Structured result reporting for the autowebcompat-repro agent."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Annotated, Literal
 

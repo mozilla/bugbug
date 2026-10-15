@@ -8,8 +8,6 @@ Handlers record an intended change (nothing is mutated) and return a short
 confirmation string, raising ``ToolError`` on invalid input.
 """
 
-from __future__ import annotations
-
 import mimetypes
 import os
 from pathlib import Path

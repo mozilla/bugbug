@@ -7,8 +7,6 @@ logic as the dicts the REST API would return, so it and its test fake don't
 depend on the client types.
 """
 
-from __future__ import annotations
-
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
