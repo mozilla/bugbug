@@ -151,3 +151,26 @@ existing one. The needinfo flag is cleared automatically as a recorded
 `bugzilla.update_bug` action once the run produces at least one other action, coalesced with
 the reply comment into a single Bugzilla transaction (see [actions.md](actions.md)). A run
 that records nothing leaves the flag standing.
+
+## Bugzilla webhook — perftest failure comments
+
+The same endpoint also triggers `perftest-repair`. When the Intermittent Failures Robot
+(`orangefactor@bots.tld`) posts its failure count on a bug ("N failures were associated
+with this bug in the last 7 days", or "... yesterday"), the bug is still failing, and is
+worth a run. A comment qualifies only when it is a `comment.create` by the robot, and the
+bug is public, open, has the `intermittent-failure` keyword and is in Testing :: AWSY,
+Raptor (which includes browsertime), Talos (which includes DAMP) or mozperftest
+([bugzilla_webhook.py](../../services/hackbot-api/app/bugzilla_webhook.py)).
+
+There is no `editbugs` check: the actor is always the robot. New bugs do not trigger on
+filing; they qualify once the robot first reports failures on them, which filters out the
+one-off failures that never recur. Retried deliveries are deduped by **comment id**, used
+as the run's database dedupe key as for needinfo, so a retry reuses the existing run.
+
+There is no per-bug cooldown: the robot comments weekly on every bug that failed at least
+once, and daily on a spike, so a bug that keeps failing gets a run each time. The agent
+itself skips a bug with no failures in the last 7 days before starting a session, so a
+run started by hand, or on a bug that has since gone quiet, costs nothing.
+
+The BMO webhook has to subscribe to comment events for those components; that is
+configured on the bot account in Bugzilla, not here.

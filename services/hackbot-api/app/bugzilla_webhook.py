@@ -1,4 +1,4 @@
-"""Detection helpers for Bugzilla needinfo webhooks."""
+"""Detection helpers for Bugzilla webhooks: needinfo requests and perftest failures."""
 
 from __future__ import annotations
 
@@ -77,3 +77,62 @@ def detect_needinfo_request(
     return BugzillaNeedinfoEvent(
         bug_id=bug_id, flag_id=flag_id, comment=comment, user_login=actor_login
     )
+
+
+# The account that posts Treeherder's failure counts on intermittent bugs
+# ("N failures were associated with this bug in the last 7 days" / "yesterday").
+INTERMITTENT_ROBOT_LOGIN = "orangefactor@bots.tld"
+
+# Components whose intermittent bugs perftest-repair works on. Browsertime jobs
+# run through raptor and DAMP through talos, so their bugs are filed under
+# Raptor and Talos.
+PERFTEST_COMPONENTS = frozenset(
+    {
+        ("Testing", "AWSY"),
+        ("Testing", "Raptor"),
+        ("Testing", "Talos"),
+        ("Testing", "mozperftest"),
+    }
+)
+
+
+@dataclass(frozen=True)
+class PerftestFailureCommentEvent:
+    """A failure-count comment from the robot on an open perf test intermittent."""
+
+    bug_id: int
+    comment_id: int
+
+
+def detect_perftest_failure_comment(
+    payload: dict,
+) -> PerftestFailureCommentEvent | None:
+    """Extract a robot failure-count comment on a public, open perftest bug.
+
+    The robot only comments when the failure recurred, so the bug is still live.
+    """
+    event = payload["event"]
+    bug = payload["bug"]
+
+    if event["action"] != "create" or event["target"] != "comment":
+        return None
+    if event["user"]["login"] != INTERMITTENT_ROBOT_LOGIN:
+        return None
+    if bug["is_private"] is not False:
+        return None
+    if (bug["product"], bug["component"]) not in PERFTEST_COMPONENTS:
+        return None
+    if "intermittent-failure" not in bug["keywords"]:
+        return None
+    # An open bug has an empty resolution; closed ones are not worth a run.
+    if bug["resolution"]:
+        return None
+
+    comment = bug.get("comment") or payload.get("comment")
+    if not comment or comment.get("is_private") is not False:
+        return None
+    comment_id = comment.get("id")
+    if not comment_id:
+        return None
+
+    return PerftestFailureCommentEvent(bug_id=bug["id"], comment_id=comment_id)
