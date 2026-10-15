@@ -1,8 +1,21 @@
 # Autowebcompat intervention agent
 
-Writes a Firefox webcompat intervention for a broken-site bug: confirms the
-breakage reproduces, adds the intervention and a test, verifies the fix, and
-records a Phabricator patch.
+Writes a Firefox webcompat intervention for a broken-site bug and records it as
+a Phabricator patch.
+
+## How it works
+
+1. **Plan:** reads the bug, downloads the Puppeteer reproduction script
+   attached to it, and works out which platforms are affected.
+2. **Reproduce:** runs the script against Firefox Nightly. The run stops here
+   if the breakage doesn't reproduce, or if it can't be verified (no script,
+   or Linux isn't affected).
+3. **Write the intervention:** in a Firefox checkout, following the rules in
+   `browser/extensions/webcompat/AGENTS.md`: adds the intervention, builds
+   Firefox, checks the fix with the script and on the page, adds a test, and
+   records the patch.
+4. **Verify:** re-runs the script against the build and checks the patch only
+   touches webcompat files; the patch is dropped if either fails.
 
 ## Input
 
