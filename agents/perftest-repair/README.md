@@ -40,7 +40,17 @@ hackbot-api applies the try push and then the Slack message without review. The
 message carries the link as `{{actions.try.url}}`, which hackbot-api fills in from
 the applied push.
 
-People read the try results on Treeherder and can retrigger more from there.
+With a try push, the run also records a Phabricator revision that waits on it
+(`wait_for_try`, see [docs/hackbot/actions.md](../../docs/hackbot/actions.md)). A
+scheduled check in hackbot-api follows the push and, once its jobs finish, replies in
+the run's Slack thread:
+
+1. the per-job results, e.g. `condprof-...-full: 9/10 passed, 1 failed`;
+2. the action: if at most 10% of the runs failed, the revision is opened for review
+   by `#perftest-reviewers` and linked; otherwise no revision, and why.
+
+So each pushed fix gets one thread: the diagnosis and push, the results, and the
+outcome. People can retrigger more from Treeherder.
 
 `rules/triage.md` holds the policy that makes this a perf agent rather than a
 generic one: what counts as a fix, and what does not -- raising timeouts without
@@ -89,8 +99,9 @@ started by hand from the Hackbot UI.
   changed, not from what the model says; or `skipped` when the bug had no recent
   failures)
 - The suggested fix, as the run's patch artifact, when `outcome` is `fix`.
-- Recorded actions: `slack.post_message`, and with a fix `try_server.push`.
-  hackbot-api applies both automatically for this agent.
+- Recorded actions: `slack.post_message`, and with a fix `try_server.push` and a
+  `phabricator.submit_patch` that waits on it. hackbot-api applies the first two
+  automatically; the revision only through the try-push check.
 
 ## Test the agent
 

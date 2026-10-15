@@ -691,3 +691,26 @@ def test_build_repair_mails_unattended_but_holds_the_revision():
     run = _run_with_findings()
     assert _action_auto_applies(spec, run, "email.send")
     assert not _action_auto_applies(spec, run, "phabricator.submit_patch")
+
+
+async def test_apply_pending_rows_leaves_waiting_and_skipped_rows_alone(monkeypatch):
+    # A revision waiting on its try push must not go up on a manual apply-all,
+    # nor one the try push already ruled out.
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    waiting = _row(0, actions_applier.WAITING, action_type="phabricator.submit_patch")
+    skipped = _row(1, actions_applier.SKIPPED, action_type="phabricator.submit_patch")
+    pending = _row(2, "pending")
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(waiting, []), (skipped, []), (pending, [])],
+    )
+
+    assert len(handler.calls) == 1
+    assert waiting.status == actions_applier.WAITING
+    assert skipped.status == actions_applier.SKIPPED

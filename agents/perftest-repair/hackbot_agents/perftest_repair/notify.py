@@ -11,7 +11,13 @@ from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 from hackbot_runtime.actions.try_server import TRY_PUSH_ACTION_TYPE
 
 from .agent import PerftestRepairResult
-from .config import TRY_REF
+from .config import (
+    MAX_TRY_FAILURE_RATE,
+    REVISION_REVIEWERS,
+    SLACK_CHANNEL,
+    SLACK_REF,
+    TRY_REF,
+)
 
 BUG_URL = "https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}"
 RUN_URL = HACKBOT_UI_URL.rstrip("/") + "/runs/{run_id}"
@@ -29,6 +35,26 @@ def try_push_of(recorder: ActionsRecorder) -> dict | None:
         if action["type"] == TRY_PUSH_ACTION_TYPE and action.get("ref") == TRY_REF:
             return action["params"]
     return None
+
+
+def revision_params(result: PerftestRepairResult, try_push: dict) -> dict:
+    """The Phabricator revision hackbot-api opens once the try push has passed."""
+    summary = result.summary.strip()
+    if summary.startswith("#"):
+        summary = summary.partition("\n")[2].strip()
+    return {
+        "bug_id": result.bug_id,
+        "title": try_push.get("title") or f"Bug {result.bug_id} - perf test fix",
+        "summary": summary,
+        "test_plan": f"Try push: {TRY_URL_PLACEHOLDER}",
+        "reviewers": REVISION_REVIEWERS,
+        "wait_for_try": {
+            "ref": TRY_REF,
+            "max_failure_rate": MAX_TRY_FAILURE_RATE,
+            "slack_channel": SLACK_CHANNEL,
+            "slack_ref": SLACK_REF,
+        },
+    }
 
 
 def _headline(result: PerftestRepairResult, try_push: dict | None) -> str:

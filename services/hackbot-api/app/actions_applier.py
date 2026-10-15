@@ -121,6 +121,17 @@ def _should_auto_apply(
     return run_level_auto_apply
 
 
+# Actions with `wait_for_try` start `waiting` until their try push passes (see
+# `try_results`), or end `skipped` if it didn't; auto-apply and apply-all skip both.
+WAITING = "waiting"
+SKIPPED = "skipped"
+_NOT_APPLICABLE = {"applied", WAITING, SKIPPED}
+
+
+def initial_status(params: dict) -> str:
+    return WAITING if params.get("wait_for_try") else "pending"
+
+
 async def ensure_action_rows(
     db: AsyncSession, run: Run
 ) -> list[tuple[RunAction, list[dict]]]:
@@ -145,7 +156,7 @@ async def ensure_action_rows(
                 type=action["type"],
                 params=action.get("params", {}),
                 ref=action.get("ref"),
-                status="pending",
+                status=initial_status(action.get("params", {})),
             )
             db.add(row)
         rows.append((row, action.get("attachments", [])))
@@ -205,7 +216,7 @@ async def _apply_pending_rows(
         if row.ref and row.status == "applied" and row.result is not None
     }
 
-    pending = [(row, att) for row, att in rows if row.status != "applied"]
+    pending = [(row, att) for row, att in rows if row.status not in _NOT_APPLICABLE]
 
     # Plan which pending rows coalesce into one bug PUT (indices into `pending`).
     # Drop any group whose rows carry a `ref`: nothing should reference a

@@ -15,7 +15,11 @@ from hackbot_agents.perftest_repair.agent import (
     assemble_result,
     render_prompt,
 )
-from hackbot_agents.perftest_repair.notify import build_message, try_push_of
+from hackbot_agents.perftest_repair.notify import (
+    build_message,
+    revision_params,
+    try_push_of,
+)
 from hackbot_runtime import ActionsRecorder
 from pydantic import ValidationError
 
@@ -326,3 +330,21 @@ async def test_test_runs_investigate_a_bug_without_recent_failures(
 ):
     with pytest.raises(RuntimeError, match="session started"):
         await _run(monkeypatch, tmp_path, failures=0, ignore_stop_conditions=True)
+
+
+def test_revision_waits_for_the_try_push_and_asks_perftest_reviewers():
+    params = revision_params(
+        _result(outcome="fix"), {**_TRY_PUSH, "title": "Bug 2076647 - Fix the race"}
+    )
+    assert params["bug_id"] == 2076647
+    assert params["title"] == "Bug 2076647 - Fix the race"
+    # The markdown heading is dropped from the summary.
+    assert params["summary"] == "The parser splits a line."
+    assert params["test_plan"] == "Try push: {{actions.try.url}}"
+    assert params["reviewers"] == ["#perftest-reviewers"]
+    assert params["wait_for_try"] == {
+        "ref": "try",
+        "max_failure_rate": 0.10,
+        "slack_channel": "#perftest-intermittent-hackbot",
+        "slack_ref": "announce",
+    }
