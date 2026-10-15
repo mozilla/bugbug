@@ -4,6 +4,8 @@ const nextConfig = {
   // Emit a self-contained server bundle so the Docker image stays small.
   output: "standalone",
   reactStrictMode: true,
+  // CommonJS with Node built-ins; loaded by the profile route at runtime.
+  serverExternalPackages: ["claude-profiler"],
 };
 
 export default withSentryConfig(nextConfig, {
