@@ -31,7 +31,7 @@ tasks:
       $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.body}
 
-    taskboot_image: "mozilla/taskboot:0.4.2"
+    taskboot_image: "mozilla/taskboot:0.5.2"
   in:
     $let:
       default_task_definition:
