@@ -16,6 +16,10 @@ TRY_PUSH_ACTION_TYPE = "try_server.push"
 # ``phabricator.PATCH_ACTION_TYPES``.
 TRY_ACTION_TYPES = frozenset({TRY_PUSH_ACTION_TYPE})
 
+# The range `mach try --rebuild` accepts (tools/tryselect/task_config.py). Its
+# lower limit of 3 applies only to `--full`, which pushes every task.
+MAX_REBUILD = 20
+
 
 def validate_test_paths(tests: dict[str, list[str]]) -> dict[str, list[str]]:
     """Check the shape of an agent-supplied ``{suite: [paths]}`` narrowing."""
@@ -86,6 +90,17 @@ async def push(
             ),
         ),
     ] = None,
+    rebuild: Annotated[
+        int | None,
+        Field(
+            default=None,
+            description=(
+                f"Run each selected task this many times (2-{MAX_REBUILD}), as "
+                "`mach try --rebuild` does. For telling whether an intermittent "
+                "failure is fixed; each extra run costs machine time."
+            ),
+        ),
+    ] = None,
     title: Annotated[
         str | None,
         Field(
@@ -141,6 +156,12 @@ async def push(
             )
         )
 
+    if rebuild is not None and not 1 <= rebuild <= MAX_REBUILD:
+        raise ToolError(
+            f"`rebuild` must be between 1 and {MAX_REBUILD}, the range `mach try "
+            f"--rebuild` accepts; {rebuild} is outside it."
+        )
+
     params: dict = {
         "tasks": cleaned_tasks or None,
         "auto": auto,
@@ -148,6 +169,9 @@ async def push(
     }
     if tests:
         params["test_paths"] = validate_test_paths(tests)
+    # One run is what a push does anyway, so only a real repeat is recorded.
+    if rebuild is not None and rebuild > 1:
+        params["rebuild"] = rebuild
 
     action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning, ref=ref)
     return confirmation(action)
