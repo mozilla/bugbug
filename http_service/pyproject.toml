@@ -30,6 +30,11 @@ dependencies = [
     "sentry-sdk[flask]>=2.60.0",
 ]
 
+[project.optional-dependencies]
+# Only the background worker runs model inference; the web image does not
+# install this extra (see Dockerfile.bg_worker).
+perf-regression-predictor = ["bugbug[perf-regression-predictor]"]
+
 [project.scripts]
 bugbug-http-worker = "bugbug_http.worker:main"
 bugbug-http-pulse-listener = "bugbug_http.listener:main"
