@@ -54,6 +54,16 @@ _EMAIL_RECOMMENDATIONS = {
 }
 
 
+def backout_reason(investigation: Investigation) -> str:
+    """What the backout was for, as sheriffs word it: "failures at test_foo.js"."""
+    if not investigation.failing_groups:
+        return f"{investigation.harness} failures"
+    group = investigation.failing_groups[0]
+    if group.tests:
+        return f"failures at {group.tests[0].rsplit('/', 1)[-1]}"
+    return f"failures in {group.group}"
+
+
 def sheriff_action_required(result: TestRepairResult) -> bool:
     """Whether the verdict is one a sheriff has to act on.
 
