@@ -2,24 +2,58 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
 
 import httpx
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 
 from hackbot_client.models import ApplyActionsResponse, TriggeredRun
 
 
 class HackbotClient:
-    """Call the public, API-key-authenticated Hackbot endpoints."""
+    """Call the public Hackbot API with either API key or service account auth."""
 
     def __init__(
-        self, base_url: str, api_key: str, timeout_seconds: float = 30.0
+        self,
+        base_url: str,
+        api_key: str = "",
+        audience: str = "",
+        timeout_seconds: float = 30.0,
     ) -> None:
+        """Initialize the client.
+
+        Args:
+            base_url: Base URL of the Hackbot API
+            api_key: API key for legacy authentication (optional)
+            audience: Audience for service account OIDC token minting.
+                Required if api_key is not set.
+            timeout_seconds: HTTP request timeout
+        """
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        self._audience = audience
         self._timeout_seconds = timeout_seconds
+
+        if not api_key and not audience:
+            raise ValueError(
+                "Either api_key or audience must be provided for authentication"
+            )
+
+    async def _get_headers(self) -> dict[str, str]:
+        """Return auth headers: API key or service account token."""
+        if self._api_key:
+            return {"X-API-Key": self._api_key}
+
+        token = await asyncio.to_thread(
+            id_token.fetch_id_token,
+            google_requests.Request(),
+            self._audience,
+        )
+        return {"Authorization": f"Bearer {token}"}
 
     async def trigger_run(
         self,
@@ -35,7 +69,7 @@ class HackbotClient:
         for good: repeated triggers carrying it are no-ops, answered with the
         same run reference and `is_new=False`.
         """
-        headers = {"X-API-Key": self._api_key}
+        headers = await self._get_headers()
         if on_behalf_of is not None:
             headers["X-On-Behalf-Of"] = on_behalf_of
 
