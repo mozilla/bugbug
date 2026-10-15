@@ -22,6 +22,7 @@ from bugbug.tools.core.connection import (
     get_github_api_headers,
     get_http_client,
     get_user_agent,
+    raise_for_github_api_error,
 )
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
@@ -580,7 +581,7 @@ class PhabricatorPatch(Patch):
         if r.status_code in (404, 422):
             return False
 
-        r.raise_for_status()
+        raise_for_github_api_error(r)
         return True
 
     @staticmethod
@@ -597,7 +598,7 @@ class PhabricatorPatch(Patch):
             },
             headers=get_github_api_headers(),
         )
-        r.raise_for_status()
+        raise_for_github_api_error(r)
 
         # The search matches the subjects anywhere in the message.
         for item in r.json()["items"]:

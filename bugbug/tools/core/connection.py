@@ -5,10 +5,60 @@
 
 """Core connection utilities for bugbug tools."""
 
+import json
 import os
 from functools import cache
+from logging import getLogger
 
 import httpx
+
+logger = getLogger(__name__)
+
+
+def raise_for_github_api_error(response: httpx.Response) -> None:
+    """Log GitHub's error diagnostics without recording request credentials."""
+    if response.status_code >= 400:
+        authorization = response.request.headers.get("Authorization", "")
+
+        def redact(value: str) -> str:
+            for secret in (authorization, authorization.removeprefix("Bearer ")):
+                if secret:
+                    value = value.replace(secret, "[REDACTED]")
+            return value[:1000]
+
+        try:
+            body = response.json()
+            message = body.get("message") if isinstance(body, dict) else None
+        except ValueError:
+            message = None
+
+        headers = (
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+            "X-RateLimit-Resource",
+            "Retry-After",
+            "X-Accepted-GitHub-Permissions",
+            "X-GitHub-SSO",
+            "X-GitHub-Request-Id",
+        )
+        logger.warning(
+            "GitHub API error: %s",
+            json.dumps(
+                {
+                    "url": str(response.request.url.copy_with(query=None)),
+                    "status": response.status_code,
+                    "authenticated": bool(authorization),
+                    "message": redact(str(message)) if message is not None else None,
+                    "headers": {
+                        name: redact(response.headers[name])
+                        for name in headers
+                        if name in response.headers
+                    },
+                }
+            ),
+        )
+    response.raise_for_status()
 
 
 def get_user_agent() -> str:

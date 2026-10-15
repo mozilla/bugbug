@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from unittest.mock import patch as mock_patch
 
+import httpx
 import pytest
 
 from bugbug import phabricator
@@ -56,6 +57,73 @@ def test_base_lookup_authenticates_github_api(monkeypatch, github_token) -> None
     for call in client.get.await_args_list:
         assert call.kwargs["headers"]["Authorization"] == "Bearer secret-token"
     assert client.get.await_count == 2
+
+
+@pytest.mark.parametrize("lookup", ["commit", "landing"])
+def test_github_lookup_logs_error_diagnostics(
+    monkeypatch, github_token, caplog, lookup
+) -> None:
+    async def get(url, **kwargs):
+        return httpx.Response(
+            403,
+            request=httpx.Request("GET", url, headers=kwargs["headers"]),
+            json={"message": "API rate limit exceeded"},
+            headers={
+                "X-RateLimit-Limit": "5000",
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": "1792083672",
+                "X-GitHub-Request-Id": "test-request",
+                "Set-Cookie": "private-cookie",
+            },
+        )
+
+    client = MagicMock()
+    client.get = get
+    monkeypatch.setattr(phab_platform, "get_http_client", lambda: client)
+    patch_class = phab_platform.PhabricatorPatch
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(
+            patch_class._commit_exists("mozilla-firefox/firefox", "abc")
+            if lookup == "commit"
+            else patch_class._latest_landing_commit(
+                "mozilla-firefox/firefox", before=datetime(2026, 10, 5, tzinfo=UTC)
+            )
+        )
+
+    assert '"authenticated": true' in caplog.text
+    assert "API rate limit exceeded" in caplog.text
+    assert '"X-RateLimit-Remaining": "0"' in caplog.text
+    assert "test-request" in caplog.text
+    assert "secret-token" not in caplog.text
+    assert "private-cookie" not in caplog.text
+
+
+@pytest.mark.parametrize("body", [b"<html>Forbidden</html>", b'[{"message":"no"}]'])
+def test_github_diagnostics_handle_nonstandard_error_bodies(caplog, body):
+    response = httpx.Response(
+        403, request=httpx.Request("GET", "https://api.github.com/test"), content=body
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        connection.raise_for_github_api_error(response)
+    assert '"authenticated": false' in caplog.text
+    assert '"message": null' in caplog.text
+
+
+def test_github_diagnostics_redact_credentials_from_error_message(caplog):
+    response = httpx.Response(
+        403,
+        request=httpx.Request(
+            "GET",
+            "https://api.github.com/test?private=query",
+            headers={"Authorization": "Bearer secret-token"},
+        ),
+        json={"message": "Rejected Bearer secret-token (secret-token)"},
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        connection.raise_for_github_api_error(response)
+    assert "[REDACTED]" in caplog.text
+    assert "secret-token" not in caplog.text
+    assert "private=query" not in caplog.text
 
 
 def test_stack_base_patch_is_bottom_ancestor() -> None:
