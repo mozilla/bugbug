@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import PerftestRepairResult, run_perftest_repair
 from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
-from .notify import build_message, try_push_of
+from .notify import build_message, revision_params, try_push_of
 
 
 class AgentInputs(BaseSettings):
@@ -62,7 +62,13 @@ async def main(ctx: HackbotContext) -> PerftestRepairResult:
         return result
     try_push = try_push_of(ctx.actions) if result.outcome == "fix" else None
     message = build_message(result, run_id=ctx.run_id, try_push=try_push)
-    record_message(ctx.actions, SLACK_CHANNEL, message)
+    announce = record_message(ctx.actions, SLACK_CHANNEL, message)
+    if try_push:
+        ctx.actions.record(
+            "phabricator.submit_patch",
+            revision_params(result, try_push, announce["action_id"]),
+            reasoning="Open the fix for review once its try push passes.",
+        )
     return result
 
 

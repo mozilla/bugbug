@@ -44,6 +44,16 @@ The Job's infrastructure is declared in the agent's own `hackbot.toml`, under `[
 mozilla/webservices-infra. Images ship separately and never need an infra PR. See
 [tools/hackbot-deploy](../../tools/hackbot-deploy/README.md).
 
+## Scheduled endpoints
+
+Two hackbot-api endpoints under `/internal/maintenance` (OIDC push auth) are meant to be
+called on a schedule, by a scheduler configured outside this repository:
+
+- `POST /finalize-stale-runs`: finalizes runs whose completion event was lost.
+- `POST /check-try-pushes`: applies or skips actions waiting on a try push once it has
+  finished (see [actions.md](actions.md)); every 30 minutes or so. Without it, those
+  actions stay `waiting`.
+
 ## Environments
 
 `ENVIRONMENT` (`development` / `production`) selects the Sentry environment and, in the

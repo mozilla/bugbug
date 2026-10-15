@@ -11,6 +11,7 @@ from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 from hackbot_runtime.actions.try_server import TRY_PUSH_ACTION_TYPE
 
 from .agent import PerftestRepairResult
+from .config import MAX_TRY_FAILURE_RATE, REVISION_REVIEWERS, SLACK_CHANNEL
 
 BUG_URL = "https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}"
 RUN_URL = HACKBOT_UI_URL.rstrip("/") + "/runs/{run_id}"
@@ -26,6 +27,34 @@ def try_push_of(recorder: ActionsRecorder) -> dict | None:
     """The run's last recorded try push action, if any."""
     pushes = [a for a in recorder.list_actions() if a["type"] == TRY_PUSH_ACTION_TYPE]
     return pushes[-1] if pushes else None
+
+
+def revision_params(
+    result: PerftestRepairResult, try_push: dict, announce_id: str
+) -> dict:
+    """The Phabricator revision hackbot-api opens once the try push has passed.
+
+    ``try_push`` is the recorded try push action, and ``announce_id`` the ID of
+    the recorded Slack report the try results are posted under.
+    """
+    summary = result.summary.strip()
+    if summary.startswith("#"):
+        summary = summary.partition("\n")[2].strip()
+    try_id = try_push["action_id"]
+    return {
+        "bug_id": result.bug_id,
+        "title": try_push["params"].get("title")
+        or f"Bug {result.bug_id} - perf test fix",
+        "summary": summary,
+        "test_plan": f"Try push: {TRY_URL_PLACEHOLDER.format(action_id=try_id)}",
+        "reviewers": REVISION_REVIEWERS,
+        "wait_for_try": {
+            "try_action_id": try_id,
+            "max_failure_rate": MAX_TRY_FAILURE_RATE,
+            "slack_channel": SLACK_CHANNEL,
+            "slack_action_id": announce_id,
+        },
+    }
 
 
 def _headline(result: PerftestRepairResult, try_push: dict | None) -> str:
