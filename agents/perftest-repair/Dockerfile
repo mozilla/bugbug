@@ -1,0 +1,110 @@
+FROM python:3.14 AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
+WORKDIR /app
+
+# Install external deps without building workspace members.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=VERSION,target=VERSION \
+    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-perftest-repair
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,target=/app,rw \
+    uv sync --locked --no-dev --no-editable --package hackbot-agent-perftest-repair
+
+# treeherder-cli (MPL-2.0) lets the agent query Firefox CI: what failed on a push,
+# when a failure started, how often a job passes. Built from source because upstream
+# only ships prebuilt Linux binaries for x86_64, and `cargo install` also works for an
+# arm64 developer build. A bookworm builder is safe against either python:3.14 base
+# (same glibc, or older building for newer); rustls means no OpenSSL to link.
+# Built from the evgenyrp fork until the User-Agent fix (Treeherder rejects requests
+# without one) is released upstream: https://github.com/padenot/treeherder-cli/pull/12
+FROM rust:1-slim-bookworm AS treeherder-cli
+ARG TREEHERDER_CLI_GIT=https://github.com/evgenyrp/treeherder-cli.git
+ARG TREEHERDER_CLI_REV=0095956a9db27306e2b5dc3b524870e893fd4a86
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/target \
+    CARGO_TARGET_DIR=/build/target/${TREEHERDER_CLI_REV} \
+    cargo install --git ${TREEHERDER_CLI_GIT} --rev ${TREEHERDER_CLI_REV} --locked --root /out treeherder-cli
+
+# car-mechanic (MPL-2.0) diagnoses Chromium-as-Release (CaR) failures against known
+# breakage patterns, using treeherder-cli to fetch the logs. Built from source like
+# treeherder-cli; it is not on crates.io, so it is pinned to a git commit instead of
+# a version. Bump CAR_MECHANIC_REV deliberately.
+FROM rust:1-slim-bookworm AS car-mechanic
+ARG CAR_MECHANIC_REPO=https://github.com/92kns/car-mechanic-cli
+# v0.5.7
+ARG CAR_MECHANIC_REV=cbc4cb470d876ef661894559abb55fd8ce903a44
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/target \
+    CARGO_TARGET_DIR=/build/target \
+    cargo install --git ${CAR_MECHANIC_REPO} --rev ${CAR_MECHANIC_REV} --locked --root /out
+
+FROM python:3.14 AS base
+
+COPY --from=builder /opt/venv /opt/venv
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PATH="/opt/venv/bin:$PATH"
+
+FROM base AS agent
+
+# Xvfb plus Firefox's runtime libraries, so a run with SKIP_FIREFOX_BUILD=false can
+# run a desktop perf test locally. ffmpeg is what browsertime's visual metrics use.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        xvfb x11-utils \
+        fonts-liberation fonts-dejavu-core \
+        libgtk-3-0t64 libdbus-glib-1-2 libx11-xcb1 libxtst6 libxt6 libpci3 \
+        libasound2t64 libnss3 libnspr4 libgbm1 libdrm2 libxcomposite1 \
+        libxdamage1 libxfixes3 libxrandr2 libxkbcommon0 libpango-1.0-0 \
+        libcairo2 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 \
+        libatspi2.0-0t64 \
+        zip unzip bzip2 \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# hackbot.toml lives at the agent root (not inside the package), so copy it into
+# the working dir; the runtime discovers it there (cwd) at startup.
+COPY agents/perftest-repair/hackbot.toml /app/hackbot.toml
+COPY agents/perftest-repair/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+RUN useradd --create-home --shell /bin/bash agent \
+    && mkdir -p /workspace \
+    && chown agent:agent /workspace \
+    # Xvfb runs unprivileged and cannot create its own socket directory.
+    && mkdir -p /tmp/.X11-unix \
+    && chmod 1777 /tmp/.X11-unix
+
+COPY --from=treeherder-cli /out/bin/treeherder-cli /usr/local/bin/treeherder-cli
+COPY --from=car-mechanic /out/bin/car-mechanic /usr/local/bin/car-mechanic
+
+# `mach bootstrap` installs the toolchain here at runtime; put it on PATH so the
+# agent's own `./mach build` (and the build_firefox tool) find rustc/clang.
+ENV PATH="/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:${PATH}"
+ENV DISPLAY=:99
+
+USER agent
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["python", "-m", "hackbot_agents.perftest_repair"]
+
+FROM base AS broker
+
+RUN useradd --create-home --shell /bin/bash broker
+
+USER broker
+
+EXPOSE 8765
+
+CMD ["python", "-m", "hackbot_agents.perftest_repair.broker"]
