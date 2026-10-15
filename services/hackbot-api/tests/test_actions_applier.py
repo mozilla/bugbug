@@ -214,7 +214,7 @@ def test_which_agents_auto_apply_without_asking_for_consent():
         for name, spec in AGENT_REGISTRY.items()
         if spec.auto_apply_actions and not spec.auto_apply_requires_consent
     }
-    assert unbounded == {"bug-fix"}
+    assert unbounded == {"autowebcompat-intervention", "bug-fix"}
 
 
 class _FakeDB:
@@ -321,11 +321,11 @@ async def test_succeeded_run_only_applies_eligible_action_types(monkeypatch):
 
 async def test_other_agents_do_not_auto_apply():
     # Opting an agent in is a deliberate edit, so spell out who is in today: bug-fix
-    # auto-applies unconditionally, frontend-triage only when the run vouched for
-    # itself, build-repair and test-repair only their notifications, and everyone
-    # else stays human-gated.
+    # and autowebcompat-intervention auto-apply unconditionally, frontend-triage
+    # only when the run vouched for itself, build-repair and test-repair only their
+    # notifications, and everyone else stays human-gated.
     auto_apply = {n for n, s in AGENT_REGISTRY.items() if s.auto_apply_actions}
-    assert auto_apply == {"bug-fix", "frontend-triage"}
+    assert auto_apply == {"autowebcompat-intervention", "bug-fix", "frontend-triage"}
     assert AGENT_REGISTRY["test-repair"].always_apply_actions == {
         "email.send",
         "slack.post_message",
