@@ -37,6 +37,13 @@ TRY_REBUILD_PERMAFAIL = 3
 # `{{actions.try.url}}` once hackbot-api has applied the push.
 TRY_REF = "try"
 
+# Once the try push finishes, hackbot-api opens the fix as a Phabricator revision
+# if at most this share of its runs failed, asking these reviewers. The run's Slack
+# message is recorded under SLACK_REF so the results are posted in its thread.
+MAX_TRY_FAILURE_RATE = 0.10
+REVISION_REVIEWERS = ["#perftest-reviewers"]
+SLACK_REF = "announce"
+
 # Only the build tool: evaluate_testcase / evaluate_js_shell do not run the perf
 # harnesses, so the agent runs the test itself with mach over Bash.
 FIREFOX_TOOLS = ["mcp__firefox__build_firefox"]

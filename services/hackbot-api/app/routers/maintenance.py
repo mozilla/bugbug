@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import try_results
 from app.auth import require_push_auth
 from app.database.connection import get_db
 from app.database.models import Run
@@ -84,3 +85,28 @@ async def finalize_stale_runs(
         still_running=still_running,
         errored=errored,
     )
+
+
+class TryPushSweep(BaseModel):
+    """What one try-push check did with the actions waiting on a push."""
+
+    considered: int
+    still_running: int
+    applied: int
+    not_applied: int
+    failed: int
+
+
+@router.post("/check-try-pushes", response_model=TryPushSweep)
+async def check_try_pushes(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+) -> TryPushSweep:
+    """Apply, or skip, each action waiting on a try push that has finished.
+
+    Meant to be called on a schedule, like ``finalize-stale-runs``; see
+    ``app.try_results``.
+    """
+    result = await try_results.check_try_pushes(db, limit=limit)
+    log.info("Try-push check: %s", result)
+    return TryPushSweep(**vars(result))

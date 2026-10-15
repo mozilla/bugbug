@@ -78,3 +78,22 @@ async def test_missing_token_fails_the_action():
     )
     assert result.status == "failed"
     assert "SLACK_BOT_TOKEN" in result.error
+
+
+async def test_a_reply_goes_into_the_thread(monkeypatch):
+    client = _fake_client(monkeypatch)
+    await slack_handler.PostMessageHandler().apply(
+        {"channel": "#c", "text": "done", "thread_ts": "1.2", "reply_broadcast": True},
+        _ctx(),
+    )
+    assert client.calls[0]["thread_ts"] == "1.2"
+    assert client.calls[0]["reply_broadcast"] is True
+
+
+async def test_a_plain_message_carries_no_thread_fields(monkeypatch):
+    client = _fake_client(monkeypatch)
+    await slack_handler.PostMessageHandler().apply(
+        {"channel": "#c", "text": "hi", "reply_broadcast": True}, _ctx()
+    )
+    assert "thread_ts" not in client.calls[0]
+    assert "reply_broadcast" not in client.calls[0]

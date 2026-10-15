@@ -40,7 +40,14 @@ export interface RunSummary {
   findings: Record<string, unknown>;
 }
 
-export type RunActionStatus = "pending" | "applied" | "failed";
+// "waiting": held until the run's try push finishes; "skipped": the push did not
+// pass, so it was never applied. Neither is applied by the apply button.
+export type RunActionStatus =
+  | "pending"
+  | "applied"
+  | "failed"
+  | "waiting"
+  | "skipped";
 
 // Mirror of RunActionDoc (services/hackbot-api/app/schemas.py): a recorded
 // agent action and its apply state.
