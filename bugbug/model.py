@@ -9,9 +9,7 @@ from collections import defaultdict
 from os import makedirs, path
 from typing import Any
 
-import matplotlib
 import numpy as np
-import shap
 from imblearn.metrics import (
     classification_report_imbalanced,
     geometric_mean_score,
@@ -443,6 +441,10 @@ class Model:
 
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
+            # Imported lazily as they are slow to import and rarely needed.
+            import matplotlib.pyplot
+            import shap
+
             explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
             _X_train = get_transformer_pipeline(self.clf).transform(X_train)
             shap_values = explainer.shap_values(_X_train)
@@ -697,6 +699,8 @@ class Model:
         classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
+            import shap
+
             pred_class_index = classes.argmax(axis=-1)[0]
             pred_class = self.le.inverse_transform([pred_class_index])[0]
 
