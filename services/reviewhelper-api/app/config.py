@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -21,6 +22,16 @@ class Settings(BaseSettings):
     # Phabricator
     phabricator_url: str
     phabricator_api_key: str
+
+    # Optional until a GitHub App is registered and installed.
+    github_app_id: str | None = None
+    github_app_private_key: str | None = None
+    github_webhook_secret: str | None = None
+    github_review_delay_seconds: int = Field(default=30, ge=0, le=300)
+    # Enrolled repositories, as a JSON list of "owner/repo".
+    github_repositories: list[str] = ["padenot/searchfox-cli"]
+    github_automatic_reviews: bool = True
+    github_allow_author_requests: bool = True
 
     # Bugzilla
     bugzilla_url: str
