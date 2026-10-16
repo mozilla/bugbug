@@ -35,7 +35,7 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
 )
 
 
-def _validate_summary(summary: str | None) -> None:
+def _validate_summary(summary: str | None, tool_name: str) -> None:
     if not summary:
         return
 
@@ -44,7 +44,7 @@ def _validate_summary(summary: str | None) -> None:
         raise ToolError(
             f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
             "a line belongs in the Test Plan field. Move the verification details "
-            "to the test_plan argument and call submit_patch again."
+            f"to the test_plan argument and call {tool_name} again."
         )
 
 
@@ -119,7 +119,7 @@ async def submit_patch(
     in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
     bug comment).
     """
-    _validate_summary(summary)
+    _validate_summary(summary, "submit_patch")
     params: dict = {
         "bug_id": bug_id,
         "title": title,
@@ -150,6 +150,36 @@ async def update_patch(
     reasoning: Annotated[
         str, Field(description="Why you are updating this patch (for audit log).")
     ],
+    title: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New title for the revision: the commit message subject line. "
+                "Do not include reviewer annotations (r=... or r?...). Omit to "
+                "keep the current title."
+            )
+        ),
+    ] = None,
+    summary: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New summary for the revision: the commit message body. "
+                "Replaces the current summary entirely, so pass the full text. "
+                "Keep test and verification details in test_plan instead. Omit "
+                "to keep the current summary."
+            )
+        ),
+    ] = None,
+    test_plan: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New test plan for the revision. Replaces the current one "
+                "entirely. Omit to keep the current test plan."
+            )
+        ),
+    ] = None,
 ) -> str:
     """Submit your fix as a new diff on an existing Phabricator revision.
 
@@ -163,14 +193,26 @@ async def update_patch(
     first, then call this once you are done. Calling it records the submission as
     a proposed action for review; it is not sent to Phabricator during the run.
 
-    Only the diff changes: the revision keeps its title, summary, and bug
-    association exactly as they are.
+    The revision keeps its title, summary, test plan, and bug association
+    unless you pass a new title, summary, or test_plan. Those are the patch's
+    commit message, so pass them when you are asked to reword it; pass only the
+    fields you are changing, and read the revision first so a summary you
+    rewrite keeps whatever it should still say. Rewording the commit message
+    needs no code change because the working directory already holds the
+    revision's latest diff.
     """
-    action = recorder.record(
-        UPDATE_PATCH_ACTION_TYPE,
-        {"revision_id": revision_id},
-        reasoning=reasoning,
-    )
+    if title is not None and not title.strip():
+        raise ToolError("The title cannot be empty: omit it to keep the current one.")
+    _validate_summary(summary, "update_patch")
+
+    params: dict = {"revision_id": revision_id}
+    if title is not None:
+        params["title"] = title
+    if summary is not None:
+        params["summary"] = summary
+    if test_plan is not None:
+        params["test_plan"] = test_plan
+    action = recorder.record(UPDATE_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 

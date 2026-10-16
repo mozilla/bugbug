@@ -110,8 +110,37 @@ async def test_update_records_only_the_revision_id():
     await phabricator.update_patch(rec, revision_id=12345, reasoning="r")
     action = rec.actions[0]
     assert action["type"] == "phabricator.update_patch"
-    # Nothing about the revision itself is the agent's to set on an update.
+    # Without new fields, nothing about the revision itself changes.
     assert action["params"] == {"revision_id": 12345}
+
+
+async def test_update_records_only_the_given_fields():
+    rec = ActionsRecorder()
+    await phabricator.update_patch(
+        rec, revision_id=42, title="Bug 1 - Better title", summary="", reasoning="r"
+    )
+    assert rec.actions[0]["params"] == {
+        "revision_id": 42,
+        "title": "Bug 1 - Better title",
+        "summary": "",
+    }
+
+
+async def test_update_rejects_an_empty_title():
+    rec = ActionsRecorder()
+    with pytest.raises(ToolError):
+        await phabricator.update_patch(rec, revision_id=42, title=" ", reasoning="r")
+    assert rec.actions == []
+
+
+async def test_update_rejects_test_plan_headers():
+    rec = ActionsRecorder()
+    with pytest.raises(ToolError) as exc:
+        await phabricator.update_patch(
+            rec, revision_id=42, summary="Why\n\nTests: ran them", reasoning="r"
+        )
+    assert "call update_patch again" in str(exc.value)
+    assert rec.actions == []
 
 
 async def test_update_requires_revision_id():
@@ -133,10 +162,17 @@ def test_agent_facing_schemas_are_case_specific():
     }
     assert "test_plan" in submit.input_schema["properties"]
 
-    # An update carries the revision id and nothing else: the revision's title,
-    # summary and bug id stay as they are, and there is no new URL to reference.
+    # An update demands the revision id; a new title, summary or test plan is
+    # optional, the bug id is never the agent's to change, and there is no new
+    # URL to reference.
     assert set(update.input_schema["required"]) == {"revision_id", "reasoning"}
-    assert set(update.input_schema["properties"]) == {"revision_id", "reasoning"}
+    assert set(update.input_schema["properties"]) == {
+        "revision_id",
+        "reasoning",
+        "title",
+        "summary",
+        "test_plan",
+    }
 
 
 async def test_add_comment_records_revision_and_text():
