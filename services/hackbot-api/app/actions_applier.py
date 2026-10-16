@@ -24,6 +24,7 @@ from app import gcs
 from app.action_handlers import (
     ActionResult,
     ApplyContext,
+    ensure_inline_comments_published,
     get_handler,
     merge_resolved,
     plan_coalesced_groups,
@@ -130,7 +131,7 @@ async def ensure_action_rows(
     summary.json. Idempotent: existing rows are reused, so this can run on
     every completion and again on each manual apply.
     """
-    actions: list[dict] = (run.summary or {}).get("actions", [])
+    actions = ensure_inline_comments_published((run.summary or {}).get("actions", []))
 
     result = await db.execute(select(RunAction).where(RunAction.run_id == run.run_id))
     existing = {row.idx: row for row in result.scalars()}

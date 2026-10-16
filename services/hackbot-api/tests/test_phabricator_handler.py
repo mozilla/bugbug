@@ -470,8 +470,8 @@ async def test_submit_patch_conduit_error_fails(monkeypatch):
     assert "ERR-CONDUIT-CORE" in result.error
 
 
-async def test_add_comment_posts_comment_transaction(monkeypatch):
-    fake, calls = _fake_conduit({"differential.revision.edit": {"object": {"id": 42}}})
+async def test_add_comment_publishes_comment_with_inlines(monkeypatch):
+    fake, calls = _fake_conduit({"differential.createcomment": {"revisionid": 42}})
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
 
     result = await phabricator_handler.AddCommentHandler().apply(
@@ -484,10 +484,54 @@ async def test_add_comment_posts_comment_transaction(monkeypatch):
         "revision_id": 42,
         "revision_url": "https://phabricator.services.mozilla.com/D42",
     }
-    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
-    assert edit_call[1]["objectIdentifier"] == 42
-    assert edit_call[1]["transactions"] == [
-        {"type": "comment", "value": "Answering your question."}
+    assert calls == [
+        (
+            "differential.createcomment",
+            {
+                "revision_id": 42,
+                "message": "Answering your question.",
+                "attach_inlines": 1,
+            },
+        )
+    ]
+
+
+async def test_add_inline_comment_creates_draft(monkeypatch):
+    fake, calls = _fake_conduit({"differential.createinline": {"id": 7}})
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    result = await phabricator_handler.AddInlineCommentHandler().apply(
+        {
+            "revision_id": 42,
+            "diff_id": 100,
+            "file_path": "dom/base/Foo.cpp",
+            "on_new_side": True,
+            "line": 10,
+            "line_length": 2,
+            "content": "This can overflow.",
+        },
+        ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None),
+    )
+
+    assert result.status == "applied"
+    assert result.result == {
+        "inline_id": 7,
+        "revision_id": 42,
+        "revision_url": "https://phabricator.services.mozilla.com/D42",
+    }
+    assert calls == [
+        (
+            "differential.createinline",
+            {
+                "revisionID": 42,
+                "diffID": 100,
+                "filePath": "dom/base/Foo.cpp",
+                "isNewFile": True,
+                "lineNumber": 10,
+                "lineLength": 2,
+                "content": "This can overflow.",
+            },
+        )
     ]
 
 
@@ -524,3 +568,25 @@ async def test_repository_phid_looks_up_by_short_name(monkeypatch):
 
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
     assert await phabricator_handler._repository_phid() == "PHID-MC"
+
+
+def test_inline_comments_without_comment_get_one_appended():
+    def inline(revision_id):
+        return {
+            "type": "phabricator.add_inline_comment",
+            "params": {"revision_id": revision_id},
+        }
+
+    comment = {
+        "type": "phabricator.add_comment",
+        "params": {"revision_id": 43, "text": "Review."},
+    }
+    actions = [inline(42), inline(43), comment]
+
+    assert phabricator_handler.ensure_inline_comments_published(actions) == [
+        *actions,
+        {
+            "type": "phabricator.add_comment",
+            "params": {"revision_id": 42, "text": "See the inline comments."},
+        },
+    ]

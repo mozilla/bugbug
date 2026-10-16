@@ -27,6 +27,7 @@ BUG_FIX_ACTIONS = [
     "phabricator.submit_patch",
     "phabricator.update_patch",
     "phabricator.add_comment",
+    "phabricator.add_inline_comment",
 ]
 
 # Firefox build/test tools.
