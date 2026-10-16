@@ -1,7 +1,6 @@
 """Tests for the Firefox tools."""
 
 import os
-from pathlib import Path
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
@@ -74,39 +73,24 @@ async def test_failed_bootstrap_leaves_ffpuppet_alone(tmp_path, monkeypatch):
     assert MinidumpParser.MDSW_BIN is None
 
 
-def _recording_tree(tmp_path, tools_exit_code):
-    """A source dir whose `./mach` logs its commands; `mach python` exits as told."""
+def _recording_tree(tmp_path):
+    """A source dir whose `./mach` logs its commands."""
     src = tmp_path / "firefox"
     src.mkdir()
     mach = src / "mach"
-    mach.write_text(
-        "#!/bin/sh\n"
-        f'echo "$@" >> "{tmp_path}/mach.log"\n'
-        f'[ "$1" = python ] && exit {tools_exit_code}\n'
-        "exit 0\n"
-    )
+    mach.write_text(f'#!/bin/sh\necho "$@" >> "{tmp_path}/mach.log"\n')
     mach.chmod(0o755)
     return src
 
 
-async def test_bootstrap_installs_developer_tools(tmp_path):
-    result = await bootstrap_firefox(_recording_tree(tmp_path, 0))
+async def test_bootstrap_runs_non_interactively(tmp_path):
+    result = await bootstrap_firefox(_recording_tree(tmp_path))
 
     assert result["success"]
     assert result["message"] == "mach bootstrap completed successfully"
-    log = (tmp_path / "mach.log").read_text().splitlines()
-    assert log[0] == "--no-interactive bootstrap --application-choice=browser"
-    script = log[1].split(" ", 1)[1]
-    assert log[1] == f"python {script}"
-    assert script.endswith("/mach_python/install_developer_tools.py")
-    assert Path(script).is_file()
-
-
-async def test_developer_tools_failure_does_not_fail_bootstrap(tmp_path):
-    result = await bootstrap_firefox(_recording_tree(tmp_path, 3))
-
-    assert result["success"]
-    assert "installing developer tools failed with exit code 3" in result["message"]
+    assert (tmp_path / "mach.log").read_text().splitlines() == [
+        "--no-interactive bootstrap --application-choice=browser"
+    ]
 
 
 async def test_bootstrap_runs_without_controlling_terminal(tmp_path):
@@ -124,12 +108,12 @@ async def test_bootstrap_runs_without_controlling_terminal(tmp_path):
 
     assert result["success"]
     sessions = (tmp_path / "sessions").read_text().split()
-    assert len(sessions) == 2
+    assert len(sessions) == 1
     assert str(os.getsid(0)) not in sessions
 
 
 async def test_bootstrap_for_android(tmp_path, monkeypatch):
-    src = _recording_tree(tmp_path, 0)
+    src = _recording_tree(tmp_path)
     mozbuild = tmp_path / "mozbuild"
     for path in (
         "jdk/jdk-17.0.9+1",
@@ -146,9 +130,9 @@ async def test_bootstrap_for_android(tmp_path, monkeypatch):
     result = await bootstrap_firefox(src, "mobile_android")
 
     assert result["success"]
-    assert (tmp_path / "mach.log").read_text().splitlines()[0] == (
+    assert (tmp_path / "mach.log").read_text().splitlines() == [
         "--no-interactive bootstrap --application-choice=mobile_android"
-    )
+    ]
     # The newest of each, for PATH to point at.
     assert os.readlink(mozbuild / "jdk/current") == "jdk-17.0.20.1+1"
     sdk = mozbuild / "android-sdk-linux"
@@ -157,7 +141,7 @@ async def test_bootstrap_for_android(tmp_path, monkeypatch):
 
 
 async def test_bootstrap_rejects_unknown_application(tmp_path):
-    result = await bootstrap_firefox(_recording_tree(tmp_path, 0), "ios")
+    result = await bootstrap_firefox(_recording_tree(tmp_path), "ios")
 
     assert not result["success"]
     assert "Unknown application 'ios'" in result["message"]
