@@ -9,7 +9,7 @@ from typing import NoReturn
 
 from pydantic import ValidationError
 
-from hackbot_runtime import anthropic_wif, wandb_wif
+from hackbot_runtime import anthropic_wif, openai_wif, wandb_wif
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.results import HackbotAgentResult
@@ -37,12 +37,14 @@ _AGENT_LOG_KEY = "logs/agent.log"
 def _configure_auth() -> None:
     """Set up the model-provider and observability credentials before the run.
 
-    Both Anthropic (model access) and W&B (Weave tracing) support GCP Workload
-    Identity Federation, so in deployment neither needs a long-lived key in the
-    agent container; both fall back to their API-key env var locally.
+    Anthropic and OpenAI (model access) and W&B (Weave tracing) all support GCP
+    Workload Identity Federation, so in deployment none needs a long-lived key in
+    the agent container; each falls back to its API-key env var locally.
     """
     if anthropic_wif.configure():
         log.info("Configured Anthropic WIF authentication")
+    if openai_wif.configure():
+        log.info("Configured OpenAI WIF authentication")
     if wandb_wif.configure():
         log.info("Configured W&B WIF authentication")
 
