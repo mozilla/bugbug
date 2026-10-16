@@ -912,12 +912,15 @@ tasks:
         command:
           - bugbug-regressor-finder
           - bug_introducing
-          - --git_repo_url=hg::https://hg.mozilla.org/mozilla-central
-          - --git_repo_dir=gecko-dev
+          - --repo_dir=/cache/mozilla-central
+        cache:
+          bugbug-mercurial-repository: /cache
         features:
           taskclusterProxy: true
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
