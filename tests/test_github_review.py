@@ -1,13 +1,15 @@
 """GitHub snapshots and context must consistently reflect the reviewed revision."""
 
+import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
 
 from bugbug.tools.code_review import langchain_tools, review_context
+from bugbug.tools.core.exceptions import LargeDiffError
 from bugbug.tools.core.platforms.github import (
     GitHubCodeContext,
     GitHubPatch,
@@ -235,3 +237,81 @@ async def test_context_tools_use_the_provider_in_a_real_graph_runtime():
             context=langchain_tools.CodeReviewContext(snapshot, source),
         )
     assert "new.rs:1: new_symbol();" in result[0]
+
+
+class _ReachedSummarization(Exception):
+    pass
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=LargeDiffError,
+    reason="Commit context counts against the diff budget, halving the reviewable size",
+)
+@pytest.mark.asyncio
+async def test_commit_context_does_not_shrink_the_diff_budget():
+    from bugbug.tools.code_review.agent import CodeReviewTool
+
+    tool = CodeReviewTool.__new__(CodeReviewTool)
+    tool.count_tokens = lambda text: len(text.split())
+    tool.patch_summarizer = Mock(run=Mock(side_effect=_ReachedSummarization))
+    diff = "token " * 15_000
+    # Commit context repeats the whole diff split per commit.
+    snapshot = SimpleNamespace(raw_diff=diff, commit_context=diff)
+    with pytest.raises(_ReachedSummarization):
+        await tool.run(snapshot)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=asyncio.TimeoutError,
+    reason="The search cache lock is held across the GitHub code search request",
+)
+@pytest.mark.asyncio
+async def test_slow_discovery_does_not_block_other_searches():
+    api = SnapshotAPI()
+    snapshot = await GitHubPatch.load(api, "owner/repo", 15)
+    release = asyncio.Event()
+    original = api.request
+
+    async def request(method, path, **kwargs):
+        if path == "search/code" and "slow" in kwargs["params"]["q"]:
+            await release.wait()
+        return await original(method, path, **kwargs)
+
+    api.request = request
+    source = GitHubCodeContext(snapshot)
+    slow = asyncio.create_task(source.search_text("slow"))
+    await asyncio.sleep(0)
+    try:
+        result = await asyncio.wait_for(source.search_text("new_symbol"), 0.5)
+        assert "new.rs:1: new_symbol();" in result
+    finally:
+        release.set()
+        await slow
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="The GitHub expand_context branch duplicates formatting without padding",
+)
+@pytest.mark.asyncio
+async def test_expand_context_formats_lines_like_searchfox():
+    api = SnapshotAPI()
+    snapshot = await GitHubPatch.load(api, "owner/repo", 15)
+    original = api.request
+
+    async def request(method, path, **kwargs):
+        if "/contents/" in path:
+            return response("".join(f"line{i}\n" for i in range(1, 11)))
+        return await original(method, path, **kwargs)
+
+    api.request = request
+    source = GitHubCodeContext(snapshot)
+    runtime = SimpleNamespace(
+        context=langchain_tools.CodeReviewContext(snapshot, source)
+    )
+    with patch.object(langchain_tools, "get_runtime", return_value=runtime):
+        result = await langchain_tools.expand_context.coroutine("new.rs", 9, 10)
+    assert result == " 9| line9\n10| line10"

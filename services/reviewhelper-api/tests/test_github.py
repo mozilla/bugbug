@@ -524,3 +524,110 @@ async def test_base_branch_movement_does_not_supersede_review(monkeypatch):
         lambda: SimpleNamespace(repo_client=AsyncMock(return_value=api)),
     )
     assert await github_reviews.current_pr(review()) is not None
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="Failed or superseded rows for the same snapshot swallow new requests",
+)
+@pytest.mark.asyncio
+async def test_new_request_retries_failed_or_superseded_snapshot(monkeypatch):
+    db = AsyncMock()
+    existing = review()
+    existing.status = ReviewStatus.FAILED
+    db.scalar.side_effect = [None, existing]
+    api = SimpleNamespace(request=AsyncMock(return_value=response(pull_request())))
+    enqueue = AsyncMock()
+    monkeypatch.setattr(github_reviews, "create_review_task", enqueue)
+    await github_reviews.request_github_review(db, api, "owner/repo", 15, 7, "author")
+    enqueue.assert_awaited_once()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="GET retries wait out rate limits inside GitHub's 10s webhook timeout",
+)
+@pytest.mark.asyncio
+async def test_webhook_does_not_wait_out_rate_limits(harness, monkeypatch):
+    app, _, _, _, github_app = harness
+    sleeps = []
+
+    async def sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(github, "asyncio", SimpleNamespace(sleep=sleep))
+    limited = httpx.Response(
+        429,
+        headers={"Retry-After": "60"},
+        request=httpx.Request("GET", "https://api.github.com/test"),
+    )
+    http = SimpleNamespace(
+        request=AsyncMock(
+            side_effect=[
+                limited,
+                response(pull_request()),
+                response({"permission": "write"}),
+            ]
+        )
+    )
+    monkeypatch.setattr(github, "get_http_client", lambda: http)
+    tokens = SimpleNamespace(token=AsyncMock(return_value="dummy"))
+    github_app.client = lambda installation: github.GitHubClient(tokens, installation)
+    data = payload("issue_comment", "created")
+    data["sender"]["id"] = 9
+    await deliver(app, data, "issue_comment")
+    assert sum(sleeps) < 10
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="Multi-line and context-line findings are dropped before publication",
+)
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "line_start,line_end",
+    [(2, 3), (1, 1)],
+    ids=["multi-line", "context-line"],
+)
+async def test_publication_keeps_valid_review_coordinates(
+    monkeypatch, line_start, line_end
+):
+    diff = "--- a/f.rs\n+++ b/f.rs\n@@ -1,3 +1,4 @@\n ctx\n-old\n+new1\n+new2\n tail\n"
+    api = SimpleNamespace(
+        request=AsyncMock(
+            side_effect=[
+                response([]),
+                response(diff),
+                response({"id": 30}),
+                response([]),
+            ]
+        )
+    )
+    app = SimpleNamespace(
+        repo_client=AsyncMock(return_value=api),
+        bot_login=AsyncMock(return_value="reviewhelper[bot]"),
+    )
+    monkeypatch.setattr(review_processor, "get_github_app", lambda: app)
+    monkeypatch.setattr(
+        review_processor, "current_pr", AsyncMock(return_value=pull_request())
+    )
+    comment = SimpleNamespace(
+        id=50,
+        platform_comment_id=None,
+        file_path="f.rs",
+        line_start=line_start,
+        line_end=line_end,
+        on_new=True,
+        content="Fix this",
+    )
+    _ = [
+        item
+        async for item in review_processor.submit_review_to_platform(
+            review(), [comment]
+        )
+    ]
+    post = api.request.await_args_list[2]
+    assert len(post.kwargs["json"]["comments"]) == 1
