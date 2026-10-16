@@ -7,6 +7,7 @@ from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
+    PerftestRepairInputs,
     TestRepairInputs,
     UpliftInputs,
 )
@@ -259,3 +260,27 @@ def test_uplift_inputs_require_at_least_one_source():
 def test_uplift_inputs_reject_an_unknown_source_kind():
     with pytest.raises(ValidationError):
         UpliftInputs(target_branch="beta", sources=[{"kind": "hg", "rev": "abc"}])
+
+
+def test_perftest_repair_registry_entry():
+    spec = AGENT_REGISTRY["perftest-repair"]
+    assert spec.build_env is None
+    assert spec.input_schema is PerftestRepairInputs
+    assert spec.job_name == "hackbot-agent-perftest-repair"
+    # Only the try push and the Slack report are applied unattended.
+    assert spec.auto_apply_actions is False
+    assert spec.always_apply_actions == frozenset(
+        {"try_server.push", "slack.post_message"}
+    )
+    # A skipped run records nothing, and a fix stays a patch artifact, so no
+    # recorded action is expected of a successful run.
+    assert spec.expects_actions is False
+
+
+def test_perftest_repair_env_serialization():
+    env = model_to_env(PerftestRepairInputs(bug_id=1900000))
+    # Unset optional inputs are left to the agent's own defaults.
+    assert env == {"BUG_ID": "1900000"}
+
+    env = model_to_env(PerftestRepairInputs(bug_id=1, skip_firefox_build=False))
+    assert env["SKIP_FIREFOX_BUILD"] == "False"

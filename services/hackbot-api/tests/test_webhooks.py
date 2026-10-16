@@ -14,7 +14,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 from app.auth import verify_phabricator_signature
-from app.bugzilla_webhook import detect_needinfo_request
+from app.bugzilla_webhook import (
+    detect_needinfo_request,
+    detect_perftest_failure_comment,
+)
 from app.config import settings
 from app.main import app
 from app.phabricator_authorization import (
@@ -816,7 +819,7 @@ def test_bugzilla_route_ignores_non_matching_event(client):
     assert response.status_code == 202
     assert response.json() == {
         "status": "ignored",
-        "reason": "no actionable Hackbot needinfo",
+        "reason": "no actionable Bugzilla event",
     }
 
 
@@ -895,3 +898,116 @@ def test_bugzilla_route_surfaces_failed_dispatch(client):
 
     with pytest.raises(RuntimeError, match="run creation failed"):
         _post_bugzilla(client, _bugzilla_payload())
+
+
+# --- perftest failure comments ---
+
+
+def _robot_comment_payload(
+    *,
+    bug_id: int = 1966101,
+    comment_id: int = 17654321,
+    actor: str = "orangefactor@bots.tld",
+    product: str = "Testing",
+    component: str = "Raptor",
+    keywords: tuple[str, ...] = ("intermittent-failure",),
+    resolution: str = "",
+) -> dict:
+    return {
+        "bug": {
+            "id": bug_id,
+            "is_private": False,
+            "product": product,
+            "component": component,
+            "keywords": list(keywords),
+            "status": "REOPENED",
+            "resolution": resolution,
+            "comment": {
+                "id": comment_id,
+                "number": 49,
+                "is_private": False,
+                "body": "15 failures were associated with this bug yesterday.",
+            },
+        },
+        "event": {
+            "action": "create",
+            "routing_key": "comment.create",
+            "target": "comment",
+            "time": "2026-09-24T06:00:00",
+            "user": {"login": actor, "real_name": "Intermittent Failures Robot"},
+        },
+        "webhook_id": 122,
+        "webhook_name": "Hackbot perftest failures",
+    }
+
+
+@pytest.mark.parametrize("component", ["Raptor", "Talos", "mozperftest"])
+def test_detect_perftest_failure_comment(component):
+    detected = detect_perftest_failure_comment(
+        _robot_comment_payload(component=component)
+    )
+    assert detected is not None
+    assert detected.bug_id == 1966101
+    assert detected.comment_id == 17654321
+
+
+def test_detect_perftest_failure_comment_accepts_top_level_comment():
+    payload = _robot_comment_payload()
+    payload["comment"] = payload["bug"].pop("comment")
+    assert detect_perftest_failure_comment(payload) is not None
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"actor": "sheriff@mozilla.com"},
+        {"actor": "intermittent-bug-filer@mozilla.bugs"},
+        {"component": "AWSY"},
+        {"product": "Core", "component": "Layout"},
+        {"keywords": ()},
+        {"resolution": "INCOMPLETE"},
+    ],
+)
+def test_detect_perftest_failure_comment_rejects_out_of_scope(overrides):
+    assert detect_perftest_failure_comment(_robot_comment_payload(**overrides)) is None
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda p: p["bug"].update(is_private=True),
+        lambda p: p["bug"]["comment"].update(is_private=True),
+        lambda p: p["bug"].pop("comment"),
+        lambda p: p["event"].update(action="modify", target="bug"),
+    ],
+)
+def test_detect_perftest_failure_comment_fails_closed(mutate):
+    payload = _robot_comment_payload()
+    mutate(payload)
+    assert detect_perftest_failure_comment(payload) is None
+
+
+def test_bugzilla_route_triggers_perftest_repair(client):
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+
+    response = _post_bugzilla(client, _robot_comment_payload())
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "triggered"
+    assert fake_api.calls == [("perftest-repair", {"bug_id": 1966101})]
+
+
+def test_bugzilla_route_dedupes_perftest_retry_but_not_later_comment(client):
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+
+    first = _post_bugzilla(client, _robot_comment_payload())
+    duplicate = _post_bugzilla(client, _robot_comment_payload())
+    later = _post_bugzilla(client, _robot_comment_payload(comment_id=17654322))
+
+    assert first.json()["status"] == "triggered"
+    assert duplicate.json()["reason"] == "duplicate delivery"
+    assert later.json()["status"] == "triggered"
+    # Each comment is its own unit of work; a retry carries the same key.
+    assert fake_api.dedupe_keys == ["c17654321", "c17654321", "c17654322"]

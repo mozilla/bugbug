@@ -1,0 +1,43 @@
+services:
+  perftest-repair-broker:
+    build:
+      context: ../..
+      dockerfile: agents/perftest-repair/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+    expose:
+      - "8765"
+
+  perftest-repair-agent:
+    build:
+      context: ../..
+      dockerfile: agents/perftest-repair/Dockerfile
+      target: agent
+    # Compose passes unset per-run inputs as empty strings; AgentInputs ignores them.
+    environment:
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      - SKIP_FIREFOX_BUILD=${SKIP_FIREFOX_BUILD:-}
+      - IGNORE_STOP_CONDITIONS=${IGNORE_STOP_CONDITIONS:-}
+      # Local testing: pin the checkout to a commit, e.g. the parent of a fix.
+      - SOURCE_REF=${SOURCE_REF:-}
+      - BROKER_URL=http://perftest-repair-broker:8765
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      # No uploader locally: summary/logs/artifacts are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    # Firefox's content processes need far more than Docker's default 64MB /dev/shm.
+    shm_size: 2gb
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      perftest-repair-broker:
+        condition: service_started
+
+volumes:
+  workspace:
