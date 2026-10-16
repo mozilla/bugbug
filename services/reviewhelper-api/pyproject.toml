@@ -18,6 +18,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "bugbug",
     "sentry-sdk>=2.60.0",
+    "pyjwt[crypto]>=2.10.1",
 ]
 
 [project.optional-dependencies]

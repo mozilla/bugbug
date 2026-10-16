@@ -91,6 +91,11 @@ class Patch(ABC):
         """
         return None
 
+    @property
+    def commit_context(self) -> str:
+        """Ordered commit units, with findings anchored to the final diff."""
+        return ""
+
     @abstractmethod
     async def get_base_revision(self) -> Optional[str]:
         """Return the VCS revision the patch was written against, or None."""
