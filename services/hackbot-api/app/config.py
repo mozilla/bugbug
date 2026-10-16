@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from phabricator_client import PhabricatorSettings
 from pydantic import BaseModel, StringConstraints
@@ -56,6 +56,7 @@ class Settings(BaseSettings):
 
     # Cloud SQL Postgres
     cloud_sql_instance: str = ""
+    cloud_sql_ip_type: Literal["PUBLIC", "PRIVATE", "PSC"] = "PUBLIC"
     db_user: str = ""
     db_pass: str = ""
     db_name: str = "hackbot"

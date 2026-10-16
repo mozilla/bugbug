@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 
-from google.cloud.sql.connector import Connector, IPTypes
+from google.cloud.sql.connector import Connector
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -28,7 +28,7 @@ async def init_db():
             user=settings.db_user,
             password=settings.db_pass,
             db=settings.db_name,
-            ip_type=IPTypes.PUBLIC,
+            ip_type=settings.cloud_sql_ip_type,
         )
 
     engine = create_async_engine(
