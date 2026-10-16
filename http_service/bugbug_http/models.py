@@ -8,7 +8,7 @@ import os
 from collections import defaultdict
 from datetime import timedelta
 from functools import lru_cache
-from typing import Sequence
+from typing import Any, Callable, Sequence
 from urllib.parse import urlparse
 
 import orjson
@@ -21,7 +21,11 @@ from bugbug import bugzilla, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testselect
-from bugbug.utils import get_hgmo_stack
+from bugbug.models.perf_regression_predictor import (
+    MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
+)
+from bugbug.models.perf_regression_predictor import PatchCommitMessageExtractor
+from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +46,7 @@ MODELS_NAMES = [
     "performancebug",
     "worksforme",
     "fenixcomponent",
+    "perfregressionpredictor",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
@@ -60,6 +65,7 @@ redis = Redis(
     ssl=(url.scheme == "rediss"),
     ssl_cert_reqs=None,
 )
+
 
 MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
     timedelta(hours=1), lambda m: Model.load(f"{m}model")
@@ -289,6 +295,184 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
     return "OK"
 
 
+# Commits the perf regression predictor must not score, keyed by the reason
+# reported to the client. Rules are evaluated in order and the first match
+# wins. Each predicate receives a hg.mozilla.org automationrelevance changeset.
+PERF_REGRESSION_IGNORED_COMMIT_RULES: dict[str, Callable[[dict], bool]] = {
+    # Backouts revert an earlier patch, so their diff mirrors the original
+    # change and tells nothing about new regressions.
+    "backout": lambda changeset: len(changeset.get("backsoutnodes", [])) > 0,
+    # Merges (e.g. mozilla-central into autoland) carry no change of their own.
+    "merge": lambda changeset: len(changeset.get("parents", [])) > 1,
+    # Automated web-platform-tests imports from upstream.
+    "wptsync": lambda changeset: repository.is_wptsync(
+        {
+            "author_email": changeset.get("author", ""),
+            "desc": changeset.get("desc", ""),
+        }
+    ),
+    # Large mechanical changes (e.g. reformatting) excluded from blame.
+    "ignore-this-changeset": lambda changeset: (
+        "ignore-this-changeset" in changeset.get("desc", "")
+    ),
+}
+
+
+def get_perf_regression_ignore_reason(changeset: dict) -> str | None:
+    """Return why the perf regression predictor skips a commit, or None to score it."""
+    for reason, matches in PERF_REGRESSION_IGNORED_COMMIT_RULES.items():
+        if matches(changeset):
+            return reason
+    return None
+
+
+def classify_perf_regression(branch: str, rev: str) -> str:
+    """Predict performance-regression risk for a push.
+
+    Mirrors :func:`schedule_tests`: the push is resolved server-side against
+    the service's own local hg clone. Commits matching one of
+    ``PERF_REGRESSION_IGNORED_COMMIT_RULES`` are listed with their
+    ``ignored_reason`` but not scored. Every other commit is scored
+    separately and the top-level ``risk_score`` is the maximum across the
+    scored commits, or ``None`` when every commit in the push was ignored.
+    """
+    from bugbug_http import REPO_DIR
+    from bugbug_http.app import JobInfo
+
+    log_prefix = "[perf-regression-predictor]"
+
+    job = JobInfo(classify_perf_regression, branch, rev)
+    LOGGER.info(
+        "%s Processing prediction for %s @ %s",
+        log_prefix,
+        branch,
+        rev,
+    )
+
+    # Pull the revision to the local repository.
+    LOGGER.info(
+        "%s Pulling commits from the remote repository...",
+        log_prefix,
+    )
+    repository.pull(REPO_DIR, branch, rev, update=False)
+
+    # Load the full stack of patches leading to that revision.
+    LOGGER.info(
+        "%s Loading commits to analyze using automationrelevance...",
+        log_prefix,
+    )
+    try:
+        changesets = get_hgmo_stack_changesets(branch, rev)
+    except requests.exceptions.RequestException:
+        # Store nothing so the client's next poll
+        # schedules a new attempt: the pull above already found the
+        # revision, so a failure here is almost always transient (a lagging
+        # mirror, a server error, a timeout).
+        LOGGER.warning(
+            "%s Could not load the stack for %s @ %s, will retry on the next request",
+            log_prefix,
+            branch,
+            rev,
+        )
+        return "NOK"
+
+    if not changesets:
+        LOGGER.warning(
+            "%s No commits to analyze for %s @ %s",
+            log_prefix,
+            branch,
+            rev,
+        )
+        setkey(job.result_key, orjson.dumps({"available": False}))
+        return "OK"
+
+    # Decide which commits to score. Ignored commits are still listed in the
+    # result, with the reason they were skipped and no score.
+    commits: list[dict[str, Any]] = []
+    to_score: list[tuple[int, bytes]] = []
+    for changeset in changesets:
+        node = changeset["node"]
+        ignored_reason = get_perf_regression_ignore_reason(changeset)
+        commits.append(
+            {
+                "node": node,
+                "prob": None,
+                "class": None,
+                "risk_score": None,
+                "ignored_reason": ignored_reason,
+            }
+        )
+        if ignored_reason is None:
+            to_score.append((len(commits) - 1, node.encode("ascii")))
+        else:
+            LOGGER.info("%s Ignoring commit %s (%s)", log_prefix, node, ignored_reason)
+
+    # Export each commit to score as its own patch (commit message + diff)
+    # from the local clone. Patches are exported lazily, one at a time.
+    revs = [node for _, node in to_score]
+    patches = repository.get_commit_patches(REPO_DIR, revs) if revs else []
+
+    model = MODEL_CACHE.get(PERF_REGRESSION_PREDICTOR)
+
+    # Score each commit separately. The service runs inference on CPU,
+    # so we classify one at a time to keep memory flat.
+    extract_commit_message = PatchCommitMessageExtractor()
+    for (index, _), patch in zip(to_score, patches):
+        patch_text = patch.decode("utf-8", "replace")
+        commit_probabilities = model.classify(
+            [
+                {
+                    "commit_message": extract_commit_message(patch_text) or "",
+                    "diff": patch_text,
+                }
+            ],
+            probabilities=True,
+        )[0]
+        commits[index].update(
+            {
+                "prob": commit_probabilities.tolist(),
+                "class": int(commit_probabilities.argmax()),
+                "risk_score": float(commit_probabilities[1]),
+            }
+        )
+
+    scored_risk_scores = [
+        commit["risk_score"] for commit in commits if commit["ignored_reason"] is None
+    ]
+    risk_score = max(scored_risk_scores) if scored_risk_scores else None
+
+    data = {
+        "branch": branch,
+        "rev": rev,
+        "risk_score": risk_score,
+        "commits": commits,
+        "extra_data": {
+            **model.get_extra_data(),
+            "commit_count": len(commits),
+            "ignored_commit_count": len(commits) - len(scored_risk_scores),
+        },
+    }
+    setkey(job.result_key, orjson.dumps(data), compress=True)
+    LOGGER.info(
+        "%s Finished prediction for %s @ %s, commit_count=%d, "
+        "ignored_commit_count=%d, risk_score=%s",
+        log_prefix,
+        branch,
+        rev,
+        len(commits),
+        len(commits) - len(scored_risk_scores),
+        risk_score,
+    )
+    return "OK"
+
+
+# Models that classify a push (branch + revision) rather than a bug or an
+# issue, keyed by the model name accepted by the push prediction endpoint.
+PUSH_CLASSIFIERS = {
+    PERF_REGRESSION_PREDICTOR: classify_perf_regression,
+}
+
+
 @lru_cache(maxsize=None)
 def get_known_tasks() -> tuple[str, ...]:
     with open("known_tasks", "r") as f:
@@ -396,12 +580,31 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     return "OK"
 
 
+def _normalize_group(group: str) -> str:
+    """Convert a group name from Treeherder to the name used by the group model."""
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci.task import wpt_workaround
+
+    # WPT groups are relative to the root of the WPT suite (sometimes prefixed with
+    # ":"), while the group model uses the names normalized by mozci.
+    if group.startswith(("/", ":/")):
+        return wpt_workaround(group)
+
+    # Manifests included by another manifest are reported as "manifest:parent".
+    return group.split(":")[0]
+
+
 def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
     """Get the tasks and manifests which failed recently on a Treeherder project.
 
     Failures classified as intermittent, infra or expected are ignored, and only
     tasks and manifests known to the label and group models are returned.
     """
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci.task import Task, TestTask
+
     # Retry only a few times, so that an unavailable Treeherder doesn't stall the
     # scheduling for long.
     session = requests.Session()
@@ -430,7 +633,7 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
         return set(), set()
 
     tasks: set[str] = set()
-    task_ids_by_push: dict[int, set[str]] = defaultdict(set)
+    labels_by_push: dict[int, dict[str, str]] = defaultdict(dict)
     # Push IDs are unique across all Treeherder projects, so filtering by them
     # already restricts the jobs to the pushes of the given project.
     url: str | None = f"{TREEHERDER_API_URL}/jobs/"
@@ -449,14 +652,14 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
                 continue
 
             tasks.add(job["job_type_name"])
-            task_ids_by_push[job["push_id"]].add(job["task_id"])
+            labels_by_push[job["push_id"]][job["task_id"]] = job["job_type_name"]
 
         # The "next" URL already contains the query parameters.
         url = data["next"]
         params = None
 
     groups: set[str] = set()
-    for push_id, task_ids in task_ids_by_push.items():
+    for push_id, labels in labels_by_push.items():
         response = session.get(
             f"{TREEHERDER_API_URL}/project/{project}/push/group_results/",
             params={"revision": push_revs[push_id]},
@@ -465,10 +668,21 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
         )
         response.raise_for_status()
         group_results = response.json()
-        for task_id in task_ids:
-            groups.update(
-                group for group, ok in group_results.get(task_id, {}).items() if not ok
-            )
+        for task_id, label in labels.items():
+            if task_id in group_results:
+                groups.update(
+                    group for group, ok in group_results[task_id].items() if not ok
+                )
+                continue
+
+            # The group results are missing when the task did not report them (e.g.
+            # when it was aborted), or when Treeherder did not ingest them yet. In
+            # this case, take the groups of the failing tests from the errorsummary
+            # artifacts of the task. They are not used in general, as they also
+            # contain failures which passed on retry.
+            task = Task.create(id=task_id, label=label)
+            if isinstance(task, TestTask):
+                groups.update(task.failure_types)
 
     known_tasks = set(test_scheduling.PastFailures("label", True).all_runnables)
     known_groups = set(test_scheduling.PastFailures("group", True).all_runnables)
@@ -479,11 +693,7 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
             for task in map(test_scheduling.rename_task, tasks)
             if task in known_tasks
         },
-        {
-            group
-            for group in (group.split(":")[0] for group in groups)
-            if group in known_groups
-        },
+        {group for group in map(_normalize_group, groups) if group in known_groups},
     )
 
 
