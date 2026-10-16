@@ -665,3 +665,37 @@ def test_sanitizing_untrusted_inline_comment_drops_its_suggestion() -> None:
     assert sanitized[0].suggestion_text is None
     # The sanitizer works on a copy, so the original keeps its suggestion.
     assert comment.suggestion_text == "payload"
+
+
+def test_to_md_keeps_human_comment_text_after_divider() -> None:
+    general = _inline_transaction("| a | b |\n|---|---|\n| 1 | 2 |\n\nPlease fix this.")
+    general["type"] = "comment"
+    general["fields"] = {}
+
+    markdown = _to_md([phab_platform.PhabricatorGeneralComment(general)])
+
+    assert "| 1 | 2 |" in markdown
+    assert "Please fix this." in markdown
+
+
+def test_to_md_strips_reviewbot_footer() -> None:
+    comment = phab_platform.PhabricatorInlineComment(
+        _inline_transaction("The actual review.\n\n---\nFeedback footer")
+    )
+    comment.author_phid = phab_platform.REVIEWBOT_PHID
+
+    markdown = _to_md([comment])
+
+    assert "The actual review." in markdown
+    assert "Feedback footer" not in markdown
+
+
+def test_to_md_does_not_truncate_long_comments() -> None:
+    content = "x" * 3000 + " the end"
+
+    markdown = _to_md(
+        [phab_platform.PhabricatorInlineComment(_inline_transaction(content))]
+    )
+
+    assert content in markdown
+    assert "*[Content truncated]*" not in markdown
