@@ -182,15 +182,13 @@ def create_main_review_comment(
 
     if review_request.general_comment:
         parts.append(review_request.general_comment)
-        parts.append("\n---\n")
 
-    num_comments = len(generated_comments)
-    if num_comments > 0:
+    if generated_comments:
+        if review_request.general_comment:
+            parts.append("\n---\n")
         parts.append(
             "(NOTE) Please use {icon thumbs-up} / {icon thumbs-down} reactions on inline comments to provide feedback. "
             "This will have a significant impact on the quality of future reviews."
         )
-    else:
-        parts.append("(NOTE) Automated review completed with no comments.")
 
     return "\n".join(parts)

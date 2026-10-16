@@ -31,7 +31,7 @@ tasks:
       $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.body}
 
-    taskboot_image: "mozilla/taskboot:0.4.2"
+    taskboot_image: "mozilla/taskboot:0.5.2"
   in:
     $let:
       default_task_definition:
@@ -99,7 +99,7 @@ tasks:
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --group test --extra nlp --group spawn-pipeline &&
-                    hg clone -r 50a59e00c4a76fcfae660e3feb9b79e0cd549b15 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    hg clone -r 7e05eb6de61fd8ecfda678c47dee53c51ef69ffe https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     uv run pytest --cov=./ tests/test_*.py &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
@@ -124,7 +124,7 @@ tasks:
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --package bugbug-http-service --group test &&
-                    hg clone -r 50a59e00c4a76fcfae660e3feb9b79e0cd549b15 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    hg clone -r 7e05eb6de61fd8ecfda678c47dee53c51ef69ffe https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     uv run pytest --cov=http_service http_service/tests/ -vvv &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
