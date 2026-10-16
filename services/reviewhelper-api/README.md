@@ -69,12 +69,3 @@ token for authenticated base-commit checks and landing-merge searches. The
 platform tools read it directly from the environment, like `PHABRICATOR_API_KEY`.
 A local `.env` must be exported into the process environment for these tools.
 Configure the token on both development and production workers.
-
-`expand_context(before_patch=True)` reads the pre-patch file, including deleted
-lines and files. Its default view includes the current patch.
-
-Changed files come from Phabricator's latest changeset in the stack; untouched
-files come from raw.githubusercontent.com at the stack's base commit. Those raw
-file requests do not use the GitHub API token. HTTP errors, including rate limits,
-are reported as context-retrieval warnings; they never trigger a read of the
-latest branch contents. App authentication can replace the PAT later if needed.
