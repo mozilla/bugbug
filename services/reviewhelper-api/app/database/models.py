@@ -85,10 +85,19 @@ class ReviewRequest(Base):
     async def is_first_published_review(self) -> bool:
         """Check if this is the first review to be published for this revision."""
         session = async_object_session(self)
+        if session is None:
+            raise RuntimeError("Review request is not attached to a database session")
+        identity = (
+            ReviewRequest.revision_id == self.revision_id
+            if self.platform == Platform.PHABRICATOR
+            else (ReviewRequest.owner == self.owner)
+            & (ReviewRequest.repo == self.repo)
+            & (ReviewRequest.pr_number == self.pr_number)
+        )
         stmt = (
             select(ReviewRequest.id)
             .where(
-                ReviewRequest.revision_id == self.revision_id,
+                identity,
                 ReviewRequest.platform == self.platform,
                 ReviewRequest.id != self.id,
                 ReviewRequest.status == ReviewStatus.PUBLISHED,
