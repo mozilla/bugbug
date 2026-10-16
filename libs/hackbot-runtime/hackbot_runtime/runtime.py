@@ -49,13 +49,12 @@ def _configure_auth() -> None:
         log.info("Configured W&B WIF authentication")
 
 
-def _configure_sentry(entrypoint: Callable, run_id: str) -> None:
+def _configure_sentry(entrypoint: Callable) -> None:
     dsn = os.environ.get("SENTRY_DSN")
     if not dsn:
         return
     sentry_sdk.init(dsn=dsn)
     sentry_sdk.set_tag("agent", resolve_agent_name(entrypoint))
-    sentry_sdk.set_tag("run_id", run_id)
 
 
 def _configure_logging() -> None:
@@ -197,13 +196,14 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
 
 
 def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
+    _configure_sentry(entrypoint)
     _configure_logging()
     ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
         raise SystemExit(2)
+    sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
-        _configure_sentry(entrypoint, ctx.run_id)
         _configure_auth()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = entrypoint(ctx)
@@ -215,13 +215,14 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
 
 
 def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
+    _configure_sentry(entrypoint)
     _configure_logging()
     ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
         raise SystemExit(2)
+    sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
-        _configure_sentry(entrypoint, ctx.run_id)
         _configure_auth()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = asyncio.run(entrypoint(ctx))
