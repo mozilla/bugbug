@@ -160,16 +160,6 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
         payload = _error_payload(ctx, msg)
         exit_code = 1
 
-    try:
-        _publish_log(ctx)
-    except Exception:
-        log.exception("Failed to publish agent log")
-
-    try:
-        ctx.publish_changes()
-    except Exception:
-        log.exception("Failed to publish source changes")
-
     # Upload when a signed policy is configured, else write into the local
     # artifacts dir (so local/compose/direct runs leave it on the host).
     try:
@@ -183,6 +173,21 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
             "RESULTS_POLICY_URL not configured; wrote summary to %s.",
             ctx.run_artifacts_dir / _SUMMARY_NAME,
         )
+
+    try:
+        ctx.actions.publish_attachments()
+    except Exception:
+        log.exception("Failed to publish action attachments")
+
+    try:
+        _publish_log(ctx)
+    except Exception:
+        log.exception("Failed to publish agent log")
+
+    try:
+        ctx.publish_changes()
+    except Exception:
+        log.exception("Failed to publish source changes")
 
     return exit_code
 
