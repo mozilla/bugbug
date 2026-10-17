@@ -189,9 +189,14 @@ button.secondary {
   background: rgba(210, 153, 42, 0.16);
   color: var(--amber);
 }
-.badge.running {
+.badge.running,
+.badge.waiting {
   background: rgba(74, 122, 240, 0.18);
   color: var(--blue);
+}
+.badge.skipped {
+  background: rgba(154, 163, 178, 0.16);
+  color: var(--muted);
 }
 .badge.succeeded {
   background: rgba(46, 160, 67, 0.18);

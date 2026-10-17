@@ -313,3 +313,26 @@ async def test_apply_reports_a_lando_rejection(monkeypatch):
 
     assert result.status == "failed"
     assert "Repo try does not exist." in result.error
+
+
+@pytest.mark.parametrize("auto", [False, True])
+def test_try_task_config_repeats_tasks_for_a_rebuild(auto):
+    tasks = None if auto else ["perftest-android-hw-a55-background-resource-fenix"]
+    config = try_server_handler.try_task_config(tasks, auto=auto, rebuild=10)
+    assert config["parameters"]["try_task_config"]["rebuild"] == 10
+
+
+@pytest.mark.parametrize("rebuild", [None, 1])
+def test_try_task_config_omits_rebuild_for_a_single_run(rebuild):
+    config = try_server_handler.try_task_config(["build-linux64/opt"], rebuild=rebuild)
+    assert "rebuild" not in config["parameters"]["try_task_config"]
+
+
+async def test_apply_carries_the_rebuild_count_into_the_config(submitted):
+    result = await try_server_handler.PushHandler().apply(
+        {"tasks": ["perftest-a55"], "rebuild": 10}, _ctx()
+    )
+
+    assert result.result["rebuild"] == 10
+    tip = b64decode(submitted[0]["patches"][-1]).decode()
+    assert '"rebuild": 10' in tip

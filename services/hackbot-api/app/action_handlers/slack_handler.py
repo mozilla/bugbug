@@ -49,6 +49,15 @@ class PostMessageHandler:
             },
         }
 
+        # ``thread_ts`` posts a reply in that message's thread; ``reply_broadcast``
+        # also shows the reply in the channel. Only sent when set, so a plain
+        # message is posted exactly as before.
+        thread = {}
+        if params.get("thread_ts"):
+            thread["thread_ts"] = params["thread_ts"]
+            if params.get("reply_broadcast"):
+                thread["reply_broadcast"] = True
+
         try:
             # Slack reports application errors in a 200 body; the SDK raises
             # ``SlackApiError`` on them, so "channel_not_found" cannot read as a
@@ -60,6 +69,7 @@ class PostMessageHandler:
                 metadata=metadata,
                 unfurl_links=bool(params.get("unfurl_links", False)),
                 unfurl_media=bool(params.get("unfurl_media", False)),
+                **thread,
             )
         except Exception as exc:
             log.exception("Failed to post to Slack channel %s", channel)

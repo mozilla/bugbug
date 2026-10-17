@@ -12,6 +12,7 @@ export const AGENTS = [
   { value: "build-repair", label: "build-repair" },
   { value: "frontend-triage", label: "frontend-triage" },
   { value: "test-repair", label: "test-repair" },
+  { value: "perftest-repair", label: "perftest-repair" },
   { value: "test-plan-generator", label: "test-plan-generator" },
   {
     value: "uplift-resolve",
