@@ -6,6 +6,9 @@
 
 import os
 import sys
+import threading
+import time
+from pathlib import Path
 from urllib.parse import urlparse
 
 from redis import Redis
@@ -39,6 +42,13 @@ def main():
 
     # Write readiness probe file.
     open("/tmp/ready", "w").close()
+
+    def write_heartbeat():
+        while True:
+            Path("/tmp/heartbeat").touch()
+            time.sleep(15)
+
+    threading.Thread(target=write_heartbeat, daemon=True).start()
 
     w.work()
 
