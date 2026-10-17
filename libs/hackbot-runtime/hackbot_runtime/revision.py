@@ -74,11 +74,12 @@ async def checkout_revision(
     ctx: HackbotContext,
     revision_id: int,
     broker_url: str,
-) -> None:
+) -> Stack:
     """Prepare the source so it matches ``D<revision_id>`` before the agent runs.
 
-    Raises :class:`RuntimeError` if the stack cannot be resolved or a diff does
-    not apply, so the run fails visibly rather than editing the wrong tree.
+    Returns the resolved stack. Raises :class:`RuntimeError` if the stack cannot
+    be resolved or a diff does not apply, so the run fails visibly rather than
+    editing the wrong tree.
     """
     client = PhabricatorClient(
         PhabricatorSettings(
@@ -107,6 +108,7 @@ async def checkout_revision(
     ctx.record_source_base()
 
     _apply(repo, stack.target, should_commit=False)
+    return stack
 
 
 async def _resolve_stack(client: PhabricatorClient, revision_id: int) -> Stack:
