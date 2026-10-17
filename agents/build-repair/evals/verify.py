@@ -10,8 +10,6 @@ agent's artifacts in a worktree and the real landed fix commits, then asks Claud
 to score the analysis and the fix.
 """
 
-from __future__ import annotations
-
 from datetime import date
 from logging import getLogger
 from pathlib import Path

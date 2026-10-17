@@ -18,8 +18,6 @@ instructions. Handlers return it verbatim; framing it safely is the caller's
 job (see the bug-fix agent's prompts).
 """
 
-from __future__ import annotations
-
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any

@@ -7,8 +7,6 @@ real session is told to, so the mechanical checks run rather than being
 bypassed.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from types import SimpleNamespace

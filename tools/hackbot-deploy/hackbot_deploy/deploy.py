@@ -21,8 +21,6 @@ Images are always pinned by digest. A tag can be moved by anyone who can push;
 a digest can't.
 """
 
-from __future__ import annotations
-
 import json
 import re
 from collections.abc import Callable

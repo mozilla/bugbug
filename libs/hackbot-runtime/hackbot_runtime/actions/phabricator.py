@@ -11,8 +11,6 @@ when it meant to update one (or invent a revision id) by getting one optional
 argument wrong.
 """
 
-from __future__ import annotations
-
 import re
 from typing import Annotated
 

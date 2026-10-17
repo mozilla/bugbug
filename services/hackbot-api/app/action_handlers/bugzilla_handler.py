@@ -7,8 +7,6 @@ read pipelines): a single-bug write from an event-driven handler doesn't fit
 that shape, and a plain ``requests`` call is simpler to reason about and test.
 """
 
-from __future__ import annotations
-
 import base64
 import logging
 import os

@@ -4,8 +4,6 @@ Exit codes: 0 done (or nothing to do), 1 failed, 3 waiting for infra. A build
 pipeline should treat 3 as "skip the remaining environments", not as a failure.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import sys
