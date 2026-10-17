@@ -955,14 +955,6 @@ class PhabricatorPatch(Patch):
                 )
 
             final_comment_content = comment.content
-            # Only strip the reviewbot footer; human comments may contain "---" in
-            # tables, horizontal rules or pasted diffs.
-            if comment.author_phid == REVIEWBOT_PHID:
-                divider_index = final_comment_content.find("---")
-                if divider_index != -1:
-                    final_comment_content = final_comment_content[
-                        :divider_index
-                    ].strip()
 
             md_lines.append("")
             if final_comment_content:
