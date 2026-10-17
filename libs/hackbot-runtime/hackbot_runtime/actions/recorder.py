@@ -113,7 +113,7 @@ class ActionsRecorder:
             recorded_attachments: list[dict] = []
             for name, path in attachments.items():
                 key = publish_file(
-                    self._uploader,
+                    None,
                     self._artifacts_dir,
                     f"attachments/{action_id}/{name}",
                     path,
@@ -139,6 +139,15 @@ class ActionsRecorder:
         removed = _detach(action_id, action)
         del self._actions[action_id]
         return removed
+
+    def publish_attachments(self) -> None:
+        if self._uploader is None:
+            return
+
+        for action in self._actions.values():
+            for attachment in action.get("attachments", []):
+                key = attachment["uploaded_key"]
+                self._uploader.upload_file(key, self._artifacts_dir / key)
 
     @property
     def actions(self) -> list[dict]:
