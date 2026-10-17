@@ -219,10 +219,13 @@ class AddCommentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         revision_id = params["revision_id"]
         try:
+            # attach_inlines publishes the bot's draft inline comments on the
+            # revision together with this comment.
             await _conduit_request(
-                "differential.revision.edit",
-                objectIdentifier=revision_id,
-                transactions=[{"type": "comment", "value": params["text"]}],
+                "differential.createcomment",
+                revision_id=revision_id,
+                message=params["text"],
+                attach_inlines=1,
             )
         except Exception as exc:
             log.exception("Failed to comment on revision D%s", revision_id)
@@ -230,6 +233,59 @@ class AddCommentHandler:
         return ActionResult.ok(
             {"revision_id": revision_id, "revision_url": _revision_url(revision_id)}
         )
+
+
+class AddInlineCommentHandler:
+    async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        revision_id = params["revision_id"]
+        try:
+            # Created as a draft; a later phabricator.add_comment publishes it.
+            inline = await _conduit_request(
+                "differential.createinline",
+                revisionID=revision_id,
+                diffID=params["diff_id"],
+                filePath=params["file_path"],
+                isNewFile=params["on_new_side"],
+                lineNumber=params["line"],
+                lineLength=params["line_length"],
+                content=params["content"],
+            )
+        except Exception as exc:
+            log.exception("Failed to add inline comment on revision D%s", revision_id)
+            return ActionResult.failed(str(exc))
+        return ActionResult.ok(
+            {
+                "inline_id": inline["id"],
+                "revision_id": revision_id,
+                "revision_url": _revision_url(revision_id),
+            }
+        )
+
+
+def ensure_inline_comments_published(actions: list[dict]) -> list[dict]:
+    """Append an ``add_comment`` for revisions whose inline comments have none.
+
+    Inline comments stay hidden drafts until a general comment publishes them,
+    so a run that records inline comments without one gets a short comment
+    after its recorded actions.
+    """
+    inline = {
+        action["params"]["revision_id"]
+        for action in actions
+        if action["type"] == "phabricator.add_inline_comment"
+    }
+    commented = {
+        action["params"]["revision_id"]
+        for action in actions
+        if action["type"] == "phabricator.add_comment"
+    }
+    return actions + [
+        {
+            "type": "phabricator.add_comment",
+            "params": {"revision_id": revision_id, "text": "See the inline comments."},
+        }
+        for revision_id in sorted(inline - commented)
+    ]
 
 
 class SubmitPatchHandler:

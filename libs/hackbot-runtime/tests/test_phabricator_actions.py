@@ -148,3 +148,18 @@ async def test_add_comment_records_revision_and_text():
     assert action["type"] == "phabricator.add_comment"
     assert action["params"]["revision_id"] == 42
     assert action["params"]["text"].startswith("Here is the answer.")
+
+
+async def test_add_inline_comment_rejects_invalid_line():
+    with pytest.raises(ToolError, match="Invalid line range"):
+        await phabricator.add_inline_comment(
+            ActionsRecorder(),
+            revision_id=42,
+            diff_id=100,
+            file_path="dom/base/Foo.cpp",
+            on_new_side=True,
+            line=0,
+            line_length=0,
+            content="c",
+            reasoning="r",
+        )

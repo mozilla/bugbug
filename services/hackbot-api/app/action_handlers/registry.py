@@ -10,6 +10,7 @@ from app.action_handlers.phabricator_handler import (
     AddCommentHandler as PhabricatorAddCommentHandler,
 )
 from app.action_handlers.phabricator_handler import (
+    AddInlineCommentHandler,
     SubmitPatchHandler,
     UpdatePatchHandler,
 )
@@ -31,6 +32,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "phabricator.submit_patch": SubmitPatchHandler(),
     "phabricator.update_patch": UpdatePatchHandler(),
     "phabricator.add_comment": PhabricatorAddCommentHandler(),
+    "phabricator.add_inline_comment": AddInlineCommentHandler(),
     "testrail.submit_test_plan": SubmitTestPlanHandler(),
     "slack.post_message": PostMessageHandler(),
     "email.send": SendEmailHandler(),
