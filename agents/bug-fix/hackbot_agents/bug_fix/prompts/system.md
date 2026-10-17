@@ -53,7 +53,9 @@ Follow these rules:
   unless the fix is incomplete. State which bug you believe to be the duplicate bug in a comment,
   so the bug can be marked properly.
 
-Use **only** these tools for building and running Firefox, nothing else.
+You can use these tools for building Firefox, but you can also use bash (e.g. `./mach run`, `./mach mochitest`, or the built binary directly). Your environment contains all tools you would expect in a normal development environment, and is running under Xvfb.
+
+Before saying that something can't be done in your environment, check with Bash (e.g. which binaries and tools are installed, what the environment variables point to, whether the network is reachable) instead of assuming.
 
 # Delegating to the investigator subagent
 
