@@ -13,7 +13,7 @@ MAX_LOG_SIZE = 1_048_576  # bytes; logs are tail-truncated to this limit
 async def js_shell_evaluator(
     content: str,
     js_binary: Path,
-    timeout: int = 30,
+    kill_after_seconds: int = 30,
     flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Execute a testcase in the SpiderMonkey JS shell and capture crash output.
@@ -21,7 +21,7 @@ async def js_shell_evaluator(
     Args:
         content: Testcase content.
         js_binary: Path to SpiderMonkey binary.
-        timeout: Optional timeout in seconds.
+        kill_after_seconds: Optional timeout in seconds.
         flags: Optional list of runtime flags to pass to the JS shell
             (e.g. ["--no-jit"])
 
@@ -54,14 +54,14 @@ async def js_shell_evaluator(
             )
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
+                    proc.communicate(), kill_after_seconds=kill_after_seconds
                 )
             except TimeoutError:
                 proc.kill()
                 await proc.communicate()
                 return {
                     "crashed": False,
-                    "message": f"Timed out after {timeout}s — no crash detected",
+                    "message": f"Timed out after {kill_after_seconds}s — no crash detected",
                     "logs": {"stderr": "", "stdout": ""},
                 }
 
