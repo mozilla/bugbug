@@ -678,16 +678,16 @@ def test_to_md_keeps_human_comment_text_after_divider() -> None:
     assert "Please fix this." in markdown
 
 
-def test_to_md_strips_reviewbot_footer() -> None:
+def test_to_md_keeps_reviewbot_comment_text_after_divider() -> None:
     comment = phab_platform.PhabricatorInlineComment(
-        _inline_transaction("The actual review.\n\n---\nFeedback footer")
+        _inline_transaction("The actual review.\n\n---\nMore details")
     )
     comment.author_phid = phab_platform.REVIEWBOT_PHID
 
     markdown = _to_md([comment])
 
     assert "The actual review." in markdown
-    assert "Feedback footer" not in markdown
+    assert "More details" in markdown
 
 
 def test_to_md_does_not_truncate_long_comments() -> None:
