@@ -141,6 +141,7 @@ class ActionsRecorder:
         return removed
 
     def publish_attachments(self) -> None:
+        """Upload locally saved attachments for recorded actions."""
         if self._uploader is None:
             return
 
