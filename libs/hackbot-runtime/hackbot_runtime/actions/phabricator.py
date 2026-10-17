@@ -68,7 +68,12 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(description="Revision test plan."),
+        Field(
+            description=(
+                "Revision test plan. If you recorded a Try push, include "
+                "its Treeherder URL using {{actions.<ref>.url}}."
+            )
+        ),
     ] = None,
     summary: Annotated[
         str | None,
