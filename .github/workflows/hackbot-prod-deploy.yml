@@ -1,5 +1,11 @@
-# Deploy a Hackbot agent, or the API or UI, to prod: each one on its own, and
-# only once a reviewer approves it in the `prod` environment.
+# Deploy a Hackbot agent or service to prod: each one on its own, and only once
+# a reviewer approves it in the GitHub environment for its kind,
+# `hackbot-prod-agents` or `hackbot-prod-services`.
+#
+# Everything is named by its path in the repository (agents/<name>,
+# services/<name>), which is also what decides the kind and so the
+# environment: the deploy tool maps one to the other, and no list of names is
+# kept here.
 #
 # Every stage deploy is offered automatically. When an agent's or service's
 # Cloud Build trigger (agent-<name> / service-<name>, in
@@ -15,7 +21,7 @@
 # From the Actions tab (anyone with write access):
 #   promote   the same, for one name, still behind the approval.
 #   rollback  step prod back to its previous recorded deployment, in the
-#             `prod-rollback` environment.
+#             `hackbot-prod-rollback` environment.
 #
 # Shape changes don't come through here: applying the infra PR's prod
 # directory moves prod to the new shape together with the images pinned for
@@ -23,12 +29,13 @@
 # "waiting for infra" until that apply.
 #
 # `plan` runs as the read-only manifest-sync account. Deploys run as the prod
-# deploy account, which only a job in the `prod` or `prod-rollback`
-# environment can get, so no deploy skips the environment's protection.
+# deploy account, which only a job in one of the three hackbot-prod-*
+# environments can get, so no deploy skips an environment's protection.
 #
 # Needs, in this repo's settings:
-#   environments `prod` (required reviewers) and `prod-rollback`, both limited
-#                to the default branch
+#   environments `hackbot-prod-agents` and `hackbot-prod-services` (each with
+#                its required reviewers) and `hackbot-prod-rollback`, all
+#                limited to the default branch
 #   vars.HACKBOT_WIF_PROVIDER         the platform's GitHub Actions workload identity provider
 #   vars.HACKBOT_MANIFEST_SYNC_SA     the prod state's manifest_sync_service_account_email output
 #   vars.HACKBOT_PROD_DEPLOY_SA       the prod state's prod_deploy_service_account_email output
@@ -44,22 +51,22 @@ on:
   workflow_dispatch:
     inputs:
       name:
-        description: "An agent, or the API or UI"
+        description: "What to deploy: agents/<name> or services/<name>"
         required: true
         type: choice
         # Every agent with a [deploy] table, then the services. Filled in by the
         # hackbot-deploy-names pre-commit hook; don't edit by hand.
         # hackbot-deploy: names
         options:
-          - autowebcompat-diagnosis
-          - autowebcompat-repro
-          - bug-fix
-          - build-repair
-          - frontend-triage
-          - test-plan-generator
-          - test-repair
-          - hackbot-api
-          - hackbot-ui
+          - agents/autowebcompat-diagnosis
+          - agents/autowebcompat-repro
+          - agents/bug-fix
+          - agents/build-repair
+          - agents/frontend-triage
+          - agents/test-plan-generator
+          - agents/test-repair
+          - services/hackbot-api
+          - services/hackbot-ui
       action:
         description: "promote: what stage runs; rollback: prod's previous deployment"
         required: true
@@ -91,6 +98,7 @@ jobs:
     outputs:
       name: ${{ steps.name.outputs.name }}
       promotion: ${{ steps.plan.outputs.promotion }}
+      environment: ${{ steps.plan.outputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
@@ -101,12 +109,14 @@ jobs:
           CHECK_NAME: ${{ github.event.check_run.name }}
           INPUT_NAME: ${{ inputs.name }}
         run: |
+          # The trigger is agent-<name> or service-<name> (Cloud Build names
+          # can't hold a slash); the deployable is agents/<name> or
+          # services/<name>.
           if [ -n "$INPUT_NAME" ]; then
             name="$INPUT_NAME"
           else
-            name="${CHECK_NAME% (*}"
-            name="${name#agent-}"
-            name="${name#service-}"
+            trigger="${CHECK_NAME% (*}"
+            name="${trigger%%-*}s/${trigger#*-}"
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
@@ -144,12 +154,13 @@ jobs:
           uv run --frozen --package hackbot-deploy python -m hackbot_deploy promotion "$NAME" \
             --from stage --to prod --output "$RUNNER_TEMP/promotion.json"
           echo "promotion=$(jq -c . "$RUNNER_TEMP/promotion.json")" >> "$GITHUB_OUTPUT"
+          echo "environment=$(jq -r '.environment // ""' "$RUNNER_TEMP/promotion.json")" >> "$GITHUB_OUTPUT"
           {
             if [ "$(jq length "$RUNNER_TEMP/promotion.json")" -eq 0 ]; then
               echo "### $NAME: nothing to promote"
               echo "Prod already runs what stage runs."
             else
-              echo "### Promote $NAME to prod"
+              echo "### Promote $NAME to prod (approval in $(jq -r .environment "$RUNNER_TEMP/promotion.json"))"
               jq -r --arg repo "$GITHUB_REPOSITORY" '
                 "- commit: \(.revision // "unknown")",
                 "- built: \(.created // "unknown"), deployed to stage by \(.deployed_by // "unknown")",
@@ -168,7 +179,9 @@ jobs:
     needs: plan
     if: needs.plan.outputs.promotion != '{}' && !inputs.dry_run
     runs-on: ubuntu-latest
-    environment: prod
+    # Chosen by the deploy tool from the kind: hackbot-prod-agents or
+    # hackbot-prod-services.
+    environment: ${{ needs.plan.outputs.environment }}
 
     # One deploy of a given agent or service at a time; different ones in
     # parallel.
@@ -228,7 +241,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
-    environment: prod-rollback
+    environment: hackbot-prod-rollback
 
     concurrency:
       group: hackbot-prod-deploy-${{ inputs.name }}

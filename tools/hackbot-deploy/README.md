@@ -110,15 +110,20 @@ rollback and history include it.
 ## Deploying
 
 ```sh
-hackbot-deploy deploy  bug-fix --env dev --agent-image …@sha256:… --broker-image …@sha256:…
-hackbot-deploy deploy  hackbot-api --env dev --image …@sha256:…
-hackbot-deploy promote bug-fix --from stage --to prod
-hackbot-deploy rollback hackbot-ui --env prod
+hackbot-deploy deploy  agents/bug-fix --env dev --agent-image …@sha256:… --broker-image …@sha256:…
+hackbot-deploy deploy  services/hackbot-api --env dev --image …@sha256:…
+hackbot-deploy promote agents/bug-fix --from stage --to prod
+hackbot-deploy rollback services/hackbot-ui --env prod
 ```
 
-`hackbot-api` and `hackbot-ui` are services and take `--image`; anything else
-is an agent and takes `--agent-image` (plus `--broker-image` where it has a
-broker). Mixing them up is an error.
+Everything deployable is named by its path in the repository, which also says
+what it is, so no list of names is kept anywhere: `agents/<name>` is an agent
+with a `[deploy]` table, deployed as a Cloud Run Job, and `services/<name>` is
+a service with its own `cloudbuild.yaml`, deployed as a Cloud Run service. A
+service takes `--image`; an agent takes `--agent-image` (plus `--broker-image`
+where it has a broker). Mixing them up is an error. Resource names keep their
+own form (`hackbot-agent-bug-fix-dev`, `hackbot-api-dev`), since Cloud Run
+names can't hold a slash.
 
 (`uv run --package hackbot-deploy python -m hackbot_deploy …` from the repo
 root.) Credentials are Application Default Credentials, so the same command
@@ -145,7 +150,8 @@ and fails without recording anything if the new revision never becomes ready,
 in which case Cloud Run keeps serving the old one.
 
 Then it updates the Job or service, reads it back, and writes
-`deployments/<name>.json` with the images, commit, build time and a
+`deployments/<id>.json` (`deployments/agents/bug-fix.json`) with the images,
+commit, build time and a
 deployment history. The write is conditioned on the record's generation, so
 two concurrent deploys can't silently overwrite each other. A rollback steps
 back through that history one deployment at a time.
@@ -162,15 +168,15 @@ mirror the Terraform in webservices-infra. Change one, change both.
 Prod is never deployed by a build, and never without an approval. The
 **Hackbot prod deploy** workflow offers every stage deploy to prod, one agent
 or service at a time: once a build's check run succeeds, it compares stage with
-prod (`promotion`), and if they differ, waits in the `prod` GitHub environment
-for a reviewer. On approval it runs `promote --expect`, which puts on exactly
+prod (`promotion`), and if they differ, waits for a reviewer in the GitHub
+environment for its kind: `hackbot-prod-agents` or `hackbot-prod-services`. On approval it runs `promote --expect`, which puts on exactly
 the digests that were planned, or reports `superseded` if stage has moved on
 (the newer build's run asks for its own approval). The approver is recorded as
 `deployed_by`.
 
 From the Actions tab, `promote` does the same for one name, and `rollback`
-steps prod back through its history in the `prod-rollback` environment. The
-prod deploy account is bound to those two environments, so no workflow can
+steps prod back through its history in the `hackbot-prod-rollback`
+environment. The prod deploy account is bound to those three environments, so no workflow can
 deploy prod without passing their protection. A shape change reaches prod by
 applying the infra PR's prod directory instead, which puts on the images pinned
 for it.

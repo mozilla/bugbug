@@ -3,7 +3,12 @@
 Terraform owns the infrastructure; this owns which image runs on it.
 Deploying, promoting and rolling back are all the same operation: set the
 images something runs in one environment, then record that in the
-environment's registry bucket (``deployments/<name>.json``).
+environment's registry bucket (``deployments/<id>.json``).
+
+Everything deployable is named by where it lives in the repository, which also
+says what it is: ``agents/<name>`` (a Cloud Run Job, from an agent's
+``[deploy]`` table) or ``services/<name>`` (a Cloud Run service, with its own
+``cloudbuild.yaml``).
 
 The gate, for agents. Every agent image carries the ``config_hash`` of the
 shape it was built for (the ``hackbot.config_hash`` label), and every
@@ -43,8 +48,21 @@ _IMAGE = re.compile(
     r"@(?P<digest>sha256:[0-9a-f]{64})"
 )
 
-# Deployed as Cloud Run services; everything else is an agent.
-SERVICES = ("hackbot-api", "hackbot-ui")
+AGENTS = "agents"
+SERVICES = "services"
+
+# The GitHub environment a prod promotion of each kind waits for approval in.
+PROD_APPROVAL = {AGENTS: "hackbot-prod-agents", SERVICES: "hackbot-prod-services"}
+
+
+def split_id(deployable: str) -> tuple[str, str]:
+    """Return a deployable's kind and name: ``agents/bug-fix`` -> (agents, bug-fix)."""
+    kind, _, name = deployable.partition("/")
+    if kind not in (AGENTS, SERVICES) or not name or "/" in name:
+        raise DeployError(
+            f"{deployable}: not a deployable; expected {AGENTS}/<name> or {SERVICES}/<name>"
+        )
+    return kind, name
 
 
 @dataclass(frozen=True)
@@ -312,7 +330,7 @@ def _image_hash(cloud: Cloud, images: dict[str, str]) -> tuple[str, dict[str, st
 def _adopt_terraform_deploy(
     cloud: Cloud,
     env: Environment,
-    agent: str,
+    key: str,
     applied: dict[str, Any],
     running: dict[str, str],
     current: dict[str, Any] | None,
@@ -336,7 +354,7 @@ def _adopt_terraform_deploy(
         return current, generation
     labels = cloud.image_labels(running["agent"])
     record = {
-        "name": agent,
+        "name": key,
         "environment": env.name,
         "runtime": applied["runtime"],
         "images": running,
@@ -351,11 +369,11 @@ def _adopt_terraform_deploy(
         return record, generation
     cloud.write_object(
         env.registry_bucket,
-        f"deployments/{agent}.json",
+        f"deployments/{key}.json",
         (json.dumps(record, indent=2) + "\n").encode(),
         if_generation_match=generation,
     )
-    return _read_record(cloud, env, agent)
+    return _read_record(cloud, env, key)
 
 
 def deploy_agent(
@@ -377,7 +395,8 @@ def deploy_agent(
     """
     if rollback and images is not None:
         raise DeployError(_ROLLBACK_WITH_IMAGES)
-    current, generation = _read_record(cloud, env, agent)
+    key = f"{AGENTS}/{agent}"
+    current, generation = _read_record(cloud, env, key)
     applied = _applied(cloud, env, agent)
 
     job_name = env.job_name(agent)
@@ -390,11 +409,11 @@ def deploy_agent(
         )
     running = {c["name"]: c["image"] for c in job["template"]["template"]["containers"]}
     current, generation = _adopt_terraform_deploy(
-        cloud, env, agent, applied, running, current, generation, dry_run=dry_run
+        cloud, env, key, applied, running, current, generation, dry_run=dry_run
     )
 
     if rollback:
-        images = _rollback_target(current, agent, env)
+        images = _rollback_target(current, key, env)
     if not images or "agent" not in images:
         raise DeployError("an agent image is required")
     for ref in images.values():
@@ -421,7 +440,7 @@ def deploy_agent(
     # Compared with what the Job runs, not just the record: Terraform can
     # recreate a Job on its placeholder image, and a redeploy must repair that.
     if current and current.get("images") == images == running:
-        return Result(agent, env.name, "unchanged", images, image_hash, current)
+        return Result(key, env.name, "unchanged", images, image_hash, current)
     _refuse_stale(
         current, labels.get(LABEL_CREATED), agent, env, rollback=rollback, force=force
     )
@@ -440,7 +459,7 @@ def deploy_agent(
     return _ship(
         cloud,
         env,
-        agent,
+        key,
         images=images,
         config_hash=image_hash,
         runtime=applied["runtime"],
@@ -474,13 +493,10 @@ def deploy_service(
     A new revision is rolled out, and if it never becomes ready Cloud Run keeps
     serving the old one.
     """
-    if service not in SERVICES:
-        raise DeployError(
-            f"{service} is not a service; services are {', '.join(SERVICES)}"
-        )
     if rollback and image is not None:
         raise DeployError(_ROLLBACK_WITH_IMAGES)
-    current, generation = _read_record(cloud, env, service)
+    key = f"{SERVICES}/{service}"
+    current, generation = _read_record(cloud, env, key)
 
     name = env.service_name(service)
     running = {
@@ -496,7 +512,7 @@ def deploy_service(
         )
 
     if rollback:
-        images = _rollback_target(current, service, env)
+        images = _rollback_target(current, key, env)
     elif image:
         images = {containers[0]: image}
     else:
@@ -510,7 +526,7 @@ def deploy_service(
 
     labels = cloud.image_labels(images[containers[0]])
     if current and current.get("images") == images == running:
-        return Result(service, env.name, "unchanged", images, None, current)
+        return Result(key, env.name, "unchanged", images, None, current)
     _refuse_stale(
         current, labels.get(LABEL_CREATED), service, env, rollback=rollback, force=force
     )
@@ -532,7 +548,7 @@ def deploy_service(
     return _ship(
         cloud,
         env,
-        service,
+        key,
         images=images,
         config_hash=None,
         runtime="cloud_run_service",
@@ -550,21 +566,25 @@ def deploy_service(
 
 
 def promotion(
-    cloud: Cloud, name: str, source: Environment, target: Environment
+    cloud: Cloud, deployable: str, source: Environment, target: Environment
 ) -> dict[str, Any] | None:
-    """Say what promoting ``name`` from ``source`` to ``target`` would put on.
+    """Say what promoting ``deployable`` from ``source`` to ``target`` would put on.
 
     None when there is nothing to promote: ``source`` has no deployment, or
-    ``target`` already runs the same images.
+    ``target`` already runs the same images. ``environment`` is the GitHub
+    environment a prod promotion of its kind waits for approval in.
     """
-    record, _ = _read_record(cloud, source, name)
+    kind, _ = split_id(deployable)
+    record, _ = _read_record(cloud, source, deployable)
     if record is None:
         return None
-    current, _ = _read_record(cloud, target, name)
+    current, _ = _read_record(cloud, target, deployable)
     if current and current.get("images") == record["images"]:
         return None
     return {
-        "name": name,
+        "name": deployable,
+        "kind": kind,
+        "environment": PROD_APPROVAL[kind],
         "images": record["images"],
         "revision": record.get("revision"),
         "created": record.get("created"),
@@ -575,26 +595,27 @@ def promotion(
 
 def promote(
     cloud: Cloud,
-    name: str,
+    deployable: str,
     source: Environment,
     target: Environment,
     *,
     expect: dict[str, str] | None = None,
     **kwargs: Any,
 ) -> Result:
-    """Deploy to ``target`` exactly the images ``name`` runs in ``source``.
+    """Deploy to ``target`` exactly the images ``deployable`` runs in ``source``.
 
     With ``expect``, only if ``source`` still runs those images: a promotion
     approved after ``source`` moved on is superseded, not a deploy of
     something nobody looked at.
     """
-    record, _ = _read_record(cloud, source, name)
+    kind, name = split_id(deployable)
+    record, _ = _read_record(cloud, source, deployable)
     if record is None:
-        raise DeployError(f"{name} has never been deployed to {source.name}")
+        raise DeployError(f"{deployable} has never been deployed to {source.name}")
     images = dict(record["images"])
     if expect is not None and images != expect:
-        return Result(name, target.name, "superseded", expect, None)
-    if name in SERVICES:
+        return Result(deployable, target.name, "superseded", expect, None)
+    if kind == SERVICES:
         return deploy_service(
             cloud, name, target, next(iter(images.values())), **kwargs
         )
