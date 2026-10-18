@@ -157,6 +157,16 @@ pipeline should treat `3` as "stop here", not as a failure;
 The environment names (projects, the `-dev`/`-stage` suffix, bucket names)
 mirror the Terraform in webservices-infra. Change one, change both.
 
+## Prod
+
+Prod is never deployed from a build. Anyone with write access runs the
+**Hackbot prod deploy** workflow from the Actions tab: `promote` puts on prod
+exactly the images stage runs (the same build of the same commit), and
+`rollback` steps prod back through its history. It runs as the prod deploy
+account, which only trusts runs from the default branch, and records the
+GitHub user as `deployed_by`. A shape change reaches prod by applying the infra
+PR's prod directory instead, which puts on the images pinned for it.
+
 ## Building
 
 `agents/cloudbuild.yaml` builds an agent's images with the hash label, and

@@ -1,0 +1,91 @@
+# Deploy a Hackbot agent, or the API or UI, to prod.
+#
+# Run it from the Actions tab (anyone with write access can):
+#   promote   put on prod exactly the images stage runs: the same build of the
+#             same commit, never a rebuild.
+#   rollback  step prod back to its previous recorded deployment.
+#
+# Shape changes don't come through here: applying the infra PR's prod
+# directory moves prod to the new shape together with the images pinned for
+# it. A promote whose image needs a shape prod hasn't applied yet fails with
+# "waiting for infra" until that apply.
+#
+# It runs as the prod deploy account, which only trusts runs from the default
+# branch, so the code doing the deploy is always reviewed.
+#
+# Needs, in this repo's settings:
+#   vars.HACKBOT_WIF_PROVIDER     the platform's GitHub Actions workload identity provider
+#   vars.HACKBOT_PROD_DEPLOY_SA   the prod state's prod_deploy_service_account_email output
+name: Hackbot prod deploy
+run-name: ${{ inputs.action }} ${{ inputs.name }} in prod${{ inputs.dry_run && ' (dry run)' || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "An agent (e.g. bug-fix), or hackbot-api / hackbot-ui"
+        required: true
+        type: string
+      action:
+        description: "promote: what stage runs; rollback: prod's previous deployment"
+        required: true
+        type: choice
+        options: [promote, rollback]
+        default: promote
+      dry_run:
+        description: "Only say what would happen"
+        type: boolean
+        default: false
+
+# One deploy of a given agent or service at a time; different ones in parallel.
+concurrency:
+  group: hackbot-prod-deploy-${{ inputs.name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Google Cloud Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.HACKBOT_WIF_PROVIDER }}
+          service_account: ${{ vars.HACKBOT_PROD_DEPLOY_SA }}
+
+      - name: Deploy
+        env:
+          NAME: ${{ inputs.name }}
+          ACTION: ${{ inputs.action }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          case "$ACTION" in
+            promote) args=(promote "$NAME" --from stage --to prod) ;;
+            rollback) args=(rollback "$NAME" --env prod) ;;
+          esac
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+
+          set +e
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/out.txt"
+          status=${PIPESTATUS[0]}
+          set -e
+
+          {
+            echo "### $ACTION $NAME in prod"
+            echo '```'
+            cat "$RUNNER_TEMP/out.txt"
+            echo '```'
+            if [ "$status" -eq 3 ]; then
+              echo "Prod hasn't applied the shape this image was built for. Apply the infra PR's prod directory first; that apply puts on the images pinned for the new shape."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
