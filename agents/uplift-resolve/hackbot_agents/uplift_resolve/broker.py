@@ -12,6 +12,7 @@ allow-lists the read methods that needs and substitutes the real key.
 import logging
 
 import uvicorn
+from hackbot_runtime import configure_broker_sentry
 from phabricator_client import PhabricatorClient, PhabricatorSettings
 from phabricator_proxy import create_app as conduit_proxy
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -44,6 +45,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    configure_broker_sentry(main)
     inputs = BrokerInputs()
     uvicorn.run(build_app(inputs), host=inputs.host, port=inputs.port, log_config=None)
 

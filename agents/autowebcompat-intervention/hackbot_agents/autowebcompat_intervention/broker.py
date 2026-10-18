@@ -26,6 +26,7 @@ from agent_tools import phabricator as phabricator_tools
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.phabricator import PhabricatorContext
+from hackbot_runtime import configure_broker_sentry
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from phabricator_client import PhabricatorClient, PhabricatorSettings
 from phabricator_proxy import create_app as conduit_proxy
@@ -106,6 +107,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    configure_broker_sentry(main)
     inputs = BrokerInputs()
     app = build_app(inputs)
     uvicorn.run(app, host=inputs.host, port=inputs.port, log_config=None)
