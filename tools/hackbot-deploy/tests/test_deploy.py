@@ -712,3 +712,44 @@ def test_workflow_names_replace_only_the_marked_list() -> None:
 def test_workflow_names_need_the_marker() -> None:
     with pytest.raises(Exception, match="hackbot-deploy: names"):
         cli.set_workflow_names("options:\n  - a\n", ["b"])
+
+
+def test_promotion_says_what_would_go_on(cloud: FakeCloud) -> None:
+    cloud.apply(STAGE, "bug-fix", "h2")
+    cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
+    ship(cloud, 1)
+    promote(cloud, "bug-fix", DEV, STAGE, actor="test")
+
+    assert deploy.promotion(cloud, "bug-fix", DEV, STAGE) is None
+    ship(cloud, 2, created="2026-10-09T11:00:00Z")
+    planned = deploy.promotion(cloud, "bug-fix", DEV, STAGE)
+    assert planned is not None
+    assert planned["images"] == ship_images(2)
+    assert planned["replaces"]["images"] == ship_images(1)
+
+
+def test_nothing_to_promote_from_an_undeployed_source(cloud: FakeCloud) -> None:
+    assert deploy.promotion(cloud, "bug-fix", DEV, STAGE) is None
+
+
+def test_a_promotion_approved_after_the_source_moved_on_is_superseded(
+    cloud: FakeCloud,
+) -> None:
+    cloud.apply(STAGE, "bug-fix", "h2")
+    cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
+    ship(cloud, 1)
+    planned = deploy.promotion(cloud, "bug-fix", DEV, STAGE)
+    ship(cloud, 2, created="2026-10-09T11:00:00Z")
+
+    result = promote(
+        cloud, "bug-fix", DEV, STAGE, expect=planned["images"], actor="test"
+    )
+    assert result.action == "superseded"
+    assert (STAGE.registry_bucket, "deployments/bug-fix.json") not in cloud.objects
+
+    planned = deploy.promotion(cloud, "bug-fix", DEV, STAGE)
+    result = promote(
+        cloud, "bug-fix", DEV, STAGE, expect=planned["images"], actor="test"
+    )
+    assert result.action == "deployed"
+    assert cloud.record(STAGE, "bug-fix")["images"] == ship_images(2)

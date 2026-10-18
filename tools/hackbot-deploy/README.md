@@ -159,13 +159,21 @@ mirror the Terraform in webservices-infra. Change one, change both.
 
 ## Prod
 
-Prod is never deployed from a build. Anyone with write access runs the
-**Hackbot prod deploy** workflow from the Actions tab: `promote` puts on prod
-exactly the images stage runs (the same build of the same commit), and
-`rollback` steps prod back through its history. It runs as the prod deploy
-account, which only trusts runs from the default branch, and records the
-GitHub user as `deployed_by`. A shape change reaches prod by applying the infra
-PR's prod directory instead, which puts on the images pinned for it.
+Prod is never deployed by a build, and never without an approval. The
+**Hackbot prod deploy** workflow offers every stage deploy to prod, one agent
+or service at a time: once a build's check run succeeds, it compares stage with
+prod (`promotion`), and if they differ, waits in the `prod` GitHub environment
+for a reviewer. On approval it runs `promote --expect`, which puts on exactly
+the digests that were planned, or reports `superseded` if stage has moved on
+(the newer build's run asks for its own approval). The approver is recorded as
+`deployed_by`.
+
+From the Actions tab, `promote` does the same for one name, and `rollback`
+steps prod back through its history in the `prod-rollback` environment. The
+prod deploy account is bound to those two environments, so no workflow can
+deploy prod without passing their protection. A shape change reaches prod by
+applying the infra PR's prod directory instead, which puts on the images pinned
+for it.
 
 ## Building
 

@@ -549,14 +549,51 @@ def deploy_service(
 # --- Either --------------------------------------------------------------------
 
 
+def promotion(
+    cloud: Cloud, name: str, source: Environment, target: Environment
+) -> dict[str, Any] | None:
+    """Say what promoting ``name`` from ``source`` to ``target`` would put on.
+
+    None when there is nothing to promote: ``source`` has no deployment, or
+    ``target`` already runs the same images.
+    """
+    record, _ = _read_record(cloud, source, name)
+    if record is None:
+        return None
+    current, _ = _read_record(cloud, target, name)
+    if current and current.get("images") == record["images"]:
+        return None
+    return {
+        "name": name,
+        "images": record["images"],
+        "revision": record.get("revision"),
+        "created": record.get("created"),
+        "deployed_by": record.get("deployed_by"),
+        "replaces": _summary(current) if current else None,
+    }
+
+
 def promote(
-    cloud: Cloud, name: str, source: Environment, target: Environment, **kwargs: Any
+    cloud: Cloud,
+    name: str,
+    source: Environment,
+    target: Environment,
+    *,
+    expect: dict[str, str] | None = None,
+    **kwargs: Any,
 ) -> Result:
-    """Deploy to ``target`` exactly the images ``name`` runs in ``source``."""
+    """Deploy to ``target`` exactly the images ``name`` runs in ``source``.
+
+    With ``expect``, only if ``source`` still runs those images: a promotion
+    approved after ``source`` moved on is superseded, not a deploy of
+    something nobody looked at.
+    """
     record, _ = _read_record(cloud, source, name)
     if record is None:
         raise DeployError(f"{name} has never been deployed to {source.name}")
     images = dict(record["images"])
+    if expect is not None and images != expect:
+        return Result(name, target.name, "superseded", expect, None)
     if name in SERVICES:
         return deploy_service(
             cloud, name, target, next(iter(images.values())), **kwargs

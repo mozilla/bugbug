@@ -285,20 +285,42 @@ def rollback(name: Name, env: EnvOption, dry_run: DryRun = False) -> None:
 
 
 @app.command()
+def promotion(
+    name: Name,
+    source: Annotated[Env, typer.Option("--from")],
+    target: Annotated[Env, typer.Option("--to")],
+    output: Annotated[Path, typer.Option(help="Where to write the JSON.")],
+) -> None:
+    """Write what promoting would put on, or {} when there is nothing to promote."""
+    planned = deploy.promotion(
+        GoogleCloud(), name, deploy.ENVIRONMENTS[source], deploy.ENVIRONMENTS[target]
+    )
+    output.write_text(json.dumps(planned or {}, indent=2) + "\n")
+
+
+@app.command()
 def promote(
     name: Name,
     source: Annotated[Env, typer.Option("--from")],
     target: Annotated[Env, typer.Option("--to")],
+    expect: Annotated[
+        Path | None,
+        typer.Option(
+            help="JSON from promotion: deploy only if the source still runs its images."
+        ),
+    ] = None,
     dry_run: DryRun = False,
 ) -> None:
     """Deploy the images one environment runs to another."""
     cloud = GoogleCloud()
+    expected = _read_json(expect)
     _report(
         deploy.promote(
             cloud,
             name,
             deploy.ENVIRONMENTS[source],
             deploy.ENVIRONMENTS[target],
+            expect=expected["images"] if expected else None,
             dry_run=dry_run,
             actor=_actor(cloud),
         )
