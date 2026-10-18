@@ -64,6 +64,32 @@ def _report(result: deploy.Result) -> None:
         print(f"  {container}: {image}")
 
 
+# Marks the generated `options:` list of the prod deploy workflow's name input.
+_NAMES_MARKER = "# hackbot-deploy: names"
+
+
+def set_workflow_names(text: str, names: list[str]) -> str:
+    """Replace the options list that follows the marker comment with ``names``."""
+    lines = text.splitlines(keepends=True)
+    try:
+        start = next(i for i, line in enumerate(lines) if _NAMES_MARKER in line) + 1
+    except StopIteration:
+        raise manifest.ManifestError(
+            f"no '{_NAMES_MARKER}' line in the workflow"
+        ) from None
+    if start >= len(lines) or lines[start].strip() != "options:":
+        raise manifest.ManifestError(
+            f"'{_NAMES_MARKER}' must be followed by 'options:'"
+        )
+    indent = lines[start][: len(lines[start]) - len(lines[start].lstrip())] + "  "
+    end = start + 1
+    while end < len(lines) and lines[end].startswith(f"{indent}- "):
+        end += 1
+    return "".join(
+        lines[: start + 1] + [f"{indent}- {name}\n" for name in names] + lines[end:]
+    )
+
+
 def _read_json(path: Path | None) -> Any:
     return json.loads(path.read_text()) if path else None
 
@@ -111,6 +137,17 @@ def manifest_(
         sys.stdout.write(text)
     else:
         Path(output).write_text(text)
+
+
+@app.command()
+def workflow_names(workflow: Path, agents_dir: AgentsDir = Path("agents")) -> None:
+    """Fill a workflow's name choices with every deployable agent and service."""
+    names = sorted(manifest.load_configs(agents_dir)) + list(deploy.SERVICES)
+    text = workflow.read_text()
+    updated = set_workflow_names(text, names)
+    if updated != text:
+        workflow.write_text(updated)
+        print(f"{workflow}: updated the deployable names", file=sys.stderr)
 
 
 @app.command()

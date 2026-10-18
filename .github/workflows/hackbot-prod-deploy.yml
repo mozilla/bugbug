@@ -23,9 +23,22 @@ on:
   workflow_dispatch:
     inputs:
       name:
-        description: "An agent (e.g. bug-fix), or hackbot-api / hackbot-ui"
+        description: "An agent, or the API or UI"
         required: true
-        type: string
+        type: choice
+        # Every agent with a [deploy] table, then the services. Filled in by the
+        # hackbot-deploy-names pre-commit hook; don't edit by hand.
+        # hackbot-deploy: names
+        options:
+          - autowebcompat-diagnosis
+          - autowebcompat-repro
+          - bug-fix
+          - build-repair
+          - frontend-triage
+          - test-plan-generator
+          - test-repair
+          - hackbot-api
+          - hackbot-ui
       action:
         description: "promote: what stage runs; rollback: prod's previous deployment"
         required: true

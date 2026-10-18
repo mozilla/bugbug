@@ -689,3 +689,26 @@ def test_a_dry_run_records_nothing_terraform_did(cloud: FakeCloud) -> None:
 
 def ship_images(n: int) -> dict[str, str]:
     return {"agent": image("bug-fix-agent", n), "broker": image("bug-fix-broker", n)}
+
+
+WORKFLOW = """\
+      name:
+        type: choice
+        # hackbot-deploy: names
+        options:
+          - old-agent
+          - hackbot-api
+      action:
+        type: choice
+"""
+
+
+def test_workflow_names_replace_only_the_marked_list() -> None:
+    updated = cli.set_workflow_names(WORKFLOW, ["bug-fix", "hackbot-api"])
+    assert updated == WORKFLOW.replace("- old-agent\n", "- bug-fix\n")
+    assert cli.set_workflow_names(updated, ["bug-fix", "hackbot-api"]) == updated
+
+
+def test_workflow_names_need_the_marker() -> None:
+    with pytest.raises(Exception, match="hackbot-deploy: names"):
+        cli.set_workflow_names("options:\n  - a\n", ["b"])
