@@ -8,7 +8,9 @@
 # waits for approval, then puts on exactly those, unless stage has moved on in
 # the meantime (superseded: the newer build's run asks for its own approval).
 # A build that didn't change stage, such as one waiting for infra, asks
-# nothing.
+# nothing. Each run first cancels older runs of the same name still waiting
+# for approval, so there is at most one request per agent or service, always
+# for what stage runs now.
 #
 # From the Actions tab (anyone with write access):
 #   promote   the same, for one name, still behind the approval.
@@ -82,6 +84,7 @@ jobs:
        github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
     runs-on: ubuntu-latest
     permissions:
+      actions: write # cancel older runs still waiting for approval
       contents: read
       id-token: write
 
@@ -106,6 +109,24 @@ jobs:
             name="${name#service-}"
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # They haven't started deploying (that only begins after approval), so
+      # cancelling can't interrupt one. Matched by the promote job's name.
+      - name: Cancel older requests for the same name
+        env:
+          NAME: ${{ steps.name.outputs.name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow hackbot-prod-deploy.yml \
+              --status waiting --json databaseId --jq '.[].databaseId' |
+            while read -r run; do
+              [ "$run" -lt "$GITHUB_RUN_ID" ] || continue
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" \
+                  --jq '.jobs[] | select(.status == "waiting") | .name' | grep -qxF "promote $NAME"; then
+                echo "Cancelling run $run: an older request to promote $NAME"
+                gh run cancel "$run" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
 
       - uses: astral-sh/setup-uv@v6
 
@@ -142,14 +163,15 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   promote:
+    # The plan job of a newer run finds and cancels this one by this name.
+    name: promote ${{ needs.plan.outputs.name }}
     needs: plan
     if: needs.plan.outputs.promotion != '{}' && !inputs.dry_run
     runs-on: ubuntu-latest
     environment: prod
 
     # One deploy of a given agent or service at a time; different ones in
-    # parallel. A newer run of the same name replaces an older one still
-    # queued.
+    # parallel.
     concurrency:
       group: hackbot-prod-deploy-${{ needs.plan.outputs.name }}
       cancel-in-progress: false
