@@ -36,9 +36,10 @@
 #   environments `hackbot-prod-agents` and `hackbot-prod-services` (each with
 #                its required reviewers) and `hackbot-prod-rollback`, all
 #                limited to the default branch
-#   vars.HACKBOT_WIF_PROVIDER         the platform's GitHub Actions workload identity provider
 #   vars.HACKBOT_MANIFEST_SYNC_SA     the prod state's manifest_sync_service_account_email output
 #   vars.HACKBOT_PROD_DEPLOY_SA       the prod state's prod_deploy_service_account_email output
+# The workload identity provider is the platform's organization variable,
+# GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER, so it needs nothing here.
 name: Hackbot prod deploy
 run-name: >-
   ${{ github.event_name == 'check_run'
@@ -143,7 +144,7 @@ jobs:
       - name: Google Cloud Auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.HACKBOT_WIF_PROVIDER }}
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.HACKBOT_MANIFEST_SYNC_SA }}
 
       - name: What stage runs that prod doesn't
@@ -202,7 +203,7 @@ jobs:
       - name: Google Cloud Auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.HACKBOT_WIF_PROVIDER }}
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.HACKBOT_PROD_DEPLOY_SA }}
 
       - name: Deploy what was approved
@@ -259,7 +260,7 @@ jobs:
       - name: Google Cloud Auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.HACKBOT_WIF_PROVIDER }}
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.HACKBOT_PROD_DEPLOY_SA }}
 
       - name: Roll back
