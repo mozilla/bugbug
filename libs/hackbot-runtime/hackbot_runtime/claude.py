@@ -44,6 +44,22 @@ class Reporter:
         self._log = log_path.open("w", encoding="utf-8") if log_path else None
         self._turn = 0
         self._started = time.monotonic()
+        # Claude Code's background tasks as of its last ``background_tasks_changed``.
+        self._background_tasks: list[dict] = []
+
+    @property
+    def unfinished_subagents(self) -> list[str]:
+        """Subagents still running in the background when the session last reported.
+
+        Claude Code launches subagents in the background by default. A model that
+        ends its turn to wait for one ends the run there: the ``ResultMessage``
+        arrives before the subagent's findings, and nothing picks them up.
+        """
+        return [
+            task.get("subagent_type") or task.get("task_id", "?")
+            for task in self._background_tasks
+            if task.get("task_type") == "local_agent"
+        ]
 
     def __enter__(self):
         return self
@@ -123,6 +139,9 @@ class Reporter:
                         )
 
         elif isinstance(msg, SystemMessage):
+            if msg.subtype == "background_tasks_changed":
+                tasks = msg.data.get("tasks")
+                self._background_tasks = tasks if isinstance(tasks, list) else []
             if msg.subtype == "init":
                 model = msg.data.get("model", "?")
                 self._emit(f"[system] session started (model={model})")
@@ -142,3 +161,8 @@ class Reporter:
             self._emit(line, always=True)
             if msg.is_error:
                 self._emit(f"[done] ERROR: {msg.result}", always=True)
+            if unfinished := self.unfinished_subagents:
+                self._emit(
+                    f"[done] ended with subagents still running: {', '.join(unfinished)}",
+                    always=True,
+                )
