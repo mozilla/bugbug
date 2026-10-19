@@ -15,7 +15,11 @@ from bugbug.tools.core.platforms.phabricator import (
 
 logger = logging.getLogger(__name__)
 
-VISIBILITY_TIMEOUT = timedelta(minutes=5)
+# phab-bot can take longer than five minutes to make a revision public.
+# The worker returns 409 during this window so Cloud Tasks retries the original
+# task using the queue's exponential backoff. On the first attempt after the
+# deadline, a still-private revision fails permanently; failed rows stay intact.
+VISIBILITY_TIMEOUT = timedelta(minutes=30)
 
 
 class ReviewProcessingError(Exception):
@@ -38,14 +42,15 @@ def get_code_review_tool():
 
 async def process_review(
     review_request: ReviewRequest,
-) -> tuple[list[GeneratedComment], str, dict]:
+) -> tuple[list[GeneratedComment], str, str, dict]:
     """Process a review request and generate comments.
 
     Args:
         review_request: The review request to process.
 
     Returns:
-        A tuple of (generated comments, patch summary, review details).
+        A tuple of (generated comments, patch summary, general comment, review
+        details).
     """
     logger.info(
         "Processing review request %s for platform %s",
@@ -99,7 +104,12 @@ async def process_review(
         for comment in result.review_comments
     ]
 
-    return generated_comments, result.patch_summary, result.details
+    return (
+        generated_comments,
+        result.patch_summary,
+        result.general_comment,
+        result.details,
+    )
 
 
 def submit_review_to_platform(
@@ -174,17 +184,15 @@ def create_main_review_comment(
     diff_url = f"{settings.phabricator_url}/D{review_request.revision_id}?id={review_request.diff_id}"
     parts = [f"(Reviewing [Diff {review_request.diff_id}]({diff_url}))"]
 
-    if review_request.summary:
-        parts.append(review_request.summary)
-        parts.append("\n---\n")
+    if review_request.general_comment:
+        parts.append(review_request.general_comment)
 
-    num_comments = len(generated_comments)
-    if num_comments > 0:
+    if generated_comments:
+        if review_request.general_comment:
+            parts.append("\n---\n")
         parts.append(
             "(NOTE) Please use {icon thumbs-up} / {icon thumbs-down} reactions on inline comments to provide feedback. "
             "This will have a significant impact on the quality of future reviews."
         )
-    else:
-        parts.append("(NOTE) Automated review completed with no comments.")
 
     return "\n".join(parts)

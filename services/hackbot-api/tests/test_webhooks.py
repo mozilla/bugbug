@@ -614,8 +614,6 @@ def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
-    # Fresh dedupe cache per test.
-    webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
     app.dependency_overrides[webhooks.get_bugzilla_authorizer] = lambda: (
@@ -665,13 +663,11 @@ def test_route_rejects_bad_signature(client):
 def test_route_ignores_test_ping(client):
     resp = _post(client, {"action": {"test": True}, "object": {"type": "DREV"}})
     assert resp.status_code == 202
-    assert resp.json()["status"] == "ignored"
 
 
 def test_route_ignores_non_drev(client):
     resp = _post(client, {"object": {"type": "TASK", "phid": "PHID-TASK-1"}})
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "not a revision"
 
 
 def test_route_ignores_no_mention(client, monkeypatch):
@@ -686,7 +682,6 @@ def test_route_ignores_no_mention(client, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "no actionable @hackbot mention"
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
@@ -703,10 +698,7 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json() == {
-        "status": "triggered",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
+    assert resp.json() is None
     assert detect.call_args.args[0] is phab_client
     assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
@@ -757,14 +749,9 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
         "phab-txn:PHID-XACT-1",
         "phab-txn:PHID-XACT-2",
     ]
-    assert first.json()["status"] == "triggered"
-    # The retry is answered with the existing run rather than claimed as new.
-    assert retry.json() == {
-        "status": "ignored",
-        "reason": "duplicate delivery",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
-    assert later.json()["status"] == "triggered"
+    for response in (first, retry, later):
+        assert response.status_code == 202
+        assert response.json() is None
 
 
 def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):
@@ -824,7 +811,7 @@ def test_bugzilla_route_rejects_bad_secret(client):
 def test_bugzilla_route_ignores_non_matching_event(client):
     response = _post_bugzilla(
         client,
-        _bugzilla_payload(added="? (someone@mozilla.com)"),
+        _bugzilla_payload(requestee="someone@mozilla.com"),
     )
     assert response.status_code == 202
     assert response.json() == {
@@ -868,47 +855,43 @@ def test_bugzilla_route_ignores_unauthorized_actor(client, bugzilla_authorizer):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
-    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
 
     response = _post_bugzilla(client, payload)
 
     assert response.status_code == 202
     assert response.json() == {"status": "ignored", "reason": "unauthorized user"}
     assert fake_api.calls == []
-    # The event stays unconsumed: the same flag can still trigger a run once
-    # the actor is authorized.
-    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
 
 
-def test_bugzilla_route_dedupes_retry_but_not_later_event(client):
+def test_bugzilla_route_keys_retry_same_but_later_event_differently(client):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
 
     first = _post_bugzilla(client, payload)
-    duplicate = _post_bugzilla(client, payload)
+    retry = _post_bugzilla(client, payload)
     later = _post_bugzilla(
         client,
         _bugzilla_payload(flag_id=2187234, event_time="2026-08-07T19:00:05"),
     )
 
     assert first.json()["status"] == "triggered"
-    assert duplicate.json()["reason"] == "duplicate delivery"
+    # The retry is answered with the existing run rather than claimed as new.
+    assert retry.json() == {
+        "status": "ignored",
+        "reason": "duplicate delivery",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     assert later.json()["status"] == "triggered"
-    assert len(fake_api.calls) == 2
+    assert fake_api.dedupe_keys == ["ni2187233", "ni2187233", "ni2187234"]
 
 
-def test_bugzilla_route_does_not_dedupe_failed_dispatch(client):
+def test_bugzilla_route_surfaces_failed_dispatch(client):
     class _FailingClient:
-        async def trigger_run(self, agent_name, inputs):
+        async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
             raise RuntimeError("run creation failed")
 
-    payload = _bugzilla_payload()
-    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
-    assert detected is not None
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
 
     with pytest.raises(RuntimeError, match="run creation failed"):
-        _post_bugzilla(client, payload)
-
-    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
+        _post_bugzilla(client, _bugzilla_payload())

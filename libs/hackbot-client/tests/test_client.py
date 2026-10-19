@@ -151,10 +151,16 @@ async def test_apply_actions_returns_each_action_with_its_state(monkeypatch):
         httpx.Response(
             200,
             json=[
-                {"idx": 0, "type": "bugzilla.add_comment", "status": "applied"},
+                {
+                    "idx": 0,
+                    "type": "bugzilla.add_comment",
+                    "params": {},
+                    "status": "applied",
+                },
                 {
                     "idx": 1,
                     "type": "slack.post_message",
+                    "params": {},
                     "status": "failed",
                     "error": "channel_not_found",
                 },
@@ -179,8 +185,18 @@ async def test_apply_actions_reports_a_clean_pass_as_all_applied(monkeypatch):
         httpx.Response(
             200,
             json=[
-                {"idx": 0, "type": "bugzilla.add_comment", "status": "applied"},
-                {"idx": 1, "type": "slack.post_message", "status": "applied"},
+                {
+                    "idx": 0,
+                    "type": "bugzilla.add_comment",
+                    "params": {},
+                    "status": "applied",
+                },
+                {
+                    "idx": 1,
+                    "type": "slack.post_message",
+                    "params": {},
+                    "status": "applied",
+                },
             ],
         ),
     )

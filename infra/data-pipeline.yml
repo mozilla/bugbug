@@ -8,7 +8,7 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.4.5
+    taskboot_image: mozilla/taskboot:0.5.2
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
@@ -506,7 +506,7 @@ tasks:
       deadline: { $fromNow: "4 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-push_data-retrieval
@@ -1050,12 +1050,15 @@ tasks:
         command:
           - bugbug-regressor-finder
           - bug_introducing
-          - --git_repo_url=hg::https://hg.mozilla.org/mozilla-central
-          - --git_repo_dir=gecko-dev
+          - --repo_dir=/cache/mozilla-central
+        cache:
+          bugbug-mercurial-repository: /cache
         features:
           taskclusterProxy: true
       scopes:
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
         - index.project.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
@@ -1301,11 +1304,16 @@ tasks:
         - test-label-scheduling-history-generator
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-base:${version}
+        # The image with git, to get the moz.build files of Firefox (from which the model gets the
+        # directories with the tests of some suites).
+        image: mozilla/bugbug-commit-retrieval:${version}
         command:
-          - bugbug-train
-          - testlabelselect
-          - --download-eval
+          - "/bin/sh"
+          - "-cxe"
+          - "git clone --quiet --depth 1 --filter=blob:none --no-checkout https://github.com/mozilla-firefox/firefox.git /firefox &&
+            git -C /firefox sparse-checkout set --no-cone moz.build &&
+            git -C /firefox checkout --quiet &&
+            bugbug-train testlabelselect --download-eval --repo_dir /firefox"
 
         artifacts:
           public/testlabelselectmodel.tar.zst:
@@ -1370,7 +1378,7 @@ tasks:
       deadline: { $fromNow: "5 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-generator

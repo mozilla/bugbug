@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from phabricator_client import PhabricatorSettings
 from pydantic import BaseModel, StringConstraints
@@ -34,8 +34,6 @@ class BugzillaWebhookSettings(BaseModel):
     secret: str
     # The Bugzilla account to which the needinfo request must be directed.
     bot_login: str = "hackbot@mozilla.tld"
-    # Best-effort in-memory dedupe of retried bug-modification deliveries.
-    dedupe_ttl_seconds: int = 6 * 60 * 60
 
 
 class SlackSettings(BaseModel):
@@ -58,14 +56,23 @@ class Settings(BaseSettings):
 
     # Cloud SQL Postgres
     cloud_sql_instance: str = ""
+    cloud_sql_ip_type: Literal["PUBLIC", "PRIVATE", "PSC"] = "PUBLIC"
     db_user: str = ""
     db_pass: str = ""
     db_name: str = "hackbot"
 
     # Cloud Run Jobs
+    # Appended to every agent's Job name. Dev and stage share a project, so
+    # their Jobs are named hackbot-agent-<agent>-dev / -stage; prod has none.
+    agent_job_suffix: str = ""
     job_execution_timeout_seconds: int = 8 * 60 * 60
     signed_policy_max_bytes: int = 5 * 1024 * 1024 * 1024
     signed_policy_grace_seconds: int = 60 * 60
+
+    # Largest run artifact an action handler downloads unless it asks for a
+    # different limit. Guards against loading something like a multi-GB patch
+    # into memory, which can take the service down.
+    action_apply_max_bytes: int = 100 * 1024 * 1024
 
     # API auth
     external_api_key: str = ""
@@ -79,8 +86,6 @@ class Settings(BaseSettings):
     webhook: WebhookSettings
 
     # Bugzilla uses a separate shared-secret header and bot identity. These map
-    # from BUGZILLA_WEBHOOK_SECRET, BUGZILLA_WEBHOOK_BOT_LOGIN, and
-    # BUGZILLA_WEBHOOK_DEDUPE_TTL_SECONDS.
     bugzilla_webhook: BugzillaWebhookSettings
 
     bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
@@ -106,7 +111,6 @@ class Settings(BaseSettings):
     push_auth_service_account: str = ""
 
     # Run-completion email settings (see app/notifications.py).
-    hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str
     notification_sender: str
 
@@ -114,6 +118,7 @@ class Settings(BaseSettings):
     port: int = 8080
     environment: str = "development"
     sentry_dsn: str | None = None
+    agents_sentry_dsn: str
 
     model_config = {
         "env_file": ".env",

@@ -3,8 +3,16 @@
 import json
 
 import pytest
-from hackbot_runtime import AgentError, HackbotAgentResult, HackbotContext, run_async
+import sentry_sdk
+from hackbot_runtime import (
+    AgentError,
+    HackbotAgentResult,
+    HackbotContext,
+    run_async,
+    runtime,
+)
 from hackbot_runtime.runtime import _discover_config_path, _finish, _resolve_config
+from sentry_sdk.transport import Transport
 
 
 def test_run_id_defaults_to_unique_generated_id(monkeypatch):
@@ -232,6 +240,33 @@ def test_run_async_exits_nonzero_when_agent_raises(tmp_path, monkeypatch):
     summary = json.loads((tmp_path / "t" / "summary.json").read_text())
     assert summary["status"] == "error"
     assert "nope" in summary["error"]
+
+
+def test_agent_exception_reported_to_sentry_with_agent_tag(tmp_path, monkeypatch):
+    _run_env(tmp_path, monkeypatch)
+    monkeypatch.setenv("SENTRY_DSN", "https://key@sentry.example/1")
+    events = []
+
+    class _Capture(Transport):
+        def capture_envelope(self, envelope):
+            events.extend(item.payload.json for item in envelope.items)
+
+    real_init = sentry_sdk.init
+
+    def init(**kwargs):
+        real_init(transport=_Capture(), **kwargs)
+
+    monkeypatch.setattr(runtime.sentry_sdk, "init", init)
+
+    async def main(ctx):
+        raise AgentError("nope")
+
+    with pytest.raises(SystemExit):
+        run_async(main)
+
+    (event,) = [e for e in events if e.get("exception")]
+    assert event["tags"]["agent"] == "tests"
+    assert event["tags"]["run_id"] == "t"
 
 
 def test_publish_file_copies_locally_without_uploader(tmp_path):

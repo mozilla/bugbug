@@ -15,8 +15,6 @@ shared ``phabricator_client`` lib, a small ``httpx``-based client that avoids
 lightweight calls.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os
@@ -68,6 +66,18 @@ async def _repository_phid() -> str:
         if fields.get("shortName") == name or fields.get("name") == name:
             return repository["phid"]
     raise RuntimeError(f"Could not find a Phabricator repository named '{name}'")
+
+
+async def _revision_phid(revision_id: int) -> str | None:
+    """The PHID of ``D<revision_id>``, or None (logged) when there is no such revision."""
+    result = await _conduit_request(
+        "differential.revision.search", constraints={"ids": [revision_id]}
+    )
+    data = result.get("data") or []
+    if not data:
+        log.warning("Parent revision D%s not found; filing unstacked", revision_id)
+        return None
+    return data[0]["phid"]
 
 
 # moz-phab's arc commit-message template (see mozphab.commits) — replicated so
@@ -240,7 +250,7 @@ class SubmitPatchHandler:
                 "Failed to load Phabricator submission artifact for run %s", ctx.run_id
             )
             return ActionResult.failed(
-                f"No Phabricator submission artifact for this run: {exc}"
+                f"Could not load the Phabricator submission artifact for this run: {exc}"
             )
 
         try:
@@ -264,6 +274,11 @@ class SubmitPatchHandler:
                 transactions.append({"type": "summary", "value": summary})
             if test_plan:
                 transactions.append({"type": "testPlan", "value": test_plan})
+            parent_revision_id = params.get("parent_revision_id")
+            if parent_revision_id:
+                parent_phid = await _revision_phid(parent_revision_id)
+                if parent_phid:
+                    transactions.append({"type": "parents.set", "value": [parent_phid]})
 
             revision_result = await _conduit_request(
                 "differential.revision.edit", transactions=transactions
@@ -315,7 +330,7 @@ class UpdatePatchHandler:
                 "Failed to load Phabricator submission artifact for run %s", ctx.run_id
             )
             return ActionResult.failed(
-                f"No Phabricator submission artifact for this run: {exc}"
+                f"Could not load the Phabricator submission artifact for this run: {exc}"
             )
 
         try:

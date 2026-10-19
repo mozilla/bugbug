@@ -9,9 +9,7 @@ from collections import defaultdict
 from os import makedirs, path
 from typing import Any
 
-import matplotlib
 import numpy as np
-import shap
 from imblearn.metrics import (
     classification_report_imbalanced,
     geometric_mean_score,
@@ -366,6 +364,17 @@ class Model:
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
 
+    def get_sample_weights(self, y) -> np.ndarray | None:
+        """Subclasses can return a weight for each training sample, passed to the estimator."""
+        return None
+
+    def fit_classifier(self, X, y):
+        sample_weight = self.get_sample_weights(y)
+        if sample_weight is None:
+            self.clf.fit(X, y)
+        else:
+            self.clf.fit(X, y, estimator__sample_weight=sample_weight)
+
     def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
         raise NotImplementedError("The model must implement this method")
@@ -425,13 +434,17 @@ class Model:
         logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
         logger.info("X_test: %s, y_test: %s", X_test.shape, y_test.shape)
 
-        self.clf.fit(X_train, self.le.transform(y_train))
+        self.fit_classifier(X_train, self.le.transform(y_train))
         logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
 
         logger.info("Model trained")
 
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
+            # Imported lazily as they are slow to import and rarely needed.
+            import matplotlib.pyplot
+            import shap
+
             explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
             _X_train = get_transformer_pipeline(self.clf).transform(X_train)
             shap_values = explainer.shap_values(_X_train)
@@ -594,7 +607,7 @@ class Model:
 
             logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
-            self.clf.fit(X_train, self.le.transform(y_train))
+            self.fit_classifier(X_train, self.le.transform(y_train))
 
         model_directory = self.__class__.__name__.lower()
         makedirs(model_directory, exist_ok=True)
@@ -626,6 +639,15 @@ class Model:
     @staticmethod
     def load(model_directory: str) -> "Model":
         model_path = path.join(model_directory, "model.pkl")
+
+        if not path.exists(model_path):
+            # Models stored in another format (e.g. a Hugging Face checkpoint)
+            # override load(). Dispatch to the class registered for this
+            # directory, whose name follows the `{model_name}model` convention.
+            model_class = Model._registered_class(model_directory)
+            if model_class is not None and model_class.load is not Model.load:
+                return model_class.load(model_directory)
+
         with open(model_path, "rb") as f:
             model = pickle.load(f)
 
@@ -634,6 +656,21 @@ class Model:
             model.clf.named_steps["estimator"].load_model(xgboost_model_path)
 
         return model
+
+    @staticmethod
+    def _registered_class(model_directory: str) -> "type[Model] | None":
+        """Return the model class registered for a `{model_name}model` directory."""
+        # Imported here to avoid a circular import (bugbug.models imports us).
+        from bugbug.models import get_model_class
+
+        model_name = path.basename(path.normpath(model_directory))
+        if model_name.endswith("model"):
+            model_name = model_name[: -len("model")]
+
+        try:
+            return get_model_class(model_name)
+        except ValueError:
+            return None
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
@@ -657,14 +694,13 @@ class Model:
         assert isinstance(items[0], (dict, tuple))
 
         X = self.extraction_pipeline.transform(lambda: items)
-        if probabilities:
-            classes = self.clf.predict_proba(X)
-        else:
-            classes = self.clf.predict(X)
+        classes = self.clf.predict_proba(X) if probabilities else self.clf.predict(X)
 
         classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
+            import shap
+
             pred_class_index = classes.argmax(axis=-1)[0]
             pred_class = self.le.inverse_transform([pred_class_index])[0]
 

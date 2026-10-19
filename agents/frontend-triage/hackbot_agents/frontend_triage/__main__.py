@@ -78,8 +78,8 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
         actions_recorder=ctx.actions,
     )
 
-    # Recorded last, so it applies after the Bugzilla writes it reports. Only an
-    # auto-applied run in a component with a channel records anything -- see notify.py.
+    # Recorded last, so it applies after the Bugzilla writes it reports. Only a run
+    # in a component with a channel records anything -- see notify.py.
     record_notification(ctx.actions, result, run_id=ctx.run_id)
     return result
 

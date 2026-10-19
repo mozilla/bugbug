@@ -25,21 +25,25 @@ exposes them as capabilities over loopback (`BROKER_URL`, e.g. `http://127.0.0.1
 - `/{bugzilla,phabricator}/mcp` — read-only MCP tool servers, live during the run.
 - `GET /phabricator/revision/{id}/patch` — a revision's base commit and raw diff, so a
   follow-up run can reproduce the revision's tree without a Conduit key.
+- `/phabricator/api` — a Conduit proxy allow-listing a few read methods and substituting
+  the real key, for agent code that has to call Conduit directly (`uplift-resolve` fetches each
+  source's raw diff this way before rendering its prompt).
 
 It exposes only what a run legitimately needs, and only reads — every write goes through the
 recorded-actions path instead. **Per-execution env overrides target the `agent` container by
 name**, which is what stops a run's inputs from reaching or altering the broker's
 environment.
 
-Today `bug-fix`, `build-repair`, `frontend-triage` and `autowebcompat-repro` run a broker.
+Today `bug-fix`, `build-repair`, `frontend-triage`, `autowebcompat-repro`,
+`autowebcompat-diagnosis` and `uplift-resolve` run a broker.
 `test-repair` reaches an MCP server via an injected `BUGZILLA_MCP_URL` instead, and
 `test-plan-generator` needs no credentialed reads at all. The invariant holds in every case:
 **the key is never in the agent container.**
 
 ## Workload Identity Federation
 
-Anthropic and W&B both accept a Google-signed OIDC identity token exchanged for a
-short-lived access token, so neither needs a static key in the container.
+Anthropic, OpenAI and W&B all accept a Google-signed OIDC identity token exchanged for a
+short-lived access token, so none needs a static key in the container.
 
 The runtime fetches that token from the GCP metadata server, writes it to a private file the
 SDK reads, and keeps refreshing it in the background — Google tokens outlive neither a long
@@ -49,6 +53,12 @@ run nor a single exchange, so the file has to stay fresh for the whole run
 Federation is enabled by the presence of `ANTHROPIC_FEDERATION_RULE_ID`. An
 `ANTHROPIC_API_KEY` set _alongside_ it is refused with an error, because the key would take
 precedence and silently shadow federation.
+
+OpenAI federation is enabled by the presence of `OPENAI_FEDERATION_RULE_ID`
+([hackbot_runtime/openai_wif.py](../../libs/hackbot-runtime/hackbot_runtime/openai_wif.py)),
+which exposes the token through `OPENAI_IDENTITY_TOKEN_FILE`. The token's audience defaults
+to `https://api.openai.com/v1` and can be overridden with `OPENAI_WIF_AUDIENCE`. Here
+WIF has precedence over an `OPENAI_API_KEY`, so a leftover key only logs a warning.
 
 ## The signed upload policy
 

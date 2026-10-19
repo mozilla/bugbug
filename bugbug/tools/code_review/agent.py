@@ -224,7 +224,7 @@ class CodeReviewTool(GenerativeModelTool):
 
     async def generate_review_comments(
         self, patch: Patch, patch_summary: str
-    ) -> tuple[list[GeneratedReviewComment], list[dict]]:
+    ) -> tuple[AgentResponse, list[dict]]:
         external_context = ""
         manifest: list[dict] = []
         review_context_repo = self._review_context_repo
@@ -246,17 +246,35 @@ class CodeReviewTool(GenerativeModelTool):
                 content_overrides=self._content_overrides,
             )
 
+        messages = [
+            HumanMessage(
+                self.generate_initial_prompt(patch, patch_summary, external_context)
+            )
+        ]
+        for attempt in range(2):
+            result = await self._invoke_review_agent(patch, messages)
+
+            if result is not None and result.get("structured_response") is not None:
+                return result["structured_response"], manifest
+
+            if attempt == 0 and result is not None:
+                logger.warning("Review agent returned no structured response; retrying")
+                messages = [
+                    *result["messages"],
+                    HumanMessage(
+                        "Finish the review by calling the AgentResponse tool with "
+                        "the review comments and general comment."
+                    ),
+                ]
+
+        raise ValueError("Review agent returned no structured response")
+
+    async def _invoke_review_agent(self, patch: Patch, messages: list) -> dict | None:
+        """Run the review agent and return its final streamed state."""
+        result = None
         try:
             async for chunk in self.agent.astream(
-                {
-                    "messages": [
-                        HumanMessage(
-                            self.generate_initial_prompt(
-                                patch, patch_summary, external_context
-                            )
-                        ),
-                    ]
-                },
+                {"messages": messages},
                 context=CodeReviewContext(patch=patch),
                 stream_mode="values",
                 config={"recursion_limit": 500},
@@ -264,8 +282,7 @@ class CodeReviewTool(GenerativeModelTool):
                 result = chunk
         except GraphRecursionError as e:
             raise RecursionLimitError("The model could not complete the review") from e
-
-        return result["structured_response"].comments, manifest
+        return result
 
     async def assess_patch_scope(
         self, patch: Patch, patch_summary: str
@@ -290,10 +307,10 @@ class CodeReviewTool(GenerativeModelTool):
 
         patch_summary = self.patch_summarizer.run(patch)
 
-        (
-            unfiltered_suggestions,
-            external_content_manifest,
-        ) = await self.generate_review_comments(patch, patch_summary)
+        agent_response, external_content_manifest = await self.generate_review_comments(
+            patch, patch_summary
+        )
+        unfiltered_suggestions = agent_response.comments
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
 
@@ -314,6 +331,7 @@ class CodeReviewTool(GenerativeModelTool):
         return CodeReviewToolResponse(
             review_comments=inline_comments,
             patch_summary=patch_summary,
+            general_comment=agent_response.general_comment,
             details={
                 "model": self._agent_model_name,
                 "num_unfiltered_suggestions": len(unfiltered_suggestions),

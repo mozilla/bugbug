@@ -5,11 +5,9 @@ each takes a :class:`FirefoxContext` (paths derived from the source repo) as its
 first parameter and returns plain data.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -35,6 +33,27 @@ class FirefoxContext:
     objdir: Path
     binary: Path
     js_binary: Path
+    # What bootstrap_firefox last set up, which build_firefox then builds for.
+    application: str = "browser"
+
+    @property
+    def android_mozconfig(self) -> Path:
+        # /.mozconfig* is in the tree's .gitignore, so it stays out of patches.
+        return self.source_dir / ".mozconfig-android"
+
+    def build_config(self) -> tuple[Path, Path]:
+        """The mozconfig and objdir to build with, for ``application``.
+
+        The agent's own for desktop Firefox; for Android, the mozconfig
+        bootstrap_firefox writes, with an objdir for artifact builds and one for
+        full ones so switching between them doesn't need a clobber.
+        """
+        if not self.application.startswith("mobile_android"):
+            return self.mozconfig, self.objdir
+        objdir = "objdir-android"
+        if self.application.endswith("_artifact_mode"):
+            objdir += "-artifact"
+        return self.android_mozconfig, self.source_dir / objdir
 
     @classmethod
     def from_source_repo(
@@ -135,6 +154,9 @@ async def build_firefox(
 ) -> dict:
     """Build Firefox using the configured mozconfig.
 
+    For Android once ``bootstrap_firefox`` has been called for it, with the
+    mozconfig it wrote for that; for desktop Firefox otherwise.
+
     Slow on a full tree build (tens of minutes cold, faster incremental); pass a
     `target` directory to build just the part you changed. Returns JSON: success
     (bool), build_dir (str), message (str), stdout/stderr. Only call this if
@@ -142,8 +164,9 @@ async def build_firefox(
     first.
     """
     firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
-    mozconfig_p = Path(mozconfig_path) if mozconfig_path else ctx.mozconfig
-    return await _build_firefox(firefox_dir_p, mozconfig_p, ctx.objdir, target=target)
+    mozconfig, objdir = ctx.build_config()
+    mozconfig_p = Path(mozconfig_path) if mozconfig_path else mozconfig
+    return await _build_firefox(firefox_dir_p, mozconfig_p, objdir, target=target)
 
 
 @tool
@@ -197,17 +220,57 @@ async def bootstrap_firefox(
             description="Firefox source directory. Optional — defaults to the configured source dir."
         ),
     ] = None,
+    application: Annotated[
+        Literal[
+            "browser",
+            "browser_artifact_mode",
+            "mobile_android",
+            "mobile_android_artifact_mode",
+        ],
+        Field(
+            description="What to bootstrap for: desktop Firefox (the default), or "
+            "Android (GeckoView, Fenix, Focus, android-components), which installs "
+            "a JDK and the Android SDK and NDK."
+        ),
+    ] = "browser",
 ) -> dict:
     """Run ``./mach bootstrap`` to install the Firefox build toolchain.
 
-    Installs rust, clang, cbindgen under the running user's ~/.mozbuild/.
-    Required before a full (non-artifact) build. Slow — ~10-15 min on a fresh
-    image, fast on re-runs. Returns JSON: success, message, stdout, stderr. Only
-    call this if you intend to do a full build; artifact builds don't need
-    bootstrap.
+    Installs rust, clang, cbindgen under the running user's ~/.mozbuild/, or for
+    Android a JDK, the Android SDK and NDK. Required before a full (non-artifact)
+    build, and before any Android build. Slow — ~10-15 min on a fresh image,
+    fast on re-runs. Returns JSON: success, message, stdout, stderr. Only call
+    this if you intend to do a full build or an Android one; desktop artifact
+    builds don't need bootstrap.
+
+    Bootstrapping for Android also writes a mozconfig for it, which
+    ``build_firefox`` then uses; bootstrapping for desktop switches back.
     """
     firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
-    return await _bootstrap_firefox(firefox_dir_p)
+    result = await _bootstrap_firefox(firefox_dir_p, application)
+    if result["success"]:
+        ctx.application = application
+        if application.startswith("mobile_android"):
+            mozconfig, objdir = ctx.build_config()
+            mozconfig.write_text(_android_mozconfig(application, objdir))
+            result["message"] += (
+                f"; build_firefox now builds Firefox for Android, with {mozconfig} "
+                f"(for mach from Bash: MOZCONFIG={mozconfig} ./mach ...)"
+            )
+    return result
+
+
+def _android_mozconfig(application: str, objdir: Path) -> str:
+    """What `mach bootstrap` suggests for ``application``, with our objdir."""
+    lines = [
+        f"# Written by bootstrap_firefox(application={application!r}), again on",
+        "# each Android bootstrap.",
+        "ac_add_options --enable-project=mobile/android",
+    ]
+    if application.endswith("_artifact_mode"):
+        lines.append("ac_add_options --enable-artifact-builds")
+    lines.append(f"mk_add_options MOZ_OBJDIR={objdir}")
+    return "\n".join(lines) + "\n"
 
 
 TOOLS = tools_in(__name__)

@@ -1,7 +1,5 @@
 """Detection helpers for Bugzilla needinfo webhooks."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 
@@ -41,9 +39,11 @@ def detect_needinfo_request(
     if actor_login == bot_login:
         return None
 
-    expected_added = f"? ({bot_login})"
+    # FIXME: Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=2079991
+    # (`changes` keeps only the last needinfo per update), so `added` may not
+    # name the bot; it is matched via `bug.flags` below instead.
     if not any(
-        change["field"] == "flag.needinfo" and change["added"] == expected_added
+        change["field"] == "flag.needinfo" and change["added"].startswith("?")
         for change in event["changes"]
     ):
         return None

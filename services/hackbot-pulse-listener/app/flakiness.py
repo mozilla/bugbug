@@ -15,8 +15,6 @@ and xpcshell harnesses, so this answers for a subset of failures and abstains on
 rest.
 """
 
-from __future__ import annotations
-
 import logging
 import threading
 from collections.abc import Iterable

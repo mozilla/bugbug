@@ -6,12 +6,14 @@ from pydantic import BaseModel
 
 from app.schemas import (
     AutowebcompatDiagnosisInputs,
+    AutowebcompatInterventionInputs,
     AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
+    UpliftInputs,
 )
 
 
@@ -126,7 +128,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
-        auto_apply_actions=True,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send", "slack.post_message"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",
@@ -136,5 +139,26 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         job_name="hackbot-agent-test-plan-generator",
         input_schema=TestPlanGeneratorInputs,
+    ),
+    "uplift-resolve": AgentSpec(
+        name="uplift-resolve",
+        description=(
+            "Resolve the merge conflicts from cherry-picking patches (git commits "
+            "and/or Phabricator revisions) onto a stable uplift branch, and return "
+            "the resolved patch with a confidence level for human review."
+        ),
+        job_name="hackbot-agent-uplift-resolve",
+        input_schema=UpliftInputs,
+    ),
+    "autowebcompat-intervention": AgentSpec(
+        name="autowebcompat-intervention",
+        description=(
+            "Write a Firefox webcompat intervention for a broken-site bug: "
+            "confirm the breakage reproduces, write the intervention and a "
+            "test, verify that it fixes the site, and submit a patch."
+        ),
+        job_name="hackbot-agent-autowebcompat-intervention",
+        input_schema=AutowebcompatInterventionInputs,
+        auto_apply_actions=True,
     ),
 }

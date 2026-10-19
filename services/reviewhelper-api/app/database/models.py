@@ -73,6 +73,7 @@ class ReviewRequest(Base):
     details: Mapped[dict | None] = mapped_column(JSONB)
     error: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
+    general_comment: Mapped[str | None] = mapped_column(Text)
 
     # Relationships
     comments: Mapped[list["GeneratedComment"]] = relationship(

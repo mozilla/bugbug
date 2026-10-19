@@ -27,7 +27,16 @@ def _result_msg():
 FAILURE_COMMIT = "a" * 40
 
 
-def _run(tmp_path, monkeypatch, *, bug_id, actions_recorder, push_bug=None, blame=None):
+def _run(
+    tmp_path,
+    monkeypatch,
+    *,
+    bug_id,
+    actions_recorder,
+    push_bug=None,
+    blame=None,
+    checkout=None,
+):
     """Run the agent with both sessions faked, returning their (options, prompt).
 
     ``push_bug`` is the bug the pushlog reported for the failure commit, which is
@@ -65,10 +74,143 @@ def _run(tmp_path, monkeypatch, *, bug_id, actions_recorder, push_bug=None, blam
             hg_revision="abc123",
             failure_tasks={"build-linux": "taskid"},
             actions_recorder=actions_recorder,
+            checkout=checkout,
         )
     )
-    assert len(sessions) == 2
-    return result, sessions[0], sessions[1]
+    return result, sessions[0], sessions[1] if len(sessions) > 1 else None
+
+
+# --- the fix stage works on the blamed commit itself ----------------------- #
+
+
+def test_the_tree_moves_to_the_blamed_commit_before_the_fix_stage(
+    tmp_path, monkeypatch
+):
+    checked_out = []
+    _, (_, analysis_prompt), (_, fix_prompt) = _run(
+        tmp_path,
+        monkeypatch,
+        bug_id=1,
+        actions_recorder=None,
+        checkout=lambda sha: checked_out.append(sha),
+    )
+    assert checked_out == [FAILURE_COMMIT]
+    assert (
+        f"Commit {FAILURE_COMMIT} broke the build and the tree is checked out at it"
+        in fix_prompt
+    )
+    assert "fold into that commit and reland" in fix_prompt
+    assert "checked out at it" not in analysis_prompt
+
+
+def test_no_fix_stage_when_the_agent_blamed_nothing(tmp_path, monkeypatch):
+    checked_out = []
+    result, _, fix = _run(
+        tmp_path,
+        monkeypatch,
+        bug_id=1,
+        actions_recorder=ActionsRecorder(),
+        blame="",
+        checkout=lambda sha: checked_out.append(sha),
+    )
+    assert fix is None
+    assert checked_out == []
+    assert result.blamed_commit is None
+
+
+def test_the_prompt_does_not_claim_a_checkout_that_did_not_happen(
+    tmp_path, monkeypatch
+):
+    _, _, (_, fix_prompt) = _run(tmp_path, monkeypatch, bug_id=1, actions_recorder=None)
+    assert (
+        f"Commit {FAILURE_COMMIT} broke the build. Sheriffs back it out" in fix_prompt
+    )
+
+
+def test_the_revision_stacks_on_the_blamed_commits_own(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
+    _, _, (_, fix_prompt) = _run(
+        tmp_path,
+        monkeypatch,
+        bug_id=1234567,
+        actions_recorder=ActionsRecorder(),
+        checkout=lambda sha: sha,
+    )
+    assert (
+        "parent_revision_id=325120 (the busted commit's own revision, D325120)"
+        in fix_prompt
+    )
+
+
+def test_no_stacking_unless_the_tree_moved_to_the_blamed_commit(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
+    _, _, (_, fix_prompt) = _run(
+        tmp_path, monkeypatch, bug_id=1234567, actions_recorder=ActionsRecorder()
+    )
+    assert "D325120" not in fix_prompt
+
+
+def test_a_failed_checkout_costs_the_stacking_not_the_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
+
+    def failing_checkout(sha):
+        raise RuntimeError("dirty tree")
+
+    result, _, (_, fix_prompt) = _run(
+        tmp_path,
+        monkeypatch,
+        bug_id=1234567,
+        actions_recorder=ActionsRecorder(),
+        checkout=failing_checkout,
+    )
+    assert result.blamed_commit == FAILURE_COMMIT
+    assert "D325120" not in fix_prompt
+    assert "checked out at it" not in fix_prompt
+
+
+def test_no_stacking_when_the_commit_names_no_revision(tmp_path, monkeypatch):
+    # The scratch path lands in the prompt, so the test name must not carry the
+    # word this asserts on.
+    _, _, (_, fix_prompt) = _run(
+        tmp_path,
+        monkeypatch,
+        bug_id=1234567,
+        actions_recorder=ActionsRecorder(),
+        checkout=lambda sha: sha,
+    )
+    assert "parent_revision" not in fix_prompt
+    assert "fold into that commit and reland" in fix_prompt
+
+
+def test_the_revision_is_read_off_the_commit_footer(tmp_path):
+    env = {
+        "GIT_AUTHOR_NAME": "T",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "T",
+        "GIT_COMMITTER_EMAIL": "t@t",
+        "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+    }
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "Bug 555 - a fix r=me\n\nDifferential Revision: "
+            "https://phabricator.services.mozilla.com/D325120",
+        ],
+        check=True,
+        env=env,
+    )
+    assert agent._revision_from_commit(tmp_path, "HEAD") == 325120
+
+
+def test_no_revision_from_a_commit_git_cannot_read(tmp_path):
+    assert agent._revision_from_commit(tmp_path, "HEAD") is None
 
 
 def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
@@ -79,7 +221,7 @@ def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
     assert not ACTION_TOOLS & set(analysis_opts.allowed_tools)
     assert "actions" not in analysis_opts.mcp_servers
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "actions" in fix_opts.mcp_servers
     assert "bugzilla" in fix_opts.mcp_servers
 
@@ -105,7 +247,7 @@ def test_the_pushs_bug_stands_in_for_an_unset_bug_id(tmp_path, monkeypatch):
         push_bug=2063979,
     )
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "bug_id=2063979" in fix_prompt
     assert '"Bug 2063979 - ' in fix_prompt
     assert result.bug_id == 2063979
@@ -201,7 +343,7 @@ def test_an_earlier_pushs_culprit_gets_its_bug_from_the_checkout(tmp_path, monke
         blame=earlier,
     )
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "bug_id=555" in fix_prompt
     assert result.bug_id == 555
     assert result.blamed_commit == earlier

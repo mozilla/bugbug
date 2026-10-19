@@ -11,8 +11,6 @@ when it meant to update one (or invent a revision id) by getting one optional
 argument wrong.
 """
 
-from __future__ import annotations
-
 import re
 from typing import Annotated
 
@@ -21,10 +19,13 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
+SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
+UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
+
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
-PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
+PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
 
 _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
@@ -65,14 +66,21 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(description="Revision test plan."),
+        Field(
+            description=(
+                "Revision test plan. If you recorded a Try push, include "
+                "its Treeherder URL using {{actions.<ref>.url}}."
+            )
+        ),
     ] = None,
     summary: Annotated[
         str | None,
         Field(
             description=(
-                "Revision summary/description. Keep test and verification details "
-                "in test_plan instead."
+                "Revision summary/description. Keep it concise and useful for permanent "
+                "history. Do not restate the bug, narrate the investigation or "
+                "implementation process. Keep test and verification details in "
+                "test_plan instead."
             ),
         ),
     ] = None,
@@ -84,6 +92,15 @@ async def submit_patch(
                 "bugzilla.add_comment in the same run) can reference its "
                 "result once applied, via {{actions.<ref>.url}} in that "
                 "action's text."
+            ),
+        ),
+    ] = None,
+    parent_revision_id: Annotated[
+        int | None,
+        Field(
+            description=(
+                "The revision this patch stacks on (the number after D), when it "
+                "belongs on top of an existing revision rather than on its own."
             ),
         ),
     ] = None,
@@ -106,16 +123,16 @@ async def submit_patch(
     bug comment).
     """
     _validate_summary(summary)
+    params: dict = {
+        "bug_id": bug_id,
+        "title": title,
+        "summary": summary,
+        "test_plan": test_plan,
+    }
+    if parent_revision_id is not None:
+        params["parent_revision_id"] = parent_revision_id
     action = recorder.record(
-        "phabricator.submit_patch",
-        {
-            "bug_id": bug_id,
-            "title": title,
-            "summary": summary,
-            "test_plan": test_plan,
-        },
-        reasoning=reasoning,
-        ref=ref,
+        SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning, ref=ref
     )
     return confirmation(action)
 
@@ -153,7 +170,7 @@ async def update_patch(
     association exactly as they are.
     """
     action = recorder.record(
-        "phabricator.update_patch",
+        UPDATE_PATCH_ACTION_TYPE,
         {"revision_id": revision_id},
         reasoning=reasoning,
     )

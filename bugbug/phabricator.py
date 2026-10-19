@@ -5,7 +5,7 @@
 
 import itertools
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Collection, Iterator, NewType
 
 import tenacity
@@ -151,7 +151,7 @@ def download_revisions(rev_ids: Collection[int]) -> None:
     logger.info("Loaded %d revisions.", old_rev_count)
 
     new_rev_ids_list = sorted(list(new_rev_ids))
-    rev_ids_groups = itertools.batched(new_rev_ids_list, 100)
+    rev_ids_groups = itertools.batched(new_rev_ids_list, 100, strict=False)
 
     logger.info("%d revisions left to download", len(new_rev_ids_list))
 
@@ -298,9 +298,9 @@ def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
         )
 
     if last_exclusion_end_date is not None:
-        return datetime.now(timezone.utc) - last_exclusion_end_date
+        return datetime.utcnow() - last_exclusion_end_date
     else:
-        return datetime.now(timezone.utc) - creation_date
+        return datetime.utcnow() - creation_date
 
 
 def fetch_diff_from_url(

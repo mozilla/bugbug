@@ -1,7 +1,5 @@
 """Build a Firefox profile, optionally preinstalling AMO extensions."""
 
-from __future__ import annotations
-
 import json
 import logging
 import shutil
@@ -55,11 +53,13 @@ def resolve_xpi_url(slug: str) -> tuple[str, str]:
 
 
 def download(url: str, dest: Path) -> None:
-    with amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp:
-        with dest.open("wb") as f:
-            for chunk in resp.iter_content(chunk_size=64 * 1024):
-                if chunk:
-                    f.write(chunk)
+    with (
+        amo_get(url, timeout=AMO_DOWNLOAD_TIMEOUT, stream=True) as resp,
+        dest.open("wb") as f,
+    ):
+        for chunk in resp.iter_content(chunk_size=64 * 1024):
+            if chunk:
+                f.write(chunk)
 
 
 def extract_extension_id(xpi: Path) -> str:

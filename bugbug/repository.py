@@ -20,7 +20,7 @@ import shelve
 import subprocess
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from functools import lru_cache
 from typing import Collection, Iterable, Iterator, NewType, Set, Union
 
@@ -725,6 +725,14 @@ def set_commit_metrics(
         )
 
 
+def get_commit_patch(hg: hglib.client, rev: bytes) -> bytes:
+    """Export a revision as a git-formatted patch (``hg export --git``).
+
+    The payload carries the commit message header followed by the diff.
+    """
+    return hg.export(revs=[rev], git=True)
+
+
 def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     hg_modified_files(hg, commit)
 
@@ -738,7 +746,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     test_sizes = []
     metrics_file_count = 0
 
-    patch = hg.export(revs=[commit.node.encode("ascii")], git=True)
+    patch = get_commit_patch(hg, commit.node.encode("ascii"))
     try:
         patch_data = rs_parsepatch.get_lines(patch)
     except Exception:
@@ -903,9 +911,9 @@ def hg_log(
         assert b" " in rev[6]
         pushdate_timestamp = rev[6].split(b" ", 1)[0]
         if pushdate_timestamp != b"0":
-            pushdate = datetime.fromtimestamp(float(pushdate_timestamp), timezone.utc)
+            pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
         else:
-            pushdate = datetime.now(timezone.utc)
+            pushdate = datetime.utcnow()
 
         bug_id = int(rev[3].decode("ascii")) if rev[3] else None
 
@@ -1595,6 +1603,17 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
                 hg.update(revision.encode("utf-8"), clean=True)
 
     trigger_pull()
+
+
+def get_commit_patches(repo_dir: str, revs: list[bytes]) -> Iterator[bytes]:
+    """Export each revision as its own git-formatted patch (see get_commit_patch).
+
+    Patches are exported lazily, one per iteration, so callers processing a
+    push commit by commit never hold more than one patch in memory.
+    """
+    with hglib.open(repo_dir) as hg:
+        for rev in revs:
+            yield get_commit_patch(hg, rev)
 
 
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:

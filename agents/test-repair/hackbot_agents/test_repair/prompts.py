@@ -5,6 +5,33 @@
 
 """Prompt templates for the test-repair agent."""
 
+SYSTEM_PROMPT_APPEND = """\
+# Unattended run
+
+You run in an isolated container as part of Mozilla's automated CI repair. No human
+is watching or can answer, so do not ask questions or wait for replies: finish the
+task and state the outcome in your final message. Do not propose good first bugs.
+
+# Tools
+
+`searchfox-cli`, `rg` and the `moz` MCP server are not available here; do not run
+`./mach bootstrap` to get them. Search the tree with `git grep`, restricted to paths
+where you can, never `grep -r`, which hits the Bash timeout on a tree this big. Use
+the Bugzilla and Phabricator tools you were given.
+
+# Working in the tree
+
+- Stay in your working directory, the source tree: write scratch files by absolute
+  path rather than `cd`-ing elsewhere. If a command reports "not a git repository",
+  you have moved -- run `git -C <tree>` rather than hunting for the tree.
+- Review your edits with `git diff --stat` and `git diff -- <path>`, never
+  `git status`: after a build the objdir adds millions of untracked files and the
+  output runs to tens of MB.
+- Never read or cat a whole CI log; they run to six figures of lines. Read a window
+  with `sed -n`, and clip the width as well as the line count with `| cut -c1-200`,
+  because a single log line can be 10 KB.
+"""
+
 MAX_TESTS_PER_GROUP = 100
 MAX_CANDIDATE_COMMITS = 5
 
@@ -21,10 +48,7 @@ The label pins the build type, variant and chunk, so the failure may be specific
 to this configuration rather than to the platform.
 
 The source tree is at {source_repo} (your working directory), checked out at the
-failure commit {failure_commit}. Stay in it: write scratch files by absolute path
-rather than `cd`-ing elsewhere, or the next git command fails with "not a git
-repository". Search the tree with `git grep`, never `grep -r`, which hits the Bash
-timeout on a tree this big.
+failure commit {failure_commit}.
 {candidate_intro}
 {known_intermittents_line}Steps:
 1. See exactly how the test failed. `treeherder-cli` queries Firefox CI directly,
@@ -39,9 +63,7 @@ timeout on a tree this big.
    full logs stay under {scratch_out}/logs, where those line numbers apply, so read
    a window around one to get the assertion, stack or diff that follows:
    `sed -n '5890,5930p' {scratch_out}/logs/job_<id>/live_backing_log.log | cut -c1-200`
-   Never read or cat a whole log; they run to six figures of lines. Clip the width
-   as well as the line count with `| cut -c1-200`; log lines run to thousands of
-   characters. Two windows are usually enough.
+   Two windows are usually enough.
    Two things can stop that command finding the job, and both are recoverable:
    - Treeherder sometimes returns a malformed response ("error decoding response
      body"). Retry the same command once; it usually succeeds.
@@ -172,20 +194,18 @@ fixing the root cause you identified in {scratch_out}/analysis.md.
 The recommendation stays "backout". The patch is advice for the commit's author to
 squash into their existing patches and reland, so write it as a change to the
 original patch, not a follow-up on top of it.
-
-The source tree is at {source_repo} (your working directory). Search it with
-`git grep`, never `grep -r`.
+{tree_note}
+The source tree is at {source_repo} (your working directory).
 Editing: Read a file before you Edit or Write it -- both refuse until the file has
 been read, which costs a turn. To see how the culprit handled comparable files,
 run `git show {culprit_commit} -- <dir>` rather than guessing a sibling's name.
 
-Working in this tree: review your own edits with `git diff --stat` and `git diff --
-<path>`, never `git status` -- after a build the objdir adds millions of untracked
-files and the output runs to tens of MB. Logs already fetched sit under
-{scratch_out}/logs; when you grep or sed one, cap the width as well as the line
-count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB.
+Logs already fetched sit under {scratch_out}/logs.
 
-1. Make the smallest change that addresses the root cause.
+1. Make the smallest change that addresses the root cause. Do not add code
+   comments explaining the fix or what it replaced: the revision summary carries
+   that, and the patch is squashed into the author's own. Add a comment only where
+   the code would be unclear without it, as the surrounding code would.
 {verify_step}
 3. Append a "## Patch" section to {scratch_out}/analysis.md, under 10 lines: the
    files it touches, the root cause it addresses, and whether it was verified.
@@ -195,6 +215,24 @@ count (`| head -40 | cut -c1-200`), because a single build-log line can be 10 KB
 5. Update {scratch_out}/verdict.json in place, preserving its existing keys: set
    "proposed_patch" to true if you made a fix, and leave "recommendation" as
    "backout".
+{report}"""
+
+TREE_AT_CULPRIT = """
+The tree is checked out at {culprit_commit} itself, so the diff you leave stacks
+directly on that commit.
+"""
+
+PARENT_REVISION_ARG = (
+    " parent_revision_id={revision} (the culprit's own revision, D{revision}),"
+)
+
+REPORT_INSTRUCTIONS = """
+6. Submit the patch with the `phabricator_submit_patch` action: bug_id={bug_id},{parent}
+   a title of the form "Bug {bug_id} - <what the fix does>", a summary naming the
+   culprit commit and the failing test(s) and saying the patch is meant to be
+   squashed into the culprit and relanded, and a test_plan stating how it was
+   verified. If you are not confident in the patch, record nothing and say so in
+   your final message.
 """
 
 VERIFY_LOCAL = """\

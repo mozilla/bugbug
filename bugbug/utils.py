@@ -298,21 +298,46 @@ def get_last_modified(url: str) -> datetime | None:
     return dateutil.parser.parse(r.headers["Last-Modified"])
 
 
-def download_model(model_name: str) -> str:
-    version = os.getenv("TAG")
-    if not version:
-        try:
-            version = f"v{get_bugbug_version()}"
-        except PackageNotFoundError:
-            version = "latest"
+def _model_artifact_url(model_name: str) -> str | None:
+    """Return the model's `artifact_url` if published outside the Taskcluster index."""
+    # Imported here to avoid a circular import (model modules import utils).
+    from bugbug.models import get_model_class
 
+    try:
+        model_class = get_model_class(model_name)
+    except ValueError:
+        # Models missing from the registry may still exist in the Taskcluster
+        # index, so let download_model() try the index.
+        return None
+
+    return getattr(model_class, "artifact_url", None)
+
+
+def download_model(model_name: str) -> str:
+    """Download a model and unpack it to a `{model_name}model` directory.
+
+    Models are fetched from the Taskcluster index, unless the registered model
+    class declares an `artifact_url`, in which case that URL is used instead.
+    """
     path = f"{model_name}model"
-    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.tar.zst"
+    archive = f"{path}.tar.zst"
+
+    url = _model_artifact_url(model_name)
+    if url is None:
+        version = os.getenv("TAG")
+        if not version:
+            try:
+                version = f"v{get_bugbug_version()}"
+            except PackageNotFoundError:
+                version = "latest"
+        url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{archive}"
+
     logger.info("Downloading %s...", url)
-    updated = download_check_etag(url)
+    # Save it under our own name; the URL can end in anything.
+    updated = download_check_etag(url, archive)
     if updated:
-        extract_tar_zst(f"{path}.tar.zst")
-        os.remove(f"{path}.tar.zst")
+        extract_tar_zst(archive)
+        os.remove(archive)
     assert os.path.exists(path), "Decompressed directory exists"
     return path
 
@@ -328,9 +353,8 @@ def zstd_compress(path: str) -> None:
             "%s. Falling back to zstandard API, which could be slower.", error
         )
         cctx = zstandard.ZstdCompressor()
-        with open(path, "rb") as input_f:
-            with open(f"{path}.zst", "wb") as output_f:
-                cctx.copy_stream(input_f, output_f)
+        with open(path, "rb") as input_f, open(f"{path}.zst", "wb") as output_f:
+            cctx.copy_stream(input_f, output_f)
 
 
 def zstd_decompress(path: str) -> None:
@@ -344,25 +368,28 @@ def zstd_decompress(path: str) -> None:
             "%s. Falling back to zstandard API, which could be slower.", error
         )
         dctx = zstandard.ZstdDecompressor()
-        with open(f"{path}.zst", "rb") as input_f:
-            with open(path, "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
+        with open(f"{path}.zst", "rb") as input_f, open(path, "wb") as output_f:
+            dctx.copy_stream(input_f, output_f)
 
 
 @contextmanager
 def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
-        with open(path, "wb") as f:
-            with cctx.stream_writer(f) as compressor:
-                with tarfile.open(mode="w|", fileobj=compressor) as tar:
-                    yield tar
+        with (
+            open(path, "wb") as output_file,
+            cctx.stream_writer(output_file) as compressor,
+            tarfile.open(mode="w|", fileobj=compressor) as tar,
+        ):
+            yield tar
     elif mode == "r":
         dctx = zstandard.ZstdDecompressor()
-        with open(path, "rb") as f:
-            with dctx.stream_reader(f) as reader:
-                with tarfile.open(mode="r|", fileobj=reader) as tar:
-                    yield tar
+        with (
+            open(path, "rb") as input_file,
+            dctx.stream_reader(input_file) as reader,
+            tarfile.open(mode="r|", fileobj=reader) as tar,
+        ):
+            yield tar
     else:
         raise AssertionError(f"Unexpected mode: {mode}")
 
@@ -415,7 +442,7 @@ class CustomJsonEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
             return obj.item()
-        except (ValueError, IndexError, AttributeError, TypeError):
+        except ValueError, IndexError, AttributeError, TypeError:
             pass
 
         return super().default(obj)
@@ -512,6 +539,9 @@ class LMDBDict:
         for key, _value in cursor:
             yield key.tobytes()
 
+    def get(self, key: bytes, default: Any = None) -> Any:
+        return self.txn.get(key, default)
+
 
 def get_free_tcp_port() -> int:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -585,8 +615,12 @@ def get_automationrelevance(branch: str, revision: str) -> dict:
     return response.json()
 
 
-def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
-    """Load descriptions of patches in the stack for a given revision."""
+def get_hgmo_stack_changesets(branch: str, revision: str) -> list[dict]:
+    """Load the automationrelevance changesets in the stack for a given revision.
+
+    Each item is the raw hg.mozilla.org changeset object (``node``, ``desc``,
+    ``author``, ``parents``, ``backsoutnodes``, ...).
+    """
     automation_relevance = get_automationrelevance(branch, revision)
 
     def should_skip(changeset):
@@ -604,15 +638,15 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
             return True
 
         # Don't analyze changesets which simply specify try parameters.
-        if changeset["files"] == ["try_task_config.json"]:
-            return True
+        return changeset["files"] == ["try_task_config.json"]
 
-        return False
+    return [c for c in automation_relevance["changesets"] if not should_skip(c)]
 
+
+def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
+    """Load the nodes of patches in the stack for a given revision."""
     return [
-        c["node"].encode("ascii")
-        for c in automation_relevance["changesets"]
-        if not should_skip(c)
+        c["node"].encode("ascii") for c in get_hgmo_stack_changesets(branch, revision)
     ]
 
 
