@@ -283,9 +283,9 @@ async def test_claim_stamps_a_lease_and_takes_over_an_abandoned_row():
 
     params = db.statements[0].compile(dialect=postgresql.dialect()).params
     assert params["status"] == "applying"
-    assert params["claimed_at"] >= before
+    assert params["updated_at"] >= before
     # The cutoff trails the stamp by exactly one lease.
-    assert params["claimed_at"] - params["claimed_at_1"] == actions_applier._CLAIM_LEASE
+    assert params["updated_at"] - params["updated_at_1"] == actions_applier._CLAIM_LEASE
     # ... and an `applying` row is a candidate, not only pending/failed ones.
     assert params["status_2"] == "applying"
 
@@ -444,7 +444,6 @@ def _row(
         result=result,
         error=error,
         applied_at=applied_at,
-        claimed_at=None,
     )
 
 
@@ -503,24 +502,6 @@ async def test_the_winner_applies_the_whole_chain_so_refs_still_resolve(monkeypa
     )
 
     assert calls[1] == {"text": "Created at https://bugzilla.example/1"}
-
-
-async def test_a_finished_row_no_longer_carries_a_claim(monkeypatch):
-    # Only an in-flight row should have a `claimed_at`, so the abandoned-claim
-    # check never has to care about the status alongside it.
-    handler = _RecordingHandler(
-        SimpleNamespace(status="applied", result={"ok": 1}, error=None)
-    )
-    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
-    row = _row(0, "pending")
-    row.claimed_at = datetime.now(timezone.utc)
-
-    await actions_applier._apply_pending_rows(
-        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), [(row, [])]
-    )
-
-    assert row.status == "applied"
-    assert row.claimed_at is None
 
 
 async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):

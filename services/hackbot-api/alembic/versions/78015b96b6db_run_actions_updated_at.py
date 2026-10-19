@@ -1,4 +1,4 @@
-"""Record when an apply pass claimed an action, so a crashed one can be recovered.
+"""Track when an action last changed, so a crashed apply pass can be recovered.
 
 Revision ID: 78015b96b6db
 Revises: a7d4e9c21b83
@@ -22,10 +22,18 @@ def upgrade() -> None:
     """Upgrade schema."""
     op.add_column(
         "run_actions",
-        sa.Column("claimed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.execute("UPDATE run_actions SET updated_at = COALESCE(applied_at, created_at)")
+    op.alter_column(
+        "run_actions",
+        "updated_at",
+        nullable=False,
+        server_default=sa.text("now()"),
+        existing_type=sa.DateTime(timezone=True),
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column("run_actions", "claimed_at")
+    op.drop_column("run_actions", "updated_at")

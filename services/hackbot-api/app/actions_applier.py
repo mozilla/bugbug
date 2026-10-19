@@ -209,11 +209,11 @@ async def _claim_for_apply(db: AsyncSession, rows: list[RunAction]) -> bool:
                 RunAction.status.in_(_CLAIMABLE_STATUSES),
                 and_(
                     RunAction.status == "applying",
-                    RunAction.claimed_at < now - _CLAIM_LEASE,
+                    RunAction.updated_at < now - _CLAIM_LEASE,
                 ),
             ),
         )
-        .values(status="applying", claimed_at=now)
+        .values(status="applying", updated_at=now)
         .returning(RunAction.id)
     )
     claimed = set(result.scalars())
@@ -306,7 +306,6 @@ async def _apply_pending_rows(
             member.status = outcome.status
             member.result = outcome.result
             member.error = outcome.error
-            member.claimed_at = None
             if applied_at is not None:
                 member.applied_at = applied_at
         await db.commit()
