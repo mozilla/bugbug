@@ -87,6 +87,11 @@ FIREFOX_APPLICATIONS = frozenset(("firefox", "fenix", "geckoview", "refbrow", "f
 # benchmarks, run from source-test tasks the JS team schedules; two regressions
 # in six months and a separate label shape make them not worth modeling yet.
 EXCLUDED_FRAMEWORKS = frozenset(("build_metrics", "js-bench"))
+# Frameworks that also receive metrics from jobs that are not perf tasks,
+# mapped to the only suites perf tasks report. devtools mixes DAMP, run by
+# Talos, with metrics from mochitest-devtools jobs. Matching on the suite rather
+# than the task label also covers alerts whose job Treeherder has expired.
+FRAMEWORK_PERF_SUITES = {"devtools": frozenset(("damp",))}
 # Synthetic canaries and the harness sample tests.
 EXCLUDED_TEST_MARKERS = (
     "regression-tests",

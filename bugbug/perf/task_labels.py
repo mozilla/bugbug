@@ -21,6 +21,7 @@ from bugbug.perf.label_policy import (
     EXCLUDED_TEST_MARKERS,
     EXCLUDED_VARIANTS,
     FIREFOX_APPLICATIONS,
+    FRAMEWORK_PERF_SUITES,
     PERF_LABEL_MARKERS,
     PLATFORM_RENAMES,
 )
@@ -243,24 +244,35 @@ def get_runnable_identity(label: str) -> dict[str, Any]:
 
 
 def get_exclusion_reason(
-    label: str, framework: str | None = None, application: str | None = None
+    label: str | None,
+    framework: str | None = None,
+    application: str | None = None,
+    suite: str | None = None,
 ) -> str | None:
     """Why a runnable is out of scope for Firefox perf test selection, or None.
 
-    Reasons: ``framework``, ``unparsed`` (not a test task label), ``variant``,
-    ``canary`` and ``application``.
+    Reasons: ``framework``, ``suite`` (not reported by a perf task),
+    ``unparsed`` (not a test task label), ``variant``, ``canary`` and
+    ``application``. ``label`` is None for alerts whose job Treeherder has
+    expired; only the rules the signature's ``framework``, ``suite`` and
+    ``application`` can answer apply to them.
     """
     if framework in EXCLUDED_FRAMEWORKS:
         return "framework"
-    if split_task_label(label) is None:
-        return "unparsed"
-    identity = get_runnable_identity(label)
-    if identity["variant"] in EXCLUDED_VARIANTS:
-        return "variant"
-    test_name = identity["test_name"] or ""
-    if any(marker in test_name for marker in EXCLUDED_TEST_MARKERS):
-        return "canary"
-    app = identity["application"] or application or None
+    perf_suites = FRAMEWORK_PERF_SUITES.get(framework or "")
+    if suite is not None and perf_suites is not None and suite not in perf_suites:
+        return "suite"
+    app = application or None
+    if label is not None:
+        if split_task_label(label) is None:
+            return "unparsed"
+        identity = get_runnable_identity(label)
+        if identity["variant"] in EXCLUDED_VARIANTS:
+            return "variant"
+        test_name = identity["test_name"] or ""
+        if any(marker in test_name for marker in EXCLUDED_TEST_MARKERS):
+            return "canary"
+        app = identity["application"] or app
     if app and app not in FIREFOX_APPLICATIONS:
         return "application"
     return None

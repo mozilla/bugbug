@@ -21,7 +21,6 @@ from bugbug.perf.label_policy import (
     CONFIRMED_BUG_RESOLUTIONS,
     CONFIRMED_SUMMARY_STATUSES,
     EXCLUDED_ALERT_STATUSES,
-    EXCLUDED_FRAMEWORKS,
     EXCLUDED_SUMMARY_TAGS,
     POLICY_VERSION,
     REJECTED_BUG_RESOLUTIONS,
@@ -270,15 +269,14 @@ def generate_regressions(
 
         runnables = {}
         for alert in positives:
-            if alert["framework"] in EXCLUDED_FRAMEWORKS:
-                stats["excluded_runnables"] += 1
-                continue
+            # Alerts whose job Treeherder expired have no label; they go through
+            # the same rules, as far as the signature can answer them.
             for label in alert["normalized_labels"] or [None]:
                 key = (alert["signature_id"], label)
                 if key in runnables:
                     continue
-                if label and get_exclusion_reason(
-                    label, alert["framework"], alert["application"]
+                if get_exclusion_reason(
+                    label, alert["framework"], alert["application"], alert["suite"]
                 ):
                     stats["excluded_runnables"] += 1
                     continue

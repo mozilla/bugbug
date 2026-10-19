@@ -726,6 +726,43 @@ def test_exclusion_reasons() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "label, framework, application, suite, expected",
+    [
+        # Without a label, the signature's application decides.
+        (None, "browsertime", "chrome", "amazon", "application"),
+        (None, "browsertime", "firefox", "amazon", None),
+        (None, "browsertime", "fenix", "amazon", None),
+        (None, "awsy", "", "Base Content Explicit", None),
+        (None, "build_metrics", "", "installer size", "framework"),
+        # Only DAMP comes from a perf task in the devtools framework.
+        (None, "devtools", "firefox", "damp", None),
+        (
+            "test-linux2404-64-shippable/opt-talos-damp-inspector",
+            "devtools",
+            "firefox",
+            "damp",
+            None,
+        ),
+        (None, "devtools", "", "reload-netmonitor:content-process", "suite"),
+        (
+            "test-linux2404-64/opt-mochitest-devtools-chrome-1",
+            "devtools",
+            "",
+            "reload-inspector:content-process",
+            "suite",
+        ),
+        # The suite rule only applies to the frameworks listed in the policy.
+        ("test-linux2404-64-shippable/opt-talos-g1", "talos", "firefox", "tart", None),
+    ],
+)
+def test_exclusion_reasons_from_signature(
+    label, framework, application, suite, expected
+) -> None:
+    reason = perf.get_exclusion_reason(label, framework, application, suite)
+    assert reason == expected
+
+
 def test_generate_regressions_applies_exclusions() -> None:
     alerts = [
         _alert(),
@@ -759,6 +796,44 @@ def test_generate_regressions_applies_exclusions() -> None:
     assert regressions[0]["runnables"][0]["family"] == "browsertime-tp6"
     assert regressions[0]["runnables"][0]["category"] == "page-load"
     assert regressions[0]["policy_version"] == perf.POLICY_VERSION
+
+
+def test_generate_regressions_excludes_unlabeled_alerts() -> None:
+    # Treeherder expired the jobs of these alerts, so none has a task label.
+    alerts = [
+        # An unlabeled DAMP alert is kept.
+        _alert(framework="devtools", suite="damp", task_labels=None),
+        # An unlabeled Chrome alert in the same summary is dropped.
+        _alert(alert_id=2, signature_id=901, application="chrome", task_labels=None),
+        # Summaries made only of unlabeled out-of-scope alerts are not
+        # regressions: mochitest-devtools metrics, and a non-Firefox browser.
+        _alert(
+            alert_id=3,
+            summary_id=101,
+            push_id=13,
+            prev_push_id=12,
+            signature_id=902,
+            framework="devtools",
+            suite="reload-netmonitor:content-process",
+            application="",
+            task_labels=None,
+        ),
+        _alert(
+            alert_id=4,
+            summary_id=102,
+            push_id=14,
+            prev_push_id=13,
+            signature_id=903,
+            application="chrome",
+            task_labels=None,
+        ),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    assert [r["summary_id"] for r in regressions] == [100]
+    assert [
+        (r["signature_id"], r["suite"], r["label"]) for r in regressions[0]["runnables"]
+    ] == [(900, "damp", None)]
 
 
 def test_landings_group_commits_by_bug() -> None:

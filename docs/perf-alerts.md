@@ -408,6 +408,9 @@ labeling, and a summary made only of excluded runnables is not a regression:
 - the `build_metrics` framework, which measures builds rather than tests, and
   the `js-bench` framework, the SpiderMonkey shell benchmarks run from
   `source-test-jsshell-bench-*` tasks outside the perf harnesses;
+- `devtools` suites other than `damp`, such as `reload-*` and
+  `debugger-metrics`, which mochitest-devtools jobs report and which are not
+  perf tasks, listed in `FRAMEWORK_PERF_SUITES`;
 - tasks running a non-Firefox application (Chrome, Chromium, Safari), which a
   Firefox change cannot regress;
 - profiling variants (`-profiling`, `-native-profiling`), which are
@@ -417,7 +420,13 @@ labeling, and a summary made only of excluded runnables is not a regression:
   marker: the harnesses' own unit tests (`source-test-python-raptor-*`) and
   toolchain fetches (`toolchain-*-talos-pdfs`).
 
-`get_exclusion_reason(label, framework, application)` returns which rule applied.
+Treeherder expires jobs after 120 days, so older alerts can arrive without a
+task label. They go through the same rules as far as the signature answers
+them: the framework, the suite and the signature's `application`. The rules
+that need a label, variants, canaries and unparsed labels, cannot apply to them.
+
+`get_exclusion_reason(label, framework, application, suite)` returns which rule
+applied.
 
 ## Grouping hierarchy
 
