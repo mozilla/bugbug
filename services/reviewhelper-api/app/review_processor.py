@@ -1,12 +1,16 @@
 import logging
+from collections import Counter
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from functools import cache
 from typing import Collection, Iterable
 
+import yaml
+
 from app.config import settings
 from app.database.models import GeneratedComment, ReviewRequest
 from app.enums import Platform
+from bugbug.tools.core.data_types import CommentSeverity, InlineComment
 from bugbug.tools.core.exceptions import LargeDiffError, RecursionLimitError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
@@ -92,15 +96,7 @@ async def process_review(
         ) from e
 
     generated_comments = [
-        GeneratedComment(
-            review_request_id=review_request.id,
-            file_path=comment.filename,
-            line_start=comment.start_line,
-            line_end=comment.end_line,
-            on_new=not comment.on_removed_code,
-            content=comment.content,
-            details=comment.details,
-        )
+        build_generated_comment(review_request.id, comment)
         for comment in result.review_comments
     ]
 
@@ -109,6 +105,26 @@ async def process_review(
         result.patch_summary,
         result.general_comment,
         result.details,
+    )
+
+
+def build_generated_comment(
+    review_request_id: int, comment: InlineComment
+) -> GeneratedComment:
+    """Build the database row for an inline comment produced by the review tool."""
+    return GeneratedComment(
+        review_request_id=review_request_id,
+        file_path=comment.filename,
+        line_start=comment.start_line,
+        line_end=comment.end_line,
+        on_new=not comment.on_removed_code,
+        content=comment.content,
+        explanation=comment.explanation,
+        order=comment.order,
+        severity=comment.severity,
+        category=comment.category,
+        confidence=comment.confidence,
+        details=comment.details,
     )
 
 
@@ -156,7 +172,7 @@ async def _submit_review_to_phabricator(
             isNewFile=comment.on_new,
             lineNumber=comment.line_start,
             lineLength=comment.line_end - comment.line_start,
-            content=comment.content,
+            content=format_inline_comment_content(comment),
         )
 
         # We yield here to allow the caller to save the platform comment id to
@@ -177,6 +193,29 @@ async def _submit_review_to_phabricator(
     )
 
 
+def format_inline_comment_content(comment: GeneratedComment) -> str:
+    """Return the inline comment text to post, with severity frontmatter if enabled.
+
+    The stored `content` stays raw so the frontmatter does not leak into
+    comment examples or matching.
+    """
+    if not settings.severity_frontmatter_enabled or comment.severity is None:
+        return comment.content
+
+    # `safe_dump` can't represent `StrEnum` members, so dump their values.
+    metadata = {
+        key: str(value)
+        for key, value in (
+            ("severity", comment.severity),
+            ("category", comment.category),
+            ("confidence", comment.confidence),
+        )
+        if value is not None
+    }
+    frontmatter = yaml.safe_dump({"reviewhelper": metadata}, sort_keys=False)
+    return f"---\n{frontmatter}---\n{comment.content}"
+
+
 def create_main_review_comment(
     review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
 ) -> str:
@@ -187,6 +226,10 @@ def create_main_review_comment(
     if review_request.general_comment:
         parts.append(review_request.general_comment)
 
+    severity_summary = summarize_severities(generated_comments)
+    if severity_summary:
+        parts.append(f"**Findings:** {severity_summary}")
+
     if generated_comments:
         if review_request.general_comment:
             parts.append("\n---\n")
@@ -196,3 +239,30 @@ def create_main_review_comment(
         )
 
     return "\n".join(parts)
+
+
+def summarize_severities(generated_comments: Iterable[GeneratedComment]) -> str:
+    """Summarize comment counts per severity, e.g. "1 critical · 2 nits".
+
+    Severities without comments are omitted, and an empty string is returned
+    when no comment has a severity.
+    """
+    counts = Counter(
+        comment.severity
+        for comment in generated_comments
+        if comment.severity is not None
+    )
+
+    summary_parts = []
+    for severity in CommentSeverity:
+        count = counts[severity]
+        if not count:
+            continue
+        label = (
+            f"{severity}s"
+            if severity == CommentSeverity.NIT and count > 1
+            else severity
+        )
+        summary_parts.append(f"{count} {label}")
+
+    return " · ".join(summary_parts)

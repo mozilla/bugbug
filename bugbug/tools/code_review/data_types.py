@@ -6,7 +6,12 @@ import tenacity
 from pydantic import BaseModel, Field, PrivateAttr
 
 from bugbug.tools.core.connection import get_http_client
-from bugbug.tools.core.data_types import InlineComment
+from bugbug.tools.core.data_types import (
+    CommentCategory,
+    CommentConfidence,
+    CommentSeverity,
+    InlineComment,
+)
 
 
 class GeneratedReviewComment(BaseModel):
@@ -30,6 +35,18 @@ class GeneratedReviewComment(BaseModel):
         Field(
             description="An integer representing the priority of the comment, with 1 being the highest confidence/importance."
         ),
+    ]
+    severity: Annotated[
+        CommentSeverity,
+        Field(description="How much the issue matters, from critical to nit."),
+    ]
+    category: Annotated[
+        CommentCategory,
+        Field(description="The kind of problem the comment reports."),
+    ]
+    confidence: Annotated[
+        CommentConfidence,
+        Field(description="How confident you are that the issue is valid."),
     ]
 
 
