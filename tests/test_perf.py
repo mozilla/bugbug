@@ -575,35 +575,77 @@ def test_test_categories(test_name, categories) -> None:
 
 def test_every_known_test_has_a_category() -> None:
     # One identity per family seen on autoland over six months.
-    identities = """
-        browsertime-custom-firefox-process-switch browsertime-pageload-benchmark-firefox-tp6-bench
-        browsertime-speculative-firefox-connect browsertime-tp6-firefox-buzzfeed
-        browsertime-tp6-bytecode-firefox-amazon browsertime-tp6-essential-firefox-cnn
-        browsertime-tp6-live-sheriffed-firefox-cnn browsertime-tp6-webextensions-firefox-amazon
-        browsertime-tp6m-fenix-amazon-nofis browsertime-tp6m-essential-geckoview-google
-        talos-tp5o talos-tp5o-swr browsertime-media-seek-firefox-media-seek
-        browsertime-video-playback-latency-firefox-vpl-av1 browsertime-webcodecs-firefox-ve-h264-rt
-        browsertime-mobile-fenix-youtube-playback-hfr browsertime-hev3-connection-m-fenix-he3on-doh
-        browsertime-network-bench-firefox-h3-download-1M_400ms-0 browsertime-trr-performance-firefox-trr-cira
-        browsertime-upload-firefox-upload-h3 browsertime-benchmark-firefox-ares6
-        browsertime-benchmark-firefox-assorted-dom browsertime-benchmark-firefox-jetstream3
-        browsertime-benchmark-firefox-matrix-react-bench browsertime-benchmark-firefox-media-capabilities
-        browsertime-benchmark-firefox-stylebench browsertime-benchmark-firefox-sunspider
-        browsertime-benchmark-firefox-twitch-animation browsertime-benchmark-firefox-unity-webgl
-        browsertime-benchmark-jetstream2-fenix browsertime-benchmark-speedometer3-mobile-geckoview
-        browsertime-benchmark-wasm-firefox-wasm-godot-baseline browsertime-benchmark-unity-webgl-mobile-fenix
-        talos-dromaeojs talos-g3 talos-g1 talos-g4 talos-pdfpaint-7 talos-perf-reftest-singletons
-        talos-svgr talos-webgl talos-bcv perftest-ml-llama-summarizer-perf-hwinference
-        perftest-tr8ns-perf-basememory perftest-mlsuggest-perf-native perftest-semantichistory-perf
-        perftest-smarttabgrouping-perf-native perftest-smartwindow-perf perftest-linkpreview-perf
-        browsertime-first-install-firefox-welcome perftest-newssite-applink-startup
-        perftest-startup-geckoview-cold-view-nav-start talos-other-nv talos-realworld-webextensions
-        talos-sessionrestore-many-windows-no-nv talos-xperf browsertime-indexeddb-firefox-idbCurNext
-        browsertime-nav-bench-firefox-nav-bench browsertime-responsiveness-firefox-reddit-billgates-ama
-        talos-chrome-nv talos-tabswitch awsy-base-dmd awsy-tp6 talos-damp-webconsole
-        perftest-foreground-resource-fenix perftest-accessibility perftest-service-worker perftest-places
-        perftest-busy-trr
-    """.split()
+    identities = [
+        "browsertime-custom-firefox-process-switch",
+        "browsertime-pageload-benchmark-firefox-tp6-bench",
+        "browsertime-speculative-firefox-connect",
+        "browsertime-tp6-firefox-buzzfeed",
+        "browsertime-tp6-bytecode-firefox-amazon",
+        "browsertime-tp6-essential-firefox-cnn",
+        "browsertime-tp6-live-sheriffed-firefox-cnn",
+        "browsertime-tp6-webextensions-firefox-amazon",
+        "browsertime-tp6m-fenix-amazon-nofis",
+        "browsertime-tp6m-essential-geckoview-google",
+        "talos-tp5o",
+        "talos-tp5o-swr",
+        "browsertime-media-seek-firefox-media-seek",
+        "browsertime-video-playback-latency-firefox-vpl-av1",
+        "browsertime-webcodecs-firefox-ve-h264-rt",
+        "browsertime-mobile-fenix-youtube-playback-hfr",
+        "browsertime-hev3-connection-m-fenix-he3on-doh",
+        "browsertime-network-bench-firefox-h3-download-1M_400ms-0",
+        "browsertime-trr-performance-firefox-trr-cira",
+        "browsertime-upload-firefox-upload-h3",
+        "browsertime-benchmark-firefox-ares6",
+        "browsertime-benchmark-firefox-assorted-dom",
+        "browsertime-benchmark-firefox-jetstream3",
+        "browsertime-benchmark-firefox-matrix-react-bench",
+        "browsertime-benchmark-firefox-media-capabilities",
+        "browsertime-benchmark-firefox-stylebench",
+        "browsertime-benchmark-firefox-sunspider",
+        "browsertime-benchmark-firefox-twitch-animation",
+        "browsertime-benchmark-firefox-unity-webgl",
+        "browsertime-benchmark-jetstream2-fenix",
+        "browsertime-benchmark-speedometer3-mobile-geckoview",
+        "browsertime-benchmark-wasm-firefox-wasm-godot-baseline",
+        "browsertime-benchmark-unity-webgl-mobile-fenix",
+        "talos-dromaeojs",
+        "talos-g3",
+        "talos-g1",
+        "talos-g4",
+        "talos-pdfpaint-7",
+        "talos-perf-reftest-singletons",
+        "talos-svgr",
+        "talos-webgl",
+        "talos-bcv",
+        "perftest-ml-llama-summarizer-perf-hwinference",
+        "perftest-tr8ns-perf-basememory",
+        "perftest-mlsuggest-perf-native",
+        "perftest-semantichistory-perf",
+        "perftest-smarttabgrouping-perf-native",
+        "perftest-smartwindow-perf",
+        "perftest-linkpreview-perf",
+        "browsertime-first-install-firefox-welcome",
+        "perftest-newssite-applink-startup",
+        "perftest-startup-geckoview-cold-view-nav-start",
+        "talos-other-nv",
+        "talos-realworld-webextensions",
+        "talos-sessionrestore-many-windows-no-nv",
+        "talos-xperf",
+        "browsertime-indexeddb-firefox-idbCurNext",
+        "browsertime-nav-bench-firefox-nav-bench",
+        "browsertime-responsiveness-firefox-reddit-billgates-ama",
+        "talos-chrome-nv",
+        "talos-tabswitch",
+        "awsy-base-dmd",
+        "awsy-tp6",
+        "talos-damp-webconsole",
+        "perftest-foreground-resource-fenix",
+        "perftest-accessibility",
+        "perftest-service-worker",
+        "perftest-places",
+        "perftest-busy-trr",
+    ]
     uncategorized = [t for t in identities if perf.get_test_category(t) == "other"]
     assert uncategorized == []
 
@@ -1130,25 +1172,39 @@ def _bug(bug_id, status="RESOLVED", resolution=None, regressed_by=(), dupe_of=No
 
 
 @pytest.mark.parametrize(
-    "summary_status, bug, pinned_by, expected",
+    "summary_status, bug, pinned_by, bug_number, expected",
     [
-        ("investigating", _bug(1, resolution="FIXED"), "bug", "concluded"),
-        ("investigating", _bug(1, resolution="WONTFIX"), "bug", "concluded"),
-        ("investigating", _bug(1, resolution="WORKSFORME"), "bug", "concluded"),
-        ("investigating", _bug(1, resolution="INVALID"), "bug", "rejected"),
-        ("investigating", _bug(1, resolution="INACTIVE"), None, "rejected"),
-        ("fixed", _bug(1, resolution="INVALID"), "bug", "rejected"),
-        ("investigating", _bug(1, status="NEW"), "bug", "pending"),
-        ("investigating", _bug(1, status="ASSIGNED"), None, "pending"),
-        ("backedout", _bug(1, status="REOPENED"), "bug", "attributed"),
-        ("investigating", _bug(1, resolution="DUPLICATE", dupe_of=9), None, "pending"),
-        ("investigating", None, None, "pending"),
-        ("wontfix", None, None, "attributed"),
-        ("investigating", _bug(1, status="NEW"), "summary_bug", "attributed"),
+        ("investigating", _bug(1, resolution="FIXED"), "bug", 1, "concluded"),
+        ("investigating", _bug(1, resolution="WONTFIX"), "bug", 1, "concluded"),
+        ("investigating", _bug(1, resolution="WORKSFORME"), "bug", 1, "concluded"),
+        ("investigating", _bug(1, resolution="INVALID"), "bug", 1, "rejected"),
+        ("investigating", _bug(1, resolution="INACTIVE"), None, 1, "rejected"),
+        ("fixed", _bug(1, resolution="INVALID"), "bug", 1, "rejected"),
+        ("investigating", _bug(1, status="NEW"), "bug", 1, "pending"),
+        ("investigating", _bug(1, status="ASSIGNED"), None, 1, "pending"),
+        ("backedout", _bug(1, status="REOPENED"), "bug", 1, "attributed"),
+        (
+            "investigating",
+            _bug(1, resolution="DUPLICATE", dupe_of=9),
+            None,
+            1,
+            "pending",
+        ),
+        ("investigating", None, None, None, "pending"),
+        ("wontfix", None, None, None, "attributed"),
+        ("investigating", _bug(1, status="NEW"), "summary_bug", 1, "attributed"),
+        # A linked bug that was not fetched, e.g. restricted: verdict unknown.
+        ("wontfix", None, None, 1, "pending"),
+        ("fixed", None, "single_landing", 1, "pending"),
+        # Unless the sheriff linked the culprit bug, which the push itself shows.
+        ("investigating", None, "summary_bug", 1, "attributed"),
     ],
 )
-def test_regression_outcome(summary_status, bug, pinned_by, expected) -> None:
-    assert perf.decide_regression_outcome(summary_status, bug, pinned_by) == expected
+def test_regression_outcome(
+    summary_status, bug, pinned_by, bug_number, expected
+) -> None:
+    outcome = perf.decide_regression_outcome(summary_status, bug, pinned_by, bug_number)
+    assert outcome == expected
 
 
 def test_canonical_bug_follows_duplicates() -> None:
@@ -1276,6 +1332,35 @@ def test_generate_regressions_outcomes_and_label_states() -> None:
     )  # no clean push left to sample from
 
 
+def test_unfetched_linked_bug_is_pending() -> None:
+    alerts = [
+        # A fixed summary on push 12 links bug 999, which was not fetched, e.g.
+        # restricted. Its verdict is unknown, so it is not a positive.
+        _alert(bug_number=999),
+        # The sheriff linked the culprit bug landed in push 13: the push shows it.
+        _alert(
+            alert_id=2,
+            summary_id=101,
+            push_id=13,
+            prev_push_id=12,
+            bug_number=5,
+            signature_id=901,
+        ),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, {}, SETTLED))
+    by_summary = {r["summary_id"]: r for r in regressions}
+
+    assert by_summary[100]["outcome"] == "pending"
+    assert by_summary[100]["pinned_by"] is None
+    assert by_summary[100]["bug_state"] is None
+    assert by_summary[101]["outcome"] == "attributed"
+    assert by_summary[101]["pinned_by"] == "summary_bug"
+    # The pending push yields neither positives nor negatives.
+    states = perf.get_push_label_states(regressions, "autoland")
+    assert states == {12: "pending", 13: "culprit"}
+
+
 @responses.activate
 def test_fetch_bugs_follows_duplicates() -> None:
     def reply(request):
@@ -1291,6 +1376,7 @@ def test_fetch_bugs_follows_duplicates() -> None:
                     "resolution": "DUPLICATE" if dupe_of else "FIXED",
                     "dupe_of": dupe_of,
                     "regressed_by": [],
+                    "groups": [],
                 }
             )
         return 200, {}, json.dumps({"bugs": bugs})
@@ -1306,3 +1392,42 @@ def test_fetch_bugs_follows_duplicates() -> None:
     assert bugs[3]["resolution"] == "FIXED"
     requested = [c.request.params["id"] for c in responses.calls]
     assert requested == ["1", "2", "3"]
+
+
+@responses.activate
+def test_fetch_bugs_drops_restricted_bugs() -> None:
+    # Bug 1 is public and a duplicate of restricted bug 2, which is itself a
+    # duplicate of bug 3. Bug 4 is restricted.
+    catalog = {
+        1: {"dupe_of": 2, "groups": []},
+        2: {"dupe_of": 3, "groups": ["core-security"]},
+        3: {"dupe_of": None, "groups": []},
+        4: {"dupe_of": None, "groups": ["mozilla-employee-confidential"]},
+    }
+
+    def reply(request):
+        assert "groups" in request.params["include_fields"].split(",")
+        bugs = [
+            {
+                "id": int(bug_id),
+                "status": "RESOLVED",
+                "resolution": "DUPLICATE" if catalog[int(bug_id)]["dupe_of"] else "",
+                "regressed_by": [],
+                **catalog[int(bug_id)],
+            }
+            for bug_id in request.params["id"].split(",")
+        ]
+        return 200, {}, json.dumps({"bugs": bugs})
+
+    responses.add_callback(
+        responses.GET,
+        extraction.BUGZILLA_REST_URL,
+        callback=reply,
+        content_type="application/json",
+    )
+    bugs = perf.fetch_bugs([1, 4])
+    assert [bug["id"] for bug in bugs] == [1]
+    assert "groups" not in bugs[0]
+    # Restricted bug 2 is requested once and its duplicate link is not followed.
+    requested = [c.request.params["id"] for c in responses.calls]
+    assert requested == ["1,4", "2"]

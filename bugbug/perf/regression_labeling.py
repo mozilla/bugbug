@@ -178,20 +178,24 @@ def resolve_canonical_bug(
 
 
 def decide_regression_outcome(
-    summary_status_name: str, bug: dict[str, Any] | None, pinned_by: str | None
+    summary_status_name: str,
+    bug: dict[str, Any] | None,
+    pinned_by: str | None,
+    bug_number: int | None,
 ) -> str:
     """Decide what a confirmed summary means, using the developer's verdict.
 
     ``concluded``: the regression bug was resolved FIXED, WONTFIX or WORKSFORME.
     ``attributed``: the sheriff linked the culprit bug itself, or closed the
     summary without a regression bug. ``rejected``: the regression bug was
-    resolved as not a regression. ``pending``: still open, or a duplicate whose
-    canonical bug is unknown.
+    resolved as not a regression. ``pending``: still open, a duplicate whose
+    canonical bug is unknown, or a linked ``bug_number`` that was not fetched,
+    such as a restricted bug, whose verdict is unknown.
     """
     if pinned_by == "summary_bug":
         return "attributed"
     if bug is None:
-        if summary_status_name in RESOLVED_SUMMARY_STATUSES:
+        if bug_number is None and summary_status_name in RESOLVED_SUMMARY_STATUSES:
             return "attributed"
         return "pending"
     resolution = bug.get("resolution") or ""
@@ -260,7 +264,9 @@ def generate_regressions(
         bug, canonical_id = resolve_canonical_bug(linked_bug, bugs)
         culprit_commits, pinned_by = pin_culprit_commits(push, bug, head["bug_number"])
         regressed_by_agrees = check_regressed_by_agreement(push, bug)
-        outcome = decide_regression_outcome(head["summary_status_name"], bug, pinned_by)
+        outcome = decide_regression_outcome(
+            head["summary_status_name"], bug, pinned_by, head["bug_number"]
+        )
 
         runnables = {}
         for alert in positives:

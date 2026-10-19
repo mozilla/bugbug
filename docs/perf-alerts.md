@@ -214,6 +214,8 @@ reassigned alert carries its new summary's fields.
 Bugzilla REST fields, stored unchanged. Bugs linked on improvement summaries
 are included, and those often have an empty `regressed_by` because the linked
 bug is the change itself. Bugs reached by following `dupe_of` are included too.
+Restricted bugs, those in any Bugzilla group, are dropped because this file is
+published, and their `dupe_of` is not followed.
 
 | Field                               | Type      | Meaning                                                                              |
 | ----------------------------------- | --------- | ------------------------------------------------------------------------------------ |
@@ -359,7 +361,9 @@ record as `policy_version`. Bump it when they change.
     without a bug. The bug's status describes the culprit change there, not
     the regression, so the link itself is taken as the conclusion.
   - `pending`: the bug is still open, the summary is `investigating` with no
-    bug, or the duplicate's canonical bug is unknown.
+    bug, the duplicate's canonical bug is unknown, or the linked bug is not in
+    `perf_alert_bugs.json` (for example a restricted bug), so the verdict is
+    unknown.
   - `rejected`: the bug was resolved `INVALID`, `INACTIVE`, `INCOMPLETE` or
     `MOVED`: developers concluded it was not a regression.
     Only `concluded` and `attributed` summaries are positives. `pending` and
