@@ -7,8 +7,6 @@ retrievable on the host. Both branches use the same ``key``, so a downstream
 apply step resolves it identically against GCS or the local dir.
 """
 
-from __future__ import annotations
-
 import json
 import shutil
 from pathlib import Path

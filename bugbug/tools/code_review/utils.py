@@ -283,13 +283,13 @@ def request_for_context_lines(function_search, commit_hash, context_line_codes, 
         for context_line in context_line_codes:
             try:
                 line_number = int(re.search(r"\b(\d+)\b", context_line).group(1))
-            except (AttributeError, ValueError):
+            except AttributeError, ValueError:
                 print("Unexpected Line Number Format")
                 continue
 
             try:
                 content_line = str(context_line.split(str(line_number))[1]).lstrip()[1:]
-            except (IndexError, TypeError):
+            except IndexError, TypeError:
                 print("Unexpected content line")
                 continue
 

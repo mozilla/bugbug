@@ -179,6 +179,7 @@ async def create_run(
             "RESULTS_PREFIX": results_prefix,
             "RESULTS_POLICY_URL": policy["url"],
             "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
+            "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
         }
         execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
@@ -327,11 +328,10 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
         log.warning("Failed to fetch execution status for run %s", run.run_id)
         raise
 
-    if exec_status in (ExecutionStatus.pending, ExecutionStatus.running):
-        if (
-            run.status == RunStatus.pending.value
-            and exec_status == ExecutionStatus.running
-        ):
+    if exec_status == ExecutionStatus.pending:
+        return
+    if exec_status == ExecutionStatus.running:
+        if run.status == RunStatus.pending.value:
             run.status = RunStatus.running.value
             await db.commit()
         return

@@ -17,6 +17,13 @@ def get_user_agent() -> str:
 
 
 @cache
+def get_github_api_headers() -> dict[str, str]:
+    """Return headers authenticating GitHub API requests, if a token is configured."""
+    token = os.getenv("GITHUB_TOKEN", "")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+@cache
 def get_http_client() -> httpx.AsyncClient:
     """Get the shared HTTP client instance."""
     http_client = httpx.AsyncClient(

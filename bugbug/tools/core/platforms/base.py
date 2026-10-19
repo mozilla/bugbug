@@ -44,6 +44,11 @@ class Patch(ABC):
         return [self.patch_set]
 
     @property
+    def stack_base_patch(self) -> "Patch":
+        """Return the patch whose base precedes the entire stack."""
+        return self
+
+    @property
     @abstractmethod
     def bug_title(self) -> str:
         """Return the title of the bug associated with this patch."""
@@ -234,7 +239,7 @@ class ReviewData(ABC):
                 return False
 
             comment_lower = comment_content.lower()
-            if any(
+            return not any(
                 phrase in comment_lower
                 for phrase in [
                     "wdyt?",
@@ -242,10 +247,7 @@ class ReviewData(ABC):
                     "you explain",
                     "understand",
                 ]
-            ):
-                return False
-
-            return True
+            )
 
         from libmozdata.phabricator import ConduitError
         from unidiff.errors import UnidiffParseError

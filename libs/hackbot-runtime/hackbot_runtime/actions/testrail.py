@@ -1,7 +1,5 @@
 """TestRail recordable actions."""
 
-from __future__ import annotations
-
 from typing import Annotated, Any, Literal
 
 from agent_tools.registry import ToolError, tool, tools_in

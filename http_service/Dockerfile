@@ -12,5 +12,9 @@ RUN --mount=type=bind,source=pyproject.toml,target=/tmp/workspace/pyproject.toml
 RUN --mount=type=bind,target=/tmp/workspace,rw \
 	cd /tmp/workspace && uv sync --locked --no-dev --package bugbug-http-service --no-editable
 
+# Build matplotlib's cache at build time, in a directory writable by the non-root runtime user
+ENV MPLCONFIGDIR=/opt/matplotlib
+RUN python -c "import matplotlib.font_manager" && chmod -R a+rwX $MPLCONFIGDIR
+
 # Run the Pulse listener in the background
 CMD (bugbug-http-pulse-listener &) && gunicorn -b 0.0.0.0:$PORT bugbug_http.app --preload --timeout 30 -w 3

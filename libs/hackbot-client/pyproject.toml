@@ -2,7 +2,7 @@
 name = "hackbot-client"
 version = "0.1.0"
 description = "Small shared Hackbot API client (httpx-based)"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "httpx>=0.26.0",
     "pydantic>=2.6.0",
