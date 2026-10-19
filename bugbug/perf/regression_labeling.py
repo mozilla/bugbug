@@ -221,6 +221,25 @@ def check_regressed_by_agreement(
     return bool(set(bug["regressed_by"]) & landed)
 
 
+def get_signature_labels(alerts: Iterable[dict[str, Any]]) -> dict[int, str]:
+    """Map each signature to the one task label its alerts name.
+
+    Many alerts carry no task label: Treeherder expires jobs after 120 days,
+    and some datapoints never link to a job. A signature is one test series on
+    one platform, so another alert of the same series usually names the task.
+    Signatures whose alerts name more than one label are left out rather than
+    guessed.
+    """
+    labels: dict[int, set[str]] = collections.defaultdict(set)
+    for alert in alerts:
+        labels[alert["signature_id"]].update(alert["normalized_labels"])
+    return {
+        signature_id: next(iter(found))
+        for signature_id, found in labels.items()
+        if len(found) == 1
+    }
+
+
 def generate_regressions(
     alerts: Iterable[dict[str, Any]],
     push_index: PushIndex,
@@ -235,11 +254,15 @@ def generate_regressions(
     as settled never had an alert dropped for being too recent. Each record
     holds the summary, its outcome, the culprit push with its landings and
     pinned commits, and the regressed runnables; skip reasons are counted and
-    logged at the end.
+    logged at the end. An alert without a task label takes the one its
+    signature's other alerts name, from :func:`get_signature_labels`.
     """
     summaries: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
     for alert in alerts:
         summaries[alert["summary_id"]].append(alert)
+    signature_labels = get_signature_labels(
+        alert for summary_alerts in summaries.values() for alert in summary_alerts
+    )
 
     stats: collections.Counter = collections.Counter()
     for summary_id, summary_alerts in sorted(summaries.items()):
@@ -269,9 +292,14 @@ def generate_regressions(
 
         runnables = {}
         for alert in positives:
-            # Alerts whose job Treeherder expired have no label; they go through
-            # the same rules, as far as the signature can answer them.
-            for label in alert["normalized_labels"] or [None]:
+            labels = alert["normalized_labels"]
+            from_signature = not labels and alert["signature_id"] in signature_labels
+            if from_signature:
+                labels = [signature_labels[alert["signature_id"]]]
+                stats["labels_from_signature"] += 1
+            # Alerts still without a label go through the same rules, as far
+            # as the signature can answer them.
+            for label in labels or [None]:
                 key = (alert["signature_id"], label)
                 if key in runnables:
                     continue
@@ -296,6 +324,7 @@ def generate_regressions(
                     "t_value": alert["t_value"],
                     "noise_profile": alert["noise_profile"],
                     "label": label,
+                    "label_from_signature": from_signature,
                     "test_name": identity["test_name"] if identity else None,
                     "family": identity["family"] if identity else None,
                     "category": identity["category"] if identity else None,

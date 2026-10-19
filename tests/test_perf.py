@@ -836,6 +836,72 @@ def test_generate_regressions_excludes_unlabeled_alerts() -> None:
     ] == [(900, "damp", None)]
 
 
+def test_unlabeled_alerts_take_their_signature_label() -> None:
+    amazon_linux = "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"
+    amazon_windows = (
+        "test-windows11-64-24h2-shippable/opt-browsertime-tp6-firefox-amazon"
+    )
+    g1 = "test-linux2404-64-shippable/opt-talos-g1"
+    g1_profiling = "test-linux2404-64-shippable/opt-talos-g1-profiling"
+    alerts = [
+        # The confirmed summary: one alert kept its label, four lost theirs.
+        _alert(alert_id=1, signature_id=900, task_labels=None),
+        _alert(alert_id=2, signature_id=901, task_labels=amazon_windows),
+        _alert(alert_id=3, signature_id=902, task_labels=None),
+        _alert(alert_id=4, signature_id=903, task_labels=None),
+        _alert(alert_id=5, signature_id=904, task_labels=None),
+        # An untriaged summary is not a regression but still names the tasks.
+        *(
+            _alert(
+                alert_id=alert_id,
+                summary_id=200,
+                summary_status=0,
+                push_id=13,
+                prev_push_id=12,
+                signature_id=signature_id,
+                task_labels=label,
+            )
+            for alert_id, signature_id, label in [
+                (11, 900, amazon_linux),
+                (12, 902, g1),
+                # Two different labels for one signature: no guess is made.
+                (13, 903, "test-linux2404-64-shippable/opt-talos-tp5o"),
+                (14, 903, "test-linux2404-64-shippable/opt-talos-other"),
+                # A copied label is excluded like any other.
+                (15, 904, g1_profiling),
+            ]
+        ),
+    ]
+    assert perf.get_signature_labels(alerts) == {
+        900: amazon_linux,
+        901: amazon_windows,
+        902: g1,
+        904: g1_profiling,
+    }
+
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    assert [r["summary_id"] for r in regressions] == [100]
+    assert [
+        (r["signature_id"], r["label"], r["label_from_signature"])
+        for r in regressions[0]["runnables"]
+    ] == [
+        (900, amazon_linux, True),
+        (901, amazon_windows, False),
+        (902, g1, True),
+        (903, None, False),
+    ]
+
+    # A pair is flagged only when every label behind it was copied.
+    pairs = list(perf.generate_scheduling_pairs(regressions, push_index, "autoland"))
+    assert [
+        (p["node"][0], p["test_name"], p["labels_from_signature"]) for p in pairs
+    ] == [
+        ("c", "browsertime-tp6-firefox-amazon", False),
+        ("c", "talos-g1", True),
+    ]
+
+
 def test_landings_group_commits_by_bug() -> None:
     push = _push(
         12,

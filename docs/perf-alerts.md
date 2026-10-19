@@ -113,6 +113,8 @@ grouping (the reverse is impossible):
   `summary_ids` and `pinned_by`. These are the positives. Pinned regressions
   label their culprit commits only; unpinned ones label every non-backout
   commit of the push with `pinned_by` null so consumers can filter them.
+  Likewise, `labels_from_signature` marks rows whose task labels were all
+  copied from other alerts of the same signature.
 - `data/perf_push_status.json`: one row per push with `settled`, its
   non-backout `commits` (node, bug id, landing id and size), and the test
   identities and platform families that ran. Negatives are not stored: every
@@ -277,17 +279,18 @@ reading.
 Each `runnables[]` entry is one regressed test series, deduplicated per
 signature and task label:
 
-| Field                                      | Type              | Meaning                                                                |
-| ------------------------------------------ | ----------------- | ---------------------------------------------------------------------- |
-| `alert_id`, `alert_status`                 | int, str          | the alert and its decoded status                                       |
-| `signature_id`, `signature_hash`           | int, str          | the Perfherder series                                                  |
-| `framework`, `suite`, `test`               | str               | harness, page or benchmark, and metric, as in `perf_alerts.json`       |
-| `platform`, `extra_options`, `application` | str               | where it ran, its options, and the browser under test                  |
-| `amount_pct`, `t_value`, `noise_profile`   | float, float, str | size and confidence of the shift, and series noisiness                 |
-| `label`                                    | str?              | normalized task label that produced the datapoints; null when unmapped |
-| `test_name`, `family`, `category`          | str?              | grouping levels from the label; null when unmapped                     |
-| `categories`                               | list[str]         | every category the test measures, primary first; empty when unmapped   |
-| `platform_family`                          | str               | OS family, from the label when mapped, else from `platform`            |
+| Field                                      | Type              | Meaning                                                                                     |
+| ------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------- |
+| `alert_id`, `alert_status`                 | int, str          | the alert and its decoded status                                                            |
+| `signature_id`, `signature_hash`           | int, str          | the Perfherder series                                                                       |
+| `framework`, `suite`, `test`               | str               | harness, page or benchmark, and metric, as in `perf_alerts.json`                            |
+| `platform`, `extra_options`, `application` | str               | where it ran, its options, and the browser under test                                       |
+| `amount_pct`, `t_value`, `noise_profile`   | float, float, str | size and confidence of the shift, and series noisiness                                      |
+| `label`                                    | str?              | normalized task label that produced the datapoints; null when unmapped                      |
+| `label_from_signature`                     | bool              | the alert had no label of its own and `label` comes from other alerts of the same signature |
+| `test_name`, `family`, `category`          | str?              | grouping levels from the label; null when unmapped                                          |
+| `categories`                               | list[str]         | every category the test measures, primary first; empty when unmapped                        |
+| `platform_family`                          | str               | OS family, from the label when mapped, else from `platform`                                 |
 
 ### `perf_scheduling_pairs.json` (one record per culprit commit and test identity)
 
@@ -304,6 +307,7 @@ signature and task label:
 | `label`                                          | int             | always 1; negatives are inferred, see `perf_push_status.json`                      |
 | `platform_families`                              | list[str]       | platform families that regressed, e.g. `["linux", "windows"]`                      |
 | `platform_labels`                                | list[str]       | the normalized task labels that regressed                                          |
+| `labels_from_signature`                          | bool            | every label in `platform_labels` was taken from other alerts of its signature      |
 | `summary_ids`                                    | list[int]       | summaries merged into this pair                                                    |
 | `policy_version`                                 | int             | rules version                                                                      |
 
@@ -420,10 +424,14 @@ labeling, and a summary made only of excluded runnables is not a regression:
   marker: the harnesses' own unit tests (`source-test-python-raptor-*`) and
   toolchain fetches (`toolchain-*-talos-pdfs`).
 
-Treeherder expires jobs after 120 days, so older alerts can arrive without a
-task label. They go through the same rules as far as the signature answers
-them: the framework, the suite and the signature's `application`. The rules
-that need a label, variants, canaries and unparsed labels, cannot apply to them.
+Many alerts arrive without a task label: Treeherder expires jobs after 120
+days, and some datapoints never link to a job. A signature is one test series
+on one platform, so such an alert takes the label that the other alerts of its
+signature name, when they all name the same one, and is flagged
+`label_from_signature`. Every rule then applies to it. Alerts left without a
+label go through the rules the signature answers: the framework, the suite and
+the signature's `application`. The rules that need a label, variants, canaries
+and unparsed labels, cannot apply to them.
 
 `get_exclusion_reason(label, framework, application, suite)` returns which rule
 applied.

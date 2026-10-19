@@ -34,7 +34,8 @@ def generate_scheduling_pairs(
 
     Pinned regressions label their culprit commits; unpinned ones label every
     commit of the push, with ``pinned_by`` null so consumers can filter them
-    out.
+    out. ``labels_from_signature`` is true when every task label behind the
+    pair was taken from other alerts of its signature.
     """
     pairs: dict[tuple[str, str], dict[str, Any]] = {}
     for regression in regressions:
@@ -77,11 +78,15 @@ def generate_scheduling_pairs(
                         "label": 1,
                         "platform_families": set(),
                         "platform_labels": set(),
+                        "labels_from_signature": True,
                         "summary_ids": set(),
                         "policy_version": POLICY_VERSION,
                     }
                 pair["platform_families"].add(runnable["platform_family"])
                 pair["platform_labels"].add(runnable["label"])
+                pair["labels_from_signature"] = (
+                    pair["labels_from_signature"] and runnable["label_from_signature"]
+                )
                 pair["summary_ids"].add(regression["summary_id"])
 
     for key in sorted(pairs):
