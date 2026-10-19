@@ -1072,14 +1072,6 @@ class PhabricatorPatch(Patch):
                 )
 
             final_comment_content = comment.content
-            divider_index = final_comment_content.find("---")
-            if divider_index != -1:
-                final_comment_content = final_comment_content[:divider_index].strip()
-
-            if len(final_comment_content) > 2000:
-                final_comment_content = (
-                    final_comment_content[:2000] + "...\n\n*[Content truncated]*"
-                )
 
             md_lines.append("")
             if final_comment_content:

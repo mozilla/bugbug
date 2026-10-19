@@ -118,6 +118,7 @@ class Settings(BaseSettings):
     port: int = 8080
     environment: str = "development"
     sentry_dsn: str | None = None
+    agents_sentry_dsn: str
 
     model_config = {
         "env_file": ".env",

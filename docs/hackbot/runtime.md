@@ -9,7 +9,7 @@ identical for all agents, so an agent's code is only its own logic.
 run_async(main)
   ├─ discover hackbot.toml (cwd, then above the entry point's module)
   ├─ build HackbotContext from that config + environment
-  ├─ configure Anthropic + W&B credentials (Workload Identity Federation, or API keys)
+  ├─ configure Anthropic, OpenAI + W&B credentials (Workload Identity Federation, or API keys)
   ├─ start a Weave trace labelled with the agent's name
   ├─ call main(ctx)  ──> HackbotAgentResult, or an exception
   ├─ publish logs/agent.log
@@ -95,11 +95,12 @@ checkout of its own. It's best-effort: a failure to build it doesn't fail the ru
 
 ## Model credentials
 
-Anthropic (model access) and W&B (tracing) are both configured before `main()` runs, so an
-agent just reads `ctx.anthropic.api_key` and never touches the environment. Deployed, both
-use Workload Identity Federation and the container holds no long-lived key; locally both
-fall back to their API-key env var, with no special casing needed either side. Mechanism
-and failure modes: [security.md](security.md).
+Anthropic and OpenAI (model access) and W&B (tracing) are all configured before `main()`
+runs, so an agent just reads `ctx.anthropic.api_key` (or lets Codex pick up the OpenAI
+federation env) and never touches the environment. Deployed, all three use Workload Identity
+Federation and the container holds no long-lived key; locally each falls back to its API-key
+env var, with no special casing needed either side. Mechanism and failure modes:
+[security.md](security.md).
 
 ## Tools and actions
 

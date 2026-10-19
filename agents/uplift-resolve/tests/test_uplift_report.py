@@ -5,8 +5,6 @@ value cannot get through, and that a bad report degrades to an unresolved run
 rather than losing the whole one.
 """
 
-from __future__ import annotations
-
 import json
 
 import pytest

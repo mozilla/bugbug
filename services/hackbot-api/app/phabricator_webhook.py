@@ -6,8 +6,6 @@ detect an ``@hackbot`` mention, and resolve the revision to a revision id +
 Bugzilla bug id. The route in ``app/routers/webhooks.py`` orchestrates these.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NamedTuple

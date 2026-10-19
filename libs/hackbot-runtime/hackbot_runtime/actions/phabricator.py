@@ -11,8 +11,6 @@ when it meant to update one (or invent a revision id) by getting one optional
 argument wrong.
 """
 
-from __future__ import annotations
-
 import re
 from typing import Annotated
 
@@ -68,7 +66,12 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(description="Revision test plan."),
+        Field(
+            description=(
+                "Revision test plan. If you recorded a Try push, include "
+                "its Treeherder URL using {{actions.<ref>.url}}."
+            )
+        ),
     ] = None,
     summary: Annotated[
         str | None,

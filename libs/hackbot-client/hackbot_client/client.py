@@ -1,7 +1,5 @@
 """Small async client for the public Hackbot API."""
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from typing import Any
 from uuid import UUID

@@ -1,7 +1,5 @@
 """The Bolt app that handles every Slack interaction this service receives."""
 
-from __future__ import annotations
-
 import logging
 
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler

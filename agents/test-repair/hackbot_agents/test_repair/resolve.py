@@ -12,8 +12,6 @@ endpoints are mapped to git; the agent enumerates the commits between them with
 ``git log`` in the checkout.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass, field
 
