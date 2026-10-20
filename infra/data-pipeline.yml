@@ -753,6 +753,7 @@ tasks:
           - bugbug-data-perf-alerts
           - export
           - --repo-dir=/cache/mozilla-central
+          - --refresh-repo
 
         artifacts:
           public/perf_regression_commits.json.zst:

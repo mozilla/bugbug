@@ -21,6 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 
 from bugbug import db, perf, redash
+from bugbug.repository import clone as clone_repository
 from bugbug.utils import parse_timestamp, utcnow, zstd_compress
 
 logging.basicConfig(level=logging.INFO)
@@ -31,8 +32,8 @@ COST_COVERAGE_DAYS = 30
 # window), so pushes start earlier than alerts; three weeks leaves a margin.
 PUSHES_LEAD_DAYS = 21
 
-# CLI flag defaults. The pipeline tasks in infra/data-pipeline.yml pass no
-# flags, so these are the production values.
+# CLI flag defaults. The pipeline tasks in infra/data-pipeline.yml only pass
+# export's --repo-dir and --refresh-repo, so these are the production values.
 DEFAULT_MONTHS = 14
 DEFAULT_WINDOW_DAYS = 3
 DEFAULT_RERETRIEVE_DAYS = 30
@@ -344,11 +345,16 @@ class Retriever:
         test_fraction: float,
         since: datetime | None = None,
         until: datetime | None = None,
+        refresh_repo: bool = False,
     ) -> None:
         """Write the commit dataset for the regression predictor.
 
         Culprit commits come from the regressions, clean commits from the push
         status rows, and the message and diff of each from ``repo_dir``.
+        Commits missing from the clone are dropped, so with ``refresh_repo``
+        the clone is first created or pulled from mozilla-central. That also
+        reverts local changes and strips unpushed commits, which is right for
+        the pipeline's cache but not for a working checkout.
         """
         for path in (perf.PERF_REGRESSIONS_DB, perf.PERF_PUSH_STATUS_DB):
             if not db.exists(path):
@@ -374,6 +380,10 @@ class Retriever:
             regressions, statuses, negative_ratio, seed
         )
         perf.assign_train_test_splits(selected, test_fraction)
+
+        if refresh_repo:
+            logger.info("Refreshing the Mercurial clone in %s", repo_dir)
+            clone_repository(repo_dir)
 
         db.write(
             perf.PERF_REGRESSION_COMMITS_DB,
@@ -479,6 +489,11 @@ def main() -> None:
         required=True,
         help="Local Mercurial clone to read commit messages and diffs from.",
     )
+    export.add_argument(
+        "--refresh-repo",
+        action="store_true",
+        help="Clone or pull --repo-dir from mozilla-central first. This reverts local changes and strips unpushed commits, so only use it on a dedicated clone, as the pipeline does.",
+    )
     _add_window_arguments(export)
     export.add_argument(
         "--negative-ratio",
@@ -524,6 +539,7 @@ def main() -> None:
             args.test_fraction,
             args.since,
             args.until,
+            args.refresh_repo,
         )
 
 

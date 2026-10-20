@@ -582,6 +582,11 @@ bugbug-data-perf-alerts generate --settle-days 7
 bugbug-data-perf-alerts export --settle-days 7 --repo-dir ~/repos/mozilla-unified
 ```
 
+`export` reads the clone as it is and drops commits it does not have, with a
+warning, so pull it first. `--refresh-repo` clones or pulls it for you, but it
+also reverts local changes and strips unpushed commits, so only pass it for a
+clone you keep for this purpose.
+
 Each command first tries to download the previous snapshot from the
 Taskcluster index and falls back to the files in `./data/`, logging a warning
 until the pipeline has published once. `retrieve` takes `--skip-alerts`,
@@ -623,9 +628,13 @@ ones captured, see Sources.
 `infra/data-pipeline.yml` runs `perf-alerts-retrieval` (compute-small, needs
 the secret), then `perf-regressions-generator` (compute-large), then
 `perf-regression-commits-export`, which runs in the `bugbug-commit-retrieval`
-image and reuses the Mercurial clone cache of `commit-retrieval`. Artifacts
-are indexed under `project.bugbug.data_perf_alerts`,
+image and keeps its Mercurial clone in the same `bugbug-mercurial-repository`
+cache as `commit-retrieval`. A worker cache stays on the machine that wrote it,
+and the two tasks run on different worker types, so the export passes
+`--refresh-repo` to clone or pull its own copy first. Artifacts are indexed
+under `project.bugbug.data_perf_alerts`,
 `project.bugbug.data_perf_regressions` and
-`project.bugbug.data_perf_regression_commits`. The tasks pass no flags, so the
-`DEFAULT_*` constants in `scripts/perf_alerts_retriever.py` are the production
+`project.bugbug.data_perf_regression_commits`. Apart from the export's
+`--repo-dir` and `--refresh-repo`, the tasks pass no flags, so the `DEFAULT_*`
+constants in `scripts/perf_alerts_retriever.py` are the production
 configuration.
