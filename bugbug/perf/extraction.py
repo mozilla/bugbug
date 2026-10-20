@@ -12,8 +12,6 @@ from importlib import resources
 from typing import Any, Iterable, Iterator
 
 from bugbug import utils
-from bugbug.perf.label_policy import ALERT_STATUS, SUMMARY_STATUS
-from bugbug.perf.task_labels import normalize_task_label
 from bugbug.redash import RedashClient
 from bugbug.utils import utcnow
 
@@ -93,18 +91,16 @@ def _split_agg(value: str | None) -> list[str]:
 def normalize_alert_row(row: dict[str, Any]) -> dict[str, Any]:
     """Turn a raw alerts query row into a stored alert record.
 
-    Adds human-readable status names, splits the aggregated tag and task
-    columns into lists, and attaches the normalized task labels.
+    Only splits the aggregated tag and task columns into lists. Anything
+    computed from policy tables, such as status names and normalized task
+    labels, is added when reading, by
+    :func:`bugbug.perf.regression_labeling.derive_alert_fields`, so the archive
+    keeps source data only.
     """
     alert = dict(row)
-    alert["summary_status_name"] = SUMMARY_STATUS.get(row["summary_status"], "unknown")
-    alert["alert_status_name"] = ALERT_STATUS.get(row["alert_status"], "unknown")
     alert["summary_tags"] = _split_agg(row.get("summary_tags"))
     alert["task_labels"] = _split_agg(row.get("task_labels"))
     alert["task_ids"] = _split_agg(row.get("task_ids"))
-    alert["normalized_labels"] = sorted(
-        {normalize_task_label(label) for label in alert["task_labels"]}
-    )
     return alert
 
 
@@ -210,7 +206,7 @@ def merge_alerts(
     for alert in fetched:
         old = merged.get(alert["alert_id"])
         if old is not None and old["task_labels"] and not alert["task_labels"]:
-            for field in ("task_labels", "task_ids", "normalized_labels"):
+            for field in ("task_labels", "task_ids"):
                 alert[field] = old[field]
         merged[alert["alert_id"]] = alert
     return sorted(

@@ -19,7 +19,7 @@ package.
 | `bugbug/perf/task_labels.py`         | pure functions: label parsing, grouping hierarchy, exclusions         |
 | `bugbug/perf/extraction.py`          | query builders and fetch/parse for Treeherder, `fxci` and Bugzilla    |
 | `bugbug/perf/sql/`                   | the SQL templates                                                     |
-| `bugbug/perf/datasets.py`            | dataset paths, registrations and readers                              |
+| `bugbug/perf/datasets.py`            | dataset paths, registrations, readers and the archive loader          |
 | `bugbug/perf/regression_labeling.py` | `PushIndex`, culprit pinning, labeled regression records              |
 | `bugbug/perf/push_status.py`         | per-push label state and settled flag; the shared source of negatives |
 | `bugbug/perf/selection_pairs.py`     | test selection pairs and the labeled pair stream                      |
@@ -60,6 +60,27 @@ snapshot, keeping rows the source no longer returns and carrying forward task
 labels captured while the job still existed. Mapped history grows by a
 fortnight per run; only alerts already older than four months on the first
 run stay unmapped.
+
+### Archives
+
+The alerts, pushes and task costs snapshots are archives: each run merges into
+the previous snapshot, and they are the only copy of what the sources have
+deleted, so they cannot be rebuilt. `load_previous_snapshot` in
+`bugbug/perf/datasets.py` guards them. A run starts a new archive only when the
+Taskcluster index has never published one. If it was published but cannot be
+fetched, the run fails and publishes nothing, so the next run starts from the
+intact snapshot. Locally, an existing copy in `./data/` is used instead.
+
+Their format changes by these rules, also written above their registrations:
+
+- Store what the source returned. Fields computed from bugbug's rules, such as
+  normalized task labels, are derived when reading, so editing a rule never
+  changes the format.
+- Adding a field needs no version bump. Readers must treat it as optional,
+  because archived rows that the source no longer returns never get it.
+- Renaming or removing a field, or changing what it means, needs a version bump
+  and a converter from the previous version. Until one is written, the run
+  fails on the version mismatch instead of starting over.
 
 ## Operations
 
@@ -154,9 +175,13 @@ as stored, after the reshaping done in `bugbug/perf/extraction.py`. Types use
 
 ### `perf_alerts.json` (one record per alert)
 
-Every column of `perf_alerts.sql`, plus the decoded and split fields at the end
-of the table. An alert belongs to the summary it is currently attached to, so a
-reassigned alert carries its new summary's fields.
+Every column of `perf_alerts.sql`, with the pipe-joined columns split into
+lists. An alert belongs to the summary it is currently attached to, so a
+reassigned alert carries its new summary's fields. The decoded status names
+and normalized task labels are not stored: `derive_alert_fields` adds
+`summary_status_name`, `alert_status_name` and `normalized_labels` (`task_labels`
+after platform renames, deduplicated and sorted) when the alerts are labeled,
+so edits to those tables reach archived alerts too.
 
 | Field                                              | Type            | Meaning                                                                                                                      |
 | -------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -193,10 +218,8 @@ reassigned alert carries its new summary's fields.
 | `measurement_unit`                                 | str?            | `ms`, `score`, `bytes`, ...                                                                                                  |
 | `signature_tags`                                   | str             | space-separated tags on the series                                                                                           |
 | `platform`                                         | str             | machine platform, e.g. `linux2404-64-shippable`                                                                              |
-| `summary_status_name`, `alert_status_name`         | str             | the two numeric statuses decoded, e.g. `fixed`, `acknowledged`                                                               |
 | `summary_tags`                                     | list[str]       | sheriff tags on the summary, e.g. `harness` or `infra`, split from the pipe-joined column                                    |
 | `task_labels`, `task_ids`                          | list[str]       | task labels and Taskcluster task ids of the datapoints that triggered the alert, split from the pipe-joined columns          |
-| `normalized_labels`                                | list[str]       | `task_labels` after platform renames, deduplicated and sorted                                                                |
 
 ### `perf_pushes.json` (one record per push)
 

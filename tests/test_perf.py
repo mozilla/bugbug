@@ -7,7 +7,9 @@ import json
 from datetime import datetime, timezone
 
 import pytest
+import requests
 import responses
+import zstandard
 
 from bugbug import db, perf
 from bugbug.perf import extraction, regression_commits
@@ -172,11 +174,23 @@ def test_merge_alerts_keeps_history_and_labels() -> None:
     merged = perf.merge_alerts(previous, fetched)
     assert [a["alert_id"] for a in merged] == [1, 2, 3, 4]
     refreshed = merged[1]
-    assert refreshed["summary_status_name"] == "fixed"
+    assert refreshed["summary_status"] == 7
     assert refreshed["task_labels"] == previous[1]["task_labels"]
     assert refreshed["task_ids"] == previous[1]["task_ids"]
-    assert refreshed["normalized_labels"] == previous[1]["normalized_labels"]
     assert merged[2]["task_labels"] == []
+
+
+def test_alert_fields_are_derived_on_read() -> None:
+    # Stored alerts keep source data only.
+    alert = _alert(task_labels="test-linux1804-64-shippable/opt-talos-g1")
+    assert not {"summary_status_name", "alert_status_name", "normalized_labels"} & set(
+        alert
+    )
+    # The current rename table applies to every alert, archived ones included.
+    derived = perf.derive_alert_fields(alert)
+    assert derived["summary_status_name"] == "fixed"
+    assert derived["alert_status_name"] == "acknowledged"
+    assert derived["normalized_labels"] == ["test-linux2404-64-shippable/opt-talos-g1"]
 
 
 def test_parse_push_row() -> None:
@@ -872,7 +886,7 @@ def test_unlabeled_alerts_take_their_signature_label() -> None:
             ]
         ),
     ]
-    assert perf.get_signature_labels(alerts) == {
+    assert perf.get_signature_labels(map(perf.derive_alert_fields, alerts)) == {
         900: amazon_linux,
         901: amazon_windows,
         902: g1,
@@ -1572,3 +1586,65 @@ def test_fetch_bugs_drops_restricted_bugs() -> None:
     # Restricted bug 2 is requested once and its duplicate link is not followed.
     requested = [c.request.params["id"] for c in responses.calls]
     assert requested == ["1,4", "2"]
+
+
+ALERTS_URL = db.DATABASES[perf.PERF_ALERTS_DB]["url"]
+ALERTS_VERSION_URL = ALERTS_URL.replace(".zst", ".version")
+
+
+def _publish_alerts(version, records=()):
+    """Serve a published alerts snapshot from the Taskcluster index."""
+    responses.add(responses.GET, ALERTS_VERSION_URL, body=str(version))
+    body = zstandard.ZstdCompressor().compress(
+        "".join(json.dumps(record) + "\n" for record in records).encode()
+    )
+    responses.add(responses.HEAD, ALERTS_URL, headers={"ETag": "etag"})
+    responses.add(responses.GET, ALERTS_URL, body=body)
+
+
+@responses.activate
+def test_previous_snapshot_is_downloaded() -> None:
+    _publish_alerts(1, [{"alert_id": 7}])
+    assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+    assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
+
+
+@responses.activate
+def test_first_run_starts_a_new_archive() -> None:
+    responses.add(responses.GET, ALERTS_VERSION_URL, status=404)
+    assert not perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+
+
+@pytest.mark.parametrize(
+    "version_reply",
+    [
+        {"status": 403},
+        {"body": requests.exceptions.ConnectionError("unreachable")},
+        {"body": "not a version"},
+    ],
+)
+@responses.activate
+def test_unavailable_snapshot_is_never_started_over(version_reply) -> None:
+    responses.add(responses.GET, ALERTS_VERSION_URL, **version_reply)
+    with pytest.raises(RuntimeError, match="Not starting perf_alerts.json over"):
+        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+
+    # A local copy, as in local runs and reruns, is used instead.
+    db.write(perf.PERF_ALERTS_DB, [{"alert_id": 7}])
+    assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+    assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
+
+
+@responses.activate
+def test_failed_snapshot_download_is_never_started_over() -> None:
+    responses.add(responses.GET, ALERTS_VERSION_URL, body="1")
+    responses.add(responses.HEAD, ALERTS_URL, status=403)
+    with pytest.raises(RuntimeError, match="Could not download"):
+        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+
+
+@responses.activate
+def test_snapshot_of_another_version_needs_a_converter() -> None:
+    _publish_alerts(2)
+    with pytest.raises(RuntimeError, match="needs a converter"):
+        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)

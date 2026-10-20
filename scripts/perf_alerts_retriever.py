@@ -104,12 +104,7 @@ class Retriever:
         older alerts and of their task labels.
         """
         previous: list[dict] = []
-        have_previous = False
-        try:
-            have_previous = db.download(perf.PERF_ALERTS_DB)
-        except Exception:
-            logger.warning("Could not download the previous alerts DB")
-        if have_previous or db.exists(perf.PERF_ALERTS_DB):
+        if perf.load_previous_snapshot(perf.PERF_ALERTS_DB):
             previous = list(perf.get_perf_alerts())
 
         fetched = list(perf.fetch_alerts(client, self.repositories, since))
@@ -133,12 +128,7 @@ class Retriever:
         """Refresh the recent window of costs and keep older rows untouched."""
         today = utcnow().date()
         cutoff = since
-        have_previous = False
-        try:
-            have_previous = db.download(perf.PERF_TASK_COSTS_DB)
-        except Exception:
-            logger.warning("Could not download the previous costs DB")
-        have_previous = have_previous or db.exists(perf.PERF_TASK_COSTS_DB)
+        have_previous = perf.load_previous_snapshot(perf.PERF_TASK_COSTS_DB)
         if have_previous:
             newest = max(
                 (row["submission_date"] for row in perf.get_perf_task_costs()),
@@ -179,12 +169,7 @@ class Retriever:
         while its jobs are still running.
         """
         pushes = {}
-        have_previous = False
-        try:
-            have_previous = db.download(perf.PERF_PUSHES_DB)
-        except Exception:
-            logger.warning("Could not download the previous pushes DB")
-        if have_previous or db.exists(perf.PERF_PUSHES_DB):
+        if perf.load_previous_snapshot(perf.PERF_PUSHES_DB):
             pushes = {push["push_id"]: push for push in perf.get_perf_pushes()}
 
         now = utcnow()

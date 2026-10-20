@@ -29,6 +29,7 @@ from bugbug.perf.datasets import (
     get_perf_regression_commits,
     get_perf_regressions,
     get_perf_task_costs,
+    load_previous_snapshot,
 )
 from bugbug.perf.extraction import (
     BIGQUERY_DATA_SOURCE_ID,
@@ -78,6 +79,7 @@ from bugbug.perf.regression_labeling import (
     alert_is_positive,
     check_regressed_by_agreement,
     decide_regression_outcome,
+    derive_alert_fields,
     generate_regressions,
     get_landing_id,
     get_ran_perf_labels,
@@ -147,6 +149,7 @@ __all__ = [
     "check_regressed_by_agreement",
     "collect_push_task_ids",
     "decide_regression_outcome",
+    "derive_alert_fields",
     "estimate_labels_cost",
     "fetch_alerts",
     "fetch_bugs",
@@ -179,6 +182,7 @@ __all__ = [
     "is_within_window",
     "iter_clean_commits",
     "iter_labeled_pairs",
+    "load_previous_snapshot",
     "load_task_costs",
     "merge_alerts",
     "normalize_alert_row",

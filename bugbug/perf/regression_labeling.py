@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Any, Iterable, Iterator
 
 from bugbug.perf.label_policy import (
+    ALERT_STATUS,
     CONFIRMED_BUG_RESOLUTIONS,
     CONFIRMED_SUMMARY_STATUSES,
     EXCLUDED_ALERT_STATUSES,
@@ -25,6 +26,7 @@ from bugbug.perf.label_policy import (
     POLICY_VERSION,
     REJECTED_BUG_RESOLUTIONS,
     RESOLVED_SUMMARY_STATUSES,
+    SUMMARY_STATUS,
 )
 from bugbug.perf.task_labels import (
     get_exclusion_reason,
@@ -35,6 +37,24 @@ from bugbug.perf.task_labels import (
 from bugbug.utils import parse_timestamp
 
 logger = logging.getLogger(__name__)
+
+
+def derive_alert_fields(alert: dict[str, Any]) -> dict[str, Any]:
+    """Add the fields computed from policy tables to a stored alert.
+
+    Decodes the two numeric statuses and normalizes the task labels. These are
+    derived on every read and never stored, so editing a table, such as
+    ``PLATFORM_RENAMES``, also applies to alerts that only the archive still
+    has.
+    """
+    return {
+        **alert,
+        "summary_status_name": SUMMARY_STATUS.get(alert["summary_status"], "unknown"),
+        "alert_status_name": ALERT_STATUS.get(alert["alert_status"], "unknown"),
+        "normalized_labels": sorted(
+            {normalize_task_label(label) for label in alert["task_labels"]}
+        ),
+    }
 
 
 def summary_is_confirmed(summary_status: str, tags: Iterable[str]) -> bool:
@@ -222,13 +242,14 @@ def check_regressed_by_agreement(
 
 
 def get_signature_labels(alerts: Iterable[dict[str, Any]]) -> dict[int, str]:
-    """Map each signature to the one task label its alerts name.
+    """Map each signature to the one normalized task label its alerts name.
 
     Many alerts carry no task label: Treeherder expires jobs after 120 days,
     and some datapoints never link to a job. A signature is one test series on
     one platform, so another alert of the same series usually names the task.
     Signatures whose alerts name more than one label are left out rather than
-    guessed.
+    guessed. Takes alerts with their derived fields, see
+    :func:`derive_alert_fields`.
     """
     labels: dict[int, set[str]] = collections.defaultdict(set)
     for alert in alerts:
@@ -247,19 +268,20 @@ def generate_regressions(
     settle_before: datetime,
     pushed_from: datetime | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """Turn raw alerts into one labeled record per confirmed regression summary.
+    """Turn stored alerts into one labeled record per confirmed regression summary.
 
     Only summaries whose culprit push lies in ``[pushed_from, settle_before)``
     are labeled. Bounding on push time, as negatives are, means a push counted
     as settled never had an alert dropped for being too recent. Each record
     holds the summary, its outcome, the culprit push with its landings and
     pinned commits, and the regressed runnables; skip reasons are counted and
-    logged at the end. An alert without a task label takes the one its
+    logged at the end. Alerts get their derived fields from
+    :func:`derive_alert_fields`, and one without a task label takes the one its
     signature's other alerts name, from :func:`get_signature_labels`.
     """
     summaries: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
     for alert in alerts:
-        summaries[alert["summary_id"]].append(alert)
+        summaries[alert["summary_id"]].append(derive_alert_fields(alert))
     signature_labels = get_signature_labels(
         alert for summary_alerts in summaries.values() for alert in summary_alerts
     )
