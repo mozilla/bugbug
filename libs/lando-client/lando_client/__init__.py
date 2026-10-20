@@ -6,6 +6,7 @@ from lando_client.client import (
     encode_patch,
 )
 from lando_client.config import LandoSettings
+from lando_client.try_config import try_task_config, try_task_config_patch
 
 __all__ = [
     "LandoAPIError",
@@ -14,4 +15,6 @@ __all__ = [
     "PATCH_FORMAT_GIT",
     "PATCH_FORMAT_HG",
     "encode_patch",
+    "try_task_config",
+    "try_task_config_patch",
 ]

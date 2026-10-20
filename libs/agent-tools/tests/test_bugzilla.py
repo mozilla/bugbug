@@ -1,6 +1,7 @@
 """Tests for the Bugzilla read tools."""
 
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import bugsy
 import pytest
@@ -42,6 +43,56 @@ async def test_search_bugs_returns_data():
         BugzillaContext(client=client), params={"id": "1,2"}
     )
     assert result == {"count": 2, "bugs": [{"id": 1}, {"id": 2}]}
+
+
+async def test_async_transport_supports_bulk_comments_and_inaccessible_bugs():
+    async def request(path, *, params):
+        if path == "bug":
+            assert params["id"] == "1,2,3"
+            return {"bugs": [{"id": 1}, {"id": 2}]}
+        assert path == "bug/1/comment"
+        assert params == {"ids": "2"}
+        return {"bugs": {"1": {"comments": [{"text": "comment"}]}}}
+
+    result = await bugzilla.get_bugs(
+        BugzillaContext(client=SimpleNamespace(request=request)),
+        [1, 2, 3],
+        include_comments=True,
+    )
+    assert result["inaccessible"] == [3]
+    assert result["bugs"] == [
+        {"id": 1, "comments": [{"text": "comment"}]},
+        {"id": 2, "comments": []},
+    ]
+
+
+@pytest.mark.parametrize("request_type", [MagicMock, AsyncMock])
+async def test_raw_rest_errors_use_existing_bugzilla_error_mapping(request_type):
+    client = SimpleNamespace(
+        request=request_type(
+            return_value={"error": True, "code": 102, "message": "Access denied"}
+        )
+    )
+    with pytest.raises(ToolError) as caught:
+        await bugzilla.get_bug_comments(BugzillaContext(client=client), 1)
+    assert caught.value.payload["error"] == "access_denied"
+    assert caught.value.payload["code"] == 102
+
+
+async def test_async_attachment_download_uses_existing_metadata_restrictions(tmp_path):
+    original = _attachment_client(_att(content_type="text/plain"))
+
+    async def request(path, *, params):
+        return original.request(path, params=params)
+
+    result = await bugzilla.download_attachment(
+        BugzillaContext(client=SimpleNamespace(request=request)),
+        7,
+        str(tmp_path / "attachment.txt"),
+    )
+    assert (tmp_path / "attachment.txt").read_bytes() == b"hello"
+    assert result["size_bytes"] == 5
+    assert original.calls[0][1] == {"exclude_fields": "data"}
 
 
 async def test_search_bugs_raises_tool_error_on_bugsy_failure():

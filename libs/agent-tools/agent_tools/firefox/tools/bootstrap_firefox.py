@@ -7,6 +7,8 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
+from agent_tools.firefox_env import toolchain_environment
+
 APPLICATIONS = (
     "browser",
     "browser_artifact_mode",
@@ -104,6 +106,7 @@ async def bootstrap_firefox(
             "--no-interactive",
             "bootstrap",
             f"--application-choice={application}",
+            env=toolchain_environment(),
             cwd=firefox_dir,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
