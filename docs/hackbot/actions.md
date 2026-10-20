@@ -35,18 +35,19 @@ record in its `config.py` and passes them to `actions_server_for`, which builds 
 carrying only those. `bug-fix`, for instance, allows `phabricator.submit_patch` on a fresh
 triage run but swaps it for `phabricator.update_patch` on a follow-up.
 
-| Action type                 | Records the intent to…                     | Params                                                          |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
-| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                                             |
-| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`                                  |
-| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
-| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields                                            |
-| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
-| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                                                   |
-| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                           |
-| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
-| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
-| `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
+| Action type                 | Records the intent to…                     | Params                                                           |
+| --------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                                              |
+| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`                                   |
+| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                  |
+| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields                                             |
+| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id`  |
+| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                                                    |
+| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                            |
+| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                               |
+| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                                |
+| `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                 |
+| `lando.backout`             | Back out a landed commit                   | `lando_repo`, `commit`, `reason`, + a `backout.patch` attachment |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. `phabricator.submit_patch`
@@ -56,6 +57,10 @@ is the only model-facing tool that exposes **`ref`** (see cross-references below
 code calls directly rather than the model choosing to — for an action the agent always takes
 once it has a result, not one the model decides on. `email` provides `record_email`
 alongside its tool for the same reason.
+
+`lando.backout` has only a `record_backout` helper, no model-facing tool. It builds the
+revert agent-side, and the handler pushes it through Lando's headless API, which needs
+`LANDO_HEADLESS_API_TOKEN` for an account with the repo's automation permission.
 
 `slack.post_message` is posted without Slack's link and media previews; they can
 be turned back on for a recorded message by passing `unfurl=True` to `record_message`.
