@@ -71,6 +71,14 @@ repos:
           - types-python-dateutil==2.9.0.20260807
           - types-orjson==3.6.2
           - types-tabulate==0.10.0.20261006
+  - repo: local
+    hooks:
+      - id: hackbot-deploy-names
+        name: hackbot prod deploy names
+        entry: uv run --frozen --package hackbot-deploy python -m hackbot_deploy workflow-names .github/workflows/hackbot-prod-deploy.yml
+        language: system
+        pass_filenames: false
+        files: ^agents/[^/]+/hackbot\.toml$|^\.github/workflows/hackbot-prod-deploy\.yml$|^tools/hackbot-deploy/hackbot_deploy/
   - repo: meta
     hooks:
       - id: check-useless-excludes

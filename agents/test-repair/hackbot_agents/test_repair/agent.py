@@ -11,8 +11,6 @@ candidate commit diffs and writes the verdict; stage 2 (fix) proposes a source
 patch and runs whenever stage 1 blamed a commit.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import subprocess

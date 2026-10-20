@@ -12,8 +12,6 @@ Classification then trails the job's end (measured over 40 recent autoland pushe
 ~1min median, ~11min at p90, with a long tail past an hour).
 """
 
-from __future__ import annotations
-
 import logging
 import threading
 import time

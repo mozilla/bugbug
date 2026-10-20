@@ -12,8 +12,6 @@ The team address, the sender and the local-testing override live apply-side, so
 an agent only names the individuals its result concerns.
 """
 
-from __future__ import annotations
-
 import re
 from collections.abc import Iterable
 from typing import Annotated

@@ -1,7 +1,5 @@
 """Authorization checks for Bugzilla webhook actors."""
 
-from __future__ import annotations
-
 import httpx
 from cachetools import TTLCache
 

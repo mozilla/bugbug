@@ -7,8 +7,6 @@ genuine conflict, a committed resolution, then `collect` and `git am` onto a
 fresh clone.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from types import SimpleNamespace

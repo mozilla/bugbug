@@ -8,8 +8,6 @@ so it works regardless of how shallow the agent's checkout is. Failures surface 
 a structured :class:`~agent_tools.registry.ToolError`.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated
 
