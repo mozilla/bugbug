@@ -6,8 +6,6 @@ detect an ``@hackbot`` mention, and resolve the revision to a revision id +
 Bugzilla bug id. The route in ``app/routers/webhooks.py`` orchestrates these.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NamedTuple
@@ -155,7 +153,7 @@ async def resolve_revision(
     bug_id_raw = fields.get("bugzilla.bug-id")
     try:
         bug_id = int(bug_id_raw) if bug_id_raw not in (None, "") else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         bug_id = None
     return revision_id, bug_id
 

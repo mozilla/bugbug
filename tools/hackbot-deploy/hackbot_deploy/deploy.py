@@ -21,8 +21,6 @@ Images are always pinned by digest. A tag can be moved by anyone who can push;
 a digest can't.
 """
 
-from __future__ import annotations
-
 import json
 import re
 from collections.abc import Callable
@@ -108,6 +106,9 @@ class Cloud(Protocol):
         """Write, but only if the object is still at that generation (0: absent)."""
 
     def image_labels(self, image: str) -> dict[str, str]: ...
+
+    def image_digest(self, image: str) -> str:
+        """Pin a tagged image (host/path:tag) to the digest the tag names now."""
 
     def get_job(self, project: str, region: str, name: str) -> dict[str, Any]: ...
 
@@ -308,6 +309,55 @@ def _image_hash(cloud: Cloud, images: dict[str, str]) -> tuple[str, dict[str, st
     return next(iter(hashes.values())), labels["agent"]  # type: ignore[return-value]
 
 
+def _adopt_terraform_deploy(
+    cloud: Cloud,
+    env: Environment,
+    agent: str,
+    applied: dict[str, Any],
+    running: dict[str, str],
+    current: dict[str, Any] | None,
+    generation: int,
+    *,
+    dry_run: bool,
+) -> tuple[dict[str, Any] | None, int]:
+    """Record images Terraform put on, if it did, as the current deployment.
+
+    An apply that moves an agent to a new shape also puts on the images pinned
+    for it (``images`` in applied.json), without touching the record. Left
+    alone, the record would name the old images, and a rollback would step
+    back past them.
+    """
+    pinned = applied.get("images")
+    if (
+        not pinned
+        or running != pinned
+        or (current and current.get("images") == running)
+    ):
+        return current, generation
+    labels = cloud.image_labels(running["agent"])
+    record = {
+        "name": agent,
+        "environment": env.name,
+        "runtime": applied["runtime"],
+        "images": running,
+        "config_hash": applied["applied"],
+        "revision": labels.get(LABEL_REVISION),
+        "created": labels.get(LABEL_CREATED),
+        "deployed_at": _now(),
+        "deployed_by": "terraform",
+        "history": _history(current, running, rollback=False)[:HISTORY_LIMIT],
+    }
+    if dry_run:
+        return record, generation
+    cloud.write_object(
+        env.registry_bucket,
+        f"deployments/{agent}.json",
+        (json.dumps(record, indent=2) + "\n").encode(),
+        if_generation_match=generation,
+    )
+    return _read_record(cloud, env, agent)
+
+
 def deploy_agent(
     cloud: Cloud,
     agent: str,
@@ -328,6 +378,20 @@ def deploy_agent(
     if rollback and images is not None:
         raise DeployError(_ROLLBACK_WITH_IMAGES)
     current, generation = _read_record(cloud, env, agent)
+    applied = _applied(cloud, env, agent)
+
+    job_name = env.job_name(agent)
+    job = cloud.get_job(env.project_id, REGION, job_name)
+    job_hash = job.get("labels", {}).get(JOB_LABEL_CONFIG_HASH)
+    if job_hash != applied["applied"]:
+        raise DeployError(
+            f"{job_name} is labelled {job_hash or 'with no config hash'} but applied.json says {applied['applied']}; "
+            "a Terraform apply looks incomplete"
+        )
+    running = {c["name"]: c["image"] for c in job["template"]["template"]["containers"]}
+    current, generation = _adopt_terraform_deploy(
+        cloud, env, agent, applied, running, current, generation, dry_run=dry_run
+    )
 
     if rollback:
         images = _rollback_target(current, agent, env)
@@ -336,7 +400,6 @@ def deploy_agent(
     for ref in images.values():
         split_image(ref)
 
-    applied = _applied(cloud, env, agent)
     image_hash, labels = _image_hash(cloud, images)
 
     if rollback:
@@ -351,15 +414,6 @@ def deploy_agent(
             "Deploy again once the infra PR for this change is applied."
         )
 
-    job_name = env.job_name(agent)
-    job = cloud.get_job(env.project_id, REGION, job_name)
-    job_hash = job.get("labels", {}).get(JOB_LABEL_CONFIG_HASH)
-    if job_hash != applied["applied"]:
-        raise DeployError(
-            f"{job_name} is labelled {job_hash or 'with no config hash'} but applied.json says {applied['applied']}; "
-            "a Terraform apply looks incomplete"
-        )
-    running = {c["name"]: c["image"] for c in job["template"]["template"]["containers"]}
     if set(running) != set(images):
         raise DeployError(
             f"{job_name} runs containers {sorted(running)}, but images were given for {sorted(images)}"
@@ -511,6 +565,30 @@ def promote(
 
 
 # --- Builds --------------------------------------------------------------------
+
+
+def built_images(
+    cloud: Cloud,
+    repository: str,
+    agent: str,
+    tag: str,
+    config_hash: str,
+    has_broker: bool,
+) -> dict[str, str] | None:
+    """Return the digests of the images a build pushed for ``agent`` as ``tag``.
+
+    None when they were built for another shape: the agent's shape has changed
+    since that commit, and the build of the newer commit pins its own images.
+    """
+    containers = ["agent", "broker"] if has_broker else ["agent"]
+    images = {
+        container: cloud.image_digest(f"{repository}/{agent}-{container}:{tag}")
+        for container in containers
+    }
+    for image in images.values():
+        if cloud.image_labels(image).get(LABEL_CONFIG_HASH) != config_hash:
+            return None
+    return images
 
 
 def older_builds(cloud: Cloud, project: str, location: str, build_id: str) -> list[str]:

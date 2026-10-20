@@ -1,7 +1,5 @@
 """The ``submit_result`` tool an agent calls to hand back its validated result."""
 
-from __future__ import annotations
-
 from typing import Generic, TypeVar
 
 from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool

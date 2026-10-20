@@ -4,14 +4,12 @@ Exit codes: 0 done (or nothing to do), 1 failed, 3 waiting for infra. A build
 pipeline should treat 3 as "skip the remaining environments", not as a failure.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import sys
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -66,6 +64,10 @@ def _report(result: deploy.Result) -> None:
         print(f"  {container}: {image}")
 
 
+def _read_json(path: Path | None) -> Any:
+    return json.loads(path.read_text()) if path else None
+
+
 @app.command("manifest")
 def manifest_(
     previous: Annotated[
@@ -79,12 +81,24 @@ def manifest_(
         Path | None,
         typer.Option(help="Exit 1 if this file differs from what would be generated."),
     ] = None,
+    pending: Annotated[
+        Path | None,
+        typer.Option(help="The open bot PR's agents.json, to keep images it pinned."),
+    ] = None,
+    images: Annotated[
+        Path | None,
+        typer.Option(
+            help="JSON of images just built, {agent: {container: digest}}, as resolve-images writes."
+        ),
+    ] = None,
     agents_dir: AgentsDir = Path("agents"),
 ) -> None:
     """Generate agents.json from every agent's [deploy] table."""
     result, changes = manifest.build_manifest(
         manifest.load_configs(agents_dir),
-        json.loads(previous.read_text()) if previous else None,
+        _read_json(previous),
+        pending=_read_json(pending),
+        images=_read_json(images),
     )
     text = manifest.dumps(result)
     for name, change in sorted(changes.items()):
@@ -110,6 +124,41 @@ def info(agent: str, agents_dir: AgentsDir = Path("agents")) -> None:
     print(f"CONFIG_HASH={manifest.config_hash(agent, entry)}")
     print(f"RUNTIME={entry['runtime']}")
     print(f"HAS_BROKER={'true' if 'broker' in entry else 'false'}")
+
+
+@app.command()
+def resolve_images(
+    agent: str,
+    tag: Annotated[str, typer.Option(help="The tag the build pushed: its commit.")],
+    repository: Annotated[
+        str, typer.Option(help="host/project/repository the images are in.")
+    ],
+    output: Annotated[Path, typer.Option(help="Where to write the JSON.")],
+    agents_dir: AgentsDir = Path("agents"),
+) -> None:
+    """Write {agent: {container: digest}} for the images a build pushed.
+
+    Writes {} when they were built for a shape the agent no longer has.
+    """
+    config = manifest.load_config(agents_dir / agent / "hackbot.toml")
+    if config is None:
+        print(f"{agent} has no [deploy] table", file=sys.stderr)
+        raise typer.Exit(1)
+    entry = config.manifest_entry()
+    images = deploy.built_images(
+        GoogleCloud(),
+        repository,
+        agent,
+        tag,
+        manifest.config_hash(agent, entry),
+        "broker" in entry,
+    )
+    if images is None:
+        print(
+            f"{agent}'s images at {tag} were built for an older shape; nothing to pin",
+            file=sys.stderr,
+        )
+    output.write_text(json.dumps({agent: images} if images else {}, indent=2) + "\n")
 
 
 @app.command()

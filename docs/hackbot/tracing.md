@@ -41,3 +41,24 @@ environment:
 **In deployment**, the agent container holds no long-lived key: it authenticates
 via W&B [Identity Federation](https://docs.wandb.ai/platform/hosting/iam/identity_federation),
 the same mechanism the runtime uses for Anthropic — see [security.md](security.md).
+
+## Querying traces from AI assistants
+
+Agent developers can let Claude Code (or other AI) read the traces via the W&B MCP server and skills.
+
+1. Get an invite to the `moz-bugbug` W&B team (Weave access is invite-only).
+2. Create an API key, following the [W&B AI assistants guide](https://docs.coreweave.com/products/wandb/platform/ai-assistants).
+3. Install the skills and the MCP server:
+
+```bash
+export WANDB_API_KEY="<key>"
+export WANDB_PROJECT=hackbot-dev
+npx skills add wandb/skills --skill '*' --yes
+claude mcp add --transport http wandb https://mcp.withwandb.com/mcp --header "Authorization: Bearer <key>"
+```
+
+Example query:
+
+```bash
+claude "analyze Weave agent traces for the test-repair agent for the last week where the agent used model Opus 5.5. See where the bottlenecks are and how to reduce duration of the runs"
+```

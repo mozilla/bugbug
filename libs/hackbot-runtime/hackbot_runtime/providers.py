@@ -6,8 +6,6 @@ protocol leaves room to add others (Vertex, OpenAI, ...) without changing the
 agent-facing surface.
 """
 
-from __future__ import annotations
-
 import os
 from typing import Protocol, runtime_checkable
 

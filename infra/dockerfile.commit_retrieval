@@ -3,9 +3,9 @@ FROM mozilla/bugbug-base:latest
 # git is required by the annotate pipeline.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git xz-utils curl && \
-    curl -fL -o /tmp/vct.zip https://hg.mozilla.org/hgcustom/version-control-tools/archive/50a59e00c4a76fcfae660e3feb9b79e0cd549b15.zip && \
+    curl -fL -o /tmp/vct.zip https://hg.mozilla.org/hgcustom/version-control-tools/archive/7e05eb6de61fd8ecfda678c47dee53c51ef69ffe.zip && \
     python -m zipfile -e /tmp/vct.zip /tmp/ && \
-    mv /tmp/version-control-tools-50a59e00c4a76fcfae660e3feb9b79e0cd549b15 /version-control-tools && \
+    mv /tmp/version-control-tools-7e05eb6de61fd8ecfda678c47dee53c51ef69ffe /version-control-tools && \
     rm -r /tmp/vct.zip /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv && \
     apt-get purge -y xz-utils curl && \

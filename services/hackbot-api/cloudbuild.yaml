@@ -1,9 +1,10 @@
 # Build hackbot-api once and ship it to dev, then stage.
 #
 # Its trigger (webservices-infra, hackbot/tf/modules/resources/build.tf) runs
-# this on a push to main touching the API or the libraries it's built from. Prod is a separate, approved
-# promotion; nothing here reaches it. services/cloudbuild.yaml is hackbot-dev's
-# older config and goes away at cutover.
+# this on a push to the default branch touching the API or the libraries it's
+# built from. Prod is a separate, approved promotion; nothing here reaches it.
+# services/cloudbuild.yaml is hackbot-dev's older config and goes away at
+# cutover.
 #
 # Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
 # build on unknown ones, so shell variables below are written `$$name`.
@@ -12,7 +13,7 @@ steps:
   # Before anything else: if an older build of this trigger is still going,
   # stop here rather than deploy over it.
   - id: One at a time
-    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     args:
       - -c
@@ -40,7 +41,7 @@ steps:
   # infrastructure is written by hand in webservices-infra and changes there
   # first.
   - id: Deploy
-    name: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     # Recorded as deployed_by: whoever pushed, or the build when the trigger
     # is run by hand. Substitutions aren't in a step's environment otherwise.

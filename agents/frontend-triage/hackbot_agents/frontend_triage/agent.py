@@ -11,8 +11,6 @@ It reaches Bugzilla via an out-of-process MCP broker (HTTP transport) that holds
 the Bugzilla token -- the agent process itself never sees it.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import sys

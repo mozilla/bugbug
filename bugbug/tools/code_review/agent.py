@@ -246,17 +246,35 @@ class CodeReviewTool(GenerativeModelTool):
                 content_overrides=self._content_overrides,
             )
 
+        messages = [
+            HumanMessage(
+                self.generate_initial_prompt(patch, patch_summary, external_context)
+            )
+        ]
+        for attempt in range(2):
+            result = await self._invoke_review_agent(patch, messages)
+
+            if result is not None and result.get("structured_response") is not None:
+                return result["structured_response"], manifest
+
+            if attempt == 0 and result is not None:
+                logger.warning("Review agent returned no structured response; retrying")
+                messages = [
+                    *result["messages"],
+                    HumanMessage(
+                        "Finish the review by calling the AgentResponse tool with "
+                        "the review comments and general comment."
+                    ),
+                ]
+
+        raise ValueError("Review agent returned no structured response")
+
+    async def _invoke_review_agent(self, patch: Patch, messages: list) -> dict | None:
+        """Run the review agent and return its final streamed state."""
+        result = None
         try:
             async for chunk in self.agent.astream(
-                {
-                    "messages": [
-                        HumanMessage(
-                            self.generate_initial_prompt(
-                                patch, patch_summary, external_context
-                            )
-                        ),
-                    ]
-                },
+                {"messages": messages},
                 context=CodeReviewContext(patch=patch),
                 stream_mode="values",
                 config={"recursion_limit": 500},
@@ -264,8 +282,7 @@ class CodeReviewTool(GenerativeModelTool):
                 result = chunk
         except GraphRecursionError as e:
             raise RecursionLimitError("The model could not complete the review") from e
-
-        return result["structured_response"], manifest
+        return result
 
     async def assess_patch_scope(
         self, patch: Patch, patch_summary: str

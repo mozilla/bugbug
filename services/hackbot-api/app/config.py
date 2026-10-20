@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from phabricator_client import PhabricatorSettings
 from pydantic import BaseModel, StringConstraints
@@ -56,6 +56,7 @@ class Settings(BaseSettings):
 
     # Cloud SQL Postgres
     cloud_sql_instance: str = ""
+    cloud_sql_ip_type: Literal["PUBLIC", "PRIVATE", "PSC"] = "PUBLIC"
     db_user: str = ""
     db_pass: str = ""
     db_name: str = "hackbot"
@@ -112,7 +113,6 @@ class Settings(BaseSettings):
     push_auth_service_account: str = ""
 
     # Run-completion email settings (see app/notifications.py).
-    hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str
     notification_sender: str
 
@@ -120,6 +120,7 @@ class Settings(BaseSettings):
     port: int = 8080
     environment: str = "development"
     sentry_dsn: str | None = None
+    agents_sentry_dsn: str
 
     model_config = {
         "env_file": ".env",

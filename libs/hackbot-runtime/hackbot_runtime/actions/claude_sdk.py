@@ -5,8 +5,6 @@ tool context, and tools are namespace-prefixed (one ``actions`` server hosts
 every domain). Requires the ``claude-sdk`` optional extra.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from agent_tools.claude_sdk import build_sdk_server

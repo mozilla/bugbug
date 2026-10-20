@@ -11,3 +11,11 @@ mozext = /version-control-tools/hgext/mozext
 # Disable the mozext `changetracker.db` SQLite database as
 # we don't need any of the functionality it provides.
 disable_local_database = true
+# Git-style reverts ("This reverts commit <git hash>.") are resolved to the
+# reverted changesets by searching the most recent `backoutsearchlimit`
+# ancestors of the revert for a matching git_commit. The default limit of 100
+# misses about 13% of the reverts on autoland, while 2000 (about 8 days of
+# autoland commits) misses about 0.5%. The same limit applies to the search of
+# backouts in the descendants of each commit for {backedoutby}, so a higher
+# limit would make retrieving old commits much slower.
+backoutsearchlimit = 2000

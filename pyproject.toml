@@ -7,10 +7,10 @@ name = "bugbug"
 dynamic = ["version"]
 description = "ML tools for Mozilla projects"
 license = "MPL-2.0"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 authors = [{ name = "Marco Castelluccio", email = "mcastelluccio@mozilla.com" }]
 classifiers = [
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
     "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
 ]
@@ -38,7 +38,7 @@ dependencies = [
     "microannotate~=0.0.24",
     "mozci~=2.4.8",
     "numpy~=2.4.3",
-    "orjson~=3.11.7",
+    "orjson>=3.11.7,<3.14.0",
     "ortools~=9.15.6755",
     "pandas~=3.0.1",
     "psutil~=7.2.2",
@@ -61,6 +61,7 @@ dependencies = [
     "tqdm>=4.67.3,<4.71.0",
     "unidiff~=0.7.5",
     "weave>=0.53.4",
+    "whatthepatch~=1.0.7",
     "xgboost>=3.2,<3.5",
     "zstandard~=0.25.0",
 ]
@@ -70,11 +71,15 @@ nlp = [
     "spacy==3.8.16",
 ]
 nn = []
+perf-regression-predictor = [
+    "torch==2.13.0",
+    "transformers==5.15.0",
+]
 
 [dependency-groups]
 test = [
-    "coverage==7.15.4",
-    "hypothesis==6.165.2",
+    "coverage==7.16.2",
+    "hypothesis==6.168.5",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
     "pre-commit==4.6.2",
@@ -116,6 +121,7 @@ bugbug-fixed-comments = "scripts.inline_comments_data_collection:main"
 bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
 bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
 bugbug-validate-review-context = "bugbug.tools.code_review.review_context_schema:main"
+bugbug-predict-perf-regression = "scripts.perf_regression_predictor:main"
 
 [tool.hatch.version]
 path = "VERSION"
@@ -143,6 +149,14 @@ exclude = [
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 extend-exclude = ["data"]
