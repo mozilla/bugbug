@@ -36,3 +36,6 @@ FIREFOX_TOOLS = [
     "mcp__firefox__evaluate_js_shell",
     "mcp__firefox__bootstrap_firefox",
 ]
+
+# Tool for reporting problems to the Hackbot developers.
+FEEDBACK_TOOLS = ["mcp__feedback__developer_feedback"]

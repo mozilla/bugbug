@@ -74,6 +74,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         },
         source_repo=ctx.repo_path,
         fx_ctx=ctx.firefox,
+        feedback_ctx=ctx.feedback,
         bug=inputs.bug_id,
         revision_id=inputs.revision_id,
         comment=inputs.comment,

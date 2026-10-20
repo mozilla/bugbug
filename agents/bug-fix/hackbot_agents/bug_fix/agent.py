@@ -10,8 +10,9 @@ import sys
 from pathlib import Path
 from shlex import quote
 
-from agent_tools import firefox
+from agent_tools import feedback, firefox
 from agent_tools.claude_sdk import build_sdk_server
+from agent_tools.feedback import FeedbackContext
 from agent_tools.firefox import FirefoxContext
 from claude_agent_sdk import (
     AgentDefinition,
@@ -28,6 +29,7 @@ from hackbot_runtime.claude import Reporter
 from .config import (
     BUG_FIX_ACTIONS,
     BUGZILLA_READ_TOOLS,
+    FEEDBACK_TOOLS,
     FIREFOX_TOOLS,
     PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
@@ -145,6 +147,7 @@ async def run_bug_fix(
     phabricator_mcp_server: McpServerConfig,
     source_repo: Path,
     fx_ctx: FirefoxContext,
+    feedback_ctx: FeedbackContext,
     bug: int,
     comment: str | None = None,
     revision_id: int | None = None,
@@ -172,6 +175,7 @@ async def run_bug_fix(
     # hackbot.toml. Provision the config before the session can call build tools.
     _write_mozconfig(fx_ctx)
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
+    feedback_server = build_sdk_server("feedback", feedback_ctx, feedback.TOOLS)
 
     user_prompt = select_workflow(
         bug=bug,
@@ -198,6 +202,7 @@ async def run_bug_fix(
             "phabricator": phabricator_mcp_server,
             "firefox": firefox_server,
             ACTIONS_SERVER_NAME: actions_server,
+            "feedback": feedback_server,
         },
         agents={"investigator": make_investigator()},
         cwd=str(source_repo.resolve()),
@@ -214,6 +219,7 @@ async def run_bug_fix(
             *PHABRICATOR_READ_TOOLS,
             *enabled_action_tools,
             *FIREFOX_TOOLS,
+            *FEEDBACK_TOOLS,
         ],
         model=model,
         max_turns=max_turns,
