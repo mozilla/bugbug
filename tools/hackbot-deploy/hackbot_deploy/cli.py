@@ -4,14 +4,12 @@ Exit codes: 0 done (or nothing to do), 1 failed, 3 waiting for infra. A build
 pipeline should treat 3 as "skip the remaining environments", not as a failure.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import sys
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -34,11 +32,10 @@ app = typer.Typer(
 Env = StrEnum("Env", sorted(deploy.ENVIRONMENTS))
 
 AgentsDir = Annotated[Path, typer.Option(help="Where the agents live.")]
+ServicesDir = Annotated[Path, typer.Option(help="Where the services live.")]
 Name = Annotated[
     str,
-    typer.Argument(
-        help=f"An agent, or one of the services: {', '.join(deploy.SERVICES)}."
-    ),
+    typer.Argument(help="What to deploy: agents/<name> or services/<name>."),
 ]
 EnvOption = Annotated[Env, typer.Option("--env")]
 DryRun = Annotated[bool, typer.Option("--dry-run")]
@@ -66,6 +63,36 @@ def _report(result: deploy.Result) -> None:
         print(f"  {container}: {image}")
 
 
+# Marks the generated `options:` list of the prod deploy workflow's name input.
+_NAMES_MARKER = "# hackbot-deploy: names"
+
+
+def set_workflow_names(text: str, names: list[str]) -> str:
+    """Replace the options list that follows the marker comment with ``names``."""
+    lines = text.splitlines(keepends=True)
+    try:
+        start = next(i for i, line in enumerate(lines) if _NAMES_MARKER in line) + 1
+    except StopIteration:
+        raise manifest.ManifestError(
+            f"no '{_NAMES_MARKER}' line in the workflow"
+        ) from None
+    if start >= len(lines) or lines[start].strip() != "options:":
+        raise manifest.ManifestError(
+            f"'{_NAMES_MARKER}' must be followed by 'options:'"
+        )
+    indent = lines[start][: len(lines[start]) - len(lines[start].lstrip())] + "  "
+    end = start + 1
+    while end < len(lines) and lines[end].startswith(f"{indent}- "):
+        end += 1
+    return "".join(
+        lines[: start + 1] + [f"{indent}- {name}\n" for name in names] + lines[end:]
+    )
+
+
+def _read_json(path: Path | None) -> Any:
+    return json.loads(path.read_text()) if path else None
+
+
 @app.command("manifest")
 def manifest_(
     previous: Annotated[
@@ -79,12 +106,24 @@ def manifest_(
         Path | None,
         typer.Option(help="Exit 1 if this file differs from what would be generated."),
     ] = None,
+    pending: Annotated[
+        Path | None,
+        typer.Option(help="The open bot PR's agents.json, to keep images it pinned."),
+    ] = None,
+    images: Annotated[
+        Path | None,
+        typer.Option(
+            help="JSON of images just built, {agent: {container: digest}}, as resolve-images writes."
+        ),
+    ] = None,
     agents_dir: AgentsDir = Path("agents"),
 ) -> None:
     """Generate agents.json from every agent's [deploy] table."""
     result, changes = manifest.build_manifest(
         manifest.load_configs(agents_dir),
-        json.loads(previous.read_text()) if previous else None,
+        _read_json(previous),
+        pending=_read_json(pending),
+        images=_read_json(images),
     )
     text = manifest.dumps(result)
     for name, change in sorted(changes.items()):
@@ -99,6 +138,36 @@ def manifest_(
         Path(output).write_text(text)
 
 
+def deployables(agents_dir: Path, services_dir: Path) -> list[str]:
+    """Every deployable, by its path in the repository.
+
+    Agents with a [deploy] table, then services with their own cloudbuild.yaml.
+    """
+    agents = [
+        f"{deploy.AGENTS}/{name}" for name in sorted(manifest.load_configs(agents_dir))
+    ]
+    services = [
+        f"{deploy.SERVICES}/{path.parent.name}"
+        for path in sorted(services_dir.glob("*/cloudbuild.yaml"))
+    ]
+    return agents + services
+
+
+@app.command()
+def workflow_names(
+    workflow: Path,
+    agents_dir: AgentsDir = Path("agents"),
+    services_dir: ServicesDir = Path("services"),
+) -> None:
+    """Fill a workflow's name choices with every deployable agent and service."""
+    names = deployables(agents_dir, services_dir)
+    text = workflow.read_text()
+    updated = set_workflow_names(text, names)
+    if updated != text:
+        workflow.write_text(updated)
+        print(f"{workflow}: updated the deployable names", file=sys.stderr)
+
+
 @app.command()
 def info(agent: str, agents_dir: AgentsDir = Path("agents")) -> None:
     """Print an agent's config hash and shape, shell-sourceable."""
@@ -110,6 +179,41 @@ def info(agent: str, agents_dir: AgentsDir = Path("agents")) -> None:
     print(f"CONFIG_HASH={manifest.config_hash(agent, entry)}")
     print(f"RUNTIME={entry['runtime']}")
     print(f"HAS_BROKER={'true' if 'broker' in entry else 'false'}")
+
+
+@app.command()
+def resolve_images(
+    agent: str,
+    tag: Annotated[str, typer.Option(help="The tag the build pushed: its commit.")],
+    repository: Annotated[
+        str, typer.Option(help="host/project/repository the images are in.")
+    ],
+    output: Annotated[Path, typer.Option(help="Where to write the JSON.")],
+    agents_dir: AgentsDir = Path("agents"),
+) -> None:
+    """Write {agent: {container: digest}} for the images a build pushed.
+
+    Writes {} when they were built for a shape the agent no longer has.
+    """
+    config = manifest.load_config(agents_dir / agent / "hackbot.toml")
+    if config is None:
+        print(f"{agent} has no [deploy] table", file=sys.stderr)
+        raise typer.Exit(1)
+    entry = config.manifest_entry()
+    images = deploy.built_images(
+        GoogleCloud(),
+        repository,
+        agent,
+        tag,
+        manifest.config_hash(agent, entry),
+        "broker" in entry,
+    )
+    if images is None:
+        print(
+            f"{agent}'s images at {tag} were built for an older shape; nothing to pin",
+            file=sys.stderr,
+        )
+    output.write_text(json.dumps({agent: images} if images else {}, indent=2) + "\n")
 
 
 @app.command()
@@ -148,9 +252,10 @@ def deploy_(
     dry_run: DryRun = False,
 ) -> None:
     """Deploy images to an environment."""
+    kind, short = deploy.split_id(name)
     cloud = GoogleCloud()
     common = {"force": force, "dry_run": dry_run, "actor": _actor(cloud)}
-    if name in deploy.SERVICES:
+    if kind == deploy.SERVICES:
         if agent_image or broker_image:
             raise deploy.DeployError(
                 f"{name} is a service: use --image, not --agent-image/--broker-image"
@@ -158,7 +263,7 @@ def deploy_(
         if not image:
             raise deploy.DeployError(f"{name} is a service: --image is required")
         result = deploy.deploy_service(
-            cloud, name, deploy.ENVIRONMENTS[env], image, **common
+            cloud, short, deploy.ENVIRONMENTS[env], image, **common
         )
     else:
         if image:
@@ -171,7 +276,7 @@ def deploy_(
         if broker_image:
             images["broker"] = broker_image
         result = deploy.deploy_agent(
-            cloud, name, deploy.ENVIRONMENTS[env], images, **common
+            cloud, short, deploy.ENVIRONMENTS[env], images, **common
         )
     _report(result)
 
@@ -182,14 +287,15 @@ def rollback(name: Name, env: EnvOption, dry_run: DryRun = False) -> None:
 
     Takes no images: a rollback only steps back through the recorded history.
     """
+    kind, short = deploy.split_id(name)
     roll_back = (
-        deploy.deploy_service if name in deploy.SERVICES else deploy.deploy_agent
+        deploy.deploy_service if kind == deploy.SERVICES else deploy.deploy_agent
     )
     cloud = GoogleCloud()
     _report(
         roll_back(
             cloud,
-            name,
+            short,
             deploy.ENVIRONMENTS[env],
             rollback=True,
             dry_run=dry_run,
@@ -199,20 +305,42 @@ def rollback(name: Name, env: EnvOption, dry_run: DryRun = False) -> None:
 
 
 @app.command()
+def promotion(
+    name: Name,
+    source: Annotated[Env, typer.Option("--from")],
+    target: Annotated[Env, typer.Option("--to")],
+    output: Annotated[Path, typer.Option(help="Where to write the JSON.")],
+) -> None:
+    """Write what promoting would put on, or {} when there is nothing to promote."""
+    planned = deploy.promotion(
+        GoogleCloud(), name, deploy.ENVIRONMENTS[source], deploy.ENVIRONMENTS[target]
+    )
+    output.write_text(json.dumps(planned or {}, indent=2) + "\n")
+
+
+@app.command()
 def promote(
     name: Name,
     source: Annotated[Env, typer.Option("--from")],
     target: Annotated[Env, typer.Option("--to")],
+    expect: Annotated[
+        Path | None,
+        typer.Option(
+            help="JSON from promotion: deploy only if the source still runs its images."
+        ),
+    ] = None,
     dry_run: DryRun = False,
 ) -> None:
     """Deploy the images one environment runs to another."""
     cloud = GoogleCloud()
+    expected = _read_json(expect)
     _report(
         deploy.promote(
             cloud,
             name,
             deploy.ENVIRONMENTS[source],
             deploy.ENVIRONMENTS[target],
+            expect=expected["images"] if expected else None,
             dry_run=dry_run,
             actor=_actor(cloud),
         )

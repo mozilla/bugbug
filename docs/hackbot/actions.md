@@ -40,7 +40,7 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                                             |
 | `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`                                  |
 | `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
-| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields                                            |
+| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields, `ref`                                     |
 | `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
 | `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                                                   |
 | `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                           |
@@ -118,6 +118,13 @@ until it exists. So a later action can reference an earlier one's result by labe
 ```
 submit_patch(..., ref="patch")
 add_comment(text="Patch up for review: {{actions.patch.url}}")
+```
+
+A new bug works the same way, through its `bug_id`:
+
+```
+create_bug(..., ref="bug")
+add_comment(revision_id=..., text="Filed bug {{actions.bug.bug_id}}")
 ```
 
 `{{actions.<ref>.<field>}}` is substituted at apply time, recursively through params.

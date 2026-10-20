@@ -4,8 +4,6 @@ Conduit is stubbed and the filesystem is real: the point is which diff is
 asked for and where it lands, not HTTP.
 """
 
-from __future__ import annotations
-
 import pytest
 from hackbot_agents.uplift_resolve.agent import (
     build_phabricator_client,

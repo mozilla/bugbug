@@ -13,8 +13,6 @@ before the agent runs, and expanding early means the comment awaiting review in
 ``summary.json`` shows the real URLs a human can click.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 from collections.abc import Callable

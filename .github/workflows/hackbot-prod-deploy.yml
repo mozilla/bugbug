@@ -1,0 +1,285 @@
+# Deploy a Hackbot agent or service to prod: each one on its own, and only once
+# a reviewer approves it in the GitHub environment for its kind,
+# `hackbot-prod-agents` or `hackbot-prod-services`.
+#
+# Everything is named by its path in the repository (agents/<name>,
+# services/<name>), which is also what decides the kind and so the
+# environment: the deploy tool maps one to the other, and no list of names is
+# kept here.
+#
+# Every stage deploy is offered automatically. When an agent's or service's
+# Cloud Build trigger (agent-<name> / service-<name>, in
+# moz-fx-hackbot-nonprod) reports success, `plan` compares what stage runs
+# with what prod runs. If they differ, it pins stage's digests and `promote`
+# waits for approval, then puts on exactly those, unless stage has moved on in
+# the meantime (superseded: the newer build's run asks for its own approval).
+# A build that didn't change stage, such as one waiting for infra, asks
+# nothing. Each run first cancels older runs of the same name still waiting
+# for approval, so there is at most one request per agent or service, always
+# for what stage runs now.
+#
+# From the Actions tab (anyone with write access):
+#   promote   the same, for one name, still behind the approval.
+#   rollback  step prod back to its previous recorded deployment, in the
+#             `hackbot-prod-rollback` environment.
+#
+# Shape changes don't come through here: applying the infra PR's prod
+# directory moves prod to the new shape together with the images pinned for
+# it. A promote whose image needs a shape prod hasn't applied yet fails with
+# "waiting for infra" until that apply.
+#
+# `plan` runs as the read-only manifest-sync account. Deploys run as the prod
+# deploy account, which only a job in one of the three hackbot-prod-*
+# environments can get, so no deploy skips an environment's protection.
+#
+# Needs, in this repo's settings:
+#   environments `hackbot-prod-agents` and `hackbot-prod-services` (each with
+#                its required reviewers) and `hackbot-prod-rollback`, all
+#                limited to the default branch
+#   vars.HACKBOT_MANIFEST_SYNC_SA     the prod state's manifest_sync_service_account_email output
+#   vars.HACKBOT_PROD_DEPLOY_SA       the prod state's prod_deploy_service_account_email output
+# The workload identity provider is the platform's organization variable,
+# GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER, so it needs nothing here.
+name: Hackbot prod deploy
+run-name: >-
+  ${{ github.event_name == 'check_run'
+      && format('Offer {0} to prod', github.event.check_run.name)
+      || format('{0} {1} in prod{2}', inputs.action, inputs.name, inputs.dry_run && ' (dry run)' || '') }}
+
+on:
+  check_run:
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "What to deploy: agents/<name> or services/<name>"
+        required: true
+        type: choice
+        # Every agent with a [deploy] table, then the services. Filled in by the
+        # hackbot-deploy-names pre-commit hook; don't edit by hand.
+        # hackbot-deploy: names
+        options:
+          - agents/autowebcompat-diagnosis
+          - agents/autowebcompat-repro
+          - agents/bug-fix
+          - agents/build-repair
+          - agents/frontend-triage
+          - agents/test-plan-generator
+          - agents/test-repair
+          - services/hackbot-api
+          - services/hackbot-ui
+      action:
+        description: "promote: what stage runs; rollback: prod's previous deployment"
+        required: true
+        type: choice
+        options: [promote, rollback]
+        default: promote
+      dry_run:
+        description: "Only say what would happen"
+        type: boolean
+        default: false
+
+jobs:
+  plan:
+    if: >-
+      (github.event_name == 'check_run' &&
+       github.event.check_run.app.slug == 'google-cloud-build' &&
+       github.event.check_run.conclusion == 'success' &&
+       (startsWith(github.event.check_run.name, 'agent-') || startsWith(github.event.check_run.name, 'service-')) &&
+       endsWith(github.event.check_run.name, ' (moz-fx-hackbot-nonprod)'))
+      ||
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'promote' &&
+       github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # cancel older runs still waiting for approval
+      contents: read
+      id-token: write
+
+    outputs:
+      name: ${{ steps.name.outputs.name }}
+      promotion: ${{ steps.plan.outputs.promotion }}
+      environment: ${{ steps.plan.outputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Name
+        id: name
+        env:
+          CHECK_NAME: ${{ github.event.check_run.name }}
+          INPUT_NAME: ${{ inputs.name }}
+        run: |
+          # The trigger is agent-<name> or service-<name> (Cloud Build names
+          # can't hold a slash); the deployable is agents/<name> or
+          # services/<name>.
+          if [ -n "$INPUT_NAME" ]; then
+            name="$INPUT_NAME"
+          else
+            trigger="${CHECK_NAME% (*}"
+            name="${trigger%%-*}s/${trigger#*-}"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # They haven't started deploying (that only begins after approval), so
+      # cancelling can't interrupt one. Matched by the promote job's name.
+      - name: Cancel older requests for the same name
+        env:
+          NAME: ${{ steps.name.outputs.name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow hackbot-prod-deploy.yml \
+              --status waiting --json databaseId --jq '.[].databaseId' |
+            while read -r run; do
+              [ "$run" -lt "$GITHUB_RUN_ID" ] || continue
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" \
+                  --jq '.jobs[] | select(.status == "waiting") | .name' | grep -qxF "promote $NAME"; then
+                echo "Cancelling run $run: an older request to promote $NAME"
+                gh run cancel "$run" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Google Cloud Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.HACKBOT_MANIFEST_SYNC_SA }}
+
+      - name: What stage runs that prod doesn't
+        id: plan
+        env:
+          NAME: ${{ steps.name.outputs.name }}
+        run: |
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy promotion "$NAME" \
+            --from stage --to prod --output "$RUNNER_TEMP/promotion.json"
+          echo "promotion=$(jq -c . "$RUNNER_TEMP/promotion.json")" >> "$GITHUB_OUTPUT"
+          echo "environment=$(jq -r '.environment // ""' "$RUNNER_TEMP/promotion.json")" >> "$GITHUB_OUTPUT"
+          {
+            if [ "$(jq length "$RUNNER_TEMP/promotion.json")" -eq 0 ]; then
+              echo "### $NAME: nothing to promote"
+              echo "Prod already runs what stage runs."
+            else
+              echo "### Promote $NAME to prod (approval in $(jq -r .environment "$RUNNER_TEMP/promotion.json"))"
+              jq -r --arg repo "$GITHUB_REPOSITORY" '
+                "- commit: \(.revision // "unknown")",
+                "- built: \(.created // "unknown"), deployed to stage by \(.deployed_by // "unknown")",
+                (if .replaces then
+                  "- replaces: \(.replaces.revision // "unknown") (changes: https://github.com/\($repo)/compare/\(.replaces.revision)...\(.revision))"
+                 else "- first deploy to prod" end),
+                "",
+                (.images | to_entries[] | "- `\(.key)`: `\(.value)`")
+              ' "$RUNNER_TEMP/promotion.json"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  promote:
+    # The plan job of a newer run finds and cancels this one by this name.
+    name: promote ${{ needs.plan.outputs.name }}
+    needs: plan
+    if: needs.plan.outputs.promotion != '{}' && !inputs.dry_run
+    runs-on: ubuntu-latest
+    # Chosen by the deploy tool from the kind: hackbot-prod-agents or
+    # hackbot-prod-services.
+    environment: ${{ needs.plan.outputs.environment }}
+
+    # One deploy of a given agent or service at a time; different ones in
+    # parallel.
+    concurrency:
+      group: hackbot-prod-deploy-${{ needs.plan.outputs.name }}
+      cancel-in-progress: false
+
+    permissions:
+      actions: read # who approved, for deployed_by
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Google Cloud Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.HACKBOT_PROD_DEPLOY_SA }}
+
+      - name: Deploy what was approved
+        env:
+          NAME: ${{ needs.plan.outputs.name }}
+          PROMOTION: ${{ needs.plan.outputs.promotion }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$PROMOTION" > "$RUNNER_TEMP/promotion.json"
+          approver=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" \
+            --jq '[.[] | select(.state == "approved")] | last | .user.login // empty')
+          export HACKBOT_DEPLOY_ACTOR="github:${approver:-$GITHUB_ACTOR}"
+
+          set +e
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy promote "$NAME" \
+            --from stage --to prod --expect "$RUNNER_TEMP/promotion.json" 2>&1 | tee "$RUNNER_TEMP/out.txt"
+          status=${PIPESTATUS[0]}
+          set -e
+
+          {
+            echo "### promote $NAME in prod (approved by ${approver:-unknown})"
+            echo '```'
+            cat "$RUNNER_TEMP/out.txt"
+            echo '```'
+            if grep -q ": superseded" "$RUNNER_TEMP/out.txt"; then
+              echo "Stage has moved on since this was planned; the newer build's run asks for its own approval."
+            fi
+            if [ "$status" -eq 3 ]; then
+              echo "Prod hasn't applied the shape this image was built for. Apply the infra PR's prod directory first; that apply puts on the images pinned for the new shape."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+  rollback:
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    environment: hackbot-prod-rollback
+
+    concurrency:
+      group: hackbot-prod-deploy-${{ inputs.name }}
+      cancel-in-progress: false
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Google Cloud Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.HACKBOT_PROD_DEPLOY_SA }}
+
+      - name: Roll back
+        env:
+          NAME: ${{ inputs.name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(rollback "$NAME" --env prod)
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+
+          set +e
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/out.txt"
+          status=${PIPESTATUS[0]}
+          set -e
+
+          {
+            echo "### rollback $NAME in prod"
+            echo '```'
+            cat "$RUNNER_TEMP/out.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

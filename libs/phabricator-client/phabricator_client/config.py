@@ -6,8 +6,6 @@ environment parse. Use :meth:`PhabricatorSettings.from_env` for standalone,
 env-driven config (e.g. the agents' Cloud Run Jobs).
 """
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from pydantic import BaseModel, Field
