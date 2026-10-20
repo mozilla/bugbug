@@ -12,10 +12,12 @@ tables live in ``task_labels`` and ``regression_labeling``.
 
 import re
 
-# Sheriffs attribute regressions to autoland pushes, and a mozilla-central push
-# is a merge whose commit list repeats the autoland commits it merged, so
-# including it only duplicates commits. Re-add it with --repository if needed.
-REPOSITORIES = ("autoland",)
+# The only repository the pipeline handles. Sheriffs attribute regressions to
+# autoland pushes, and a mozilla-central push is a merge whose commit list
+# repeats the autoland commits it merged. Each commit therefore lands in exactly
+# one push, which the labeling relies on: a commit is a negative only when its
+# push is clean.
+REPOSITORY = "autoland"
 
 # Bump whenever any table in this file changes: they all change what a label means.
 POLICY_VERSION = 1

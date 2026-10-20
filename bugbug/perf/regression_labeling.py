@@ -86,17 +86,13 @@ def is_within_window(
 
 
 class PushIndex:
-    """Pushes keyed by id, with per-repository ordering."""
+    """Pushes keyed by id, and their ids in push order."""
 
     def __init__(self, pushes: Iterable[dict[str, Any]]) -> None:
-        self.by_id: dict[int, dict[str, Any]] = {}
-        ids: dict[str, list[int]] = collections.defaultdict(list)
-        for push in pushes:
-            self.by_id[push["push_id"]] = push
-            ids[push["repository"]].append(push["push_id"])
-        self.ids_by_repository = {
-            repo: sorted(repo_ids) for repo, repo_ids in ids.items()
+        self.by_id: dict[int, dict[str, Any]] = {
+            push["push_id"]: push for push in pushes
         }
+        self.ids = sorted(self.by_id)
 
 
 def get_landing_id(push_id: int, commit: dict[str, Any]) -> str:

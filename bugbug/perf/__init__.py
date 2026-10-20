@@ -58,7 +58,7 @@ from bugbug.perf.label_policy import (
     POLICY_VERSION,
     POSITIVE_OUTCOMES,
     REJECTED_BUG_RESOLUTIONS,
-    REPOSITORIES,
+    REPOSITORY,
 )
 from bugbug.perf.push_status import (
     generate_push_status,
@@ -135,7 +135,7 @@ __all__ = [
     "PushIndex",
     "RECORD_SEP",
     "REJECTED_BUG_RESOLUTIONS",
-    "REPOSITORIES",
+    "REPOSITORY",
     "TREEHERDER_DATA_SOURCE_ID",
     "TaskCost",
     "UNIT_SEP",

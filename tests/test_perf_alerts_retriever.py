@@ -26,7 +26,7 @@ def test_export_refreshes_the_clone_only_when_asked(monkeypatch, refresh_repo) -
 
     monkeypatch.setattr(perf, "attach_commit_patches", attach_commit_patches)
 
-    perf_alerts_retriever.Retriever(["autoland"]).export(
+    perf_alerts_retriever.Retriever().export(
         "/cache/mozilla-central",
         settle_days=21,
         negative_ratio=5,

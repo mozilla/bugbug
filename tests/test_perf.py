@@ -180,6 +180,32 @@ def test_merge_alerts_keeps_history_and_labels() -> None:
     assert merged[2]["task_labels"] == []
 
 
+def test_archive_readers_skip_other_repositories() -> None:
+    # Snapshots retrieved before the pipeline became autoland-only can hold
+    # mozilla-central rows; a merge push would list autoland culprits again.
+    db.write(
+        perf.PERF_ALERTS_DB,
+        [_alert(alert_id=1), _alert(alert_id=2, repository="mozilla-central")],
+    )
+    db.write(
+        perf.PERF_PUSHES_DB,
+        [
+            {"push_id": 1, "repository": "autoland"},
+            {"push_id": 2, "repository": "mozilla-central"},
+        ],
+    )
+    db.write(
+        perf.PERF_TASK_COSTS_DB,
+        [
+            {"task_id": "A", "project": "autoland"},
+            {"task_id": "B", "project": "mozilla-central"},
+        ],
+    )
+    assert [a["alert_id"] for a in perf.get_perf_alerts()] == [1]
+    assert [p["push_id"] for p in perf.get_perf_pushes()] == [1]
+    assert [c["task_id"] for c in perf.get_perf_task_costs()] == ["A"]
+
+
 def test_alert_fields_are_derived_on_read() -> None:
     # Stored alerts keep source data only.
     alert = _alert(task_labels="test-linux1804-64-shippable/opt-talos-g1")
@@ -231,11 +257,11 @@ def test_parse_push_row() -> None:
 
 def test_costs_query_and_normalization() -> None:
     query = perf.build_task_costs_query(
-        ("autoland",), datetime(2026, 9, 1).date(), datetime(2026, 9, 3).date()
+        datetime(2026, 9, 1).date(), datetime(2026, 9, 3).date()
     )
     assert 'submission_date >= "2026-09-01"' in query
     assert 'submission_date < "2026-09-03"' in query
-    assert "tags.project IN ('autoland')" in query
+    assert "tags.project = 'autoland'" in query
 
     cost = perf.normalize_cost_row(
         {
@@ -354,19 +380,13 @@ def test_push_cost_summary() -> None:
 
 def test_sql_queries_are_parameterized() -> None:
     query = perf.build_alerts_query(
-        ("autoland", "mozilla-central"),  # explicit list, independent of the default
-        datetime(2026, 1, 2).date(),
-        datetime(2026, 2, 1).date(),
+        datetime(2026, 1, 2).date(), datetime(2026, 2, 1).date()
     )
-    assert "IN ('autoland', 'mozilla-central')" in query
+    assert "repo.name = 'autoland'" in query
     assert "s.created >= '2026-01-02'" in query
     assert "s.created < '2026-02-01'" in query
-    with pytest.raises(ValueError):
-        perf.build_alerts_query(
-            ("autoland'; DROP TABLE push; --",),
-            datetime(2026, 1, 2).date(),
-            datetime(2026, 2, 1).date(),
-        )
+    pushes = perf.build_pushes_query(datetime(2026, 1, 2), datetime(2026, 1, 3))
+    assert "repo.name = 'autoland'" in pushes
 
 
 def _alert(**overrides):
@@ -405,10 +425,10 @@ def _alert(**overrides):
     return perf.normalize_alert_row(alert)
 
 
-def _push(push_id, commits, jobs=(), repository="autoland", time="2026-05-30T00:00:00"):
+def _push(push_id, commits, jobs=(), time="2026-05-30T00:00:00"):
     return {
         "push_id": push_id,
-        "repository": repository,
+        "repository": "autoland",
         "revision": commits[-1][0],
         "time": time,
         "author": "a@b.c",
@@ -907,7 +927,7 @@ def test_unlabeled_alerts_take_their_signature_label() -> None:
     ]
 
     # A pair is flagged only when every label behind it was copied.
-    pairs = list(perf.generate_scheduling_pairs(regressions, push_index, "autoland"))
+    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
     assert [
         (p["node"][0], p["test_name"], p["labels_from_signature"]) for p in pairs
     ] == [
@@ -1087,7 +1107,7 @@ def test_pairs_and_push_status_and_negatives() -> None:
     push_index = perf.PushIndex(_pushes())
     regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
 
-    pairs = list(perf.generate_scheduling_pairs(regressions, push_index, "autoland"))
+    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
     assert [(p["push_id"], p["node"][0], p["test_name"]) for p in pairs] == [
         (12, "c", "browsertime-tp6-firefox-amazon"),
         (13, "e", "talos-g1"),
@@ -1102,9 +1122,7 @@ def test_pairs_and_push_status_and_negatives() -> None:
     assert not any(p["node"] == "d" * 40 for p in pairs)
     assert pairs[1]["pinned_by"] == "single_landing"
 
-    statuses = list(
-        perf.generate_push_status(push_index, regressions, "autoland", SETTLED)
-    )
+    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
     by_id = {s["push_id"]: s for s in statuses}
     assert by_id[12]["label_state"] == "culprit" and by_id[10]["label_state"] == "clean"
     assert by_id[12]["identities_ran"] == ["browsertime-tp6-firefox-amazon", "talos-g1"]
@@ -1161,9 +1179,7 @@ def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
     regressions = list(
         perf.generate_regressions([_alert()], push_index, _bugs(), SETTLED)
     )
-    statuses = list(
-        perf.generate_push_status(push_index, regressions, "autoland", SETTLED)
-    )
+    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
     selected = perf.select_export_commits(
         regressions, statuses, negative_ratio=2, seed=1
     )
@@ -1197,43 +1213,6 @@ def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
     assert exported[-1]["commit_message"] == "Bug 3 - culprit\n\nMore text"
     assert exported[-1]["diff"].startswith("diff --git a/f b/f")
     assert exported[-1]["policy_version"] == perf.POLICY_VERSION
-
-
-def test_export_never_samples_culprits_or_duplicates() -> None:
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(
-        perf.generate_regressions([_alert()], push_index, _bugs(), SETTLED)
-    )
-    statuses = list(
-        perf.generate_push_status(push_index, regressions, "autoland", SETTLED)
-    )
-    # A merge push on another repository lists the culprit and a clean commit again.
-    merge = _push(
-        40,
-        [("c" * 40, "Bug 3 - culprit", 3, False), ("a" * 40, "Bug 1 - x", 1, False)],
-        [],
-        repository="mozilla-central",
-        time="2026-06-02T00:00:00",
-    )
-    statuses += list(
-        perf.generate_push_status(
-            perf.PushIndex([merge]), [], "mozilla-central", SETTLED
-        )
-    )
-    selected = perf.select_export_commits(
-        regressions, statuses, negative_ratio=10, seed=0
-    )
-    negatives = [r for r in selected if r["label"] == 0]
-    assert "c" * 40 not in {n["node"] for n in negatives}
-    assert len([n for n in negatives if n["node"] == "a" * 40]) == 1
-
-    db.write(
-        perf.PERF_PAIRS_DB,
-        list(perf.generate_scheduling_pairs(regressions, push_index, "autoland")),
-    )
-    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
-    rows = list(perf.iter_labeled_pairs({"talos-g1"}, repository="mozilla-central"))
-    assert all(r["node"] != "c" * 40 for r in rows)
 
 
 def test_attach_commit_patches_skips_empty_diffs(monkeypatch) -> None:
@@ -1276,13 +1255,11 @@ def test_revert_is_pinned_through_the_summary_bug() -> None:
     assert regression["pinned_by"] == "summary_bug"
     assert regression["regressed_by_agrees"] is False
 
-    pairs = list(perf.generate_scheduling_pairs([regression], push_index, "autoland"))
+    pairs = list(perf.generate_scheduling_pairs([regression], push_index))
     assert [(p["node"][0], p["backout"], p["test_name"]) for p in pairs] == [
         ("9", True, "browsertime-tp6-firefox-amazon")
     ]
-    statuses = list(
-        perf.generate_push_status(push_index, [regression], "autoland", SETTLED)
-    )
+    statuses = list(perf.generate_push_status(push_index, [regression], SETTLED))
     exported = perf.select_export_commits(
         [regression], statuses, negative_ratio=1, seed=0
     )
@@ -1315,9 +1292,7 @@ def test_labeled_window_excludes_pushes_before_the_alerts_window() -> None:
     labeled_from = datetime(2026, 5, 29, 12, tzinfo=timezone.utc)
     push_index = perf.PushIndex(_pushes())
     # Pushes 10 (May 28) and 11 (May 29 00:00) predate the alerts window.
-    statuses = list(
-        perf.generate_push_status(push_index, [], "autoland", SETTLED, labeled_from)
-    )
+    statuses = list(perf.generate_push_status(push_index, [], SETTLED, labeled_from))
     assert [(s["push_id"], s["settled"]) for s in statuses] == [
         (10, False),
         (11, False),
@@ -1334,7 +1309,7 @@ def test_labeled_window_excludes_pushes_before_the_alerts_window() -> None:
     ]
     db.write(perf.PERF_PAIRS_DB, [])
     db.write(perf.PERF_PUSH_STATUS_DB, statuses)
-    assert perf.read_push_status("autoland") == statuses
+    assert perf.read_push_status() == statuses
     negatives = {r["node"][0] for r in perf.iter_labeled_pairs({"talos-g1"})}
     assert negatives == {"c", "d", "e"}  # a, b are unlabeled; f is a backout
 
@@ -1480,7 +1455,7 @@ def test_generate_regressions_outcomes_and_label_states() -> None:
     assert by_summary[104]["outcome"] == "attributed"
     assert by_summary[104]["summary_tags"] == ["harness"]
 
-    states = perf.get_push_label_states(regressions, "autoland")
+    states = perf.get_push_label_states(regressions)
     assert states == {
         12: "culprit",
         13: "culprit",
@@ -1490,12 +1465,10 @@ def test_generate_regressions_outcomes_and_label_states() -> None:
     }
 
     # Pairs come only from positives.
-    pairs = list(perf.generate_scheduling_pairs(regressions, push_index, "autoland"))
+    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
     assert sorted({p["push_id"] for p in pairs}) == [12, 13, 14]
 
-    statuses = list(
-        perf.generate_push_status(push_index, regressions, "autoland", SETTLED)
-    )
+    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
     db.write(perf.PERF_PAIRS_DB, pairs)
     db.write(perf.PERF_PUSH_STATUS_DB, statuses)
     labeled = list(perf.iter_labeled_pairs({"talos-g1"}))
@@ -1538,7 +1511,7 @@ def test_unfetched_linked_bug_is_pending() -> None:
     assert by_summary[101]["outcome"] == "attributed"
     assert by_summary[101]["pinned_by"] == "summary_bug"
     # The pending push yields neither positives nor negatives.
-    states = perf.get_push_label_states(regressions, "autoland")
+    states = perf.get_push_label_states(regressions)
     assert states == {12: "pending", 13: "culprit"}
 
 
@@ -1630,7 +1603,7 @@ def _publish_alerts(version, records=()):
 
 @responses.activate
 def test_previous_snapshot_is_downloaded() -> None:
-    _publish_alerts(1, [{"alert_id": 7}])
+    _publish_alerts(1, [{"alert_id": 7, "repository": "autoland"}])
     assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
     assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
 
@@ -1656,7 +1629,7 @@ def test_unavailable_snapshot_is_never_started_over(version_reply) -> None:
         perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
 
     # A local copy, as in local runs and reruns, is used instead.
-    db.write(perf.PERF_ALERTS_DB, [{"alert_id": 7}])
+    db.write(perf.PERF_ALERTS_DB, [{"alert_id": 7, "repository": "autoland"}])
     assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
     assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
 

@@ -28,7 +28,7 @@ from bugbug.perf.regression_labeling import PushIndex
 
 
 def generate_scheduling_pairs(
-    regressions: Iterable[dict[str, Any]], push_index: PushIndex, repository: str
+    regressions: Iterable[dict[str, Any]], push_index: PushIndex
 ) -> Iterator[dict[str, Any]]:
     """One row per (culprit commit, test identity), merging platforms and summaries.
 
@@ -39,8 +39,6 @@ def generate_scheduling_pairs(
     """
     pairs: dict[tuple[str, str], dict[str, Any]] = {}
     for regression in regressions:
-        if regression["repository"] != repository:
-            continue
         if regression["outcome"] not in POSITIVE_OUTCOMES:
             continue
         push = push_index.by_id.get(regression["push_id"])
@@ -59,7 +57,7 @@ def generate_scheduling_pairs(
                 pair = pairs.get(key)
                 if pair is None:
                     pair = pairs[key] = {
-                        "repository": repository,
+                        "repository": push["repository"],
                         "push_id": push["push_id"],
                         "revision": push["revision"],
                         "push_time": push["time"],
@@ -97,38 +95,34 @@ def generate_scheduling_pairs(
 
 
 def iter_labeled_pairs(
-    candidates: set[str] | None = None, repository: str = "autoland"
+    candidates: set[str] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Yield positive pairs and inferred negatives at commit granularity.
 
     Negatives are every candidate identity for every commit from
-    :func:`bugbug.perf.push_status.iter_clean_commits`, except commits that are
-    positives in any repository; pending and rejected pushes yield nothing.
-    ``candidates`` defaults to every identity that ran.
+    :func:`bugbug.perf.push_status.iter_clean_commits`; culprit, pending and
+    rejected pushes yield none. Each commit lands in a single autoland push, so
+    a positive commit is never also in a clean push. ``candidates`` defaults to
+    every identity that ran.
     """
-    statuses = read_push_status(repository)
+    statuses = read_push_status()
     if candidates is None:
         candidates = {
             identity for row in statuses for identity in row["identities_ran"]
         }
 
     positives: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
-    positive_nodes: set[str] = set()
     for pair in db.read(PERF_PAIRS_DB):
-        positive_nodes.add(pair["node"])
-        if pair["repository"] == repository:
-            positives[pair["push_id"]].append(pair)
+        positives[pair["push_id"]].append(pair)
 
     for status in statuses:
         if status["push_id"] in positives:
             yield from positives[status["push_id"]]
             continue
         for _, commit in iter_clean_commits([status]):
-            if commit["node"] in positive_nodes:
-                continue
             for identity in sorted(candidates):
                 yield {
-                    "repository": repository,
+                    "repository": status["repository"],
                     "push_id": status["push_id"],
                     "revision": status["revision"],
                     "push_time": status["push_time"],

@@ -51,10 +51,7 @@ def _download(path: str) -> None:
 
 
 class Retriever:
-    """The three pipeline commands, scoped to a set of repositories."""
-
-    def __init__(self, repositories: list[str]) -> None:
-        self.repositories = repositories
+    """The three pipeline commands, over autoland (``perf.REPOSITORY``)."""
 
     def retrieve(
         self,
@@ -107,7 +104,7 @@ class Retriever:
         if perf.load_previous_snapshot(perf.PERF_ALERTS_DB):
             previous = list(perf.get_perf_alerts())
 
-        fetched = list(perf.fetch_alerts(client, self.repositories, since))
+        fetched = list(perf.fetch_alerts(client, since))
         merged = perf.merge_alerts(previous, fetched)
         logger.info(
             "Alerts snapshot: %d fetched, %d kept from the previous snapshot, %d total",
@@ -144,9 +141,7 @@ class Retriever:
                 for row in perf.get_perf_task_costs():
                     if row["submission_date"] < cutoff.isoformat():
                         yield perf.normalize_cost_row(row)
-            yield from perf.fetch_task_costs(
-                client, self.repositories, cutoff, today, window_days
-            )
+            yield from perf.fetch_task_costs(client, cutoff, today, window_days)
 
         new_path = perf.PERF_TASK_COSTS_DB.replace(".json", "_new.json")
         db.DATABASES[new_path] = db.DATABASES[perf.PERF_TASK_COSTS_DB]
@@ -186,9 +181,7 @@ class Retriever:
         # Jobs on the newest pushes are still running.
         time_to = now - timedelta(days=1)
 
-        for push in perf.fetch_pushes(
-            client, self.repositories, time_from, time_to, window_days
-        ):
+        for push in perf.fetch_pushes(client, time_from, time_to, window_days):
             pushes[push["push_id"]] = push
 
         db.write(
@@ -255,22 +248,17 @@ class Retriever:
         db.write(perf.PERF_REGRESSIONS_DB, regressions)
         zstd_compress(perf.PERF_REGRESSIONS_DB)
 
-        def pairs():
-            for repository in self.repositories:
-                yield from perf.generate_scheduling_pairs(
-                    regressions, push_index, repository
-                )
-
-        db.write(perf.PERF_PAIRS_DB, pairs())
+        db.write(
+            perf.PERF_PAIRS_DB, perf.generate_scheduling_pairs(regressions, push_index)
+        )
         zstd_compress(perf.PERF_PAIRS_DB)
 
-        def push_status():
-            for repository in self.repositories:
-                yield from perf.generate_push_status(
-                    push_index, regressions, repository, settle_before, labeled_from
-                )
-
-        db.write(perf.PERF_PUSH_STATUS_DB, push_status())
+        db.write(
+            perf.PERF_PUSH_STATUS_DB,
+            perf.generate_push_status(
+                push_index, regressions, settle_before, labeled_from
+            ),
+        )
         zstd_compress(perf.PERF_PUSH_STATUS_DB)
         logger.info(
             "Wrote %d regressions, %d pairs, %d push status rows",
@@ -406,12 +394,6 @@ def _add_window_arguments(parser: argparse.ArgumentParser) -> None:
 def main() -> None:
     """Parse the command line and dispatch to the matching ``Retriever`` command."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--repository",
-        action="append",
-        dest="repositories",
-        help="Repository to consider (repeatable). Defaults to autoland and mozilla-central.",
-    )
     subparsers = parser.add_subparsers(dest="op", required=True)
 
     retrieve = subparsers.add_parser(
@@ -500,7 +482,7 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    retriever = Retriever(args.repositories or list(perf.REPOSITORIES))
+    retriever = Retriever()
 
     if args.op == "retrieve":
         retriever.retrieve(

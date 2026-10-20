@@ -49,9 +49,7 @@ def get_push_commits(push: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def get_push_label_states(
-    regressions: Iterable[dict[str, Any]], repository: str
-) -> dict[int, str]:
+def get_push_label_states(regressions: Iterable[dict[str, Any]]) -> dict[int, str]:
     """Classify every push that has a regression: culprit, pending or rejected.
 
     A push with at least one positive regression is a culprit. Otherwise it is
@@ -61,8 +59,6 @@ def get_push_label_states(
     rank = {"rejected": 0, "pending": 1, "culprit": 2}
     states: dict[int, str] = {}
     for regression in regressions:
-        if regression["repository"] != repository:
-            continue
         if regression["outcome"] in POSITIVE_OUTCOMES:
             state = "culprit"
         elif regression["outcome"] == "pending":
@@ -90,7 +86,6 @@ def is_within_labeled_window(
 def generate_push_status(
     push_index: PushIndex,
     regressions: Iterable[dict[str, Any]],
-    repository: str,
     settle_before: datetime,
     labeled_from: datetime | None = None,
 ) -> Iterator[dict[str, Any]]:
@@ -101,12 +96,12 @@ def generate_push_status(
     their non-backout commits. ``settled`` is false for pushes older than the
     alerts window, whose alerts are not in the snapshot.
     """
-    states = get_push_label_states(regressions, repository)
-    for push_id in push_index.ids_by_repository.get(repository, []):
+    states = get_push_label_states(regressions)
+    for push_id in push_index.ids:
         push = push_index.by_id[push_id]
         labels = get_ran_perf_labels(push)
         yield {
-            "repository": repository,
+            "repository": push["repository"],
             "push_id": push_id,
             "revision": push["revision"],
             "push_time": push["time"],
@@ -123,13 +118,9 @@ def generate_push_status(
         }
 
 
-def read_push_status(repository: str | None = None) -> list[dict[str, Any]]:
-    """Load the stored push status rows, optionally for one repository."""
-    return [
-        row
-        for row in db.read(PERF_PUSH_STATUS_DB)
-        if repository is None or row["repository"] == repository
-    ]
+def read_push_status() -> list[dict[str, Any]]:
+    """Load the stored push status rows."""
+    return list(db.read(PERF_PUSH_STATUS_DB))
 
 
 def iter_clean_commits(

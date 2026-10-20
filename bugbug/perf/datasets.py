@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 import requests
 
 from bugbug import db, utils
+from bugbug.perf.label_policy import REPOSITORY
 
 logger = logging.getLogger(__name__)
 
@@ -146,12 +147,23 @@ def load_previous_snapshot(path: str) -> bool:
     return unavailable(f"Could not download the published {name}")
 
 
+# The archive readers skip rows of other repositories, which snapshots
+# retrieved before the pipeline became autoland-only can still hold. Labeling
+# relies on each commit landing in a single push, and a mozilla-central merge
+# push would list autoland culprits again as clean commits. The next retrieval
+# drops those rows from the archives.
+
+
 def get_perf_alerts() -> Iterator[dict[str, Any]]:
-    yield from db.read(PERF_ALERTS_DB)
+    for alert in db.read(PERF_ALERTS_DB):
+        if alert["repository"] == REPOSITORY:
+            yield alert
 
 
 def get_perf_pushes() -> Iterator[dict[str, Any]]:
-    yield from db.read(PERF_PUSHES_DB)
+    for push in db.read(PERF_PUSHES_DB):
+        if push["repository"] == REPOSITORY:
+            yield push
 
 
 def get_perf_alert_bugs() -> Iterator[dict[str, Any]]:
@@ -159,7 +171,9 @@ def get_perf_alert_bugs() -> Iterator[dict[str, Any]]:
 
 
 def get_perf_task_costs() -> Iterator[dict[str, Any]]:
-    yield from db.read(PERF_TASK_COSTS_DB)
+    for row in db.read(PERF_TASK_COSTS_DB):
+        if row["project"] == REPOSITORY:
+            yield row
 
 
 def get_perf_regressions() -> Iterator[dict[str, Any]]:

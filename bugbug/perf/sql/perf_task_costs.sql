@@ -9,7 +9,7 @@
 -- Columns (one row per perf task):
 --   task_id          text    Taskcluster task id; joins to task_ids in the alerts and pushes queries
 --   label            text    task label, e.g. test-linux2404-64-shippable/opt-talos-g1
---   project          text    autoland or mozilla-central
+--   project          text    always autoland (REPOSITORY in label_policy.py)
 --   test_platform    text?   taskgraph tag, e.g. linux2404-64-shippable/opt
 --   test_suite       text?   taskgraph tag, e.g. talos, raptor, awsy
 --   task_queue_id    text    worker pool, e.g. releng-hardware/gecko-t-linux-talos-2404
@@ -31,7 +31,7 @@ WITH perf_tasks AS (
   FROM `moz-fx-data-shared-prod.fxci.tasks`
   WHERE submission_date >= "{date_from}"
     AND submission_date < "{date_to}"
-    AND tags.project IN ({repositories})
+    AND tags.project = '{repository}'
     AND (
       tags.label LIKE "%-browsertime-%"
       OR tags.label LIKE "%-talos-%"

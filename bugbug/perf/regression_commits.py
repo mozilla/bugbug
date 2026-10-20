@@ -64,9 +64,9 @@ def select_export_commits(
     come from the push status rows. Negatives are drawn from
     :func:`bugbug.perf.push_status.iter_clean_commits`, ``negative_ratio`` times the
     number of positives, using ``seed`` over a sorted candidate list so the
-    sample does not depend on file order. A commit that is a culprit of any
-    regression is never a negative, and a commit listed by several pushes,
-    as merges do, is a candidate once.
+    sample does not depend on file order. Each commit lands in a single
+    autoland push, and only clean pushes give candidates, so a commit of a
+    culprit, pending or rejected push is never a negative.
     """
     statuses = list(statuses)
     regressions = list(regressions)
@@ -98,18 +98,9 @@ def select_export_commits(
                 }
             record["summary_ids"].append(regression["summary_id"])
 
-    excluded = set(positives) | {
-        node for regression in regressions for node in regression["culprit_commits"]
-    }
-    seen: set[str] = set()
-    candidates = []
-    for status, commit in sorted(
+    candidates = sorted(
         iter_clean_commits(statuses), key=lambda sc: (sc[0]["push_time"], sc[1]["node"])
-    ):
-        if commit["node"] in excluded or commit["node"] in seen:
-            continue
-        seen.add(commit["node"])
-        candidates.append((status, commit))
+    )
     rng = random.Random(seed)
     sample_size = min(len(candidates), int(len(positives) * negative_ratio))
     negatives = [

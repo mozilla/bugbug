@@ -40,11 +40,12 @@ both, `push_status` builds on `regression_labeling`, and `selection_pairs` and
 | Bugzilla                            | REST API, optional token          | The regression bug of each summary and the canonical bugs its duplicates point at, with `regressed_by` to pin the culprit commit and the resolution to decide the outcome |
 | Mercurial clone (`mozilla-central`) | `hg export`                       | Commit messages and diffs for the regression predictor dataset                                                                                                            |
 
-Only autoland is retrieved by default (`REPOSITORIES` in `label_policy.py`,
-overridable with `--repository`). Sheriffs attribute regressions to autoland
-pushes, and a mozilla-central push is a merge whose commit list repeats every
-autoland commit it merged, so including it produced no positives and turned
-culprit commits into negatives through their merge push.
+The pipeline only handles autoland (`REPOSITORY` in `label_policy.py`).
+Sheriffs attribute regressions to autoland pushes, and a mozilla-central push
+is a merge whose commit list repeats every autoland commit it merged, so
+including it produced no positives and turned culprit commits into negatives
+through their merge push. With autoland alone, each commit lands in exactly one
+push, which the labeling relies on.
 
 The Redash key is read from `REDASH_API_KEY`, or from the `REDASH_API_KEY`
 entry of the Taskcluster secret when running in the pipeline. An optional
@@ -206,7 +207,7 @@ so edits to those tables reach archived alerts too.
 | `original_push_id`, `original_prev_push_id`        | int             | the same pair as first detected, before any sheriff edit                                                                     |
 | `revision`, `push_time`                            | str, ts         | culprit push as changeset hash and timestamp                                                                                 |
 | `prev_push_revision`, `prev_push_time`             | str?, ts?       | previous push; null for a series' first datapoint                                                                            |
-| `repository`                                       | str             | `autoland` (see `--repository`)                                                                                              |
+| `repository`                                       | str             | always `autoland`                                                                                                            |
 | `framework`                                        | str             | `browsertime`, `talos`, `awsy`, `mozperftest`, `build_metrics`, ...                                                          |
 | `signature_id`, `signature_hash`                   | int, str        | Perfherder series id and its stable identity hash                                                                            |
 | `suite`, `test`                                    | str             | e.g. `amazon` and `fcp`; `test` is empty for a suite summary                                                                 |
@@ -226,7 +227,7 @@ so edits to those tables reach archived alerts too.
 | Field                | Type | Meaning                                                                                                       |
 | -------------------- | ---- | ------------------------------------------------------------------------------------------------------------- |
 | `push_id`            | int  | Treeherder push id                                                                                            |
-| `repository`         | str  | `autoland` (see `--repository`)                                                                               |
+| `repository`         | str  | always `autoland`                                                                                             |
 | `revision`           | str  | head changeset hash                                                                                           |
 | `time`               | ts   | when the push landed                                                                                          |
 | `author`             | str? | who pushed                                                                                                    |
@@ -266,7 +267,7 @@ reading.
 | ----------------- | ------ | -------------------------------------------------------------------------------------------------------- |
 | `task_id`         | str    | Taskcluster task id; joins to `task_ids` in the alerts and to `perf_jobs[].runs[].task_id` in the pushes |
 | `label`           | str    | task label, e.g. `test-linux2404-64-shippable/opt-talos-g1`                                              |
-| `project`         | str    | `autoland` (see `--repository`)                                                                          |
+| `project`         | str    | always `autoland`                                                                                        |
 | `task_queue_id`   | str    | worker pool, e.g. `releng-hardware/gecko-t-linux-talos-2404`; also names the machine type                |
 | `submission_date` | str    | day the task was created, `YYYY-MM-DD`                                                                   |
 | `runs`            | int?   | runs that started and finished, retries included                                                         |
@@ -420,8 +421,8 @@ record as `policy_version`. Bump it when they change.
   is clean for every sheriffed test, because the backstop runs every
   performance test and any regression would have been detected and attributed.
   This inference only holds while the backstop keeps running the full
-  performance suite. A commit that is a culprit anywhere is never a negative,
-  even when another push, such as a merge, lists it again.
+  performance suite. Each commit lands in exactly one autoland push, so a
+  commit of a culprit, pending or rejected push is never a negative.
 
 Task labels are normalized by dropping the `-qr` platform suffix and folding
 retired platforms into their successors through `PLATFORM_RENAMES`.
@@ -551,7 +552,7 @@ for regression in perf.get_perf_regressions():
 
 db.download(perf.PERF_PAIRS_DB)
 db.download(perf.PERF_PUSH_STATUS_DB)
-for pair in perf.iter_labeled_pairs(repository="autoland"):
+for pair in perf.iter_labeled_pairs():
     # Positives carry family, category and platforms; negatives are inferred.
     print(pair["push_id"], pair["node"], pair["landing_id"], pair["test_name"], pair["label"])
 

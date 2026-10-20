@@ -12,6 +12,7 @@ from importlib import resources
 from typing import Any, Iterable, Iterator
 
 from bugbug import utils
+from bugbug.perf.label_policy import REPOSITORY
 from bugbug.redash import RedashClient
 from bugbug.utils import utcnow
 
@@ -26,7 +27,6 @@ UNIT_SEP = "\x1f"
 
 BUG_RE = re.compile(r"\b[Bb]ug\s+(\d+)")
 BACKOUT_RE = re.compile(r"^\s*(backed\s*out|backout|revert)", re.IGNORECASE)
-SAFE_SQL_VALUE_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def load_sql_template(name: str) -> str:
@@ -36,48 +36,32 @@ def load_sql_template(name: str) -> str:
     )
 
 
-def _sql_string_list(values: Iterable[str]) -> str:
-    """Render values as a quoted SQL ``IN`` list, refusing anything but plain names.
+def build_alerts_query(created_from: date, created_to: date) -> str:
+    """SQL for alerts of summaries created in ``[created_from, created_to)``.
 
-    Templates are filled with ``str.format``, so every value that reaches the
-    SQL is checked against ``SAFE_SQL_VALUE_RE`` to rule out injection.
+    The templates are filled with ``str.format``, which is safe because every
+    value is a constant or a formatted date.
     """
-    quoted = []
-    for value in values:
-        if not SAFE_SQL_VALUE_RE.match(value):
-            raise ValueError(f"Unsafe SQL value: {value!r}")
-        quoted.append(f"'{value}'")
-    return ", ".join(quoted)
-
-
-def build_alerts_query(
-    repositories: Iterable[str], created_from: date, created_to: date
-) -> str:
-    """SQL for alerts of summaries created in ``[created_from, created_to)``."""
     return load_sql_template("perf_alerts").format(
-        repositories=_sql_string_list(repositories),
+        repository=REPOSITORY,
         created_from=created_from.isoformat(),
         created_to=created_to.isoformat(),
     )
 
 
-def build_pushes_query(
-    repositories: Iterable[str], time_from: datetime, time_to: datetime
-) -> str:
+def build_pushes_query(time_from: datetime, time_to: datetime) -> str:
     """SQL for pushes, their commits and perf jobs, pushed in ``[time_from, time_to)``."""
     return load_sql_template("perf_pushes").format(
-        repositories=_sql_string_list(repositories),
+        repository=REPOSITORY,
         time_from=time_from.strftime("%Y-%m-%d %H:%M:%S"),
         time_to=time_to.strftime("%Y-%m-%d %H:%M:%S"),
     )
 
 
-def build_task_costs_query(
-    repositories: Iterable[str], date_from: date, date_to: date
-) -> str:
+def build_task_costs_query(date_from: date, date_to: date) -> str:
     """BigQuery SQL for perf tasks submitted in ``[date_from, date_to)``."""
     return load_sql_template("perf_task_costs").format(
-        repositories=_sql_string_list(repositories),
+        repository=REPOSITORY,
         date_from=date_from.isoformat(),
         date_to=date_to.isoformat(),
     )
@@ -161,24 +145,20 @@ def parse_push_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def fetch_alerts(
-    client: RedashClient,
-    repositories: Iterable[str],
-    created_from: date,
-    window_days: int = 30,
+    client: RedashClient, created_from: date, window_days: int = 30
 ) -> Iterator[dict[str, Any]]:
     """Yield normalized alert rows from ``created_from`` to today.
 
     The range is queried in ``window_days`` slices so no single Redash result
     grows large.
     """
-    repositories = tuple(repositories)
     created_to = utcnow().date() + timedelta(days=1)
     window_start = created_from
     while window_start < created_to:
         window_end = min(window_start + timedelta(days=window_days), created_to)
         rows = client.execute(
             TREEHERDER_DATA_SOURCE_ID,
-            build_alerts_query(repositories, window_start, window_end),
+            build_alerts_query(window_start, window_end),
         )
         logger.info(
             "Retrieved %d alert rows created between %s and %s",
@@ -216,19 +196,17 @@ def merge_alerts(
 
 def fetch_pushes(
     client: RedashClient,
-    repositories: Iterable[str],
     time_from: datetime,
     time_to: datetime,
     window_days: int = 3,
 ) -> Iterator[dict[str, Any]]:
     """Yield parsed push records for ``[time_from, time_to)`` in ``window_days`` slices."""
-    repositories = tuple(repositories)
     window_start = time_from
     while window_start < time_to:
         window_end = min(window_start + timedelta(days=window_days), time_to)
         rows = client.execute(
             TREEHERDER_DATA_SOURCE_ID,
-            build_pushes_query(repositories, window_start, window_end),
+            build_pushes_query(window_start, window_end),
         )
         logger.info(
             "Retrieved %d pushes between %s and %s", len(rows), window_start, window_end
@@ -259,19 +237,17 @@ def normalize_cost_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def fetch_task_costs(
     client: RedashClient,
-    repositories: Iterable[str],
     date_from: date,
     date_to: date,
     window_days: int = 2,
 ) -> Iterator[dict[str, Any]]:
     """Yield perf task cost rows for ``[date_from, date_to)`` in ``window_days`` slices."""
-    repositories = tuple(repositories)
     window_start = date_from
     while window_start < date_to:
         window_end = min(window_start + timedelta(days=window_days), date_to)
         rows = client.execute(
             BIGQUERY_DATA_SOURCE_ID,
-            build_task_costs_query(repositories, window_start, window_end),
+            build_task_costs_query(window_start, window_end),
         )
         logger.info(
             "Retrieved %d perf task cost rows between %s and %s",

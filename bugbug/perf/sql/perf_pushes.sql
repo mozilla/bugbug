@@ -6,7 +6,7 @@
 --
 -- Columns (one row per push):
 --   push_id       int    Treeherder push id, global across repositories
---   repository    text   autoland or mozilla-central
+--   repository    text   always autoland (REPOSITORY in label_policy.py)
 --   revision      text   head changeset hash of the push
 --   push_time     ts     when the push landed
 --   author        text   who pushed
@@ -58,7 +58,7 @@ SELECT
   ) AS perf_jobs
 FROM push p
 JOIN repository repo ON repo.id = p.repository_id
-WHERE repo.name IN ({repositories})
+WHERE repo.name = '{repository}'
   AND p.time >= '{time_from}'
   AND p.time < '{time_to}'
 ORDER BY p.id

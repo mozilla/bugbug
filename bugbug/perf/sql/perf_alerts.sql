@@ -40,7 +40,7 @@
 --   prev_push_revision,       text,ts  previous push as changeset hash and timestamp (null for a first datapoint)
 --   prev_push_time
 --   Series
---   repository                text     autoland or mozilla-central
+--   repository                text     always autoland (REPOSITORY in label_policy.py)
 --   framework                 text     browsertime, talos, awsy, mozperftest, build_metrics, ...
 --   signature_id              int      Perfherder series id
 --   signature_hash            text     stable hash of the series identity
@@ -138,7 +138,7 @@ JOIN push ON push.id = s.push_id
 LEFT JOIN push prev_push ON prev_push.id = s.prev_push_id
 JOIN performance_signature sig ON sig.id = a.series_signature_id
 JOIN machine_platform mp ON mp.id = sig.platform_id
-WHERE repo.name IN ({repositories})
+WHERE repo.name = '{repository}'
   AND s.created >= '{created_from}'
   AND s.created < '{created_to}'
 ORDER BY s.id, a.id
