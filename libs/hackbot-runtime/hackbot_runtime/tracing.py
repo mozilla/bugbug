@@ -4,7 +4,7 @@
 runtime before an agent's ``main()`` runs captures every query, model response,
 and tool call as a trace with no per-agent instrumentation. It authenticates
 either from ``WANDB_API_KEY`` (local/dev) or, in deployment, from the short-lived
-identity token that :mod:`hackbot_runtime.wandb_wif` writes -- so the agent
+identity token that :mod:`hackbot_runtime.wif` writes -- so the agent
 container needs no long-lived W&B credential. Tracing is opt-in: it activates
 only when one of those is present, and never fails the run if Weave can't start.
 
@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 
-from hackbot_runtime import wandb_wif
+from hackbot_runtime import wif
 
 if TYPE_CHECKING:
     from opentelemetry.context import Context
@@ -58,10 +58,11 @@ def _init_weave() -> bool:
     """Initialize Weave when credentials are available; return whether enabled.
 
     Credentials come from ``WANDB_API_KEY`` (local) or the identity token file set
-    by :mod:`wandb_wif` (deployment via federation). No-op when neither is present.
+    by :mod:`wif` (deployment via federation). No-op when neither is present.
     """
     if not (
-        os.environ.get("WANDB_API_KEY") or os.environ.get(wandb_wif.TOKEN_FILE_ENV)
+        os.environ.get("WANDB_API_KEY")
+        or os.environ.get(wif.WandbWifSettings.token_file_env)
     ):
         return False
 
