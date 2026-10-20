@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from hackbot_runtime import revision
+from hackbot_runtime.actions import ActionsRecorder, phabricator
 from phabricator_client import UnresolvedCommitError
 from phabricator_client import client as client_module
 
@@ -30,6 +31,7 @@ class _FakeCtx:
         self._repo = repo
         self.prepared_ref = None
         self.rebased_base = False
+        self.actions = ActionsRecorder()
 
     async def prepare_repo(
         self, ref: str | None = None, depth: int | None = None
@@ -387,6 +389,29 @@ async def test_each_ancestor_gets_its_own_commit(monkeypatch, tmp_path):
     ]
     # And each says what it is, so nobody mistakes it for the original commit.
     assert "Replayed by hackbot" in _git(repo, "log", "-1", "--format=%b", "HEAD")
+
+
+async def test_a_new_revision_stacks_on_the_direct_parent(monkeypatch, tmp_path):
+    repo = _repo_at_base(tmp_path)
+    revisions = _with_stack_graph(
+        {42: _revision(42), 43: _revision(43), 44: _revision(44)},
+        {42: [], 43: [42], 44: [43]},
+    )
+    _fake_conduit(
+        monkeypatch,
+        revisions,
+        raw_diffs={
+            42: _diff("base", "from D42"),
+            43: _diff("from D42", "from D43"),
+            44: _diff("from D43", "from D44"),
+        },
+    )
+    ctx = _FakeCtx(repo)
+
+    await revision.checkout_revision(ctx, 44, BROKER)
+    await phabricator.submit_patch(ctx.actions, bug_id=1, title="Fix", reasoning="r")
+
+    assert ctx.actions.actions[0]["params"]["parent_revision_id"] == 43
 
 
 async def test_ancestor_commits_keep_their_original_author(monkeypatch, tmp_path):
