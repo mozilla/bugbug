@@ -138,15 +138,20 @@ def select_export_commits(
 def assign_train_test_splits(
     records: list[dict[str, Any]], test_fraction: float
 ) -> None:
-    """Mark the newest ``test_fraction`` of records, by push date, as ``test``.
+    """Mark roughly the newest ``test_fraction`` of records, by push date, as ``test``.
 
     A time split mirrors production, where the model scores pushes newer than
-    anything it was trained on.
+    anything it was trained on. The boundary is a push time, not a record
+    count: every record pushed at or after the push holding the cutoff record
+    is ``test``. No push, and so no landing, has commits on both sides, and the
+    test share rounds up to whole pushes.
     """
     records.sort(key=lambda record: (record["pushdate"], record["node"]))
     cutoff = int(len(records) * (1 - test_fraction))
-    for i, record in enumerate(records):
-        record["split"] = "train" if i < cutoff else "test"
+    boundary = records[cutoff]["pushdate"] if cutoff < len(records) else None
+    for record in records:
+        is_test = boundary is not None and record["pushdate"] >= boundary
+        record["split"] = "test" if is_test else "train"
 
 
 def attach_commit_patches(

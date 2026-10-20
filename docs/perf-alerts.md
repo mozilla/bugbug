@@ -363,7 +363,7 @@ are aggregated to the push by taking the maximum per test.
 | `label`                                 | int            | 1 for culprit commits, 0 for sampled clean commits                                          |
 | `pinned_by`                             | str?           | as in `perf_regressions.json`; null for negatives and unpinned positives                    |
 | `summary_ids`                           | list[int]      | summaries that named this commit; empty for negatives                                       |
-| `split`                                 | str            | `train` or `test`, the newest tenth by push date                                            |
+| `split`                                 | str            | `train` or `test`, about the newest tenth, cut at a push time so no push is in both         |
 | `commit_message`                        | str            | full message from `hg export`, header lines removed                                         |
 | `diff`                                  | str            | the git-style diff from `hg export`                                                         |
 | `policy_version`                        | int            | rules version                                                                               |

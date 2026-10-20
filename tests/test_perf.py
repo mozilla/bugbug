@@ -1130,6 +1130,32 @@ def test_pairs_and_push_status_and_negatives() -> None:
     assert all("landing_id" in r and "push_id" in r for r in rows)
 
 
+def test_train_test_split_never_divides_a_push() -> None:
+    def records():
+        pushes = [("t1", 1), ("t2", 1), ("t3", 3), ("t4", 1)]
+        return [
+            {"pushdate": f"2026-06-0{i}T00:00:00", "node": f"{push}-{n}"}
+            for i, (push, size) in enumerate(pushes, start=1)
+            for n in range(size)
+        ]
+
+    # A 30% cutoff by count lands inside push t3; the whole push goes to test.
+    selected = records()
+    perf.assign_train_test_splits(selected, test_fraction=0.3)
+    assert [(r["node"], r["split"]) for r in selected] == [
+        ("t1-0", "train"),
+        ("t2-0", "train"),
+        ("t3-0", "test"),
+        ("t3-1", "test"),
+        ("t3-2", "test"),
+        ("t4-0", "test"),
+    ]
+
+    selected = records()
+    perf.assign_train_test_splits(selected, test_fraction=0)
+    assert {r["split"] for r in selected} == {"train"}
+
+
 def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
     push_index = perf.PushIndex(_pushes())
     regressions = list(
