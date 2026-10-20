@@ -18,8 +18,6 @@ may need to act on today -- but only one the run is confident about, on the same
 threshold that decides whether the comment mentions severity at all.
 """
 
-from __future__ import annotations
-
 import logging
 
 from hackbot_runtime.actions.recorder import ActionsRecorder

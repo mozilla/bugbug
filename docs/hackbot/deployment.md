@@ -85,8 +85,9 @@ Two things those files do not tell you:
 - **An agent container's env arrives from three places.** Per-execution overrides from the
   API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
-  `WEAVE_PROJECT`); and local-only fallbacks (`ANTHROPIC_API_KEY`, `WANDB_API_KEY`,
-  `ARTIFACTS_DIR`). Only the first varies per run.
+  `OPENAI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`); and local-only fallbacks
+  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`). Only the first
+  varies per run.
 
 The listener also honours `DRY_RUN=true`, which logs intended calls without POSTing them.
 

@@ -8,8 +8,6 @@ LangChain later) consume :class:`ToolDefinition` without the handlers importing
 any framework. This module imports no agent framework — only pydantic.
 """
 
-from __future__ import annotations
-
 import functools
 import inspect
 from collections import defaultdict

@@ -12,8 +12,6 @@ provided. The API is asynchronous — both consumers run in an event loop, so th
 client is async-native rather than sync-with-threadpool.
 """
 
-from __future__ import annotations
-
 import json
 from typing import Any
 

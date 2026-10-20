@@ -53,3 +53,10 @@ node_modules/
 # Local env files
 .env
 /http_service/docker-compose.override.yml
+
+# Local files
+*.local.*
+
+# Claude Code local state
+.claude/worktrees/
+.claude/.cc-writes/

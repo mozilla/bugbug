@@ -8,8 +8,6 @@ rendering the streamed messages.
 Requires the ``claude-sdk`` optional extra of hackbot-runtime.
 """
 
-from __future__ import annotations
-
 import json
 import time
 from pathlib import Path

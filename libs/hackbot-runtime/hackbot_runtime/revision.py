@@ -1,7 +1,5 @@
 """Check an agent's source tree out at a Phabricator revision, stack included."""
 
-from __future__ import annotations
-
 import logging
 import subprocess
 from pathlib import Path

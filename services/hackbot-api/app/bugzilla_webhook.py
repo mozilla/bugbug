@@ -1,7 +1,5 @@
 """Detection helpers for Bugzilla webhooks: needinfo requests and perftest failures."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 

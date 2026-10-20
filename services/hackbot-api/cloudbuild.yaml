@@ -1,9 +1,10 @@
 # Build hackbot-api once and ship it to dev, then stage.
 #
 # Its trigger (webservices-infra, hackbot/tf/modules/resources/build.tf) runs
-# this on a push to main touching the API or the libraries it's built from. Prod is a separate, approved
-# promotion; nothing here reaches it. services/cloudbuild.yaml is hackbot-dev's
-# older config and goes away at cutover.
+# this on a push to the default branch touching the API or the libraries it's
+# built from. Prod is a separate, approved promotion; nothing here reaches it.
+# services/cloudbuild.yaml is hackbot-dev's older config and goes away at
+# cutover.
 #
 # Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
 # build on unknown ones, so shell variables below are written `$$name`.
@@ -52,7 +53,7 @@ steps:
       - |
         set -euo pipefail
         for env in dev stage; do
-          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy hackbot-api --env "$$env" --image "$$(cat /workspace/image.digest)"
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy services/hackbot-api --env "$$env" --image "$$(cat /workspace/image.digest)"
         done
 
   # After the deploy, so a Sentry outage can't hold one up.

@@ -5,8 +5,6 @@ each takes a :class:`FirefoxContext` (paths derived from the source repo) as its
 first parameter and returns plain data.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal

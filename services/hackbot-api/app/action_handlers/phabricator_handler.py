@@ -15,8 +15,6 @@ shared ``phabricator_client`` lib, a small ``httpx``-based client that avoids
 lightweight calls.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os
@@ -268,6 +266,12 @@ class SubmitPatchHandler:
         summary = params.get("summary")
         test_plan = params.get("test_plan")
         reviewers = params.get("reviewers") or []
+
+        if not str(bug_id).isdigit():
+            return ActionResult.failed(
+                f"bug_id {bug_id!r} is not a bug number; if it references a "
+                "bugzilla.create_bug action, that action has not been applied."
+            )
 
         try:
             raw = await ctx.download_artifact(_DIFF_ARTIFACT_KEY)
