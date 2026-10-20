@@ -19,8 +19,6 @@ patch is introduced -- headings, fencing, whether it appears at all -- is the
 recording agent's to decide.
 """
 
-from __future__ import annotations
-
 import asyncio
 import base64
 import logging

@@ -1,7 +1,5 @@
 """One Claude session per task, ending in a validated result."""
 
-from __future__ import annotations
-
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

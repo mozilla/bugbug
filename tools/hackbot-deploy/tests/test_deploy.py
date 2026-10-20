@@ -30,6 +30,7 @@ class FakeCloud:
         self.updates: list[tuple[str, dict[str, str]]] = []
         self.revisions_fail = False
         self.builds: list[dict[str, Any]] = []
+        self.tags: dict[str, str] = {}
 
     # --- setup helpers ---
     def apply(
@@ -38,16 +39,16 @@ class FakeCloud:
         agent: str,
         applied: str,
         compatible: list[str] | None = None,
+        images: dict[str, str] | None = None,
     ) -> None:
-        body = {
-            "agents": {
-                agent: {
-                    "runtime": "cloud_run_job",
-                    "applied": applied,
-                    "compatible": compatible or [applied],
-                }
-            }
+        entry: dict[str, Any] = {
+            "runtime": "cloud_run_job",
+            "applied": applied,
+            "compatible": compatible or [applied],
         }
+        if images:
+            entry["images"] = images
+        body = {"agents": {agent: entry}}
         self.put(env.registry_bucket, "applied.json", body)
 
     def job(
@@ -136,6 +137,9 @@ class FakeCloud:
             svc["latestReadyRevision"] = f"r{n}"
         self.updates.append((name, images))
 
+    def image_digest(self, image: str) -> str:
+        return self.tags[image]
+
     def get_build(self, project: str, location: str, build_id: str) -> dict[str, Any]:
         return next(b for b in self.builds if b["id"] == build_id)
 
@@ -177,7 +181,7 @@ def test_deploys_and_records(cloud: FakeCloud) -> None:
 
     assert result.action == "deployed"
     assert cloud.updates == [("hackbot-agent-bug-fix-dev", result.images)]
-    record = cloud.record(DEV, "bug-fix")
+    record = cloud.record(DEV, "agents/bug-fix")
     assert record["images"] == result.images
     assert (record["config_hash"], record["revision"], record["history"]) == (
         "h2",
@@ -190,7 +194,7 @@ def test_waits_for_infra_when_the_shape_is_not_applied(cloud: FakeCloud) -> None
     with pytest.raises(WaitingForInfra, match="h3"):
         ship(cloud, 1, config_hash="h3")
     assert cloud.updates == []
-    assert (DEV.registry_bucket, "deployments/bug-fix.json") not in cloud.objects
+    assert (DEV.registry_bucket, "deployments/agents/bug-fix.json") not in cloud.objects
 
 
 def test_waits_for_infra_when_the_agent_is_not_applied(cloud: FakeCloud) -> None:
@@ -252,7 +256,7 @@ def test_redeploying_repairs_a_job_that_drifted_from_the_record(
     job = cloud.jobs[DEV.job_name("bug-fix")]["template"]["template"]
     assert {c["image"] for c in job["containers"]} == set(result.images.values())
     # Not a new deployment: the history still steps back to 1, once.
-    history = cloud.record(DEV, "bug-fix")["history"]
+    history = cloud.record(DEV, "agents/bug-fix")["history"]
     assert [h["images"]["agent"] for h in history] == [image("bug-fix-agent", 1)]
 
 
@@ -280,8 +284,10 @@ def test_rollback_goes_back_one_deployment_at_a_time(cloud: FakeCloud) -> None:
     assert deploy_agent(cloud, "bug-fix", DEV, rollback=True).images == first
     with pytest.raises(DeployError, match="no earlier deployment"):
         deploy_agent(cloud, "bug-fix", DEV, rollback=True)
-    assert cloud.record(DEV, "bug-fix")["images"] == first
-    assert third not in [h["images"] for h in cloud.record(DEV, "bug-fix")["history"]]
+    assert cloud.record(DEV, "agents/bug-fix")["images"] == first
+    assert third not in [
+        h["images"] for h in cloud.record(DEV, "agents/bug-fix")["history"]
+    ]
 
 
 def test_rollback_keeps_earlier_deployments_of_the_same_images(
@@ -352,7 +358,7 @@ def test_dry_run_changes_nothing(cloud: FakeCloud) -> None:
     result = ship(cloud, 1, dry_run=True)
     assert result.action == "would be deployed"
     assert cloud.updates == []
-    assert (DEV.registry_bucket, "deployments/bug-fix.json") not in cloud.objects
+    assert (DEV.registry_bucket, "deployments/agents/bug-fix.json") not in cloud.objects
 
 
 def test_a_concurrent_deploy_is_detected(cloud: FakeCloud) -> None:
@@ -375,7 +381,7 @@ def test_promote_deploys_the_source_environment_images(cloud: FakeCloud) -> None
     cloud.apply(STAGE, "bug-fix", "h2")
     cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
 
-    result = promote(cloud, "bug-fix", DEV, STAGE, actor="test")
+    result = promote(cloud, "agents/bug-fix", DEV, STAGE, actor="test")
     assert result.images == images
     assert cloud.updates[-1] == ("hackbot-agent-bug-fix-stage", images)
 
@@ -385,7 +391,7 @@ def test_promote_waits_for_infra_in_the_target(cloud: FakeCloud) -> None:
     cloud.apply(STAGE, "bug-fix", "h1")
     cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h1")
     with pytest.raises(WaitingForInfra):
-        promote(cloud, "bug-fix", DEV, STAGE)
+        promote(cloud, "agents/bug-fix", DEV, STAGE)
 
 
 def test_environment_names_match_the_terraform() -> None:
@@ -427,7 +433,7 @@ def test_service_deploys_without_a_gate(services: FakeCloud) -> None:
     assert services.updates == [
         ("hackbot-api-dev", {"hackbot-api": api_image(services, 1)})
     ]
-    record = services.record(DEV, "hackbot-api")
+    record = services.record(DEV, "services/hackbot-api")
     assert (record["runtime"], record["config_hash"]) == ("cloud_run_service", None)
 
 
@@ -436,9 +442,29 @@ def test_service_refuses_tags(services: FakeCloud) -> None:
         deploy_service(services, "hackbot-api", DEV, f"{REPO}/hackbot-api:latest")
 
 
-def test_only_known_services_are_services(services: FakeCloud) -> None:
-    with pytest.raises(DeployError, match="not a service"):
-        deploy_service(services, "bug-fix", DEV, api_image(services, 1))
+def test_deployables_are_named_by_their_path() -> None:
+    assert deploy.split_id("agents/bug-fix") == ("agents", "bug-fix")
+    assert deploy.split_id("services/hackbot-api") == ("services", "hackbot-api")
+    for bad in ("bug-fix", "jobs/bug-fix", "agents/", "agents/a/b"):
+        with pytest.raises(DeployError, match="not a deployable"):
+            deploy.split_id(bad)
+
+
+def test_deployables_are_discovered(tmp_path) -> None:
+    for name, table in (
+        ("a", "[deploy]\nruntime = 'cloud_run_job'\ncpu = '1'\nmemory = '1Gi'\n"),
+        ("draft", ""),
+    ):
+        (tmp_path / "agents" / name).mkdir(parents=True)
+        (tmp_path / "agents" / name / "hackbot.toml").write_text(table)
+    for name, pipeline in (("api", True), ("listener", False)):
+        (tmp_path / "services" / name).mkdir(parents=True)
+        if pipeline:
+            (tmp_path / "services" / name / "cloudbuild.yaml").write_text("steps: []\n")
+    assert cli.deployables(tmp_path / "agents", tmp_path / "services") == [
+        "agents/a",
+        "services/api",
+    ]
 
 
 def test_a_revision_that_never_becomes_ready_fails_and_is_not_recorded(
@@ -475,7 +501,7 @@ def test_service_redeploy_repairs_drift(services: FakeCloud) -> None:
     assert deploy_service(services, "hackbot-api", DEV, ref).action == "deployed"
     svc = services.services[DEV.service_name("hackbot-api")]
     assert svc["template"]["containers"][0]["image"] == ref
-    assert services.record(DEV, "hackbot-api")["history"] == []
+    assert services.record(DEV, "services/hackbot-api")["history"] == []
 
 
 def test_service_rollback_goes_back_one_deployment_at_a_time(
@@ -512,7 +538,7 @@ def test_service_rollback_refuses_an_explicit_image(services: FakeCloud) -> None
 
 def test_promote_dispatches_services(services: FakeCloud) -> None:
     images = deploy_service(services, "hackbot-api", DEV, api_image(services, 1)).images
-    result = promote(services, "hackbot-api", DEV, STAGE, actor="test")
+    result = promote(services, "services/hackbot-api", DEV, STAGE, actor="test")
     assert result.images == images
     assert services.updates[-1] == ("hackbot-api-stage", images)
 
@@ -609,3 +635,157 @@ def test_deployed_by(
     for var, value in env.items():
         monkeypatch.setenv(var, value)
     assert cli._actor(SignedIn()) == actor  # type: ignore[arg-type]
+
+
+def test_built_images_are_pinned_by_digest() -> None:
+    fake = FakeCloud()
+    for container, n in (("agent", 1), ("broker", 2)):
+        fake.tags[f"{REPO}/bug-fix-{container}:abc"] = fake.build(
+            image(f"bug-fix-{container}", n), "h2"
+        )
+    images = deploy.built_images(fake, REPO, "bug-fix", "abc", "h2", has_broker=True)
+    assert images == {
+        "agent": image("bug-fix-agent", 1),
+        "broker": image("bug-fix-broker", 2),
+    }
+
+
+def test_images_built_for_an_older_shape_are_not_pinned() -> None:
+    fake = FakeCloud()
+    fake.tags[f"{REPO}/bug-fix-agent:abc"] = fake.build(image("bug-fix-agent", 1), "h1")
+    assert (
+        deploy.built_images(fake, REPO, "bug-fix", "abc", "h2", has_broker=False)
+        is None
+    )
+
+
+def terraform_moves_to_a_new_shape(cloud: FakeCloud, n: int) -> dict[str, str]:
+    """What an apply does: the new shape, with the images pinned for it."""
+    pinned = {
+        "agent": cloud.build(image("bug-fix-agent", n), "h3"),
+        "broker": cloud.build(image("bug-fix-broker", n), "h3"),
+    }
+    cloud.apply(DEV, "bug-fix", "h3", ["h2", "h3"], images=pinned)
+    cloud.job(DEV, "bug-fix", ["agent", "broker"], label="h3")
+    cloud.set_job_images(DEV.project_id, deploy.REGION, DEV.job_name("bug-fix"), pinned)
+    return pinned
+
+
+def test_images_terraform_put_on_are_recorded(cloud: FakeCloud) -> None:
+    ship(cloud, 1)
+    pinned = terraform_moves_to_a_new_shape(cloud, 3)
+
+    result = ship(cloud, 3, config_hash="h3")
+    assert result.action == "unchanged"
+    record = cloud.record(DEV, "agents/bug-fix")
+    assert record["images"] == pinned
+    assert record["deployed_by"] == "terraform"
+    assert [h["images"]["agent"] for h in record["history"]] == [
+        image("bug-fix-agent", 1)
+    ]
+
+
+def test_rollback_after_terraform_goes_back_to_what_ran_before(
+    cloud: FakeCloud,
+) -> None:
+    ship(cloud, 1)
+    terraform_moves_to_a_new_shape(cloud, 3)
+    result = deploy_agent(cloud, "bug-fix", DEV, rollback=True, actor="test")
+    assert result.images["agent"] == image("bug-fix-agent", 1)
+
+
+def test_a_deploy_after_terraform_keeps_its_images_in_history(cloud: FakeCloud) -> None:
+    ship(cloud, 1)
+    pinned = terraform_moves_to_a_new_shape(cloud, 3)
+    ship(cloud, 4, config_hash="h3", created="2026-10-09T11:00:00Z")
+    history = cloud.record(DEV, "agents/bug-fix")["history"]
+    assert [h["images"] for h in history][:2] == [pinned, ship_images(1)]
+
+
+def test_a_dry_run_records_nothing_terraform_did(cloud: FakeCloud) -> None:
+    ship(cloud, 1)
+    terraform_moves_to_a_new_shape(cloud, 3)
+    ship(cloud, 4, config_hash="h3", created="2026-10-09T11:00:00Z", dry_run=True)
+    assert cloud.record(DEV, "agents/bug-fix")["images"] == ship_images(1)
+
+
+def ship_images(n: int) -> dict[str, str]:
+    return {"agent": image("bug-fix-agent", n), "broker": image("bug-fix-broker", n)}
+
+
+WORKFLOW = """\
+      name:
+        type: choice
+        # hackbot-deploy: names
+        options:
+          - old-agent
+          - hackbot-api
+      action:
+        type: choice
+"""
+
+
+def test_workflow_names_replace_only_the_marked_list() -> None:
+    updated = cli.set_workflow_names(WORKFLOW, ["bug-fix", "hackbot-api"])
+    assert updated == WORKFLOW.replace("- old-agent\n", "- bug-fix\n")
+    assert cli.set_workflow_names(updated, ["bug-fix", "hackbot-api"]) == updated
+
+
+def test_workflow_names_need_the_marker() -> None:
+    with pytest.raises(Exception, match="hackbot-deploy: names"):
+        cli.set_workflow_names("options:\n  - a\n", ["b"])
+
+
+def test_promotion_says_what_would_go_on(cloud: FakeCloud) -> None:
+    cloud.apply(STAGE, "bug-fix", "h2")
+    cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
+    ship(cloud, 1)
+    promote(cloud, "agents/bug-fix", DEV, STAGE, actor="test")
+
+    assert deploy.promotion(cloud, "agents/bug-fix", DEV, STAGE) is None
+    ship(cloud, 2, created="2026-10-09T11:00:00Z")
+    planned = deploy.promotion(cloud, "agents/bug-fix", DEV, STAGE)
+    assert planned is not None
+    assert planned["images"] == ship_images(2)
+    assert planned["replaces"]["images"] == ship_images(1)
+    assert planned["kind"] == "agents"
+    assert planned["environment"] == "hackbot-prod-agents"
+
+
+def test_nothing_to_promote_from_an_undeployed_source(cloud: FakeCloud) -> None:
+    assert deploy.promotion(cloud, "agents/bug-fix", DEV, STAGE) is None
+
+
+def test_a_promotion_approved_after_the_source_moved_on_is_superseded(
+    cloud: FakeCloud,
+) -> None:
+    cloud.apply(STAGE, "bug-fix", "h2")
+    cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
+    ship(cloud, 1)
+    planned = deploy.promotion(cloud, "agents/bug-fix", DEV, STAGE)
+    ship(cloud, 2, created="2026-10-09T11:00:00Z")
+
+    result = promote(
+        cloud, "agents/bug-fix", DEV, STAGE, expect=planned["images"], actor="test"
+    )
+    assert result.action == "superseded"
+    assert (
+        STAGE.registry_bucket,
+        "deployments/agents/bug-fix.json",
+    ) not in cloud.objects
+
+    planned = deploy.promotion(cloud, "agents/bug-fix", DEV, STAGE)
+    result = promote(
+        cloud, "agents/bug-fix", DEV, STAGE, expect=planned["images"], actor="test"
+    )
+    assert result.action == "deployed"
+    assert cloud.record(STAGE, "agents/bug-fix")["images"] == ship_images(2)
+
+
+def test_a_service_promotion_waits_in_the_services_environment(
+    services: FakeCloud,
+) -> None:
+    deploy_service(services, "hackbot-api", DEV, api_image(services, 1))
+    planned = deploy.promotion(services, "services/hackbot-api", DEV, STAGE)
+    assert planned is not None
+    assert planned["environment"] == "hackbot-prod-services"

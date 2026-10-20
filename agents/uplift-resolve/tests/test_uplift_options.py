@@ -4,8 +4,6 @@ Both are pure: the options object is asserted on without running anything, and
 the result guard is fed lightweight stand-in result objects.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from types import SimpleNamespace
 

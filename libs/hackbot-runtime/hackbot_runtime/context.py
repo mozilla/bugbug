@@ -10,8 +10,6 @@ its capability declarations come from the agent's ``hackbot.toml``
 (:class:`HackbotConfig`), attached via :meth:`from_config`.
 """
 
-from __future__ import annotations
-
 import datetime
 import logging
 import os

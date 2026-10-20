@@ -1,7 +1,5 @@
 """Apply-side try-server action: push an already-built patch series to Lando."""
 
-from __future__ import annotations
-
 import json
 import logging
 from datetime import datetime, timezone
