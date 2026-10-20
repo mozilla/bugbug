@@ -42,7 +42,7 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
 | `bugzilla.create_bug`       | File a new bug                             | the new bug's fields                                            |
 | `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
-| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`                                                   |
+| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`, `title`, `summary`, `test_plan`                  |
 | `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                           |
 | `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
 | `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
