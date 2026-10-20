@@ -44,7 +44,7 @@ class Patch(ABC):
         return [self.patch_set]
 
     @property
-    def stack_base_patch(self) -> "Patch":
+    def stack_base_patch(self) -> Patch:
         """Return the patch whose base precedes the entire stack."""
         return self
 

@@ -80,7 +80,7 @@ class _RunIdSpanProcessor(SpanProcessor):
     def __init__(self, run_id: str) -> None:
         self._run_id = run_id
 
-    def on_start(self, span: "Span", parent_context: "Context | None" = None) -> None:
+    def on_start(self, span: Span, parent_context: Context | None = None) -> None:
         span.set_attribute(RUN_ID_SPAN_ATTRIBUTE, self._run_id)
 
 

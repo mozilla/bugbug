@@ -37,7 +37,7 @@ class AgentInputs(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     @model_validator(mode="after")
-    def require_subject(self) -> "AgentInputs":
+    def require_subject(self) -> AgentInputs:
         if self.bug_data is None and self.bug_id is None:
             raise ValueError("provide at least one of bug_data (BUG_DATA) or bug_id")
         return self
