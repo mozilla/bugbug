@@ -102,6 +102,13 @@ async def checkout_revision(
         log.info("D%s is stacked on %s; replaying them first", revision_id, below)
         for patch in stack.ancestors:
             _apply(repo, patch)
+        # A new revision's diff leaves out the replayed ancestors, so stack it on
+        # the direct parent or it will not apply on mozilla-central.
+        parent = stack.ancestors[-1].revision_id
+        ctx.actions.add_hook(
+            "phabricator.submit_patch",
+            lambda action: action["params"].setdefault("parent_revision_id", parent),
+        )
 
     # Whatever was seeded above is the agent's starting point, not its work.
     ctx.record_source_base()
