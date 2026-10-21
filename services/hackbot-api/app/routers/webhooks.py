@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     require_bugzilla_webhook_secret,
@@ -15,9 +16,11 @@ from app.auth import (
 from app.bugzilla_authorization import BugzillaAuthorizer
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
+from app.database.connection import get_db
 from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     detect_mention_and_revision,
+    follow_up_agent,
     triggering_transaction_phids,
 )
 from app.slack.app import build_request_handler
@@ -98,6 +101,7 @@ async def phabricator_webhook(
     phab_client: Annotated[PhabricatorClient, Depends(get_phabricator_client)],
     authorizer: Annotated[PhabricatorAuthorizer, Depends(get_phabricator_authorizer)],
     api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     payload = await request.json()
 
@@ -129,10 +133,12 @@ async def phabricator_webhook(
         log.info("Phabricator webhook ignored: no actionable @hackbot mention")
         return
 
+    agent = await follow_up_agent(db, detected.revision_id)
+
     # The anchor transaction identifies the submission, so a retried delivery
     # is answered with the run the first delivery created, on any instance.
     run = await api_client.trigger_run(
-        "bug-fix",
+        agent,
         {
             "bug_id": detected.bug_id,
             "revision_id": detected.revision_id,
@@ -149,7 +155,8 @@ async def phabricator_webhook(
         )
         return
     log.info(
-        "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention (%s)",
+        "Triggered %s run %s for D%s (bug %s) from @hackbot mention (%s)",
+        agent,
         run.run_id,
         detected.revision_id,
         detected.bug_id,
