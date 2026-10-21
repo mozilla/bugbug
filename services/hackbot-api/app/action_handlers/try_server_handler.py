@@ -62,6 +62,7 @@ def try_task_config(
     *,
     auto: bool = False,
     test_paths: dict[str, list[str]] | None = None,
+    rebuild: int | None = None,
 ) -> dict:
     """The ``try_task_config.json`` contents for one push.
 
@@ -80,6 +81,9 @@ def try_task_config(
     shape to those tests via ``MOZHARNESS_TEST_PATHS``, as ``mach try``'s path
     argument does. It is a modifier, never a selection of its own: mozharness
     only consults it for a suite that is already scheduled.
+
+    ``rebuild`` runs every selected task that many times, as ``mach try
+    --rebuild`` does.
     """
     if auto and tasks:
         raise ValueError("A try push selects tasks either automatically or by label")
@@ -117,6 +121,9 @@ def try_task_config(
             sort_keys=True,
         )
 
+    if rebuild and rebuild > 1:
+        parameters["try_task_config"]["rebuild"] = rebuild
+
     return {"version": 2, "parameters": parameters}
 
 
@@ -126,6 +133,7 @@ def try_task_config_patch(
     *,
     auto: bool = False,
     test_paths: dict[str, list[str]] | None = None,
+    rebuild: int | None = None,
 ) -> bytes:
     """A ``git format-patch`` email whose one commit adds ``try_task_config.json``.
 
@@ -134,7 +142,7 @@ def try_task_config_patch(
     """
     content = (
         json.dumps(
-            try_task_config(tasks, auto=auto, test_paths=test_paths),
+            try_task_config(tasks, auto=auto, test_paths=test_paths, rebuild=rebuild),
             indent=4,
             sort_keys=True,
         )
@@ -160,6 +168,7 @@ class PushHandler:
         tasks = params.get("tasks") or []
         auto = bool(params.get("auto"))
         test_paths = params.get("test_paths") or None
+        rebuild = params.get("rebuild") or None
         if not tasks and not auto:
             return ActionResult.failed(
                 "A try push needs a selection: either `auto` or task labels"
@@ -184,6 +193,7 @@ class PushHandler:
                             tasks,
                             auto=auto,
                             test_paths=test_paths,
+                            rebuild=rebuild,
                         )
                     ),
                 ],
@@ -208,5 +218,6 @@ class PushHandler:
                 "selection": "auto" if auto else "tasks",
                 "tasks": sorted(set(tasks)),
                 **({"test_paths": test_paths} if test_paths else {}),
+                **({"rebuild": rebuild} if rebuild else {}),
             }
         )

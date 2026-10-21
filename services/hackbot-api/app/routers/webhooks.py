@@ -13,7 +13,10 @@ from app.auth import (
     require_phabricator_signature,
 )
 from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
-from app.bugzilla_webhook import detect_needinfo_request
+from app.bugzilla_webhook import (
+    detect_needinfo_request,
+    detect_perftest_failure_comment,
+)
 from app.config import settings
 from app.phabricator_authorization import (
     AUTHORIZED_GROUP_PHID,
@@ -168,7 +171,11 @@ async def bugzilla_webhook(
     api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
     authorizer: Annotated[BugzillaAuthorizer, Depends(get_bugzilla_authorizer)],
 ) -> dict:
-    """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
+    """Trigger a run from a BMO event.
+
+    A bot-directed ``needinfo?`` change triggers a bug-fix follow-up; a robot
+    failure-count comment on a perftest bug triggers perftest-repair.
+    """
     payload = await request.json()
     if not isinstance(payload, dict):
         return {"status": "ignored", "reason": "payload is not a JSON object"}
@@ -178,7 +185,7 @@ async def bugzilla_webhook(
         bot_login=settings.bugzilla_webhook.bot_login,
     )
     if detected is None:
-        return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
+        return await _trigger_perftest_repair(payload, api_client)
 
     if not await authorizer.is_authorized(detected.user_login):
         log.info(
@@ -214,5 +221,41 @@ async def bugzilla_webhook(
         run.run_id,
         detected.bug_id,
         detected.flag_id,
+    )
+    return {"status": "triggered", "run_id": run.run_id}
+
+
+async def _trigger_perftest_repair(payload: dict, api_client: HackbotClient) -> dict:
+    """Trigger perftest-repair for a robot failure-count comment on a perftest bug.
+
+    No editbugs check: the author is always the robot. Retried deliveries carry
+    the same comment id, so they resolve to the same run.
+    """
+    detected = detect_perftest_failure_comment(payload)
+    if detected is None:
+        return {"status": "ignored", "reason": "no actionable Bugzilla event"}
+
+    run = await api_client.trigger_run(
+        "perftest-repair",
+        {"bug_id": detected.bug_id},
+        dedupe_key=f"c{detected.comment_id}",
+    )
+    if not run.is_new:
+        log.info(
+            "Duplicate Bugzilla delivery for bug %s (comment: %s) resolved to run %s",
+            detected.bug_id,
+            detected.comment_id,
+            run.run_id,
+        )
+        return {
+            "status": "ignored",
+            "reason": "duplicate delivery",
+            "run_id": run.run_id,
+        }
+    log.info(
+        "Triggered perftest-repair run %s for Bugzilla bug %s from failure comment %s",
+        run.run_id,
+        detected.bug_id,
+        detected.comment_id,
     )
     return {"status": "triggered", "run_id": run.run_id}
