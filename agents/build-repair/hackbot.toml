@@ -5,7 +5,7 @@ checkout_path = "/workspace/firefox"
 
 [firefox]
 enabled = true
-objdir = "objdir-build-repair"
+objdir = "/builds/worker/workspace/obj-build"
 
 # Infrastructure this agent runs on, applied by Terraform. Changing anything here
 # changes the agent's shape and goes through an infra PR; the image ships on
