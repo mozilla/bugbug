@@ -156,7 +156,13 @@ def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
     )
     # mach only accepts in-tree mozconfigs in automation, which then takes the
     # toolchains from MOZ_FETCHES_DIR. The agent's builds inherit this env.
-    os.environ.update(MOZ_AUTOMATION="1", MOZ_FETCHES_DIR=str(CI_FETCHES_DIR))
+    # mozharness sets UPLOAD_PATH, which goes into CI's compiler flags.
+    os.environ.update(
+        {k: env[k] for k in ("FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS") if k in env},
+        MOZ_AUTOMATION="1",
+        MOZ_FETCHES_DIR=str(CI_FETCHES_DIR),
+        UPLOAD_PATH="/builds/worker/artifacts",
+    )
     lines = [f'. "$topsrcdir/{env["MOZCONFIG"]}"']
     if env.get("USE_SCCACHE"):
         lines += [

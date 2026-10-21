@@ -11,6 +11,7 @@ FETCHES = [
 ENV = {
     "MOZCONFIG": "browser/config/mozconfigs/linux64/nightly",
     "MOZ_FETCHES": json.dumps(FETCHES),
+    "PERFHERDER_EXTRA_OPTIONS": "x11",
     "USE_SCCACHE": "1",
 }
 
@@ -48,7 +49,13 @@ def test_setup_ci_build_fetches_ci_toolchains_and_uses_ci_mozconfig(
     fetches = tmp_path / "fetches"
     fetches.mkdir()
     monkeypatch.setattr(agent, "CI_FETCHES_DIR", fetches)
-    monkeypatch.delenv("MOZ_AUTOMATION", raising=False)
+    for var in (
+        "MOZ_AUTOMATION",
+        "MOZ_FETCHES_DIR",
+        "UPLOAD_PATH",
+        "PERFHERDER_EXTRA_OPTIONS",
+    ):
+        monkeypatch.delenv(var, raising=False)
     fx_ctx = FirefoxContext.from_source_repo(src, objdir=str(tmp_path / "obj-build"))
 
     agent._setup_ci_build(fx_ctx, ENV)
@@ -64,6 +71,8 @@ def test_setup_ci_build_fetches_ci_toolchains_and_uses_ci_mozconfig(
     ]
     assert os.environ["MOZ_AUTOMATION"] == "1"
     assert os.environ["MOZ_FETCHES_DIR"] == str(fetches)
+    assert os.environ["UPLOAD_PATH"] == "/builds/worker/artifacts"
+    assert os.environ["PERFHERDER_EXTRA_OPTIONS"] == "x11"
     assert fx_ctx.mozconfig.read_text().splitlines() == [
         '. "$topsrcdir/browser/config/mozconfigs/linux64/nightly"',
         f"ac_add_options --with-ccache={fetches}/sccache/sccache",
