@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Agent settings
     todo_enabled: bool = True
 
+    # Prepend severity YAML frontmatter to inline comments. Only enable this
+    # once Phabricator can render the frontmatter.
+    severity_frontmatter_enabled: bool = False
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

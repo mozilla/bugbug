@@ -25,6 +25,7 @@ from bugbug.tools.code_review.langchain_tools import (
     search_identifier,
     search_text,
 )
+from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.code_review.review_context import (
     _merge_rules,
     external_content_manifest,
@@ -45,7 +46,15 @@ from bugbug.tools.code_review.review_context_schema import (
 from bugbug.tools.code_review.review_context_schema import (
     main as validate_review_context_main,
 )
-from bugbug.tools.code_review.utils import find_comment_scope
+from bugbug.tools.code_review.utils import (
+    convert_generated_comments_to_inline,
+    find_comment_scope,
+)
+from bugbug.tools.core.data_types import (
+    CommentCategory,
+    CommentConfidence,
+    CommentSeverity,
+)
 from bugbug.tools.core.platforms import phabricator as phab_platform
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
@@ -1766,6 +1775,9 @@ def test_assess_patch_scope_returns_at_most_one_comment():
             comment=f"Split this patch {i}",
             explanation="bundles unrelated changes",
             order=1,
+            severity=CommentSeverity.MINOR,
+            category=CommentCategory.SCOPE,
+            confidence=CommentConfidence.HIGH,
         )
         for i in range(2)
     ]
@@ -1796,6 +1808,9 @@ def test_run_appends_scope_suggestion_last():
         comment="Fix the bug",
         explanation="off-by-one",
         order=1,
+        severity=CommentSeverity.MAJOR,
+        category=CommentCategory.CORRECTNESS,
+        confidence=CommentConfidence.HIGH,
     )
     scope = GeneratedReviewComment(
         file="b/f.txt",
@@ -1803,6 +1818,9 @@ def test_run_appends_scope_suggestion_last():
         comment="Split this patch into smaller pieces",
         explanation="bundles unrelated changes",
         order=1,
+        severity=CommentSeverity.CRITICAL,
+        category=CommentCategory.CORRECTNESS,
+        confidence=CommentConfidence.HIGH,
     )
     tool = _make_scope_tool(PatchScopeResponse(comments=[scope]))
 
@@ -1831,6 +1849,45 @@ def test_run_appends_scope_suggestion_last():
     last = result.review_comments[-1]
     assert last.content == "Split this patch into smaller pieces"
     assert last.order == 2
+    assert last.severity == CommentSeverity.MINOR, (
+        "The split suggestion should always be `minor`, whatever the model chose."
+    )
+    assert last.category == CommentCategory.SCOPE, (
+        "The split suggestion should always be in the `scope` category."
+    )
+
+
+def test_system_prompt_describes_every_severity_and_category():
+    for value in [*CommentSeverity, *CommentCategory]:
+        assert f"`{value}`" in SYSTEM_PROMPT_TEMPLATE, (
+            f"The review prompt rubric should describe `{value}`."
+        )
+
+
+def test_convert_generated_comments_to_inline_keeps_severity():
+    generated = GeneratedReviewComment(
+        file="f.txt",
+        code_line=1,
+        comment="Fix the bug",
+        explanation="off-by-one",
+        order=1,
+        severity=CommentSeverity.CRITICAL,
+        category=CommentCategory.SECURITY,
+        confidence=CommentConfidence.MEDIUM,
+    )
+    patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
+
+    (inline,) = convert_generated_comments_to_inline([generated], patch.patch_set)
+
+    assert inline.severity == CommentSeverity.CRITICAL, (
+        "The severity should be copied onto the inline comment."
+    )
+    assert inline.category == CommentCategory.SECURITY, (
+        "The category should be copied onto the inline comment."
+    )
+    assert inline.confidence == CommentConfidence.MEDIUM, (
+        "The confidence should be copied onto the inline comment."
+    )
 
 
 # ---------------------------------------------------------------------------

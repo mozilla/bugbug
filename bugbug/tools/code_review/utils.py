@@ -391,4 +391,7 @@ def convert_generated_comments_to_inline(
             on_removed_code=not scope["has_added_lines"],
             explanation=comment.explanation,
             order=comment.order,
+            severity=comment.severity,
+            category=comment.category,
+            confidence=comment.confidence,
         )
