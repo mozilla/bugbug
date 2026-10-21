@@ -161,6 +161,15 @@ class TestRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
+class PerftestRepairInputs(BaseModel):
+    # The Bugzilla bug tracking an intermittent or permanent perf test failure.
+    bug_id: int
+    skip_firefox_build: bool | None = None
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None
+
+
 class FrontendTriageInputs(BaseModel):
     bug_id: int
     model: str | None = None
