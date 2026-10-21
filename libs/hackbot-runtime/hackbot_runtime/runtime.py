@@ -11,7 +11,7 @@ from typing import NoReturn
 import sentry_sdk
 from pydantic import ValidationError
 
-from hackbot_runtime import anthropic_wif, openai_wif, wandb_wif
+from hackbot_runtime import wif
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.results import HackbotAgentResult
@@ -43,12 +43,8 @@ def _configure_auth() -> None:
     Workload Identity Federation, so in deployment none needs a long-lived key in
     the agent container; each falls back to its API-key env var locally.
     """
-    if anthropic_wif.configure():
-        log.info("Configured Anthropic WIF authentication")
-    if openai_wif.configure():
-        log.info("Configured OpenAI WIF authentication")
-    if wandb_wif.configure():
-        log.info("Configured W&B WIF authentication")
+    for config in wif.PROVIDERS:
+        wif.configure(config)
 
 
 def _configure_sentry(entrypoint: Callable) -> None:
