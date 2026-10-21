@@ -6,6 +6,7 @@ import os
 import pytest
 from google.auth.exceptions import GoogleAuthError
 from hackbot_runtime import wandb_wif
+from hackbot_runtime.config import WandbWifSettings
 from hackbot_runtime.providers import ProviderError
 
 _AUDIENCE = "https://example.wandb.example/federation"
@@ -22,17 +23,17 @@ def _reset_module_state():
 @pytest.fixture
 def _no_federation_env(monkeypatch):
     for var in (
-        wandb_wif.AUDIENCE_ENV,
-        wandb_wif.TOKEN_FILE_ENV,
-        wandb_wif.REFRESH_INTERVAL_ENV,
+        WandbWifSettings.AUDIENCE_ENV,
+        WandbWifSettings.TOKEN_FILE_ENV,
+        WandbWifSettings.REFRESH_INTERVAL_ENV,
     ):
         monkeypatch.delenv(var, raising=False)
 
 
 def test_is_enabled_follows_audience(monkeypatch):
-    monkeypatch.delenv(wandb_wif.AUDIENCE_ENV, raising=False)
+    monkeypatch.delenv(WandbWifSettings.AUDIENCE_ENV, raising=False)
     assert wandb_wif.is_enabled() is False
-    monkeypatch.setenv(wandb_wif.AUDIENCE_ENV, _AUDIENCE)
+    monkeypatch.setenv(WandbWifSettings.AUDIENCE_ENV, _AUDIENCE)
     assert wandb_wif.is_enabled() is True
 
 
@@ -48,13 +49,13 @@ def test_configure_is_inert_without_federation(_no_federation_env, monkeypatch):
 
     assert wandb_wif.configure() is False
     assert called is False
-    assert wandb_wif.TOKEN_FILE_ENV not in os.environ
+    assert WandbWifSettings.TOKEN_FILE_ENV not in os.environ
 
 
 def test_configure_writes_token_and_sets_env(_no_federation_env, monkeypatch, tmp_path):
     token_file = tmp_path / "identity-token"
-    monkeypatch.setenv(wandb_wif.AUDIENCE_ENV, _AUDIENCE)
-    monkeypatch.setenv(wandb_wif.TOKEN_FILE_ENV, str(token_file))
+    monkeypatch.setenv(WandbWifSettings.AUDIENCE_ENV, _AUDIENCE)
+    monkeypatch.setenv(WandbWifSettings.TOKEN_FILE_ENV, str(token_file))
     monkeypatch.delenv("WANDB_API_KEY", raising=False)
     monkeypatch.setattr(
         wandb_wif, "fetch_gcp_identity_token", lambda *a, **k: "google.jwt.token"
@@ -63,14 +64,16 @@ def test_configure_writes_token_and_sets_env(_no_federation_env, monkeypatch, tm
     assert wandb_wif.configure() is True
 
     assert token_file.read_text() == "google.jwt.token"
-    assert os.environ[wandb_wif.TOKEN_FILE_ENV] == str(token_file)
+    assert os.environ[WandbWifSettings.TOKEN_FILE_ENV] == str(token_file)
 
 
 def test_configure_refuses_when_api_key_set(
     _no_federation_env, monkeypatch, tmp_path, caplog
 ):
-    monkeypatch.setenv(wandb_wif.AUDIENCE_ENV, _AUDIENCE)
-    monkeypatch.setenv(wandb_wif.TOKEN_FILE_ENV, str(tmp_path / "identity-token"))
+    monkeypatch.setenv(WandbWifSettings.AUDIENCE_ENV, _AUDIENCE)
+    monkeypatch.setenv(
+        WandbWifSettings.TOKEN_FILE_ENV, str(tmp_path / "identity-token")
+    )
     monkeypatch.setenv("WANDB_API_KEY", "leftover")
     monkeypatch.setattr(wandb_wif, "fetch_gcp_identity_token", lambda *a, **k: "tok")
 
@@ -86,8 +89,8 @@ def test_configure_refuses_when_api_key_set(
 
 
 def test_configure_is_idempotent(_no_federation_env, monkeypatch, tmp_path):
-    monkeypatch.setenv(wandb_wif.AUDIENCE_ENV, _AUDIENCE)
-    monkeypatch.setenv(wandb_wif.TOKEN_FILE_ENV, str(tmp_path / "tok"))
+    monkeypatch.setenv(WandbWifSettings.AUDIENCE_ENV, _AUDIENCE)
+    monkeypatch.setenv(WandbWifSettings.TOKEN_FILE_ENV, str(tmp_path / "tok"))
     monkeypatch.delenv("WANDB_API_KEY", raising=False)
 
     calls = 0
@@ -105,20 +108,20 @@ def test_configure_is_idempotent(_no_federation_env, monkeypatch, tmp_path):
 
 
 def test_configure_defaults_token_path_when_unset(_no_federation_env, monkeypatch):
-    monkeypatch.setenv(wandb_wif.AUDIENCE_ENV, _AUDIENCE)
+    monkeypatch.setenv(WandbWifSettings.AUDIENCE_ENV, _AUDIENCE)
     monkeypatch.delenv("WANDB_API_KEY", raising=False)
     monkeypatch.setattr(wandb_wif, "fetch_gcp_identity_token", lambda *a, **k: "tok")
 
     assert wandb_wif.configure() is True
 
-    path = os.environ[wandb_wif.TOKEN_FILE_ENV]
+    path = os.environ[WandbWifSettings.TOKEN_FILE_ENV]
     assert "wandb-wif-" in path
     assert os.path.exists(path)
 
 
 def test_configure_passes_audience_to_fetch(_no_federation_env, monkeypatch, tmp_path):
-    monkeypatch.setenv(wandb_wif.AUDIENCE_ENV, _AUDIENCE)
-    monkeypatch.setenv(wandb_wif.TOKEN_FILE_ENV, str(tmp_path / "tok"))
+    monkeypatch.setenv(WandbWifSettings.AUDIENCE_ENV, _AUDIENCE)
+    monkeypatch.setenv(WandbWifSettings.TOKEN_FILE_ENV, str(tmp_path / "tok"))
     monkeypatch.delenv("WANDB_API_KEY", raising=False)
 
     seen = {}
@@ -170,18 +173,18 @@ def test_fetch_rejects_empty(monkeypatch):
 @pytest.mark.parametrize(
     "raw, expected",
     [
-        (None, wandb_wif.DEFAULT_REFRESH_INTERVAL),
+        (None, WandbWifSettings.DEFAULT_REFRESH_INTERVAL),
         ("900", 900),
-        ("not-a-number", wandb_wif.DEFAULT_REFRESH_INTERVAL),
-        ("0", wandb_wif.DEFAULT_REFRESH_INTERVAL),
-        ("-5", wandb_wif.DEFAULT_REFRESH_INTERVAL),
+        ("not-a-number", WandbWifSettings.DEFAULT_REFRESH_INTERVAL),
+        ("0", WandbWifSettings.DEFAULT_REFRESH_INTERVAL),
+        ("-5", WandbWifSettings.DEFAULT_REFRESH_INTERVAL),
     ],
 )
 def test_refresh_interval_parsing(monkeypatch, raw, expected):
     if raw is None:
-        monkeypatch.delenv(wandb_wif.REFRESH_INTERVAL_ENV, raising=False)
+        monkeypatch.delenv(WandbWifSettings.REFRESH_INTERVAL_ENV, raising=False)
     else:
-        monkeypatch.setenv(wandb_wif.REFRESH_INTERVAL_ENV, raw)
+        monkeypatch.setenv(WandbWifSettings.REFRESH_INTERVAL_ENV, raw)
     assert wandb_wif._refresh_interval() == expected
 
 
