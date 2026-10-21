@@ -24,7 +24,7 @@ from bugbug.models import testconfigselect, testselect
 from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
-from bugbug.perf.commit_risk import get_ignore_reason
+from bugbug.perf.commit_risk import get_ignore_reason, score_patch
 from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -300,9 +300,9 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     """Predict performance-regression risk for a push.
 
     Mirrors :func:`schedule_tests`: the push is resolved server-side against
-    the service's own local hg clone. Commits matching one of the rules in
-    :mod:`bugbug.perf.commit_risk` are listed with their ``ignored_reason``
-    but not scored. Every other commit is scored
+    the service's own local hg clone. Commits matching one of
+    ``IGNORED_COMMIT_RULES`` in ``bugbug.perf.commit_risk`` are listed with their
+    ``ignored_reason`` but not scored. Every other commit is scored
     separately and the top-level ``risk_score`` is the maximum across the
     scored commits, or ``None`` when every commit in the push was ignored.
     """
@@ -387,18 +387,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     # Score each commit separately. The service runs inference on CPU,
     # so we classify one at a time to keep memory flat.
     for (index, _), patch in zip(to_score, patches):
-        export = repository.parse_hg_export(patch)
-        commit_probabilities = model.classify(
-            [{"commit_message": export.message, "diff": export.diff}],
-            probabilities=True,
-        )[0]
-        commits[index].update(
-            {
-                "prob": commit_probabilities.tolist(),
-                "class": int(commit_probabilities.argmax()),
-                "risk_score": float(commit_probabilities[1]),
-            }
-        )
+        commits[index].update(score_patch(model, patch))
 
     scored_risk_scores = [
         commit["risk_score"] for commit in commits if commit["ignored_reason"] is None

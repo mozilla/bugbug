@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 from importlib import resources
 from typing import Any, Iterable, Iterator
 
-from bugbug import bugzilla
+from bugbug import bugzilla, utils
 from bugbug.perf.label_policy import REPOSITORY
 from bugbug.redash import RedashClient
 from bugbug.utils import utcnow
@@ -224,6 +224,80 @@ def fetch_pushes(
         for row in rows:
             yield parse_push_row(row)
         window_start = window_end
+
+
+HG_REPOSITORY_URL = f"https://hg.mozilla.org/integration/{REPOSITORY}"
+PUSHLOG_URL = f"{HG_REPOSITORY_URL}/json-pushes"
+# The pushlog filters on its own push dates, which are the push times
+# Treeherder stores; the margin covers rounding at the window edges.
+PUSHLOG_MARGIN = timedelta(hours=1)
+
+
+def pushlog_windows(
+    times: Iterable[datetime], window_days: int
+) -> list[tuple[datetime, datetime]]:
+    """Group times into ``[start, end)`` windows of at most ``window_days``.
+
+    Each window starts at the first time it covers and spans of time without
+    any are skipped, so filling the pushlog ids of a few pushes spread over a
+    year costs one request per cluster rather than one per window of the year.
+    """
+    windows: list[tuple[datetime, datetime]] = []
+    for time in sorted(times):
+        if windows and time < windows[-1][1]:
+            continue
+        windows.append((time, time + timedelta(days=window_days)))
+    return windows
+
+
+def fetch_pushlog_ids(windows: Iterable[tuple[datetime, datetime]]) -> dict[str, int]:
+    """Map the head changeset of each push in the windows to its pushlog id.
+
+    Treeherder pushes have no pushlog id, which the taskgraph's push-count
+    rules are defined on, so it comes from hg.mozilla.org's pushlog, queried
+    by push date and joined on the head changeset.
+    """
+    session = utils.get_session("hg.mozilla.org")
+    pushlog_ids: dict[str, int] = {}
+    for window_start, window_end in windows:
+        response = session.get(
+            PUSHLOG_URL,
+            params={
+                "version": "2",
+                "tipsonly": "1",
+                "startdate": (window_start - PUSHLOG_MARGIN).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "enddate": (window_end + PUSHLOG_MARGIN).strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+        pushes = response.json()["pushes"]
+        for pushlog_id, push in pushes.items():
+            if push["changesets"]:
+                pushlog_ids[push["changesets"][-1]] = int(pushlog_id)
+        logger.info(
+            "Retrieved %d pushlog ids between %s and %s",
+            len(pushes),
+            window_start,
+            window_end,
+        )
+    return pushlog_ids
+
+
+def set_pushlog_ids(
+    pushes: Iterable[dict[str, Any]], pushlog_ids: dict[str, int]
+) -> int:
+    """Fill ``pushlog_id`` on the pushes that lack one; returns how many still do."""
+    missing = 0
+    for push in pushes:
+        if push.get("pushlog_id") is not None:
+            continue
+        push["pushlog_id"] = pushlog_ids.get(push["revision"])
+        if push["pushlog_id"] is None:
+            missing += 1
+    return missing
 
 
 COST_FIELDS = (

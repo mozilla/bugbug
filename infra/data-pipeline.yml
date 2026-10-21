@@ -777,6 +777,48 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: perf-commit-risk-scorer
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - perf-alerts-retrieval
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-perf-commit-risk:${version}
+        command:
+          - bugbug-data-perf-commit-risk
+          - --repo-dir=/cache/mozilla-central
+          - --refresh-repo
+          # Leaves time to refresh the clone, load the model and write the
+          # archive within maxRunTime; the next run scores the rest.
+          - --time-budget=20
+
+        artifacts:
+          public/perf_commit_risk.json.zst:
+            path: /data/perf_commit_risk.json.zst
+            type: file
+          public/perf_commit_risk.json.version:
+            path: /data/perf_commit_risk.json.version
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_commit_risk.${version}
+        - index.project.bugbug.data_perf_commit_risk.latest
+      metadata:
+        name: bugbug performance commit risk scorer
+        description: bugbug perf regression predictor risk scores of every autoland commit
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: rollback-test-task
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }

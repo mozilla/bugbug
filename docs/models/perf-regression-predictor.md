@@ -24,10 +24,11 @@ are still listed in the result with an `ignored_reason` and `null` scores.
 Backouts are scored like any other commit, since a revert is a real code
 change that can regress a benchmark, and the training set treats them the same
 way. The rules live in `IGNORED_COMMIT_RULES` in `bugbug/perf/commit_risk.py`,
-shared with the training set export so the model is never trained on a kind of
-commit it does not score; to ignore another kind of commit, add an entry
-mapping the reason to a predicate over the hg.mozilla.org `automationrelevance`
-changeset. Rules are evaluated in order and the first match wins.
+shared with the training set export, so the model is never trained on a kind
+of commit it does not score, and with the batch scorer described below; to
+ignore another kind of commit, add an entry mapping the reason to a predicate
+over the hg.mozilla.org `automationrelevance` changeset. Rules are evaluated in
+order and the first match wins.
 
 Each scored commit gets its own `risk_score`; the push-level `risk_score` is
 the maximum across the scored commits, or `null` when every commit in the push
@@ -121,7 +122,7 @@ Example result:
   ],
   "extra_data": {
     "model_name": "Perf Regression Predictor",
-    "model_version": null,
+    "model_version": "perf-regression-predictor-v1",
     "max_length": 512,
     "calibrated": false,
     "commit_count": 2,
@@ -135,6 +136,16 @@ values of the scored commits in `commits`. Ignored commits have
 `ignored_reason` set and `null` for `prob`, `class` and `risk_score`; a `null`
 means "not scored", not "no risk". When every commit was ignored the push-level
 `risk_score` is `null` too.
+
+## Batch scoring
+
+Evaluations that replay scheduling strategies over autoland history need a
+score for every commit, and the endpoint scores one push at a time. The
+`bugbug-data-perf-commit-risk` command of the
+[performance alerts data pipeline](../perf-alerts.md) runs the same ignore
+rules and scoring over every commit of the pipeline's pushes snapshot, reading
+commit metadata and patches from a local clone, and publishes the scores as
+the `perf_commit_risk.json` dataset, one record per commit and model version.
 
 ## Model artifact
 

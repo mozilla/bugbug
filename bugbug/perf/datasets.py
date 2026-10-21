@@ -59,6 +59,14 @@ PERF_TASK_COSTS_DB = "data/perf_task_costs.json"
 db.register(
     PERF_TASK_COSTS_DB, _index_url("data_perf_alerts", "perf_task_costs.json"), 1
 )
+# Also an archive, since scoring a year of commits takes a day: one record per
+# commit and model version, extended by every scorer run.
+PERF_COMMIT_RISK_DB = "data/perf_commit_risk.json"
+db.register(
+    PERF_COMMIT_RISK_DB,
+    _index_url("data_perf_commit_risk", "perf_commit_risk.json"),
+    1,
+)
 
 # Derived, labeled datasets.
 PERF_REGRESSIONS_DB = "data/perf_regressions.json"
@@ -213,3 +221,7 @@ def get_perf_push_status() -> Iterator[dict[str, Any]]:
 
 def get_perf_regression_commits() -> Iterator[dict[str, Any]]:
     yield from db.read(PERF_REGRESSION_COMMITS_DB)
+
+
+def get_perf_commit_risk() -> Iterator[dict[str, Any]]:
+    yield from db.read(PERF_COMMIT_RISK_DB)
