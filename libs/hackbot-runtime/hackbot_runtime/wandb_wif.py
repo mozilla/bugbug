@@ -35,6 +35,7 @@ import google.auth.transport.requests
 import google.oauth2.id_token
 from google.auth.exceptions import GoogleAuthError
 
+from hackbot_runtime.config import WanddbWifSettings, settings
 from hackbot_runtime.providers import ProviderError
 
 log = logging.getLogger("hackbot_runtime.wandb_wif")
@@ -58,7 +59,7 @@ _refresher: _TokenFileRefresher | None = None
 
 def is_enabled() -> bool:
     """True when the deploy provisioned a federation audience (WIF mode)."""
-    return bool(os.environ.get(AUDIENCE_ENV))
+    return bool(settings.wanddbWif.audience)
 
 
 def fetch_gcp_identity_token(audience: str) -> str:
@@ -84,27 +85,27 @@ def fetch_gcp_identity_token(audience: str) -> str:
 
 
 def _refresh_interval() -> float:
-    raw = os.environ.get(REFRESH_INTERVAL_ENV)
+    raw = settings.wanddbWif.refresh_interval
     if not raw:
-        return DEFAULT_REFRESH_INTERVAL
+        return WanddbWifSettings.DEFAULT_REFRESH_INTERVAL
     try:
         value = float(raw)
     except ValueError:
         log.warning(
             "%s=%r is not a number; falling back to %ss",
-            REFRESH_INTERVAL_ENV,
+            WanddbWifSettings.REFRESH_INTERVAL_ENV,
             raw,
-            DEFAULT_REFRESH_INTERVAL,
+            WanddbWifSettings.DEFAULT_REFRESH_INTERVAL,
         )
-        return DEFAULT_REFRESH_INTERVAL
+        return WanddbWifSettings.DEFAULT_REFRESH_INTERVAL
     if value <= 0:
         log.warning(
             "%s=%s is not positive; falling back to %ss",
-            REFRESH_INTERVAL_ENV,
+            WanddbWifSettings.REFRESH_INTERVAL_ENV,
             raw,
-            DEFAULT_REFRESH_INTERVAL,
+            WanddbWifSettings.DEFAULT_REFRESH_INTERVAL,
         )
-        return DEFAULT_REFRESH_INTERVAL
+        return WanddbWifSettings.DEFAULT_REFRESH_INTERVAL
     return value
 
 
