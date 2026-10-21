@@ -50,6 +50,12 @@ INTERVENTION_ACTIONS = [
     "phabricator.submit_patch",
 ]
 
+# A follow-up on a revision the agent filed updates that revision or replies on it.
+FOLLOW_UP_ACTIONS = [
+    "phabricator.update_patch",
+    "phabricator.add_comment",
+]
+
 # Artifact builds download the binaries of the nearest ancestor commit that was
 # built on CI. The tip is sometimes a DONTBUILD push, so increasing depth ensures
 # there are built ancestors available.
