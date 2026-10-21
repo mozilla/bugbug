@@ -465,3 +465,17 @@ def test_StructuredColumnTransformer() -> None:
         .view(np.dtype("int64")),
         ColumnTransformer(transformers).fit_transform(df),
     )
+
+
+def test_parse_timestamp_handles_zones() -> None:
+    from datetime import timedelta, timezone
+
+    zulu = utils.parse_timestamp("2026-09-12T17:06:58.160Z")
+    assert zulu is not None and zulu.tzinfo == timezone.utc and zulu.hour == 17
+    offset = utils.parse_timestamp("2026-09-12T17:06:58+02:00")
+    assert offset is not None and offset.utcoffset() == timedelta(hours=2)
+    naive = utils.parse_timestamp("2026-09-13T03:57:53")
+    assert naive is not None and naive.tzinfo == timezone.utc
+    assert utils.parse_timestamp(None) is None
+    assert utils.parse_timestamp("") is None
+    assert utils.utcnow().tzinfo == timezone.utc

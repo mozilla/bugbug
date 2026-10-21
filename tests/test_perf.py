@@ -1,0 +1,1649 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import json
+from datetime import datetime, timezone
+
+import pytest
+import requests
+import responses
+import zstandard
+
+from bugbug import db, perf
+from bugbug.perf import extraction, regression_commits
+
+RS = perf.RECORD_SEP
+US = perf.UNIT_SEP
+SETTLED = datetime(2030, 1, 1, tzinfo=timezone.utc)
+
+
+def test_split_and_normalize_label() -> None:
+    label = "test-linux1804-64-shippable-qr/opt-browsertime-tp6-firefox-amazon"
+    assert perf.split_task_label(label) == (
+        "linux1804-64-shippable-qr",
+        "opt",
+        "browsertime-tp6-firefox-amazon",
+    )
+    assert (
+        perf.normalize_task_label(label)
+        == "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"
+    )
+    assert perf.normalize_task_label("perftest-linux-domcount") == (
+        "perftest-linux-domcount"
+    )
+    assert perf.normalize_platform("windows11-64-24h2-shippable") == (
+        "windows11-64-24h2-shippable"
+    )
+
+
+@pytest.mark.parametrize(
+    "label, platform, build, test_name, family, application, platform_family",
+    [
+        (
+            "perftest-android-hw-a55-aarch64-shippable-startup-fenix-cold-main-first-frame",
+            "android-hw-a55-aarch64-shippable",
+            None,
+            "perftest-startup-fenix-cold-main-first-frame",
+            "perftest-startup",
+            "fenix",
+            "android",
+        ),
+        (
+            "perftest-android-hw-p6-aarch64-shippable-startup-chrome-m-homeview-startup",
+            "android-hw-p6-aarch64-shippable",
+            None,
+            "perftest-startup-chrome-m-homeview-startup",
+            "perftest-startup",
+            "chrome-m",
+            "android",
+        ),
+        (
+            "perftest-android-hw-a55-background-resource-fenix",
+            "android-hw-a55",
+            None,
+            "perftest-background-resource-fenix",
+            "perftest",
+            "fenix",
+            "android",
+        ),
+        (
+            "perftest-android-emulator-shippable-first-frame-startup",
+            "android-emulator-shippable",
+            None,
+            "perftest-first-frame-startup",
+            "perftest-startup",
+            "firefox",
+            "android",
+        ),
+        (
+            "perftest-linux-service-worker-linux2404-64-shippable/opt",
+            "linux2404-64-shippable",
+            "opt",
+            "perftest-service-worker",
+            "perftest",
+            "firefox",
+            "linux",
+        ),
+        (
+            "perftest-linux-perftest-accessibility-linux2404-64-shippable/opt",
+            "linux2404-64-shippable",
+            "opt",
+            "perftest-accessibility",
+            "perftest",
+            "firefox",
+            "linux",
+        ),
+        (
+            "perftest-windows11-24h2-ref-perftest-accessibility",
+            "windows11-24h2-ref",
+            None,
+            "perftest-accessibility",
+            "perftest",
+            "firefox",
+            "windows",
+        ),
+        (
+            "perftest-macosx-perftest-accessibility",
+            "macosx",
+            None,
+            "perftest-accessibility",
+            "perftest",
+            "firefox",
+            "macosx",
+        ),
+    ],
+)
+def test_perftest_labels(
+    label, platform, build, test_name, family, application, platform_family
+) -> None:
+    assert perf.split_task_label(label) == (platform, build, test_name)
+    identity = perf.get_runnable_identity(label)
+    assert identity["test_name"] == test_name
+    assert identity["family"] == family
+    assert identity["application"] == application
+    assert identity["platform_family"] == platform_family
+    assert identity["build_type"] == build
+    assert identity["platform"] == (f"{platform}/{build}" if build else platform)
+
+
+def test_perftest_label_normalization_and_exclusion() -> None:
+    old = "perftest-linux-ml-summarizer-perf-linux1804-64-shippable/opt"
+    assert (
+        perf.normalize_task_label(old)
+        == "perftest-linux-ml-summarizer-perf-linux2404-64-shippable/opt"
+    )
+    chrome = "perftest-android-hw-a55-background-resource-chrome"
+    assert perf.get_exclusion_reason(chrome) == "application"
+    fenix = "perftest-android-hw-a55-background-resource-fenix"
+    assert perf.get_exclusion_reason(fenix) is None
+    assert perf.split_task_label("perftest-unknown") is None
+
+
+def test_runnable_identity() -> None:
+    identity = perf.get_runnable_identity(
+        "test-android-hw-a55-14-0-aarch64-shippable/opt-browsertime-tp6m-fenix-amazon"
+    )
+    assert identity["test_name"] == "browsertime-tp6m-fenix-amazon"
+    assert identity["platform_family"] == "android"
+    assert identity["platform"] == "android-hw-a55-14-0-aarch64-shippable/opt"
+    assert perf.is_perf_task_label("test-linux2404-64-shippable/opt-talos-g1")
+    assert not perf.is_perf_task_label("test-linux2404-64/opt-mochitest-plain-1")
+
+
+def test_merge_alerts_keeps_history_and_labels() -> None:
+    previous = [
+        _alert(alert_id=1, summary_created="2025-01-01T00:00:00"),
+        _alert(alert_id=2, summary_created="2025-02-01T00:00:00", summary_status=5),
+        _alert(alert_id=3, summary_created="2025-03-01T00:00:00", task_labels=None),
+    ]
+    fetched = [
+        # Refreshed by the source, but the job behind it is gone.
+        _alert(
+            alert_id=2,
+            summary_created="2025-02-01T00:00:00",
+            summary_status=7,
+            task_labels=None,
+            task_ids=None,
+        ),
+        # Still unmapped on both sides.
+        _alert(alert_id=3, summary_created="2025-03-01T00:00:00", task_labels=None),
+        _alert(alert_id=4, summary_created="2025-04-01T00:00:00"),
+    ]
+    merged = perf.merge_alerts(previous, fetched)
+    assert [a["alert_id"] for a in merged] == [1, 2, 3, 4]
+    refreshed = merged[1]
+    assert refreshed["summary_status"] == 7
+    assert refreshed["task_labels"] == previous[1]["task_labels"]
+    assert refreshed["task_ids"] == previous[1]["task_ids"]
+    assert merged[2]["task_labels"] == []
+
+
+def test_archive_readers_skip_other_repositories() -> None:
+    # Snapshots retrieved before the pipeline became autoland-only can hold
+    # mozilla-central rows; a merge push would list autoland culprits again.
+    db.write(
+        perf.PERF_ALERTS_DB,
+        [_alert(alert_id=1), _alert(alert_id=2, repository="mozilla-central")],
+    )
+    db.write(
+        perf.PERF_PUSHES_DB,
+        [
+            {"push_id": 1, "repository": "autoland"},
+            {"push_id": 2, "repository": "mozilla-central"},
+        ],
+    )
+    db.write(
+        perf.PERF_TASK_COSTS_DB,
+        [
+            {"task_id": "A", "project": "autoland"},
+            {"task_id": "B", "project": "mozilla-central"},
+        ],
+    )
+    assert [a["alert_id"] for a in perf.get_perf_alerts()] == [1]
+    assert [p["push_id"] for p in perf.get_perf_pushes()] == [1]
+    assert [c["task_id"] for c in perf.get_perf_task_costs()] == ["A"]
+
+
+def test_alert_fields_are_derived_on_read() -> None:
+    # Stored alerts keep source data only.
+    alert = _alert(task_labels="test-linux1804-64-shippable/opt-talos-g1")
+    assert not {"summary_status_name", "alert_status_name", "normalized_labels"} & set(
+        alert
+    )
+    # The current rename table applies to every alert, archived ones included.
+    derived = perf.derive_alert_fields(alert)
+    assert derived["summary_status_name"] == "fixed"
+    assert derived["alert_status_name"] == "acknowledged"
+    assert derived["normalized_labels"] == ["test-linux2404-64-shippable/opt-talos-g1"]
+
+
+def test_parse_push_row() -> None:
+    row = {
+        "push_id": 10,
+        "repository": "autoland",
+        "revision": "a" * 40,
+        "push_time": "2026-08-01T10:00:00",
+        "author": "someone@mozilla.com",
+        "commits": f"{'a' * 40}{US}Bug 123 - Fix things r=me{RS}{'b' * 40}{US}Backed out changeset xyz",
+        "perf_jobs": (
+            f"test-linux2404-64-shippable/opt-talos-g1{US}success{US}600{US}1{US}T1{US}0{RS}"
+            f"test-linux2404-64-shippable/opt-talos-g1{US}retry{US}{US}1{US}T1{US}1{RS}"
+            f"test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon{US}success{US}1200{US}2{US}T2{US}0"
+        ),
+    }
+    push = perf.parse_push_row(row)
+    assert push["commits"][0] == {
+        "revision": "a" * 40,
+        "desc": "Bug 123 - Fix things r=me",
+        "bug_id": 123,
+        "backout": False,
+    }
+    assert push["commits"][1]["backout"] is True
+    assert push["commits"][1]["bug_id"] is None
+    jobs = {job["label"]: job for job in push["perf_jobs"]}
+    g1 = jobs["test-linux2404-64-shippable/opt-talos-g1"]
+    assert g1["duration"] == 600
+    assert g1["runs"] == [
+        {"task_id": "T1", "retry_id": 0, "result": "success", "duration": 600},
+        {"task_id": "T1", "retry_id": 1, "result": "retry", "duration": None},
+    ]
+    assert (
+        jobs["test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"]["tier"]
+        == 2
+    )
+
+
+def test_costs_query_and_normalization() -> None:
+    query = perf.build_task_costs_query(
+        datetime(2026, 9, 1).date(), datetime(2026, 9, 3).date()
+    )
+    assert 'submission_date >= "2026-09-01"' in query
+    assert 'submission_date < "2026-09-03"' in query
+    assert "tags.project = 'autoland'" in query
+
+    cost = perf.normalize_cost_row(
+        {
+            "task_id": "T1",
+            "label": "test-linux1804-64-shippable/opt-talos-g1",
+            "project": "autoland",
+            "task_queue_id": "releng-hardware/gecko-t-linux-talos-2404",
+            "runs": 1,
+            "duration": 400,
+            "cost": None,
+            "costed_runs": None,
+            "unexpected": "dropped",
+        }
+    )
+    assert set(cost) == set(perf.COST_FIELDS)
+    assert cost["task_queue_id"] == "releng-hardware/gecko-t-linux-talos-2404"
+    assert cost["submission_date"] is None
+    identity = perf.get_runnable_identity(cost["label"])
+    assert identity["test_name"] == "talos-g1"
+    assert identity["platform_family"] == "linux"
+
+
+def test_load_task_costs_filters_by_task_id() -> None:
+    db.write(
+        perf.PERF_TASK_COSTS_DB,
+        [
+            {
+                "task_id": "T1",
+                "task_queue_id": "pool-a",
+                "cost": None,
+                "costed_runs": None,
+            },
+            {"task_id": "T2", "task_queue_id": "pool-b", "cost": 0.5, "costed_runs": 1},
+        ],
+    )
+    assert perf.load_task_costs({"T2"}) == {"T2": perf.TaskCost("pool-b", 0.5, 1)}
+    assert set(perf.load_task_costs()) == {"T1", "T2"}
+    pushes = [{"perf_jobs": [{"runs": [{"task_id": "T1"}, {"task_id": None}]}]}]
+    assert perf.collect_push_task_ids(pushes) == {"T1"}
+
+
+def test_label_prices_and_price_labels() -> None:
+    amazon = "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"
+    old_amazon = "test-linux1804-64-shippable-qr/opt-browsertime-tp6-firefox-amazon"
+    win_g1 = "test-windows11-64-24h2-shippable/opt-talos-g1"
+    rows: list[dict] = [
+        {"label": amazon, "task_queue_id": "linux-hw", "runs": 1, "duration": 100},
+        {"label": old_amazon, "task_queue_id": "linux-hw", "runs": 2, "duration": 600},
+        {"label": amazon, "task_queue_id": "linux-cloud", "runs": 1, "duration": 500},
+        {"label": win_g1, "task_queue_id": "win-hw", "runs": 1, "duration": 40},
+        {"label": win_g1, "task_queue_id": "win-hw", "runs": 0, "duration": 0},
+        {"label": None, "task_queue_id": "win-hw", "runs": 1, "duration": 1},
+    ]
+    prices = perf.build_label_prices(rows)
+    # Renamed platforms merge; the median is over runs, the pool the most common.
+    assert prices == {
+        amazon: perf.LabelPrice("linux-hw", 300, 4),
+        win_g1: perf.LabelPrice("win-hw", 40, 1),
+    }
+
+    ebay = "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-ebay"
+    mac_g1 = "test-macosx1470-64-shippable/opt-talos-g1"
+    summary = perf.estimate_labels_cost([old_amazon, win_g1, ebay, mac_g1], prices)
+    # ebay borrows the tp6/linux price; mac talos has no sibling on macosx.
+    assert summary == {
+        "labels": 4,
+        "priced": 2,
+        "estimated": 1,
+        "unpriced": 1,
+        "machine_seconds_by_pool": {"linux-hw": 600, "win-hw": 40},
+    }
+
+
+def test_push_cost_summary() -> None:
+    push = {
+        "perf_jobs": [
+            {
+                "label": "a",
+                "runs": [
+                    {
+                        "task_id": "T1",
+                        "retry_id": 0,
+                        "result": "success",
+                        "duration": 100,
+                    },
+                    {
+                        "task_id": "T2",
+                        "retry_id": 0,
+                        "result": "success",
+                        "duration": 50,
+                    },
+                    {
+                        "task_id": None,
+                        "retry_id": None,
+                        "result": "success",
+                        "duration": 5,
+                    },
+                ],
+            }
+        ]
+    }
+    costs = {
+        "T1": perf.TaskCost("releng-hardware/mac", None, None),
+        "T2": perf.TaskCost("gecko-t/linux", 0.4, 2),
+    }
+    summary = perf.summarize_push_cost(push, costs)
+    assert summary["runs"] == 3
+    assert summary["runs_with_pool"] == 2
+    assert summary["runs_with_cost"] == 1
+    assert summary["machine_seconds_by_pool"] == {
+        "releng-hardware/mac": 100,
+        "gecko-t/linux": 50,
+    }
+    assert summary["cost"] == pytest.approx(0.2)
+
+
+def test_sql_queries_are_parameterized() -> None:
+    query = perf.build_alerts_query(
+        datetime(2026, 1, 2).date(), datetime(2026, 2, 1).date()
+    )
+    assert "repo.name = 'autoland'" in query
+    assert "s.created >= '2026-01-02'" in query
+    assert "s.created < '2026-02-01'" in query
+    pushes = perf.build_pushes_query(datetime(2026, 1, 2), datetime(2026, 1, 3))
+    assert "repo.name = 'autoland'" in pushes
+
+
+def _alert(**overrides):
+    alert = {
+        "alert_id": 1,
+        "alert_status": 4,
+        "is_regression": True,
+        "amount_pct": 5.0,
+        "t_value": 9.0,
+        "noise_profile": "OK",
+        "summary_id": 100,
+        "summary_status": 7,
+        "summary_created": "2026-06-01T00:00:00",
+        "bug_number": 555,
+        "bug_status": "RESOLVED",
+        "push_id": 12,
+        "prev_push_id": 11,
+        "original_push_id": 12,
+        "revision": "c" * 40,
+        "push_time": "2026-05-30T00:00:00",
+        "prev_push_revision": "b" * 40,
+        "repository": "autoland",
+        "framework": "browsertime",
+        "signature_id": 900,
+        "signature_hash": "hash",
+        "suite": "amazon",
+        "test": "fcp",
+        "platform": "linux2404-64-shippable",
+        "extra_options": "e10s fission",
+        "application": "firefox",
+        "summary_tags": None,
+        "task_labels": "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon",
+        "task_ids": "T1|T2",
+    }
+    alert.update(overrides)
+    return perf.normalize_alert_row(alert)
+
+
+def _push(push_id, commits, jobs=(), time="2026-05-30T00:00:00"):
+    return {
+        "push_id": push_id,
+        "repository": "autoland",
+        "revision": commits[-1][0],
+        "time": time,
+        "author": "a@b.c",
+        "commits": [
+            {"revision": rev, "desc": desc, "bug_id": bug, "backout": backout}
+            for rev, desc, bug, backout in commits
+        ],
+        "perf_jobs": [
+            {
+                "label": label,
+                "duration": 100,
+                "tier": 1,
+                "runs": [
+                    {
+                        "task_id": f"T{push_id}{i}",
+                        "retry_id": 0,
+                        "result": "success",
+                        "duration": 100,
+                    }
+                ],
+            }
+            for i, label in enumerate(jobs)
+        ],
+    }
+
+
+def _pushes():
+    amazon = "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"
+    g1 = "test-linux2404-64-shippable/opt-talos-g1"
+    return [
+        _push(
+            10,
+            [("a" * 40, "Bug 1 - x", 1, False)],
+            [amazon, g1],
+            time="2026-05-28T00:00:00",
+        ),
+        _push(
+            11, [("b" * 40, "Bug 2 - y", 2, False)], [g1], time="2026-05-29T00:00:00"
+        ),
+        _push(
+            12,
+            [
+                ("c" * 40, "Bug 3 - culprit", 3, False),
+                ("d" * 40, "Bug 4 - other", 4, False),
+            ],
+            [amazon, g1],
+        ),
+        _push(13, [("e" * 40, "Bug 5 - z", 5, False)], [], time="2026-05-31T00:00:00"),
+        _push(
+            14,
+            [("f" * 40, "Backed out changeset", None, True)],
+            [amazon],
+            time="2026-06-01T00:00:00",
+        ),
+    ]
+
+
+def _bugs():
+    return {
+        555: {
+            "id": 555,
+            "regressed_by": [3],
+            "status": "RESOLVED",
+            "resolution": "FIXED",
+            "dupe_of": None,
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "test_name, family, application, category",
+    [
+        ("browsertime-tp6-firefox-amazon", "browsertime-tp6", "firefox", "page-load"),
+        ("browsertime-tp6-chrome-amazon", "browsertime-tp6", "chrome", "page-load"),
+        ("browsertime-tp6m-fenix-amazon", "browsertime-tp6m", "fenix", "page-load"),
+        (
+            "browsertime-benchmark-firefox-speedometer3",
+            "browsertime-benchmark",
+            "firefox",
+            "benchmark",
+        ),
+        (
+            "browsertime-benchmark-firefox-motionmark-1-3",
+            "browsertime-benchmark",
+            "firefox",
+            "graphics",
+        ),
+        (
+            "browsertime-benchmark-speedometer3-mobile-fenix-native-profiling",
+            "browsertime-benchmark-speedometer3-mobile",
+            "fenix",
+            "benchmark",
+        ),
+        (
+            "browsertime-firefox-youtube-playback-h264-sfr",
+            "browsertime-youtube-playback",
+            "firefox",
+            "media",
+        ),
+        (
+            "browsertime-network-bench-firefox-h2-download",
+            "browsertime-network-bench",
+            "firefox",
+            "network",
+        ),
+        (
+            "browsertime-responsiveness-firefox-cnn-nav",
+            "browsertime-responsiveness",
+            "firefox",
+            "responsiveness",
+        ),
+        (
+            "browsertime-benchmark-safari-tp-speedometer3",
+            "browsertime-benchmark",
+            "safari-tp",
+            "benchmark",
+        ),
+        ("talos-g1", "talos-g1", "firefox", "graphics"),
+        ("talos-g1-profiling", "talos-g1", "firefox", "graphics"),
+        ("talos-damp-inspector", "talos-damp-inspector", "firefox", "devtools"),
+        ("talos-other", "talos-other", "firefox", "startup"),
+        (
+            "talos-perf-reftest-singletons",
+            "talos-perf-reftest-singletons",
+            "firefox",
+            "graphics",
+        ),
+        ("awsy-base-dmd", "awsy", "firefox", "memory"),
+        (
+            "perftest-android-hw-a55-aarch64-shippable-startup-fenix-cold-main-first-frame",
+            "perftest-startup",
+            "fenix",
+            "startup",
+        ),
+        (
+            "perftest-linux-domcount-linux2404-64-shippable/opt",
+            "perftest",
+            "firefox",
+            "other",
+        ),
+    ],
+)
+def test_grouping_hierarchy(test_name, family, application, category) -> None:
+    grouping = perf.split_test_name(test_name)
+    assert grouping["family"] == family
+    assert grouping["application"] == application
+    assert perf.get_test_category(test_name) == category
+
+
+@pytest.mark.parametrize(
+    "test_name, categories",
+    [
+        ("browsertime-power-firefox-youtube-playback-h264-1080p30", ["media", "power"]),
+        ("browsertime-media-playback-firefox-mp-idle", ["media", "power"]),
+        ("perftest-background-resource-fenix", ["power", "memory"]),
+        ("awsy-tp6", ["memory", "page-load"]),
+        ("browsertime-benchmark-firefox-motionmark-1-3", ["graphics", "benchmark"]),
+        ("browsertime-benchmark-firefox-webaudio", ["media", "benchmark"]),
+        ("browsertime-speculation-rules-firefox-prefetch", ["page-load", "network"]),
+        ("talos-other", ["startup", "responsiveness"]),
+        ("talos-g5", ["page-load", "startup"]),
+        ("perftest-ml-perf-wasm", ["ml"]),
+        ("perftest-formautofill-ml-perf-native", ["ml"]),
+        ("perftest-speech-recognition-perf", ["ml"]),
+        ("perftest-busy-trr", ["network"]),
+        ("perftest-places", ["storage"]),
+        ("perftest-service-worker", ["storage"]),
+        ("perftest-accessibility", ["accessibility"]),
+        ("talos-bcv", ["graphics"]),
+        ("browsertime-benchmark-firefox-speedometer3", ["benchmark"]),
+        ("perftest-linux-domcount", ["other"]),
+    ],
+)
+def test_test_categories(test_name, categories) -> None:
+    assert perf.get_test_categories(test_name) == categories
+    assert perf.get_test_category(test_name) == categories[0]
+
+
+def test_every_known_test_has_a_category() -> None:
+    # One identity per family seen on autoland over six months.
+    identities = [
+        "browsertime-custom-firefox-process-switch",
+        "browsertime-pageload-benchmark-firefox-tp6-bench",
+        "browsertime-speculative-firefox-connect",
+        "browsertime-tp6-firefox-buzzfeed",
+        "browsertime-tp6-bytecode-firefox-amazon",
+        "browsertime-tp6-essential-firefox-cnn",
+        "browsertime-tp6-live-sheriffed-firefox-cnn",
+        "browsertime-tp6-webextensions-firefox-amazon",
+        "browsertime-tp6m-fenix-amazon-nofis",
+        "browsertime-tp6m-essential-geckoview-google",
+        "talos-tp5o",
+        "talos-tp5o-swr",
+        "browsertime-media-seek-firefox-media-seek",
+        "browsertime-video-playback-latency-firefox-vpl-av1",
+        "browsertime-webcodecs-firefox-ve-h264-rt",
+        "browsertime-mobile-fenix-youtube-playback-hfr",
+        "browsertime-hev3-connection-m-fenix-he3on-doh",
+        "browsertime-network-bench-firefox-h3-download-1M_400ms-0",
+        "browsertime-trr-performance-firefox-trr-cira",
+        "browsertime-upload-firefox-upload-h3",
+        "browsertime-benchmark-firefox-ares6",
+        "browsertime-benchmark-firefox-assorted-dom",
+        "browsertime-benchmark-firefox-jetstream3",
+        "browsertime-benchmark-firefox-matrix-react-bench",
+        "browsertime-benchmark-firefox-media-capabilities",
+        "browsertime-benchmark-firefox-stylebench",
+        "browsertime-benchmark-firefox-sunspider",
+        "browsertime-benchmark-firefox-twitch-animation",
+        "browsertime-benchmark-firefox-unity-webgl",
+        "browsertime-benchmark-jetstream2-fenix",
+        "browsertime-benchmark-speedometer3-mobile-geckoview",
+        "browsertime-benchmark-wasm-firefox-wasm-godot-baseline",
+        "browsertime-benchmark-unity-webgl-mobile-fenix",
+        "talos-dromaeojs",
+        "talos-g3",
+        "talos-g1",
+        "talos-g4",
+        "talos-pdfpaint-7",
+        "talos-perf-reftest-singletons",
+        "talos-svgr",
+        "talos-webgl",
+        "talos-bcv",
+        "perftest-ml-llama-summarizer-perf-hwinference",
+        "perftest-tr8ns-perf-basememory",
+        "perftest-mlsuggest-perf-native",
+        "perftest-semantichistory-perf",
+        "perftest-smarttabgrouping-perf-native",
+        "perftest-smartwindow-perf",
+        "perftest-linkpreview-perf",
+        "browsertime-first-install-firefox-welcome",
+        "perftest-newssite-applink-startup",
+        "perftest-startup-geckoview-cold-view-nav-start",
+        "talos-other-nv",
+        "talos-realworld-webextensions",
+        "talos-sessionrestore-many-windows-no-nv",
+        "talos-xperf",
+        "browsertime-indexeddb-firefox-idbCurNext",
+        "browsertime-nav-bench-firefox-nav-bench",
+        "browsertime-responsiveness-firefox-reddit-billgates-ama",
+        "talos-chrome-nv",
+        "talos-tabswitch",
+        "awsy-base-dmd",
+        "awsy-tp6",
+        "talos-damp-webconsole",
+        "perftest-foreground-resource-fenix",
+        "perftest-accessibility",
+        "perftest-service-worker",
+        "perftest-places",
+        "perftest-busy-trr",
+    ]
+    uncategorized = [t for t in identities if perf.get_test_category(t) == "other"]
+    assert uncategorized == []
+
+
+def test_non_test_labels_are_excluded() -> None:
+    for label in (
+        "source-test-python-raptor-linux2404-64/opt",
+        "toolchain-linux64-talos-pdfs",
+    ):
+        assert not perf.is_perf_task_label(label)
+        assert perf.get_exclusion_reason(label) == "unparsed"
+    assert perf.is_perf_task_label("test-linux2404-64-shippable/opt-talos-g1")
+    assert perf.is_perf_task_label("perftest-linux-busy-trr-linux2404-64-shippable/opt")
+    sample = (
+        "test-linux2404-64-shippable/opt-browsertime-custom-firefox-browsertime-sample"
+    )
+    assert perf.get_exclusion_reason(sample) == "canary"
+
+
+def test_runnable_identity_levels() -> None:
+    identity = perf.get_runnable_identity(
+        "test-windows11-64-24h2-shippable/opt-browsertime-tp6-firefox-amazon"
+    )
+    assert identity["test_name"] == "browsertime-tp6-firefox-amazon"
+    assert identity["family"] == "browsertime-tp6"
+    assert identity["category"] == "page-load"
+    assert identity["categories"] == ["page-load"]
+    assert identity["application"] == "firefox"
+    assert identity["platform_family"] == "windows"
+    assert identity["variant"] is None
+
+
+def test_exclusion_reasons() -> None:
+    assert (
+        perf.get_exclusion_reason("build-linux64/opt", framework="build_metrics")
+        == "framework"
+    )
+    assert (
+        perf.get_exclusion_reason(
+            "test-linux2404-64-shippable/opt-browsertime-tp6-chrome-amazon"
+        )
+        == "application"
+    )
+    assert (
+        perf.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1-profiling")
+        == "variant"
+    )
+    assert (
+        perf.get_exclusion_reason(
+            "test-linux2404-64-shippable/opt-browsertime-tp6-profiling-firefox-amazon"
+        )
+        == "variant"
+    )
+    assert (
+        perf.get_exclusion_reason(
+            "test-linux2404-64-shippable/opt-browsertime-regression-tests-firefox-constant"
+        )
+        == "canary"
+    )
+    assert perf.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1") is None
+    # Only the variants listed in the policy are excluded; swr is a real Firefox run.
+    assert (
+        perf.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1-swr")
+        is None
+    )
+    assert (
+        perf.get_exclusion_reason(
+            "test-android-hw-a55-14-0-aarch64-shippable/opt-browsertime-tp6m-fenix-amazon"
+        )
+        is None
+    )
+    # Signature application only matters when the label carries none.
+    assert (
+        perf.get_exclusion_reason(
+            "test-linux2404-64-shippable/opt-talos-g1", application="chrome"
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "label, framework, application, suite, expected",
+    [
+        # Without a label, the signature's application decides.
+        (None, "browsertime", "chrome", "amazon", "application"),
+        (None, "browsertime", "firefox", "amazon", None),
+        (None, "browsertime", "fenix", "amazon", None),
+        (None, "awsy", "", "Base Content Explicit", None),
+        (None, "build_metrics", "", "installer size", "framework"),
+        # Only DAMP comes from a perf task in the devtools framework.
+        (None, "devtools", "firefox", "damp", None),
+        (
+            "test-linux2404-64-shippable/opt-talos-damp-inspector",
+            "devtools",
+            "firefox",
+            "damp",
+            None,
+        ),
+        (None, "devtools", "", "reload-netmonitor:content-process", "suite"),
+        (
+            "test-linux2404-64/opt-mochitest-devtools-chrome-1",
+            "devtools",
+            "",
+            "reload-inspector:content-process",
+            "suite",
+        ),
+        # The suite rule only applies to the frameworks listed in the policy.
+        ("test-linux2404-64-shippable/opt-talos-g1", "talos", "firefox", "tart", None),
+    ],
+)
+def test_exclusion_reasons_from_signature(
+    label, framework, application, suite, expected
+) -> None:
+    reason = perf.get_exclusion_reason(label, framework, application, suite)
+    assert reason == expected
+
+
+def test_generate_regressions_applies_exclusions() -> None:
+    alerts = [
+        _alert(),
+        _alert(
+            alert_id=2,
+            signature_id=901,
+            framework="build_metrics",
+            task_labels="build-linux64/opt",
+        ),
+        _alert(
+            alert_id=3,
+            signature_id=902,
+            application="chrome",
+            task_labels="test-linux2404-64-shippable/opt-browsertime-tp6-chrome-amazon",
+        ),
+        # A summary made only of excluded runnables is dropped entirely.
+        _alert(
+            alert_id=4,
+            summary_id=105,
+            signature_id=903,
+            push_id=13,
+            prev_push_id=12,
+            task_labels="test-linux2404-64-shippable/opt-talos-g1-profiling",
+        ),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    assert [r["summary_id"] for r in regressions] == [100]
+    labels = [r["label"] for r in regressions[0]["runnables"]]
+    assert labels == ["test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"]
+    assert regressions[0]["runnables"][0]["family"] == "browsertime-tp6"
+    assert regressions[0]["runnables"][0]["category"] == "page-load"
+    assert regressions[0]["policy_version"] == perf.POLICY_VERSION
+
+
+def test_generate_regressions_excludes_unlabeled_alerts() -> None:
+    # Treeherder expired the jobs of these alerts, so none has a task label.
+    alerts = [
+        # An unlabeled DAMP alert is kept.
+        _alert(framework="devtools", suite="damp", task_labels=None),
+        # An unlabeled Chrome alert in the same summary is dropped.
+        _alert(alert_id=2, signature_id=901, application="chrome", task_labels=None),
+        # Summaries made only of unlabeled out-of-scope alerts are not
+        # regressions: mochitest-devtools metrics, and a non-Firefox browser.
+        _alert(
+            alert_id=3,
+            summary_id=101,
+            push_id=13,
+            prev_push_id=12,
+            signature_id=902,
+            framework="devtools",
+            suite="reload-netmonitor:content-process",
+            application="",
+            task_labels=None,
+        ),
+        _alert(
+            alert_id=4,
+            summary_id=102,
+            push_id=14,
+            prev_push_id=13,
+            signature_id=903,
+            application="chrome",
+            task_labels=None,
+        ),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    assert [r["summary_id"] for r in regressions] == [100]
+    assert [
+        (r["signature_id"], r["suite"], r["label"]) for r in regressions[0]["runnables"]
+    ] == [(900, "damp", None)]
+
+
+def test_unlabeled_alerts_take_their_signature_label() -> None:
+    amazon_linux = "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"
+    amazon_windows = (
+        "test-windows11-64-24h2-shippable/opt-browsertime-tp6-firefox-amazon"
+    )
+    g1 = "test-linux2404-64-shippable/opt-talos-g1"
+    g1_profiling = "test-linux2404-64-shippable/opt-talos-g1-profiling"
+    alerts = [
+        # The confirmed summary: one alert kept its label, four lost theirs.
+        _alert(alert_id=1, signature_id=900, task_labels=None),
+        _alert(alert_id=2, signature_id=901, task_labels=amazon_windows),
+        _alert(alert_id=3, signature_id=902, task_labels=None),
+        _alert(alert_id=4, signature_id=903, task_labels=None),
+        _alert(alert_id=5, signature_id=904, task_labels=None),
+        # An untriaged summary is not a regression but still names the tasks.
+        *(
+            _alert(
+                alert_id=alert_id,
+                summary_id=200,
+                summary_status=0,
+                push_id=13,
+                prev_push_id=12,
+                signature_id=signature_id,
+                task_labels=label,
+            )
+            for alert_id, signature_id, label in [
+                (11, 900, amazon_linux),
+                (12, 902, g1),
+                # Two different labels for one signature: no guess is made.
+                (13, 903, "test-linux2404-64-shippable/opt-talos-tp5o"),
+                (14, 903, "test-linux2404-64-shippable/opt-talos-other"),
+                # A copied label is excluded like any other.
+                (15, 904, g1_profiling),
+            ]
+        ),
+    ]
+    assert perf.get_signature_labels(map(perf.derive_alert_fields, alerts)) == {
+        900: amazon_linux,
+        901: amazon_windows,
+        902: g1,
+        904: g1_profiling,
+    }
+
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    assert [r["summary_id"] for r in regressions] == [100]
+    assert [
+        (r["signature_id"], r["label"], r["label_from_signature"])
+        for r in regressions[0]["runnables"]
+    ] == [
+        (900, amazon_linux, True),
+        (901, amazon_windows, False),
+        (902, g1, True),
+        (903, None, False),
+    ]
+
+    # A pair is flagged only when every label behind it was copied.
+    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
+    assert [
+        (p["node"][0], p["test_name"], p["labels_from_signature"]) for p in pairs
+    ] == [
+        ("c", "browsertime-tp6-firefox-amazon", False),
+        ("c", "talos-g1", True),
+    ]
+
+
+def test_landings_group_commits_by_bug() -> None:
+    push = _push(
+        12,
+        [
+            ("c" * 40, "Bug 3 - part 1", 3, False),
+            ("d" * 40, "Bug 4 - other", 4, False),
+            ("e" * 40, "Bug 3 - part 2", 3, False),
+            ("f" * 40, "Backed out changeset", None, True),
+            ("g" * 40, "No Bug - l10n", None, False),
+        ],
+    )
+    result = perf.group_landings(push)
+    assert [
+        (x["landing_id"], x["bug_id"], x["backout"], x["revisions"]) for x in result
+    ] == [
+        ("12:3", 3, False, ["c" * 40, "e" * 40]),
+        ("12:4", 4, False, ["d" * 40]),
+        (f"12:{'f' * 12}", None, True, ["f" * 40]),
+        (f"12:{'g' * 12}", None, False, ["g" * 40]),
+    ]
+    commits = perf.get_push_commits(push)
+    assert [
+        (c["node"][0], c["landing_id"], c["landing_size"], c["backout"])
+        for c in commits
+    ] == [
+        ("c", "12:3", 2, False),
+        ("d", "12:4", 1, False),
+        ("e", "12:3", 2, False),
+        ("f", f"12:{'f' * 12}", 1, True),
+        ("g", f"12:{'g' * 12}", 1, False),
+    ]
+
+
+def test_pin_culprit_commits_rules() -> None:
+    multi = _push(
+        12,
+        [
+            ("c" * 40, "Bug 3 - culprit", 3, False),
+            ("d" * 40, "Bug 4 - other", 4, False),
+        ],
+    )
+    single = _push(
+        20,
+        [
+            ("a" * 40, "Bug 7 - part 1", 7, False),
+            ("b" * 40, "Bug 7 - part 2", 7, False),
+        ],
+    )
+    assert perf.pin_culprit_commits(multi, {"regressed_by": [3]}, 555) == (
+        ["c" * 40],
+        "bug",
+    )
+    # The summary links the culprit bug directly instead of a regression bug.
+    assert perf.pin_culprit_commits(multi, {"regressed_by": []}, 4) == (
+        ["d" * 40],
+        "summary_bug",
+    )
+    assert perf.pin_culprit_commits(multi, None, None) == ([], None)
+    # A stack for one bug is one landing and pins as a whole.
+    assert perf.pin_culprit_commits(single, None, 999) == (
+        ["a" * 40, "b" * 40],
+        "single_landing",
+    )
+    assert perf.pin_culprit_commits(None, None, None) == ([], None)
+
+
+def test_generate_regressions_labels_and_pins_culprit() -> None:
+    alerts = [
+        _alert(),
+        # Second alert on the same summary, another test.
+        _alert(
+            alert_id=2,
+            signature_id=901,
+            suite="g1",
+            framework="talos",
+            task_labels="test-linux2404-64-shippable/opt-talos-g1",
+        ),
+        # Invalid alert inside the summary must be dropped.
+        _alert(
+            alert_id=3,
+            alert_status=3,
+            signature_id=902,
+            task_labels="test-linux2404-64-shippable/opt-talos-g3",
+        ),
+        # Improvement summary is not a regression.
+        _alert(
+            alert_id=4, summary_id=101, summary_status=4, push_id=13, prev_push_id=12
+        ),
+        # Confirmed, reassigned from another push, unpinned (backout-only push).
+        _alert(
+            alert_id=5,
+            summary_id=102,
+            summary_status=8,
+            push_id=14,
+            prev_push_id=10,
+            original_push_id=13,
+            bug_number=None,
+        ),
+        # A push still inside the settle window is skipped.
+        _alert(alert_id=6, summary_id=103, push_time="2031-01-01T00:00:00"),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    assert [r["summary_id"] for r in regressions] == [100, 102]
+
+    first = regressions[0]
+    assert first["revisions"] == ["c" * 40, "d" * 40]
+    assert first["culprit_commits"] == ["c" * 40]
+    assert first["pinned_by"] == "bug"
+    assert first["landings"] == [
+        {
+            "landing_id": "12:3",
+            "bug_id": 3,
+            "backout": False,
+            "revisions": ["c" * 40],
+            "culprit": True,
+        },
+        {
+            "landing_id": "12:4",
+            "bug_id": 4,
+            "backout": False,
+            "revisions": ["d" * 40],
+            "culprit": False,
+        },
+    ]
+    assert first["regressed_by_agrees"] is True
+    assert first["resolved"] is True
+    assert first["reassigned"] is False
+    assert "tier" not in first and "weight" not in first and "range_size" not in first
+    assert sorted(r["label"] for r in first["runnables"]) == [
+        "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon",
+        "test-linux2404-64-shippable/opt-talos-g1",
+    ]
+
+    second = regressions[1]
+    assert second["reassigned"] is True
+    # A backout-only push: the revert is its single landing and is the culprit.
+    assert second["culprit_commits"] == ["f" * 40]
+    assert second["pinned_by"] == "single_landing"
+    assert second["landings"][0]["backout"] is True
+    assert second["regressed_by_agrees"] is None
+
+
+def test_pairs_and_push_status_and_negatives() -> None:
+    windows = "test-windows11-64-24h2-shippable/opt-browsertime-tp6-firefox-amazon"
+    alerts = [
+        _alert(),
+        # Same test on another platform in the same summary merges into one pair.
+        _alert(
+            alert_id=2,
+            signature_id=901,
+            platform="windows11-64-24h2-shippable",
+            task_labels=windows,
+        ),
+        # Unpinned regression on push 13 (single landing, so it pins after all).
+        _alert(
+            alert_id=5,
+            summary_id=102,
+            summary_status=8,
+            push_id=13,
+            prev_push_id=12,
+            bug_number=None,
+            signature_id=905,
+            suite="g1",
+            framework="talos",
+            task_labels="test-linux2404-64-shippable/opt-talos-g1",
+        ),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+
+    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
+    assert [(p["push_id"], p["node"][0], p["test_name"]) for p in pairs] == [
+        (12, "c", "browsertime-tp6-firefox-amazon"),
+        (13, "e", "talos-g1"),
+    ]
+    amazon = pairs[0]
+    assert amazon["platform_families"] == ["linux", "windows"]
+    assert amazon["landing_id"] == "12:3" and amazon["landing_size"] == 1
+    assert amazon["pinned_by"] == "bug"
+    assert amazon["family"] == "browsertime-tp6" and amazon["category"] == "page-load"
+    assert amazon["summary_ids"] == [100]
+    # The innocent landing of the culprit push gets no positive row.
+    assert not any(p["node"] == "d" * 40 for p in pairs)
+    assert pairs[1]["pinned_by"] == "single_landing"
+
+    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
+    by_id = {s["push_id"]: s for s in statuses}
+    assert by_id[12]["label_state"] == "culprit" and by_id[10]["label_state"] == "clean"
+    assert by_id[12]["identities_ran"] == ["browsertime-tp6-firefox-amazon", "talos-g1"]
+    assert by_id[12]["platform_families_ran"] == ["linux"]
+    assert [c["node"][0] for c in by_id[12]["commits"]] == ["c", "d"]
+    assert [(c["node"][0], c["backout"]) for c in by_id[14]["commits"]] == [("f", True)]
+    assert all(s["settled"] for s in statuses)
+    assert "ambiguous" not in by_id[12]
+
+    db.write(perf.PERF_PAIRS_DB, pairs)
+    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
+    rows = list(perf.iter_labeled_pairs())
+    labeled = {(r["node"][0], r["test_name"]): r["label"] for r in rows}
+    assert labeled[("c", "browsertime-tp6-firefox-amazon")] == 1
+    assert labeled[("e", "talos-g1")] == 1
+    # Culprit pushes yield only their positives, never negatives.
+    assert ("c", "talos-g1") not in labeled and ("d", "talos-g1") not in labeled
+    assert ("e", "browsertime-tp6-firefox-amazon") not in labeled
+    # Clean pushes yield a negative per non-backout commit and candidate identity.
+    assert labeled[("a", "talos-g1")] == 0
+    assert not any(k[0] == "f" for k in labeled)
+    assert labeled[("b", "browsertime-tp6-firefox-amazon")] == 0
+    assert all("landing_id" in r and "push_id" in r for r in rows)
+
+
+def test_train_test_split_never_divides_a_push() -> None:
+    def records():
+        pushes = [("t1", 1), ("t2", 1), ("t3", 3), ("t4", 1)]
+        return [
+            {"pushdate": f"2026-06-0{i}T00:00:00", "node": f"{push}-{n}"}
+            for i, (push, size) in enumerate(pushes, start=1)
+            for n in range(size)
+        ]
+
+    # A 30% cutoff by count lands inside push t3; the whole push goes to test.
+    selected = records()
+    perf.assign_train_test_splits(selected, test_fraction=0.3)
+    assert [(r["node"], r["split"]) for r in selected] == [
+        ("t1-0", "train"),
+        ("t2-0", "train"),
+        ("t3-0", "test"),
+        ("t3-1", "test"),
+        ("t3-2", "test"),
+        ("t4-0", "test"),
+    ]
+
+    selected = records()
+    perf.assign_train_test_splits(selected, test_fraction=0)
+    assert {r["split"] for r in selected} == {"train"}
+
+
+def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(
+        perf.generate_regressions([_alert()], push_index, _bugs(), SETTLED)
+    )
+    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
+    selected = perf.select_export_commits(
+        regressions, statuses, negative_ratio=2, seed=1
+    )
+    positives = [r for r in selected if r["label"] == 1]
+    negatives = [r for r in selected if r["label"] == 0]
+    assert [p["node"] for p in positives] == ["c" * 40]
+    assert positives[0]["pinned_by"] == "bug"
+    assert positives[0]["landing_id"] == "12:3" and positives[0]["landing_size"] == 1
+    assert positives[0]["summary_ids"] == [100]
+    assert "weight" not in positives[0] and "tier" not in positives[0]
+    assert len(negatives) == 2
+    # Backouts and every commit of a culprit push are never negatives.
+    assert all(n["node"] not in ("c" * 40, "d" * 40, "f" * 40) for n in negatives)
+
+    perf.assign_train_test_splits(selected, test_fraction=0.3)
+    assert [r["split"] for r in selected] == ["train", "train", "test"]
+
+    def fake_patches(repo_dir, revs):
+        return [
+            (
+                b"# HG changeset patch\n# User a@b.c\n# Date 1 0\n# Node ID "
+                + rev
+                + b"\n# Parent 0\nBug 3 - culprit\n\nMore text\n\ndiff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n"
+            )
+            for rev in revs
+        ]
+
+    monkeypatch.setattr(regression_commits, "export_hg_patches", fake_patches)
+    exported = list(perf.attach_commit_patches(selected, "/nonexistent"))
+    assert len(exported) == 3
+    assert exported[-1]["commit_message"] == "Bug 3 - culprit\n\nMore text"
+    assert exported[-1]["diff"].startswith("diff --git a/f b/f")
+    assert exported[-1]["policy_version"] == perf.POLICY_VERSION
+
+
+def test_attach_commit_patches_skips_empty_diffs(monkeypatch) -> None:
+    records = [{"node": "1" * 40}, {"node": "2" * 40}]
+
+    def fake_patches(repo_dir, revs):
+        header = b"# HG changeset patch\n# Node ID "
+        return [
+            header + rev + b"\nMerge a to b\n"
+            if rev.startswith(b"1")
+            else header + rev + b"\nBug 1 - x\n\ndiff --git a/f b/f\n+x\n"
+            for rev in revs
+        ]
+
+    monkeypatch.setattr(regression_commits, "export_hg_patches", fake_patches)
+    exported = list(perf.attach_commit_patches(records, "/nonexistent"))
+    assert [e["node"][0] for e in exported] == ["2"]
+
+
+def test_revert_is_pinned_through_the_summary_bug() -> None:
+    # Real case: a revert caused the regression. The sheriff linked the reverted
+    # bug, whose regressed_by describes that bug's own history, not the revert.
+    revert = _push(
+        30,
+        [
+            (
+                "9" * 40,
+                'Revert "Bug 2067590 - Set the max dirty page modifier" r=smaug',
+                2067590,
+                True,
+            )
+        ],
+        ["test-linux2404-64-shippable/opt-talos-g1"],
+    )
+    push_index = perf.PushIndex(_pushes() + [revert])
+    bugs = {2067590: {"id": 2067590, "regressed_by": [1947687]}}
+    alerts = [_alert(summary_id=200, push_id=30, prev_push_id=14, bug_number=2067590)]
+    (regression,) = perf.generate_regressions(alerts, push_index, bugs, SETTLED)
+    assert regression["culprit_commits"] == ["9" * 40]
+    assert regression["pinned_by"] == "summary_bug"
+    assert regression["regressed_by_agrees"] is False
+
+    pairs = list(perf.generate_scheduling_pairs([regression], push_index))
+    assert [(p["node"][0], p["backout"], p["test_name"]) for p in pairs] == [
+        ("9", True, "browsertime-tp6-firefox-amazon")
+    ]
+    statuses = list(perf.generate_push_status(push_index, [regression], SETTLED))
+    exported = perf.select_export_commits(
+        [regression], statuses, negative_ratio=1, seed=0
+    )
+    assert [e["node"][0] for e in exported if e["label"] == 1] == ["9"]
+    assert all(not e["backout"] for e in exported if e["label"] == 0)
+
+
+def test_regression_window_is_bounded_by_push_time() -> None:
+    push_index = perf.PushIndex(_pushes())
+    cutoff = datetime(2026, 5, 30, 12, tzinfo=timezone.utc)
+    # A summary opened after the cutoff still counts when its push is settled.
+    late_summary = _alert(summary_created="2031-01-01T00:00:00")
+    kept = perf.generate_regressions([late_summary], push_index, _bugs(), cutoff)
+    assert [r["summary_id"] for r in kept] == [100]
+    # Pushes at or after the cutoff, or before --since, are outside the window.
+    push_time = datetime(2026, 5, 30, tzinfo=timezone.utc)
+    assert not list(
+        perf.generate_regressions([late_summary], push_index, _bugs(), push_time)
+    )
+    assert not list(
+        perf.generate_regressions(
+            [late_summary], push_index, _bugs(), cutoff, pushed_from=cutoff
+        )
+    )
+    assert perf.is_within_window("2026-05-30T00:00:00", push_time, cutoff)
+    assert not perf.is_within_window(None, None, cutoff)
+
+
+def test_labeled_window_excludes_pushes_before_the_alerts_window() -> None:
+    labeled_from = datetime(2026, 5, 29, 12, tzinfo=timezone.utc)
+    push_index = perf.PushIndex(_pushes())
+    # Pushes 10 (May 28) and 11 (May 29 00:00) predate the alerts window.
+    statuses = list(perf.generate_push_status(push_index, [], SETTLED, labeled_from))
+    assert [(s["push_id"], s["settled"]) for s in statuses] == [
+        (10, False),
+        (11, False),
+        (12, True),
+        (13, True),
+        (14, True),
+    ]
+    assert [
+        (s["push_id"], c["node"][0]) for s, c in perf.iter_clean_commits(statuses)
+    ] == [
+        (12, "c"),
+        (12, "d"),
+        (13, "e"),
+    ]
+    db.write(perf.PERF_PAIRS_DB, [])
+    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
+    assert perf.read_push_status() == statuses
+    negatives = {r["node"][0] for r in perf.iter_labeled_pairs({"talos-g1"})}
+    assert negatives == {"c", "d", "e"}  # a, b are unlabeled; f is a backout
+
+    exported = perf.select_export_commits([], statuses, negative_ratio=1, seed=0)
+    assert exported == []  # no positives, so no negatives are sampled
+
+
+def _bug(bug_id, status="RESOLVED", resolution=None, regressed_by=(), dupe_of=None):
+    return {
+        "id": bug_id,
+        "status": status,
+        "resolution": resolution,
+        "regressed_by": list(regressed_by),
+        "dupe_of": dupe_of,
+    }
+
+
+@pytest.mark.parametrize(
+    "summary_status, bug, pinned_by, bug_number, expected",
+    [
+        ("investigating", _bug(1, resolution="FIXED"), "bug", 1, "concluded"),
+        ("investigating", _bug(1, resolution="WONTFIX"), "bug", 1, "concluded"),
+        ("investigating", _bug(1, resolution="WORKSFORME"), "bug", 1, "concluded"),
+        ("investigating", _bug(1, resolution="INVALID"), "bug", 1, "rejected"),
+        ("investigating", _bug(1, resolution="INACTIVE"), None, 1, "rejected"),
+        ("fixed", _bug(1, resolution="INVALID"), "bug", 1, "rejected"),
+        ("investigating", _bug(1, status="NEW"), "bug", 1, "pending"),
+        ("investigating", _bug(1, status="ASSIGNED"), None, 1, "pending"),
+        ("backedout", _bug(1, status="REOPENED"), "bug", 1, "attributed"),
+        (
+            "investigating",
+            _bug(1, resolution="DUPLICATE", dupe_of=9),
+            None,
+            1,
+            "pending",
+        ),
+        ("investigating", None, None, None, "pending"),
+        ("wontfix", None, None, None, "attributed"),
+        ("investigating", _bug(1, status="NEW"), "summary_bug", 1, "attributed"),
+        # A linked bug that was not fetched, e.g. restricted: verdict unknown.
+        ("wontfix", None, None, 1, "pending"),
+        ("fixed", None, "single_landing", 1, "pending"),
+        # Unless the sheriff linked the culprit bug, which the push itself shows.
+        ("investigating", None, "summary_bug", 1, "attributed"),
+    ],
+)
+def test_regression_outcome(
+    summary_status, bug, pinned_by, bug_number, expected
+) -> None:
+    outcome = perf.decide_regression_outcome(summary_status, bug, pinned_by, bug_number)
+    assert outcome == expected
+
+
+def test_canonical_bug_follows_duplicates() -> None:
+    bugs = {
+        1: _bug(1, resolution="DUPLICATE", dupe_of=2),
+        2: _bug(2, resolution="DUPLICATE", dupe_of=3),
+        3: _bug(3, resolution="FIXED", regressed_by=[3]),
+        4: _bug(4, resolution="DUPLICATE", dupe_of=99),
+    }
+    assert perf.resolve_canonical_bug(bugs[1], bugs) == (bugs[3], 3)
+    assert perf.resolve_canonical_bug(bugs[3], bugs) == (bugs[3], None)
+    assert perf.resolve_canonical_bug(bugs[4], bugs) == (
+        bugs[4],
+        None,
+    )  # target not fetched
+    assert perf.resolve_canonical_bug(None, bugs) == (None, None)
+
+
+def test_generate_regressions_outcomes_and_label_states() -> None:
+    bugs = {
+        555: _bug(555, resolution="FIXED", regressed_by=[3]),
+        600: _bug(600, resolution="DUPLICATE", dupe_of=601),
+        601: _bug(601, resolution="WONTFIX", regressed_by=[5]),
+        700: _bug(700, status="NEW", regressed_by=[1]),
+        800: _bug(800, resolution="INVALID", regressed_by=[2]),
+    }
+    alerts = [
+        _alert(),  # push 12, bug 555 FIXED -> concluded
+        # Duplicate whose canonical bug is WONTFIX and pins push 13's commit.
+        _alert(
+            alert_id=2,
+            summary_id=101,
+            push_id=13,
+            prev_push_id=12,
+            bug_number=600,
+            signature_id=901,
+        ),
+        # Open bug on an investigating summary, push 10 -> pending.
+        _alert(
+            alert_id=3,
+            summary_id=102,
+            summary_status=5,
+            push_id=10,
+            prev_push_id=9,
+            bug_number=700,
+            signature_id=902,
+        ),
+        # Rejected on push 11.
+        _alert(
+            alert_id=4,
+            summary_id=103,
+            push_id=11,
+            prev_push_id=10,
+            bug_number=800,
+            signature_id=903,
+        ),
+        # Harness-tagged summaries are regressions now; infra-tagged are not.
+        _alert(
+            alert_id=5,
+            summary_id=104,
+            push_id=14,
+            prev_push_id=13,
+            bug_number=None,
+            summary_status=8,
+            summary_tags="harness",
+            signature_id=904,
+        ),
+        _alert(
+            alert_id=6,
+            summary_id=105,
+            push_id=14,
+            prev_push_id=13,
+            bug_number=None,
+            summary_status=8,
+            summary_tags="infra",
+            signature_id=905,
+        ),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, bugs, SETTLED))
+    by_summary = {r["summary_id"]: r for r in regressions}
+    assert sorted(by_summary) == [100, 101, 102, 103, 104]
+
+    assert by_summary[100]["outcome"] == "concluded"
+    assert by_summary[100]["bug_resolution"] == "FIXED"
+    dup = by_summary[101]
+    assert dup["outcome"] == "concluded" and dup["canonical_bug"] == 601
+    assert dup["bug_resolution"] == "WONTFIX"
+    assert dup["culprit_commits"] == ["e" * 40] and dup["pinned_by"] == "bug"
+    assert by_summary[102]["outcome"] == "pending"
+    assert by_summary[103]["outcome"] == "rejected"
+    assert by_summary[104]["outcome"] == "attributed"
+    assert by_summary[104]["summary_tags"] == ["harness"]
+
+    states = perf.get_push_label_states(regressions)
+    assert states == {
+        12: "culprit",
+        13: "culprit",
+        10: "pending",
+        11: "rejected",
+        14: "culprit",
+    }
+
+    # Pairs come only from positives.
+    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
+    assert sorted({p["push_id"] for p in pairs}) == [12, 13, 14]
+
+    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
+    db.write(perf.PERF_PAIRS_DB, pairs)
+    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
+    labeled = list(perf.iter_labeled_pairs({"talos-g1"}))
+    negatives = {r["node"][0] for r in labeled if r["label"] == 0}
+    assert (
+        negatives == set()
+    )  # pushes 10 and 11 are pending/rejected, the rest culprits
+
+    exported = perf.select_export_commits(
+        regressions, statuses, negative_ratio=5, seed=0
+    )
+    assert {e["node"][0] for e in exported if e["label"] == 1} == {"c", "e", "f"}
+    assert not any(
+        e["label"] == 0 for e in exported
+    )  # no clean push left to sample from
+
+
+def test_unfetched_linked_bug_is_pending() -> None:
+    alerts = [
+        # A fixed summary on push 12 links bug 999, which was not fetched, e.g.
+        # restricted. Its verdict is unknown, so it is not a positive.
+        _alert(bug_number=999),
+        # The sheriff linked the culprit bug landed in push 13: the push shows it.
+        _alert(
+            alert_id=2,
+            summary_id=101,
+            push_id=13,
+            prev_push_id=12,
+            bug_number=5,
+            signature_id=901,
+        ),
+    ]
+    push_index = perf.PushIndex(_pushes())
+    regressions = list(perf.generate_regressions(alerts, push_index, {}, SETTLED))
+    by_summary = {r["summary_id"]: r for r in regressions}
+
+    assert by_summary[100]["outcome"] == "pending"
+    assert by_summary[100]["pinned_by"] is None
+    assert by_summary[100]["bug_state"] is None
+    assert by_summary[101]["outcome"] == "attributed"
+    assert by_summary[101]["pinned_by"] == "summary_bug"
+    # The pending push yields neither positives nor negatives.
+    states = perf.get_push_label_states(regressions)
+    assert states == {12: "pending", 13: "culprit"}
+
+
+@responses.activate
+def test_fetch_bugs_follows_duplicates() -> None:
+    def reply(request):
+        ids = request.params["id"].split(",")
+        bugs = []
+        for bug_id in ids:
+            bug_id = int(bug_id)
+            dupe_of = {1: 2, 2: 3}.get(bug_id)
+            bugs.append(
+                {
+                    "id": bug_id,
+                    "status": "RESOLVED",
+                    "resolution": "DUPLICATE" if dupe_of else "FIXED",
+                    "dupe_of": dupe_of,
+                    "regressed_by": [],
+                    "groups": [],
+                }
+            )
+        return 200, {}, json.dumps({"bugs": bugs})
+
+    responses.add_callback(
+        responses.GET,
+        extraction.BUGZILLA_REST_URL,
+        callback=reply,
+        content_type="application/json",
+    )
+    bugs = {b["id"]: b for b in perf.fetch_bugs([1])}
+    assert sorted(bugs) == [1, 2, 3]
+    assert bugs[3]["resolution"] == "FIXED"
+    requested = [c.request.params["id"] for c in responses.calls]
+    assert requested == ["1", "2", "3"]
+
+
+@responses.activate
+def test_fetch_bugs_drops_restricted_bugs() -> None:
+    # Bug 1 is public and a duplicate of restricted bug 2, which is itself a
+    # duplicate of bug 3. Bug 4 is restricted.
+    catalog = {
+        1: {"dupe_of": 2, "groups": []},
+        2: {"dupe_of": 3, "groups": ["core-security"]},
+        3: {"dupe_of": None, "groups": []},
+        4: {"dupe_of": None, "groups": ["mozilla-employee-confidential"]},
+    }
+
+    def reply(request):
+        assert "groups" in request.params["include_fields"].split(",")
+        bugs = [
+            {
+                "id": int(bug_id),
+                "status": "RESOLVED",
+                "resolution": "DUPLICATE" if catalog[int(bug_id)]["dupe_of"] else "",
+                "regressed_by": [],
+                **catalog[int(bug_id)],
+            }
+            for bug_id in request.params["id"].split(",")
+        ]
+        return 200, {}, json.dumps({"bugs": bugs})
+
+    responses.add_callback(
+        responses.GET,
+        extraction.BUGZILLA_REST_URL,
+        callback=reply,
+        content_type="application/json",
+    )
+    bugs = perf.fetch_bugs([1, 4])
+    assert [bug["id"] for bug in bugs] == [1]
+    assert "groups" not in bugs[0]
+    # Restricted bug 2 is requested once and its duplicate link is not followed.
+    requested = [c.request.params["id"] for c in responses.calls]
+    assert requested == ["1,4", "2"]
+
+
+ALERTS_URL = db.DATABASES[perf.PERF_ALERTS_DB]["url"]
+ALERTS_VERSION_URL = ALERTS_URL.replace(".zst", ".version")
+
+
+def _publish_alerts(version, records=()):
+    """Serve a published alerts snapshot from the Taskcluster index."""
+    responses.add(responses.GET, ALERTS_VERSION_URL, body=str(version))
+    body = zstandard.ZstdCompressor().compress(
+        "".join(json.dumps(record) + "\n" for record in records).encode()
+    )
+    responses.add(responses.HEAD, ALERTS_URL, headers={"ETag": "etag"})
+    responses.add(responses.GET, ALERTS_URL, body=body)
+
+
+@responses.activate
+def test_previous_snapshot_is_downloaded() -> None:
+    _publish_alerts(1, [{"alert_id": 7, "repository": "autoland"}])
+    assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+    assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
+
+
+@responses.activate
+def test_first_run_starts_a_new_archive() -> None:
+    responses.add(responses.GET, ALERTS_VERSION_URL, status=404)
+    assert not perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+
+
+@pytest.mark.parametrize(
+    "version_reply",
+    [
+        {"status": 403},
+        {"body": requests.exceptions.ConnectionError("unreachable")},
+        {"body": "not a version"},
+    ],
+)
+@responses.activate
+def test_unavailable_snapshot_is_never_started_over(version_reply) -> None:
+    responses.add(responses.GET, ALERTS_VERSION_URL, **version_reply)
+    with pytest.raises(RuntimeError, match="Not starting perf_alerts.json over"):
+        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+
+    # A local copy, as in local runs and reruns, is used instead.
+    db.write(perf.PERF_ALERTS_DB, [{"alert_id": 7, "repository": "autoland"}])
+    assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+    assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
+
+
+@responses.activate
+def test_failed_snapshot_download_is_never_started_over() -> None:
+    responses.add(responses.GET, ALERTS_VERSION_URL, body="1")
+    responses.add(responses.HEAD, ALERTS_URL, status=403)
+    with pytest.raises(RuntimeError, match="Could not download"):
+        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+
+
+@responses.activate
+def test_snapshot_of_another_version_needs_a_converter() -> None:
+    _publish_alerts(2)
+    with pytest.raises(RuntimeError, match="needs a converter"):
+        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
