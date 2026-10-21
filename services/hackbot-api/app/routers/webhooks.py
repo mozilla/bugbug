@@ -49,7 +49,6 @@ def get_hackbot_client() -> HackbotClient:
     return HackbotClient(
         base_url=settings.hackbot_api_url,
         api_key=settings.external_api_key,
-        audience=settings.api_audience,
     )
 
 

@@ -226,14 +226,8 @@ async def test_apply_actions_raises_for_http_errors(monkeypatch):
         await _client().apply_actions(RUN_ID)
 
 
-def test_client_requires_either_api_key_or_audience():
-    """Client must have at least one auth method configured."""
-    with pytest.raises(ValueError, match="Either api_key or audience must be provided"):
-        HackbotClient(base_url="https://example.com")
-
-
 async def test_trigger_run_with_service_account_auth(monkeypatch):
-    """Client uses Bearer token when api_key is not set but audience is."""
+    """Client sends a Bearer token minted with base_url as the audience."""
     captured = _capture_post(
         monkeypatch,
         httpx.Response(
@@ -242,33 +236,28 @@ async def test_trigger_run_with_service_account_auth(monkeypatch):
         ),
     )
 
-    def mock_fetch_id_token(request, audience):
-        return "fake.jwt.token"
+    class _FakeCredentials:
+        token = None
 
-    monkeypatch.setattr(client_module.id_token, "fetch_id_token", mock_fetch_id_token)
+        @property
+        def valid(self):
+            return self.token is not None
 
-    client = _client(api_key="", audience="https://hackbot.example")
+        def refresh(self, request):
+            self.token = "fake.jwt.token"
+
+    def mock_fetch_id_token_credentials(audience, request):
+        captured["audience"] = audience
+        return _FakeCredentials()
+
+    monkeypatch.setattr(
+        client_module.id_token,
+        "fetch_id_token_credentials",
+        mock_fetch_id_token_credentials,
+    )
+
+    client = _client(api_key="")
     await client.trigger_run("bug-fix", {"bug_id": 1234})
 
+    assert captured["audience"] == "https://hackbot.example"
     assert captured["headers"] == {"Authorization": "Bearer fake.jwt.token"}
-
-
-async def test_trigger_run_prefers_api_key_over_service_account(monkeypatch):
-    """When both api_key and audience are set, use the API key."""
-    captured = _capture_post(
-        monkeypatch,
-        httpx.Response(
-            201,
-            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
-        ),
-    )
-
-    def mock_fetch_id_token(request, audience, credentials=None):
-        raise AssertionError("Should not call fetch_id_token when api_key is set")
-
-    monkeypatch.setattr(client_module.id_token, "fetch_id_token", mock_fetch_id_token)
-
-    client = _client(api_key="secret", audience="https://hackbot.example")
-    await client.trigger_run("bug-fix", {"bug_id": 1234})
-
-    assert captured["headers"] == {"X-API-Key": "secret"}

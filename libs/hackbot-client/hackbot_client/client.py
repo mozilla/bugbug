@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+from google.auth import credentials
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
@@ -17,41 +18,42 @@ class HackbotClient:
 
     def __init__(
         self,
-        base_url: str,
+        base_url: str = "https://hackbot-api.moz.tools",
         api_key: str = "",
-        audience: str = "",
         timeout_seconds: float = 30.0,
     ) -> None:
         """Initialize the client.
 
+        Auth is picked in this order: API key, the service account key file in
+        `GOOGLE_APPLICATION_CREDENTIALS`, then the GCP metadata server. Service
+        account tokens use `base_url` as their audience.
+
         Args:
             base_url: Base URL of the Hackbot API
             api_key: API key for legacy authentication (optional)
-            audience: Audience for service account OIDC token minting.
-                Required if api_key is not set.
             timeout_seconds: HTTP request timeout
         """
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._audience = audience
         self._timeout_seconds = timeout_seconds
+        self._credentials: credentials.Credentials | None = None
 
-        if not api_key and not audience:
-            raise ValueError(
-                "Either api_key or audience must be provided for authentication"
+    def _refresh_credentials(self) -> None:
+        request = google_requests.Request()
+        if self._credentials is None:
+            self._credentials = id_token.fetch_id_token_credentials(
+                self._base_url, request
             )
+        self._credentials.refresh(request)
 
     async def _get_headers(self) -> dict[str, str]:
         """Return auth headers: API key or service account token."""
         if self._api_key:
             return {"X-API-Key": self._api_key}
 
-        token = await asyncio.to_thread(
-            id_token.fetch_id_token,
-            google_requests.Request(),
-            self._audience,
-        )
-        return {"Authorization": f"Bearer {token}"}
+        if self._credentials is None or not self._credentials.valid:
+            await asyncio.to_thread(self._refresh_credentials)
+        return {"Authorization": f"Bearer {self._credentials.token}"}
 
     async def trigger_run(
         self,
@@ -97,7 +99,7 @@ class HackbotClient:
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.post(
                 f"{self._base_url}/runs/{run_id}/actions/apply",
-                headers={"X-API-Key": self._api_key},
+                headers=await self._get_headers(),
             )
 
         response.raise_for_status()
