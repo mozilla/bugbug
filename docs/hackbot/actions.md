@@ -134,6 +134,28 @@ later manual apply can still reference an earlier action's result.
 An unresolvable placeholder is **left as-is and logged**, rather than raising. The action
 then fails with an error a human can read, instead of silently posting mangled text.
 
+## Waiting on a try push
+
+An action can be held until CI has checked the change it carries. Params with a
+`wait_for_try` key (`{"ref", "max_failure_rate", "slack_channel", "slack_ref"}`) make
+its row start `waiting` instead of `pending`. Neither auto-apply nor a manual apply-all
+touches a `waiting` row.
+
+`POST /internal/maintenance/check-try-pushes`, meant to be called on a schedule like
+`finalize-stale-runs`, finds each one's try push on Treeherder by its Lando commit id,
+the `try_server.push` result's `job_id`. Once every selected job has finished, it:
+
+- posts the per-job results in the Slack thread of the message recorded under
+  `slack_ref`;
+- applies the action if at most `max_failure_rate` of the runs failed, adding the
+  results to its `test_plan`; or marks it `skipped`, with the failure count as its
+  error.
+
+It then posts the outcome to the thread, also shown in the channel. A push that fails,
+or has not finished a day later, is reported and the action `skipped`. perftest-repair
+uses this to open its fix as a Phabricator revision for `#perftest-reviewers` only once
+its retriggers mostly pass ([try_results.py](../../services/hackbot-api/app/try_results.py)).
+
 ## Bugzilla coalescing
 
 Same-bug field changes are merged with the closest comment into a single

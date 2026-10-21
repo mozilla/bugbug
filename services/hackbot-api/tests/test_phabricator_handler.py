@@ -537,3 +537,53 @@ async def test_repository_phid_looks_up_by_short_name(monkeypatch):
 
     monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
     assert await phabricator_handler._repository_phid() == "PHID-MC"
+
+
+async def test_submit_patch_with_reviewers_requests_their_review(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "differential.revision.edit": {"object": {"id": 555, "phid": "PHID-REV-1"}},
+            "project.search": {"data": [{"phid": "PHID-PROJ-perftest"}]},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 1, "title": "Fix", "reviewers": ["#perftest-reviewers"]}, _ctx()
+    )
+
+    assert result.status == "applied"
+    search = next(c for c in calls if c[0] == "project.search")
+    assert search[1]["constraints"] == {"slugs": ["perftest-reviewers"]}
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
+    assert transactions["reviewers.set"] == ["PHID-PROJ-perftest"]
+    # Not a draft: it goes straight to needing review.
+    assert "plan-changes" not in transactions
+    commits = next(c for c in calls if c[0] == "differential.setdiffproperty")
+    assert "Reviewers: #perftest-reviewers" in commits[1]["data"]
+
+
+async def test_submit_patch_fails_for_an_unknown_reviewer(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "project.search": {"data": []},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": 1, "title": "Fix", "reviewers": ["#nobody-here"]}, _ctx()
+    )
+
+    assert result.status == "failed"
+    assert "#nobody-here" in result.error
+    assert not any(c[0] == "differential.revision.edit" for c in calls)

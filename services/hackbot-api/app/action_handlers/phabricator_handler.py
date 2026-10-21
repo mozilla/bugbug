@@ -46,6 +46,25 @@ def _revision_url(revision_id: int) -> str:
     return _client().revision_url(revision_id)
 
 
+async def _reviewer_phids(reviewers: list[str]) -> list[str]:
+    """Resolve reviewer names to PHIDs: ``#slug`` is a project, anything else a user.
+
+    Raises on an unknown name rather than dropping it.
+    """
+    phids = []
+    for name in reviewers:
+        if name.startswith("#"):
+            method, constraint = "project.search", {"slugs": [name[1:]]}
+        else:
+            method, constraint = "user.search", {"usernames": [name]}
+        result = await _conduit_request(method, constraints=constraint)
+        data = result.get("data") or []
+        if not data:
+            raise ValueError(f"Unknown Phabricator reviewer {name!r}")
+        phids.append(data[0]["phid"])
+    return phids
+
+
 @alru_cache(maxsize=1)
 async def _repository_phid() -> str:
     """The target repository's PHID, needed on every `differential.creatediff` call.
@@ -162,12 +181,13 @@ def _arc_commit_message(
     test_plan: str | None,
     bug_id: Any,
     url: str,
+    reviewers: list[str] | None = None,
 ) -> str:
     """Build moz-phab's arc commit message, with the Differential Revision URL.
 
     Mirrors ``Commit.build_arc_commit_message`` + ``amend_revision_url`` so the
     reconstructed commit reads identically to a moz-phab submission. Reviewers
-    are always empty: hackbot never assigns them (draft submissions omit them).
+    are empty for a draft, which gets them at promotion time.
     """
     body = summary or ""
     if body:
@@ -177,7 +197,7 @@ def _arc_commit_message(
         title=title,
         body=body,
         test_plan=test_plan or "",
-        reviewers="",
+        reviewers=", ".join(reviewers or []),
         bug_id=bug_id if bug_id is not None else "",
     )
 
@@ -190,6 +210,7 @@ async def _set_local_commits(
     test_plan: str | None,
     bug_id: Any,
     revision_id: int,
+    reviewers: list[str] | None = None,
 ) -> None:
     """Complete and store moz-phab's ``local:commits`` diff property.
 
@@ -199,7 +220,7 @@ async def _set_local_commits(
     URL.
     """
     message = _arc_commit_message(
-        title, summary, test_plan, bug_id, _revision_url(revision_id)
+        title, summary, test_plan, bug_id, _revision_url(revision_id), reviewers
     )
     for commit_info in local_commits.values():
         commit_info["summary"] = title
@@ -235,12 +256,16 @@ class SubmitPatchHandler:
 
     Nothing exists on the Phabricator side yet, so the agent's title, summary,
     and bug id are what the revision gets, created in a single edit.
+
+    By default the revision is a draft with no reviewers; ``reviewers`` (``#project``
+    or user names) requests their review instead.
     """
 
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
         summary = params.get("summary")
         test_plan = params.get("test_plan")
+        reviewers = params.get("reviewers") or []
 
         if not str(bug_id).isdigit():
             return ActionResult.failed(
@@ -266,7 +291,7 @@ class SubmitPatchHandler:
                 **submission["diff"],
             )
 
-            # Reviewers are never assigned by hackbot: a draft gets them at
+            # Without reviewers the revision is a draft: it gets them at
             # promotion time, and the agent doesn't choose them. A new revision
             # has no status yet, so plan-changes rides this same edit.
             title = _revision_title(params["title"])
@@ -274,8 +299,13 @@ class SubmitPatchHandler:
                 {"type": "update", "value": diff_result["phid"]},
                 {"type": "title", "value": title},
                 {"type": "bugzilla.bug-id", "value": str(bug_id)},
-                {"type": "plan-changes", "value": True},
             ]
+            if reviewers:
+                transactions.append(
+                    {"type": "reviewers.set", "value": await _reviewer_phids(reviewers)}
+                )
+            else:
+                transactions.append({"type": "plan-changes", "value": True})
             if summary:
                 transactions.append({"type": "summary", "value": summary})
             if test_plan:
@@ -303,6 +333,7 @@ class SubmitPatchHandler:
                 test_plan,
                 bug_id,
                 revision_id,
+                reviewers,
             )
         except Exception as exc:
             log.exception("Failed to submit Phabricator diff for bug %s", bug_id)
