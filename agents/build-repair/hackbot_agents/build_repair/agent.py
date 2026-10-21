@@ -137,15 +137,16 @@ def _build_options(
     )
 
 
-# CI's paths, created in the Dockerfile: compile commands must match CI's for
-# sccache to reuse CI's level-1 cache, which Hackbot may only read.
-CI_FETCHES_DIR = Path("/builds/worker/fetches")
+# On the workspace disk. configure strips the source, object and sysroot paths
+# from sccache's cache keys, so CI's level-1 cache (read-only here) still hits.
+CI_FETCHES_DIR = Path("/workspace/fetches")
 CI_SCCACHE_BUCKET = "sccache-l1-us-central1"
 
 
 def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
-    """Build as the failing CI task did: its toolchains, mozconfig and paths."""
+    """Build as the failing CI task did: its toolchains and mozconfig."""
     fetches = [f"{f['task']}:{f['artifact']}" for f in json.loads(env["MOZ_FETCHES"])]
+    CI_FETCHES_DIR.mkdir(exist_ok=True)
     subprocess.run(
         [str(fx_ctx.source_dir / "mach"), "--no-interactive", "artifact"]
         + ["toolchain", "--from-task", *fetches],

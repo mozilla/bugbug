@@ -53,13 +53,17 @@
             "cpu": "6",
             "memory": "24Gi",
             "timeout_seconds": 7200,
+            "workspace": {
+                "size": "40Gi"
+            },
             "broker": {
                 "cpu": "1",
                 "memory": "512Mi"
             },
-            "config_hash": "ae4c8525b6aecb26",
+            "config_hash": "16fbba57f9570e19",
             "compatible": [
-                "ae4c8525b6aecb26"
+                "ae4c8525b6aecb26",
+                "16fbba57f9570e19"
             ]
         },
         "frontend-triage": {
