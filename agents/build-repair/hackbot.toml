@@ -5,7 +5,7 @@ checkout_path = "/workspace/firefox"
 
 [firefox]
 enabled = true
-objdir = "/builds/worker/workspace/obj-build"
+objdir = "objdir-build-repair"
 
 # Infrastructure this agent runs on, applied by Terraform. Changing anything here
 # changes the agent's shape and goes through an infra PR; the image ships on
@@ -15,6 +15,9 @@ runtime = "cloud_run_job"
 cpu = "6"
 memory = "24Gi"
 timeout_seconds = 7200
+
+[deploy.workspace]
+size = "40Gi"
 
 [deploy.broker]
 cpu = "1"

@@ -58,13 +58,9 @@ RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
 
-# CI's paths, so builds of failing Linux tasks match CI's compile commands. The
-# runtime clones into /workspace/firefox (SOURCE_REPO), and mach resolves the
-# symlink. CI's in-tree mozconfigs read these key files; the agent has no secrets.
-RUN mkdir -p /builds/worker/checkouts/gecko /builds/worker/workspace /builds/worker/fetches \
-    && for f in gls-gapi.data sb-gapi.data mozilla-desktop-geoloc-api.key; do echo no-secret > /builds/$f; done \
-    && chown -R agent:agent /builds \
-    && ln -s /builds/worker/checkouts/gecko /workspace/firefox
+# CI's in-tree mozconfigs read these key files; the agent has no secrets.
+RUN mkdir /builds \
+    && for f in gls-gapi.data sb-gapi.data mozilla-desktop-geoloc-api.key; do echo no-secret > /builds/$f; done
 
 # Not ~/.cargo/bin, where `mach bootstrap` installs the Rust toolchain at runtime:
 # that directory is rustup-managed and inside the agent's HOME, so a root-owned copy
