@@ -120,7 +120,14 @@ class SendEmailHandler:
             Subject(params["subject"]),
             Content("text/plain", body_md),
             HtmlContent(
-                markdown2.markdown(body_md, extras=["fenced-code-blocks", "tables"])
+                markdown2.markdown(
+                    body_md,
+                    extras={
+                        "fenced-code-blocks": None,
+                        "tables": None,
+                        "middle-word-em": False,
+                    },
+                )
             ),
         )
         team = os.environ.get("NOTIFICATION_TEAM_EMAIL", "").strip()
