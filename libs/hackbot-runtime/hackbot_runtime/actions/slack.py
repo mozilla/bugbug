@@ -7,7 +7,7 @@ during the run, so a notification gets the same properties as every other
 action: it is visible in the UI before it lands, it is applied at most once
 (an already-applied row is never reposted, so a redelivered completion event
 cannot double-post), and its text may reference an earlier action's apply-time
-result through ``{{actions.<ref>.<field>}}`` -- e.g. the URL of a bug comment
+result through ``{{actions.<action_id>.<field>}}`` -- e.g. the URL of a bug comment
 this run posted.
 """
 
@@ -85,7 +85,6 @@ def record_message(
     text: str | None = None,
     blocks: list[dict] | None = None,
     *,
-    ref: str | None = None,
     unfurl: bool = False,
 ) -> dict:
     """Record a notification the agent was never asked to decide on.
@@ -96,7 +95,7 @@ def record_message(
     ``unfurl`` turns Slack's previews back on, recorded as its link and media
     flags separately.
     """
-    return recorder.record(ACTION_TYPE, _params(channel, text, blocks, unfurl), ref=ref)
+    return recorder.record(ACTION_TYPE, _params(channel, text, blocks, unfurl))
 
 
 TOOLS = tools_in(__name__)

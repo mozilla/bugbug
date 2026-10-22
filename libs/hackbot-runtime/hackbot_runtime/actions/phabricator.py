@@ -69,7 +69,8 @@ async def submit_patch(
         Field(
             description=(
                 "Revision test plan. If you recorded a Try push, include "
-                "its Treeherder URL using {{actions.<ref>.url}}."
+                "its Treeherder URL using {{actions.<action_id>.url}}, with "
+                "the ID returned when you recorded the push"
             )
         ),
     ] = None,
@@ -81,17 +82,6 @@ async def submit_patch(
                 "history. Do not restate the bug, narrate the investigation or "
                 "implementation process. Keep test and verification details in "
                 "test_plan instead."
-            ),
-        ),
-    ] = None,
-    ref: Annotated[
-        str | None,
-        Field(
-            description=(
-                "Optional label for this action so a later action (e.g. a "
-                "bugzilla.add_comment in the same run) can reference its "
-                "result once applied, via {{actions.<ref>.url}} in that "
-                "action's text."
             ),
         ),
     ] = None,
@@ -118,9 +108,9 @@ async def submit_patch(
     submission as a proposed action for review; it is not sent to Phabricator
     during the run.
 
-    Set `ref` if you want to reference the new revision's URL from another action
-    in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
-    bug comment).
+    A later action in the same run can reference the new revision's URL as
+    `{{actions.<action_id>.url}}` (for example, inside a bug comment), using the
+    ID this call returns.
     """
     _validate_summary(summary)
     params: dict = {
@@ -131,9 +121,7 @@ async def submit_patch(
     }
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
-    action = recorder.record(
-        SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning, ref=ref
-    )
+    action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 

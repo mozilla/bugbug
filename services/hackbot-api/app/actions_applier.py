@@ -10,6 +10,7 @@ Application runs each pending row through the handler registry in
 never re-applied, so Pub/Sub retries and repeated manual applies are safe.
 """
 
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -36,7 +37,7 @@ _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 
 
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
-    """Substitute `{{actions.<ref>.<field>}}` in `value` using prior results.
+    """Substitute `{{actions.<action_id>.<field>}}` in `value` using prior results.
 
     Recurses through dicts/lists so a placeholder can appear anywhere in an
     action's params, not just at the top level. A placeholder referencing a
@@ -142,7 +143,7 @@ async def ensure_action_rows(
                 idx=idx,
                 type=action["type"],
                 params=action.get("params", {}),
-                ref=action.get("ref"),
+                ref=action.get("action_id"),
                 status="pending",
             )
             db.add(row)
@@ -192,7 +193,7 @@ async def _apply_pending_rows(
     bugmail, one history entry); any other comments on that bug still apply
     separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`.
 
-    Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
+    Cross-action `{{actions.<action_id>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
     earlier in this pass, so a later (even manual) apply can still reference an
     earlier action's result.
@@ -206,15 +207,20 @@ async def _apply_pending_rows(
     pending = [(row, att) for row, att in rows if row.status != "applied"]
 
     # Plan which pending rows coalesce into one bug PUT (indices into `pending`).
-    # Drop any group whose rows carry a `ref`: nothing should reference a
-    # coalesced member's result, and this keeps that invariant if a ref is ever
-    # added to a bug action. Everything else applies one row at a time as before.
+    # Drop any group with a member another pending action references: a group
+    # applies at its last member, possibly after the action that needs the
+    # result. Everything else applies one row at a time as before.
+    referenced = {
+        match.group(1)
+        for row, _ in pending
+        for match in _PLACEHOLDER_RE.finditer(json.dumps(row.params))
+    }
     groups = [
         group
         for group in plan_coalesced_groups(
             [(row.type, row.params) for row, _ in pending]
         )
-        if all(pending[i][0].ref is None for i in group)
+        if all(pending[i][0].ref not in referenced for i in group)
     ]
     # Rows sit in idx order, so a group's last member is its max idx: apply the
     # whole group there, once every earlier (backward) dependency is resolved.

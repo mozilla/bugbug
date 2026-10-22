@@ -87,18 +87,6 @@ def test_attachment_key_uses_action_id(tmp_path):
     )
 
 
-def test_ref_included_when_given():
-    rec = ActionsRecorder()
-    rec.record("phabricator.submit_patch", {"bug_id": 1}, ref="patch")
-    assert rec.actions[0]["ref"] == "patch"
-
-
-def test_ref_omitted_when_not_given():
-    rec = ActionsRecorder()
-    rec.record("bugzilla.update_bug", {"bug_id": 1})
-    assert "ref" not in rec.actions[0]
-
-
 def test_hooks_run_in_order_and_mutations_are_recorded():
     calls: list[str] = []
 
@@ -132,7 +120,7 @@ def test_hooks_only_run_for_their_action_type():
     assert seen == ["phabricator.submit_patch"]
 
 
-def test_hook_sees_ref_but_runs_before_attachments_are_published(tmp_path):
+def test_hook_runs_before_attachments_are_published(tmp_path):
     src = tmp_path / "fix.patch"
     src.write_text("diff")
     captured: list[dict] = []
@@ -147,11 +135,9 @@ def test_hook_sees_ref_but_runs_before_attachments_are_published(tmp_path):
     recorded = rec.record(
         "bugzilla.add_attachment",
         {"bug_id": 1},
-        ref="patch",
         attachments={"file": src},
     )
 
-    assert captured[0]["ref"] == "patch"
     # Publishing happens only once the hooks have accepted the action.
     assert "attachments" not in captured[0]
     assert recorded["attachments"] == [
@@ -236,11 +222,10 @@ def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
         "phabricator.submit_patch",
         {"bug_id": 1, "title": "Fix"},
         reasoning="verified fix",
-        ref="patch",
     )
     comment = rec.record(
         "bugzilla.add_comment",
-        {"bug_id": 1, "text": "See {{actions.patch.url}}"},
+        {"bug_id": 1, "text": "See the patch"},
         reasoning="announce the patch",
     )
 
@@ -255,7 +240,6 @@ def test_list_actions_returns_stable_ids_and_complete_detached_payloads():
         "type": "phabricator.submit_patch",
         "params": {"bug_id": 1, "title": "Fix"},
         "reasoning": "verified fix",
-        "ref": "patch",
     }
     assert "action_id" not in rec.actions[0]
 
