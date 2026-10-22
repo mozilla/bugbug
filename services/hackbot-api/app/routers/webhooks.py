@@ -69,7 +69,7 @@ def get_phabricator_authorizer(
     authorizer = getattr(request.app.state, "phabricator_authorizer", None)
     if authorizer is None:
         authorizer = PhabricatorAuthorizer(
-            phab_client, settings.webhook.authorized_group_phid
+            phab_client, settings.webhook.authorized_group
         )
         request.app.state.phabricator_authorizer = authorizer
     return authorizer
