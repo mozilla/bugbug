@@ -5,6 +5,7 @@ import json
 import pytest
 from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
+    AutowebcompatInterventionInputs,
     BugFixInputs,
     BuildRepairInputs,
     TestRepairInputs,
@@ -259,3 +260,29 @@ def test_uplift_inputs_require_at_least_one_source():
 def test_uplift_inputs_reject_an_unknown_source_kind():
     with pytest.raises(ValidationError):
         UpliftInputs(target_branch="beta", sources=[{"kind": "hg", "rev": "abc"}])
+
+
+def test_intervention_follow_up_reaches_the_agent():
+    env = model_to_env(
+        AutowebcompatInterventionInputs(
+            bug_id=1, revision_id=42, comment="@hackbot please fix"
+        )
+    )
+    assert env["REVISION_ID"] == "42"
+    assert env["COMMENT"] == "@hackbot please fix"
+
+
+@pytest.mark.parametrize(
+    ("fields", "error"),
+    [
+        ({"bug_id": 1, "revision_id": 42}, "comment is required"),
+        ({"bug_id": 1, "comment": "@hackbot please fix"}, "comment requires"),
+        (
+            {"bug_data": "report", "revision_id": 42, "comment": "@hackbot hi"},
+            "bug_id is required",
+        ),
+    ],
+)
+def test_intervention_follow_up_inputs_must_be_coherent(fields, error):
+    with pytest.raises(ValidationError, match=error):
+        AutowebcompatInterventionInputs(**fields)

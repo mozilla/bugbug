@@ -7,6 +7,7 @@ from autowebcompat_tools.task import RunTracker, TaskConfig
 from hackbot_runtime import (
     HackbotAgentResult,
     HackbotContext,
+    checkout_revision,
     run_async,
 )
 from pydantic import model_validator
@@ -22,6 +23,10 @@ class AgentInputs(BaseSettings):
     broker_url: str
     bug_data: str | None = None
     bug_id: int | None = None
+    # Set when following up on a revision this agent filed: the revision to
+    # update and the comment that mentioned Hackbot.
+    revision_id: int | None = None
+    comment: str | None = None
     model: str | None = None
     max_turns: int | None = None
     effort: (
@@ -40,6 +45,20 @@ class AgentInputs(BaseSettings):
     def require_subject(self) -> AgentInputs:
         if self.bug_data is None and self.bug_id is None:
             raise ValueError("provide at least one of bug_data (BUG_DATA) or bug_id")
+        return self
+
+    @model_validator(mode="after")
+    def require_follow_up_context(self) -> "AgentInputs":
+        if self.revision_id is not None:
+            if not self.comment:
+                raise ValueError(
+                    "comment (COMMENT) is required when revision_id is set, to "
+                    "respond on the revision"
+                )
+            if self.bug_id is None:
+                raise ValueError("bug_id (BUG_ID) is required when revision_id is set")
+        elif self.comment is not None:
+            raise ValueError("comment (COMMENT) requires revision_id")
         return self
 
     @property
@@ -61,7 +80,12 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
     start_time = datetime.now()
     inputs = AgentInputs()  # type: ignore
 
-    await ctx.prepare_repo(depth=CHECKOUT_DEPTH)
+    if inputs.revision_id is not None:
+        await checkout_revision(
+            ctx, inputs.revision_id, inputs.broker_url, depth=CHECKOUT_DEPTH
+        )
+    else:
+        await ctx.prepare_repo(depth=CHECKOUT_DEPTH)
 
     if inputs.bug_data is not None:
         input_data: BugDataInput | BugIdInput = BugDataInput(bug_data=inputs.bug_data)
@@ -87,6 +111,8 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
         phabricator_mcp_server={"type": "http", "url": inputs.phabricator_mcp_url},
         phabricator_read_tools=PHABRICATOR_READ_TOOLS,
         actions_recorder=ctx.actions,
+        revision_id=inputs.revision_id,
+        comment=inputs.comment,
     )
     end_time = datetime.now()
 
