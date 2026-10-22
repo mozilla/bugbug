@@ -48,7 +48,7 @@ tasks:
     $let:
       # Whether a push changes the bug-fix agent image or what goes into it.
       touches_bug_fix_image:
-        $eval: '" agents/bug-fix/" in (" " + join(changed_paths, " ")) || " libs/agent-tools/" in (" " + join(changed_paths, " ")) || " libs/hackbot-runtime/" in (" " + join(changed_paths, " ")) || " libs/phabricator-client/" in (" " + join(changed_paths, " ")) || " libs/phabricator-proxy/" in (" " + join(changed_paths, " ")) || "uv.lock" in changed_paths || "pyproject.toml" in changed_paths || ".taskcluster.yml" in changed_paths'
+        $eval: '" agents/bug-fix/" in (" " + join(changed_paths, " ")) || " libs/agent-tools/" in (" " + join(changed_paths, " ")) || " libs/hackbot-client/" in (" " + join(changed_paths, " ")) || " libs/hackbot-runtime/" in (" " + join(changed_paths, " ")) || " libs/phabricator-client/" in (" " + join(changed_paths, " ")) || " libs/phabricator-proxy/" in (" " + join(changed_paths, " ")) || "uv.lock" in changed_paths || "pyproject.toml" in changed_paths || ".taskcluster.yml" in changed_paths'
 
       default_task_definition:
         created: { $fromNow: "" }

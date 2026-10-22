@@ -11,7 +11,7 @@ TRY_PUSH_ACTION_TYPE = "try_server.push"
 
 # Anything gated on "this run pushes to try" — today the patch-series artifact
 # built in ``context.publish_changes`` — keys off this set, for symmetry with
-# ``phabricator.PATCH_ACTION_TYPES``.
+# ``hackbot_client.PATCH_ACTION_TYPES``.
 TRY_ACTION_TYPES = frozenset({TRY_PUSH_ACTION_TYPE})
 
 
