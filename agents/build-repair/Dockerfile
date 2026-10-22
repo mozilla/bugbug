@@ -3,6 +3,7 @@ FROM python:3.14 AS builder
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 
@@ -87,6 +88,8 @@ CMD ["python", "-m", "hackbot_agents.build_repair.broker"]
 # prod `agent` target never pulls these deps, since this stage builds only when
 # targeted.
 FROM agent AS eval
+
+ENV UV_PYTHON_DOWNLOADS=never
 
 USER root
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
