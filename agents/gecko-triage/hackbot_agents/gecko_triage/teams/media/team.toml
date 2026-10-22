@@ -1,0 +1,181 @@
+# The media team: the components it triages and the capture steps its comments quote.
+# Another team copies this directory to `teams/<team>/` and changes the values and its
+# `rules/`. What every team shares is in `shared/`.
+
+label = "Firefox Audio/Video"
+
+# Ask one of these, never more, when an analyzed bug needs a developer decision, no
+# expert's area matches, and the code's history names nobody.
+needinfo_fallback = ["alwu@mozilla.com", "padenot@mozilla.com", "jmathies@mozilla.com"]
+
+[comment]
+# A request that names this word must carry `capture_block` verbatim. The agent writes a
+# placeholder and a hook expands it, so the steps stay exact.
+capture_marker = "about:logging"
+capture_block = """Please capture a profile:
+
+1. Open `about:logging`.
+2. On the **Logging presets** tab, choose the **"Media playback"** preset.
+3. Under **Logging output**, select **"Logging to the Firefox Profiler"**.
+4. Click **Start Logging**.
+5. Reload the page. Then do the steps that show the problem.
+6. Click **Stop Logging**. The profile opens in the Firefox Profiler.
+7. Click **Upload Local Profile**. This is the share button.
+8. Copy the share URL. Add it to this bug.
+
+The [instruction video](https://www.loom.com/share/24ea3a8e3a054c478de94643a0ea8620?sid=87b0ffaa-c4ea-43ce-8107-639f24b747a8) shows these steps."""
+# The block's UI labels. Two of them outside the block mean the steps were retyped. The
+# preset names are not here: `rules/comment.md` asks for a sentence that names them.
+capture_labels = [
+  "Logging presets",
+  "Logging output",
+  "Logging to the Firefox Profiler",
+  "Start Logging",
+  "Stop Logging",
+  "Upload Local Profile",
+]
+
+[[components]]
+product = "Core"
+component = "Audio/Video"
+trees = ["dom/media/"]
+notes = "General A/V."
+
+[[components]]
+product = "Core"
+component = "Audio/Video: cubeb"
+trees = ["media/libcubeb/", "dom/media/CubebUtils.cpp"]
+doc_trees = ["dom/media/"]
+notes = "Audio backend (cubeb)."
+
+[[components]]
+product = "Core"
+component = "Audio/Video: GMP"
+trees = ["dom/media/gmp/", "dom/media/eme/"]
+doc_trees = ["dom/media/"]
+notes = "Gecko Media Plugins, EME, CDMs (Widevine, OpenH264)."
+
+[[components]]
+product = "Core"
+component = "Audio/Video: MediaStreamGraph"
+trees = ["dom/media/MediaTrackGraph.cpp", "dom/media/GraphDriver.cpp"]
+doc_trees = ["dom/media/"]
+notes = "The real-time audio graph."
+
+[[components]]
+product = "Core"
+component = "Audio/Video: Playback"
+trees = [
+  "dom/media/",
+  "dom/media/platforms/",
+  "dom/media/platforms/wmf/",
+  "dom/media/mediasource/",
+]
+notes = "The playback pipeline: demuxers, decoders, MDSM, sinks. Also PlayReady and autoplay."
+
+[[components]]
+product = "Core"
+component = "Audio/Video: Recording"
+trees = ["dom/media/webrtc/", "dom/media/encoder/", "dom/media/MediaRecorder.cpp"]
+doc_trees = ["dom/media/"]
+notes = "getUserMedia and MediaRecorder."
+
+[[components]]
+product = "Core"
+component = "Web Audio"
+trees = ["dom/media/webaudio/"]
+doc_trees = ["dom/media/"]
+notes = "The Web Audio API."
+
+[[components]]
+product = "Core"
+component = "Audio/Video: Web Codecs"
+trees = ["dom/media/webcodecs/"]
+doc_trees = ["dom/media/"]
+notes = "The WebCodecs API."
+
+# The developers the agent may needinfo without moving the bug, one entry per person. The
+# agent asks one only when the bug is in one of the areas and the `when` condition holds.
+[[needinfo_experts]]
+email = "padenot@mozilla.com"
+areas = ["Web Audio", "WebCodecs", "Web Speech", "audio-specific issues"]
+
+[[needinfo_experts]]
+email = "karlt@mozbugz.karlt.net"
+areas = ["Web Audio", "MediaStreamGraph (MTG)"]
+
+[[needinfo_experts]]
+email = "kinetik@flim.org"
+areas = ["cubeb", "AudioIPC"]
+
+[[needinfo_experts]]
+email = "cchang@mozilla.com"
+areas = ["WebCodecs"]
+
+[[needinfo_experts]]
+email = "aosmond@mozilla.com"
+areas = ["GMP", "Android NDK", "graphics in media"]
+
+[[needinfo_experts]]
+email = "jolin@mozilla.com"
+areas = ["Android", "HLS"]
+
+[[needinfo_experts]]
+email = "azebrowski@mozilla.com"
+areas = ["Media Capabilities", "codec support"]
+
+[[needinfo_experts]]
+email = "alwu@mozilla.com"
+areas = ["autoplay", "WebVTT", "PlayReady"]
+
+[[needinfo_experts]]
+email = "stransky@anakreon.cz"
+areas = ["Linux hardware video decoding (VA-API, V4L2, ffvpx-hw)"]
+when = "The bug is on Linux and involves hardware video decoding. about:support must show that hardware decoding is available. Do not ask when HARDWARE_VIDEO_DECODING is unavailable or blocklisted, or when Codec Support lists only SWDEC. Do not ask when any GPU in about:support is NVIDIA or the bug involves Vulkan: ask tboiko@nvidia.com."
+
+[[needinfo_experts]]
+email = "tboiko@nvidia.com"
+areas = ["NVIDIA GPUs on Linux", "Vulkan video decoding"]
+when = "The bug is on Linux and any GPU in about:support is NVIDIA, also on a laptop with a second GPU, or the bug involves Vulkan, for example Vulkan video decoding."
+
+# The values for the run's `issue_type`, the bug's main symptom, in this order. `other` is
+# always allowed and is not listed.
+[[issue_types]]
+value = "playback-failure"
+meaning = "does not start, error, unsupported format"
+
+[[issue_types]]
+value = "stall-freeze"
+meaning = "plays, then stops, freezes or skips"
+
+[[issue_types]]
+value = "av-sync"
+meaning = "audio and video out of sync"
+
+[[issue_types]]
+value = "audio-output"
+meaning = "no sound, glitches, crackling, wrong device"
+
+[[issue_types]]
+value = "video-rendering"
+meaning = "corruption, wrong colors, green frames, scaling"
+
+[[issue_types]]
+value = "performance"
+meaning = "high CPU or memory, dropped frames"
+
+[[issue_types]]
+value = "codec-support"
+meaning = "hardware or software decoder or encoder availability, MediaCapabilities"
+
+[[issue_types]]
+value = "drm"
+meaning = "EME, Widevine, PlayReady, GMP"
+
+[[issue_types]]
+value = "capture"
+meaning = "getUserMedia, MediaRecorder, camera, microphone"
+
+[[issue_types]]
+value = "web-api"
+meaning = "Web Audio, Web Codecs, media element spec behavior"

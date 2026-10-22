@@ -1,0 +1,165 @@
+{
+  "_note": "A faked Bugzilla corpus for the duplicate search. The ids and texts are fake; the wording follows real media reports.",
+  "bugs": [
+    {
+      "id": 9100668,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Bluetooth headphone audio fades in after resuming playback in Firefox",
+      "status": "UNCONFIRMED",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": [
+        "When I pause a YouTube video and resume it, the audio starts quiet and fades in over about a second. I use Bluetooth headphones."
+      ]
+    },
+    {
+      "id": 9100421,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Playing tab stays silent after Bluetooth connects",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": [
+        "Connect Bluetooth headphones while a video plays. The tab stays silent until a reload."
+      ]
+    },
+    {
+      "id": 9096008,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "YouTube Audio/Video desync with Bluetooth devices when pausing or skipping",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": [
+        "With Bluetooth earbuds the audio lags behind the picture after pausing the video."
+      ]
+    },
+    {
+      "id": 9094151,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "When playing video from any website in a paused state or skipping 5/10 seconds with the arrow keys, the audio would cut out and take a half second to fade back in with the video still playing.",
+      "status": "UNCONFIRMED",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": [
+        "Steps: play any video, pause it, then play again, or skip 5/10 seconds with the arrow keys. The audio cuts out and takes about half a second to fade back in. I use a headset (Example Maxwell in wireless mode). Another browser does not do this."
+      ]
+    },
+    {
+      "id": 9092625,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Video playback faded colors",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": ["HDR video looks washed out on an external monitor."]
+    },
+    {
+      "id": 9091245,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Audio Distortion when skipping around or unpausing videos (no fade in and out)",
+      "status": "RESOLVED",
+      "resolution": "FIXED",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": [
+        "Seeking produces a loud click. There is no fade in or fade out on the audio."
+      ]
+    },
+    {
+      "id": 9090002,
+      "product": "Core",
+      "component": "Audio/Video",
+      "summary": "Audio stutters on Windows after sleep",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": [
+        "The regressing push is changeset a3fade12bc. Resume from sleep and the audio stutters through the headphones."
+      ]
+    },
+    {
+      "id": 9088001,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Crash in [@ mozilla::AudioSink::PopFrames]",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": ["crash"],
+      "cf_crash_signature": "[@ mozilla::AudioSink::PopFrames]",
+      "comments": ["Crash reports when playback resumes after a device change."]
+    },
+    {
+      "id": 9087003,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Pause button does nothing on a streaming site",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": ["Clicking pause does not stop the video."]
+    },
+    {
+      "id": 9086004,
+      "product": "Core",
+      "component": "Audio/Video: Recording",
+      "summary": "Wireless headset crackles in video calls",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": ["The microphone of my wireless headset crackles in calls."]
+    },
+    {
+      "id": 9085005,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Video freezes after seeking with the keyboard",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": ["Seek with the arrow keys and the picture freezes."]
+    },
+    {
+      "id": 9080000,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "[meta] Bluetooth audio output problems",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": ["meta"],
+      "comments": [
+        "Tracking bug for audio problems with Bluetooth headphones and headsets, such as a fade in after a pause."
+      ]
+    },
+    {
+      "id": 9070001,
+      "product": "Firefox",
+      "component": "Address Bar",
+      "summary": "Link status panel doesn't fade after clicking a link",
+      "status": "NEW",
+      "resolution": "",
+      "dupe_of": null,
+      "keywords": [],
+      "comments": [
+        "The panel does not fade out after a pause of the pointer over a link with headphones on."
+      ]
+    }
+  ]
+}

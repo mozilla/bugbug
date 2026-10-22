@@ -7,6 +7,7 @@ from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
+    GeckoTriageInputs,
     TestRepairInputs,
     UpliftInputs,
 )
@@ -259,3 +260,50 @@ def test_uplift_inputs_require_at_least_one_source():
 def test_uplift_inputs_reject_an_unknown_source_kind():
     with pytest.raises(ValidationError):
         UpliftInputs(target_branch="beta", sources=[{"kind": "hg", "rev": "abc"}])
+
+
+def test_gecko_triage_registry_uses_its_schema():
+    assert AGENT_REGISTRY["gecko-triage"].input_schema is GeckoTriageInputs
+
+
+def test_gecko_triage_takes_a_known_team():
+    env = model_to_env(GeckoTriageInputs(bug_id=9000001, team="media"))
+    assert env == {"BUG_ID": "9000001", "TEAM": "media"}
+
+
+@pytest.mark.parametrize("team", ["graphics", "Media", "media ", "", "../media"])
+def test_gecko_triage_refuses_an_unknown_team(team):
+    # The agent reads `teams/<team>/` at import, so an unknown team would fail the
+    # job before it could report anything.
+    with pytest.raises(ValidationError, match="team"):
+        GeckoTriageInputs(bug_id=1, team=team)
+
+
+def test_gecko_triage_runs_with_no_team():
+    # No team means the shared rules only, in the bug's own component. `TEAM` stays
+    # unset, so the agent never sees an empty name.
+    for inputs in (GeckoTriageInputs(bug_id=1), GeckoTriageInputs(bug_id=1, team=None)):
+        assert inputs.team is None
+        assert model_to_env(inputs) == {"BUG_ID": "1"}
+
+
+def test_gecko_triage_passes_its_run_limits():
+    env = model_to_env(
+        GeckoTriageInputs(bug_id=1, team="media", max_turns=200, max_budget_usd=20)
+    )
+    assert env["MAX_TURNS"] == "200"
+    assert float(env["MAX_BUDGET_USD"]) == 20
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        {"max_turns": 0},
+        {"max_turns": 201},
+        {"max_budget_usd": 0},
+        {"max_budget_usd": 20.01},
+    ],
+)
+def test_gecko_triage_bounds_its_run_limits(limits):
+    with pytest.raises(ValidationError, match=next(iter(limits))):
+        GeckoTriageInputs(bug_id=1, team="media", **limits)
