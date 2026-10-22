@@ -91,7 +91,7 @@ async def evaluate_testcase(
             description="Path to Firefox binary. Optional — defaults to the configured build's binary."
         ),
     ] = None,
-    timeout: Annotated[
+    timeout_sec: Annotated[
         int, Field(description="Seconds to wait for a crash (default: 30)")
     ] = 30,
     prefs: Annotated[
@@ -121,7 +121,7 @@ async def evaluate_testcase(
         content=content,
         filename=filename,
         firefox_binary=binary,
-        timeout=timeout,
+        timeout_sec=timeout_sec,
         prefs=prefs or {},
     )
 
@@ -179,7 +179,7 @@ async def evaluate_js_shell(
             description="Path to the SpiderMonkey js binary. Optional — defaults to the configured build's js shell."
         ),
     ] = None,
-    timeout: Annotated[
+    timeout_sec: Annotated[
         int,
         Field(description="Seconds to wait before killing the shell (default: 30)"),
     ] = 30,
@@ -207,7 +207,7 @@ async def evaluate_js_shell(
     """
     binary = Path(js_binary or ctx.js_binary)
     return await _js_shell_evaluator(
-        content=content, js_binary=binary, timeout=timeout, flags=flags
+        content=content, js_binary=binary, timeout_sec=timeout_sec, flags=flags
     )
 
 

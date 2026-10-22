@@ -172,9 +172,9 @@ ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107",
 [tool.ruff.lint.per-file-ignores]
 "http_service/**" = ["D"]
 # Agents currently run sequentially, so blocking calls in async functions are harmless there; tracked in #7008.
-"agents/**" = ["ASYNC"]
-"libs/agent-tools/**" = ["ASYNC"]
-"libs/hackbot-runtime/**" = ["ASYNC"]
+"agents/**" = ["ASYNC2"]
+"libs/agent-tools/**" = ["ASYNC2"]
+"libs/hackbot-runtime/**" = ["ASYNC2"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
