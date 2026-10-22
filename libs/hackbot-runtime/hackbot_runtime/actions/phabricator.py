@@ -33,7 +33,7 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
 )
 
 
-def _validate_summary(summary: str | None) -> None:
+def _validate_summary(summary: str | None, tool_name: str) -> None:
     if not summary:
         return
 
@@ -42,7 +42,7 @@ def _validate_summary(summary: str | None) -> None:
         raise ToolError(
             f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
             "a line belongs in the Test Plan field. Move the verification details "
-            "to the test_plan argument and call submit_patch again."
+            f"to the test_plan argument and call {tool_name} again."
         )
 
 
@@ -134,7 +134,7 @@ async def submit_patch(
     To fix a bug you file in the same run, record ``bugzilla.create_bug`` with a
     `ref` first, then pass `bug_id` as `{{actions.<ref>.bug_id}}`.
     """
-    _validate_summary(summary)
+    _validate_summary(summary, "submit_patch")
     params: dict = {
         "bug_id": bug_id,
         "title": title,
@@ -165,6 +165,36 @@ async def update_patch(
     reasoning: Annotated[
         str, Field(description="Why you are updating this patch (for audit log).")
     ],
+    title: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New title for the revision: the commit message subject line. "
+                "Do not include reviewer annotations (r=... or r?...). "
+                "Leave unset to keep the same title."
+            )
+        ),
+    ] = None,
+    summary: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New summary for the revision: the commit message body. "
+                "Replaces the current summary entirely, so pass the full text. "
+                "Keep test and verification details in test_plan instead. "
+                "Leave unset to keep the same summary."
+            )
+        ),
+    ] = None,
+    test_plan: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New test plan for the revision. Replaces the current one "
+                "entirely. Leave unset to keep the same test plan."
+            )
+        ),
+    ] = None,
 ) -> str:
     """Submit your fix as a new diff on an existing Phabricator revision.
 
@@ -178,14 +208,19 @@ async def update_patch(
     first, then call this once you are done. Calling it records the submission as
     a proposed action for review; it is not sent to Phabricator during the run.
 
-    Only the diff changes: the revision keeps its title, summary, and bug
-    association exactly as they are.
+    The revision keeps its title, summary, test plan, and bug association
+    unless you pass a new title, summary, or test_plan.
     """
-    action = recorder.record(
-        UPDATE_PATCH_ACTION_TYPE,
-        {"revision_id": revision_id},
-        reasoning=reasoning,
-    )
+    _validate_summary(summary, "update_patch")
+
+    params: dict = {"revision_id": revision_id}
+    if title:
+        params["title"] = title
+    if summary:
+        params["summary"] = summary
+    if test_plan:
+        params["test_plan"] = test_plan
+    action = recorder.record(UPDATE_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 

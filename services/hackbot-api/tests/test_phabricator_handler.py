@@ -345,6 +345,50 @@ async def test_update_patch_local_commits_use_the_revisions_own_fields(monkeypat
     )
 
 
+async def test_update_patch_edits_the_given_fields_with_the_diff(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 3},
+            "differential.revision.edit": {"object": {"id": 42}},
+            "differential.revision.search": {
+                "data": [
+                    {
+                        "fields": {
+                            "title": "Old title",
+                            "summary": "old sum",
+                            "testPlan": "existing test plan",
+                            "bugzilla.bug-id": "9",
+                        }
+                    }
+                ]
+            },
+            "differential.setdiffproperty": {},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.UpdatePatchHandler().apply(
+        {"revision_id": 42, "title": "WIP: New title", "summary": "new sum"},
+        _ctx(local_commits={"n": {"author": "A"}}),
+    )
+    assert result.status == "applied"
+    payloads = dict(calls)
+
+    assert payloads["differential.revision.edit"]["transactions"] == [
+        {"type": "update", "value": "PHID-DIFF-1"},
+        {"type": "title", "value": "New title"},
+        {"type": "summary", "value": "new sum"},
+    ]
+
+    stored = json.loads(payloads["differential.setdiffproperty"]["data"])["n"]
+    assert stored["summary"] == "New title"
+    assert stored["message"].startswith("New title\n\nSummary:\nnew sum")
+    assert "Test Plan:\nexisting test plan" in stored["message"]
+
+
 async def test_update_patch_preserves_previous_diff_commit_author(monkeypatch):
     fake, calls = _fake_conduit(
         {
