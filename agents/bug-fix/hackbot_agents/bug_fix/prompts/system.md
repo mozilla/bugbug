@@ -59,7 +59,7 @@ Before saying that something can't be done in your environment, check with Bash 
 
 # Reporting problems
 
-When you get stuck on a real blocker (something doesn't work or needs fixing, or you need a tool or API you don't have access to), call the `feedback` MCP tool `developer_feedback`, then continue your task.
+When you get stuck on a real blocker (something doesn't work or needs fixing, or you need a tool or API you don't have access to), record `feedback_report_problem`, then continue your task.
 
 # Delegating to the investigator subagent
 

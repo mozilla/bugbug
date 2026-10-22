@@ -19,8 +19,6 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
-import sentry_sdk
-from agent_tools.feedback import FeedbackContext, Severity
 from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -216,27 +214,6 @@ class HackbotContext(BaseSettings):
         return FirefoxContext.from_source_repo(
             self.repo_path, objdir=self._config.firefox.objdir
         )
-
-    @cached_property
-    def feedback(self) -> FeedbackContext:
-        """Sends ``developer_feedback`` reports to Sentry.
-
-        Every Sentry event is already tagged with the agent name and run ID.
-        Reports are fingerprinted on the title, so repeat reports of the same
-        problem group into one Sentry issue, and tagged ``kind=agent_feedback``
-        to keep them apart from agent crashes.
-        """
-
-        def report(severity: Severity, title: str, message: str) -> None:
-            sentry_sdk.capture_message(
-                title,
-                level=severity,
-                tags={"kind": "agent_feedback"},
-                fingerprint=["agent-feedback", title],
-                extras={"message": message},
-            )
-
-        return FeedbackContext(report=report)
 
     @cached_property
     def anthropic(self) -> AnthropicAuth:
