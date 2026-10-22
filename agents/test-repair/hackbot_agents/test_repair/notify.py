@@ -9,10 +9,10 @@ Both are recorded as actions rather than sent from the run: they are then visibl
 in the hackbot UI before they land, and the apply step delivers each at most once
 (see ``hackbot_runtime.actions.slack`` / ``.email``).
 
-Only verdicts a sheriff acts on go to the channel -- see
-:func:`sheriff_action_required`. Every verdict is emailed, so the team can track
-what the agent decided either way; the culprit's author is addressed too when there
-is a patch for them to reland -- see :func:`recipients`.
+Both are for sheriffs and the team; the culprit's author hears from the
+test-repair-fix run, which has a patch for them. Only verdicts a sheriff acts on go
+to the channel -- see :func:`sheriff_action_required`. Every verdict is emailed, so
+the team can track what the agent decided either way.
 
 Every identifier a recipient would otherwise have to look up -- revisions, task,
 bug, run -- is a link. The Slack message stays short enough to read in a channel,
@@ -22,7 +22,7 @@ since the run holds the detail; the email carries the full analysis.
 import subprocess
 from pathlib import Path
 
-from hackbot_runtime.actions.email import PATCH_PLACEHOLDER, demote_headings
+from hackbot_runtime.actions.email import demote_headings
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 
 from .agent import TestRepairResult
@@ -96,25 +96,6 @@ def resolve_culprit_author(source_repo: Path, sha: str | None) -> str | None:
     return proc.stdout.strip() or None
 
 
-def recipients(
-    result: TestRepairResult,
-    culprit_author: str | None,
-    classification: str | None = None,
-) -> list[str]:
-    """Who the verdict concerns individually.
-
-    The culprit's author, when a patch was proposed for them to squash and reland.
-    The team address is added apply-side, so the team gets every email.
-    """
-    # Treeherder can misclassify a regression as intermittent, so the patch may
-    # still help, but a reland email for an intermittent confuses the author.
-    if classification and "intermittent" in classification:
-        return []
-    if result.proposed_patch and culprit_author:
-        return [culprit_author]
-    return []
-
-
 def _failing_line(investigation: Investigation) -> str:
     groups = (
         ", ".join(f"`{group.group}`" for group in investigation.failing_groups)
@@ -160,16 +141,6 @@ def _culprit_line(result: TestRepairResult, culprit_author: str | None) -> str:
     return line
 
 
-def _patch_lines(result: TestRepairResult) -> list[str]:
-    """Who the attached patch is for, so it is not read as an alternative action."""
-    if not result.proposed_patch:
-        return []
-    return [
-        "Patch attached for the author: squash it into the existing patches and"
-        " reland, rather than landing it as a follow-up. The backout still stands."
-    ]
-
-
 def build_message(
     result: TestRepairResult,
     investigation: Investigation,
@@ -187,7 +158,6 @@ def build_message(
         _jobs_line(investigation, task_id),
         _push_line(investigation),
         _culprit_line(result, culprit_author),
-        *_patch_lines(result),
         _link(RUN_URL.format(run_id=run_id), "Hackbot run details"),
     ]
     if result.summary.strip():
@@ -195,11 +165,11 @@ def build_message(
     return "\n".join(lines)
 
 
-def _md_link(url: str, label: str) -> str:
+def md_link(url: str, label: str) -> str:
     return f"[{label}]({url})"
 
 
-def _groups_label(investigation: Investigation) -> str:
+def groups_label(investigation: Investigation) -> str:
     """A one-line name for the run's failing groups, for the email subject."""
     if not investigation.failing_groups:
         return investigation.label or "unresolved tests"
@@ -208,11 +178,10 @@ def _groups_label(investigation: Investigation) -> str:
 
 
 def _headline(result: TestRepairResult, investigation: Investigation) -> str:
-    """What happened, in a developer's words, for the subject line."""
-    tests = _groups_label(investigation)
+    """What happened, for the subject line."""
+    tests = groups_label(investigation)
     if result.culprit_commit:
-        patch = " - patch proposed" if result.proposed_patch else ""
-        return f"{tests} regressed by {result.culprit_commit[:12]}{patch}"
+        return f"{tests} regressed by {result.culprit_commit[:12]}"
     if result.classification == "intermittent":
         return f"Intermittent failure in {tests}"
     if result.recommendation == "rerun":
@@ -220,22 +189,7 @@ def _headline(result: TestRepairResult, investigation: Investigation) -> str:
     return f"Regression in {tests}, culprit not identified"
 
 
-def _why_paragraph(result: TestRepairResult, culprit_author: str | None) -> list[str]:
-    """Tell the author up front why they are on the email."""
-    if not recipients(result, culprit_author):
-        return []
-    link = _md_link(
-        GIT_COMMIT_URL.format(sha=result.culprit_commit),
-        f"`{result.culprit_commit[:12]}`",
-    )
-    return [
-        f"**{culprit_author}**, the agent believes your {link} broke the tests below."
-        " The patch at the end is for your reland, not to land on its own.",
-        "",
-    ]
-
-
-def _failing_bullet(investigation: Investigation) -> str:
+def failing_bullet(investigation: Investigation) -> str:
     groups = (
         ", ".join(f"`{group.group}`" for group in investigation.failing_groups)
         or "not resolved"
@@ -244,8 +198,8 @@ def _failing_bullet(investigation: Investigation) -> str:
     return f"- **Failing:** {groups} in `{job}`"
 
 
-def _jobs_bullet(investigation: Investigation, task_id: str) -> str:
-    treeherder = _md_link(
+def jobs_bullet(investigation: Investigation, task_id: str) -> str:
+    treeherder = md_link(
         TREEHERDER_JOB_URL.format(
             project=investigation.project,
             revision=investigation.hg_revision,
@@ -253,16 +207,16 @@ def _jobs_bullet(investigation: Investigation, task_id: str) -> str:
         ),
         "Treeherder",
     )
-    task = _md_link(TASK_URL.format(task_id=task_id), "Taskcluster")
+    task = md_link(TASK_URL.format(task_id=task_id), "Taskcluster")
     return f"- **Jobs:** {treeherder}, {task}"
 
 
-def _push_bullet(investigation: Investigation) -> str:
-    hg = _md_link(
+def push_bullet(investigation: Investigation) -> str:
+    hg = md_link(
         HG_REV_URL.format(rev=investigation.hg_revision),
         f"hg {investigation.hg_revision[:12]}",
     )
-    git = _md_link(
+    git = md_link(
         GIT_COMMIT_URL.format(sha=investigation.failure_commit),
         f"git {investigation.failure_commit[:12]}",
     )
@@ -274,7 +228,7 @@ def _culprit_bullet(result: TestRepairResult, culprit_author: str | None) -> str
         by = f" by {culprit_author}" if culprit_author else ""
         line = (
             "- **Culprit:** "
-            + _md_link(
+            + md_link(
                 GIT_COMMIT_URL.format(sha=result.culprit_commit),
                 f"`{result.culprit_commit[:12]}`",
             )
@@ -282,7 +236,7 @@ def _culprit_bullet(result: TestRepairResult, culprit_author: str | None) -> str
         )
     elif result.candidate_commits:
         candidates = ", ".join(
-            _md_link(GIT_COMMIT_URL.format(sha=sha), f"`{sha[:12]}`")
+            md_link(GIT_COMMIT_URL.format(sha=sha), f"`{sha[:12]}`")
             for sha in result.candidate_commits
         )
         line = f"- **Culprit:** not narrowed down, candidates {candidates}"
@@ -290,7 +244,7 @@ def _culprit_bullet(result: TestRepairResult, culprit_author: str | None) -> str
         line = "- **Culprit:** none identified"
     bug = result.culprit_bug or result.intermittent_bug
     if bug:
-        line += ", " + _md_link(BUG_URL.format(bug_id=bug), f"bug {bug}")
+        line += ", " + md_link(BUG_URL.format(bug_id=bug), f"bug {bug}")
     return line
 
 
@@ -306,33 +260,6 @@ def _classification_bullet(classification: str | None) -> str:
     return "- **Current Treeherder classification:** " + (
         classification or "not classified"
     )
-
-
-def _reland_steps(
-    bug_id: int | None, run_url: str, parent_revision: int | None
-) -> list[str]:
-    """How the author gets the pending revision into their own patch."""
-    run_page = _md_link(run_url, "run page")
-    if parent_revision is None:
-        bug = _md_link(BUG_URL.format(bug_id=bug_id), f"bug {bug_id}")
-        return [
-            f"**Phabricator:** *Apply pending actions* on the {run_page} files this"
-            f" patch as a WIP revision on {bug}. Apply it on top of your patch with"
-            " `moz-phab patch D<new> --apply-to @`, squash, and `moz-phab submit`.",
-        ]
-    parent = f"D{parent_revision}"
-    return [
-        f"**Phabricator:** *Apply pending actions* on the {run_page} files this patch"
-        f" as a child revision of {parent}. To reland:",
-        "",
-        "```",
-        f"moz-phab patch {parent}",
-        "moz-phab patch D<new> --apply-to @",
-        "git rebase -i @~1   # squash the fix into your patch",
-        "moz-phab patch D<next> --skip-dependencies   # each later patch in your stack",
-        "moz-phab submit",
-        "```",
-    ]
 
 
 def _analysis_section(result: TestRepairResult) -> list[str]:
@@ -352,14 +279,9 @@ def build_email(
     run_id: str,
     culprit_author: str | None = None,
     classification: str | None = None,
-    revision_pending: bool = False,
-    parent_revision: int | None = None,
 ) -> tuple[str, str]:
     """The subject and markdown body of the verdict email.
 
-    ``revision_pending`` means the run recorded a ``phabricator.submit_patch``
-    action that is waiting for approval, so the email says how to apply it;
-    ``parent_revision`` is the culprit's revision it stacks on, when known;
     ``classification`` is the job's Treeherder classification when recorded.
     """
     subject = (
@@ -370,20 +292,13 @@ def build_email(
     lines = [
         "# Test failure analysis",
         "",
-        *_why_paragraph(result, culprit_author),
-        _failing_bullet(investigation),
-        _jobs_bullet(investigation, task_id),
-        _push_bullet(investigation),
+        failing_bullet(investigation),
+        jobs_bullet(investigation, task_id),
+        push_bullet(investigation),
         _culprit_bullet(result, culprit_author),
         _verdict_bullet(result),
         _classification_bullet(classification),
         f"- **Hackbot Run:** {run_url}",
     ]
     lines += _analysis_section(result)
-    if revision_pending:
-        lines += ["", *_reland_steps(result.culprit_bug, run_url, parent_revision)]
-    if result.proposed_patch:
-        # The diff itself is substituted for the placeholder when the mail is sent,
-        # from the same artifact it attaches.
-        lines += ["", "## Proposed patch", "", "```diff", PATCH_PLACEHOLDER, "```"]
     return subject, "\n".join(lines)

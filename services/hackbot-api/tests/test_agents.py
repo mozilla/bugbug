@@ -7,6 +7,7 @@ from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
+    TestRepairFixInputs,
     TestRepairInputs,
     UpliftInputs,
 )
@@ -138,9 +139,22 @@ def test_test_repair_registry_entry():
     assert spec.build_env is None
     assert spec.input_schema is TestRepairInputs
     assert spec.job_name == "hackbot-agent-test-repair"
-    # The revision waits for the author in the UI; only the notifications auto-apply.
+    # Only the notifications and the hand-off to the fix agent auto-apply.
     assert spec.auto_apply_actions is False
-    assert spec.always_apply_actions == {"email.send", "slack.post_message"}
+    assert spec.always_apply_actions == {
+        "email.send",
+        "slack.post_message",
+        "agents.start_run",
+    }
+
+
+def test_test_repair_fix_registry_entry():
+    spec = AGENT_REGISTRY["test-repair-fix"]
+    assert spec.input_schema is TestRepairFixInputs
+    assert spec.job_name == "hackbot-agent-test-repair-fix"
+    # The revision waits for the author in the UI; only the email auto-applies.
+    assert spec.auto_apply_actions is False
+    assert spec.always_apply_actions == {"email.send"}
 
 
 def test_test_repair_env_serialization():
