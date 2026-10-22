@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 from app.action_handlers import ApplyContext, ArtifactTooLargeError, phabricator_handler
-from app.action_handlers.registry import PATCH_ACTION_TYPES, get_handler
+from app.action_handlers.registry import get_handler
+from hackbot_client import PATCH_ACTION_TYPES
 
 
 @pytest.fixture(autouse=True)

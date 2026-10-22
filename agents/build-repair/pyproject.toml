@@ -6,6 +6,7 @@ requires-python = ">=3.14"
 dependencies = [
     "hackbot-runtime[claude-sdk,phabricator]",
     "agent-tools[bugzilla,firefox]",
+    "hackbot-client",
     "bugsy",
     "claude-agent-sdk>=0.2.165",
     "mcp>=1.0.0",
@@ -24,6 +25,7 @@ eval = [
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
+hackbot-client = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

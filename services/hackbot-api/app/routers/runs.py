@@ -6,13 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import Response
+from hackbot_client import PATCH_ACTION_TYPES, PATCH_ARTIFACT
 from pydantic import BeforeValidator, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
-from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
 from app.auth import require_api_key
@@ -33,8 +33,6 @@ from app.schemas import (
 log = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
-
-_PATCH_ARTIFACT = "changes/changes.patch"
 
 
 def _normalize_identity(email: str | None) -> str | None:
@@ -379,7 +377,7 @@ def _has_unsubmitted_patch(
     artifacts: list[ArtifactRef],
 ) -> bool:
     """Whether a run produced source changes without a patch action."""
-    has_patch_artifact = any(artifact.name == _PATCH_ARTIFACT for artifact in artifacts)
+    has_patch_artifact = any(artifact.name == PATCH_ARTIFACT for artifact in artifacts)
     has_patch_action = summary is not None and any(
         action["type"] in PATCH_ACTION_TYPES for action in summary.actions
     )

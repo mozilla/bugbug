@@ -2,6 +2,7 @@
 
 import pytest
 from agent_tools.registry import ToolError
+from hackbot_client import PATCH_PLACEHOLDER
 from hackbot_runtime.actions import email
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
@@ -69,17 +70,17 @@ def test_demote_headings_leaves_fenced_code_alone():
 def test_the_body_can_carry_the_patch_without_attaching_it():
     rec = ActionsRecorder()
     action = email.record_email(
-        rec, subject="s", body_markdown=f"```diff\n{email.PATCH_PLACEHOLDER}\n```"
+        rec, subject="s", body_markdown=f"```diff\n{PATCH_PLACEHOLDER}\n```"
     )
     assert action["params"]["attach_patch"] is False
-    assert email.PATCH_PLACEHOLDER in action["params"]["body_markdown"]
+    assert PATCH_PLACEHOLDER in action["params"]["body_markdown"]
 
 
 def test_a_patch_can_be_attached_without_appearing_in_the_body():
     rec = ActionsRecorder()
     action = email.record_email(rec, subject="s", body_markdown="b", attach_patch=True)
     assert action["params"]["attach_patch"] is True
-    assert email.PATCH_PLACEHOLDER not in action["params"]["body_markdown"]
+    assert PATCH_PLACEHOLDER not in action["params"]["body_markdown"]
 
 
 async def test_send_records_the_action():

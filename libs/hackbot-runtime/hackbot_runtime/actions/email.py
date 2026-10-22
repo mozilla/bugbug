@@ -23,11 +23,6 @@ from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 ACTION_TYPE = "email.send"
 
-# Substituted with the run's patch when the mail is sent. The agent decides
-# whether the body mentions the patch at all, and how it is framed; this only
-# says where the text goes.
-PATCH_PLACEHOLDER = "{patch}"
-
 
 def _params(
     to: Iterable[str],
@@ -119,9 +114,9 @@ def record_email(
     handler still addresses the team.
 
     The run's patch can travel two ways, independently: inline, by putting
-    :data:`PATCH_PLACEHOLDER` in the body, and as a file, with ``attach_patch``.
-    Either way it is read once when the mail is sent, so the diff a recipient
-    reads and the file they save cannot differ.
+    :data:`hackbot_client.PATCH_PLACEHOLDER` in the body, and as a file, with
+    ``attach_patch``. Either way it is read once when the mail is sent, so the
+    diff a recipient reads and the file they save cannot differ.
     """
     return recorder.record(
         ACTION_TYPE,
