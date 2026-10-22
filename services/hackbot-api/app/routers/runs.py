@@ -23,6 +23,7 @@ from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
     ArtifactRef,
+    ChainedInputs,
     RunActionDoc,
     RunDoc,
     RunRef,
@@ -126,6 +127,20 @@ async def create_run(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    parent = None
+    if isinstance(inputs, ChainedInputs):
+        parent = await db.get(Run, inputs.parent_run_id)
+        if parent is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown parent run {inputs.parent_run_id}",
+            )
+        if parent.status != RunStatus.succeeded.value:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Parent run {parent.run_id} has not succeeded",
+            )
+
     run_id = uuid.uuid4()
     results_prefix = gcs.run_prefix(str(run_id))
 
@@ -181,6 +196,7 @@ async def create_run(
             "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
             "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
+            **(await _parent_artifacts_env(parent)),
         }
         execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
     except Exception as exc:
@@ -197,6 +213,18 @@ async def create_run(
     await db.commit()
 
     return RunRef.model_validate(run)
+
+
+async def _parent_artifacts_env(parent: Run | None) -> dict[str, str]:
+    """Signed download URLs for the parent run's artifacts, for the runtime."""
+    if parent is None:
+        return {}
+    urls = await gcs.generate_artifact_download_urls(
+        str(parent.run_id),
+        [artifact["name"] for artifact in parent.artifacts or []],
+        settings.job_execution_timeout_seconds,
+    )
+    return {"PARENT_ARTIFACTS": json.dumps(urls)}
 
 
 @router.get("/runs")
