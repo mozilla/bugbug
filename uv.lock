@@ -735,7 +735,7 @@ requires-dist = [
     { name = "tqdm", specifier = ">=4.67.3,<4.71.0" },
     { name = "transformers", marker = "extra == 'perf-regression-predictor'", specifier = "==5.15.0" },
     { name = "unidiff", specifier = "~=0.7.5" },
-    { name = "weave", specifier = ">=0.53.4" },
+    { name = "weave", specifier = ">=0.53.12" },
     { name = "whatthepatch", specifier = "~=1.0.7" },
     { name = "xgboost", specifier = ">=3.2,<3.5" },
     { name = "zstandard", specifier = "~=0.25.0" },
@@ -2738,7 +2738,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.0" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
     { name = "slack-sdk", specifier = ">=3.27.0" },
-    { name = "weave", specifier = ">=0.53.4" },
+    { name = "weave", specifier = ">=0.53.12" },
 ]
 provides-extras = ["claude-sdk", "phabricator"]
 
