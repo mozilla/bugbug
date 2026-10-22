@@ -90,6 +90,11 @@ def _base_url() -> str:
     return base_url
 
 
+def _edge_key_headers() -> dict[str, str]:
+    edge_key = os.getenv("PHABRICATOR_EDGE_KEY")
+    return {"Mozilla-Edge-Key": edge_key} if edge_key else {}
+
+
 @cache
 def get_phabricator_client(
     api_key: Optional[str] = None,
@@ -442,6 +447,7 @@ class PhabricatorPatch(Patch):
         client = get_http_client()
         r = await client.get(
             f"{_base_url()}/differential/changeset/?view={view}&ref={changeset_id}",
+            headers=_edge_key_headers(),
         )
         r.raise_for_status()
 
