@@ -191,7 +191,7 @@ async def detect_mention_and_revision(
             authorized_mentions.append(mention)
         else:
             log.warning(
-                "Ignoring %s mention from non-editbugs user %s on %s",
+                "Ignoring %s mention from unauthorized user %s on %s",
                 webhook.mention_token,
                 mention.author_phid,
                 object_phid,

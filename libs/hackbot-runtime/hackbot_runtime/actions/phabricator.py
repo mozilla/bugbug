@@ -49,7 +49,16 @@ def _validate_summary(summary: str | None) -> None:
 @tool
 async def submit_patch(
     recorder: ActionsRecorder,
-    bug_id: Annotated[int, Field(description="Bug this patch fixes.")],
+    bug_id: Annotated[
+        int | str,
+        Field(
+            description=(
+                "Bug this patch fixes: a bug number, or "
+                "{{actions.<ref>.bug_id}} for a bug filed by create_bug in "
+                "this run."
+            )
+        ),
+    ],
     title: Annotated[
         str,
         Field(
@@ -121,6 +130,9 @@ async def submit_patch(
     Set `ref` if you want to reference the new revision's URL from another action
     in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
     bug comment).
+
+    To fix a bug you file in the same run, record ``bugzilla.create_bug`` with a
+    `ref` first, then pass `bug_id` as `{{actions.<ref>.bug_id}}`.
     """
     _validate_summary(summary)
     params: dict = {

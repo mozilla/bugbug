@@ -84,10 +84,10 @@ Bugzilla bug id. A revision with no bug id is skipped — `bug-fix` needs one.
 Guards, each closing a specific failure mode:
 
 - **Loop prevention** — comments authored by the bot's own PHID are ignored.
-- **Authorization** — the comment author must belong to the `bmo-editbugs-team` Phabricator
-  project. Membership is cached with a short TTL; an unknown author triggers one refresh so
-  new members take effect promptly, then a cooldown so unauthorized deliveries don't cause a
-  Conduit call each.
+- **Authorization** — the comment author must belong to the Phabricator project set by
+  `WEBHOOK_AUTHORIZED_GROUP_PHID`. Membership is cached with a short TTL; an unknown author
+  triggers one refresh so new members take effect promptly, then a cooldown so unauthorized
+  deliveries don't cause a Conduit call each.
 - **Dedupe** — one delivery is one submission. Its smallest mentioning comment transaction
   PHID is the run's database dedupe key, making the key independent of transaction order.
 
@@ -135,8 +135,8 @@ Guards, each closing a specific failure mode:
 - **Latest flag wins** — BMO orders flags by id, so the last matching one is the newly
   requested one.
 
-Only requesters in Bugzilla's `editbugs` group are authorized (all Mozilla Corporation
-members belong to this group) — see
+Only requesters in the Bugzilla group set by `BUGZILLA_WEBHOOK_AUTHORIZED_GROUP` are
+authorized. See
 [bugzilla_authorization.py](../../services/hackbot-api/app/bugzilla_authorization.py).
 Membership is checked per login through Bugzilla's REST API.
 
