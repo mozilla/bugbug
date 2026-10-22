@@ -12,7 +12,7 @@ dependencies = [
     "agent-tools",
     "phabricator-client",
     "sentry-sdk>=2.51.0",
-    "weave>=0.53.4"
+    "weave>=0.53.12"
 ]
 
 [project.optional-dependencies]

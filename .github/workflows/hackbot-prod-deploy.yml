@@ -47,8 +47,6 @@ run-name: >-
       || format('{0} {1} in prod{2}', inputs.action, inputs.name, inputs.dry_run && ' (dry run)' || '') }}
 
 on:
-  check_run:
-    types: [completed]
   workflow_dispatch:
     inputs:
       name:

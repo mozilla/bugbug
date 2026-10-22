@@ -25,6 +25,9 @@ class WebhookSettings(BaseModel):
     bot_phid: str = ""
     # The mention that triggers a bug-fix follow-up run.
     mention_token: str = "@hackbot"
+    # PHID of the Phabricator project whose members may trigger a run with a
+    # mention, e.g. the project mirroring a Bugzilla group.
+    authorized_group_phid: str
 
 
 class BugzillaWebhookSettings(BaseModel):
@@ -34,6 +37,8 @@ class BugzillaWebhookSettings(BaseModel):
     secret: str
     # The Bugzilla account to which the needinfo request must be directed.
     bot_login: str = "hackbot@mozilla.tld"
+    # Name of the Bugzilla group whose members may trigger a run with a needinfo.
+    authorized_group: str
 
 
 class SlackSettings(BaseModel):
@@ -79,10 +84,6 @@ class Settings(BaseSettings):
 
     phabricator: PhabricatorSettings
 
-    # Inbound webhook receiver config, embedded as a nested model and populated
-    # from WEBHOOK_<FIELD> env vars in this single parse (WEBHOOK_SECRET,
-    # WEBHOOK_BOT_PHID, WEBHOOK_MENTION_TOKEN).
-    # Required via its `secret` field, so WEBHOOK_SECRET must be set at startup.
     webhook: WebhookSettings
 
     # Bugzilla uses a separate shared-secret header and bot identity. These map

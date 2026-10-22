@@ -38,10 +38,12 @@ _TIMEOUT = 30
 _TREEHERDER = "https://treeherder.mozilla.org/api/project"
 _FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
 _INTERMITTENT_KEYWORD = "intermittent-failure"
-# How far back the candidate window reaches. The agent narrows it itself with
-# `treeherder-cli --lookback N --suspects`, which reports the push a failure actually
-# started in -- including when that predates the push under investigation.
-RANGE_PUSHES = 100
+# How far back the candidate window reaches. Backstop pushes run every test at least
+# every 20 pushes (gecko_taskgraph/util/backstop.py), so a new failure starts within
+# it. The agent narrows it itself with `treeherder-cli --lookback N --suspects`, which
+# reports the push a failure actually started in -- including when that predates the
+# push under investigation.
+RANGE_PUSHES = 20
 # Bounds the shallow clone depth, and so the commits the agent can reach.
 MAX_RANGE_COMMITS = 500
 
