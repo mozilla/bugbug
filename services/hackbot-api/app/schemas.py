@@ -167,6 +167,14 @@ class ChainedInputs(BaseModel):
     parent_run_id: UUID
 
 
+class TestRepairFixInputs(ChainedInputs):
+    # The investigation, verdict and failure logs come from the parent
+    # test-repair run's artifacts.
+    skip_firefox_build: bool | None = None
+    model: str | None = None
+    max_turns: int | None = None
+
+
 class FrontendTriageInputs(BaseModel):
     bug_id: int
     model: str | None = None

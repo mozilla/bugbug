@@ -5,10 +5,6 @@ checkout_path = "/workspace/firefox"
 # startup, then prepares the tree at that commit, deep enough to reach the
 # last-green commit.
 
-[firefox]
-enabled = true
-objdir = "objdir-test-repair"
-
 # Infrastructure this agent runs on, applied by Terraform. Changing anything here
 # changes the agent's shape and goes through an infra PR; the image ships on
 # its own.

@@ -4,20 +4,23 @@ from pathlib import Path
 
 from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.actions.email import record_email
-from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from hackbot_runtime.actions.slack import record_message
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import TestRepairResult
-from .config import SKIP_FIREFOX_BUILD, SLACK_CHANNEL
+from .config import SLACK_CHANNEL
 from .notify import (
     build_email,
     build_message,
-    recipients,
     resolve_culprit_author,
     sheriff_action_required,
 )
-from .resolve import Investigation, resolve_investigation, sheriff_classification
+from .resolve import (
+    INVESTIGATION_ARTIFACT,
+    Investigation,
+    resolve_investigation,
+    sheriff_classification,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +28,6 @@ logger = logging.getLogger(__name__)
 class AgentInputs(BaseSettings):
     # {task_name: task_id}. Everything about the failure is resolved from the task id.
     failure_tasks: dict[str, str]
-    # When set, the fix stage proposes a patch but cannot build or run it.
-    skip_firefox_build: bool = SKIP_FIREFOX_BUILD
     bugzilla_mcp_url: str = ""
     model: str | None = None
     max_turns: int | None = None
@@ -50,6 +51,10 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
     task_id = next(iter(inputs.failure_tasks.values()))
     logger.info("Starting test-repair for task %s", task_id)
     investigation: Investigation = resolve_investigation(task_id)
+    ctx.publish_json(
+        INVESTIGATION_ARTIFACT,
+        {"task_id": task_id, "investigation": investigation.to_dict()},
+    )
 
     scratch_dir = Path(tempfile.mkdtemp(prefix="test-repair-"))
     scratch_out = scratch_dir / "out"
@@ -67,17 +72,14 @@ async def main(ctx: HackbotContext) -> TestRepairResult:
     result = await run_test_repair(
         bugzilla_mcp_server=bugzilla_mcp_server,
         source_repo=source_repo,
-        fx_ctx=ctx.firefox,
         investigation=investigation,
         scratch_out=scratch_out,
-        skip_firefox_build=inputs.skip_firefox_build,
         model=inputs.model,
         max_turns=inputs.max_turns,
         log=ctx.log_path,
         verbose=True,
         publish_file=ctx.publish_file,
         actions_recorder=ctx.actions,
-        checkout=ctx.checkout,
     )
 
     culprit_author = resolve_culprit_author(source_repo, result.culprit_commit)
@@ -114,29 +116,17 @@ def _record_verdict_email(
 
     Unlike the Slack message this is not filtered: the team tracks what the agent
     decided, including the intermittents no sheriff has to act on. The culprit's
-    author is addressed when there is a patch for them.
+    author hears from the test-repair-fix run, which has a patch for them.
     """
-    pending = next(
-        (a for a in ctx.actions.actions if a["type"] in PATCH_ACTION_TYPES), None
-    )
-    classification = sheriff_classification(investigation.project, task_id)
     subject, body = build_email(
         result,
         investigation,
         task_id=task_id,
         run_id=ctx.run_id,
         culprit_author=culprit_author,
-        classification=classification,
-        revision_pending=pending is not None,
-        parent_revision=(pending or {}).get("params", {}).get("parent_revision_id"),
+        classification=sheriff_classification(investigation.project, task_id),
     )
-    record_email(
-        ctx.actions,
-        to=recipients(result, culprit_author, classification),
-        subject=subject,
-        body_markdown=body,
-        attach_patch=ctx.source_changed,
-    )
+    record_email(ctx.actions, subject=subject, body_markdown=body)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -24,6 +24,7 @@ members = [
     "hackbot-agent-frontend-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
+    "hackbot-agent-test-repair-fix",
     "hackbot-agent-uplift-resolve",
     "hackbot-api",
     "hackbot-client",
@@ -2474,7 +2475,7 @@ name = "hackbot-agent-test-repair"
 version = "0.1.0"
 source = { editable = "agents/test-repair" }
 dependencies = [
-    { name = "agent-tools", extra = ["bugzilla", "firefox"] },
+    { name = "agent-tools", extra = ["bugzilla"] },
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
@@ -2485,13 +2486,32 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
+    { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", specifier = ">=0.2.165" },
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "mozci", specifier = "~=2.4.8" },
     { name = "requests" },
     { name = "zstandard", specifier = "~=0.25.0" },
+]
+
+[[package]]
+name = "hackbot-agent-test-repair-fix"
+version = "0.1.0"
+source = { editable = "agents/test-repair-fix" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla", "firefox"] },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-agent-test-repair" },
+    { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
+    { name = "claude-agent-sdk", specifier = ">=0.2.165" },
+    { name = "hackbot-agent-test-repair", editable = "agents/test-repair" },
+    { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
 ]
 
 [[package]]
