@@ -25,9 +25,9 @@ class WebhookSettings(BaseModel):
     bot_phid: str = ""
     # The mention that triggers a bug-fix follow-up run.
     mention_token: str = "@hackbot"
-    # PHID of the Phabricator project whose members may trigger a run with a
+    # Slug of the Phabricator project whose members may trigger a run with a
     # mention, e.g. the project mirroring a Bugzilla group.
-    authorized_group_phid: str
+    authorized_group: str
 
 
 class BugzillaWebhookSettings(BaseModel):
