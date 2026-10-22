@@ -6,9 +6,9 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from google.auth import credentials
+from google.auth import compute_engine, credentials
 from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token
+from google.oauth2 import service_account
 
 from hackbot_client.models import ApplyActionsResponse, TriggeredRun
 
@@ -20,30 +20,43 @@ class HackbotClient:
         self,
         base_url: str = "https://hackbot-api.moz.tools",
         api_key: str = "",
+        key_file: str = "",
         timeout_seconds: float = 30.0,
     ) -> None:
         """Initialize the client.
 
-        Auth is picked in this order: API key, the service account key file in
-        `GOOGLE_APPLICATION_CREDENTIALS`, then the GCP metadata server. Service
-        account tokens use `base_url` as their audience.
+        Auth is picked in this order: API key, service account key file, then
+        the GCP metadata server. Service account tokens use `base_url` as
+        their audience.
 
         Args:
             base_url: Base URL of the Hackbot API
             api_key: API key for legacy authentication (optional)
+            key_file: Path to a service account key file, for running outside
+                GCP without a metadata server (optional)
             timeout_seconds: HTTP request timeout
         """
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        self._key_file = key_file
         self._timeout_seconds = timeout_seconds
         self._credentials: credentials.Credentials | None = None
 
     def _refresh_credentials(self) -> None:
         request = google_requests.Request()
         if self._credentials is None:
-            self._credentials = id_token.fetch_id_token_credentials(
-                self._base_url, request
-            )
+            if self._key_file:
+                self._credentials = (
+                    service_account.IDTokenCredentials.from_service_account_file(
+                        self._key_file, target_audience=self._base_url
+                    )
+                )
+            else:
+                self._credentials = compute_engine.IDTokenCredentials(
+                    request,
+                    target_audience=self._base_url,
+                    use_metadata_identity_endpoint=True,
+                )
         self._credentials.refresh(request)
 
     async def _get_headers(self) -> dict[str, str]:
@@ -51,7 +64,10 @@ class HackbotClient:
         if self._api_key:
             return {"X-API-Key": self._api_key}
 
-        if self._credentials is None or not self._credentials.valid:
+        if (
+            self._credentials is None
+            or self._credentials.token_state == credentials.TokenState.INVALID
+        ):
             await asyncio.to_thread(self._refresh_credentials)
         return {"Authorization": f"Bearer {self._credentials.token}"}
 

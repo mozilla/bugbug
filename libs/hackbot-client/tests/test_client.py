@@ -227,7 +227,7 @@ async def test_apply_actions_raises_for_http_errors(monkeypatch):
 
 
 async def test_trigger_run_with_service_account_auth(monkeypatch):
-    """Client sends a Bearer token minted with base_url as the audience."""
+    """Client mints a Bearer token from the key file, audience is base_url."""
     captured = _capture_post(
         monkeypatch,
         httpx.Response(
@@ -240,24 +240,27 @@ async def test_trigger_run_with_service_account_auth(monkeypatch):
         token = None
 
         @property
-        def valid(self):
-            return self.token is not None
+        def token_state(self):
+            if self.token is None:
+                return client_module.credentials.TokenState.INVALID
+            return client_module.credentials.TokenState.FRESH
 
         def refresh(self, request):
             self.token = "fake.jwt.token"
 
-    def mock_fetch_id_token_credentials(audience, request):
-        captured["audience"] = audience
+    def mock_from_service_account_file(filename, target_audience):
+        captured.update(filename=filename, audience=target_audience)
         return _FakeCredentials()
 
     monkeypatch.setattr(
-        client_module.id_token,
-        "fetch_id_token_credentials",
-        mock_fetch_id_token_credentials,
+        client_module.service_account.IDTokenCredentials,
+        "from_service_account_file",
+        mock_from_service_account_file,
     )
 
-    client = _client(api_key="")
+    client = _client(api_key="", key_file="/path/key.json")
     await client.trigger_run("bug-fix", {"bug_id": 1234})
 
+    assert captured["filename"] == "/path/key.json"
     assert captured["audience"] == "https://hackbot.example"
     assert captured["headers"] == {"Authorization": "Bearer fake.jwt.token"}
