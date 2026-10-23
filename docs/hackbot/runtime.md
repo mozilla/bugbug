@@ -102,6 +102,16 @@ Federation and the container holds no long-lived key; locally each falls back to
 env var, with no special casing needed either side. Mechanism and failure modes:
 [security.md](security.md).
 
+Optionally, Claude SDK traffic goes through an [Otari](https://github.com/mozilla-ai/otari)
+gateway, which records cost per run and per agent, enforces budgets, and can serve a run
+from a non-Anthropic model through the agent's usual `model` input. Setting
+`OTARI_BASE_URL` (the gateway's `…/api/v1` root) points the SDK at it and tags every request
+with `Otari-Conversation-Id: hackbot-<run_id>` and `Otari-Tags: app=hackbot,agent=<agent>`
+([hackbot_runtime/otari.py](../../libs/hackbot-runtime/hackbot_runtime/otari.py)).
+It also sends `Otari-Web-Search: auto`, so Otari answers Claude Code's `WebSearch` for models
+with no search of their own. Authentication stays Workload Identity Federation: the Anthropic federation
+ids point at an Otari rule that matches the same `https://api.anthropic.com` audience.
+
 ## Tools and actions
 
 The tools a model can call are **not** in this library — read tools live in [agent-tools/](../../libs/agent-tools/)
