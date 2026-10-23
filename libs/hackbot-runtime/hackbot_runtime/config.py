@@ -8,8 +8,10 @@ can prepare them on the agent's behalf. Per-run inputs and secrets are NOT here
 
 import tomllib
 from pathlib import Path
+from typing import ClassVar
 
 from pydantic import BaseModel
+from pydantic_settings import BaseSettings
 
 
 class SourceConfig(BaseModel):
@@ -58,3 +60,27 @@ def load_config(path: Path) -> HackbotConfig:
     with path.open("rb") as fh:
         data = tomllib.load(fh)
     return HackbotConfig.model_validate(data)
+
+
+class WanddbWifSettings(BaseModel):
+    # Presence of the audience is what flips the runtime from API-key mode to WIF
+    # mode — the deploy sets it only on federation-enabled workloads. Its value is
+    # the audience the Google identity token is minted for, which must match the
+    # W&B org's federation trust configuration.
+    AUDIENCE_ENV: ClassVar[str] = "WANDB_FEDERATION_AUDIENCE"
+    TOKEN_FILE_ENV: ClassVar[str] = "WANDB_IDENTITY_TOKEN_FILE"
+    REFRESH_INTERVAL_ENV: ClassVar[str] = "WANDB_IDENTITY_TOKEN_REFRESH_SECONDS"
+
+    # Google identity tokens expire after ~1h; refresh well inside that window so
+    # the file always carries plenty of remaining lifetime for the SDK to exchange.
+    DEFAULT_REFRESH_INTERVAL: ClassVar[float] = 1800
+
+    audience: str | None
+    refresh_interval: str | None
+
+
+class Settings(BaseSettings):
+    wanddbWif: WanddbWifSettings
+
+
+settings = Settings()

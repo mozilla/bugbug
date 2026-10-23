@@ -6,6 +6,7 @@ import os
 import pytest
 from google.auth.exceptions import GoogleAuthError
 from hackbot_runtime import wandb_wif
+from hackbot_runtime.config import WanddbWifSettings
 from hackbot_runtime.providers import ProviderError
 
 _AUDIENCE = "https://example.wandb.example/federation"
@@ -22,9 +23,9 @@ def _reset_module_state():
 @pytest.fixture
 def _no_federation_env(monkeypatch):
     for var in (
-        wandb_wif.AUDIENCE_ENV,
-        wandb_wif.TOKEN_FILE_ENV,
-        wandb_wif.REFRESH_INTERVAL_ENV,
+        WanddbWifSettings.AUDIENCE_ENV,
+        WanddbWifSettings.TOKEN_FILE_ENV,
+        WanddbWifSettings.REFRESH_INTERVAL_ENV,
     ):
         monkeypatch.delenv(var, raising=False)
 
