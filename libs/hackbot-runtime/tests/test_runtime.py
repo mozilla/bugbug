@@ -242,6 +242,47 @@ def test_run_async_exits_nonzero_when_agent_raises(tmp_path, monkeypatch):
     assert "nope" in summary["error"]
 
 
+def test_run_async_hands_main_the_parent_artifacts(tmp_path, monkeypatch):
+    _run_env(tmp_path, monkeypatch)
+    monkeypatch.setenv("PARENT_RUN_ID", "parent")
+    (tmp_path / "parent").mkdir()
+    (tmp_path / "parent" / "verdict.json").write_text("{}")
+    seen = []
+
+    async def main(ctx):
+        seen.append((ctx.parent_artifacts_dir / "verdict.json").read_text())
+        return HackbotAgentResult(num_turns=1)
+
+    with pytest.raises(SystemExit) as exc:
+        run_async(main)
+
+    assert exc.value.code == 0
+    assert seen == ["{}"]
+
+
+def test_a_failed_parent_download_fails_the_run(tmp_path, monkeypatch):
+    _run_env(tmp_path, monkeypatch)
+    monkeypatch.setenv("PARENT_RUN_ID", "parent")
+    monkeypatch.setenv("PARENT_ARTIFACTS", json.dumps({"a": "https://u"}))
+
+    def failing_download(urls, dest):
+        raise OSError("expired")
+
+    monkeypatch.setattr(
+        "hackbot_runtime.context.artifacts.download_all", failing_download
+    )
+
+    async def main(ctx):
+        return HackbotAgentResult(num_turns=1)
+
+    with pytest.raises(SystemExit) as exc:
+        run_async(main)
+
+    assert exc.value.code == 1
+    summary = json.loads((tmp_path / "t" / "summary.json").read_text())
+    assert "expired" in summary["error"]
+
+
 def test_agent_exception_reported_to_sentry_with_agent_tag(tmp_path, monkeypatch):
     _run_env(tmp_path, monkeypatch)
     monkeypatch.setenv("SENTRY_DSN", "https://key@sentry.example/1")

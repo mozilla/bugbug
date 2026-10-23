@@ -161,6 +161,12 @@ class TestRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
+class ChainedInputs(BaseModel):
+    """Inputs of an agent that continues another run's work from its artifacts."""
+
+    parent_run_id: UUID
+
+
 class FrontendTriageInputs(BaseModel):
     bug_id: int
     model: str | None = None

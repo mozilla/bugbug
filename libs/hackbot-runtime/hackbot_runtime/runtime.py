@@ -207,6 +207,7 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
 
     try:
         _configure_auth()
+        ctx.fetch_parent_artifacts()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = entrypoint(ctx)
     except Exception as exc:
@@ -226,6 +227,7 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
 
     try:
         _configure_auth()
+        ctx.fetch_parent_artifacts()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = asyncio.run(entrypoint(ctx))
     except Exception as exc:

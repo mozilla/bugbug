@@ -10,6 +10,7 @@ run_async(main)
   ├─ discover hackbot.toml (cwd, then above the entry point's module)
   ├─ build HackbotContext from that config + environment
   ├─ configure Anthropic, OpenAI + W&B credentials (Workload Identity Federation, or API keys)
+  ├─ download the parent run's artifacts, for a chained run
   ├─ start a Weave trace labelled with the agent's name
   ├─ call main(ctx)  ──> HackbotAgentResult, or an exception
   ├─ publish logs/agent.log
@@ -77,6 +78,14 @@ what makes local runs faithful.
 | `changes/changes.json`            | Base commit, repo URL, commits and files touched           |
 | `changes/phabricator_diff.json`   | Prebuilt Phabricator submission payload (only when needed) |
 | `attachments/<action_idx>/<name>` | Files attached to a recorded action                        |
+
+### Chained runs
+
+A run started by another run's `agents.start_run` action gets `PARENT_RUN_ID` and
+`PARENT_ARTIFACTS` (signed download URLs by key). The runtime downloads them before
+`main()` and exposes them as `ctx.parent_artifacts_dir`, under the keys the parent
+published them with; a failed download fails the run. Locally there are no URLs, and the
+directory is the parent's own `artifacts_dir/<parent_run_id>`, so treat it as read-only.
 
 ## Capturing source changes
 
