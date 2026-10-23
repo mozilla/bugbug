@@ -6,9 +6,8 @@
 """Test-repair agent for Firefox CI test failures.
 
 Blame the commit that regressed a failing test, or identify it as a known
-intermittent, and propose a fix. Stage 1 (analysis, read-only) inspects the
-candidate commit diffs and writes the verdict; stage 2 (fix) proposes a source
-patch and runs whenever stage 1 blamed a commit.
+intermittent. Read-only: when the culprit is worth a patch, the model hands the
+run on to the test-repair-fix agent, which reads the documents published here.
 """
 
 import json
@@ -19,10 +18,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
-from agent_tools import firefox
-from agent_tools.claude_sdk import build_sdk_server
-from agent_tools.firefox import FirefoxContext
-from agent_tools.firefox.tools import bootstrap_firefox
 from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
@@ -31,45 +26,30 @@ from claude_agent_sdk import (
 )
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.agents import ACTION_TYPE as START_RUN_ACTION_TYPE
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 
 from .config import (
-    ADDITIONAL_DIRS,
     ALLOWED_TOOLS,
     ANALYSIS_MODEL,
     BUGZILLA_READ_TOOLS,
-    ENABLED_ACTION_TYPES,
-    FIREFOX_TOOLS,
-    FIX_MODEL,
-    SKIP_FIREFOX_BUILD,
+    FIX_AGENT,
 )
 from .prompts import (
     ANALYSIS_TEMPLATE,
     CANDIDATE_INTRO,
-    ENVIRONMENT_NOTE,
-    FIX_TEMPLATE,
+    FIX_HANDOFF_STEP,
     KNOWN_INTERMITTENTS_LINE,
     MAX_CANDIDATE_COMMITS,
     MAX_TESTS_PER_GROUP,
-    PARENT_REVISION_ARG,
-    REPORT_INSTRUCTIONS,
     SYSTEM_PROMPT_APPEND,
-    TREE_AT_CULPRIT,
-    VERIFY_LOCAL,
-    VERIFY_REMOTE,
-    VERIFY_SKIPPED,
 )
 from .resolve import CommitRange, Investigation
 
 _CLASSIFICATIONS = ("regression", "intermittent")
 _RECOMMENDATIONS = ("backout", "do_not_backout", "rerun")
-_SANITIZER_OPTIONS = {"asan": "address-sanitizer", "tsan": "thread-sanitizer"}
 _BUG_RE = re.compile(r"^Bug (\d+)", re.IGNORECASE)
-_REVISION_RE = re.compile(
-    r"^Differential Revision: https://phabricator\.services\.mozilla\.com/D(\d+)",
-    re.MULTILINE,
-)
 
 
 class TestRepairResult(HackbotAgentResult):
@@ -80,7 +60,6 @@ class TestRepairResult(HackbotAgentResult):
     culprit_bug: int | None = None
     confidence: float = 0.0
     intermittent_bug: int | None = None
-    proposed_patch: bool = False
     summary: str = ""
     analysis: str = ""
 
@@ -106,7 +85,7 @@ def _build_options(
         mcp_servers=mcp_servers,
         allowed_tools=allowed_tools,
         disallowed_tools=["AskUserQuestion", "Task", "Skill"],
-        add_dirs=[*ADDITIONAL_DIRS, str(scratch_dir)],
+        add_dirs=[str(scratch_dir)],
         permission_mode="bypassPermissions",
         effort=effort,
         max_turns=max_turns,
@@ -159,7 +138,7 @@ def _check(result_msg: ResultMessage | None, stage: str) -> None:
         )
 
 
-def _read_doc(
+def read_doc(
     scratch_out: Path,
     key: str,
     publish_file: Callable[[str, Path, str | None], str] | None,
@@ -172,7 +151,7 @@ def _read_doc(
     return path.read_text()
 
 
-def _read_verdict(scratch_out: Path) -> dict:
+def read_verdict(scratch_out: Path) -> dict:
     path = scratch_out / "verdict.json"
     if not path.exists():
         return {}
@@ -235,34 +214,6 @@ def _resolve_candidates(source_repo: Path, value, culprit: str | None) -> list[s
     return resolved
 
 
-def _write_mozconfig(fx_ctx: FirefoxContext, investigation: Investigation) -> None:
-    """Write a mozconfig mirroring the failing CI build's variant."""
-    options = ["ac_add_options --enable-application=browser"]
-    if investigation.debug_build:
-        options.append("ac_add_options --enable-debug")
-    else:
-        options += [
-            "ac_add_options --disable-debug",
-            "ac_add_options --enable-optimize",
-        ]
-    if investigation.sanitizer:
-        options += [
-            f"ac_add_options --enable-{_SANITIZER_OPTIONS[investigation.sanitizer]}",
-            "ac_add_options --disable-jemalloc",
-        ]
-    if investigation.coverage_build:
-        options.append("ac_add_options --enable-coverage")
-    options.append(f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}")
-    fx_ctx.mozconfig.write_text("\n".join(options) + "\n")
-
-
-async def _bootstrap(fx_ctx: FirefoxContext) -> None:
-    """Install the build toolchain. Idempotent; a failure is not fatal."""
-    result = await bootstrap_firefox(fx_ctx.source_dir)
-    if not result.get("success"):
-        print(f"[test-repair] bootstrap: {result.get('message')}", file=sys.stderr)
-
-
 def _as_float(value, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -277,44 +228,21 @@ def _as_int(value) -> int | None:
         return None
 
 
-def _commit_message(repo: Path, sha: str) -> str:
-    """A commit's full message from the local checkout; empty when unreadable."""
+def _bug_from_commit(repo: Path, sha: str | None) -> int | None:
+    """The bug a commit landed for, read off its subject."""
+    if not sha:
+        return None
     try:
-        return subprocess.run(
-            ["git", "-C", str(repo), "log", "-1", "--format=%B", sha],
+        subject = subprocess.run(
+            ["git", "-C", str(repo), "log", "-1", "--format=%s", sha],
             check=True,
             capture_output=True,
             text=True,
         ).stdout
     except subprocess.CalledProcessError, OSError:
-        return ""
-
-
-def _bug_from_commit(repo: Path, sha: str) -> int | None:
-    """The bug a commit landed for, read off its subject."""
-    match = _BUG_RE.match(_commit_message(repo, sha).strip())
+        return None
+    match = _BUG_RE.match(subject.strip())
     return int(match.group(1)) if match else None
-
-
-def _revision_from_commit(repo: Path, sha: str) -> int | None:
-    """The Phabricator revision a commit landed from, off its footer."""
-    match = _REVISION_RE.search(_commit_message(repo, sha))
-    return int(match.group(1)) if match else None
-
-
-def _checkout(checkout: Callable[[str], str] | None, sha: str) -> bool:
-    """Move the tree to ``sha`` for the fix stage; False when it stays put.
-
-    Best effort: a checkout that fails costs the stacking, not the analysis.
-    """
-    if checkout is None:
-        return False
-    try:
-        checkout(sha)
-    except Exception as exc:
-        print(f"[test-repair] could not check out {sha}: {exc}", file=sys.stderr)
-        return False
-    return True
 
 
 def _assemble_result(
@@ -338,12 +266,11 @@ def _assemble_result(
         candidate_commits=_resolve_candidates(
             source_repo, verdict.get("candidate_commits"), culprit_commit
         ),
-        culprit_bug=_as_int(verdict.get("culprit_bug")),
+        culprit_bug=_bug_from_commit(source_repo, culprit_commit),
         intermittent_bug=_as_int(verdict.get("intermittent_bug")),
         confidence=_as_float(verdict.get("confidence")),
-        proposed_patch=bool(verdict.get("proposed_patch")),
-        summary=_read_doc(scratch_out, "summary", publish_file),
-        analysis=_read_doc(scratch_out, "analysis", publish_file),
+        summary=read_doc(scratch_out, "summary", publish_file),
+        analysis=read_doc(scratch_out, "analysis", publish_file),
         num_turns=total_turns,
         total_cost_usd=total_cost,
     )
@@ -354,7 +281,7 @@ def _range_expr(commit_range: CommitRange) -> str:
     return f"HEAD~{commit_range.span}..HEAD"
 
 
-def _failing_tests(investigation: Investigation) -> str:
+def failing_tests(investigation: Investigation) -> str:
     groups = investigation.failing_groups
     if not groups:
         if not investigation.group_based:
@@ -373,32 +300,41 @@ def _failing_tests(investigation: Investigation) -> str:
     return "\n".join(lines)
 
 
+def _publish_handoff(
+    scratch_out: Path, publish_file: Callable[[str, Path, str | None], str]
+) -> None:
+    """Publish the verdict and the failure logs the fix agent works from."""
+    publish_file("verdict.json", scratch_out / "verdict.json", "application/json")
+    for path in sorted((scratch_out / "logs").glob("**/*live_backing_log*")):
+        publish_file(str(path.relative_to(scratch_out)), path, "text/plain")
+
+
+def _fix_requests(recorder: ActionsRecorder) -> list[dict]:
+    return [
+        action
+        for action in recorder.list_actions()
+        if action["type"] == START_RUN_ACTION_TYPE
+    ]
+
+
 async def run_test_repair(
     *,
     bugzilla_mcp_server: McpServerConfig | None,
     source_repo: Path,
-    fx_ctx: FirefoxContext,
     investigation: Investigation,
     scratch_out: Path,
-    skip_firefox_build: bool = SKIP_FIREFOX_BUILD,
     model: str | None = None,
     max_turns: int | None = None,
     verbose: bool = False,
     log: Path | None = None,
     publish_file: Callable[[str, Path, str | None], str] | None = None,
     actions_recorder: ActionsRecorder | None = None,
-    checkout: Callable[[str], str] | None = None,
 ) -> TestRepairResult:
-    """Blame the commit that regressed a failing test and propose a fix.
+    """Blame the commit that regressed a failing test.
 
-    Pass ``actions_recorder`` to let the fix stage submit the patch for review as a
-    Phabricator revision, recorded as a proposed action rather than submitted
-    here. Runs without a recorder, or with no bug for the culprit, only produce
-    the patch in the source tree.
-
-    Pass ``checkout`` (``HackbotContext.checkout``) to move the tree to the culprit
-    before the fix stage, so the patch is a change to that commit and the revision
-    stacks on the culprit's own.
+    Pass ``actions_recorder`` to let the model hand a blamed culprit on to the
+    test-repair-fix agent, recorded as an ``agents.start_run`` action that starts
+    it once this run has succeeded. A hand-off without a culprit is dropped.
     """
     commit_range = investigation.commit_range
     failure_commit = investigation.failure_commit
@@ -409,12 +345,15 @@ async def run_test_repair(
 
     mcp_servers: dict[str, McpServerConfig] = {}
     allowed_tools = [*ALLOWED_TOOLS]
-    if not skip_firefox_build:
-        mcp_servers["firefox"] = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
-        allowed_tools += FIREFOX_TOOLS
     if bugzilla_mcp_server:
         mcp_servers["bugzilla"] = bugzilla_mcp_server
         allowed_tools += BUGZILLA_READ_TOOLS
+    if actions_recorder is not None:
+        _, actions_server = actions_server_for(
+            actions_recorder, types=[START_RUN_ACTION_TYPE]
+        )
+        mcp_servers[ACTIONS_SERVER_NAME] = actions_server
+        allowed_tools += actions_to_tool_names([START_RUN_ACTION_TYPE])
 
     known_intermittents_line = (
         KNOWN_INTERMITTENTS_LINE.format(
@@ -425,7 +364,7 @@ async def run_test_repair(
     )
     range_expr = _range_expr(commit_range)
     analysis_prompt = ANALYSIS_TEMPLATE.format(
-        failing_tests=_failing_tests(investigation),
+        failing_tests=failing_tests(investigation),
         harness=investigation.harness,
         platform=investigation.platform or "unknown",
         label=investigation.label or "unknown",
@@ -440,11 +379,12 @@ async def run_test_repair(
         max_candidates=MAX_CANDIDATE_COMMITS,
         known_intermittents_line=known_intermittents_line,
         scratch_out=scratch_out,
+        fix_handoff=(
+            FIX_HANDOFF_STEP.format(agent=FIX_AGENT)
+            if actions_recorder is not None
+            else ""
+        ),
     )
-
-    total_cost = 0.0
-    total_turns = 0
-    scratch_dir = scratch_out.parent
 
     label = (
         investigation.failing_groups[0].group
@@ -453,117 +393,34 @@ async def run_test_repair(
     )
     with Reporter(verbose=verbose, log_path=log) as reporter:
         reporter.header(f"{label}: analysis")
-        analysis_opts = _build_options(
+        options = _build_options(
             model=model or ANALYSIS_MODEL,
             effort="high",
             cwd=source_repo,
-            scratch_dir=scratch_dir,
+            scratch_dir=scratch_out.parent,
             mcp_servers=mcp_servers,
             allowed_tools=allowed_tools,
             max_turns=max_turns,
         )
-        result_msg = await _run_session(reporter, analysis_opts, analysis_prompt)
+        result_msg = await _run_session(reporter, options, analysis_prompt)
         _check(result_msg, "analysis")
         _check_blocked(scratch_out)
-        total_cost += result_msg.total_cost_usd or 0.0
-        total_turns += result_msg.num_turns or 0
 
-        verdict = _read_verdict(scratch_out)
-        culprit_commit = _resolve_culprit(source_repo, verdict.get("culprit_commit"))
-        if culprit_commit:
-            reporter.header(f"{label}: fix")
-            at_culprit = _checkout(checkout, culprit_commit)
-            if skip_firefox_build:
-                verify_step = VERIFY_SKIPPED.format(scratch_out=scratch_out)
-            else:
-                _write_mozconfig(fx_ctx, investigation)
-                await _bootstrap(fx_ctx)
-                template = VERIFY_LOCAL if investigation.is_linux else VERIFY_REMOTE
-                verify_step = template.format(
-                    harness=investigation.harness, platform=investigation.platform
-                ) + ENVIRONMENT_NOTE.format(platform=investigation.platform)
-            bug_id = _as_int(verdict.get("culprit_bug")) or _bug_from_commit(
-                source_repo, culprit_commit
-            )
-            # A child revision has to be based on its parent's commit, so the
-            # patch only stacks when the tree really moved there.
-            parent_revision = (
-                _revision_from_commit(source_repo, culprit_commit)
-                if at_culprit
-                else None
-            )
-            report = actions_recorder is not None and bug_id is not None
-            fix_mcp_servers = mcp_servers
-            fix_allowed_tools = allowed_tools
-            if report:
-                _, actions_server = actions_server_for(
-                    actions_recorder, types=ENABLED_ACTION_TYPES
-                )
-                fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
-                fix_allowed_tools = [
-                    *allowed_tools,
-                    *actions_to_tool_names(ENABLED_ACTION_TYPES),
-                ]
-            elif actions_recorder is not None:
-                print(
-                    f"[test-repair] no bug for culprit {culprit_commit}: the patch "
-                    "will be produced but not submitted for review, since a "
-                    "Phabricator revision is filed against a bug",
-                    file=sys.stderr,
-                )
-            fix_prompt = FIX_TEMPLATE.format(
-                culprit_commit=culprit_commit,
-                verify_step=verify_step,
-                source_repo=source_repo,
-                scratch_out=scratch_out,
-                tree_note=(
-                    TREE_AT_CULPRIT.format(culprit_commit=culprit_commit)
-                    if at_culprit
-                    else ""
-                ),
-                report=(
-                    REPORT_INSTRUCTIONS.format(
-                        bug_id=bug_id,
-                        parent=(
-                            PARENT_REVISION_ARG.format(revision=parent_revision)
-                            if parent_revision
-                            else ""
-                        ),
-                    )
-                    if report
-                    else ""
-                ),
-            )
-            fix_opts = _build_options(
-                model=model or FIX_MODEL,
-                effort="low",
-                cwd=source_repo,
-                scratch_dir=scratch_dir,
-                mcp_servers=fix_mcp_servers,
-                allowed_tools=fix_allowed_tools,
-                max_turns=max_turns,
-            )
-            # A failed fix stage must not discard the analysis we already paid for.
-            try:
-                result_msg = await _run_session(reporter, fix_opts, fix_prompt)
-                if result_msg is not None:
-                    total_cost += result_msg.total_cost_usd or 0.0
-                    total_turns += result_msg.num_turns or 0
-                _check(result_msg, "fix")
-            except Exception as exc:
-                print(f"[test-repair] fix stage failed: {exc}", file=sys.stderr)
-            # Merge, since the fix stage may rewrite verdict.json without the culprit.
-            fix_verdict = _read_verdict(scratch_out)
-            verdict = {
-                **verdict,
-                **{k: v for k, v in fix_verdict.items() if v is not None},
-            }
-
-    return _assemble_result(
+    result = _assemble_result(
         scratch_out,
-        verdict=verdict,
+        verdict=read_verdict(scratch_out),
         source_repo=source_repo,
-        total_turns=total_turns,
-        total_cost=total_cost,
+        total_turns=result_msg.num_turns or 0,
+        total_cost=result_msg.total_cost_usd or 0.0,
         publish_file=publish_file,
     )
+
+    fix_requests = _fix_requests(actions_recorder) if actions_recorder else []
+    if fix_requests and not result.culprit_commit:
+        print("[test-repair] no culprit to fix; not handing off", file=sys.stderr)
+        for action in fix_requests:
+            actions_recorder.remove_action(action["action_id"])
+        fix_requests = []
+    if fix_requests and publish_file is not None:
+        _publish_handoff(scratch_out, publish_file)
+    return result

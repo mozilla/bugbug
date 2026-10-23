@@ -37,7 +37,6 @@ def test_result_model_serializes_findings():
     assert findings["classification"] == "regression"
     assert findings["recommendation"] == "backout"
     assert findings["culprit_commit"] == "deadbeef"
-    assert findings["proposed_patch"] is False
 
 
 def test_intermittent_result_defaults():
@@ -47,4 +46,3 @@ def test_intermittent_result_defaults():
         recommendation="do_not_backout",
     )
     assert result.culprit_commit is None
-    assert result.proposed_patch is False

@@ -229,6 +229,8 @@ tasks:
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
                     cd ../test-repair &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../test-repair-fix &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
                     cd ../uplift-resolve &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
                     cd ../.. &&
