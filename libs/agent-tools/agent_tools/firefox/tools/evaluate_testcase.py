@@ -80,7 +80,7 @@ async def evaluate_testcase(
     content: str,
     filename: str,
     firefox_binary: Path,
-    timeout: int = 30,
+    crash_wait_seconds: int = 30,
     prefs: dict[str, str | int | bool] = None,
 ) -> dict[str, Any]:
     """Test a testcase in Firefox and capture crash output.
@@ -89,7 +89,7 @@ async def evaluate_testcase(
         content: Testcase file content
         filename: Name for the testcase file
         firefox_binary: Path to Firefox binary
-        timeout: Timeout in seconds (grizzly's crash-wait)
+        crash_wait_seconds: Timeout in seconds (grizzly's crash-wait)
         prefs: Optional custom Firefox preferences to set
 
     Returns:
@@ -101,7 +101,7 @@ async def evaluate_testcase(
     # the MCP response can't be written back and the agent transcript stops
     # mid-stream. Push the whole thing onto a worker thread.
     #
-    # Outer deadline is generous: grizzly's own ``timeout`` is the crash-wait,
+    # Outer deadline is generous: grizzly's own ``crash_wait_seconds`` is the crash-wait,
     # but launch, pref generation, and teardown are unbounded in grizzly. If
     # ffpuppet prints "Launch failed" and then hangs inside Sapphire, this is
     # what gets us out. The thread itself will keep running after a timeout
@@ -109,7 +109,7 @@ async def evaluate_testcase(
     # on — a leaked thread is better than a frozen agent.
     if prefs is None:
         prefs = {}
-    outer_deadline = timeout + 90
+    outer_deadline = crash_wait_seconds + 90
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(
@@ -117,10 +117,10 @@ async def evaluate_testcase(
                 content,
                 filename,
                 firefox_binary,
-                timeout,
+                crash_wait_seconds,
                 prefs,
             ),
-            timeout=outer_deadline,
+            crash_wait_seconds=outer_deadline,
         )
     except asyncio.TimeoutError:
         return {
