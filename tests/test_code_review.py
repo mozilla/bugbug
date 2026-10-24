@@ -1018,6 +1018,29 @@ async def test_external_content_load_caches():
     assert client.get.await_count == 1
 
 
+@pytest.mark.asyncio
+async def test_external_content_load_retries_on_429():
+    item = ExternalContent(
+        name="a",
+        url="https://example.com/a.md",
+        description="example",
+    )
+    request = httpx.Request("GET", item.url)
+    client = MagicMock()
+    client.get = AsyncMock(
+        side_effect=[
+            httpx.Response(429, request=request),
+            httpx.Response(200, text="body\n", request=request),
+        ]
+    )
+    with (
+        patch.object(data_types, "get_http_client", return_value=client),
+        patch.object(data_types._fetch_url.retry, "sleep", AsyncMock()),
+    ):
+        assert await item.load() == "body\n"
+    assert client.get.await_count == 2
+
+
 _RULES_TOML = """
 version = 1
 

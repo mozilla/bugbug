@@ -207,6 +207,9 @@ async def create_bug(
 
     The description becomes comment 0 and is rendered as Markdown. Recorded into
     the run summary for human review — does not file in Bugzilla.
+
+    A later action in the same run can reference the new bug's ID as
+    `{{actions.<action_id>.bug_id}}`, using the ID this call returns.
     """
     body: dict[str, Any] = {
         "product": product,

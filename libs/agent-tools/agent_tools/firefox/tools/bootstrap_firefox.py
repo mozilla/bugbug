@@ -29,29 +29,6 @@ def _refresh_minidump_stackwalk() -> None:
     MinidumpParser.MDSW_BIN = which("minidump-stackwalk")
 
 
-# Run with `./mach python`, for the tree's mozboot and mozbuild.
-_MACH_PYTHON = Path(__file__).parent / "mach_python"
-
-
-async def _install_developer_tools(firefox_dir: Path) -> tuple[int | None, str, str]:
-    process = await asyncio.create_subprocess_exec(
-        "./mach",
-        "python",
-        str(_MACH_PYTHON / "install_developer_tools.py"),
-        cwd=firefox_dir,
-        stdin=asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        start_new_session=True,
-    )
-    stdout, stderr = await process.communicate()
-    return (
-        process.returncode,
-        stdout.decode("utf-8", errors="ignore"),
-        stderr.decode("utf-8", errors="ignore"),
-    )
-
-
 def _version_key(path: Path) -> tuple[int, ...]:
     return tuple(int(n) for n in re.findall(r"\d+", path.name))
 
@@ -90,9 +67,8 @@ async def bootstrap_firefox(
     With ``application="mobile_android"`` (or ``"mobile_android_artifact_mode"``)
     it installs what Android builds need instead: a JDK, the Android SDK and NDK.
 
-    Also installs the developer tools bootstrap offers coding agents
-    (treeherder-cli, searchfox-cli, socorro-cli, stmo-cli, webspec-index);
-    failing to is reported in the message but not an error.
+    Bootstrap also installs the developer tools it offers coding agents
+    (treeherder-cli, searchfox-cli, socorro-cli, stmo-cli, webspec-index).
 
     Required before a full (non-artifact) build can succeed. On a fresh
     image bootstrap takes ~10-15 min and downloads the toolchain into
@@ -147,19 +123,11 @@ async def bootstrap_firefox(
             _refresh_minidump_stackwalk()
             if application.startswith("mobile_android"):
                 _link_android_tools()
-            message = "mach bootstrap completed successfully"
-            returncode, tools_stdout, tools_stderr = await _install_developer_tools(
-                firefox_dir
-            )
-            if returncode != 0:
-                message += (
-                    f"; installing developer tools failed with exit code {returncode}"
-                )
             return {
                 "success": True,
-                "message": message,
-                "stdout": stdout_output + tools_stdout,
-                "stderr": stderr_output + tools_stderr,
+                "message": "mach bootstrap completed successfully",
+                "stdout": stdout_output,
+                "stderr": stderr_output,
             }
         return {
             "success": False,

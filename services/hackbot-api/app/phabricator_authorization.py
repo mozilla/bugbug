@@ -10,10 +10,6 @@ if TYPE_CHECKING:
     from phabricator_client import PhabricatorClient
 
 
-# Members of this project are authorized to trigger Hackbot.
-AUTHORIZED_GROUP_PHID = "PHID-PROJ-njo5uuqyyq3oijbkhy55"  # bmo-editbugs-team
-
-
 class PhabricatorAuthorizer:
     """Cache-backed authorization checks against a Phabricator project."""
 
