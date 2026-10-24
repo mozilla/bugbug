@@ -734,6 +734,11 @@ async def run_frontend_triage(
         raise AgentError(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
         )
+    if unfinished := reporter.unfinished_subagents:
+        raise AgentError(
+            f"bug {bug}: the agent ended its turn with subagents still running "
+            f"({', '.join(unfinished)}), so their findings never reached the triage"
+        )
 
     plan = parse_plan(result_msg.result)
 
