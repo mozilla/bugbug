@@ -47,6 +47,7 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
 | `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
 | `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
+| `feedback.report_problem`   | Report a problem to the Hackbot developers | `severity`, `title`, `message`                                  |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. `phabricator.submit_patch`

@@ -58,6 +58,10 @@ You can use these tools for building Firefox, but you can also use bash (e.g. `.
 
 Before saying that something can't be done in your environment, check with Bash (e.g. which binaries and tools are installed, what the environment variables point to, whether the network is reachable) instead of assuming.
 
+# Reporting problems
+
+When you get stuck on a real blocker (something doesn't work or needs fixing, or you need a tool or API you don't have access to), record `feedback_report_problem`, then continue your task.
+
 # Delegating to the investigator subagent
 
 You have one generic subagent type: `investigator`. It has the same read-only tools you do (source repo + bugzilla read tools). **You write its full instructions dynamically** each time you spawn it — there is no fixed investigator behaviour.

@@ -13,6 +13,7 @@ from agent_tools.registry import tool_name_for
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions import action_records as _action_records
 from hackbot_runtime.actions import bugzilla as _bugzilla
+from hackbot_runtime.actions import feedback as _feedback
 from hackbot_runtime.actions import phabricator as _phabricator
 from hackbot_runtime.actions import slack as _slack
 from hackbot_runtime.actions import testrail as _testrail
@@ -42,6 +43,7 @@ def actions_server_for(
         + _testrail.TOOLS
         + _slack.TOOLS
         + _try_server.TOOLS
+        + _feedback.TOOLS
     )
     if types is not None:
         wanted = set(types)
