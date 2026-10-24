@@ -71,7 +71,7 @@ def test_removed_action_is_absent_from_summary(tmp_path):
         {"bug_id": 1, "changes": {"severity": "S2"}},
         reasoning="inaccurate",
     )
-    ctx.actions.record(
+    corrected = ctx.actions.record(
         "bugzilla.add_comment",
         {"bug_id": 1, "text": "Corrected assessment"},
         reasoning="corrected",
@@ -89,6 +89,7 @@ def test_removed_action_is_absent_from_summary(tmp_path):
             "type": "bugzilla.add_comment",
             "params": {"bug_id": 1, "text": "Corrected assessment"},
             "reasoning": "corrected",
+            "action_id": corrected["action_id"],
         }
     ]
 

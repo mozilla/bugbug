@@ -23,7 +23,6 @@ async def test_submit_records_test_plan():
         "summary": "Details",
         "test_plan": "uv run pytest tests/test_thing.py (passed)",
     }
-    assert "ref" not in action
 
 
 async def test_submit_records_the_parent_revision_only_when_stacked():
@@ -91,18 +90,6 @@ async def test_submit_accepts_missing_test_plan():
     rec = ActionsRecorder()
     await phabricator.submit_patch(rec, bug_id=1, title="Fix", reasoning="r")
     assert rec.actions[0]["params"]["test_plan"] is None
-
-
-async def test_submit_ref_is_recorded():
-    rec = ActionsRecorder()
-    await phabricator.submit_patch(
-        rec,
-        bug_id=1,
-        title="Fix",
-        reasoning="r",
-        ref="patch",
-    )
-    assert rec.actions[0]["ref"] == "patch"
 
 
 async def test_update_records_only_the_revision_id():

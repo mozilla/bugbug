@@ -49,8 +49,8 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
-stored on the action and shown in the UI beside the proposed change. `phabricator.submit_patch`
-is the only model-facing tool that exposes **`ref`** (see cross-references below).
+stored on the action and shown in the UI beside the proposed change. Each tool returns the
+recorded action's ID, which a later action can reference (see cross-references below).
 
 `testrail` and `slack` also provide `record_test_plan` / `record_message` helpers that agent
 code calls directly rather than the model choosing to — for an action the agent always takes
@@ -113,21 +113,22 @@ verified-good state is not wanted even if it recorded something before erroring.
 ## Cross-action references
 
 An action's result often isn't known until it's applied — a Phabricator revision has no URL
-until it exists. So a later action can reference an earlier one's result by label:
+until it exists. So a later action can reference an earlier one's result by the action ID
+returned when it was recorded:
 
 ```
-submit_patch(..., ref="patch")
-add_comment(text="Patch up for review: {{actions.patch.url}}")
+submit_patch(...)  # -> "Recorded phabricator.submit_patch (ID: action-1a2b3c)."
+add_comment(text="Patch up for review: {{actions.action-1a2b3c.url}}")
 ```
 
 A new bug works the same way, through its `bug_id`:
 
 ```
-create_bug(..., ref="bug")
-add_comment(revision_id=..., text="Filed bug {{actions.bug.bug_id}}")
+create_bug(...)  # -> "Recorded bugzilla.create_bug (ID: action-4d5e6f)."
+add_comment(revision_id=..., text="Filed bug {{actions.action-4d5e6f.bug_id}}")
 ```
 
-`{{actions.<ref>.<field>}}` is substituted at apply time, recursively through params.
+`{{actions.<action_id>.<field>}}` is substituted at apply time, recursively through params.
 Resolution draws on rows already `applied` in earlier passes as well as this one, so a
 later manual apply can still reference an earlier action's result.
 
@@ -140,8 +141,8 @@ Same-bug field changes are merged with the closest comment into a single
 `PUT /bug/{id}`, so Bugzilla applies them as one transaction — one bugmail, one history
 entry, instead of a burst. Other comments on that bug still apply separately. A group is
 applied at its last member's index, once every earlier dependency has resolved, and any
-group whose rows carry a `ref` is excluded (nothing should reference a coalesced member's
-result).
+group with a member another pending action references is excluded (that action could run
+before the group is applied).
 
 ## Where to look
 
