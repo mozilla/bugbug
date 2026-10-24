@@ -17,6 +17,7 @@ from hackbot_agents.frontend_triage.agent import (
     parse_severity,
     parse_severity_assessment,
     render_scope,
+    write_system_prompt,
 )
 from hackbot_agents.frontend_triage.config import (
     TRIAGE_SCOPE,
@@ -112,6 +113,17 @@ def test_only_the_matching_component_reaches_the_prompt():
     # recognisable as one.
     for entry in TRIAGE_SCOPE:
         assert f"**{entry.key}**" in prompt, entry.key
+
+
+def test_the_fallback_prompt_reaches_the_cli_as_a_file(tmp_path):
+    # An unknown component pulls in every component's guidance, which is past the 128 KiB
+    # Linux allows for one argv string. Inline, the CLI never started (bug 7289 on GitHub).
+    prompt = load_system_prompt(Path("rules"), "", guidance_for(None, None), ())
+    assert len(prompt.encode()) > 128 * 1024
+
+    system_prompt = write_system_prompt(prompt, tmp_path)
+    assert system_prompt["type"] == "file"
+    assert Path(system_prompt["path"]).read_text(encoding="utf-8") == prompt
 
 
 def test_a_nested_owner_wins_over_the_component_that_contains_it():
