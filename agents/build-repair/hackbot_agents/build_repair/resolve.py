@@ -12,6 +12,7 @@ Taskcluster / lando / pushlog lookups the pulse listener does, so the agent
 derives everything it reports from a task id.
 """
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -48,6 +49,26 @@ def _get_json(url: str) -> dict:
 
 def _task(task_id: str) -> dict:
     return _get_json(_TC_TASK_URL.format(task_id=task_id))
+
+
+def linux_build_env(task_id: str) -> dict[str, str] | None:
+    """The env of a build task CI ran on Linux, or None for any other task.
+
+    Its ``MOZCONFIG`` and ``MOZ_FETCHES`` say how to build exactly as CI did.
+    Fetches with a ``dest`` or without extraction are not supported.
+    """
+    task = _task(task_id)
+    env = (task.get("payload") or {}).get("env") or {}
+    if not (
+        task.get("workerType", "").startswith("b-linux")
+        and env.get("MOZCONFIG")
+        and env.get("MOZ_FETCHES")
+    ):
+        return None
+    fetches = json.loads(env["MOZ_FETCHES"])
+    if any("dest" in f or not f.get("extract", True) for f in fetches):
+        return None
+    return env
 
 
 def _task_push(task: dict) -> tuple[str | None, str | None]:

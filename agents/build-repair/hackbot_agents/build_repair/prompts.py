@@ -170,8 +170,7 @@ Edit the source files in {source_repo} (your working directory) to repair the bu
 been read, which costs a turn. To see how a commit handled comparable files, run
 `git show <sha> -- <dir>` rather than guessing a sibling's name.
 
-Logs already fetched sit under {scratch_out}/logs. A mozconfig that mirrors the failing CI configuration (release milestone, warnings-as-errors)
-is already set up. Verify the fix compiles with the build_firefox tool, passing
+Logs already fetched sit under {scratch_out}/logs. A mozconfig that mirrors the failing CI configuration is already set up. Verify the fix compiles with the build_firefox tool, passing
 the directory of the file you changed as `target` (e.g. 'docshell/base') for a
 fast, focused build -- prefer this over a full tree build. If the build reports a
 missing toolchain (e.g. rustc or clang), run the bootstrap_firefox tool once and
