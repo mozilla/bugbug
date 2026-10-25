@@ -107,11 +107,6 @@ async def push(
     Your working-directory changes are pushed as-is, so finish your edits first.
     This records the push for review rather than performing it, so you will not
     see the results.
-
-    A later action in the same run can link the new CI push's Treeherder URL as
-    ``{{actions.<action_id>.url}}``, using the ID this call returns (e.g.
-    ``{{actions.action-1a2b3c.url}}``). Record this push before the action
-    containing the link.
     """
     cleaned_tasks = [task.strip() for task in (tasks or []) if task and task.strip()]
     if cleaned_tasks and auto:

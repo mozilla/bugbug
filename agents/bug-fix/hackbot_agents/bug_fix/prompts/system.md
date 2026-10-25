@@ -76,8 +76,6 @@ The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `try_ser
 
 When you record `phabricator_submit_patch` to create a new revision, do not also record `bugzilla_add_comment` in the same run. The patch description already appears as a Bugzilla comment, so another comment would be redundant.
 
-Each recorded action returns its ID. A later action can use an earlier action's result as {{{{actions.<action_id>.<field>}}}}; it is filled in when the actions are applied. For example, if recording a Try push returned `Recorded try_server.push (ID: action-1a2b3c).`, put {{{{actions.action-1a2b3c.url}}}} in the Phabricator revision's test_plan to link the push.
-
 Before calling any action tool, state in your response:
 
 - **What** action you are recording and **why** (cite the specific rule)

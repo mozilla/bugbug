@@ -53,9 +53,8 @@ async def submit_patch(
         int | str,
         Field(
             description=(
-                "Bug this patch fixes: a bug number, or "
-                "{{actions.<action_id>.bug_id}} for a bug filed by create_bug "
-                "in this run."
+                "Bug this patch fixes: a bug number, or a reference to a bug "
+                "filed by create_bug in this run."
             )
         ),
     ],
@@ -77,9 +76,7 @@ async def submit_patch(
         str | None,
         Field(
             description=(
-                "Revision test plan. If you recorded a Try push, include "
-                "its Treeherder URL using {{actions.<action_id>.url}}, with "
-                "the ID returned when you recorded the push"
+                "Revision test plan. If you recorded a Try push, link it here."
             )
         ),
     ] = None,
@@ -116,13 +113,6 @@ async def submit_patch(
     edits first, then call this once you are done. Calling it records the
     submission as a proposed action for review; it is not sent to Phabricator
     during the run.
-
-    A later action in the same run can reference the new revision's URL as
-    `{{actions.<action_id>.url}}` (for example, inside a bug comment), using the
-    ID this call returns.
-
-    To fix a bug you file in the same run, record ``bugzilla.create_bug`` first,
-    then pass `bug_id` as `{{actions.<action_id>.bug_id}}` with the ID it returns.
     """
     _validate_summary(summary)
     params: dict = {
