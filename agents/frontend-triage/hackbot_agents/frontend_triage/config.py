@@ -182,6 +182,9 @@ TRIAGE_SCOPE = (
             "misses entirely. Note also that `browser/base/content/test/sidebar/` is "
             "`Firefox :: General` in `moz.build`, not this component."
         ),
+        # The notes above send vertical-tabs bugs to the tab strip, which Tabbed Browser
+        # owns, so citing it would be refused without that guidance loaded.
+        related=("Firefox :: Tabbed Browser",),
     ),
     ScopedComponent(
         "Firefox",
@@ -2815,6 +2818,184 @@ TRIAGE_SCOPE = (
             "`devtools/shared/commands/resource/tests/` for the server-side "
             "listing. There are no jest tests."
         ),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Tabbed Browser",
+        "#tabbrowser-triage-bots",
+        trees=(
+            "browser/components/tabbrowser/",
+            "browser/components/tabnotes/",
+            "browser/components/tabunloader/",
+        ),
+        owns=(
+            "browser/components/tabbrowser/",
+            "browser/components/tabnotes/",
+            "browser/components/tabunloader/",
+        ),
+        notes=(
+            "**Vertical and horizontal tabs are one strip.** `sidebar.verticalTabs` "
+            "(off by default) reorients the same "
+            "`browser/components/tabbrowser/content/tabs.mjs` element rather than "
+            "swapping in another, and much of what differs is selectors in "
+            "`browser/themes/shared/tabbrowser/tabs.css`, which `moz.build` gives to "
+            "`Firefox :: Theme`. So a bug seen only with vertical tabs is usually a "
+            "branch or a selector in a shared file. The launcher beside the strip is "
+            "`Firefox :: Sidebar`; do not re-scope the bug there for the orientation "
+            "alone.\n\n"
+            "**Tab groups and split view are their own components, but most of their "
+            "behavior is in this one's files.** Creating, moving and dissolving either "
+            "runs through `browser/components/tabbrowser/Tabbrowser.sys.mjs`, "
+            "`browser/components/tabbrowser/content/drag-and-drop.js` and "
+            "`browser/components/tabbrowser/content/tab-context-menu.js`. Both "
+            "components' guidance ships alongside this one. Name the component by the "
+            "feature the reporter was using, not by the file the fix lands in.\n\n"
+            "**What a restart brings back is Session Restore.** Which tabs reopen, in "
+            "what order and with what history is `browser/components/sessionstore/` "
+            "(`Firefox :: Session Restore` in `moz.build`), even when the symptom shows "
+            "up in the tab strip.\n\n"
+            "**Tab notes are off by default and split across two directories.** "
+            "`browser.tabs.notes.enabled` is false in `browser/app/profile/firefox.js`, "
+            "so establish how the reporter has them on before reading anything. "
+            "Notes are stored and looked up by the page's canonical URL in "
+            "`browser/components/tabnotes/`; the menu that edits one is "
+            "`browser/components/tabbrowser/content/tabnote-menu.js`.\n\n"
+            "**Coverage is heavy, so an empty `relevant_tests` is almost always wrong "
+            "here**, but the manifest matters as much as the file. 205 tests in "
+            "`browser/components/tabbrowser/test/browser/tabs/`, of which 115 carry "
+            '`tags = "vertical-tabs"` in its `browser.toml`. CI runs exactly those '
+            "again with `sidebar.verticalTabs=true` (the `vertical-tabs` variant in "
+            "`taskcluster/test_configs/variants.yml`), so a vertical-tabs bug is "
+            "covered only by a tagged test. Beside it are the dragdrop, statuspanel and "
+            "tabMediaIndicator suites, and `moz.build` also gives this component "
+            "`browser/base/content/test/browser-tabPrompts/` and "
+            "`browser/base/content/test/browser-tabcrashed/`."
+        ),
+        related=(
+            "Firefox :: Tabbed Browser: Tab Groups",
+            "Firefox :: Tabbed Browser: Split View",
+        ),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Tabbed Browser: Tab Groups",
+        "#tabbrowser-triage-bots",
+        trees=(
+            "browser/components/tabbrowser/content/tabgroup.mjs",
+            "browser/components/tabbrowser/content/tabgroup-menu.js",
+            "browser/components/tabbrowser/content/tab-groups-list.mjs",
+            "browser/components/tabbrowser/GroupsList.sys.mjs",
+            "browser/components/tabbrowser/SmartTabGrouping.sys.mjs",
+        ),
+        # The four files `moz.build` gives this component. Smart grouping stays under
+        # Tabbed Browser's `**` there, so it is described here but not claimed.
+        owns=(
+            "browser/components/tabbrowser/content/tabgroup.mjs",
+            "browser/components/tabbrowser/content/tabgroup-menu.js",
+            "browser/components/tabbrowser/content/tab-groups-list.mjs",
+            "browser/components/tabbrowser/GroupsList.sys.mjs",
+        ),
+        notes=(
+            "**Two lists of groups are live, and they are different code.** The List "
+            "All Tabs menu builds its groups section with `GroupsPanel` from "
+            "`browser/components/tabbrowser/GroupsList.sys.mjs`, driven by "
+            "`browser/components/tabbrowser/content/browser-allTabsMenu.js`. The app "
+            "menu and the tab groups toolbar button render the lit `<tab-groups-list>` "
+            "from `browser/components/tabbrowser/content/tab-groups-list.mjs`, which "
+            "Smart Window reuses. `browser/app/profile/firefox.js` notes that groups "
+            "are moving out of the List All Tabs menu (bug 2052293), so establish which "
+            "list the reporter means before reading either.\n\n"
+            "**The suggest button is gated before it is broken.** Smart grouping "
+            "suggestions show only when `smartTabGroupsEnabled` in "
+            "`browser/components/tabbrowser/content/tabgroup-menu.js` holds: an app "
+            "locale starting with `en`, a non-private window, `browser.ml.enable`, "
+            "`browser.tabs.groups.smart.enabled`, and the user's "
+            "`browser.tabs.groups.smart.userEnabled`, which an enterprise policy can "
+            "lock off. A missing button in another locale or a private window is "
+            "expected. The model side is "
+            "`browser/components/tabbrowser/SmartTabGrouping.sys.mjs` over "
+            "`toolkit/components/ml/`, and `moz.build` files that module under "
+            "`Firefox :: Tabbed Browser`. Smart Window's automatic grouping "
+            "(`browser.smartwindow.autoTabGrouping.*`) calls the same module but is "
+            "`Core :: Machine Learning: Frontend`.\n\n"
+            "**Saved and closed groups are Session Restore.** A group the user saved "
+            "or closed is session state, typed in "
+            "`browser/components/sessionstore/TabGroupState.sys.mjs` and kept by "
+            "`browser/components/sessionstore/SessionStore.sys.mjs`, so a group that "
+            "will not reopen, reopens without its tabs, or comes back wrong after a "
+            "restart localizes there (`Firefox :: Session Restore`) rather than in the "
+            "group element.\n\n"
+            "**Coverage is good, so an empty `relevant_tests` is usually wrong.** 10 "
+            "tests named for groups in "
+            "`browser/components/tabbrowser/test/browser/tabs/`, sharing "
+            "`browser/components/tabbrowser/test/TabGroupTestUtils.sys.mjs`, but 28 "
+            "tests there call `addTabGroup`, so grep for it before concluding nothing "
+            "covers a path. Smart grouping has 7 browser tests in "
+            "`browser/components/tabbrowser/test/browser/smarttabgrouping/` and 6 "
+            "xpcshell tests in "
+            "`browser/components/tabbrowser/test/xpcshell/smarttabgrouping/`."
+        ),
+        related=("Firefox :: Tabbed Browser",),
+    ),
+    ScopedComponent(
+        "Firefox",
+        "Tabbed Browser: Split View",
+        "#tabbrowser-triage-bots",
+        trees=(
+            "browser/components/tabbrowser/content/tabsplitview.mjs",
+            "browser/components/tabbrowser/content/split-view-footer.js",
+            "browser/components/tabbrowser/content/opentabs.html",
+            "browser/components/tabbrowser/content/opentabs.css",
+            "browser/components/tabbrowser/content/opentabs-splitview.mjs",
+            "browser/components/tabbrowser/content/opentabs-splitview.css",
+        ),
+        # `moz.build` gives this component no files at all, leaving them to Tabbed
+        # Browser's `**`. These are the ones only split view loads: the wrapper, the
+        # footer, and about:opentabs, which is the picker shown in an empty pane.
+        owns=(
+            "browser/components/tabbrowser/content/tabsplitview.mjs",
+            "browser/components/tabbrowser/content/split-view-footer.js",
+            "browser/components/tabbrowser/content/opentabs.html",
+            "browser/components/tabbrowser/content/opentabs.css",
+            "browser/components/tabbrowser/content/opentabs-splitview.mjs",
+            "browser/components/tabbrowser/content/opentabs-splitview.css",
+        ),
+        # Everything above is under `content/`, which registers no docs of its own; the
+        # tabbrowser docs are where split view's events are described.
+        doc_trees=("browser/components/tabbrowser/docs/",),
+        notes=(
+            "**The files above are the edges of the feature, not its middle.** "
+            "Creating, separating and moving a split view are methods on "
+            "`browser/components/tabbrowser/Tabbrowser.sys.mjs` (`addTabSplitView`, "
+            "`showSplitViewPanels`, `moveTabToSplitView`, `adoptSplitView`), and the "
+            "strip, drag-and-drop and tab context menu each handle it in their own "
+            "Tabbed Browser file. The panes themselves are toolkit's `<tabpanels>` in "
+            "`toolkit/content/widgets/tabbox.js`, which creates the splitter and "
+            "tracks resizing, styled by "
+            "`browser/themes/shared/tabbrowser/content-area.css`. So a bug seen only in "
+            "split view is usually a branch in a shared file, and a pane sized or "
+            "drawn wrong is the widget or the CSS -- still this component's bug.\n\n"
+            "**about:opentabs is the empty pane.** A new split view opens its second "
+            "tab there, and the list it shows is built by "
+            "`browser/components/tabbrowser/content/opentabs-splitview.mjs` from "
+            "Firefox View's `browser/components/firefoxview/OpenTabs.sys.mjs`. A "
+            "picker that renders wrong is this component; one listing the wrong tabs "
+            "may be that shared module.\n\n"
+            "**Expected states that get filed as bugs.** Pinned tabs cannot join a "
+            "split view: `addTabSplitView` drops them and creates nothing if none are "
+            "left, and the keyboard command refuses a pinned, hidden or already-split "
+            "tab outright. A split view that does not come back after a restart is "
+            "`browser/components/sessionstore/` (`Firefox :: Session Restore`), and a "
+            "tab's `splitViewId` is the WebExtensions API in "
+            "`browser/components/extensions/parent/ext-tabs.js`.\n\n"
+            "**Coverage is good, so an empty `relevant_tests` is usually wrong.** 15 "
+            "`browser_tab_splitview*.js` and `browser_replacewithwindow_splitview.js` "
+            "in `browser/components/tabbrowser/test/browser/tabs/`, 3 drag tests in "
+            "`browser/components/tabbrowser/test/browser/dragdrop/`, and 3 "
+            "`browser_splitview_*` restore tests in "
+            "`browser/components/sessionstore/test/`."
+        ),
+        related=("Firefox :: Tabbed Browser",),
     ),
     # The three buckets, which are where a filing lands when the reporter could not pick
     # a component. Grouped at the end rather than beside a related area because they are
