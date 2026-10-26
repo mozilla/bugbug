@@ -202,6 +202,15 @@ def test_the_real_frontend_triage_spec_asks_for_consent():
     assert spec.auto_apply_requires_consent is True
 
 
+def test_a_held_frontend_triage_run_still_asks_the_reporter():
+    # The run held for review is the one whose question needs an answer, so only
+    # the diagnosis waits for a human.
+    spec = AGENT_REGISTRY["frontend-triage"]
+    held = _run_with_findings(auto_apply=False)
+    assert _action_auto_applies(spec, held, "bugzilla.request_info")
+    assert not _action_auto_applies(spec, held, "bugzilla.add_comment")
+
+
 def test_which_agents_auto_apply_without_asking_for_consent():
     # `bug-fix` auto-applies whatever it records, and the apply step dispatches
     # against hackbot-api's *global* handler registry — creating bugs, attaching

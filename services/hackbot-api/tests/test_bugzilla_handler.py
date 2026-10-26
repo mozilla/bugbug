@@ -98,6 +98,52 @@ async def test_comment_handlers_add_acting_agent_tag(monkeypatch):
     ]
 
 
+async def test_request_info_handler_flags_the_requestee_on_its_comment(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda m, p, b: calls.append((m, p, b))
+    )
+    result = await bugzilla_handler.RequestInfoHandler().apply(
+        {"bug_id": 5, "text": "Which version?", "requestee": "reporter@example.com"},
+        _ctx(agent="frontend-triage"),
+    )
+    # One PUT, so the needinfo is attached to the comment asking the question.
+    assert result.status == "applied"
+    assert calls == [
+        (
+            "PUT",
+            "bug/5",
+            {
+                "comment": {
+                    "body": "Which version?",
+                    "is_private": False,
+                    "is_markdown": True,
+                },
+                "comment_tags": ["frontend-triage"],
+                "flags": [
+                    {
+                        "name": "needinfo",
+                        "status": "?",
+                        "requestee": "reporter@example.com",
+                    }
+                ],
+            },
+        )
+    ]
+
+
+def test_request_info_never_coalesces_with_a_comment():
+    # frontend-triage applies it while holding its diagnosis comment, so folding the
+    # two into one PUT would either post the held comment or hold the question.
+    planned = bugzilla_handler.plan_coalesced_groups(
+        [
+            ("bugzilla.add_comment", {"bug_id": 5}),
+            ("bugzilla.request_info", {"bug_id": 5}),
+        ]
+    )
+    assert planned == []
+
+
 async def test_add_attachment_handler_downloads_and_base64_encodes(monkeypatch):
     seen = {}
     monkeypatch.setattr(
