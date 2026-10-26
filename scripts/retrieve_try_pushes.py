@@ -158,7 +158,7 @@ def main() -> None:
     BATCH_SIZE = 1000
 
     with tqdm(total=len(new_pushes)) as pbar:
-        for batch in itertools.batched(new_pushes, BATCH_SIZE):
+        for batch in itertools.batched(new_pushes, BATCH_SIZE, strict=False):
             with ThreadPoolExecutor() as executor:
                 db.append(
                     TRY_PUSHES_DB,

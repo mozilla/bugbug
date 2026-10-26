@@ -304,7 +304,7 @@ def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
     assert not ACTION_TOOLS & set(analysis_opts.allowed_tools)
     assert "actions" not in analysis_opts.mcp_servers
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "actions" in fix_opts.mcp_servers
 
 
@@ -353,7 +353,7 @@ def test_the_culprits_subject_stands_in_for_a_missing_verdict_bug(
         options_out=options,
         actions_recorder=ActionsRecorder(),
     )
-    assert ACTION_TOOLS <= set(options[1].allowed_tools)
+    assert set(options[1].allowed_tools) >= ACTION_TOOLS
     assert "bug_id=555" in calls[1]
 
 
@@ -702,14 +702,16 @@ def test_both_stages_name_the_checkout_path(tmp_path, monkeypatch):
 
 def test_both_stages_steer_tree_searches_to_git_grep(tmp_path, monkeypatch):
     # An unbounded `grep -r` over the Firefox tree burns the whole Bash timeout.
-    _result, calls, _head = _run(
+    options = []
+    _run(
         tmp_path,
         [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
         monkeypatch,
+        options_out=options,
     )
-    assert len(calls) == 2
-    for prompt in calls:
-        assert "`git grep`" in prompt
+    assert len(options) == 2
+    for opts in options:
+        assert "`git grep`" in opts.system_prompt["append"]
 
 
 def test_all_failing_tests_are_listed(tmp_path, monkeypatch):

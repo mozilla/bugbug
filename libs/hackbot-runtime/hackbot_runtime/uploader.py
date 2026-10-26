@@ -3,6 +3,19 @@ from pathlib import Path
 from typing import IO
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# GCS asks clients to retry 408, 429 and 5xx with exponential backoff:
+# https://cloud.google.com/storage/docs/retry-strategy. Retrying an upload is
+# safe because only this run writes its keys, and a retry sends the same bytes.
+_RETRY = Retry(
+    total=5,
+    backoff_factor=1,
+    status_forcelist=[408, 429, *range(500, 600)],
+    allowed_methods=["POST"],
+    raise_on_status=False,
+)
 
 
 class SignedPolicyUploader:
@@ -17,6 +30,8 @@ class SignedPolicyUploader:
         self.url = url
         self.fields = fields
         self.prefix = prefix
+        self._session = requests.Session()
+        self._session.mount(self.url, HTTPAdapter(max_retries=_RETRY))
 
     def upload_bytes(
         self, name: str, data: bytes, content_type: str = "application/octet-stream"
@@ -48,7 +63,7 @@ class SignedPolicyUploader:
         form: dict[str, str] = dict(self.fields)
         form["key"] = key
         files = {"file": (name, body, content_type)}
-        response = requests.post(self.url, data=form, files=files, timeout=300)
+        response = self._session.post(self.url, data=form, files=files, timeout=300)
         if not response.ok:
             # GCS V4 signed POST policy errors are only readable in the
             # response body. `raise_for_status()` strips it, leaving an

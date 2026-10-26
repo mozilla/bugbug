@@ -66,3 +66,4 @@ services:
 
 volumes:
   workspace:
+    name: hackbot_workspace

@@ -53,7 +53,7 @@ export function TriggerForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isReproAgent = agent === "autowebcompat-repro";
+  const isWebcompatAgent = agent.startsWith("autowebcompat-");
   const isBuildRepairAgent = agent === "build-repair";
   const isTestRepairAgent = agent === "test-repair";
   const isTestPlanAgent = agent === "test-plan-generator";
@@ -68,7 +68,7 @@ export function TriggerForm() {
 
     const parsedBugId = parseBugId(bugId);
     const hasBugId = parsedBugId !== null;
-    const hasBugData = isReproAgent && bugData.trim().length > 0;
+    const hasBugData = isWebcompatAgent && bugData.trim().length > 0;
 
     if (needsFailureTasks) {
       if (isBuildRepairAgent) {
@@ -133,7 +133,7 @@ export function TriggerForm() {
       inputs.target_branch = targetBranch.trim();
       inputs.sources = parsed.sources;
       if (hasBugId) inputs.bug_id = parsedBugId;
-    } else if (!isReproAgent) {
+    } else if (!isWebcompatAgent) {
       if (!hasBugId) {
         setError("Enter a valid Bugzilla bug ID or bug URL.");
         return;
@@ -220,7 +220,7 @@ export function TriggerForm() {
       {!needsFailureTasks && !isTestPlanAgent && !isUpliftAgent && (
         <div className="field">
           <label htmlFor="bugId">
-            {isReproAgent
+            {isWebcompatAgent
               ? "Bugzilla bug ID or URL (optional if report text provided)"
               : "Bugzilla bug ID or URL *"}
           </label>
@@ -229,12 +229,12 @@ export function TriggerForm() {
             placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
             value={bugId}
             onChange={(e) => setBugId(e.target.value)}
-            required={!isReproAgent}
+            required={!isWebcompatAgent}
           />
         </div>
       )}
 
-      {isReproAgent && (
+      {isWebcompatAgent && (
         <div className="field">
           <label htmlFor="bugData">
             Report text (optional if bug ID provided)

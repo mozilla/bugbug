@@ -39,6 +39,11 @@ copied into the image's working directory, where the runtime discovers it.
 Registering the agent in `AGENT_REGISTRY` requires the Job to exist under the `job_name`
 given there.
 
+The Job's infrastructure is declared in the agent's own `hackbot.toml`, under `[deploy]`
+(runtime, sizing, broker, workspace and secrets), and applied by Terraform in
+mozilla/webservices-infra. Images ship separately and never need an infra PR. See
+[tools/hackbot-deploy](../../tools/hackbot-deploy/README.md).
+
 ## Environments
 
 `ENVIRONMENT` (`development` / `production`) selects the Sentry environment and, in the
@@ -70,14 +75,15 @@ Two things those files do not tell you:
 - **An agent container's env arrives from three places.** Per-execution overrides from the
   API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
-  `WEAVE_PROJECT`); and local-only fallbacks (`ANTHROPIC_API_KEY`, `WANDB_API_KEY`,
-  `ARTIFACTS_DIR`). Only the first varies per run.
+  `OPENAI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`); and local-only fallbacks
+  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`). Only the first
+  varies per run.
 
 The listener also honours `DRY_RUN=true`, which logs intended calls without POSTing them.
 
 ## Running locally
 
-The repo is a `uv` workspace (`agents/*`, `libs/*`, `services/*`), so everything shares one
+The repo is a `uv` workspace (`agents/*`, `libs/*`, `services/*`, `tools/*`), so everything shares one
 lockfile.
 
 **An agent**, exactly as it ships, via its `compose.yml`:

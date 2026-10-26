@@ -255,7 +255,7 @@ async def test_apply_fails_without_a_patch_artifact(submitted):
     )
 
     assert result.status == "failed"
-    assert "No try push artifact" in result.error
+    assert "Could not load the try push artifact" in result.error
     assert submitted == []
 
 

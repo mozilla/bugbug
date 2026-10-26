@@ -5,6 +5,7 @@
 
 import collections
 import concurrent.futures
+import contextlib
 import logging
 import os
 
@@ -200,10 +201,9 @@ def boot_worker() -> None:
 
                     update_touched_together_gen.send(commits[-1]["node"])
 
-                    try:
+                    with contextlib.suppress(StopIteration):
                         update_touched_together_gen.send(None)
-                    except StopIteration:
-                        pass
+
                 logger.info("Touched together DB updated.")
             except Exception as e:
                 # It's not ideal, but better not to crash the service!

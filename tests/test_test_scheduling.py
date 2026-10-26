@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import math
 from datetime import datetime
 
@@ -308,10 +309,8 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
     assert test_scheduling.get_touched_together("layout/file.cpp", "dom/tests") == 0
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
-    try:
+    with contextlib.suppress(StopIteration):
         update_touched_together_gen.send(None)
-    except StopIteration:
-        pass
 
     # Ensure we can still read the DB after closing.
     assert test_scheduling.get_touched_together("dom", "layout/tests") == 1
@@ -608,10 +607,8 @@ def test_cochange_pmi(monkeypatch: MonkeyPatch) -> None:
     )
     next(update_touched_together_gen)
     update_touched_together_gen.send(Revision("commit4"))
-    try:
+    with contextlib.suppress(StopIteration):
         update_touched_together_gen.send(None)
-    except StopIteration:
-        pass
 
     # 4 commits (the backed-out one is skipped); dom was changed in 3 of them, layout in 1, dom/tests
     # (including its subdirectories) in 3, layout/tests in 1.

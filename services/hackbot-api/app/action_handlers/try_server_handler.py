@@ -1,7 +1,5 @@
 """Apply-side try-server action: push an already-built patch series to Lando."""
 
-from __future__ import annotations
-
 import json
 import logging
 from datetime import datetime, timezone
@@ -172,7 +170,9 @@ class PushHandler:
             submission = json.loads(raw)
         except Exception as exc:
             log.exception("Failed to load try push artifact for run %s", ctx.run_id)
-            return ActionResult.failed(f"No try push artifact for this run: {exc}")
+            return ActionResult.failed(
+                f"Could not load the try push artifact for this run: {exc}"
+            )
 
         try:
             client = _client()
