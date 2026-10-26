@@ -79,7 +79,7 @@ perf-regression-predictor = [
 [dependency-groups]
 test = [
     "coverage==7.16.2",
-    "hypothesis==6.168.5",
+    "hypothesis==6.170.1",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
     "pre-commit==4.6.2",
