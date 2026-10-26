@@ -315,6 +315,34 @@ needs. Private-scoped tokens realistically need `llm`, which adds an Anthropic d
 the proxy. Injection risk stays real in both directions: untrusted content flows in, and
 confidential content must not flow out.
 
+## Two upstream keys
+
+The proxy holds two BMO keys and picks one per token from its scope. A scope with no grant
+naming a security group reads with `BUGZILLA_UNPRIVILEGED_API_KEY`, from an account in no
+groups; a scope with at least one such grant reads with `BUGZILLA_PRIVILEGED_API_KEY`,
+which will belong to an account in security groups once phase 3 lands.
+
+For every public-only scope, which is every agent today, a read then has to be allowed
+twice: by the proxy's checks and by BMO. A bug in the proxy still cannot reach anything
+private, and a security bug the unprivileged account can see (because it was cc'd, say) is
+still denied by the scope. A scope that mixes a private grant with public ones reads
+everything with the privileged key, its public lookups included, behind the same checks.
+
+Each key has its own upstream client and its own decision cache, since the two see
+different bugs, and the proxy refuses to start if the keys are the same. Which key reads
+never changes what a request may look like, so moving an agent between public and private
+scopes is a change to its template, nothing on the agent side.
+
+An earlier design had a separate passthrough mode that relayed requests to BMO as-is with
+the unprivileged key. It was dropped: it accepted requests the scoped path refuses, relayed
+BMO's error codes, which collide with the proxy's (BMO's 101 means "bug does not exist",
+the proxy's means "endpoint not exposed"), and once given the same contract its only
+difference was the key, which choosing by scope provides for every public-only agent.
+
+Both keys send `Mozilla-Edge-Key`, exempting the proxy from BMO's edge rate limiting. A
+per-run limit in the proxy replaces it in a follow-up; until then a runaway agent is
+throttled by nothing but its job timeout.
+
 ## Deployment
 
 - Cloud Run service, own least-privilege service account, `--no-allow-unauthenticated`.
@@ -324,7 +352,8 @@ confidential content must not flow out.
   all-traffic routing. IAM auth is what restricts callers; Cloud Run's front end rejects
   unauthenticated requests before any of our code runs. VPC-internal is a later hardening
   step, and this is the detail most likely to cost a day if assumed to work out of the box.
-- BMO credential in Secret Manager, `secretAccessor` to the proxy service account only.
+- The privileged and unprivileged BMO keys and the edge key in Secret Manager,
+  `secretAccessor` to the proxy service account only.
 - No signing key to provision: hackbot-api signs as its own service account, and the
   proxy is configured with that account's email as `token_issuer`. The only IAM needed
   is `roles/iam.serviceAccountTokenCreator` on itself, which hackbot-api already has.
@@ -342,13 +371,42 @@ confidential content must not flow out.
 | Minting, scope templates, the `$bug_id` placeholder | [hackbot-api/app/bz_token.py](../../services/hackbot-api/app/bz_token.py)          |
 | The `broker` container override and its allowlist   | [hackbot-api/app/jobs.py](../../services/hackbot-api/app/jobs.py)                  |
 
+Hardening that landed after review, each verified against bugzilla.mozilla.org where it
+concerns BMO behaviour:
+
+- BMO merges query parameters into the call a path maps to, so `bug/X/comment?ids=Y`,
+  `comment_ids` and `bug/attachment/N?ids=B` each reached bugs that were never authorized.
+  The per-bug endpoints now accept an allowlist of parameters and refuse the rest,
+  authorize every bug in a comment request's `ids`, and return only what they authorized.
+- Search refuses `comments`, `attachments`, `history` and `description`, which BMO
+  otherwise returns on request and which would bypass their endpoints' checks.
+- `is_private` comments and attachments are served only under a grant cleared for private
+  data. A public bug can carry them, so this matters as soon as the credential is
+  privileged.
+- The audit log is configured at import, since the container never calls `main()`.
+- A confidential scope refuses to start rather than fall back to the broker's own key when
+  no signing key is configured.
+
+The proxy's error policy follows from the same review:
+
+- **Refuse, don't adjust.** A request the proxy cannot honour as written gets a 400 (code 104) saying what to change, rather than being capped, trimmed or rewritten into a
+  different question. This covers `limit` out of range, unsupported parameters,
+  credentials in the query string, fields a token cannot return, and an out-of-scope bug in
+  a comment request's `ids` (which BMO also fails on).
+- **A denial reveals no more than BMO would.** Every reason a bug or attachment is
+  unavailable (nonexistent, private, outside the anchor, wrong tier, refused upstream) gets
+  one message naming only what the caller asked for; an attachment denial never names its
+  bug. Silent filtering is kept only where BMO filters silently: search results, and
+  private comments and attachments. `tests/test_disclosure.py` pins this down.
+
 Not yet done in this phase, in order:
 
 1. Deploy the Cloud Run service and its IAM, and set `token_issuer` to hackbot-api's
    service account email.
 2. Test it against real BMO traffic with a hand-minted token.
 3. **Then** onboard the first agent: point its broker's Bugzilla client at the proxy (see
-   [Client side](#client-side)) and set `bugzilla_scope` on its `AgentSpec`.
+   [Client side](#client-side)) and set `bugzilla_scope` on its `AgentSpec`, most likely
+   to `PUBLIC_READ_SCOPE`.
 
 Nothing outside this table has changed, deliberately. Nothing in
 [agents/](../../agents/) is touched, and no shared client helper exists yet: what a broker
@@ -359,8 +417,11 @@ Because onboarding is opt-in per agent and minting is skipped entirely when no s
 is configured, the rollback at every step is to stop minting rather than to revert code.
 
 Deliberately deferred out of phase 0: content filtering (a token asking for `remove` or
-`llm` is refused rather than served unfiltered), upstream query rewriting (results are
-filtered after they arrive, so a capped search can return fewer rows than asked for), and
+`llm` is refused rather than served unfiltered), full upstream query rewriting (a
+public-only scope asks BMO to leave out bugs in security groups, via `bug_group` `isempty`,
+but anchors are applied after results arrive, so a search can return fewer rows than its
+`limit`; the added condition is an efficiency, never the guard, since a caller's `j_top=OR`
+can neutralize it), and
 tier promotion.
 
 **1. Trustworthy requester identity.** Split `X-API-Key` per caller class. Small, and

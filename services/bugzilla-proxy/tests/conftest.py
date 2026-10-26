@@ -49,6 +49,15 @@ def keypair() -> tuple[str, str]:
 
 
 @pytest.fixture(scope="session")
+def make_jwk():
+    """Build a JWK for a public PEM, for tests that simulate key rotation.
+
+    A fixture because test modules cannot import from conftest.
+    """
+    return _jwk
+
+
+@pytest.fixture(scope="session")
 def signing_jwk(keypair) -> dict:
     """The public half as a JWK, which is how Google serves it."""
     _private, public_pem = keypair
@@ -61,7 +70,8 @@ def settings(keypair) -> Settings:
     _private, public_pem = keypair
     return Settings(
         bugzilla_api_url="https://bugzilla.example.com/rest",
-        bugzilla_api_key="upstream-key",
+        bugzilla_privileged_api_key="privileged-key",
+        bugzilla_unprivileged_api_key="unprivileged-key",
         jwt_public_key=public_pem,
         token_issuer="",
     )
@@ -72,7 +82,8 @@ def sa_settings() -> Settings:
     """Deployed mode: verify against the issuer's published certificates."""
     return Settings(
         bugzilla_api_url="https://bugzilla.example.com/rest",
-        bugzilla_api_key="upstream-key",
+        bugzilla_privileged_api_key="privileged-key",
+        bugzilla_unprivileged_api_key="unprivileged-key",
         jwt_public_key="",
         token_issuer=ISSUER,
     )

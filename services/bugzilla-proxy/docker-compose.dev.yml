@@ -6,10 +6,11 @@ services:
     # Inject config into the container (relative to this compose file = repo root .env).
     env_file: ../../.env
     environment:
-      # `BUGZILLA_API_URL` and `BUGZILLA_API_KEY` arrive via env_file above,
-      # under the same names the agent brokers use. Restated here only to fail
-      # at compose time rather than on the first upstream call.
-      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY:?error}
+      # Both keys arrive via env_file above. Restated here only to fail at
+      # compose time rather than on the first upstream call. They must differ:
+      # the unprivileged one belongs to an account in no groups.
+      BUGZILLA_PRIVILEGED_API_KEY: ${BUGZILLA_PRIVILEGED_API_KEY:?error}
+      BUGZILLA_UNPRIVILEGED_API_KEY: ${BUGZILLA_UNPRIVILEGED_API_KEY:?error}
       # The public half of the keypair hackbot-api signs with locally. Generate
       # one with the commands in this service's README and put both halves in
       # the root .env, as JWT_PUBLIC_KEY and BZ_TOKEN_PRIVATE_KEY.

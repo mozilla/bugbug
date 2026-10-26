@@ -277,6 +277,29 @@ class TestBrokerEnv:
             == {}
         )
 
+    def test_a_confidential_scope_refuses_to_fall_back(self, monkeypatch):
+        """Falling back would run it without the proxy's scope and containment."""
+        monkeypatch.setattr(settings, "bz_token_private_key", "", raising=False)
+        monkeypatch.setattr(settings, "bz_token_service_account", "", raising=False)
+        confidential = BugzillaScope(
+            grants=(
+                {
+                    "tier": "full",
+                    "anchor": {"groups": ["core-security"], "static_bugs": [1]},
+                    "endpoints": ["bug"],
+                },
+            ),
+            confidential=True,
+        )
+        with pytest.raises(RuntimeError, match="confidential"):
+            bz_token.broker_env_for(
+                run_id="abc",
+                agent="a",
+                scope=confidential,
+                inputs=Inputs(),
+                requested_by=None,
+            )
+
     def test_a_configured_deployment_emits_the_token(self, signing_key):
         env = bz_token.broker_env_for(
             run_id="abc",
