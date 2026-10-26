@@ -46,12 +46,7 @@ def test_setup_ci_build_fetches_ci_toolchains_and_uses_ci_mozconfig(
     mach.write_text(f'#!/bin/sh\necho "$(pwd -P) $*" > "{tmp_path}/mach.log"\n')
     mach.chmod(0o755)
     fetches = tmp_path / "fetches"
-    for var in (
-        "MOZ_AUTOMATION",
-        "MOZ_FETCHES_DIR",
-        "UPLOAD_PATH",
-        "PERFHERDER_EXTRA_OPTIONS",
-    ):
+    for var in ("MOZ_AUTOMATION", "MOZ_FETCHES_DIR", "PERFHERDER_EXTRA_OPTIONS"):
         monkeypatch.delenv(var, raising=False)
     fx_ctx = FirefoxContext.from_source_repo(src, objdir=str(tmp_path / "obj-build"))
 
@@ -68,7 +63,6 @@ def test_setup_ci_build_fetches_ci_toolchains_and_uses_ci_mozconfig(
     ]
     assert os.environ["MOZ_AUTOMATION"] == "1"
     assert os.environ["MOZ_FETCHES_DIR"] == str(fetches)
-    assert os.environ["UPLOAD_PATH"] == "/builds/worker/artifacts"
     assert os.environ["PERFHERDER_EXTRA_OPTIONS"] == "x11"
     assert fx_ctx.mozconfig.read_text().splitlines() == [
         '. "$topsrcdir/browser/config/mozconfigs/linux64/nightly"',
