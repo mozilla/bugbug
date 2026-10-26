@@ -17,10 +17,24 @@ a Phabricator patch.
 4. **Verify:** re-runs the script against the build and checks the patch only
    touches webcompat files; the patch is dropped if either fails.
 
+### Follow-ups
+
+When someone mentions `@hackbot` in a comment on a revision this agent filed,
+hackbot-api routes the comment back here with `REVISION_ID` and `COMMENT`. The
+run checks out the revision and goes straight to the comments, with no planning
+or reproduction (the revision was verified when it was filed). It replies on
+the revision, updates it, or both. Before updating, it downloads the bug's
+reproduction script and verifies the change the same way as a new
+intervention. An update is dropped if the script doesn't exit 0 against the
+build afterwards, or if it touches files outside the webcompat directories; a
+reply still stands.
+
 ## Input
 
 - `BUG_ID` or `BUG_DATA`: a Bugzilla bug, or the report as inline text. At
   least one is required.
+- `REVISION_ID` and `COMMENT` (optional, together): follow up on a revision
+  this agent filed, addressing the quoted comments. Requires `BUG_ID`.
 - `MODEL`, `MAX_TURNS`, `EFFORT` (optional): Claude settings.
 - `HEADLESS` (optional, default `false`): run Firefox without Xvfb.
 
