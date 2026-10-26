@@ -84,10 +84,10 @@ Bugzilla bug id. A revision with no bug id is skipped — `bug-fix` needs one.
 Guards, each closing a specific failure mode:
 
 - **Loop prevention** — comments authored by the bot's own PHID are ignored.
-- **Authorization** — the comment author must belong to the Phabricator project set by
-  `WEBHOOK_AUTHORIZED_GROUP_PHID`. Membership is cached with a short TTL; an unknown author
-  triggers one refresh so new members take effect promptly, then a cooldown so unauthorized
-  deliveries don't cause a Conduit call each.
+- **Authorization** — the comment author must belong to the Phabricator project whose slug
+  is set by `WEBHOOK_AUTHORIZED_GROUP`. Membership is cached with a short TTL; an unknown
+  author triggers one refresh so new members take effect promptly, then a cooldown so
+  unauthorized deliveries don't cause a Conduit call each.
 - **Dedupe** — one delivery is one submission. Its smallest mentioning comment transaction
   PHID is the run's database dedupe key, making the key independent of transaction order.
 

@@ -8,7 +8,7 @@ import os
 # value intact.
 os.environ.setdefault("PHABRICATOR_API_KEY", "api-" + "a" * 28)
 os.environ.setdefault("WEBHOOK_SECRET", "test-webhook-secret")
-os.environ.setdefault("WEBHOOK_AUTHORIZED_GROUP_PHID", "PHID-PROJ-authorized")
+os.environ.setdefault("WEBHOOK_AUTHORIZED_GROUP", "authorized-project")
 os.environ.setdefault("BUGZILLA_WEBHOOK_SECRET", "test-bugzilla-webhook-secret")
 os.environ.setdefault("BUGZILLA_WEBHOOK_BOT_LOGIN", "hackbot@mozilla.tld")
 os.environ.setdefault("BUGZILLA_WEBHOOK_AUTHORIZED_GROUP", "authorized-group")
