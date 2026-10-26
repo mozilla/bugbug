@@ -46,8 +46,6 @@ def test_setup_ci_build_fetches_ci_toolchains_and_uses_ci_mozconfig(
     mach.write_text(f'#!/bin/sh\necho "$(pwd -P) $*" > "{tmp_path}/mach.log"\n')
     mach.chmod(0o755)
     fetches = tmp_path / "fetches"
-    fetches.mkdir()
-    monkeypatch.setattr(agent, "CI_FETCHES_DIR", fetches)
     for var in (
         "MOZ_AUTOMATION",
         "MOZ_FETCHES_DIR",

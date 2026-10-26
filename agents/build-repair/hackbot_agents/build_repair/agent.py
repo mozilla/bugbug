@@ -137,18 +137,16 @@ def _build_options(
     )
 
 
-# On the workspace disk: CI's toolchains are about 3.4 GB.
-CI_FETCHES_DIR = Path("/workspace/fetches")
-
-
 def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
     """Build as the failing CI task did: its toolchains and mozconfig."""
     fetches = [f"{f['task']}:{f['artifact']}" for f in json.loads(env["MOZ_FETCHES"])]
-    CI_FETCHES_DIR.mkdir(exist_ok=True)
+    # Next to the checkout: on the workspace disk, outside the source tree.
+    fetches_dir = fx_ctx.source_dir.parent / "fetches"
+    fetches_dir.mkdir(exist_ok=True)
     subprocess.run(
         [str(fx_ctx.source_dir / "mach"), "--no-interactive", "artifact"]
         + ["toolchain", "--from-task", *fetches],
-        cwd=CI_FETCHES_DIR,
+        cwd=fetches_dir,
         check=True,
         stdout=sys.stderr,
         stderr=sys.stderr,
@@ -159,7 +157,7 @@ def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
     os.environ.update(
         {k: env[k] for k in ("FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS") if k in env},
         MOZ_AUTOMATION="1",
-        MOZ_FETCHES_DIR=str(CI_FETCHES_DIR),
+        MOZ_FETCHES_DIR=str(fetches_dir),
         UPLOAD_PATH="/builds/worker/artifacts",
     )
     fx_ctx.mozconfig.write_text(
