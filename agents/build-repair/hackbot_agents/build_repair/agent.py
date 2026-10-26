@@ -137,10 +137,8 @@ def _build_options(
     )
 
 
-# On the workspace disk. configure strips the source, object and sysroot paths
-# from sccache's cache keys, so CI's level-1 cache (read-only here) still hits.
+# On the workspace disk: CI's toolchains are about 3.4 GB.
 CI_FETCHES_DIR = Path("/workspace/fetches")
-CI_SCCACHE_BUCKET = "sccache-l1-us-central1"
 
 
 def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
@@ -164,15 +162,10 @@ def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
         MOZ_FETCHES_DIR=str(CI_FETCHES_DIR),
         UPLOAD_PATH="/builds/worker/artifacts",
     )
-    lines = [f'. "$topsrcdir/{env["MOZCONFIG"]}"']
-    if env.get("USE_SCCACHE"):
-        lines += [
-            f"ac_add_options --with-ccache={CI_FETCHES_DIR}/sccache/sccache",
-            f'mk_add_options "export SCCACHE_GCS_BUCKET={CI_SCCACHE_BUCKET}"',
-            'mk_add_options "export SCCACHE_GCS_RW_MODE=READ_ONLY"',
-        ]
-    lines.append(f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}")
-    fx_ctx.mozconfig.write_text("\n".join(lines) + "\n")
+    fx_ctx.mozconfig.write_text(
+        f'. "$topsrcdir/{env["MOZCONFIG"]}"\n'
+        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
+    )
 
 
 def _write_mozconfig(fx_ctx: FirefoxContext) -> None:

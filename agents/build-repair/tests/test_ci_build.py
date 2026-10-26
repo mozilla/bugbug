@@ -12,7 +12,6 @@ ENV = {
     "MOZCONFIG": "browser/config/mozconfigs/linux64/nightly",
     "MOZ_FETCHES": json.dumps(FETCHES),
     "PERFHERDER_EXTRA_OPTIONS": "x11",
-    "USE_SCCACHE": "1",
 }
 
 
@@ -75,8 +74,5 @@ def test_setup_ci_build_fetches_ci_toolchains_and_uses_ci_mozconfig(
     assert os.environ["PERFHERDER_EXTRA_OPTIONS"] == "x11"
     assert fx_ctx.mozconfig.read_text().splitlines() == [
         '. "$topsrcdir/browser/config/mozconfigs/linux64/nightly"',
-        f"ac_add_options --with-ccache={fetches}/sccache/sccache",
-        'mk_add_options "export SCCACHE_GCS_BUCKET=sccache-l1-us-central1"',
-        'mk_add_options "export SCCACHE_GCS_RW_MODE=READ_ONLY"',
         f"mk_add_options MOZ_OBJDIR={tmp_path / 'obj-build'}",
     ]
