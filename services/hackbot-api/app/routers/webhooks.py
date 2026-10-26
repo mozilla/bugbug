@@ -12,13 +12,10 @@ from app.auth import (
     require_bugzilla_webhook_secret,
     require_phabricator_signature,
 )
-from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
+from app.bugzilla_authorization import BugzillaAuthorizer
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
-from app.phabricator_authorization import (
-    AUTHORIZED_GROUP_PHID,
-    PhabricatorAuthorizer,
-)
+from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     detect_mention_and_revision,
     triggering_transaction_phids,
@@ -71,7 +68,9 @@ def get_phabricator_authorizer(
     """Dependency: lazily create the app-scoped authorizer and its member cache."""
     authorizer = getattr(request.app.state, "phabricator_authorizer", None)
     if authorizer is None:
-        authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
+        authorizer = PhabricatorAuthorizer(
+            phab_client, settings.webhook.authorized_group
+        )
         request.app.state.phabricator_authorizer = authorizer
     return authorizer
 
@@ -83,7 +82,7 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
         authorizer = BugzillaAuthorizer(
             settings.bugzilla_api_url,
             settings.bugzilla_api_key,
-            AUTHORIZED_GROUP_NAME,
+            settings.bugzilla_webhook.authorized_group,
         )
         request.app.state.bugzilla_authorizer = authorizer
     return authorizer

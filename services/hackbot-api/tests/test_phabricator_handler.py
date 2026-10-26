@@ -454,6 +454,19 @@ async def test_oversized_artifact_is_not_submitted(monkeypatch, handler, params)
     conduit.assert_not_called()
 
 
+async def test_submit_patch_unresolved_bug_id_reference_fails(monkeypatch):
+    fake, calls = _fake_conduit({})
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": "{{actions.bug.bug_id}}", "title": "Fix"}, _ctx()
+    )
+
+    assert result.status == "failed"
+    assert "not a bug number" in result.error
+    assert calls == []
+
+
 async def test_submit_patch_conduit_error_fails(monkeypatch):
     async def fake(method, **payload):
         raise RuntimeError("Conduit error ERR-CONDUIT-CORE: bad request")

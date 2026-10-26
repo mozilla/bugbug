@@ -18,8 +18,6 @@ instructions. Handlers return it verbatim; framing it safely is the caller's
 job (see the bug-fix agent's prompts).
 """
 
-from __future__ import annotations
-
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
@@ -70,7 +68,7 @@ def _as_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

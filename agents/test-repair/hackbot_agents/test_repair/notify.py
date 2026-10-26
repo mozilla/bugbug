@@ -19,8 +19,6 @@ bug, run -- is a link. The Slack message stays short enough to read in a channel
 since the run holds the detail; the email carries the full analysis.
 """
 
-from __future__ import annotations
-
 import subprocess
 from pathlib import Path
 

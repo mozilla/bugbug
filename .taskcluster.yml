@@ -31,9 +31,25 @@ tasks:
       $if: 'tasks_for[:19] == "github-pull-request"'
       then: ${event.pull_request.body}
 
-    taskboot_image: "mozilla/taskboot:0.4.2"
+    taskboot_image: "mozilla/taskboot:0.5.2"
+
+    # The files a push adds, changes or removes.
+    changed_paths:
+      $if: 'tasks_for == "github-push"'
+      then:
+        $flattenDeep:
+          $map: { $eval: "event.commits" }
+          each(c):
+            - { $eval: "c.added" }
+            - { $eval: "c.modified" }
+            - { $eval: "c.removed" }
+      else: []
   in:
     $let:
+      # Whether a push changes the bug-fix agent image or what goes into it.
+      touches_bug_fix_image:
+        $eval: '" agents/bug-fix/" in (" " + join(changed_paths, " ")) || " libs/agent-tools/" in (" " + join(changed_paths, " ")) || " libs/hackbot-runtime/" in (" " + join(changed_paths, " ")) || " libs/phabricator-client/" in (" " + join(changed_paths, " ")) || " libs/phabricator-proxy/" in (" " + join(changed_paths, " ")) || "uv.lock" in changed_paths || "pyproject.toml" in changed_paths || ".taskcluster.yml" in changed_paths'
+
       default_task_definition:
         created: { $fromNow: "" }
         deadline: { $fromNow: "1 hour" }
@@ -41,7 +57,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: astral/uv:python3.12-trixie
+          image: astral/uv:python3.14-trixie
         metadata:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
@@ -99,7 +115,7 @@ tasks:
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --group test --extra nlp --group spawn-pipeline &&
-                    hg clone -r 50a59e00c4a76fcfae660e3feb9b79e0cd549b15 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    hg clone -r 7e05eb6de61fd8ecfda678c47dee53c51ef69ffe https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     uv run pytest --cov=./ tests/test_*.py &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
@@ -124,7 +140,7 @@ tasks:
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --package bugbug-http-service --group test &&
-                    hg clone -r 50a59e00c4a76fcfae660e3feb9b79e0cd549b15 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    hg clone -r 7e05eb6de61fd8ecfda678c47dee53c51ef69ffe https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     uv run pytest --cov=http_service http_service/tests/ -vvv &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
@@ -155,11 +171,71 @@ tasks:
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=phabricator_proxy --cov-append tests/ &&
                     cd ../lando-client &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=lando_client --cov-append tests/ &&
+                    cd ../hackbot-client &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_client --cov-append tests/ &&
+                    cd ../testrail-client &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=testrail_client --cov-append tests/ &&
                     cd ../.. &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
                 name: bugbug libs tests
                 description: bugbug libs tests
+
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("services_tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-cx"
+                  - "git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    export COVERAGE_FILE=$(pwd)/.coverage &&
+                    cd services/hackbot-api &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
+                    cd ../hackbot-pulse-listener &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
+                    cd ../mcp &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --with pytest-mock==3.15.1 pytest --cov=bugbug_mcp --cov-append tests/ &&
+                    cd ../.. &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug services tests
+                description: bugbug services tests
+
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("agents_tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-cx"
+                  - "git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    export COVERAGE_FILE=$(pwd)/.coverage &&
+                    cd agents/bug-fix &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../build-repair &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../frontend-triage &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../test-repair &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../uplift-resolve &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../.. &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug agents tests
+                description: bugbug agents tests
 
         - $mergeDeep:
             - { $eval: default_task_definition }
@@ -287,6 +363,179 @@ tasks:
                 name: bugbug hackbot-ui tests
                 description: bugbug hackbot-ui tests
 
+        # Agent images use BuildKit features and a non-final target, which taskboot's
+        # build commands don't support, so call podman (what taskboot uses) directly.
+        # Its storage is a cache, so unchanged layers (system packages, mostly) are
+        # reused; layers left over from older builds are pruned after a week.
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("bug_fix_image_build") }
+              workerType: ci
+              payload:
+                capabilities:
+                  privileged: true
+                image: "${taskboot_image}"
+                cache:
+                  bugbug-bug-fix-image-podman: /var/lib/containers
+                command:
+                  - "/bin/sh"
+                  - "-cxe"
+                  - "git clone --quiet ${repository} /code &&
+                    cd /code &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    podman build --target agent -f agents/bug-fix/Dockerfile -t mozilla/bugbug-hackbot-agent-bug-fix:latest . &&
+                    mkdir /images &&
+                    podman save --format docker-archive mozilla/bugbug-hackbot-agent-bug-fix:latest | zstd -q -o /images/bugbug-hackbot-agent-bug-fix.tar.zst &&
+                    podman image prune --force --filter until=168h"
+                artifacts:
+                  public/bug-fix-agent:
+                    expires: { $fromNow: "2 weeks" }
+                    path: /images
+                    type: directory
+              scopes:
+                - docker-worker:capability:privileged
+                - docker-worker:cache:bugbug-bug-fix-image-podman
+                - generic-worker:cache:bugbug-bug-fix-image-podman
+              metadata:
+                name: bugbug bug-fix agent image build
+                description: bugbug bug-fix agent image build
+
+        # Runs inside the image, where the entrypoint has started the display and
+        # audio services. The tests download Firefox, minidump-stackwalk and Python
+        # packages, so failures are retried once to ride out network hiccups.
+        # TASKCLUSTER_ROOT_URL is unset as it is where the agent runs: mach would
+        # otherwise look Firefox's toolchains up on this cluster.
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("bug_fix_image_tests") }
+              dependencies:
+                - { $eval: as_slugid("bug_fix_image_build") }
+              payload:
+                image:
+                  type: task-image
+                  path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                  taskId: { $eval: as_slugid("bug_fix_image_build") }
+                command:
+                  - "/bin/bash"
+                  - "-cx"
+                  - "git clone --quiet ${repository} /tmp/bugbug &&
+                    cd /tmp/bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
+                    cd agents/bug-fix &&
+                    unset TASKCLUSTER_ROOT_URL &&
+                    export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                    (python -m pytest -v -rs tests/test_image.py -k 'not artifact_build and not android' ||
+                    python -m pytest -v -rs --last-failed tests/test_image.py -k 'not artifact_build and not android')"
+              metadata:
+                name: bugbug bug-fix agent image tests
+                description: bugbug bug-fix agent image tests
+
+        # Bootstraps a Firefox checkout, makes an artifact build and runs tests in it.
+        # Too slow for every pull request, it runs after merges that change the
+        # image or what goes into it.
+        - $if: 'tasks_for == "github-push" && head_branch == "refs/heads/master" && touches_bug_fix_image'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("bug_fix_image_slow_tests") }
+                dependencies:
+                  - { $eval: as_slugid("bug_fix_image_build") }
+                workerType: compute-large
+                payload:
+                  image:
+                    type: task-image
+                    path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                    taskId: { $eval: as_slugid("bug_fix_image_build") }
+                  command:
+                    - "/bin/bash"
+                    - "-cx"
+                    - "git clone --quiet ${repository} /tmp/bugbug &&
+                      cd /tmp/bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
+                      cd agents/bug-fix &&
+                      unset TASKCLUSTER_ROOT_URL &&
+                      export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                      (python -m pytest -s -v -rs tests/test_image.py -k artifact_build ||
+                      python -m pytest -s -v -rs --last-failed tests/test_image.py -k artifact_build)"
+                metadata:
+                  name: bugbug bug-fix agent image slow tests
+                  description: bugbug bug-fix agent image slow tests
+
+        # Like the slow tests, but a full build with the agent's own mozconfig, as
+        # the agent makes. Too slow for every pull request, it runs after merges
+        # that change the image or what goes into it; a failure is not retried.
+        - $if: 'tasks_for == "github-push" && head_branch == "refs/heads/master" && touches_bug_fix_image'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("bug_fix_image_full_build_tests") }
+                dependencies:
+                  - { $eval: as_slugid("bug_fix_image_build") }
+                deadline: { $fromNow: "8 hours" }
+                # Its objdir alone takes over 30 GiB, more than other pools' disks hold.
+                workerType: firefox-build
+                payload:
+                  maxRunTime: 21600
+                  env:
+                    BUG_FIX_IMAGE_FULL_BUILD: "1"
+                  image:
+                    type: task-image
+                    path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                    taskId: { $eval: as_slugid("bug_fix_image_build") }
+                  command:
+                    - "/bin/bash"
+                    - "-cx"
+                    - "git clone --quiet ${repository} /tmp/bugbug &&
+                      cd /tmp/bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
+                      cd agents/bug-fix &&
+                      unset TASKCLUSTER_ROOT_URL &&
+                      export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                      python -m pytest -s -v -rs tests/test_image.py -k full_build"
+                metadata:
+                  name: bugbug bug-fix agent image full build tests
+                  description: bugbug bug-fix agent image full build tests
+
+        # Bootstraps a Firefox checkout for Android, makes an artifact build and
+        # runs tests in it.
+        # Too slow for every pull request, it runs after merges that change the
+        # image or what goes into it.
+        - $if: 'tasks_for == "github-push" && head_branch == "refs/heads/master" && touches_bug_fix_image'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("bug_fix_image_android_tests") }
+                dependencies:
+                  - { $eval: as_slugid("bug_fix_image_build") }
+                deadline: { $fromNow: "3 hours" }
+                # The Android SDK and NDK take ~14 GiB, which leaves other pools' disks
+                # nearly full.
+                workerType: firefox-build
+                payload:
+                  maxRunTime: 7200
+                  image:
+                    type: task-image
+                    path: public/bug-fix-agent/bugbug-hackbot-agent-bug-fix.tar.zst
+                    taskId: { $eval: as_slugid("bug_fix_image_build") }
+                  command:
+                    - "/bin/bash"
+                    - "-cx"
+                    - "git clone --quiet ${repository} /tmp/bugbug &&
+                      cd /tmp/bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
+                      cd agents/bug-fix &&
+                      unset TASKCLUSTER_ROOT_URL &&
+                      export PYTHONPATH=/tmp/pydeps BUG_FIX_IMAGE_INSIDE=1 &&
+                      (python -m pytest -s -v -rs tests/test_image.py -k android ||
+                      python -m pytest -s -v -rs --last-failed tests/test_image.py -k android)"
+                metadata:
+                  name: bugbug bug-fix agent image Android tests
+                  description: bugbug bug-fix agent image Android tests
+
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
             $mergeDeep:
@@ -296,6 +545,8 @@ tasks:
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
                   - { $eval: as_slugid("libs_tests_task") }
+                  - { $eval: as_slugid("services_tests_task") }
+                  - { $eval: as_slugid("agents_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("hackbot_ui_tests_task") }
                   - { $eval: as_slugid("packaging_test_task") }
@@ -329,6 +580,8 @@ tasks:
                   - { $eval: as_slugid("tests_task") }
                   - { $eval: as_slugid("http_tests_task") }
                   - { $eval: as_slugid("libs_tests_task") }
+                  - { $eval: as_slugid("services_tests_task") }
+                  - { $eval: as_slugid("agents_tests_task") }
                   - { $eval: as_slugid("frontend_build") }
                   - { $eval: as_slugid("hackbot_ui_tests_task") }
                   - { $eval: as_slugid("packaging_test_task") }

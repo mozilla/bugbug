@@ -1,8 +1,9 @@
-FROM python:3.12 AS builder
+FROM python:3.14 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 
@@ -17,7 +18,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
     uv sync --locked --no-dev --no-editable --package hackbot-agent-test-plan-generator
 
-FROM python:3.12 AS agent
+FROM python:3.14 AS agent
 
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app

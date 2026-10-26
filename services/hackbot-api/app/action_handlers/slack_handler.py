@@ -5,8 +5,6 @@ Authenticates as a Slack app with a bot token (``SLACK_BOT_TOKEN``, needing the
 not been invited to), through the official ``slack_sdk`` client.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 from typing import Any

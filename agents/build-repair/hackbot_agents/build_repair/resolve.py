@@ -12,8 +12,6 @@ Taskcluster / lando / pushlog lookups the pulse listener does, so the agent
 derives everything it reports from a task id.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 from dataclasses import dataclass, field

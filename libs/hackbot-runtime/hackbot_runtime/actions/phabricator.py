@@ -11,8 +11,6 @@ when it meant to update one (or invent a revision id) by getting one optional
 argument wrong.
 """
 
-from __future__ import annotations
-
 import re
 from typing import Annotated
 
@@ -21,10 +19,13 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
+SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
+UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
+
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
-PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
+PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
 
 _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
@@ -48,7 +49,16 @@ def _validate_summary(summary: str | None) -> None:
 @tool
 async def submit_patch(
     recorder: ActionsRecorder,
-    bug_id: Annotated[int, Field(description="Bug this patch fixes.")],
+    bug_id: Annotated[
+        int | str,
+        Field(
+            description=(
+                "Bug this patch fixes: a bug number, or "
+                "{{actions.<ref>.bug_id}} for a bug filed by create_bug in "
+                "this run."
+            )
+        ),
+    ],
     title: Annotated[
         str,
         Field(
@@ -65,7 +75,12 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(description="Revision test plan."),
+        Field(
+            description=(
+                "Revision test plan. If you recorded a Try push, include "
+                "its Treeherder URL using {{actions.<ref>.url}}."
+            )
+        ),
     ] = None,
     summary: Annotated[
         str | None,
@@ -115,6 +130,9 @@ async def submit_patch(
     Set `ref` if you want to reference the new revision's URL from another action
     in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
     bug comment).
+
+    To fix a bug you file in the same run, record ``bugzilla.create_bug`` with a
+    `ref` first, then pass `bug_id` as `{{actions.<ref>.bug_id}}`.
     """
     _validate_summary(summary)
     params: dict = {
@@ -126,7 +144,7 @@ async def submit_patch(
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
     action = recorder.record(
-        "phabricator.submit_patch", params, reasoning=reasoning, ref=ref
+        SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning, ref=ref
     )
     return confirmation(action)
 
@@ -164,7 +182,7 @@ async def update_patch(
     association exactly as they are.
     """
     action = recorder.record(
-        "phabricator.update_patch",
+        UPDATE_PATCH_ACTION_TYPE,
         {"revision_id": revision_id},
         reasoning=reasoning,
     )
