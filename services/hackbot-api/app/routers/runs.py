@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -185,8 +186,9 @@ async def create_run(
         # The broker's per-run environment, carrying this run's Bugzilla
         # capability token when the agent has a registered scope. Built from
         # the registry, not from `payload`, so the caller has no say in what
-        # the run may read.
-        broker_env = bz_token.broker_env_for(
+        # the run may read. In a thread because signing is a blocking IAM call.
+        broker_env = await asyncio.to_thread(
+            bz_token.broker_env_for,
             run_id=str(run_id),
             agent=agent.name,
             scope=agent.bugzilla_scope,

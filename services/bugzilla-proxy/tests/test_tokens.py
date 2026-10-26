@@ -2,9 +2,11 @@
 
 import jwt
 import pytest
+from bugzilla_proxy import tokens
 from bugzilla_proxy.tokens import (
     CERTS_URL_TEMPLATE,
     TOKEN_AUDIENCE,
+    KeySourceUnavailable,
     TokenError,
     TokenVerifier,
     parse_scope,
@@ -150,20 +152,25 @@ class TestVerifier:
             pem,
             algorithm="RS256",
         )
-        with pytest.raises(TokenError, match="not valid"):
+        with pytest.raises(TokenError, match="signature does not verify"):
             TokenVerifier(settings).verify(forged)
 
     def test_an_expired_token_is_refused(self, settings, mint, public_scope):
         expired = mint(public_scope, exp=1_700_000_001, iat=1_700_000_000)
-        with pytest.raises(TokenError, match="not valid"):
+        with pytest.raises(TokenError, match="expired"):
             TokenVerifier(settings).verify(expired)
 
     def test_a_token_for_another_audience_is_refused(
         self, settings, mint, public_scope
     ):
         wrong = mint(public_scope, aud="some-other-service")
-        with pytest.raises(TokenError, match="not valid"):
+        with pytest.raises(TokenError, match="different service"):
             TokenVerifier(settings).verify(wrong)
+
+    def test_a_missing_claim_is_named(self, settings, mint, public_scope):
+        token = mint(public_scope, sub=None)
+        with pytest.raises(TokenError, match="'sub'"):
+            TokenVerifier(settings).verify(token)
 
     def test_exactly_one_key_source_must_be_configured(self, settings):
         settings.token_issuer = "hackbot-api@p.iam.gserviceaccount.com"
@@ -212,7 +219,7 @@ class TestServiceAccountVerification:
         self, sa_settings, mint_sa, public_scope, served_certs
     ):
         wrong = mint_sa(public_scope, iss="someone-else@evil.iam.gserviceaccount.com")
-        with pytest.raises(TokenError, match="not valid"):
+        with pytest.raises(TokenError, match="does not trust"):
             TokenVerifier(sa_settings).verify(wrong)
 
     def test_a_token_with_no_key_id_is_refused(
@@ -222,15 +229,13 @@ class TestServiceAccountVerification:
             TokenVerifier(sa_settings).verify(mint(public_scope))
 
     def test_an_unknown_key_id_triggers_one_refetch(
-        self, sa_settings, mint_sa, public_scope, served_certs, keypair
+        self, sa_settings, mint_sa, public_scope, served_certs, keypair, make_jwk
     ):
         """Google rotates keys, so a miss is worth one refetch before failing."""
-        from tests.conftest import _jwk
-
         verifier = TokenVerifier(sa_settings)
         verifier.verify(mint_sa(public_scope))
         _private, public_pem = keypair
-        served_certs["keys"] = [_jwk(public_pem, "rotated")]
+        served_certs["keys"] = [make_jwk(public_pem, "rotated")]
 
         scope = verifier.verify(mint_sa(public_scope, kid="rotated"))
         assert scope.agent == "frontend-triage"
@@ -245,10 +250,44 @@ class TestServiceAccountVerification:
     def test_a_fetch_failure_fails_closed(
         self, sa_settings, mint_sa, public_scope, served_certs
     ):
-        """Unable to reach the issuer's keys means unable to trust anything."""
+        """Unable to reach the issuer's keys means unable to trust anything.
+
+        Reported as an outage rather than a bad token, so the caller retries.
+        """
         served_certs["fail"] = True
-        with pytest.raises(TokenError, match="not signed by a key we trust"):
+        with pytest.raises(KeySourceUnavailable):
             TokenVerifier(sa_settings).verify(mint_sa(public_scope))
+
+    def test_unknown_key_ids_cannot_force_a_refetch_per_request(
+        self, sa_settings, mint_sa, public_scope, served_certs
+    ):
+        """Otherwise each made-up `kid` would cost a request to Google."""
+        verifier = TokenVerifier(sa_settings)
+        verifier.verify(mint_sa(public_scope))
+        for kid in ("bogus-1", "bogus-2", "bogus-3"):
+            with pytest.raises(TokenError, match="not signed by a key we trust"):
+                verifier.verify(mint_sa(public_scope, kid=kid))
+        # The initial fetch, then one forced refetch for the first unknown id.
+        assert len(served_certs["calls"]) == 2
+
+    def test_a_forced_refetch_is_allowed_again_after_the_interval(
+        self, sa_settings, mint_sa, public_scope, served_certs, monkeypatch
+    ):
+        clock = [1000.0]
+        monkeypatch.setattr(tokens.time, "monotonic", lambda: clock[0])
+        verifier = TokenVerifier(sa_settings)
+        with pytest.raises(TokenError):
+            verifier.verify(mint_sa(public_scope, kid="bogus-1"))
+        calls = len(served_certs["calls"])
+        clock[0] += tokens.MIN_FORCED_REFETCH_SECONDS + 1
+        with pytest.raises(TokenError):
+            verifier.verify(mint_sa(public_scope, kid="bogus-2"))
+        assert len(served_certs["calls"]) == calls + 1
+
+    def test_garbage_is_refused_without_fetching_keys(self, sa_settings, served_certs):
+        with pytest.raises(TokenError, match="malformed"):
+            TokenVerifier(sa_settings).verify("not-a-token")
+        assert served_certs["calls"] == []
 
 
 class TestCrossServiceContract:

@@ -13,6 +13,8 @@ without a structural anchor is an error, not a warning.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -52,8 +54,27 @@ CERTS_URL_TEMPLATE = (
 )
 
 
+# The least time between refetches forced by an unknown key id. Without it,
+# every token carrying a made-up `kid` costs a request to Google. Google
+# publishes a key before signing with it, so the refetch an unknown id does
+# trigger also picks up any genuinely new key.
+MIN_FORCED_REFETCH_SECONDS = 30.0
+
+
 class TokenError(Exception):
-    """A token that cannot be trusted, or asks for something unsupported."""
+    """A token that cannot be trusted, or asks for something unsupported.
+
+    The message is returned to the caller, so it may describe the token but
+    never anything learned from Bugzilla.
+    """
+
+
+class KeySourceUnavailable(TokenError):
+    """The issuer's signing keys could not be fetched.
+
+    Still a refusal, since nothing can be trusted without them, but an outage
+    rather than a bad token, so the caller is told to retry.
+    """
 
 
 def _require_mapping(value: Any, what: str) -> Mapping[str, Any]:
@@ -160,6 +181,8 @@ class TokenVerifier:
                 "for local runs)"
             )
         self._settings = settings
+        self._refetch_lock = threading.Lock()
+        self._last_forced_refetch = float("-inf")
         self._jwks: jwt.PyJWKClient | None = None
         if settings.token_issuer:
             self._jwks = jwt.PyJWKClient(
@@ -167,18 +190,54 @@ class TokenVerifier:
                 lifespan=settings.jwt_public_key_ttl_seconds,
             )
 
+    def _cached_key(self, kid: str, *, refresh: bool) -> Any | None:
+        assert self._jwks is not None
+        for key in self._jwks.get_signing_keys(refresh=refresh):
+            if key.key_id == kid:
+                return key.key
+        return None
+
+    def _may_force_refetch(self) -> bool:
+        with self._refetch_lock:
+            now = time.monotonic()
+            if now - self._last_forced_refetch < MIN_FORCED_REFETCH_SECONDS:
+                return False
+            self._last_forced_refetch = now
+            return True
+
     def _key_for(self, token: str) -> Any:
         if self._jwks is None:
             return self._settings.jwt_public_key
         try:
-            return self._jwks.get_signing_key_from_jwt(token).key
+            kid = jwt.get_unverified_header(token).get("kid")
+        except jwt.PyJWTError as exc:
+            log.warning("Rejected token: %s", exc)
+            raise TokenError("token is malformed, not a signed JWT") from exc
+        if not kid:
+            raise TokenError("token is not signed by a key we trust")
+        try:
+            key = self._cached_key(kid, refresh=False)
+            if key is None and self._may_force_refetch():
+                key = self._cached_key(kid, refresh=True)
+        except jwt.PyJWKClientConnectionError as exc:
+            log.warning("Could not fetch the issuer's signing keys: %s", exc)
+            raise KeySourceUnavailable(
+                "the issuer's signing keys are unavailable, retry shortly"
+            ) from exc
         except jwt.PyJWKClientError as exc:
             log.warning("No usable signing key for token: %s", exc)
             raise TokenError("token is not signed by a key we trust") from exc
+        if key is None:
+            log.warning("No signing key with id %r", kid)
+            raise TokenError("token is not signed by a key we trust")
+        return key
 
     def verify(self, token: str) -> Scope:
         if not token:
-            raise TokenError("no token presented")
+            raise TokenError(
+                "no token presented; send the run's token in the "
+                "X-Bugzilla-API-Key header"
+            )
 
         key = self._key_for(token)
 
@@ -196,7 +255,32 @@ class TokenVerifier:
                 options={"require": ["exp", "iat", "iss", "aud", "sub"]},
             )
         except jwt.PyJWTError as exc:
-            # Terse to the caller; detail goes to the log.
             log.warning("Rejected token: %s", exc)
-            raise TokenError("token is not valid") from exc
+            raise TokenError(_reason(exc)) from exc
         return parse_scope(claims)
+
+
+def _reason(exc: jwt.PyJWTError) -> str:
+    """Why a token failed, in terms the caller can act on.
+
+    Each reason is about the token alone. None helps forge one: the signature
+    still has to verify against a key only hackbot-api's account holds.
+    """
+    if isinstance(exc, jwt.ExpiredSignatureError):
+        return (
+            "token has expired; tokens last for one run, so start a new run "
+            "for a fresh one"
+        )
+    if isinstance(exc, (jwt.ImmatureSignatureError, jwt.InvalidIssuedAtError)):
+        return "token is not valid yet; check the issuing host's clock"
+    if isinstance(exc, jwt.InvalidAudienceError):
+        return "token was minted for a different service"
+    if isinstance(exc, jwt.InvalidIssuerError):
+        return "token was issued by an account this proxy does not trust"
+    if isinstance(exc, jwt.MissingRequiredClaimError):
+        return f"token is missing the required '{exc.claim}' claim"
+    if isinstance(exc, jwt.InvalidSignatureError):
+        return "token signature does not verify"
+    if isinstance(exc, jwt.DecodeError):
+        return "token is malformed, not a signed JWT"
+    return "token is not valid"

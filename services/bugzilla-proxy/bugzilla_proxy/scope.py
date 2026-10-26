@@ -161,8 +161,8 @@ class Anchor:
             board = str(bug.get("whiteboard") or "")
             if not any(tag in board for tag in self.whiteboard):
                 return False
-        if self.blocks and not (_as_int_set(bug.get("blocks")) & self.blocks):
-            return False
+        if self.blocks:
+            return bool(_as_int_set(bug.get("blocks")) & self.blocks)
         return True
 
 
@@ -287,6 +287,22 @@ class Scope:
             if best is None or _TIER_RANK[grant.tier] > _TIER_RANK[best.tier]:
                 best = grant
         return best
+
+    def exposed_fields(self, path: str) -> frozenset[str] | None:
+        """Every field some grant exposing ``path`` may serve, or None for any.
+
+        A request for a field outside this can never be answered, whichever
+        bugs match, so it is refused up front rather than silently omitted.
+        """
+        exposed: frozenset[str] = frozenset()
+        for grant in self.grants:
+            if not grant.allows_endpoint(path):
+                continue
+            visible = grant.visible_fields()
+            if visible is None:
+                return None
+            exposed |= visible
+        return exposed
 
     def upstream_fields(self, requested: frozenset[str] | None) -> frozenset[str]:
         """The fields to ask upstream for, given what the caller asked for.

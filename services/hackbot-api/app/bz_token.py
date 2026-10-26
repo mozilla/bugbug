@@ -264,8 +264,20 @@ def broker_env_for(
 
     The only thing the API sets on `broker`; `jobs.trigger_execution` refuses
     anything outside its allowlist.
+
+    Without a signing key the broker keeps its own credential, which is the
+    rollback path for public scopes. A confidential scope refuses instead:
+    falling back would run it without the proxy, and so without the scope
+    and containment it was declared with.
     """
-    if scope is None or not is_configured():
+    if scope is None:
+        return {}
+    if not is_configured():
+        if scope.confidential:
+            raise RuntimeError(
+                f"agent {agent!r} has a confidential Bugzilla scope, but no "
+                "token signing key is configured, so its runs cannot start"
+            )
         return {}
     token = mint(
         run_id=run_id,

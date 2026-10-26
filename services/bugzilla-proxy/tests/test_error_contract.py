@@ -52,10 +52,29 @@ def assert_readable_by_agents(status: int, body: dict, code: int) -> None:
 
 
 class TestErrorCodesSurvive:
+    def test_an_invalid_request_reaches_the_agent_as_104(
+        self, settings, mint, public_scope
+    ):
+        client = TestClient(
+            create_app(
+                settings,
+                privileged_upstream=NoUpstream(),
+                unprivileged_upstream=NoUpstream(),
+            )
+        )
+        status, body = error_body(client, "/rest/bug?limit=0", mint(public_scope))
+        assert_readable_by_agents(status, body, 104)
+
     def test_an_unexposed_endpoint_reaches_the_agent_as_101(
         self, settings, mint, public_scope
     ):
-        client = TestClient(create_app(settings, upstream=NoUpstream()))
+        client = TestClient(
+            create_app(
+                settings,
+                privileged_upstream=NoUpstream(),
+                unprivileged_upstream=NoUpstream(),
+            )
+        )
         status, body = error_body(client, "/rest/user/someone", mint(public_scope))
         assert_readable_by_agents(status, body, 101)
 
@@ -63,19 +82,35 @@ class TestErrorCodesSurvive:
         upstream = NoUpstream(
             {"bug": {"bugs": [{"id": 1, "groups": ["core-security"]}]}}
         )
-        client = TestClient(create_app(settings, upstream=upstream))
+        client = TestClient(
+            create_app(
+                settings, privileged_upstream=upstream, unprivileged_upstream=upstream
+            )
+        )
         status, body = error_body(client, "/rest/bug/1/comment", mint(public_scope))
         assert_readable_by_agents(status, body, 102)
 
     def test_a_write_reaches_the_agent_as_101(self, settings, mint, public_scope):
-        client = TestClient(create_app(settings, upstream=NoUpstream()))
+        client = TestClient(
+            create_app(
+                settings,
+                privileged_upstream=NoUpstream(),
+                unprivileged_upstream=NoUpstream(),
+            )
+        )
         response = client.post(
             "/rest/bug", headers={"X-Bugzilla-API-Key": mint(public_scope)}
         )
         assert_readable_by_agents(response.status_code, response.json(), 101)
 
     def test_an_unauthorized_request_reaches_the_agent_as_102(self, settings):
-        client = TestClient(create_app(settings, upstream=NoUpstream()))
+        client = TestClient(
+            create_app(
+                settings,
+                privileged_upstream=NoUpstream(),
+                unprivileged_upstream=NoUpstream(),
+            )
+        )
         response = client.get("/rest/bug")
         assert_readable_by_agents(response.status_code, response.json(), 102)
 
@@ -92,7 +127,13 @@ class TestCredentialComplaintsAreNotRelayed:
             async def get(self, path: str, params: dict) -> dict:
                 raise UpstreamError(f"The {complaint} you supplied is invalid")
 
-        client = TestClient(create_app(settings, upstream=FailingUpstream()))
+        client = TestClient(
+            create_app(
+                settings,
+                privileged_upstream=FailingUpstream(),
+                unprivileged_upstream=FailingUpstream(),
+            )
+        )
         response = client.get(
             "/rest/bug", headers={"X-Bugzilla-API-Key": mint(public_scope)}
         )

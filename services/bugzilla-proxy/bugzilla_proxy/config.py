@@ -4,10 +4,18 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Deploy-time configuration. Nothing here varies per run."""
 
-    # Upstream Bugzilla. The credential lives only here, in this one service.
-    # Named to match what the agent brokers already use for the same values.
+    # Upstream Bugzilla. The credentials live only here, in this one service.
     bugzilla_api_url: str = "https://bugzilla.mozilla.org/rest"
-    bugzilla_api_key: str = ""
+    # Reads for tokens with a private grant, and only those. May belong to an
+    # account in security groups once private access lands.
+    bugzilla_privileged_api_key: str = ""
+    # Reads for every token without a private grant. Must belong to an account
+    # in no groups, so BMO itself refuses anything private even if the
+    # proxy's checks failed.
+    bugzilla_unprivileged_api_key: str = ""
+    # Sent as `Mozilla-Edge-Key` on every upstream request, which exempts the
+    # proxy from BMO's edge rate limiting. Named as hackbot-api names it.
+    bugzilla_edge_key: str = ""
     bugzilla_timeout_seconds: float = 30.0
 
     # hackbot-api's service account email, and the whole trust configuration:
@@ -40,9 +48,10 @@ class Settings(BaseSettings):
     decision_cache_ttl_seconds: int = 300
     decision_cache_max_entries: int = 10_000
 
-    # A ceiling on what one search can pull from upstream. Results are filtered
-    # after they arrive, so an unbounded limit would mean fetching far more
-    # than the caller can ever see.
+    # The largest `limit` a search may ask for, and the limit used when none is
+    # given. A larger request is refused rather than capped. Results are
+    # filtered after they arrive, so an unbounded limit would mean fetching far
+    # more than the caller can ever see.
     max_search_limit: int = 500
 
     port: int = 8080

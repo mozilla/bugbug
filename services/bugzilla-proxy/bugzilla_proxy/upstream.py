@@ -21,19 +21,21 @@ class UpstreamError(Exception):
 
 
 class Upstream:
-    """A thin async client holding the upstream credential.
+    """A thin async client holding one upstream credential.
 
-    Exposes one GET and nothing else, so no code path here can write to BMO
-    even by mistake.
+    Exposes GETs and nothing else, so no code path here can write to BMO even
+    by mistake. One instance per credential, each handed only to the code path
+    it serves, so a request without a private grant cannot reach the
+    privileged key.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, api_key: str) -> None:
+        headers = {"X-Bugzilla-API-Key": api_key, "User-Agent": "bugzilla-proxy"}
+        if settings.bugzilla_edge_key:
+            headers["Mozilla-Edge-Key"] = settings.bugzilla_edge_key
         self._client = httpx.AsyncClient(
             base_url=settings.bugzilla_api_url.rstrip("/"),
-            headers={
-                "X-Bugzilla-API-Key": settings.bugzilla_api_key,
-                "User-Agent": "bugzilla-proxy",
-            },
+            headers=headers,
             timeout=settings.bugzilla_timeout_seconds,
         )
 
@@ -62,6 +64,21 @@ class Upstream:
             raise UpstreamError(message, status_code=response.status_code)
 
         return payload
+
+    async def open_stream(self, path: str, params: dict[str, Any]) -> httpx.Response:
+        """Start a GET whose body is relayed unread; the caller must close it.
+
+        For responses too large to hold in memory, such as attachment data,
+        and only once the request has been authorized by other means.
+        """
+        request = self._client.build_request(
+            "GET", f"/{path.lstrip('/')}", params=params
+        )
+        try:
+            return await self._client.send(request, stream=True)
+        except httpx.HTTPError as exc:
+            log.warning("Upstream request to %s failed: %s", path, exc)
+            raise UpstreamError("Bugzilla is unreachable") from exc
 
     async def aclose(self) -> None:
         await self._client.aclose()

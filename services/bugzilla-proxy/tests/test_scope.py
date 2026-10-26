@@ -190,13 +190,13 @@ class TestScopeSelection:
 class TestUpstreamFields:
     def test_auth_fields_are_always_requested(self):
         scope = Scope(run_id="r", agent="a", jti="j", grants=(grant(tier="metadata"),))
-        assert AUTH_FIELDS <= scope.upstream_fields(frozenset({"id", "summary"}))
+        assert scope.upstream_fields(frozenset({"id", "summary"})) >= AUTH_FIELDS
 
     def test_a_full_grant_asks_for_the_default_set_plus_auth_fields(self):
         scope = Scope(run_id="r", agent="a", jti="j", grants=(grant(),))
         fields = scope.upstream_fields(None)
         assert "_default" in fields
-        assert AUTH_FIELDS <= fields
+        assert fields >= AUTH_FIELDS
 
     def test_metadata_only_scopes_ask_for_no_more_than_they_can_show(self):
         scope = Scope(run_id="r", agent="a", jti="j", grants=(grant(tier="metadata"),))
