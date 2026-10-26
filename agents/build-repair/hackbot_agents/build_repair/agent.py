@@ -150,6 +150,7 @@ def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
         stdout=sys.stderr,
         stderr=sys.stderr,
     )
+    # mach takes in-tree mozconfigs only in automation; CI's flags use UPLOAD_PATH.
     os.environ.update(
         {k: env[k] for k in ("FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS") if k in env},
         MOZ_AUTOMATION="1",
