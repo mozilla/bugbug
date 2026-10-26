@@ -270,7 +270,7 @@ def test_agent_exception_reported_to_sentry_with_agent_tag(tmp_path, monkeypatch
 
 
 def test_broker_exception_reported_to_sentry_with_agent_tag(monkeypatch):
-    monkeypatch.setenv("BROKER_SENTRY_DSN", "https://key@sentry.example/1")
+    monkeypatch.setenv("SENTRY_DSN", "https://key@sentry.example/1")
     events = []
 
     class _Capture(Transport):

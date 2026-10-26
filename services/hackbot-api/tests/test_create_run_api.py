@@ -21,7 +21,7 @@ def _stub_gcp(monkeypatch):
     async def fake_policy(run_id):
         return {"url": "https://upload.example/", "fields": {"key": "v"}}
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, broker_env):
         return "projects/p/locations/l/jobs/j/executions/e"
 
     monkeypatch.setattr(gcs, "run_prefix", lambda run_id: f"results/{run_id}/")

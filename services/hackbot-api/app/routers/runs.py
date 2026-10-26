@@ -182,7 +182,10 @@ async def create_run(
             "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
         }
-        execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
+        broker_env_overrides = {"SENTRY_DSN": settings.brokers_sentry_dsn}
+        execution_name = await jobs.trigger_execution(
+            agent.job_name, env_overrides, broker_env_overrides
+        )
     except Exception as exc:
         log.exception("Failed to start execution for run %s", run_id)
         run.status = RunStatus.failed.value

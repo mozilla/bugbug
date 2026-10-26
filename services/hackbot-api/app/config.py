@@ -119,6 +119,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     sentry_dsn: str | None = None
     agents_sentry_dsn: str
+    brokers_sentry_dsn: str
 
     model_config = {
         "env_file": ".env",
