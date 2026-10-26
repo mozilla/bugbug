@@ -9,13 +9,20 @@ loop.
 Config is injected: pass a :class:`BugzillaSettings`, or let the client load
 one from the environment (via ``BugzillaSettings.from_env``) when none is
 provided. The API is asynchronous.
+
+The client reuses one connection pool across requests. Close it when done,
+either with ``async with`` or by calling :meth:`BugzillaClient.aclose`::
+
+    async with BugzillaClient(settings) as bugzilla:
+        bugs = await bugzilla.get_bugs([1])
 """
 
 from __future__ import annotations
 
 import base64
 import logging
-from typing import Any
+from types import TracebackType
+from typing import Any, Self
 
 import httpx
 from tenacity import (
@@ -82,6 +89,25 @@ def _is_transient(exc: BaseException, *, is_read: bool) -> bool:
 class BugzillaClient:
     def __init__(self, settings: BugzillaSettings | None = None) -> None:
         self.settings = settings or BugzillaSettings.from_env()
+        self._http = httpx.AsyncClient(
+            base_url=f"{self.base_url}/rest/",
+            headers=self.headers,
+            timeout=self.settings.timeout_seconds,
+        )
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        await self.aclose()
 
     @property
     def base_url(self) -> str:
@@ -89,10 +115,7 @@ class BugzillaClient:
 
     @property
     def headers(self) -> dict[str, str]:
-        headers = {
-            "Accept": "application/json",
-            "X-Bugzilla-API-Key": self.settings.api_key,
-        }
+        headers = {"X-Bugzilla-API-Key": self.settings.api_key}
         if self.settings.edge_key:
             headers["Mozilla-Edge-Key"] = self.settings.edge_key
         return headers
@@ -125,14 +148,7 @@ class BugzillaClient:
         Raises :class:`BugzillaError` for a Bugzilla-level error or a non-JSON
         answer (e.g. a misconfigured URL serving HTML).
         """
-        async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
-            response = await client.request(
-                method,
-                f"{self.base_url}/rest/{path.lstrip('/')}",
-                params=params,
-                json=json,
-                headers=self.headers,
-            )
+        response = await self._http.request(method, path, params=params, json=json)
         return _parse(response)
 
     # Reads

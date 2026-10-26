@@ -17,8 +17,9 @@ def _no_retry_wait(monkeypatch):
 
 
 @pytest.fixture
-def bugzilla(monkeypatch):
+async def bugzilla(monkeypatch):
     """Build a client whose HTTP calls are answered by ``handler``, not the network."""
+    clients: list[BugzillaClient] = []
 
     def make(handler, **settings) -> BugzillaClient:
         real_async_client = httpx.AsyncClient
@@ -28,9 +29,13 @@ def bugzilla(monkeypatch):
 
         monkeypatch.setattr(client_module.httpx, "AsyncClient", fake_async_client)
         settings.setdefault("api_key", VALID_KEY)
-        return BugzillaClient(BugzillaSettings(**settings))
+        client = BugzillaClient(BugzillaSettings(**settings))
+        clients.append(client)
+        return client
 
-    return make
+    yield make
+    for client in clients:
+        await client.aclose()
 
 
 # A syntactically valid Bugzilla API key: 40 letters and digits.
@@ -89,6 +94,13 @@ async def test_sends_auth_headers_and_uses_rest_base(bugzilla):
     assert str(request.url) == "https://bugzilla.example.com/rest/version"
     assert request.headers["X-Bugzilla-API-Key"] == VALID_KEY
     assert request.headers["Mozilla-Edge-Key"] == "edge"
+
+
+async def test_context_manager_closes_client():
+    async with BugzillaClient(BugzillaSettings(api_key=VALID_KEY)) as client:
+        pass
+    with pytest.raises(RuntimeError):
+        await client.request("GET", "version")
 
 
 async def test_bugzilla_error_body_raises_with_code(bugzilla):
