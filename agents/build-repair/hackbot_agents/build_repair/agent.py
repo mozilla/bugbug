@@ -140,7 +140,6 @@ def _build_options(
 def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
     """Build as the failing CI task did: its toolchains and mozconfig."""
     fetches = [f"{f['task']}:{f['artifact']}" for f in json.loads(env["MOZ_FETCHES"])]
-    # Next to the checkout: on the workspace disk, outside the source tree.
     fetches_dir = fx_ctx.source_dir.parent / "fetches"
     fetches_dir.mkdir(exist_ok=True)
     subprocess.run(
@@ -151,9 +150,6 @@ def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
         stdout=sys.stderr,
         stderr=sys.stderr,
     )
-    # mach only accepts in-tree mozconfigs in automation, which then takes the
-    # toolchains from MOZ_FETCHES_DIR. The agent's builds inherit this env.
-    # mozharness sets UPLOAD_PATH, which goes into CI's compiler flags.
     os.environ.update(
         {k: env[k] for k in ("FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS") if k in env},
         MOZ_AUTOMATION="1",

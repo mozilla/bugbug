@@ -58,7 +58,6 @@ RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
 
-# CI's in-tree mozconfigs read these key files; the agent has no secrets.
 RUN mkdir /builds \
     && for f in gls-gapi.data sb-gapi.data mozilla-desktop-geoloc-api.key; do echo no-secret > /builds/$f; done
 
