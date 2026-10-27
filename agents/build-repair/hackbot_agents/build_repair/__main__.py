@@ -1,8 +1,8 @@
 import logging
 
+from hackbot_client import PATCH_ACTION_TYPES
 from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.actions.email import record_email
-from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import BuildRepairResult, run_build_repair

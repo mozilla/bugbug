@@ -2384,6 +2384,7 @@ dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
     { name = "bugsy" },
     { name = "claude-agent-sdk" },
+    { name = "hackbot-client" },
     { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
     { name = "requests" },
@@ -2403,6 +2404,7 @@ requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
     { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.2.165" },
+    { name = "hackbot-client", editable = "libs/hackbot-client" },
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "requests" },
@@ -2476,6 +2478,7 @@ source = { editable = "agents/test-repair" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
     { name = "claude-agent-sdk" },
+    { name = "hackbot-client" },
     { name = "hackbot-runtime", extra = ["claude-sdk", "phabricator"] },
     { name = "mcp" },
     { name = "mozci" },
@@ -2487,6 +2490,7 @@ dependencies = [
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "firefox"], editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", specifier = ">=0.2.165" },
+    { name = "hackbot-client", editable = "libs/hackbot-client" },
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "mozci", specifier = "~=2.4.8" },
@@ -2707,6 +2711,7 @@ source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
     { name = "google-auth" },
+    { name = "hackbot-client" },
     { name = "httpx" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
@@ -2731,6 +2736,7 @@ requires-dist = [
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
+    { name = "hackbot-client", editable = "libs/hackbot-client" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },

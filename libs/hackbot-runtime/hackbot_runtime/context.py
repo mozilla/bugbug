@@ -19,14 +19,15 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
+from hackbot_client import (
+    PATCH_ACTION_TYPES,
+    PATCH_ARTIFACT,
+    SUBMIT_PATCH_ACTION_TYPE,
+)
 from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts, changes
-from hackbot_runtime.actions.phabricator import (
-    PATCH_ACTION_TYPES,
-    SUBMIT_PATCH_ACTION_TYPE,
-)
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES, TRY_PUSH_ACTION_TYPE
 from hackbot_runtime.config import HackbotConfig, load_config
@@ -278,7 +279,7 @@ class HackbotContext(BaseSettings):
 
     def publish_changes(
         self,
-        patch_key: str = changes.PATCH_ARTIFACT,
+        patch_key: str = PATCH_ARTIFACT,
         meta_key: str = "changes/changes.json",
         phabricator_diff_key: str = "changes/phabricator_diff.json",
         try_push_key: str = "changes/try_push.json",

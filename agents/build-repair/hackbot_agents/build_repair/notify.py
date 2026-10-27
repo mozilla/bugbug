@@ -17,7 +17,8 @@ otherwise have to look up -- revisions, task, bug, run -- is a link.
 import subprocess
 from pathlib import Path
 
-from hackbot_runtime.actions.email import PATCH_PLACEHOLDER, demote_headings
+from hackbot_client import PATCH_PLACEHOLDER
+from hackbot_runtime.actions.email import demote_headings
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL
 
 from .agent import BuildRepairResult

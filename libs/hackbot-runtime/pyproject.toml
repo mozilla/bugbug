@@ -10,6 +10,7 @@ dependencies = [
     "google-auth>=2.0.0",
     "slack-sdk>=3.27.0",
     "agent-tools",
+    "hackbot-client",
     "phabricator-client",
     "sentry-sdk>=2.51.0",
     "weave>=0.53.12"
@@ -24,6 +25,7 @@ phabricator = ["MozPhab==2.15.3"]
 
 [tool.uv.sources]
 agent-tools = { workspace = true }
+hackbot-client = { workspace = true }
 phabricator-client = { workspace = true }
 
 [build-system]
