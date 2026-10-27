@@ -12,9 +12,6 @@ provided. The API is asynchronous.
 
 The client reuses one connection pool across requests. Close it when done,
 either with ``async with`` or by calling :meth:`BugzillaClient.aclose`::
-
-    async with BugzillaClient(settings) as bugzilla:
-        bugs = await bugzilla.get_bugs([1])
 """
 
 from __future__ import annotations
@@ -94,6 +91,11 @@ class BugzillaClient:
             headers=self.headers,
             timeout=self.settings.timeout_seconds,
         )
+        # One resource per page of the REST API docs; all share ``_http``.
+        self.bugs = _Bugs(self)
+        self.comments = _Comments(self)
+        self.attachments = _Attachments(self)
+        self.users = _Users(self)
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -151,9 +153,16 @@ class BugzillaClient:
         response = await self._http.request(method, path, params=params, json=json)
         return _parse(response)
 
-    # Reads
 
-    async def get_bugs(
+class _Resource:
+    def __init__(self, client: BugzillaClient) -> None:
+        self._client = client
+
+
+class _Bugs(_Resource):
+    """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/bug.html."""
+
+    async def get(
         self, ids: list[int], *, include_fields: str | None = None
     ) -> list[dict[str, Any]]:
         """Fetch bugs by id in one request.
@@ -166,62 +175,26 @@ class BugzillaClient:
         params: dict[str, Any] = {"id": ",".join(str(i) for i in ids)}
         if include_fields:
             params["include_fields"] = include_fields
-        return await self.search_bugs(params)
-
-    async def search_bugs(self, params: dict[str, Any]) -> list[dict[str, Any]]:
-        """Search with raw ``GET /bug`` query parameters."""
-        result = await self.request("GET", "bug", params=params)
+        result = await self._client.request("GET", "bug", params=params)
         return result["bugs"]
 
-    async def get_comments(self, bug_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
-        """Map each bug id to its comments, fetched in one request."""
-        if not bug_ids:
-            return {}
-        # ``/bug/{first}/comment?ids=rest`` returns comments for every bug.
-        first, *rest = bug_ids
-        params = {"ids": ",".join(str(i) for i in rest)} if rest else None
-        result = await self.request("GET", f"bug/{first}/comment", params=params)
-        return {
-            int(bug_id): data["comments"] for bug_id, data in result["bugs"].items()
-        }
+    async def search(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        """Find bugs matching search criteria (``GET /bug``).
 
-    async def get_attachments(
-        self, bug_id: int, *, include_data: bool = False
-    ) -> list[dict[str, Any]]:
-        """The attachments on a bug, without their content unless asked."""
-        params = None if include_data else {"exclude_fields": "data"}
-        result = await self.request("GET", f"bug/{bug_id}/attachment", params=params)
-        return result["bugs"][str(bug_id)]
+        ``params`` are Bugzilla search fields, e.g.
+        ``{"product": "Core", "status": "NEW", "keywords": "regression"}``.
+        Results are capped by the server (10,000 by default); page with
+        ``limit`` and ``offset``. Use :meth:`get` when the ids are known.
+        """
+        result = await self._client.request("GET", "bug", params=params)
+        return result["bugs"]
 
-    async def get_attachment(
-        self, attachment_id: int, *, include_data: bool = True
-    ) -> dict[str, Any] | None:
-        """One attachment, or ``None`` if Bugzilla did not return it."""
-        params = None if include_data else {"exclude_fields": "data"}
-        result = await self.request(
-            "GET", f"bug/attachment/{attachment_id}", params=params
-        )
-        return result["attachments"].get(str(attachment_id))
+    async def create(self, fields: dict[str, Any]) -> int:
+        """File a bug and return its id."""
+        result = await self._client.request("POST", "bug", json=fields)
+        return result["id"]
 
-    async def is_user_in_group(self, login: str, group: str) -> bool:
-        """Whether a Bugzilla account exists and belongs to ``group``."""
-        result = await self.request(
-            "GET",
-            "user",
-            params={
-                "names": login,
-                "groups": group,
-                "include_fields": "name",
-                # Report an unknown login in ``faults`` instead of failing the
-                # request, so it reads as "not in the group", not an error.
-                "permissive": "1",
-            },
-        )
-        return bool(result["users"])
-
-    # Writes
-
-    async def update_bug(
+    async def update(
         self, bug_id: int, changes: dict[str, Any]
     ) -> dict[str, dict[str, str]]:
         """Apply field changes and/or a comment in one ``PUT /bug/{id}``.
@@ -229,43 +202,97 @@ class BugzillaClient:
         Bugzilla applies the whole body as a single transaction (one bugmail,
         one history entry). Returns what actually changed, by field name; empty
         when every field already had its value (a comment is not a change).
+
+        Updates one bug only: do not pass ``ids`` in ``changes``.
         """
-        result = await self.request("PUT", f"bug/{bug_id}", json=changes)
+        result = await self._client.request("PUT", f"bug/{bug_id}", json=changes)
         (bug,) = result["bugs"]
         return bug["changes"]
 
-    async def create_bug(self, fields: dict[str, Any]) -> int:
-        """File a bug and return its id."""
-        result = await self.request("POST", "bug", json=fields)
-        return result["id"]
 
-    async def add_attachment(
-        self,
-        bug_id: int,
-        *,
-        data: bytes,
-        file_name: str,
-        summary: str,
-        content_type: str,
-        is_patch: bool = False,
-        comment: str | None = None,
-    ) -> int:
-        """Attach a file to a bug and return the new attachment id."""
-        body: dict[str, Any] = {
+class _Comments(_Resource):
+    """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/comment.html."""
+
+    async def get(self, comment_ids: list[int]) -> dict[int, dict[str, Any]]:
+        """Map each comment id to its comment, fetched in one request."""
+        if not comment_ids:
+            return {}
+        # Repeated ``comment_ids=2&comment_ids=3``: Bugzilla rejects comma-joined ids.
+        first, *rest = comment_ids
+        params = {"comment_ids": rest} if rest else None
+        result = await self._client.request(
+            "GET", f"bug/comment/{first}", params=params
+        )
+        return {
+            int(comment_id): comment
+            for comment_id, comment in result["comments"].items()
+        }
+
+    async def get_for_bugs(self, bug_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+        """Map each bug id to its comments, fetched in one request."""
+        if not bug_ids:
+            return {}
+        # Repeated ``ids=2&ids=3``: Bugzilla rejects comma-joined ids here.
+        first, *rest = bug_ids
+        params = {"ids": rest} if rest else None
+        result = await self._client.request(
+            "GET", f"bug/{first}/comment", params=params
+        )
+        return {
+            int(bug_id): data["comments"] for bug_id, data in result["bugs"].items()
+        }
+
+
+class _Attachments(_Resource):
+    """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/attachment.html."""
+
+    async def get_for_bug(
+        self, bug_id: int, *, include_data: bool = False
+    ) -> list[dict[str, Any]]:
+        """The attachments on a bug, without their content unless asked."""
+        params = None if include_data else {"exclude_fields": "data"}
+        result = await self._client.request(
+            "GET", f"bug/{bug_id}/attachment", params=params
+        )
+        return result["bugs"][str(bug_id)]
+
+    async def get(
+        self, attachment_id: int, *, include_data: bool = False
+    ) -> dict[str, Any] | None:
+        """One attachment, or ``None`` if Bugzilla did not return it."""
+        params = None if include_data else {"exclude_fields": "data"}
+        result = await self._client.request(
+            "GET", f"bug/attachment/{attachment_id}", params=params
+        )
+        # BMO answers an unknown id with an empty result, not an error.
+        return result["attachments"].get(str(attachment_id))
+
+    async def create(self, bug_id: int, data: bytes, fields: dict[str, Any]) -> int:
+        """Attach a file to a bug and return the new attachment id.
+
+        ``fields`` are the other Create Attachment fields, e.g. ``file_name``,
+        ``summary``, ``content_type``, ``is_patch`` or ``comment``. ``data`` is
+        the raw file content; it is base64-encoded here.
+        """
+        body = {
+            **fields,
             "ids": [bug_id],
             "data": base64.b64encode(data).decode("ascii"),
-            "file_name": file_name,
-            "summary": summary,
-            "content_type": content_type,
-            "is_patch": is_patch,
         }
-        if comment is not None:
-            body["comment"] = comment
-        result = await self.request("POST", f"bug/{bug_id}/attachment", json=body)
-        ids = [int(a["id"]) for a in result["attachments"].values()]
-        if len(ids) != 1:
-            raise BugzillaError(f"Expected one new attachment id, got {ids}")
-        return ids[0]
+        result = await self._client.request(
+            "POST", f"bug/{bug_id}/attachment", json=body
+        )
+        (attachment_id,) = result["attachments"]
+        return int(attachment_id)
+
+
+class _Users(_Resource):
+    """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/user.html."""
+
+    async def get(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        """Get users with raw ``GET /user`` query parameters."""
+        result = await self._client.request("GET", "user", params=params)
+        return result["users"]
 
 
 def _parse(response: httpx.Response) -> dict[str, Any]:

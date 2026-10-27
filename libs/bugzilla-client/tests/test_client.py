@@ -107,7 +107,7 @@ async def test_bugzilla_error_body_raises_with_code(bugzilla):
     body = {"error": True, "code": 102, "message": "You are not authorized"}
     handler, _ = _recorder(httpx.Response(401, json=body))
     with pytest.raises(BugzillaError) as exc_info:
-        await bugzilla(handler).get_bugs([1])
+        await bugzilla(handler).bugs.get([1])
     assert exc_info.value.code == 102
     assert exc_info.value.status == 401
     assert "not authorized" in str(exc_info.value)
@@ -125,7 +125,7 @@ async def test_non_json_response_raises_with_status(bugzilla, response):
     handler, _ = _recorder(response)
     with pytest.raises(BugzillaError) as exc_info:
         # A write, so the 503 is not retried.
-        await bugzilla(handler).update_bug(1, {"status": "NEW"})
+        await bugzilla(handler).bugs.update(1, {"status": "NEW"})
     assert exc_info.value.status == response.status_code
     assert f"HTTP {response.status_code}" in str(exc_info.value)
 
@@ -149,15 +149,15 @@ async def test_write_not_retried_when_it_may_have_landed(failure, bugzilla):
     # The PUT may have been applied; retrying could post the comment twice.
     handler, requests = _recorder(failure, httpx.Response(200, json=_no_changes(1)))
     with pytest.raises((BugzillaError, httpx.ReadTimeout)):
-        await bugzilla(handler).update_bug(1, {"comment": {"body": "hi"}})
+        await bugzilla(handler).bugs.update(1, {"comment": {"body": "hi"}})
     assert len(requests) == 1
 
 
-async def test_get_bugs_sends_ids(bugzilla):
+async def test_bugs_get_sends_ids(bugzilla):
     body = {"bugs": [{"id": 1, "summary": "one"}, {"id": 2, "summary": "two"}]}
     handler, requests = _recorder(httpx.Response(200, json=body))
 
-    bugs = await bugzilla(handler).get_bugs([1, 2, 3], include_fields="id,summary")
+    bugs = await bugzilla(handler).bugs.get([1, 2, 3], include_fields="id,summary")
 
     assert bugs == body["bugs"]
     params = requests[0].url.params
@@ -165,40 +165,42 @@ async def test_get_bugs_sends_ids(bugzilla):
     assert params["include_fields"] == "id,summary"
 
 
-async def test_get_comments_fetches_many_bugs_in_one_request(bugzilla):
+async def test_comments_get_for_bugs_fetches_many_bugs_in_one_request(bugzilla):
     body = {
         "bugs": {
             "1": {"comments": [_comment(10, 1)]},
             "2": {"comments": [_comment(20, 2), _comment(21, 2)]},
+            "3": {"comments": []},
         }
     }
     handler, requests = _recorder(httpx.Response(200, json=body))
 
-    comments = await bugzilla(handler).get_comments([1, 2])
+    comments = await bugzilla(handler).comments.get_for_bugs([1, 2, 3])
 
     assert {bug_id: [c["id"] for c in cs] for bug_id, cs in comments.items()} == {
         1: [10],
         2: [20, 21],
+        3: [],
     }
     (request,) = requests
     assert request.url.path == "/rest/bug/1/comment"
-    assert request.url.params["ids"] == "2"
+    # Repeated, not comma-joined: Bugzilla rejects ``ids=2,3``.
+    assert request.url.params.get_list("ids") == ["2", "3"]
 
 
-@pytest.mark.parametrize(
-    ("users", "expected"), [([{"name": "a@example.com"}], True), ([], False)]
-)
-async def test_is_user_in_group(users, expected, bugzilla):
-    handler, requests = _recorder(httpx.Response(200, json={"users": users}))
+async def test_comments_get_fetches_many_comments_in_one_request(bugzilla):
+    body = {"bugs": {}, "comments": {"10": _comment(10, 1), "20": _comment(20, 2)}}
+    handler, requests = _recorder(httpx.Response(200, json=body))
 
-    assert await bugzilla(handler).is_user_in_group("a@example.com", "hackers") is (
-        expected
-    )
+    comments = await bugzilla(handler).comments.get([10, 20])
 
-    params = requests[0].url.params
-    assert params["names"] == "a@example.com"
-    assert params["groups"] == "hackers"
-    assert params["permissive"] == "1"
+    assert {comment_id: c["bug_id"] for comment_id, c in comments.items()} == {
+        10: 1,
+        20: 2,
+    }
+    (request,) = requests
+    assert request.url.path == "/rest/bug/comment/10"
+    assert request.url.params.get_list("comment_ids") == ["20"]
 
 
 async def test_update_bug_returns_changes(bugzilla):
@@ -207,7 +209,7 @@ async def test_update_bug_returns_changes(bugzilla):
     handler, requests = _recorder(httpx.Response(200, json=answer))
     update = {"status": "RESOLVED", "comment": {"body": "done"}}
 
-    assert await bugzilla(handler).update_bug(1, update) == changes
+    assert await bugzilla(handler).bugs.update(1, update) == changes
 
     (request,) = requests
     assert request.method == "PUT"
@@ -220,14 +222,16 @@ async def test_add_attachment_encodes_data(bugzilla):
     body = {"attachments": {"300": _attachment(300, 5)}}
     handler, requests = _recorder(httpx.Response(201, json=body))
 
-    attachment_id = await bugzilla(handler).add_attachment(
+    attachment_id = await bugzilla(handler).attachments.create(
         5,
-        data=b"\xff\xfe\x00",
-        file_name="fix.patch",
-        summary="Fix",
-        content_type="text/plain",
-        is_patch=True,
-        comment="See patch",
+        b"\xff\xfe\x00",
+        {
+            "file_name": "fix.patch",
+            "summary": "Fix",
+            "content_type": "text/plain",
+            "is_patch": True,
+            "comment": "See patch",
+        },
     )
 
     assert attachment_id == 300
