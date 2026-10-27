@@ -74,7 +74,7 @@ class CodeReviewTool(GenerativeModelTool):
         llm: BaseChatModel,
         patch_summarizer: PatchSummarizer,
         suggestion_filterer: SuggestionFilterer,
-        review_comments_db: Optional["ReviewCommentsDB"] = None,
+        review_comments_db: Optional[ReviewCommentsDB] = None,
         show_patch_example: bool = False,
         verbose: bool = True,
         target_software: str = "Mozilla Firefox",

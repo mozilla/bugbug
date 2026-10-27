@@ -158,10 +158,18 @@ class ExternalContentLoadError(Exception):
     """Raised when an ExternalContent body cannot be loaded."""
 
 
+def _is_retryable(exc: BaseException) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        # 429: rate limited; 5xx: temporary server error
+        return status == 429 or status >= 500
+    return isinstance(exc, httpx.TransportError)
+
+
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(3),
     wait=tenacity.wait_exponential(multiplier=1, min=1),
-    retry=tenacity.retry_if_exception_type(httpx.TransportError),
+    retry=tenacity.retry_if_exception(_is_retryable),
     reraise=True,
 )
 async def _fetch_url(url: str) -> httpx.Response:

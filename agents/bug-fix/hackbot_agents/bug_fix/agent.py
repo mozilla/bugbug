@@ -35,6 +35,8 @@ from .config import (
 
 HERE = Path(__file__).resolve().parent
 PROMPTS = HERE / "prompts"
+# The SDK's 1 MB default is too small for large messages.
+MAX_BUFFER_SIZE = 10 * 1024 * 1024
 
 
 class BugFixResult(HackbotAgentResult):
@@ -217,6 +219,7 @@ async def run_bug_fix(
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
+        max_buffer_size=MAX_BUFFER_SIZE,
     )
 
     result_msg: ResultMessage | None = None

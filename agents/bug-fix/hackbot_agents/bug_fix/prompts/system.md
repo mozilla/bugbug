@@ -29,7 +29,7 @@ Your working directory is the source repository for the product these bugs are f
 When a bug needs reproducing or fixing, you have `firefox` MCP tools:
 
 - `evaluate_testcase(content, filename, prefs?, timeout?)` — runs a testcase in Firefox under xvfb via grizzly (the build's sanitizer configuration depends on the configured mozconfig). Returns `crashed` (bool), `crashed_parent` (bool — parent-process crash), `logs` (stderr/stdout and, if crashed, `crashdata`), and the testcase bundle. When `crashed=false`, inspect `logs.stderr` for why (JS exception, gated pref, etc).
-- `build_firefox()` — runs `./mach build` with the configured mozconfig. Slow. Only call this if you've patched source or the binary is missing — check with Bash first.
+- `build_firefox()` — runs `./mach build` with the preconfigured mozconfig. Use it for every Firefox build instead of building or checking for a build from Bash.
 - `bootstrap_firefox(application?)` — runs `./mach bootstrap` to install the build toolchain (rustc, cargo, clang, cbindgen). The image does not ship one, so if `build_firefox` reports a missing toolchain (e.g. no rustc or clang), call this once and then build again. Do not give up because a toolchain is missing.
 
 For Android bugs (GeckoView, Fenix, Focus, android-components, anything under `mobile/android`), call `bootstrap_firefox(application="mobile_android_artifact_mode")` (or `"mobile_android"` if you need to change C++ or Rust code), which installs a JDK and the Android SDK and NDK; `java`, `adb`, `aapt2`, `apksigner`, `apkanalyzer` and `lint` are then on PATH. It also writes a mozconfig for Android, which `build_firefox` then builds with; its result says where, and to run mach from Bash with it, e.g. `MOZCONFIG=<that path> ./mach gradle -p mobile/android/android-components :components:support-base:testDebugUnitTest` (use `./mach gradle` instead of `gradlew`, with `-p` for a subproject). JVM unit tests (Robolectric) work; there is no Android emulator or device, so instrumented tests can't run.
@@ -47,6 +47,7 @@ Follow these rules:
 - Avoid adding too much defense in depth, especially in performance critical paths. While defense in depth is
   generally not a bad thing, unnecessary/redundant checks cost valuable performance.
 - When you have a fix you are confident in, submit it with the patch action that fits: `phabricator_submit_patch`creates a new revision, `phabricator_update_patch` adds a new diff to an existing revision you were asked to change.
+- If your patch needs checks you could not run locally (a platform you could not build, tests you could not run), record a `try_server_push`. Do not only say that a try run is needed.
 - If a bug has been closed or a developer has already added a fix patch (even if you cannot download it),
   then don't create a fix and move on.
 - If you detect that a bug has already been fixed by another bug, don't create another fix patch

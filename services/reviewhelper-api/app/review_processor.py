@@ -185,10 +185,10 @@ async def _submit_review_to_phabricator(
         "differential.createcomment",
         revision_id=review_request.revision_id,
         attach_inlines=1,
-        message=(
-            create_main_review_comment(review_request, generated_comments)
-            if is_first_review
-            else None
+        message=create_main_review_comment(
+            review_request,
+            generated_comments,
+            include_feedback_note=is_first_review,
         ),
     )
 
@@ -217,7 +217,9 @@ def format_inline_comment_content(comment: GeneratedComment) -> str:
 
 
 def create_main_review_comment(
-    review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
+    review_request: ReviewRequest,
+    generated_comments: Collection[GeneratedComment],
+    include_feedback_note: bool = True,
 ) -> str:
     """Create the main review comment that summarizes the review results."""
     diff_url = f"{settings.phabricator_url}/D{review_request.revision_id}?id={review_request.diff_id}"
@@ -230,7 +232,7 @@ def create_main_review_comment(
     if severity_summary:
         parts.append(f"**Findings:** {severity_summary}")
 
-    if generated_comments:
+    if generated_comments and include_feedback_note:
         if review_request.general_comment:
             parts.append("\n---\n")
         parts.append(

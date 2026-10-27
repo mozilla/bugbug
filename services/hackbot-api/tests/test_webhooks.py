@@ -17,10 +17,7 @@ from app.auth import verify_phabricator_signature
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.main import app
-from app.phabricator_authorization import (
-    AUTHORIZED_GROUP_PHID,
-    PhabricatorAuthorizer,
-)
+from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     DetectedMention,
     HackbotMention,
@@ -331,8 +328,8 @@ class _FakeClient:
     async def search_revision(self, phid):
         return self._revision
 
-    async def get_project_members(self, project_phid):
-        assert project_phid == AUTHORIZED_GROUP_PHID
+    async def get_project_members(self, project_slug):
+        assert project_slug == settings.webhook.authorized_group
         return self._members
 
 
@@ -351,7 +348,7 @@ async def test_resolve_revision_not_found():
     assert await resolve_revision(client, "PHID-DREV-x") == (None, None)
 
 
-async def test_detect_mention_requires_editbugs_membership(monkeypatch):
+async def test_detect_mention_requires_group_membership(monkeypatch):
     client = _FakeClient(
         {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
         members={"PHID-USER-authorized"},
@@ -370,12 +367,12 @@ async def test_detect_mention_requires_editbugs_membership(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result is None
 
 
-async def test_detect_mention_accepts_editbugs_member(monkeypatch):
+async def test_detect_mention_accepts_group_member(monkeypatch):
     client = _FakeClient(
         {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
         members={"PHID-USER-authorized"},
@@ -394,7 +391,7 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result == DetectedMention(
         comment=(
@@ -441,7 +438,7 @@ async def test_detect_mention_enriches_inline_anchor(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result == DetectedMention(
         comment=(
