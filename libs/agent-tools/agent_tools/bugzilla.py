@@ -260,6 +260,15 @@ async def search_bugs(
     return {"count": len(bugs), "bugs": bugs}
 
 
+# The fields that `get_bugs` asks for when the caller names no fields.
+GET_BUGS_DEFAULT_FIELDS = (
+    "id,summary,status,resolution,product,component,priority,"
+    "severity,keywords,whiteboard,assigned_to,creator,"
+    "creation_time,last_change_time,blocks,depends_on,see_also,"
+    "cf_crash_signature,url,version,op_sys,platform"
+)
+
+
 @tool
 async def get_bugs(
     ctx: BugzillaContext,
@@ -292,12 +301,7 @@ async def get_bugs(
     """
     if not ids:
         return {"count": 0, "bugs": [], "inaccessible": []}
-    include = include_fields or (
-        "id,summary,status,resolution,product,component,priority,"
-        "severity,keywords,whiteboard,assigned_to,creator,"
-        "creation_time,last_change_time,blocks,depends_on,see_also,"
-        "cf_crash_signature,url,version,op_sys,platform"
-    )
+    include = include_fields or GET_BUGS_DEFAULT_FIELDS
     id_csv = ",".join(str(i) for i in ids)
     result = _request(ctx, "bug", {"id": id_csv, "include_fields": include})
     bugs = result.get("bugs", [])
