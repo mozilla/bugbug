@@ -52,6 +52,9 @@ node_modules/
 
 # Local env files
 .env
+
+# Local agent run output
+artifacts/
 /http_service/docker-compose.override.yml
 
 # Local files

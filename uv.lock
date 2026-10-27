@@ -22,6 +22,7 @@ members = [
     "hackbot-agent-bug-fix",
     "hackbot-agent-build-repair",
     "hackbot-agent-frontend-triage",
+    "hackbot-agent-perf-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
     "hackbot-agent-test-repair-fix",
@@ -32,6 +33,7 @@ members = [
     "hackbot-pulse-listener",
     "hackbot-runtime",
     "lando-client",
+    "performance-tools",
     "phabricator-client",
     "phabricator-proxy",
     "reviewhelper-api",
@@ -2530,6 +2532,38 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
+name = "hackbot-agent-perf-triage"
+version = "0.1.0"
+source = { editable = "agents/perf-triage" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
+    { name = "performance-tools" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "performance-tools", editable = "libs/performance-tools" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "hackbot-agent-test-plan-generator"
 version = "0.1.0"
 source = { editable = "agents/test-plan-generator" }
@@ -4880,6 +4914,36 @@ sdist = { url = "https://files.pythonhosted.org/packages/34/a4/5cec1112009f0439a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/8b/28c4eaec9d6b036a52cb44720408f26b1a143ca9bce76cc19e8f5de00ab4/pdfminer_six-20260107-py3-none-any.whl", hash = "sha256:366585ba97e80dffa8f00cebe303d2f381884d8637af4ce422f1df3ef38111a9", size = 6592252, upload-time = "2026-01-07T13:29:10.742Z" },
 ]
+
+[[package]]
+name = "performance-tools"
+version = "0.1.0"
+source = { editable = "libs/performance-tools" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "pexpect"

@@ -1,0 +1,49 @@
+services:
+  perf-triage-broker:
+    build:
+      context: ../..
+      dockerfile: agents/perf-triage/Dockerfile
+      target: broker
+      args:
+        SOURCE_REF: ${SOURCE_REF:-dev}
+    env_file:
+      - path: ../../.env
+        required: false
+    # The broker is the only container that holds the Bugzilla credential; the
+    # agent reaches Bugzilla through it.
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+      # Evaluation only (performance_tools/blind.py). Passed through only when set.
+      BLIND_BUG_ID:
+    expose:
+      - "8765"
+
+  perf-triage-agent:
+    build:
+      context: ../..
+      dockerfile: agents/perf-triage/Dockerfile
+      target: agent
+      args:
+        SOURCE_REF: ${SOURCE_REF:-dev}
+    env_file:
+      - path: ../../.env
+        required: false
+    # EVERY AgentInputs field must be listed here; Docker silently drops the rest.
+    environment:
+      - RUN_ID
+      - BUG_ID
+      - MODEL
+      - MAX_TURNS
+      - EFFORT
+      # A bare entry with the host variable unset overrides the Dockerfile ENV
+      # with an empty value, so default it to the image's copy.
+      - PERF_TRIAGE_PATH=${PERF_TRIAGE_PATH:-/app/perf_triage.py}
+      - BROKER_URL=http://perf-triage-broker:8765
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      perf-triage-broker:
+        condition: service_started
