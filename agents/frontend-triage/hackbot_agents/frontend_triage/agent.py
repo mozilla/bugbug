@@ -684,6 +684,9 @@ async def run_frontend_triage(
     system_prompt = load_system_prompt(rules_dir, instructions, components, known_docs)
 
     options = ClaudeAgentOptions(
+        system_prompt=write_system_prompt(
+            system_prompt, Path(tempfile.mkdtemp(prefix="frontend-triage-"))
+        ),
         mcp_servers={
             "bugzilla": bugzilla_mcp_server,
             "searchfox": searchfox_server,
@@ -733,11 +736,7 @@ async def run_frontend_triage(
         )
 
     result_msg: ResultMessage | None = None
-    with (
-        tempfile.TemporaryDirectory(prefix="frontend-triage-") as prompt_dir,
-        Reporter(verbose=verbose, log_path=log) as reporter,
-    ):
-        options.system_prompt = write_system_prompt(system_prompt, Path(prompt_dir))
+    with Reporter(verbose=verbose, log_path=log) as reporter:
         reporter.header(f"bug {bug}")
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
