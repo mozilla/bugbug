@@ -175,6 +175,7 @@ ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107",
 "agents/**" = ["ASYNC"]
 "libs/agent-tools/**" = ["ASYNC"]
 "libs/hackbot-runtime/**" = ["ASYNC"]
+"libs/bugzilla-broker/tests/**" = ["ASYNC"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

@@ -169,6 +169,8 @@ tasks:
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=phabricator_client --cov-append tests/ &&
                     cd ../phabricator-proxy &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=phabricator_proxy --cov-append tests/ &&
+                    cd ../bugzilla-broker &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=bugzilla_broker --cov-append tests/ &&
                     cd ../lando-client &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=lando_client --cov-append tests/ &&
                     cd ../hackbot-client &&
