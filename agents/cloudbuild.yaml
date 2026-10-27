@@ -36,6 +36,7 @@ steps:
           docker build -f "agents/${_AGENT}/Dockerfile" --target "$$target" \
             --label "hackbot.config_hash=$$CONFIG_HASH" \
             --label "org.opencontainers.image.revision=$COMMIT_SHA" \
+            --build-arg "HACKBOT_AGENT_COMMIT=$COMMIT_SHA" \
             --label "org.opencontainers.image.created=$$created" \
             -t "$$image" .
           docker push "$$image"

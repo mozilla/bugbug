@@ -122,6 +122,9 @@ ENV PATH="${PATH}:/home/agent/.mozbuild/jdk/current/bin:/home/agent/.mozbuild/an
 # packages, mostly) stay cached across those.
 COPY --from=builder /opt/venv /opt/venv
 
+ARG HACKBOT_AGENT_COMMIT
+ENV HACKBOT_AGENT_COMMIT=$HACKBOT_AGENT_COMMIT
+
 USER agent
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

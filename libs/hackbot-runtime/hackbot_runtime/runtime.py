@@ -73,6 +73,7 @@ def _ok_payload(ctx: HackbotContext, findings: dict) -> dict:
     return {
         "status": "ok",
         "error": None,
+        "agent_commit": os.environ.get("HACKBOT_AGENT_COMMIT"),
         "findings": findings,
         "actions": ctx.actions.actions,
     }
@@ -84,6 +85,7 @@ def _error_payload(
     return {
         "status": "error",
         "error": error,
+        "agent_commit": os.environ.get("HACKBOT_AGENT_COMMIT"),
         "findings": {"traceback": traceback_str} if traceback_str else {},
         "actions": ctx.actions.actions,
     }
