@@ -1,3 +1,4 @@
+import json
 from typing import NamedTuple
 
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
@@ -113,8 +114,9 @@ class ScopedComponent(NamedTuple):
 # This is narrower than what the agent will triage. `rules/scoping.md` puts any
 # user-facing Firefox defect in scope, and a bug handed to the agent by hand is triaged
 # on that rule whether or not its component is named here -- it just reports to nobody.
-# What this tuple decides is routing, and it should stay in step with bugbot's
-# `TRIAGED_COMPONENTS`, which decides what arrives automatically.
+# What this tuple decides is routing, and it is also what arrives automatically: bugbot
+# reads `scope.json`, generated from it by `scope_json` below, to pick the components it
+# sends here.
 #
 # A channel belongs to the team that owns the component, so the routing does too: a
 # component that is not listed sends nothing, since posting one team's triage into
@@ -3062,6 +3064,33 @@ TRIAGE_SCOPE = (
 # Where an auto-applied run reports itself, by `"<Product> :: <Component>"`. Derived, so
 # that `notify.py` keeps one flat mapping to look up.
 SLACK_CHANNELS = {c.key: c.channel for c in TRIAGE_SCOPE}
+
+
+# JSON has no comments, so the warning is a key.
+SCOPE_JSON_COMMENT = (
+    "Generated from TRIAGE_SCOPE in "
+    "agents/frontend-triage/hackbot_agents/frontend_triage/config.py. Do not edit "
+    "this file directly: add or change the ScopedComponent there and regenerate, as "
+    "described under 'Adding a triage component' in agents/frontend-triage/README.md."
+)
+
+
+def scope_json(scope: tuple[ScopedComponent, ...] = TRIAGE_SCOPE) -> str:
+    """The routing half of `scope`, as committed to `scope.json`.
+
+    bugbot fetches that file to decide which components it sends here, so a component
+    is added in one place and the two lists cannot drift. `notes` and the trees stay
+    out: they are prompt material, and nothing outside this agent reads them.
+    """
+    entries = [
+        {"product": c.product, "component": c.component, "channel": c.channel}
+        for c in scope
+    ]
+    return (
+        json.dumps({"_comment": SCOPE_JSON_COMMENT, "components": entries}, indent=2)
+        + "\n"
+    )
+
 
 _SCOPE_BY_KEY = {c.key: c for c in TRIAGE_SCOPE}
 
