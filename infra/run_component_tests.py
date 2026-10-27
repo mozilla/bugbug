@@ -118,7 +118,19 @@ def run_tests(components):
         for dependency in test_dependencies:
             command.extend(["--with", dependency])
 
-        command.extend(["pytest", "--cov=.", "--cov-append", "tests/"])
+        pyproject_path = ROOT / component_path / "pyproject.toml"
+
+        with pyproject_path.open("rb") as file:
+            pyproject_data = tomllib.load(file)
+
+        packages = pyproject_data["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
+
+        command.append("pytest")
+
+        for package_path in packages:
+            command.append(f"--cov={package_path}")
+
+        command.extend(["--cov-append", "tests/"])
 
         logger.info("Running tests: %s", component_path)
 
