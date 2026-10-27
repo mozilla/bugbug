@@ -80,6 +80,9 @@ and the channel each reports to:
 | `DevTools :: Source Editor`                                     | `#devtools-triage`                         |
 | `DevTools :: Storage Inspector`                                 | `#devtools-triage`                         |
 | `DevTools :: Style Editor`                                      | `#devtools-triage`                         |
+| `Firefox :: Tabbed Browser`                                     | `#tabbrowser-triage-bots`                  |
+| `Firefox :: Tabbed Browser: Tab Groups`                         | `#tabbrowser-triage-bots`                  |
+| `Firefox :: Tabbed Browser: Split View`                         | `#tabbrowser-triage-bots`                  |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
