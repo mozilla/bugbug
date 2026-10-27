@@ -73,12 +73,15 @@ def get_components_to_test(changed_files, dependencies):
             components.append(component_path)
 
     if changed_files is None:
+        logger.info("Changes are unknown, selecting all components.")
         return components
 
     if changed_files & GLOBAL_FILES:
+        logger.info("Shared configuration changed, selecting all components.")
         return components
 
     if any(Path(path).name == "pyproject.toml" for path in changed_files):
+        logger.info("Project configuration changed, selecting all components.")
         return components
 
     selected_components = []
