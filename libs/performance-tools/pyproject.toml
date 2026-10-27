@@ -1,0 +1,30 @@
+[project]
+name = "performance-tools"
+version = "0.1.0"
+description = "Shared task scaffolding and the triage step for the Firefox performance agents"
+requires-python = ">=3.12"
+dependencies = [
+    "hackbot-runtime[claude-sdk]",
+    "agent-tools[bugzilla]",
+    "claude-agent-sdk>=0.1.30",
+    "mcp>=1.0.0",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+
+[tool.uv.sources]
+hackbot-runtime = { workspace = true }
+agent-tools = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["performance_tools"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
