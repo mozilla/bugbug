@@ -14,7 +14,7 @@ import pickle
 import random
 import statistics
 from functools import reduce
-from typing import Any, Callable, Collection, Iterable, Sequence, Set
+from typing import Any, Callable, Collection, Iterable, Mapping, Sequence, Set
 
 import numpy as np
 import xgboost
@@ -422,6 +422,30 @@ CONFIDENCE_LEVEL_TARGETS = {
 CONFIDENCE_LEVEL_MIN_CAUGHT = {"label": 0.6, "group": 0.85}
 
 
+def fit_calibration(
+    totals: Sequence[int], failures: Sequence[int]
+) -> tuple[list[float], list[float]] | None:
+    """Isotonic regression of the failure rate on the confidence, from counts per confidence (0, 0.01, ..., 1).
+
+    The confidences are not probabilities (the models are trained with class-balancing weights), but they rank
+    runnables well: the regression maps them to probabilities without changing their order. Returns the
+    regression's breakpoints, to interpolate, or None if there are no failures.
+    """
+    from sklearn.isotonic import IsotonicRegression
+
+    points = [(i / 100, n, f) for i, (n, f) in enumerate(zip(totals, failures)) if n]
+    if not any(f for _, _, f in points):
+        return None
+
+    regression = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
+    regression.fit(
+        [x for x, _, _ in points],
+        [f / n for _, n, f in points],
+        sample_weight=[n for _, n, _ in points],
+    )
+    return list(regression.X_thresholds_), list(regression.y_thresholds_)
+
+
 def compute_confidence_thresholds(
     push_confidences: Sequence[Sequence[float]], targets: dict[str, float]
 ) -> dict[str, float]:
@@ -546,6 +570,9 @@ class TestSelectModel(Model):
         # Confidence thresholds for the levels in CONFIDENCE_LEVEL_TARGETS, computed on the test
         # pushes during the evaluation.
         self.confidence_thresholds: dict[str, float] | None = None
+        # Mapping from confidences to probabilities of failing (see fit_calibration), computed on the
+        # test pushes during the evaluation.
+        self.calibration: tuple[list[float], list[float]] | None = None
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
@@ -797,6 +824,22 @@ class TestSelectModel(Model):
             if runnable_confidence >= confidence
         }
 
+    def calibrated_probabilities(
+        self, confidences: Mapping[str, float]
+    ) -> dict[str, float]:
+        """The probabilities of failing of runnables with the given confidences (unchanged if not calibrated).
+
+        The order of the runnables doesn't change, so selections by confidence are the same.
+        """
+        calibration = getattr(self, "calibration", None)
+        if calibration is None:
+            return dict(confidences)
+        names = list(confidences)
+        probabilities = np.interp(
+            [confidences[name] for name in names], calibration[0], calibration[1]
+        )
+        return {name: float(p) for name, p in zip(names, probabilities)}
+
     def get_confidences(
         self,
         commits: Sequence[repository.CommitDict],
@@ -913,6 +956,9 @@ class TestSelectModel(Model):
         top_confidences: list[list[tuple[str, float]]] = []
         # Test pushes too old for their past failures to be known (see below).
         clamped_pushes = []
+        # Runnables and failing runnables per confidence (0, 0.01, ..., 1), for the calibration.
+        calibration_totals = [0] * 101
+        calibration_failures = [0] * 101
 
         # Select tests for all the pushes in the test set.
         for i, push in enumerate(tqdm(test_pushes.values())):
@@ -949,6 +995,10 @@ class TestSelectModel(Model):
                 continue
 
             confidences = self.get_confidences(commits, push_num)
+            failing = set(push["failures"])
+            for name, confidence in confidences.items():
+                calibration_totals[round(confidence * 100)] += 1
+                calibration_failures[round(confidence * 100)] += name in failing
             push["all_possibly_selected"] = {
                 name: confidence
                 for name, confidence in confidences.items()
@@ -969,6 +1019,22 @@ class TestSelectModel(Model):
             len(test_pushes),
             sum(1 for push in test_pushes.values() if len(push["failures"]) > 0),
         )
+
+        self.calibration = fit_calibration(calibration_totals, calibration_failures)
+        if self.calibration is not None:
+            logger.info(
+                "Calibration (confidence -> observed failure rate -> probability):"
+            )
+            for confidence in (0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95, 0.99):
+                b = round(confidence * 100)
+                logger.info(
+                    "  %.2f -> %s -> %.4f",
+                    confidence,
+                    f"{calibration_failures[b] / calibration_totals[b]:.4f}"
+                    if calibration_totals[b]
+                    else "-",
+                    np.interp(confidence, *self.calibration),
+                )
 
         confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]
         if targets and top_confidences:
