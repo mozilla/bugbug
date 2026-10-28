@@ -34,11 +34,6 @@ from bugzilla_client.config import BugzillaSettings
 
 log = logging.getLogger(__name__)
 
-# Rate limiting and gateway failures: the request was not processed.
-_RETRY_STATUSES = frozenset({429, 502, 503, 504})
-_ATTEMPTS = 4
-_MAX_WAIT_SECONDS = 15
-
 
 class BugzillaError(Exception):
     """Bugzilla rejected a request, or answered with something that is not JSON.
@@ -78,7 +73,8 @@ def _is_transient(exc: BaseException, *, is_read: bool) -> bool:
         return True
     if isinstance(exc, httpx.TransportError):
         return is_read
-    if isinstance(exc, BugzillaError) and exc.status in _RETRY_STATUSES:
+    # Rate limiting and gateway failures: the request was not processed.
+    if isinstance(exc, BugzillaError) and exc.status in {429, 502, 503, 504}:
         return is_read or exc.status == 429
     return False
 
@@ -127,8 +123,8 @@ class BugzillaClient:
 
     @retry(
         retry=_should_retry,
-        stop=stop_after_attempt(_ATTEMPTS),
-        wait=wait_exponential_jitter(max=_MAX_WAIT_SECONDS),
+        stop=stop_after_attempt(4),
+        wait=wait_exponential_jitter(max=15),
         before_sleep=before_sleep_log(log, logging.WARNING),
         reraise=True,
     )
