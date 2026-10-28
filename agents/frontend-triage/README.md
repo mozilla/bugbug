@@ -20,8 +20,9 @@ scope, and it is broad: any user-facing Firefox defect qualifies.
 What is _routed_ is narrower. `TRIAGE_SCOPE` in `config.py` lists the components bugs
 normally arrive from, one entry each, carrying the Slack channel and the trees the
 component's code lives in. A bug handed to the agent by hand in some other component
-(`Firefox :: Menus`, say) is triaged the same way and reports to nobody. The components,
-and the channel each reports to:
+(`Firefox :: Menus`, say) is triaged the same way and reports to nobody. An entry whose
+team asked for no Slack message sets its channel to `None`, and reports to nobody either.
+The components, and the channel each reports to:
 
 | Component                                                       | Reports to                                 |
 | --------------------------------------------------------------- | ------------------------------------------ |
@@ -83,6 +84,8 @@ and the channel each reports to:
 | `Firefox :: Tabbed Browser`                                     | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Tab Groups`                         | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Split View`                         | `#tabbrowser-triage-bots`                  |
+| `Firefox :: Bookmarks & History`                                | none (private comment)                     |
+| `Firefox :: Downloads Panel`                                    | none (private comment)                     |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
@@ -225,7 +228,9 @@ is recorded, and they are the only thing bounding what an unattended run writes:
 hackbot-api applies whatever it finds in `summary.json`, dispatching it against a
 handler registry far wider than the tools this agent was given.
 
-- `add_comment_hook` — one comment, public, on the bug being triaged.
+- `add_comment_hook` — one comment, on the bug being triaged. It is public unless the
+  bug's `TRIAGE_SCOPE` entry sets `private_comments`, and the hook overwrites whatever
+  `is_private` the model passed.
 
 That is the whole list, because a comment is the only thing this agent can write.
 It has no tool that changes a bug's fields: `severity` was the one field a ruleset
@@ -369,6 +374,9 @@ ScopedComponent(
   copy that stays current.
 - **`related`** ships another component's guidance alongside this one, for bugs that
   routinely turn out to be somewhere else.
+- **`private_comments`** makes the triage comment visible only to BMO's insider group,
+  for a team that asked for it. A channel of `None` sends no Slack message. The Places
+  components set both.
 
 Regenerate `scope.json` from this directory with
 `uv run python -c "from hackbot_agents.frontend_triage.config import scope_json; print(scope_json(), end='')" > scope.json`.
