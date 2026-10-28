@@ -173,14 +173,22 @@ class _Bugs(_Resource):
         result = await self._client.request("GET", "bug", params=params)
         return result["bugs"]
 
-    async def search(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+    async def search(
+        self,
+        params: dict[str, Any],
+        *,
+        include_fields: Collection[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Find bugs matching search criteria (``GET /bug``).
 
         ``params`` are Bugzilla search fields, e.g.
         ``{"product": "Core", "status": "NEW", "keywords": "regression"}``.
         Results are capped by the server (10,000 by default); page with
         ``limit`` and ``offset``. Use :meth:`get` when the ids are known.
+        ``include_fields`` overrides the same key in ``params``.
         """
+        if include_fields:
+            params = {**params, "include_fields": ",".join(include_fields)}
         result = await self._client.request("GET", "bug", params=params)
         return result["bugs"]
 
