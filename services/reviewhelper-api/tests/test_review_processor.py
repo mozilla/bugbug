@@ -9,7 +9,6 @@ from app.review_processor import (
 
 from bugbug.tools.core.data_types import (
     CommentCategory,
-    CommentConfidence,
     CommentSeverity,
     InlineComment,
 )
@@ -26,7 +25,6 @@ def make_inline_comment(**overrides) -> InlineComment:
         "order": 2,
         "severity": CommentSeverity.MAJOR,
         "category": CommentCategory.CORRECTNESS,
-        "confidence": CommentConfidence.HIGH,
     }
     fields.update(overrides)
     return InlineComment(**fields)
@@ -52,9 +50,6 @@ def test_build_generated_comment_keeps_severity_fields():
     assert generated_comment.category == CommentCategory.CORRECTNESS, (
         "The category should be persisted."
     )
-    assert generated_comment.confidence == CommentConfidence.HIGH, (
-        "The confidence should be persisted."
-    )
 
 
 def test_severity_frontmatter_enabled_by_default():
@@ -72,7 +67,6 @@ def test_format_inline_comment_content_adds_frontmatter(monkeypatch):
         "reviewhelper:\n"
         "  severity: major\n"
         "  category: correctness\n"
-        "  confidence: high\n"
         "---\n"
         "Fix the null check."
     ), "The comment should start with the `reviewhelper` frontmatter block."
@@ -93,7 +87,7 @@ def test_format_inline_comment_content_disabled(monkeypatch):
 def test_format_inline_comment_content_without_severity(monkeypatch):
     monkeypatch.setattr(settings, "severity_frontmatter_enabled", True)
     generated_comment = build_generated_comment(
-        7, make_inline_comment(severity=None, category=None, confidence=None)
+        7, make_inline_comment(severity=None, category=None)
     )
 
     assert format_inline_comment_content(generated_comment) == "Fix the null check.", (

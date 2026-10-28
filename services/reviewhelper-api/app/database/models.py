@@ -25,7 +25,6 @@ from app.enums import (
 )
 from bugbug.tools.core.data_types import (
     CommentCategory,
-    CommentConfidence,
     CommentSeverity,
 )
 
@@ -151,9 +150,6 @@ class GeneratedComment(Base):
     )
     category: Mapped[CommentCategory | None] = mapped_column(
         Enum(CommentCategory, name="comment_category_enum")
-    )
-    confidence: Mapped[CommentConfidence | None] = mapped_column(
-        Enum(CommentConfidence, name="comment_confidence_enum")
     )
 
     # ID assigned by the platform after posting the comment

@@ -40,7 +40,6 @@ Follow this systematic approach to review the patch:
   - `minor`: correct but not ideal; performance, robustness, error handling, or maintainability problems that will not break users
   - `nit`: style, naming, readability, or a coding-standard preference that is safe to ignore
 - Assign a `category`: `security`, `correctness`, `performance`, `maintainability`, `style`, or `scope`
-- Assign a `confidence`: `high` when you verified the issue, `medium` when it is likely but not fully verified
 - When unsure between two severities, pick the lower one
 
 **Step 5: Write Clear, Constructive Comments**

@@ -121,7 +121,6 @@ def build_generated_comment(
         content=comment.content,
         severity=comment.severity,
         category=comment.category,
-        confidence=comment.confidence,
         details=comment.details,
     )
 
@@ -206,7 +205,6 @@ def format_inline_comment_content(comment: GeneratedComment) -> str:
         for key, value in (
             ("severity", comment.severity),
             ("category", comment.category),
-            ("confidence", comment.confidence),
         )
         if value is not None
     }

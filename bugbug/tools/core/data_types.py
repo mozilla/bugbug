@@ -29,13 +29,6 @@ class CommentCategory(StrEnum):
     SCOPE = "scope"
 
 
-class CommentConfidence(StrEnum):
-    """How confident the reviewer is that a review comment is valid."""
-
-    HIGH = "high"
-    MEDIUM = "medium"
-
-
 @dataclass
 class InlineComment:
     """Represents an inline code review comment."""
@@ -58,7 +51,6 @@ class InlineComment:
     order: int | None = None
     severity: CommentSeverity | None = None
     category: CommentCategory | None = None
-    confidence: CommentConfidence | None = None
     details: dict | None = None
 
 

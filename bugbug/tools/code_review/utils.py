@@ -393,5 +393,4 @@ def convert_generated_comments_to_inline(
             order=comment.order,
             severity=comment.severity,
             category=comment.category,
-            confidence=comment.confidence,
         )

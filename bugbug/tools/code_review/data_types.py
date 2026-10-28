@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field, PrivateAttr
 from bugbug.tools.core.connection import get_http_client
 from bugbug.tools.core.data_types import (
     CommentCategory,
-    CommentConfidence,
     CommentSeverity,
     InlineComment,
 )
@@ -43,10 +42,6 @@ class GeneratedReviewComment(BaseModel):
     category: Annotated[
         CommentCategory,
         Field(description="The kind of problem the comment reports."),
-    ]
-    confidence: Annotated[
-        CommentConfidence,
-        Field(description="How confident you are that the issue is valid."),
     ]
 
 

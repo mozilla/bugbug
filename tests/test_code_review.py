@@ -52,7 +52,6 @@ from bugbug.tools.code_review.utils import (
 )
 from bugbug.tools.core.data_types import (
     CommentCategory,
-    CommentConfidence,
     CommentSeverity,
 )
 from bugbug.tools.core.platforms import phabricator as phab_platform
@@ -1777,7 +1776,6 @@ def test_assess_patch_scope_returns_at_most_one_comment():
             order=1,
             severity=CommentSeverity.MINOR,
             category=CommentCategory.SCOPE,
-            confidence=CommentConfidence.HIGH,
         )
         for i in range(2)
     ]
@@ -1810,7 +1808,6 @@ def test_run_appends_scope_suggestion_last():
         order=1,
         severity=CommentSeverity.MAJOR,
         category=CommentCategory.CORRECTNESS,
-        confidence=CommentConfidence.HIGH,
     )
     scope = GeneratedReviewComment(
         file="b/f.txt",
@@ -1820,7 +1817,6 @@ def test_run_appends_scope_suggestion_last():
         order=1,
         severity=CommentSeverity.CRITICAL,
         category=CommentCategory.CORRECTNESS,
-        confidence=CommentConfidence.HIGH,
     )
     tool = _make_scope_tool(PatchScopeResponse(comments=[scope]))
 
@@ -1873,7 +1869,6 @@ def test_convert_generated_comments_to_inline_keeps_severity():
         order=1,
         severity=CommentSeverity.CRITICAL,
         category=CommentCategory.SECURITY,
-        confidence=CommentConfidence.MEDIUM,
     )
     patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
 
@@ -1884,9 +1879,6 @@ def test_convert_generated_comments_to_inline_keeps_severity():
     )
     assert inline.category == CommentCategory.SECURITY, (
         "The category should be copied onto the inline comment."
-    )
-    assert inline.confidence == CommentConfidence.MEDIUM, (
-        "The confidence should be copied onto the inline comment."
     )
 
 
