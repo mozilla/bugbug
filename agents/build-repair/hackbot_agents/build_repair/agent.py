@@ -142,6 +142,8 @@ def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
     fetches = [f"{f['task']}:{f['artifact']}" for f in json.loads(env["MOZ_FETCHES"])]
     fetches_dir = fx_ctx.source_dir.parent / "fetches"
     fetches_dir.mkdir(exist_ok=True)
+    # A reused workspace keeps the in-tree mozconfig, which mach refuses outside automation.
+    fx_ctx.mozconfig.unlink(missing_ok=True)
     subprocess.run(
         [str(fx_ctx.source_dir / "mach"), "--no-interactive", "artifact"]
         + ["toolchain", "--from-task", *fetches],
@@ -152,7 +154,11 @@ def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
     )
     # mach takes in-tree mozconfigs only in automation.
     os.environ.update(
-        {k: env[k] for k in ("FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS") if k in env},
+        {
+            k: env[k]
+            for k in ("DISABLE_CLANG_PLUGIN", "FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS")
+            if k in env
+        },
         MOZ_AUTOMATION="1",
         MOZ_FETCHES_DIR=str(fetches_dir),
     )

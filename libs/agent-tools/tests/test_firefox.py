@@ -5,6 +5,7 @@ import os
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox.tools import bootstrap_firefox
+from agent_tools.firefox.tools import build_firefox as run_build
 from ffpuppet.minidump_parser import MinidumpParser
 from mcp.types import ListToolsRequest
 
@@ -196,7 +197,9 @@ async def test_android_bootstrap_switches_builds_to_android(tmp_path, monkeypatc
 
     assert result["success"]
     assert result["build_dir"] == str(src / "objdir-android-artifact")
-    assert (tmp_path / "mach.log").read_text().splitlines()[-1] == f"{android} build "
+    assert (tmp_path / "mach.log").read_text().splitlines()[
+        -1
+    ] == f"{android} build --quiet"
 
     # Bootstrapping for desktop goes back to the agent's own mozconfig.
     await firefox.bootstrap_firefox(ctx, application="browser")
@@ -204,7 +207,7 @@ async def test_android_bootstrap_switches_builds_to_android(tmp_path, monkeypatc
 
     assert ctx.build_config() == (src / ".mozconfig", src / "objdir-ff-asan")
     assert (tmp_path / "mach.log").read_text().splitlines()[-1] == (
-        f"{src / '.mozconfig'} build "
+        f"{src / '.mozconfig'} build --quiet"
     )
 
 
@@ -229,3 +232,22 @@ async def test_failed_android_bootstrap_keeps_building_desktop(tmp_path):
     assert not result["success"]
     assert not (src / ".mozconfig-android").exists()
     assert ctx.build_config() == (src / ".mozconfig", src / "objdir-ff-asan")
+
+
+async def test_build_target_compiles_the_directory_after_its_prerequisites(tmp_path):
+    src = tmp_path / "firefox"
+    src.mkdir()
+    mach = src / "mach"
+    mach.write_text(f'#!/bin/sh\necho "$*" >> "{tmp_path}/mach.log"\n')
+    mach.chmod(0o755)
+    (src / ".mozconfig").write_text("")
+    objdir = tmp_path / "obj"
+    (objdir / "build" / "clang-plugin").mkdir(parents=True)
+
+    result = await run_build(src, src / ".mozconfig", objdir, target="image")
+
+    assert result["success"]
+    assert (tmp_path / "mach.log").read_text().splitlines() == [
+        "build --quiet pre-export export",
+        "build --quiet --allow-subdirectory-build build/clang-plugin image",
+    ]

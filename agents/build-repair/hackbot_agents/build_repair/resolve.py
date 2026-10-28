@@ -14,6 +14,7 @@ derives everything it reports from a task id.
 
 import json
 import logging
+import platform
 import re
 from dataclasses import dataclass, field
 
@@ -55,8 +56,11 @@ def linux_build_env(task_id: str) -> dict[str, str] | None:
     """The env of a build task CI ran on Linux, or None for any other task.
 
     Its ``MOZCONFIG`` and ``MOZ_FETCHES`` say how to build exactly as CI did.
-    Fetches with a ``dest`` or without extraction are not supported.
+    Fetches with a ``dest`` or without extraction are not supported, and CI's
+    toolchains only run on an x86-64 host.
     """
+    if platform.machine() != "x86_64":
+        return None
     task = _task(task_id)
     env = (task.get("payload") or {}).get("env") or {}
     if not (
