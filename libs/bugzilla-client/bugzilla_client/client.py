@@ -157,7 +157,7 @@ class _Bugs(_Resource):
     """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/bug.html."""
 
     async def get(
-        self, ids: list[int], *, include_fields: str | None = None
+        self, ids: list[int], *, include_fields: list[str] | None = None
     ) -> list[dict[str, Any]]:
         """Fetch bugs by id in one request.
 
