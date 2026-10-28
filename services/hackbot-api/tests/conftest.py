@@ -8,7 +8,7 @@ import os
 # value intact.
 os.environ.setdefault("PHABRICATOR_API_KEY", "api-" + "a" * 28)
 os.environ.setdefault("WEBHOOK_SECRET", "test-webhook-secret")
-os.environ.setdefault("WEBHOOK_AUTHORIZED_GROUP_PHID", "PHID-PROJ-authorized")
+os.environ.setdefault("WEBHOOK_AUTHORIZED_GROUP", "authorized-project")
 os.environ.setdefault("BUGZILLA_WEBHOOK_SECRET", "test-bugzilla-webhook-secret")
 os.environ.setdefault("BUGZILLA_WEBHOOK_BOT_LOGIN", "hackbot@mozilla.tld")
 os.environ.setdefault("BUGZILLA_WEBHOOK_AUTHORIZED_GROUP", "authorized-group")
@@ -128,9 +128,9 @@ class FakeSession:
             self.added = Run(**_statement_values(stmt))
             return _Result([self.added])
 
-        # Only queries over `runs` return rows; anything else a handler runs
-        # for effect gets an empty result.
-        if Run.__table__ in stmt.get_final_froms():
+        # Only queries selecting from `runs` (joined or not) return rows;
+        # anything else a handler runs for effect gets an empty result.
+        if Run.__table__ in stmt.columns_clause_froms:
             return _Result(self.matches)
         return _Result([])
 

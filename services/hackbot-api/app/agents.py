@@ -118,6 +118,9 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         # marked `auto_apply` qualify. Everything else stays for manual apply.
         auto_apply_actions=True,
         auto_apply_requires_consent=True,
+        # Except the Slack notification: for a held run it is the only signal that
+        # an analysis is waiting, so holding it with the comment hides the run.
+        always_apply_actions=frozenset({"slack.post_message"}),
     ),
     "test-repair": AgentSpec(
         name="test-repair",

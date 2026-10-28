@@ -7,16 +7,21 @@ ENV UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 
+# To build PyGObject (the a11y extra), which has no Linux wheels.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgirepository-2.0-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install external deps without building workspace members.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=VERSION,target=VERSION \
-    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-bug-fix
+    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-bug-fix --extra a11y
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
-    uv sync --locked --no-dev --no-editable --package hackbot-agent-bug-fix
+    uv sync --locked --no-dev --no-editable --package hackbot-agent-bug-fix --extra a11y
 
 # profiler-cli, the Firefox Profiler's command-line analyzer. It runs with the
 # node `mach bootstrap` installs, so this stage only installs it.
@@ -64,6 +69,11 @@ RUN apt-get update \
         ffmpeg pipewire wireplumber pipewire-pulse pulseaudio-utils \
         # Headless display and session bus, started by docker-entrypoint.sh.
         dbus-x11 x11-xserver-utils fluxbox xvfb \
+        # Accessibility: the AT-SPI bus Firefox exposes its accessibility tree
+        # on, the Atspi typelib to inspect it from Python (with PyGObject from
+        # the a11y extra), the Orca screen reader, and xdotool to press keys
+        # for it. NVDA and JAWS are Windows-only.
+        at-spi2-core gir1.2-atspi-2.0 orca xdotool \
     && rm -rf /var/lib/apt/lists/*
 
 # Gecko media tests use the pipewire audiotestsrc plugin as a dummy sound

@@ -16,6 +16,7 @@ import pytest
 from app.auth import verify_phabricator_signature
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
+from app.database.connection import get_db
 from app.main import app
 from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
@@ -25,12 +26,14 @@ from app.phabricator_webhook import (
     anchor_transaction_phid,
     detect_mention_and_revision,
     find_hackbot_mentions,
+    follow_up_agent,
     resolve_revision,
     triggering_transaction_phids,
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
 from hackbot_client import RunStatus, TriggeredRun
+from sqlalchemy.dialects import postgresql
 
 SECRET = "test-secret"
 BUGZILLA_SECRET = "test-bugzilla-secret"
@@ -328,8 +331,8 @@ class _FakeClient:
     async def search_revision(self, phid):
         return self._revision
 
-    async def get_project_members(self, project_phid):
-        assert project_phid == settings.webhook.authorized_group_phid
+    async def get_project_members(self, project_slug):
+        assert project_slug == settings.webhook.authorized_group
         return self._members
 
 
@@ -367,9 +370,7 @@ async def test_detect_mention_requires_group_membership(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(
-            client, settings.webhook.authorized_group_phid
-        ),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result is None
 
@@ -393,9 +394,7 @@ async def test_detect_mention_accepts_group_member(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(
-            client, settings.webhook.authorized_group_phid
-        ),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result == DetectedMention(
         comment=(
@@ -442,9 +441,7 @@ async def test_detect_mention_enriches_inline_anchor(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(
-            client, settings.webhook.authorized_group_phid
-        ),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result == DetectedMention(
         comment=(
@@ -612,7 +609,7 @@ def phab_client():
 
 
 @pytest.fixture
-def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
+def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client, db):
     monkeypatch.setattr(settings, "external_api_key", "test-api-key")
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
@@ -622,6 +619,7 @@ def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
     app.dependency_overrides[webhooks.get_bugzilla_authorizer] = lambda: (
         bugzilla_authorizer
     )
+    app.dependency_overrides[get_db] = lambda: db
     try:
         yield TestClient(app)
     finally:
@@ -795,6 +793,50 @@ def test_route_surfaces_trigger_failure(client, monkeypatch):
                 "transactions": [{"phid": "PHID-XACT-1"}],
             },
         )
+
+
+@pytest.mark.parametrize(
+    ("creator", "expected_agent"),
+    [
+        ("autowebcompat-intervention", "autowebcompat-intervention"),
+        # A creator that can't follow up still gets bug-fix.
+        ("build-repair", "bug-fix"),
+    ],
+)
+def test_route_sends_follow_up_to_creating_agent(
+    client, db, monkeypatch, creator, expected_agent
+):
+    monkeypatch.setattr(
+        webhooks, "detect_mention_and_revision", AsyncMock(return_value=_DETECTED)
+    )
+    db.matches = [creator]
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+
+    resp = _post(
+        client,
+        {
+            "object": {"type": "DREV", "phid": "PHID-DREV-1"},
+            "transactions": [{"phid": "PHID-XACT-1"}],
+        },
+    )
+
+    assert resp.status_code == 202
+    assert [agent for agent, _ in fake_api.calls] == [expected_agent]
+
+
+async def test_follow_up_agent_looks_up_applied_submit_patch(db):
+    await follow_up_agent(db, 42)
+
+    sql = str(
+        db.stmt.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "run_actions.type = 'phabricator.submit_patch'" in sql
+    assert "run_actions.status = 'applied'" in sql
+    assert "run_actions.result ->> 'revision_id'" in sql
+    assert "= 42" in sql
 
 
 def test_bugzilla_route_ignores_non_object_payload(client):

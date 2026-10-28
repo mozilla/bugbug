@@ -23,6 +23,7 @@ from hackbot_agents.frontend_triage.config import (
     ScopedComponent,
     guidance_for,
     owners_for_path,
+    scope_json,
 )
 
 
@@ -90,6 +91,17 @@ def test_every_related_component_resolves():
     for entry in TRIAGE_SCOPE:
         for related in entry.related:
             assert related in keys, f"{entry.key} -> {related}"
+
+
+def test_scope_json_matches_the_registry():
+    # bugbot fetches this file from master to pick what it sends here, so a stale copy
+    # either sends a component nobody is told about or never sends a new one.
+    committed = Path(__file__).parent.parent / "scope.json"
+    assert committed.read_text() == scope_json(), (
+        "scope.json is stale; regenerate it with: uv run python -c "
+        '"from hackbot_agents.frontend_triage.config import scope_json; '
+        "print(scope_json(), end='')\" > scope.json"
+    )
 
 
 def test_an_unknown_component_gets_every_component():
