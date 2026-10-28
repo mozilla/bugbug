@@ -35,6 +35,7 @@ MODELS = {
     "testlabelselect": "bugbug.models.testselect.TestLabelSelectModel",
     "testgroupselect": "bugbug.models.testselect.TestGroupSelectModel",
     "testconfiggroupselect": "bugbug.models.testselect.TestConfigGroupSelectModel",
+    "testconfigselect": "bugbug.models.testconfigselect.TestConfigSelectModel",
     "testconfig": "bugbug.models.testfailure.TestConfigModel",
     "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",

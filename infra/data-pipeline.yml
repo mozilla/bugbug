@@ -1235,6 +1235,42 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-test-config-select
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - commit-retrieval
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselect
+
+        artifacts:
+          public/testconfigselectmodel.tar.zst:
+            path: /testconfigselectmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselect.${version}
+        - index.project.bugbug.train_testconfigselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselect.latest
+      metadata:
+        name: bugbug train test config selection model
+        description: bugbug train test config selection model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: train-test-failure
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
@@ -1534,6 +1570,7 @@ tasks:
         - train-stepstoreproduce
         - train-test-label-select
         - train-test-group-select
+        - train-test-config-select
         - train-test-failure
         - train-test-config
         - train-needsdiagnosis
@@ -1577,6 +1614,7 @@ tasks:
         - train-spambug
         - train-test-label-select
         - train-test-group-select
+        - train-test-config-select
         - train-test-config
         - train-needsdiagnosis
         - train-accessibility
