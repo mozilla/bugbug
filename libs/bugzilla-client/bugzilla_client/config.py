@@ -6,6 +6,7 @@ environment parse. Use :meth:`BugzillaSettings.from_env` for standalone,
 env-driven config (``BUGZILLA_URL``, ``BUGZILLA_API_KEY``, ...).
 """
 
+from importlib.metadata import version
 from typing import Annotated
 
 from pydantic import BaseModel, Field
@@ -19,6 +20,7 @@ class BugzillaSettings(BaseModel):
     url: str = "https://bugzilla.mozilla.org"
     timeout_seconds: float = 30
     edge_key: str | None = None
+    user_agent: str = f"Bugbug-BugzillaClient/{version('bugzilla-client')}"
 
     @classmethod
     def from_env(cls) -> BugzillaSettings:

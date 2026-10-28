@@ -94,6 +94,7 @@ async def test_sends_auth_headers_and_uses_rest_base(bugzilla):
     assert str(request.url) == "https://bugzilla.example.com/rest/version"
     assert request.headers["X-Bugzilla-API-Key"] == VALID_KEY
     assert request.headers["Mozilla-Edge-Key"] == "edge"
+    assert request.headers["User-Agent"].startswith("Bugbug-BugzillaClient/")
 
 
 async def test_context_manager_closes_client():

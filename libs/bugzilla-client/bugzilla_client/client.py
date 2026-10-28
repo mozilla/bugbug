@@ -11,7 +11,7 @@ one from the environment (via ``BugzillaSettings.from_env``) when none is
 provided. The API is asynchronous.
 
 The client reuses one connection pool across requests. Close it when done,
-either with ``async with`` or by calling :meth:`BugzillaClient.close`::
+either with ``async with`` or by calling :meth:`BugzillaClient.close`.
 """
 
 import base64
@@ -80,11 +80,17 @@ def _is_transient(exc: BaseException, *, is_read: bool) -> bool:
 
 class BugzillaClient:
     def __init__(self, settings: BugzillaSettings | None = None) -> None:
-        self.settings = settings or BugzillaSettings.from_env()
+        self._settings = settings or BugzillaSettings.from_env()
+        headers = {
+            "X-Bugzilla-API-Key": self._settings.api_key,
+            "User-Agent": self._settings.user_agent,
+        }
+        if self._settings.edge_key:
+            headers["Mozilla-Edge-Key"] = self._settings.edge_key
         self._http = httpx.AsyncClient(
             base_url=f"{self.base_url}/rest/",
-            headers=self.headers,
-            timeout=self.settings.timeout_seconds,
+            headers=headers,
+            timeout=self._settings.timeout_seconds,
         )
         # One resource per section from the REST API docs.
         self.bugs = _Bugs(self)
@@ -108,14 +114,7 @@ class BugzillaClient:
 
     @property
     def base_url(self) -> str:
-        return self.settings.url.rstrip("/")
-
-    @property
-    def headers(self) -> dict[str, str]:
-        headers = {"X-Bugzilla-API-Key": self.settings.api_key}
-        if self.settings.edge_key:
-            headers["Mozilla-Edge-Key"] = self.settings.edge_key
-        return headers
+        return self._settings.url.rstrip("/")
 
     def bug_url(self, bug_id: int) -> str:
         return f"{self.base_url}/show_bug.cgi?id={bug_id}"
