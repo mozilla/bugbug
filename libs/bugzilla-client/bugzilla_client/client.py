@@ -14,8 +14,6 @@ The client reuses one connection pool across requests. Close it when done,
 either with ``async with`` or by calling :meth:`BugzillaClient.aclose`::
 """
 
-from __future__ import annotations
-
 import base64
 import logging
 from types import TracebackType

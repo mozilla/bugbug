@@ -6,8 +6,6 @@ environment parse. Use :meth:`BugzillaSettings.from_env` for standalone,
 env-driven config (``BUGZILLA_URL``, ``BUGZILLA_API_KEY``, ...).
 """
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from pydantic import BaseModel, Field
