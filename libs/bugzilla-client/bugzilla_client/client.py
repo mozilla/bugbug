@@ -17,6 +17,7 @@ either with ``async with`` or by calling :meth:`BugzillaClient.close`.
 import base64
 import logging
 from collections.abc import Collection
+from datetime import datetime
 from types import TracebackType
 from typing import Any, Self
 
@@ -220,16 +221,22 @@ class _Comments(_Resource):
         *,
         bug_ids: Collection[int] = (),
         comment_ids: Collection[int] = (),
+        new_since: datetime | None = None,
+        include_fields: Collection[str] | None = None,
+        skip_private: bool = False,
     ) -> dict[str, dict[int, Any]]:
         """Comments by bug and/or by comment id, fetched in one request.
 
         Returns ``{"bugs": {bug_id: [comment, ...]}, "comments": {comment_id:
-        comment}}``, like Bugzilla's answer.
+        comment}}``, like Bugzilla's answer. ``new_since`` only filters the
+        comments of ``bug_ids``; ``skip_private`` skips bugs the API key cannot
+        see instead of failing.
         """
         if not bug_ids and not comment_ids:
             raise ValueError("bug_ids or comment_ids must not be empty")
         # The path takes one id, the rest go in the query. Ids are repeated
         # (``ids=2&ids=3``): Bugzilla rejects comma-joined ids here.
+        params: dict[str, Any]
         if bug_ids:
             first, *rest = bug_ids
             path = f"bug/{first}/comment"
@@ -238,6 +245,12 @@ class _Comments(_Resource):
             first, *rest = comment_ids
             path = f"bug/comment/{first}"
             params = {"comment_ids": rest}
+        if new_since:
+            params["new_since"] = new_since.isoformat()
+        if include_fields:
+            params["include_fields"] = ",".join(include_fields)
+        if skip_private:
+            params["skip_private"] = 1
         result = await self._client.request("GET", path, params=params)
         return {
             "bugs": {int(i): bug["comments"] for i, bug in result["bugs"].items()},
