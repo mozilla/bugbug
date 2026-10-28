@@ -11,7 +11,7 @@ one from the environment (via ``BugzillaSettings.from_env``) when none is
 provided. The API is asynchronous.
 
 The client reuses one connection pool across requests. Close it when done,
-either with ``async with`` or by calling :meth:`BugzillaClient.aclose`::
+either with ``async with`` or by calling :meth:`BugzillaClient.close`::
 """
 
 import base64
@@ -91,7 +91,7 @@ class BugzillaClient:
         self.attachments = _Attachments(self)
         self.users = _Users(self)
 
-    async def aclose(self) -> None:
+    async def close(self) -> None:
         await self._http.aclose()
 
     async def __aenter__(self) -> Self:
@@ -103,7 +103,7 @@ class BugzillaClient:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        await self.aclose()
+        await self.close()
 
     @property
     def base_url(self) -> str:

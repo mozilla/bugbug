@@ -35,7 +35,7 @@ async def bugzilla(monkeypatch):
 
     yield make
     for client in clients:
-        await client.aclose()
+        await client.close()
 
 
 # A syntactically valid Bugzilla API key: 40 letters and digits.
