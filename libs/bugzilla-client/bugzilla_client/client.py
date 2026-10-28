@@ -320,8 +320,40 @@ class _Attachments(_Resource):
 class _Users(_Resource):
     """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/user.html."""
 
-    async def get(self, params: dict[str, Any]) -> list[dict[str, Any]]:
-        """Get users with raw ``GET /user`` query parameters."""
+    async def get(
+        self,
+        *,
+        ids: Collection[int] = (),
+        names: Collection[str] = (),
+        match: Collection[str] = (),
+        limit: int | None = None,
+        group_ids: Collection[int] = (),
+        groups: Collection[str] = (),
+        include_disabled: bool = False,
+        permissive: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Users by id, login name, or a ``match`` search.
+
+        ``limit`` and ``include_disabled`` only apply to ``match``;
+        ``permissive`` reports unknown ``names`` in ``faults`` instead of
+        failing. ``group_ids`` and ``groups`` keep only members of any of them.
+        """
+        if not ids and not names and not match:
+            raise ValueError("ids, names or match must not be empty")
+        # Lists are repeated (``names=a&names=b``): Bugzilla rejects commas here.
+        params: dict[str, Any] = {
+            "ids": list(ids),
+            "names": list(names),
+            "match": list(match),
+            "group_ids": list(group_ids),
+            "groups": list(groups),
+        }
+        if limit is not None:
+            params["limit"] = limit
+        if include_disabled:
+            params["include_disabled"] = 1
+        if permissive:
+            params["permissive"] = 1
         result = await self._client.request("GET", "user", params=params)
         return result["users"]
 
