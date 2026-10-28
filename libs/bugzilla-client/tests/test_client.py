@@ -160,7 +160,7 @@ async def test_bugs_get_sends_ids(bugzilla):
 
     bugs = await bugzilla(handler).bugs.get([1, 2, 3], include_fields=["id", "summary"])
 
-    assert bugs == body["bugs"]
+    assert bugs.data == body
     params = requests[0].url.params
     assert params["id"] == "1,2,3"
     assert params["include_fields"] == "id,summary"
@@ -177,14 +177,9 @@ async def test_comments_get_by_bugs_and_comment_ids_in_one_request(bugzilla):
     }
     handler, requests = _recorder(httpx.Response(200, json=body))
 
-    comments = await bugzilla(handler).comments.get(bug_ids=[1, 2, 3], comment_ids=[30])
+    response = await bugzilla(handler).comments.get(bug_ids=[1, 2, 3], comment_ids=[30])
 
-    assert {i: [c["id"] for c in cs] for i, cs in comments["bugs"].items()} == {
-        1: [10],
-        2: [20, 21],
-        3: [],
-    }
-    assert list(comments["comments"]) == [30]
+    assert response.data == body
     (request,) = requests
     assert request.url.path == "/rest/bug/1/comment"
     # Repeated, not comma-joined: Bugzilla rejects ``ids=2,3``.
@@ -199,15 +194,11 @@ async def test_attachments_get_by_bugs_and_attachment_ids_in_one_request(bugzill
     }
     handler, requests = _recorder(httpx.Response(200, json=body))
 
-    attachments = await bugzilla(handler).attachments.get(
+    response = await bugzilla(handler).attachments.get(
         bug_ids=[1, 2], attachment_ids=[30]
     )
 
-    assert {i: [a["id"] for a in atts] for i, atts in attachments["bugs"].items()} == {
-        1: [10],
-        2: [],
-    }
-    assert list(attachments["attachments"]) == [30]
+    assert response.data == body
     (request,) = requests
     assert request.url.path == "/rest/bug/1/attachment"
     assert request.url.params.get_list("ids") == ["2"]
@@ -221,7 +212,8 @@ async def test_update_bug_returns_changes(bugzilla):
     handler, requests = _recorder(httpx.Response(200, json=answer))
     update = {"status": "RESOLVED", "comment": {"body": "done"}}
 
-    assert await bugzilla(handler).bugs.update(1, update) == changes
+    response = await bugzilla(handler).bugs.update(1, update)
+    assert response.data == answer
 
     (request,) = requests
     assert request.method == "PUT"
@@ -234,7 +226,7 @@ async def test_add_attachment_encodes_data(bugzilla):
     body = {"attachments": {"300": _attachment(300, 5)}}
     handler, requests = _recorder(httpx.Response(201, json=body))
 
-    attachment_id = await bugzilla(handler).attachments.create(
+    response = await bugzilla(handler).attachments.create(
         5,
         b"\xff\xfe\x00",
         {
@@ -246,7 +238,7 @@ async def test_add_attachment_encodes_data(bugzilla):
         },
     )
 
-    assert attachment_id == 300
+    assert response.data == body
     body = json.loads(requests[0].content)
     assert base64.b64decode(body["data"]) == b"\xff\xfe\x00"
     assert body["ids"] == [5]

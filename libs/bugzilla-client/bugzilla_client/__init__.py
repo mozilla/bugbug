@@ -1,4 +1,4 @@
-from bugzilla_client.client import BugzillaClient, BugzillaError
+from bugzilla_client.client import BugzillaClient, BugzillaError, BugzillaResponse
 from bugzilla_client.config import BugzillaSettings
 
-__all__ = ["BugzillaClient", "BugzillaError", "BugzillaSettings"]
+__all__ = ["BugzillaClient", "BugzillaError", "BugzillaResponse", "BugzillaSettings"]

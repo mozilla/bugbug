@@ -17,6 +17,7 @@ either with ``async with`` or by calling :meth:`BugzillaClient.close`.
 import base64
 import logging
 from collections.abc import Collection
+from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Self
@@ -49,6 +50,17 @@ class BugzillaError(Exception):
         self.message = message
         self.code = code
         self.status = status
+
+
+@dataclass(frozen=True)
+class BugzillaResponse:
+    """What a resource method returns; ``data`` is Bugzilla's JSON body.
+
+    A wrapper rather than the bare body, so typed results can be added later
+    without breaking callers.
+    """
+
+    data: dict[str, Any]
 
 
 def _should_retry(state: RetryCallState) -> bool:
@@ -159,7 +171,7 @@ class _Bugs(_Resource):
 
     async def get(
         self, ids: Collection[int], *, include_fields: Collection[str] | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> BugzillaResponse:
         """Fetch bugs by id in one request.
 
         Bugs the API key cannot see are left out of the result rather than
@@ -171,14 +183,14 @@ class _Bugs(_Resource):
         if include_fields:
             params["include_fields"] = ",".join(include_fields)
         result = await self._client.request("GET", "bug", params=params)
-        return result["bugs"]
+        return BugzillaResponse(result)
 
     async def search(
         self,
         params: dict[str, Any],
         *,
         include_fields: Collection[str] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> BugzillaResponse:
         """Find bugs matching search criteria (``GET /bug``).
 
         ``params`` are Bugzilla search fields, e.g.
@@ -190,27 +202,25 @@ class _Bugs(_Resource):
         if include_fields:
             params = {**params, "include_fields": ",".join(include_fields)}
         result = await self._client.request("GET", "bug", params=params)
-        return result["bugs"]
+        return BugzillaResponse(result)
 
-    async def create(self, fields: dict[str, Any]) -> int:
-        """File a bug and return its id."""
+    async def create(self, fields: dict[str, Any]) -> BugzillaResponse:
+        """File a bug; Bugzilla answers ``{"id": ...}``."""
         result = await self._client.request("POST", "bug", json=fields)
-        return result["id"]
+        return BugzillaResponse(result)
 
-    async def update(
-        self, bug_id: int, changes: dict[str, Any]
-    ) -> dict[str, dict[str, str]]:
+    async def update(self, bug_id: int, changes: dict[str, Any]) -> BugzillaResponse:
         """Apply field changes and/or a comment in one ``PUT /bug/{id}``.
 
         Bugzilla applies the whole body as a single transaction (one bugmail,
-        one history entry). Returns what actually changed, by field name; empty
-        when every field already had its value (a comment is not a change).
+        one history entry). Each entry in the answer's ``bugs`` lists what
+        actually changed in ``changes``; empty when every field already had
+        its value (a comment is not a change).
 
         Updates one bug only: do not pass ``ids`` in ``changes``.
         """
         result = await self._client.request("PUT", f"bug/{bug_id}", json=changes)
-        (bug,) = result["bugs"]
-        return bug["changes"]
+        return BugzillaResponse(result)
 
 
 class _Comments(_Resource):
@@ -224,11 +234,11 @@ class _Comments(_Resource):
         new_since: datetime | None = None,
         include_fields: Collection[str] | None = None,
         skip_private: bool = False,
-    ) -> dict[str, dict[int, Any]]:
+    ) -> BugzillaResponse:
         """Comments by bug and/or by comment id, fetched in one request.
 
-        Returns ``{"bugs": {bug_id: [comment, ...]}, "comments": {comment_id:
-        comment}}``, like Bugzilla's answer. ``new_since`` only filters the
+        Bugzilla answers ``{"bugs": {bug_id: {"comments": [...]}}, "comments":
+        {comment_id: comment}}``, keyed by id strings. ``new_since`` only filters the
         comments of ``bug_ids``; ``skip_private`` skips bugs the API key cannot
         see instead of failing.
         """
@@ -252,10 +262,7 @@ class _Comments(_Resource):
         if skip_private:
             params["skip_private"] = 1
         result = await self._client.request("GET", path, params=params)
-        return {
-            "bugs": {int(i): bug["comments"] for i, bug in result["bugs"].items()},
-            "comments": {int(i): c for i, c in result["comments"].items()},
-        }
+        return BugzillaResponse(result)
 
 
 class _Attachments(_Resource):
@@ -267,11 +274,11 @@ class _Attachments(_Resource):
         bug_ids: Collection[int] = (),
         attachment_ids: Collection[int] = (),
         include_data: bool = False,
-    ) -> dict[str, dict[int, Any]]:
+    ) -> BugzillaResponse:
         """Attachments by bug and/or by attachment id, fetched in one request.
 
-        Returns ``{"bugs": {bug_id: [attachment, ...]}, "attachments":
-        {attachment_id: attachment}}``, like Bugzilla's answer, without the
+        Bugzilla answers ``{"bugs": {bug_id: [attachment, ...]}, "attachments":
+        {attachment_id: attachment}}``, keyed by id strings, without the
         file content unless ``include_data``. BMO leaves unknown attachment
         ids out of the result rather than failing.
         """
@@ -293,13 +300,14 @@ class _Attachments(_Resource):
         if not include_data:
             params["exclude_fields"] = "data"
         result = await self._client.request("GET", path, params=params)
-        return {
-            "bugs": {int(i): atts for i, atts in result["bugs"].items()},
-            "attachments": {int(i): a for i, a in result["attachments"].items()},
-        }
+        return BugzillaResponse(result)
 
-    async def create(self, bug_id: int, data: bytes, fields: dict[str, Any]) -> int:
-        """Attach a file to a bug and return the new attachment id.
+    async def create(
+        self, bug_id: int, data: bytes, fields: dict[str, Any]
+    ) -> BugzillaResponse:
+        """Attach a file to a bug.
+
+        Bugzilla answers ``{"attachments": {attachment_id: attachment}}``.
 
         ``fields`` are the other Create Attachment fields, e.g. ``file_name``,
         ``summary``, ``content_type``, ``is_patch`` or ``comment``. ``data`` is
@@ -313,8 +321,7 @@ class _Attachments(_Resource):
         result = await self._client.request(
             "POST", f"bug/{bug_id}/attachment", json=body
         )
-        (attachment_id,) = result["attachments"]
-        return int(attachment_id)
+        return BugzillaResponse(result)
 
 
 class _Users(_Resource):
@@ -331,7 +338,7 @@ class _Users(_Resource):
         groups: Collection[str] = (),
         include_disabled: bool = False,
         permissive: bool = False,
-    ) -> list[dict[str, Any]]:
+    ) -> BugzillaResponse:
         """Users by id, login name, or a ``match`` search.
 
         ``limit`` and ``include_disabled`` only apply to ``match``;
@@ -355,7 +362,7 @@ class _Users(_Resource):
         if permissive:
             params["permissive"] = 1
         result = await self._client.request("GET", "user", params=params)
-        return result["users"]
+        return BugzillaResponse(result)
 
 
 def _parse(response: httpx.Response) -> dict[str, Any]:
