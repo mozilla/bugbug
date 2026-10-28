@@ -1271,6 +1271,113 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-test-config-select-pooled
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselectpooled
+
+        artifacts:
+          public/testconfigselectpooledmodel.tar.zst:
+            path: /testconfigselectpooledmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselectpooled.${version}
+        - index.project.bugbug.train_testconfigselectpooled.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselectpooled.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselectpooled.latest
+      metadata:
+        name: bugbug train test config selection model (pooled statistics)
+        description: bugbug train test config selection model (pooled statistics)
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-test-config-select-value
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - commit-retrieval
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselectvalue
+
+        artifacts:
+          public/testconfigselectvaluemodel.tar.zst:
+            path: /testconfigselectvaluemodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselectvalue.${version}
+        - index.project.bugbug.train_testconfigselectvalue.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselectvalue.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselectvalue.latest
+      metadata:
+        name: bugbug train test config selection model (per-value)
+        description: bugbug train test config selection model (per-value)
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-test-config-select-class
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - commit-retrieval
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselectclass
+
+        artifacts:
+          public/testconfigselectclassmodel.tar.zst:
+            path: /testconfigselectclassmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselectclass.${version}
+        - index.project.bugbug.train_testconfigselectclass.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselectclass.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselectclass.latest
+      metadata:
+        name: bugbug train test config selection model (pattern class)
+        description: bugbug train test config selection model (pattern class)
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: train-test-failure
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
@@ -1571,6 +1678,9 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-test-config-select
+        - train-test-config-select-pooled
+        - train-test-config-select-value
+        - train-test-config-select-class
         - train-test-failure
         - train-test-config
         - train-needsdiagnosis
@@ -1615,6 +1725,9 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-test-config-select
+        - train-test-config-select-pooled
+        - train-test-config-select-value
+        - train-test-config-select-class
         - train-test-config
         - train-needsdiagnosis
         - train-accessibility
