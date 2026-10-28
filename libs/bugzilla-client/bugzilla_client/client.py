@@ -85,7 +85,7 @@ class BugzillaClient:
             headers=self.headers,
             timeout=self.settings.timeout_seconds,
         )
-        # One resource per page of the REST API docs; all share ``_http``.
+        # One resource per section from the REST API docs.
         self.bugs = _Bugs(self)
         self.comments = _Comments(self)
         self.attachments = _Attachments(self)
