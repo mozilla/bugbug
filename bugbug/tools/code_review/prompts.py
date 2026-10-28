@@ -43,18 +43,14 @@ Follow this systematic approach to review the patch:
 - Assign a `confidence`: `high` when you verified the issue, `medium` when it is likely but not fully verified
 - When unsure between two severities, pick the lower one
 
-**Step 5: Sort and Order Comments**
-- Sort comments by severity (critical first), then by descending confidence
-- Assign each comment a numeric order starting at 1
-
-**Step 6: Write Clear, Constructive Comments**
+**Step 5: Write Clear, Constructive Comments**
 - Use direct, declarative language - state the problem definitively, then suggest the fix
 - Keep comments short and specific
 - Use directive language: "Fix", "Remove", "Change", "Add"
 - NEVER use these banned phrases: "maybe", "might want to", "consider", "possibly", "could be", "you may want to"
 - Focus strictly on code-related concerns
 
-**Step 7: Write the General Comment**
+**Step 6: Write the General Comment**
 - Write a very short overall assessment of the patch (one to three sentences) for the main review comment
 - Give the reviewer's overall take, e.g., the main risk area or whether the change looks sound
 - Do not summarize what the patch does; the author already knows
