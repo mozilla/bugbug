@@ -316,11 +316,45 @@ async def _get_bugs(
     return dict(result, count=len(bugs), bugs=bugs, inaccessible=inaccessible)
 
 
-async def _get_bug_comments(ctx: BugzillaContext, bug_id: int) -> dict:
+async def _get_bug_comments(
+    ctx: BugzillaContext,
+    bug_id: Annotated[int, Field(description="Bug ID.")],
+    start: Annotated[
+        int,
+        Field(
+            ge=0,
+            description=(
+                "The number of the first comment to return, as Bugzilla numbers "
+                "them. Comment 0 is the description."
+            ),
+        ),
+    ] = 0,
+    limit: Annotated[
+        int | None,
+        Field(
+            ge=1,
+            description=(
+                "The maximum number of public comments to return. To get all of them, "
+                "do not give it. Read a long thread in pages, so that each result "
+                "stays small."
+            ),
+        ),
+    ] = None,
+) -> dict:
     await _require_public(ctx, bug_id)
     result = await bugzilla.get_bug_comments(ctx, bug_id)
     comments = public_items(result["comments"])
-    return dict(result, count=len(comments), comments=comments)
+    later = [c for c in comments if c.get("count", 0) >= start]
+    page = later if limit is None else later[:limit]
+    more = len(page) < len(later)
+    return dict(
+        result,
+        total=len(comments),
+        start=start,
+        next_start=page[-1]["count"] + 1 if more else None,
+        count=len(page),
+        comments=page,
+    )
 
 
 # History fields that BMO hides from a logged-out reader. A relation change shows only
@@ -508,7 +542,16 @@ def public_tools(
     return [
         _public_tool(bugzilla.search_bugs, _search_bugs(comment_search)),
         _public_tool(bugzilla.get_bugs, _get_bugs, own_schema=True),
-        _public_tool(bugzilla.get_bug_comments, _get_bug_comments),
+        _public_tool(
+            bugzilla.get_bug_comments,
+            _get_bug_comments,
+            description=(
+                "Fetch the public comments of a public bug, all of them or one page. "
+                "`total` is the number of public comments. `next_start` is the "
+                "`start` of the next page, and null on the last page."
+            ),
+            own_schema=True,
+        ),
         _public_tool(
             bugzilla.get_bug_attachments,
             _get_bug_attachments(attachment_hint),

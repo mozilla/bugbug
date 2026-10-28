@@ -156,7 +156,14 @@ async def test_get_bug_comments_drops_private_comments():
         }
     )
     res = await tools["get_bug_comments"](ctx, 1)
-    assert res == {"bug_id": 1, "count": 1, "comments": [COMMENTS[0]]}
+    assert res == {
+        "bug_id": 1,
+        "total": 1,
+        "start": 0,
+        "next_start": None,
+        "count": 1,
+        "comments": [COMMENTS[0]],
+    }
     assert client.calls[0] == ("bug", {"id": "1", "include_fields": "id,groups"})
 
 
@@ -533,3 +540,47 @@ def test_the_comment_search_check_is_on_by_default():
     assert pub.refused_search_fields({"longdesc": "x"}, comment_search=False) == [
         "longdesc"
     ]
+
+
+# Comments 2 and 6 are private, so the public comments are 0, 1, 3, 4 and 5.
+THREAD = [
+    {"id": 50 + n, "count": n, "is_private": n in (2, 6), "text": f"c{n}"}
+    for n in range(7)
+]
+
+
+@pytest.mark.parametrize(
+    ("start", "limit", "expected", "next_start"),
+    [
+        (0, None, [0, 1, 3, 4, 5], None),
+        (0, 2, [0, 1], 2),
+        (2, 2, [3, 4], 5),
+        (3, 2, [3, 4], 5),
+        (3, 3, [3, 4, 5], None),
+        (5, 3, [5], None),
+        (6, 2, [], None),
+    ],
+)
+async def test_get_bug_comments_pages_by_comment_number(
+    start, limit, expected, next_start
+):
+    tools, ctx, _ = _tools(
+        {
+            "bug": {"bugs": [dict(PUBLIC)]},
+            "bug/1/comment": {"bugs": {"1": {"comments": THREAD}}},
+        }
+    )
+    res = await tools["get_bug_comments"](ctx, 1, start=start, limit=limit)
+    assert [c["count"] for c in res["comments"]] == expected
+    assert (res["total"], res["start"], res["count"]) == (5, start, len(expected))
+    assert res["next_start"] == next_start
+
+
+def test_get_bug_comments_takes_page_bounds():
+    comments = next(t for t in TOOLS if t.name == "get_bug_comments")
+    props = comments.input_schema["properties"]
+    assert set(props) == {"bug_id", "start", "limit"}
+    assert props["start"]["minimum"] == 0
+    assert props["limit"]["anyOf"][0]["minimum"] == 1
+    assert "total" in comments.description
+    assert "next_start" in comments.description
