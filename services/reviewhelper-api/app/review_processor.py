@@ -119,8 +119,6 @@ def build_generated_comment(
         line_end=comment.end_line,
         on_new=not comment.on_removed_code,
         content=comment.content,
-        explanation=comment.explanation,
-        order=comment.order,
         severity=comment.severity,
         category=comment.category,
         confidence=comment.confidence,

@@ -32,16 +32,12 @@ def make_inline_comment(**overrides) -> InlineComment:
     return InlineComment(**fields)
 
 
-def test_build_generated_comment_keeps_order_and_explanation():
+def test_build_generated_comment_maps_inline_comment():
     generated_comment = build_generated_comment(7, make_inline_comment())
 
     assert generated_comment.review_request_id == 7, (
         "The row should belong to the given review request."
     )
-    assert generated_comment.explanation == "The pointer can be null after `Reset`.", (
-        "The model's explanation should be persisted."
-    )
-    assert generated_comment.order == 2, "The model's ordering should be persisted."
     assert generated_comment.on_new is True, (
         "Comments on added code should be stored as `on_new`."
     )

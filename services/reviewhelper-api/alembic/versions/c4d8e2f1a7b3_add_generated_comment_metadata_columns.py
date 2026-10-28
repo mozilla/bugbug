@@ -1,4 +1,4 @@
-"""Add explanation, order, severity, category and confidence to generated comments.
+"""Add severity, category and confidence to generated comments.
 
 Revision ID: c4d8e2f1a7b3
 Revises: b3e1c7d2a4f9
@@ -53,14 +53,6 @@ def upgrade() -> None:
 
     op.add_column(
         "generated_comments",
-        sa.Column("explanation", sa.Text(), nullable=True),
-    )
-    op.add_column(
-        "generated_comments",
-        sa.Column("order", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "generated_comments",
         sa.Column("severity", comment_severity_enum, nullable=True),
     )
     op.add_column(
@@ -78,8 +70,6 @@ def downgrade() -> None:
     op.drop_column("generated_comments", "confidence")
     op.drop_column("generated_comments", "category")
     op.drop_column("generated_comments", "severity")
-    op.drop_column("generated_comments", "order")
-    op.drop_column("generated_comments", "explanation")
 
     for enum_type in (
         comment_confidence_enum,

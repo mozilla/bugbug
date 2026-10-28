@@ -146,8 +146,6 @@ class GeneratedComment(Base):
     line_end: Mapped[int]
     on_new: Mapped[bool]
     content: Mapped[str] = mapped_column(Text)
-    explanation: Mapped[str | None] = mapped_column(Text)
-    order: Mapped[int | None]
     severity: Mapped[CommentSeverity | None] = mapped_column(
         Enum(CommentSeverity, name="comment_severity_enum")
     )
