@@ -32,3 +32,16 @@ def test_get_hg_revision_reads_gecko_head_rev():
     assert taskcluster.get_hg_revision(task) == "abc123"
     assert taskcluster.get_hg_revision({"payload": {"env": {}}}) is None
     assert taskcluster.get_hg_revision({}) is None
+
+
+def test_get_hg_revision_maps_github_checkout_to_hg(monkeypatch):
+    monkeypatch.setattr(taskcluster.lando, "git_to_hg", {"cf70795": "39b0141"}.get)
+    task = {
+        "payload": {
+            "env": {
+                "GECKO_HEAD_REV": "cf70795",
+                "GECKO_HEAD_REPOSITORY": "https://github.com/mozilla-firefox/firefox",
+            }
+        }
+    }
+    assert taskcluster.get_hg_revision(task) == "39b0141"

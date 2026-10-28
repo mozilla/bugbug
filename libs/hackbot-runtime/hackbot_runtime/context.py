@@ -102,12 +102,12 @@ class HackbotContext(BaseSettings):
     _prepared_ref: str | None = PrivateAttr(default=None)
 
     @classmethod
-    def from_config(cls, config_path: Path) -> "HackbotContext":
+    def from_config(cls, config_path: Path) -> HackbotContext:
         """Build from ``hackbot.toml`` at ``config_path`` plus env-derived fields."""
         return cls.from_config_obj(load_config(config_path))
 
     @classmethod
-    def from_config_obj(cls, config: HackbotConfig) -> "HackbotContext":
+    def from_config_obj(cls, config: HackbotConfig) -> HackbotContext:
         """Build from an already-parsed config plus env-derived fields."""
         obj = cls()
         obj._config = config
@@ -198,7 +198,7 @@ class HackbotContext(BaseSettings):
         return self._repo_path
 
     @cached_property
-    def firefox(self) -> "FirefoxContext":
+    def firefox(self) -> FirefoxContext:
         """Firefox build paths derived from the prepared source checkout.
 
         Importing ``agent_tools.firefox`` lazily keeps the base runtime free of

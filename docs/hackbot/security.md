@@ -102,8 +102,9 @@ authority. See [triggers.md](triggers.md).
 ## Authorizing `@hackbot` mentions
 
 A webhook signature proves the delivery came from Phabricator; it says nothing about _who_
-commented. So the comment author must additionally be a member of the `bmo-editbugs-team`
-project. [triggers.md](triggers.md) covers that check and the other guards on the path.
+commented. So the comment author must additionally be a member of a configured Phabricator
+project. A Bugzilla `needinfo?` is held to the same bar: the requester must be in a configured
+Bugzilla group. [triggers.md](triggers.md) covers that check and the other guards on the path.
 
 ## Authorizing Slack clicks
 

@@ -58,7 +58,7 @@ class FirefoxContext:
     @classmethod
     def from_source_repo(
         cls, source_repo: Path, objdir: str = "objdir-ff-asan"
-    ) -> "FirefoxContext":
+    ) -> FirefoxContext:
         src = source_repo.resolve()
         objdir_path = src / objdir
         return cls(

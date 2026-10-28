@@ -242,6 +242,12 @@ class SubmitPatchHandler:
         summary = params.get("summary")
         test_plan = params.get("test_plan")
 
+        if not str(bug_id).isdigit():
+            return ActionResult.failed(
+                f"bug_id {bug_id!r} is not a bug number; if it references a "
+                "bugzilla.create_bug action, that action has not been applied."
+            )
+
         try:
             raw = await ctx.download_artifact(_DIFF_ARTIFACT_KEY)
             submission = json.loads(raw)
@@ -310,10 +316,11 @@ class SubmitPatchHandler:
 class UpdatePatchHandler:
     """Applies ``phabricator.update_patch``: a new diff on an existing revision.
 
-    Only the diff changes: title, summary, bug id, and review status are left
-    exactly as they are, so an update never overwrites something a reviewer or
-    the patch author has since edited. The revision's fields are read only to
-    rebuild the ``local:commits`` message, which has to match the revision. The
+    Title, summary, and test plan change only when the agent passed new ones
+    (to reword the commit message); bug id and review status are always left
+    as they are, so an update never overwrites something a reviewer or the
+    patch author has since edited. The revision's fields are read to rebuild
+    the ``local:commits`` message, which has to match the revision. The
     previous diff's commit author is preserved so updating a patch does not
     silently replace the author's identity with Hackbot's synthetic commit
     identity.
@@ -347,18 +354,34 @@ class UpdatePatchHandler:
                 repositoryPHID=await _repository_phid(),
                 **submission["diff"],
             )
+            transactions: list[dict[str, Any]] = [
+                {"type": "update", "value": diff_result["phid"]}
+            ]
+            title = fields.get("title") or f"D{revision_id}"
+            summary = fields.get("summary")
+            test_plan = fields.get("testPlan")
+            if params.get("title"):
+                title = _revision_title(params["title"])
+                transactions.append({"type": "title", "value": title})
+            if params.get("summary"):
+                summary = params["summary"]
+                transactions.append({"type": "summary", "value": summary})
+            if params.get("test_plan"):
+                test_plan = params["test_plan"]
+                transactions.append({"type": "testPlan", "value": test_plan})
+
             await _conduit_request(
                 "differential.revision.edit",
                 objectIdentifier=revision_id,
-                transactions=[{"type": "update", "value": diff_result["phid"]}],
+                transactions=transactions,
             )
 
             await _set_local_commits(
                 diff_result["diffid"],
                 submission["local_commits"],
-                fields.get("title") or f"D{revision_id}",
-                fields.get("summary"),
-                fields.get("testPlan"),
+                title,
+                summary,
+                test_plan,
                 fields.get("bugzilla.bug-id"),
                 revision_id,
             )
