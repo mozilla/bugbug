@@ -250,7 +250,9 @@ class Retriever(object):
             # To add runnables that didn't run on a push as (verified) negatives, we need to know on
             # which pushes each runnable ran, and when each push was backed out.
             if non_run_negatives:
-                runs, rev_to_push = test_scheduling.index_runs(push_data_iter())
+                runs, rev_to_push, regressions = test_scheduling.index_runs(
+                    push_data_iter()
+                )
                 backout_push: dict[int, int] = {}
                 for node, commit_data in commit_map.items():
                     backedoutby = commit_data["backedoutby"]
@@ -355,6 +357,7 @@ class Retriever(object):
                             runs,
                             non_run_negatives,
                             random.Random(i),
+                            regressions,
                         )
                     )
                     runnables_to_consider += sorted(non_run)

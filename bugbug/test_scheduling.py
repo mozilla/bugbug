@@ -883,16 +883,23 @@ NON_RUN_NEGATIVES_MAX_LATER = 100
 
 def index_runs(
     push_data: Iterable[PushResult],
-) -> tuple[dict[Runnable, list[int]], dict[Revision, int]]:
-    """Map each runnable to the (sorted) indices of the pushes it ran on, and each revision to its push index."""
+) -> tuple[dict[Runnable, list[int]], dict[Revision, int], dict[Runnable, list[int]]]:
+    """Index the runs of the runnables.
+
+    Returns each runnable's (sorted) indices of the pushes it ran on, each revision's push index, and
+    each runnable's (sorted) indices of the pushes it was reported as a (possible or likely) regression of.
+    """
     runs: dict[Runnable, list[int]] = collections.defaultdict(list)
     rev_to_push: dict[Revision, int] = {}
-    for i, (revisions, _, push_runnables, _, _) in enumerate(push_data):
+    regressions: dict[Runnable, list[int]] = collections.defaultdict(list)
+    for i, (revisions, _, push_runnables, possible, likely) in enumerate(push_data):
         for revision in revisions:
             rev_to_push[revision] = i
         for runnable in push_runnables:
             runs[runnable].append(i)
-    return runs, rev_to_push
+        for runnable in set(possible) | set(likely):
+            regressions[runnable].append(i)
+    return runs, rev_to_push, regressions
 
 
 def get_non_run_negatives(
@@ -903,12 +910,16 @@ def get_non_run_negatives(
     runs: dict[Runnable, list[int]],
     count: int,
     rng: random.Random,
+    regressions: dict[Runnable, list[int]] | None = None,
 ) -> list[Runnable]:
     """Sample runnables that didn't run on a push but are known to have passed with its changes.
 
     A runnable that didn't run on the push is a verified negative if it ran on a later push while the
     push's changes were still in the tree (up to `end_index`, i.e. before the push was backed out), since
-    a failure there would have been attributed to the push as a regression.
+    a failure there would have been attributed to the push as a regression. Unless its first run after the
+    push failed and the failure was attributed to a later push (`regressions`, see index_runs): with no run
+    in between, the attribution can't tell the pushes apart, so the runnable didn't verifiably pass. A
+    failure after a pass doesn't matter, as the pass happened with the push's changes.
     """
     pool = [c for c in candidates if c not in excluded]
     sampled = rng.sample(pool, min(count, len(pool)))
@@ -916,8 +927,16 @@ def get_non_run_negatives(
     for runnable in sampled:
         push_indices = runs.get(runnable, [])
         pos = bisect.bisect_right(push_indices, push_index)
-        if pos < len(push_indices) and push_indices[pos] <= end_index:
-            verified.append(runnable)
+        if pos >= len(push_indices) or push_indices[pos] > end_index:
+            continue
+
+        first_run = push_indices[pos]
+        regression_indices = regressions.get(runnable, []) if regressions else []
+        pos = bisect.bisect_right(regression_indices, push_index)
+        if pos < len(regression_indices) and regression_indices[pos] <= first_run:
+            continue
+
+        verified.append(runnable)
     return verified
 
 
