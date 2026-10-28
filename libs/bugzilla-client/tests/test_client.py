@@ -162,7 +162,7 @@ async def test_bugs_get_sends_ids(bugzilla):
     assert bugs == body["bugs"]
     params = requests[0].url.params
     assert params["id"] == "1,2,3"
-    assert params.get_list("include_fields") == ["id", "summary"]
+    assert params["include_fields"] == "id,summary"
 
 
 async def test_comments_get_for_bugs_fetches_many_bugs_in_one_request(bugzilla):

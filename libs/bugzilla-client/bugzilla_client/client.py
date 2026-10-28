@@ -16,6 +16,7 @@ either with ``async with`` or by calling :meth:`BugzillaClient.close`::
 
 import base64
 import logging
+from collections.abc import Collection
 from types import TracebackType
 from typing import Any, Self
 
@@ -157,7 +158,7 @@ class _Bugs(_Resource):
     """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/bug.html."""
 
     async def get(
-        self, ids: list[int], *, include_fields: list[str] | None = None
+        self, ids: Collection[int], *, include_fields: Collection[str] | None = None
     ) -> list[dict[str, Any]]:
         """Fetch bugs by id in one request.
 
@@ -168,7 +169,7 @@ class _Bugs(_Resource):
             return []
         params: dict[str, Any] = {"id": ",".join(str(i) for i in ids)}
         if include_fields:
-            params["include_fields"] = include_fields
+            params["include_fields"] = ",".join(include_fields)
         result = await self._client.request("GET", "bug", params=params)
         return result["bugs"]
 
@@ -207,7 +208,7 @@ class _Bugs(_Resource):
 class _Comments(_Resource):
     """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/comment.html."""
 
-    async def get(self, comment_ids: list[int]) -> dict[int, dict[str, Any]]:
+    async def get(self, comment_ids: Collection[int]) -> dict[int, dict[str, Any]]:
         """Map each comment id to its comment, fetched in one request."""
         if not comment_ids:
             return {}
@@ -222,7 +223,9 @@ class _Comments(_Resource):
             for comment_id, comment in result["comments"].items()
         }
 
-    async def get_for_bugs(self, bug_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    async def get_for_bugs(
+        self, bug_ids: Collection[int]
+    ) -> dict[int, list[dict[str, Any]]]:
         """Map each bug id to its comments, fetched in one request."""
         if not bug_ids:
             return {}
