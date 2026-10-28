@@ -140,6 +140,20 @@ class AutowebcompatDiagnosisInputs(AutowebcompatInputs):
 class AutowebcompatInterventionInputs(AutowebcompatInputs):
     """Inputs for the autowebcompat-intervention agent."""
 
+    revision_id: int | None = None
+    comment: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_follow_up(self) -> "AutowebcompatInterventionInputs":
+        if self.revision_id is not None:
+            if not self.comment:
+                raise ValueError("comment is required when revision_id is set")
+            if self.bug_id is None:
+                raise ValueError("bug_id is required when revision_id is set")
+        elif self.comment is not None:
+            raise ValueError("comment requires revision_id")
+        return self
+
 
 class BuildRepairInputs(BaseModel):
     # Failing Taskcluster build tasks {task_name: task_id}; the agent resolves the
