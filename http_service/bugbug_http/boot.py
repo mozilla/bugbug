@@ -6,15 +6,18 @@
 import collections
 import concurrent.futures
 import contextlib
+import gzip
+import json
 import logging
 import os
+import re
 
 import hglib
 import requests
 import tenacity
 from tqdm import tqdm
 
-from bugbug import repository, test_scheduling, utils
+from bugbug import build_platforms, repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
 logger = logging.getLogger(__name__)
@@ -128,16 +131,19 @@ def boot_worker() -> None:
 
         logger.info("Retrieving known tasks from %s...", revs)
 
-        # Store in a file the list of tasks in the latest autoland pushes. Pushes don't all target
-        # the same tasks (only some of them target almost all), so we use the union of the target
-        # tasks of many pushes, which also protects us from broken decision tasks.
+        # Store in a file the list of tasks in the latest autoland pushes, and the manifests run by
+        # their tasks (to select the configs to run manifests on among the current ones). Pushes
+        # don't all target the same tasks (only some of them target almost all), so we use the union
+        # of the target tasks of many pushes, which also protects us from broken decision tasks.
         known_tasks = set()
+        targets_num = {}
         for rev in revs:
             r = requests.get(
                 f"https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.revision.{rev}.taskgraph.decision/artifacts/public/target-tasks.json"
             )
             if r.ok:
                 known_tasks.update(r.json())
+                targets_num[rev] = len(r.json())
 
         logger.info("Retrieved %d tasks", len(known_tasks))
 
@@ -146,10 +152,59 @@ def boot_worker() -> None:
         with open("known_tasks", "w") as f:
             f.write("\n".join(known_tasks))
 
+        # The manifests run by each task, from the push targeting the most tasks (pushes targeting few
+        # tasks have no test tasks).
+        manifests_by_task: dict[str, list[str]] = {}
+        for rev in sorted(targets_num, key=targets_num.__getitem__, reverse=True)[:3]:
+            r = requests.get(
+                f"https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.revision.{rev}.taskgraph.decision/artifacts/public/manifests-by-task.json.gz"
+            )
+            if not r.ok:
+                continue
+            try:
+                content = gzip.decompress(r.content)
+            except gzip.BadGzipFile:
+                content = r.content
+            manifests_by_task = json.loads(content)
+            if manifests_by_task:
+                break
+
+        # Only the target tasks, as the full task graph also has tasks that don't run on autoland
+        # (e.g. shippable variants), and a group given only configs without tasks on the push
+        # wouldn't run at all. Tasks are compared without their chunk number, which varies between
+        # pushes.
+        def without_chunk(label: str) -> str:
+            return re.sub(r"-\d+$", "", label)
+
+        target_tasks = {without_chunk(task) for task in known_tasks}
+        manifests_by_task = {
+            label: manifests
+            for label, manifests in manifests_by_task.items()
+            if without_chunk(label) in target_tasks
+        }
+        logger.info("Retrieved the manifests of %d tasks", len(manifests_by_task))
+        with open("manifests_by_task.json", "w") as f:
+            json.dump(
+                {
+                    label: sorted(manifests)
+                    for label, manifests in manifests_by_task.items()
+                },
+                f,
+            )
+
+    def retrieve_build_platforms() -> None:
+        # The files built on each platform, see build_platforms.
+        built = build_platforms.retrieve_built_files()
+        with open("build_platforms.json", "w") as f:
+            json.dump(built, f)
+        logger.info("Retrieved the files built on %s.", ", ".join(sorted(built)))
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         clone_autoland_future = executor.submit(clone_autoland)
 
         retrieve_schedulable_tasks_future = executor.submit(retrieve_schedulable_tasks)
+
+        retrieve_build_platforms_future = executor.submit(retrieve_build_platforms)
 
         commits_db_extracted = extract_commits()
         extract_commit_experiences()
@@ -209,5 +264,8 @@ def boot_worker() -> None:
 
         # Wait list of schedulable tasks to be downloaded and written to disk.
         retrieve_schedulable_tasks_future.result()
+
+        clone_autoland_future.result()
+        retrieve_build_platforms_future.result()
 
     logger.info("Worker boot done")
