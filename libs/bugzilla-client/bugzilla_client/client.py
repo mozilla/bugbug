@@ -166,7 +166,7 @@ class _Bugs(_Resource):
         failing the request, so callers must not assume one bug per id.
         """
         if not ids:
-            return []
+            raise ValueError("ids must not be empty")
         params: dict[str, Any] = {"id": ",".join(str(i) for i in ids)}
         if include_fields:
             params["include_fields"] = ",".join(include_fields)
@@ -219,7 +219,7 @@ class _Comments(_Resource):
     async def get(self, comment_ids: Collection[int]) -> dict[int, dict[str, Any]]:
         """Map each comment id to its comment, fetched in one request."""
         if not comment_ids:
-            return {}
+            raise ValueError("comment_ids must not be empty")
         # Repeated ``comment_ids=2&comment_ids=3``: Bugzilla rejects comma-joined ids.
         first, *rest = comment_ids
         params = {"comment_ids": rest} if rest else None
@@ -236,7 +236,7 @@ class _Comments(_Resource):
     ) -> dict[int, list[dict[str, Any]]]:
         """Map each bug id to its comments, fetched in one request."""
         if not bug_ids:
-            return {}
+            raise ValueError("bug_ids must not be empty")
         # Repeated ``ids=2&ids=3``: Bugzilla rejects comma-joined ids here.
         first, *rest = bug_ids
         params = {"ids": rest} if rest else None
