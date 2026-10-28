@@ -307,19 +307,19 @@ def _parse(response: httpx.Response) -> dict[str, Any]:
     anything else that is not a JSON success (e.g. a proxy's HTML error page)
     is reported by its HTTP status.
     """
+    unexpected = (
+        f"Unexpected Bugzilla response: HTTP {response.status_code} "
+        f"for {response.request.url}"
+    )
     try:
         data = response.json()
-    except ValueError:
-        data = None
+    except ValueError as exc:
+        raise BugzillaError(unexpected, status=response.status_code) from exc
 
     if isinstance(data, dict) and data.get("error"):
         raise BugzillaError(
             data["message"], code=data["code"], status=response.status_code
         )
     if response.is_error or not isinstance(data, dict):
-        raise BugzillaError(
-            f"Unexpected Bugzilla response: HTTP {response.status_code} "
-            f"for {response.request.url}",
-            status=response.status_code,
-        )
+        raise BugzillaError(unexpected, status=response.status_code)
     return data
