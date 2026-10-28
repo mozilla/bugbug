@@ -215,61 +215,75 @@ class _Bugs(_Resource):
 class _Comments(_Resource):
     """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/comment.html."""
 
-    async def get(self, comment_ids: Collection[int]) -> dict[int, dict[str, Any]]:
-        """Map each comment id to its comment, fetched in one request."""
-        if not comment_ids:
-            raise ValueError("comment_ids must not be empty")
-        # Repeated ``comment_ids=2&comment_ids=3``: Bugzilla rejects comma-joined ids.
-        first, *rest = comment_ids
-        params = {"comment_ids": rest} if rest else None
-        result = await self._client.request(
-            "GET", f"bug/comment/{first}", params=params
-        )
-        return {
-            int(comment_id): comment
-            for comment_id, comment in result["comments"].items()
-        }
+    async def get(
+        self,
+        *,
+        bug_ids: Collection[int] = (),
+        comment_ids: Collection[int] = (),
+    ) -> dict[str, dict[int, Any]]:
+        """Comments by bug and/or by comment id, fetched in one request.
 
-    async def get_for_bugs(
-        self, bug_ids: Collection[int]
-    ) -> dict[int, list[dict[str, Any]]]:
-        """Map each bug id to its comments, fetched in one request."""
-        if not bug_ids:
-            raise ValueError("bug_ids must not be empty")
-        # Repeated ``ids=2&ids=3``: Bugzilla rejects comma-joined ids here.
-        first, *rest = bug_ids
-        params = {"ids": rest} if rest else None
-        result = await self._client.request(
-            "GET", f"bug/{first}/comment", params=params
-        )
+        Returns ``{"bugs": {bug_id: [comment, ...]}, "comments": {comment_id:
+        comment}}``, like Bugzilla's answer.
+        """
+        if not bug_ids and not comment_ids:
+            raise ValueError("bug_ids or comment_ids must not be empty")
+        # The path takes one id, the rest go in the query. Ids are repeated
+        # (``ids=2&ids=3``): Bugzilla rejects comma-joined ids here.
+        if bug_ids:
+            first, *rest = bug_ids
+            path = f"bug/{first}/comment"
+            params = {"ids": rest, "comment_ids": list(comment_ids)}
+        else:
+            first, *rest = comment_ids
+            path = f"bug/comment/{first}"
+            params = {"comment_ids": rest}
+        result = await self._client.request("GET", path, params=params)
         return {
-            int(bug_id): data["comments"] for bug_id, data in result["bugs"].items()
+            "bugs": {int(i): bug["comments"] for i, bug in result["bugs"].items()},
+            "comments": {int(i): c for i, c in result["comments"].items()},
         }
 
 
 class _Attachments(_Resource):
     """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/attachment.html."""
 
-    async def get_for_bug(
-        self, bug_id: int, *, include_data: bool = False
-    ) -> list[dict[str, Any]]:
-        """The attachments on a bug, without their content unless asked."""
-        params = None if include_data else {"exclude_fields": "data"}
-        result = await self._client.request(
-            "GET", f"bug/{bug_id}/attachment", params=params
-        )
-        return result["bugs"][str(bug_id)]
-
     async def get(
-        self, attachment_id: int, *, include_data: bool = False
-    ) -> dict[str, Any] | None:
-        """One attachment, or ``None`` if Bugzilla did not return it."""
-        params = None if include_data else {"exclude_fields": "data"}
-        result = await self._client.request(
-            "GET", f"bug/attachment/{attachment_id}", params=params
-        )
-        # BMO answers an unknown id with an empty result, not an error.
-        return result["attachments"].get(str(attachment_id))
+        self,
+        *,
+        bug_ids: Collection[int] = (),
+        attachment_ids: Collection[int] = (),
+        include_data: bool = False,
+    ) -> dict[str, dict[int, Any]]:
+        """Attachments by bug and/or by attachment id, fetched in one request.
+
+        Returns ``{"bugs": {bug_id: [attachment, ...]}, "attachments":
+        {attachment_id: attachment}}``, like Bugzilla's answer, without the
+        file content unless ``include_data``. BMO leaves unknown attachment
+        ids out of the result rather than failing.
+        """
+        if not bug_ids and not attachment_ids:
+            raise ValueError("bug_ids or attachment_ids must not be empty")
+        # The path takes one id, the rest go in the query. Ids are repeated
+        # (``ids=2&ids=3``): Bugzilla rejects comma-joined ids here.
+        if bug_ids:
+            first, *rest = bug_ids
+            path = f"bug/{first}/attachment"
+            params: dict[str, Any] = {
+                "ids": rest,
+                "attachment_ids": list(attachment_ids),
+            }
+        else:
+            first, *rest = attachment_ids
+            path = f"bug/attachment/{first}"
+            params = {"attachment_ids": rest}
+        if not include_data:
+            params["exclude_fields"] = "data"
+        result = await self._client.request("GET", path, params=params)
+        return {
+            "bugs": {int(i): atts for i, atts in result["bugs"].items()},
+            "attachments": {int(i): a for i, a in result["attachments"].items()},
+        }
 
     async def create(self, bug_id: int, data: bytes, fields: dict[str, Any]) -> int:
         """Attach a file to a bug and return the new attachment id.

@@ -166,42 +166,53 @@ async def test_bugs_get_sends_ids(bugzilla):
     assert params["include_fields"] == "id,summary"
 
 
-async def test_comments_get_for_bugs_fetches_many_bugs_in_one_request(bugzilla):
+async def test_comments_get_by_bugs_and_comment_ids_in_one_request(bugzilla):
     body = {
         "bugs": {
             "1": {"comments": [_comment(10, 1)]},
             "2": {"comments": [_comment(20, 2), _comment(21, 2)]},
             "3": {"comments": []},
-        }
+        },
+        "comments": {"30": _comment(30, 4)},
     }
     handler, requests = _recorder(httpx.Response(200, json=body))
 
-    comments = await bugzilla(handler).comments.get_for_bugs([1, 2, 3])
+    comments = await bugzilla(handler).comments.get(bug_ids=[1, 2, 3], comment_ids=[30])
 
-    assert {bug_id: [c["id"] for c in cs] for bug_id, cs in comments.items()} == {
+    assert {i: [c["id"] for c in cs] for i, cs in comments["bugs"].items()} == {
         1: [10],
         2: [20, 21],
         3: [],
     }
+    assert list(comments["comments"]) == [30]
     (request,) = requests
     assert request.url.path == "/rest/bug/1/comment"
     # Repeated, not comma-joined: Bugzilla rejects ``ids=2,3``.
     assert request.url.params.get_list("ids") == ["2", "3"]
+    assert request.url.params.get_list("comment_ids") == ["30"]
 
 
-async def test_comments_get_fetches_many_comments_in_one_request(bugzilla):
-    body = {"bugs": {}, "comments": {"10": _comment(10, 1), "20": _comment(20, 2)}}
+async def test_attachments_get_by_bugs_and_attachment_ids_in_one_request(bugzilla):
+    body = {
+        "bugs": {"1": [_attachment(10, 1)], "2": []},
+        "attachments": {"30": _attachment(30, 4)},
+    }
     handler, requests = _recorder(httpx.Response(200, json=body))
 
-    comments = await bugzilla(handler).comments.get([10, 20])
+    attachments = await bugzilla(handler).attachments.get(
+        bug_ids=[1, 2], attachment_ids=[30]
+    )
 
-    assert {comment_id: c["bug_id"] for comment_id, c in comments.items()} == {
-        10: 1,
-        20: 2,
+    assert {i: [a["id"] for a in atts] for i, atts in attachments["bugs"].items()} == {
+        1: [10],
+        2: [],
     }
+    assert list(attachments["attachments"]) == [30]
     (request,) = requests
-    assert request.url.path == "/rest/bug/comment/10"
-    assert request.url.params.get_list("comment_ids") == ["20"]
+    assert request.url.path == "/rest/bug/1/attachment"
+    assert request.url.params.get_list("ids") == ["2"]
+    assert request.url.params.get_list("attachment_ids") == ["30"]
+    assert request.url.params["exclude_fields"] == "data"
 
 
 async def test_update_bug_returns_changes(bugzilla):
