@@ -277,6 +277,11 @@
       "channel": "#tabbrowser-triage-bots"
     },
     {
+      "product": "Toolkit",
+      "component": "Picture-in-Picture",
+      "channel": "#pip-triage"
+    },
+    {
       "product": "Firefox",
       "component": "General",
       "channel": "#fx-toolkit-general-triage-notifications"

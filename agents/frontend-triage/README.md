@@ -83,6 +83,7 @@ and the channel each reports to:
 | `Firefox :: Tabbed Browser`                                     | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Tab Groups`                         | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Split View`                         | `#tabbrowser-triage-bots`                  |
+| `Toolkit :: Picture-in-Picture`                                 | `#pip-triage`                              |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
