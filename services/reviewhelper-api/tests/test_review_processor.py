@@ -1,4 +1,4 @@
-from app.config import settings
+from app.config import Settings, settings
 from app.database.models import ReviewRequest
 from app.review_processor import (
     build_generated_comment,
@@ -58,6 +58,12 @@ def test_build_generated_comment_keeps_severity_fields():
     )
     assert generated_comment.confidence == CommentConfidence.HIGH, (
         "The confidence should be persisted."
+    )
+
+
+def test_severity_frontmatter_enabled_by_default():
+    assert Settings.model_fields["severity_frontmatter_enabled"].default is True, (
+        "Severity frontmatter should be enabled by default."
     )
 
 
