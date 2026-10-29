@@ -82,7 +82,7 @@ test = [
     "hypothesis==6.168.5",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
-    "pre-commit==4.6.2",
+    "pre-commit==4.7.0",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
