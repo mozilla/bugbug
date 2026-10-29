@@ -1893,7 +1893,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-pubsub"
-version = "2.39.2"
+version = "2.43.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
@@ -1906,9 +1906,9 @@ dependencies = [
     { name = "proto-plus" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d1/2f/a70b6ba2016acc16ca3e4d357151edda047f63752ddcf8baee29c41e5f94/google_cloud_pubsub-2.39.2.tar.gz", hash = "sha256:934a3ab7496a6da09cd97d866bef3e47092e904688a66f60750895a7484bd585", size = 403181, upload-time = "2026-08-25T19:18:59.568Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/ce/210febb5edd160e9490f1a7a8190fd870f0997fa8be558b2c902461a27d7/google_cloud_pubsub-2.43.0.tar.gz", hash = "sha256:9a0e01876024ecd5e101a3c41cd67fa50ef0c4e39aa56f53b81524599f90e346", size = 398611, upload-time = "2026-10-15T17:49:51.415Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/62/e1/14519798b767f1ce4adf3c239c31bb1a5af607646e293e92ed1770faaa06/google_cloud_pubsub-2.39.2-py3-none-any.whl", hash = "sha256:b1295c6641032aff1dabbddf495b10642a5b547f6783ee4c6bb3365682e71354", size = 323836, upload-time = "2026-08-24T21:55:46.512Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/fe/05daee3bd9ca21bf90ce7cf0f62b95bae07c397e107dc1b6762a809a0098/google_cloud_pubsub-2.43.0-py3-none-any.whl", hash = "sha256:db5436dd2d99774171d13c1bf1fb960b6bf3aa23c15694c50090aa569316d19a", size = 323338, upload-time = "2026-10-15T17:49:22.528Z" },
 ]
 
 [[package]]
