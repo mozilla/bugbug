@@ -62,6 +62,7 @@ on:
           - agents/bug-fix
           - agents/build-repair
           - agents/frontend-triage
+          - agents/gecko-triage
           - agents/test-plan-generator
           - agents/test-repair
           - services/hackbot-api

@@ -323,9 +323,12 @@ async def test_other_agents_do_not_auto_apply():
     # Opting an agent in is a deliberate edit, so spell out who is in today: bug-fix
     # and autowebcompat-intervention auto-apply unconditionally, frontend-triage
     # only when the run vouched for itself, build-repair and test-repair only their
-    # notifications, and everyone else stays human-gated.
+    # notifications, and everyone else stays human-gated. gecko-triage starts
+    # human-gated; turning it on needs only `auto_apply_actions=True`, since it
+    # already asks for the run's consent.
     auto_apply = {n for n, s in AGENT_REGISTRY.items() if s.auto_apply_actions}
     assert auto_apply == {"autowebcompat-intervention", "bug-fix", "frontend-triage"}
+    assert AGENT_REGISTRY["gecko-triage"].auto_apply_requires_consent
     assert AGENT_REGISTRY["test-repair"].always_apply_actions == {
         "email.send",
         "slack.post_message",

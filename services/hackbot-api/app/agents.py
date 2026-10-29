@@ -11,6 +11,7 @@ from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
     FrontendTriageInputs,
+    GeckoTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
     UpliftInputs,
@@ -121,6 +122,23 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         # Except the Slack notification: for a held run it is the only signal that
         # an analysis is waiting, so holding it with the comment hides the run.
         always_apply_actions=frozenset({"slack.post_message"}),
+    ),
+    "gecko-triage": AgentSpec(
+        name="gecko-triage",
+        description=(
+            "Triage a Gecko bug. A team, such as media, adds its own rules. With no "
+            "team, the run uses the shared rules for the bug's component. Inventory "
+            "what the report contains and read its "
+            "profiles and logs. Ask the reporter for what is missing, or set severity "
+            "and priority. Come back when the bug changes."
+        ),
+        job_name="hackbot-agent-gecko-triage",
+        input_schema=GeckoTriageInputs,
+        # Human-gated while the agent is checked by hand: every run waits in the UI.
+        # Set `auto_apply_actions=True` to let vouched runs (`findings.auto_apply`)
+        # reach the bug with nobody in between.
+        auto_apply_actions=False,
+        auto_apply_requires_consent=True,
     ),
     "test-repair": AgentSpec(
         name="test-repair",
