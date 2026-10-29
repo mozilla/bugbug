@@ -175,8 +175,6 @@ tasks:
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_client --cov-append tests/ &&
                     cd ../testrail-client &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=testrail_client --cov-append tests/ &&
-                    cd ../github-client &&
-                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=github_client --cov-append tests/ &&
                     cd ../.. &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:

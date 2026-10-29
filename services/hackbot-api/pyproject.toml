@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Agent orchestration platform that runs agents as Cloud Run Jobs"
 requires-python = ">=3.14"
 dependencies = [
+    "cryptography>=42.0.0",
+    "githubkit[auth-app]>=0.16.0",
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.13.0",

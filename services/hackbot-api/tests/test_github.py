@@ -1,4 +1,4 @@
-"""Tests for the shared GitHub App auth helper."""
+"""Tests for GitHub App authentication and API configuration."""
 
 import asyncio
 import json
@@ -7,14 +7,14 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from github_client import (
+from app.config import GitHubAppSettings, Settings
+from app.github import (
     READ_ONLY_PERMISSIONS,
     READ_WRITE_PERMISSIONS,
     GitHubApp,
-    GitHubAppSettings,
 )
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pydantic import ValidationError
 
 APP_ID = 123
@@ -78,9 +78,23 @@ def _set_env(monkeypatch, **env: str) -> None:
         monkeypatch.setenv(f"GITHUB_{name}", value)
 
 
+def test_github_is_optional_until_credentials_are_deployed(monkeypatch):
+    _set_env(monkeypatch)
+    assert Settings(_env_file=None).github is None
+
+
+def test_settings_errors_do_not_expose_the_private_key(monkeypatch, pem):
+    _set_env(monkeypatch, APP_ID="invalid", PRIVATE_KEY=pem)
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None)
+    assert "PRIVATE KEY" not in str(exc.value)
+    assert "input_value" not in str(exc.value)
+
+
 def test_settings_load_from_env(monkeypatch, pem):
     _set_env(monkeypatch, APP_ID="123", PRIVATE_KEY=pem, INSTALLATION_ID="456")
-    settings = GitHubAppSettings.from_env()
+    settings = Settings(_env_file=None).github
+    assert settings is not None
     assert settings.app_id == 123
     assert settings.installation_id == 456
     assert settings.private_key.get_secret_value() == pem.strip()
@@ -88,7 +102,8 @@ def test_settings_load_from_env(monkeypatch, pem):
 
 def test_settings_accept_a_private_key_with_escaped_newlines(monkeypatch, pem):
     _set_env(monkeypatch, APP_ID="123", PRIVATE_KEY=pem.replace("\n", "\\n"))
-    settings = GitHubAppSettings.from_env()
+    settings = Settings(_env_file=None).github
+    assert settings is not None
     assert settings.private_key.get_secret_value() == pem.strip()
 
 
@@ -98,14 +113,14 @@ def test_settings_require_app_id_and_private_key(monkeypatch, pem, missing):
     del env[missing]
     _set_env(monkeypatch, **env)
     with pytest.raises(ValidationError, match=missing.lower()):
-        GitHubAppSettings.from_env()
+        Settings(_env_file=None)
 
 
 @pytest.mark.parametrize("app_id", ["abc", "0", "-1"])
 def test_settings_reject_an_invalid_app_id(monkeypatch, pem, app_id):
     _set_env(monkeypatch, APP_ID=app_id, PRIVATE_KEY=pem)
     with pytest.raises(ValidationError, match="app_id"):
-        GitHubAppSettings.from_env()
+        Settings(_env_file=None)
 
 
 def _ec_pem() -> str:
@@ -124,7 +139,7 @@ def _ec_pem() -> str:
 def test_settings_reject_anything_but_an_rsa_private_key(monkeypatch, private_key):
     _set_env(monkeypatch, APP_ID="123", PRIVATE_KEY=private_key)
     with pytest.raises(ValidationError, match="PEM-encoded RSA private key") as exc:
-        GitHubAppSettings.from_env()
+        Settings(_env_file=None)
     assert "input_value" not in str(exc.value)
 
 

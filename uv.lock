@@ -16,7 +16,6 @@ members = [
     "bugbug",
     "bugbug-http-service",
     "bugbug-mcp",
-    "github-client",
     "hackbot-agent-autowebcompat-diagnosis",
     "hackbot-agent-autowebcompat-intervention",
     "hackbot-agent-autowebcompat-repro",
@@ -1798,32 +1797,6 @@ wheels = [
 ]
 
 [[package]]
-name = "github-client"
-version = "0.1.0"
-source = { editable = "libs/github-client" }
-dependencies = [
-    { name = "cryptography" },
-    { name = "githubkit", extra = ["auth-app"] },
-    { name = "pydantic-settings" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cryptography", specifier = ">=42.0.0" },
-    { name = "githubkit", extras = ["auth-app"], specifier = ">=0.16.0" },
-    { name = "pydantic-settings", specifier = ">=2.1.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "githubkit"
 version = "0.16.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2629,7 +2602,9 @@ dependencies = [
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "cloud-sql-python-connector", extra = ["asyncpg"] },
+    { name = "cryptography" },
     { name = "fastapi" },
+    { name = "githubkit", extra = ["auth-app"] },
     { name = "google-auth" },
     { name = "google-cloud-pubsub" },
     { name = "google-cloud-run" },
@@ -2667,7 +2642,9 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "cachetools", specifier = ">=5.3.0" },
     { name = "cloud-sql-python-connector", extras = ["asyncpg"], specifier = ">=1.5.0" },
+    { name = "cryptography", specifier = ">=42.0.0" },
     { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "githubkit", extras = ["auth-app"], specifier = ">=0.16.0" },
     { name = "google-auth", specifier = ">=2.29.0" },
     { name = "google-cloud-pubsub", specifier = ">=2.21.0" },
     { name = "google-cloud-run", specifier = ">=0.10.0" },

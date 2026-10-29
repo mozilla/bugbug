@@ -17,7 +17,7 @@ from githubkit.cache import MemCacheStrategy
 from githubkit.utils import UNSET
 from githubkit_schemas.latest.types import AppPermissionsType
 
-from github_client.config import GitHubAppSettings
+from app.config import GitHubAppSettings
 
 # Requesting a permission the App wasn't granted fails the mint with a 422, so
 # keep these within what the App is configured with. Read-only, so no caller can
