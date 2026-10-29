@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@sentry/nextjs": "^10.74.0",
-    "better-auth": "^1.6.22",
+    "better-auth": "^1.7.7",
     "diff2html": "^3.4.56",
     "next": "^15.5.28",
     "react": "^19.0.0",
