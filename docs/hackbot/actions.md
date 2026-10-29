@@ -117,15 +117,15 @@ until it exists. So a later action can reference an earlier one's result by the 
 returned when it was recorded:
 
 ```
-submit_patch(...)  # -> "Recorded phabricator.submit_patch (ID: action-1a2b3c)."
-add_comment(text="Patch up for review: {{actions.action-1a2b3c.url}}")
+submit_patch(...)  # -> "Recorded phabricator.submit_patch (ID: 1a2b3c)."
+add_comment(text="Patch up for review: {{actions.1a2b3c.url}}")
 ```
 
 A new bug works the same way, through its `bug_id`:
 
 ```
-create_bug(...)  # -> "Recorded bugzilla.create_bug (ID: action-4d5e6f)."
-add_comment(revision_id=..., text="Filed bug {{actions.action-4d5e6f.bug_id}}")
+create_bug(...)  # -> "Recorded bugzilla.create_bug (ID: 4d5e6f)."
+add_comment(revision_id=..., text="Filed bug {{actions.4d5e6f.bug_id}}")
 ```
 
 `{{actions.<action_id>.<field>}}` is substituted at apply time, recursively through params.

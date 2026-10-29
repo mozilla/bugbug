@@ -95,7 +95,7 @@ class ActionsRecorder:
         recording leaves nothing behind: the action the hooks see carries no
         ``attachments`` key yet.
         """
-        action_id = f"action-{uuid.uuid4().hex}"
+        action_id = uuid.uuid4().hex
         action: dict = {
             "type": action_type,
             "params": params,

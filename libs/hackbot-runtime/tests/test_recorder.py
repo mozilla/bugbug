@@ -22,7 +22,7 @@ def test_record_basic_shape():
         {"bug_id": 1, "changes": {"severity": "S2"}},
         reasoning="rule X",
     )
-    assert returned.pop("action_id").startswith("action-")
+    assert len(returned.pop("action_id")) == 32
     assert returned == rec.actions[0]
     assert rec.actions == [
         {
