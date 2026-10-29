@@ -64,17 +64,6 @@ def test_summary_written_for_exception(tmp_path):
     assert "boom" in summary["error"]
 
 
-def test_summary_records_agent_commit(tmp_path, monkeypatch):
-    monkeypatch.setenv("HACKBOT_AGENT_COMMIT", "abc123")
-    ctx = _ctx(tmp_path)
-    _finish(ctx, HackbotAgentResult(num_turns=1))
-
-    summary = json.loads(
-        (tmp_path / "artifacts" / "local-test" / "summary.json").read_text()
-    )
-    assert summary["agent_commit"] == "abc123"
-
-
 def test_removed_action_is_absent_from_summary(tmp_path):
     ctx = _ctx(tmp_path)
     inaccurate = ctx.actions.record(
@@ -236,6 +225,21 @@ def test_run_async_exits_zero_and_writes_summary(tmp_path, monkeypatch):
     summary = json.loads((tmp_path / "t" / "summary.json").read_text())
     assert summary["status"] == "ok"
     assert summary["findings"] == {"num_turns": 1, "total_cost_usd": None}
+
+
+def test_run_async_records_agent_version(tmp_path, monkeypatch):
+    _run_env(tmp_path, monkeypatch)
+    versions = {"hackbot-agent-tests": "1.2.3"}
+    monkeypatch.setattr(runtime.metadata, "version", versions.__getitem__)
+
+    async def main(ctx):
+        return HackbotAgentResult(num_turns=1)
+
+    with pytest.raises(SystemExit):
+        run_async(main)
+
+    summary = json.loads((tmp_path / "t" / "summary.json").read_text())
+    assert summary["agent_version"] == "1.2.3"
 
 
 def test_run_async_exits_nonzero_when_agent_raises(tmp_path, monkeypatch):
