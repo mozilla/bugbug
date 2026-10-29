@@ -85,9 +85,9 @@ def require_api_key(
         claims = id_token.verify_oauth2_token(
             authorization.removeprefix("Bearer "),
             google_requests.Request(),
-            audience=settings.api_audience,
+            audience=settings.hackbot_api_url,
         )
-    except (ValueError, google_auth_exceptions.GoogleAuthError):
+    except ValueError, google_auth_exceptions.GoogleAuthError:
         log.warning("Rejected request with invalid OIDC credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
