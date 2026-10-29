@@ -21,7 +21,8 @@ import { parseTestPlan, TestPlanView } from "./TestPlanView";
 // What a proposed action would write, rendered under its row so the reviewer
 // approves the actual text and not just an action type. A comment carries its
 // body in params.text; a Phabricator submission carries the title and summary of
-// the revision it would open for the patch (previewed by PatchView).
+// the revision it would open for the patch (previewed by PatchView), and an
+// update carries them only when it rewords the existing revision's.
 function actionPreview(
   action: RunAction
 ): { label: string; text: string } | null {
@@ -31,7 +32,10 @@ function actionPreview(
     const body = text(action.params?.text);
     return body ? { label: "Comment preview", text: body } : null;
   }
-  if (action.type === "phabricator.submit_patch") {
+  if (
+    action.type === "phabricator.submit_patch" ||
+    action.type === "phabricator.update_patch"
+  ) {
     const body = [text(action.params?.title), text(action.params?.summary)]
       .filter(Boolean)
       .join("\n\n");

@@ -94,7 +94,7 @@ class BugFixInputs(BaseModel):
     effort: str | None = None
 
     @model_validator(mode="after")
-    def _validate_mode(self) -> "BugFixInputs":
+    def _validate_mode(self) -> BugFixInputs:
         """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
         if self.bugzilla_needinfo_flag_id is not None:
             if self.revision_id is not None:
@@ -123,7 +123,7 @@ class AutowebcompatInputs(BaseModel):
     effort: str | None = None
 
     @model_validator(mode="after")
-    def require_subject(self) -> "AutowebcompatInputs":
+    def require_subject(self) -> AutowebcompatInputs:
         if self.bug_data is None and self.bug_id is None:
             raise ValueError("provide at least one of bug_data or bug_id")
         return self
@@ -139,6 +139,20 @@ class AutowebcompatDiagnosisInputs(AutowebcompatInputs):
 
 class AutowebcompatInterventionInputs(AutowebcompatInputs):
     """Inputs for the autowebcompat-intervention agent."""
+
+    revision_id: int | None = None
+    comment: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_follow_up(self) -> "AutowebcompatInterventionInputs":
+        if self.revision_id is not None:
+            if not self.comment:
+                raise ValueError("comment is required when revision_id is set")
+            if self.bug_id is None:
+                raise ValueError("bug_id is required when revision_id is set")
+        elif self.comment is not None:
+            raise ValueError("comment requires revision_id")
+        return self
 
 
 class BuildRepairInputs(BaseModel):

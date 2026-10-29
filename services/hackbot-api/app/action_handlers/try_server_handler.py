@@ -199,7 +199,7 @@ class PushHandler:
         return ActionResult.ok(
             {
                 "job_id": job_id,
-                # `url` is the field a `{{actions.<ref>.url}}` placeholder reads,
+                # `url` is the field a `{{actions.<action_id>.url}}` placeholder reads,
                 # so it is the one a human would want from a try push.
                 "url": client.treeherder_url(job_id, _TRY_REPO_NAME),
                 "lando_url": client.job_url(job_id),

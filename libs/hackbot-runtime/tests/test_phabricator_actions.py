@@ -23,7 +23,6 @@ async def test_submit_records_test_plan():
         "summary": "Details",
         "test_plan": "uv run pytest tests/test_thing.py (passed)",
     }
-    assert "ref" not in action
 
 
 async def test_submit_records_the_parent_revision_only_when_stacked():
@@ -93,25 +92,42 @@ async def test_submit_accepts_missing_test_plan():
     assert rec.actions[0]["params"]["test_plan"] is None
 
 
-async def test_submit_ref_is_recorded():
-    rec = ActionsRecorder()
-    await phabricator.submit_patch(
-        rec,
-        bug_id=1,
-        title="Fix",
-        reasoning="r",
-        ref="patch",
-    )
-    assert rec.actions[0]["ref"] == "patch"
-
-
 async def test_update_records_only_the_revision_id():
     rec = ActionsRecorder()
     await phabricator.update_patch(rec, revision_id=12345, reasoning="r")
     action = rec.actions[0]
     assert action["type"] == "phabricator.update_patch"
-    # Nothing about the revision itself is the agent's to set on an update.
+    # Without new fields, nothing about the revision itself changes.
     assert action["params"] == {"revision_id": 12345}
+
+
+async def test_update_records_only_the_given_fields():
+    rec = ActionsRecorder()
+    await phabricator.update_patch(
+        rec, revision_id=42, title="Bug 1 - Better title", reasoning="r"
+    )
+    assert rec.actions[0]["params"] == {
+        "revision_id": 42,
+        "title": "Bug 1 - Better title",
+    }
+
+
+async def test_update_ignores_empty_fields():
+    rec = ActionsRecorder()
+    await phabricator.update_patch(
+        rec, revision_id=42, title="", summary="", test_plan="", reasoning="r"
+    )
+    assert rec.actions[0]["params"] == {"revision_id": 42}
+
+
+async def test_update_rejects_test_plan_headers():
+    rec = ActionsRecorder()
+    with pytest.raises(ToolError) as exc:
+        await phabricator.update_patch(
+            rec, revision_id=42, summary="Why\n\nTests: ran them", reasoning="r"
+        )
+    assert "call update_patch again" in str(exc.value)
+    assert rec.actions == []
 
 
 async def test_update_requires_revision_id():
@@ -133,10 +149,17 @@ def test_agent_facing_schemas_are_case_specific():
     }
     assert "test_plan" in submit.input_schema["properties"]
 
-    # An update carries the revision id and nothing else: the revision's title,
-    # summary and bug id stay as they are, and there is no new URL to reference.
+    # An update demands the revision id; a new title, summary or test plan is
+    # optional, the bug id is never the agent's to change, and there is no new
+    # URL to reference.
     assert set(update.input_schema["required"]) == {"revision_id", "reasoning"}
-    assert set(update.input_schema["properties"]) == {"revision_id", "reasoning"}
+    assert set(update.input_schema["properties"]) == {
+        "revision_id",
+        "reasoning",
+        "title",
+        "summary",
+        "test_plan",
+    }
 
 
 async def test_add_comment_records_revision_and_text():

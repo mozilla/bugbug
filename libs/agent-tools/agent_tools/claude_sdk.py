@@ -46,6 +46,7 @@ def build_sdk_server(
     *,
     version: str = "0.1.0",
     prefix_namespace: bool = False,
+    instructions: str | None = None,
 ):
     """Build a claude-agent-sdk ``McpSdkServerConfig`` from tool definitions.
 
@@ -53,9 +54,13 @@ def build_sdk_server(
     names the MCP tools ``<namespace>_<name>`` (used by the shared ``actions``
     server, where one server hosts multiple domains); otherwise the tool name is
     the function name (per-domain servers like ``bugzilla``/``firefox``).
+    ``instructions`` is sent to the model once, when the server connects, for
+    guidance shared by all of its tools.
     """
-    return create_sdk_mcp_server(
+    server = create_sdk_mcp_server(
         name=name,
         version=version,
         tools=[_make_tool(d, ctx, prefix_namespace) for d in tools],
     )
+    server["instance"].instructions = instructions
+    return server
