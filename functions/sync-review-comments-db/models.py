@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import enum
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy import ForeignKey, ScalarResult, UniqueConstraint, func, select
@@ -80,7 +80,7 @@ class ReviewRequest(Base):
 
     @property
     def is_recently_created(self):
-        return (datetime.utcnow() - self.created_at).total_seconds() < 240
+        return datetime.now(timezone.utc) - self.created_at < timedelta(minutes=4)
 
     def has_evaluation(self, session: Session) -> bool:
         if self.status == DiffStatus.IGNORED:
