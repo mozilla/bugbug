@@ -143,7 +143,8 @@ async def ensure_action_rows(
                 idx=idx,
                 type=action["type"],
                 params=action.get("params", {}),
-                ref=action.get("action_id"),
+                # TODO: Drop the `ref` fallback once older summaries are gone.
+                ref=action.get("action_id", action.get("ref")),
                 status="pending",
             )
             db.add(row)
