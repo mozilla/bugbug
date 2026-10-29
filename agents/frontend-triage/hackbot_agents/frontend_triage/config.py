@@ -2999,6 +2999,66 @@ TRIAGE_SCOPE = (
         ),
         related=("Firefox :: Tabbed Browser",),
     ),
+    ScopedComponent(
+        "Toolkit",
+        "Picture-in-Picture",
+        "#pip-triage",
+        trees=(
+            "browser/components/pictureinpicture/",
+            "browser/extensions/pictureinpicture/",
+            "toolkit/actors/PictureInPictureChild.sys.mjs",
+            "toolkit/components/pictureinpicture/",
+        ),
+        owns=(
+            "browser/components/pictureinpicture/",
+            "browser/extensions/pictureinpicture/",
+            "toolkit/actors/PictureInPictureChild.sys.mjs",
+            "toolkit/components/pictureinpicture/",
+        ),
+        notes=(
+            '**The settings checkbox is not the master switch.** "Use '
+            'Picture-in-Picture" in Settings is '
+            "`media.videocontrols.picture-in-picture.video-toggle.enabled`, which only "
+            "hides the toggle on videos. The feature itself is "
+            "`media.videocontrols.picture-in-picture.enabled`, and the urlbar button "
+            "and opening PiP on tab switch have their own prefs "
+            "(`media.videocontrols.picture-in-picture.urlbar-button.enabled`, "
+            "`media.videocontrols.picture-in-picture.enable-when-switching-tabs.enabled`), "
+            'so "PiP still appears with the checkbox off" is which entry point the '
+            "reporter means, not a pref that failed to apply (bug 2033786 is the open "
+            "auto-PiP case). A toggle missing on one site is often the page setting "
+            "`disablePictureInPicture`, which is respected while "
+            "`media.videocontrols.picture-in-picture.respect-disablePictureInPicture` "
+            "is true.\n\n"
+            "**Per-site symptoms are usually a site wrapper, not toolkit.** The generic "
+            "player only mirrors WebVTT `textTracks`, so captions a site draws in its "
+            "own DOM appear only through a wrapper's `setCaptionContainerObserver`. "
+            '"Captions missing on site X" with no entry in '
+            "`browser/extensions/pictureinpicture/data/picture_in_picture_overrides.js` "
+            "is therefore a request for a new wrapper, and with an entry it is the "
+            "site's markup changing under the wrapper in "
+            "`browser/extensions/pictureinpicture/video-wrappers/`; about 1 in 9 of this "
+            "year's bugs are this. The same holds for the urlbar button: wrappers can "
+            "veto it per video through `isUrlbarToggleEligible` (bug 2041113 added it "
+            "for YouTube previews), so a button that shows or hides wrongly on one site "
+            "starts in its wrapper.\n\n"
+            "**Two other features share the name.** Page-initiated "
+            "`HTMLVideoElement.requestPictureInPicture()` goes through "
+            "`dom/media/PictureInPictureService.cpp` (`Core :: Audio/Video`) into "
+            "`browser/components/pictureinpicture/DesktopPictureInPictureProvider.sys.mjs` "
+            "and then the same player window, so it is this component once it reaches "
+            "the provider. Document Picture-in-Picture "
+            "(`documentPictureInPicture.requestWindow()`, `dom/documentpip/`) is "
+            "`Core :: DOM: Core & HTML` and opens an arbitrary document rather than this "
+            "player, though its bugs are often filed here.\n\n"
+            "**Toolkit coverage is heavy, wrapper coverage is not.** 85 `browser_*.js` "
+            "tests in `toolkit/components/pictureinpicture/tests/` mean an empty "
+            "`relevant_tests` is almost always wrong for the toggle, player or actor. "
+            "Wrappers have only "
+            "`browser/extensions/pictureinpicture/tests/browser/browser_mock_wrapper.js`, "
+            "so no automated test covers a specific site."
+        ),
+    ),
     # The three buckets, which are where a filing lands when the reporter could not pick
     # a component. Grouped at the end rather than beside a related area because they are
     # not an area: they route to one channel for the people who work the unowned queue.
