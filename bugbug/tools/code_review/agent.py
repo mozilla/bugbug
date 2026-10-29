@@ -51,6 +51,7 @@ from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
     format_patch_set,
 )
+from bugbug.tools.core.data_types import CommentCategory, CommentSeverity
 from bugbug.tools.core.exceptions import (
     LargeDiffError,
     RecursionLimitError,
@@ -317,10 +318,13 @@ class CodeReviewTool(GenerativeModelTool):
         filtered_suggestions = self.suggestion_filterer.run(unfiltered_suggestions)
 
         # The patch-scope suggestion is a deliberate, meta-level comment, so it
-        # bypasses the suggestion filterer and is always sorted last.
+        # bypasses the suggestion filterer, is always sorted last, and always
+        # has a fixed `minor` severity regardless of what the model chose.
         scope_suggestions = await self.assess_patch_scope(patch, patch_summary)
         for offset, suggestion in enumerate(scope_suggestions):
             suggestion.order = len(filtered_suggestions) + offset + 1
+            suggestion.severity = CommentSeverity.MINOR
+            suggestion.category = CommentCategory.SCOPE
 
         inline_comments = list(
             convert_generated_comments_to_inline(

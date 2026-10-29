@@ -23,6 +23,10 @@ from app.enums import (
     ReviewerStatus,
     ReviewStatus,
 )
+from bugbug.tools.core.data_types import (
+    CommentCategory,
+    CommentSeverity,
+)
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -141,6 +145,12 @@ class GeneratedComment(Base):
     line_end: Mapped[int]
     on_new: Mapped[bool]
     content: Mapped[str] = mapped_column(Text)
+    severity: Mapped[CommentSeverity | None] = mapped_column(
+        Enum(CommentSeverity, name="comment_severity_enum")
+    )
+    category: Mapped[CommentCategory | None] = mapped_column(
+        Enum(CommentCategory, name="comment_category_enum")
+    )
 
     # ID assigned by the platform after posting the comment
     platform_comment_id: Mapped[int | None] = mapped_column(BigInteger)
