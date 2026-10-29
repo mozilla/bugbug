@@ -12,7 +12,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
-from app import gcs, jobs
+from app import bz_token, gcs, jobs
 from app.schemas import RunStatus
 
 
@@ -21,7 +21,7 @@ def _stub_gcp(monkeypatch):
     async def fake_policy(run_id):
         return {"url": "https://upload.example/", "fields": {"key": "v"}}
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, broker_env=None):
         return "projects/p/locations/l/jobs/j/executions/e"
 
     monkeypatch.setattr(gcs, "run_prefix", lambda run_id: f"results/{run_id}/")
@@ -133,6 +133,21 @@ def test_a_run_that_cannot_start_records_why_and_keeps_its_key(
     assert db.added.status == RunStatus.failed.value
     assert "no quota" in db.added.error
     assert db.added.dedupe_key == "push:autoland:abc"
+
+
+def test_a_run_whose_token_cannot_be_minted_is_failed_not_left_pending(
+    client, db, monkeypatch
+):
+    # Minting happens after the claim is committed, so a failure there must
+    # mark the run failed like any other start failure, or it sits in pending.
+    def fail(**_k):
+        raise RuntimeError("IAM refused to sign")
+
+    monkeypatch.setattr(bz_token, "broker_env_for", fail)
+
+    assert _create_keyed(client).status_code == 502
+    assert db.added.status == RunStatus.failed.value
+    assert "IAM refused to sign" in db.added.error
 
 
 @pytest.mark.parametrize("raw", ["", "   ", "x" * 500])

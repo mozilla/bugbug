@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -11,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import gcs, jobs, pubsub
+from app import bz_token, gcs, jobs, pubsub
 from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
@@ -182,7 +183,21 @@ async def create_run(
             "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
         }
-        execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
+        # The broker's per-run environment, carrying this run's Bugzilla
+        # capability token when the agent has a registered scope. Built from
+        # the registry, not from `payload`, so the caller has no say in what
+        # the run may read. In a thread because signing is a blocking IAM call.
+        broker_env = await asyncio.to_thread(
+            bz_token.broker_env_for,
+            run_id=str(run_id),
+            agent=agent.name,
+            scope=agent.bugzilla_scope,
+            inputs=inputs,
+            requested_by=on_behalf_of,
+        )
+        execution_name = await jobs.trigger_execution(
+            agent.job_name, env_overrides, broker_env
+        )
     except Exception as exc:
         log.exception("Failed to start execution for run %s", run_id)
         run.status = RunStatus.failed.value
