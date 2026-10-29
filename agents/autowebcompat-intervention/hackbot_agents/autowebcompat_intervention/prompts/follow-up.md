@@ -22,7 +22,7 @@ this run. The revision was verified when you filed it, so start from the comment
 with the Bugzilla tools only if you need context they don't give you, such as the affected page.
 
 The rules below apply to any change you make to the intervention or its test. D{revision_id} already follows them,
-including the version bump, so keep your change consistent with them rather than redoing that work.
+so keep your change consistent with them rather than redoing that work.
 
 {instructions}
 
