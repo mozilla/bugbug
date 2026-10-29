@@ -6,6 +6,7 @@ import os
 import pytest
 from google.auth.exceptions import GoogleAuthError
 from hackbot_runtime import anthropic_wif
+from hackbot_runtime.config import AnthropicWifSettings
 from hackbot_runtime.providers import ProviderError
 
 
@@ -21,17 +22,17 @@ def _reset_module_state():
 @pytest.fixture
 def _no_federation_env(monkeypatch):
     for var in (
-        anthropic_wif.RULE_ID_ENV,
-        anthropic_wif.TOKEN_FILE_ENV,
-        anthropic_wif.REFRESH_INTERVAL_ENV,
+        AnthropicWifSettings.RULE_ID_ENV,
+        AnthropicWifSettings.TOKEN_FILE_ENV,
+        AnthropicWifSettings.REFRESH_INTERVAL_ENV,
     ):
         monkeypatch.delenv(var, raising=False)
 
 
 def test_is_enabled_follows_rule_id(monkeypatch):
-    monkeypatch.delenv(anthropic_wif.RULE_ID_ENV, raising=False)
+    monkeypatch.delenv(AnthropicWifSettings.RULE_ID_ENV, raising=False)
     assert anthropic_wif.is_enabled() is False
-    monkeypatch.setenv(anthropic_wif.RULE_ID_ENV, "fdrl_abc")
+    monkeypatch.setenv(AnthropicWifSettings.RULE_ID_ENV, "fdrl_abc")
     assert anthropic_wif.is_enabled() is True
 
 
@@ -47,13 +48,13 @@ def test_configure_is_inert_without_federation(_no_federation_env, monkeypatch):
 
     assert anthropic_wif.configure() is False
     assert called is False
-    assert anthropic_wif.TOKEN_FILE_ENV not in os.environ
+    assert AnthropicWifSettings.TOKEN_FILE_ENV not in os.environ
 
 
 def test_configure_writes_token_and_sets_env(_no_federation_env, monkeypatch, tmp_path):
     token_file = tmp_path / "identity-token"
-    monkeypatch.setenv(anthropic_wif.RULE_ID_ENV, "fdrl_abc")
-    monkeypatch.setenv(anthropic_wif.TOKEN_FILE_ENV, str(token_file))
+    monkeypatch.setenv(AnthropicWifSettings.RULE_ID_ENV, "fdrl_abc")
+    monkeypatch.setenv(AnthropicWifSettings.TOKEN_FILE_ENV, str(token_file))
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
         anthropic_wif, "fetch_gcp_identity_token", lambda *a, **k: "google.jwt.token"
@@ -62,14 +63,16 @@ def test_configure_writes_token_and_sets_env(_no_federation_env, monkeypatch, tm
     assert anthropic_wif.configure() is True
 
     assert token_file.read_text() == "google.jwt.token"
-    assert os.environ[anthropic_wif.TOKEN_FILE_ENV] == str(token_file)
+    assert os.environ[AnthropicWifSettings.TOKEN_FILE_ENV] == str(token_file)
 
 
 def test_configure_refuses_when_api_key_set(
     _no_federation_env, monkeypatch, tmp_path, caplog
 ):
-    monkeypatch.setenv(anthropic_wif.RULE_ID_ENV, "fdrl_abc")
-    monkeypatch.setenv(anthropic_wif.TOKEN_FILE_ENV, str(tmp_path / "identity-token"))
+    monkeypatch.setenv(AnthropicWifSettings.RULE_ID_ENV, "fdrl_abc")
+    monkeypatch.setenv(
+        AnthropicWifSettings.TOKEN_FILE_ENV, str(tmp_path / "identity-token")
+    )
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-leftover")
     monkeypatch.setattr(
         anthropic_wif, "fetch_gcp_identity_token", lambda *a, **k: "tok"
@@ -88,8 +91,8 @@ def test_configure_refuses_when_api_key_set(
 
 
 def test_configure_is_idempotent(_no_federation_env, monkeypatch, tmp_path):
-    monkeypatch.setenv(anthropic_wif.RULE_ID_ENV, "fdrl_abc")
-    monkeypatch.setenv(anthropic_wif.TOKEN_FILE_ENV, str(tmp_path / "tok"))
+    monkeypatch.setenv(AnthropicWifSettings.RULE_ID_ENV, "fdrl_abc")
+    monkeypatch.setenv(AnthropicWifSettings.TOKEN_FILE_ENV, str(tmp_path / "tok"))
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     calls = 0
@@ -108,7 +111,7 @@ def test_configure_is_idempotent(_no_federation_env, monkeypatch, tmp_path):
 
 
 def test_configure_defaults_token_path_when_unset(_no_federation_env, monkeypatch):
-    monkeypatch.setenv(anthropic_wif.RULE_ID_ENV, "fdrl_abc")
+    monkeypatch.setenv(AnthropicWifSettings.RULE_ID_ENV, "fdrl_abc")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
         anthropic_wif, "fetch_gcp_identity_token", lambda *a, **k: "tok"
@@ -116,7 +119,7 @@ def test_configure_defaults_token_path_when_unset(_no_federation_env, monkeypatc
 
     assert anthropic_wif.configure() is True
 
-    path = os.environ[anthropic_wif.TOKEN_FILE_ENV]
+    path = os.environ[AnthropicWifSettings.TOKEN_FILE_ENV]
     assert "anthropic-wif-" in path
     assert os.path.exists(path)
 
@@ -136,7 +139,7 @@ def test_fetch_uses_google_auth_with_audience(monkeypatch):
     token = anthropic_wif.fetch_gcp_identity_token()
 
     assert token == "signed.jwt.value"
-    assert captured["audience"] == anthropic_wif.ANTHROPIC_AUDIENCE
+    assert captured["audience"] == AnthropicWifSettings.ANTHROPIC_AUDIENCE
     assert captured["request"] is not None
 
 
@@ -160,18 +163,18 @@ def test_fetch_rejects_empty(monkeypatch):
 @pytest.mark.parametrize(
     "raw, expected",
     [
-        (None, anthropic_wif.DEFAULT_REFRESH_INTERVAL),
+        (None, AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL),
         ("900", 900),
-        ("not-a-number", anthropic_wif.DEFAULT_REFRESH_INTERVAL),
-        ("0", anthropic_wif.DEFAULT_REFRESH_INTERVAL),
-        ("-5", anthropic_wif.DEFAULT_REFRESH_INTERVAL),
+        ("not-a-number", AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL),
+        ("0", AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL),
+        ("-5", AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL),
     ],
 )
 def test_refresh_interval_parsing(monkeypatch, raw, expected):
     if raw is None:
-        monkeypatch.delenv(anthropic_wif.REFRESH_INTERVAL_ENV, raising=False)
+        monkeypatch.delenv(AnthropicWifSettings.REFRESH_INTERVAL_ENV, raising=False)
     else:
-        monkeypatch.setenv(anthropic_wif.REFRESH_INTERVAL_ENV, raw)
+        monkeypatch.setenv(AnthropicWifSettings.REFRESH_INTERVAL_ENV, raw)
     assert anthropic_wif._refresh_interval() == expected
 
 
