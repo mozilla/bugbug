@@ -40,8 +40,6 @@ class BrokerInputs(BaseSettings):
     bugzilla_api_url: str
     bugzilla_api_key: str
     phabricator: PhabricatorSettings
-    host: str = "0.0.0.0"
-    port: int = 8765
 
     model_config = SettingsConfigDict(
         extra="ignore",
@@ -59,7 +57,8 @@ def _mcp_endpoint(manager: StreamableHTTPSessionManager):
     return handler
 
 
-def build_app(inputs: BrokerInputs) -> Starlette:
+def build_app() -> Starlette:
+    inputs = BrokerInputs()
     client = bugsy.Bugsy(
         api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
     )
@@ -84,10 +83,8 @@ def build_app(inputs: BrokerInputs) -> Starlette:
     async def lifespan(app):
         async with bugzilla_manager.run(), phabricator_manager.run():
             log.info(
-                "broker ready on %s:%d (bugzilla + phabricator read-only, "
-                "phabricator conduit proxy)",
-                inputs.host,
-                inputs.port,
+                "broker ready (bugzilla + phabricator read-only, "
+                "phabricator conduit proxy)"
             )
             yield
 
@@ -102,4 +99,4 @@ def build_app(inputs: BrokerInputs) -> Starlette:
 
 
 if __name__ == "__main__":
-    run_broker(build_app, BrokerInputs)
+    run_broker(build_app)

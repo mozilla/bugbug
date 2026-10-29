@@ -1,14 +1,8 @@
 from hackbot_runtime import broker
 from hackbot_runtime.broker import run_broker
-from pydantic_settings import BaseSettings
 
 
-class _Settings(BaseSettings):
-    host: str = "0.0.0.0"
-    port: int = 8765
-
-
-def test_run_broker_serves_app_built_from_settings(monkeypatch):
+def test_run_broker_serves_app_on_env_port(monkeypatch):
     monkeypatch.setenv("PORT", "9999")
     app = object()
     served = {}
@@ -18,6 +12,6 @@ def test_run_broker_serves_app_built_from_settings(monkeypatch):
 
     monkeypatch.setattr(broker.uvicorn, "run", fake_uvicorn_run)
 
-    run_broker(lambda settings: app, _Settings)
+    run_broker(lambda: app)
 
     assert served == {"app": app, "host": "0.0.0.0", "port": 9999}
