@@ -11,7 +11,7 @@ from typing import NoReturn
 import sentry_sdk
 from pydantic import ValidationError
 
-from hackbot_runtime import anthropic_wif, openai_wif, wandb_wif
+from hackbot_runtime import anthropic_wif, openai_wif, otari, wandb_wif
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.results import HackbotAgentResult
@@ -206,6 +206,7 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
     sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
+        otari.configure(ctx.run_id, resolve_agent_name(entrypoint))
         _configure_auth()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = entrypoint(ctx)
@@ -225,6 +226,7 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
     sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
+        otari.configure(ctx.run_id, resolve_agent_name(entrypoint))
         _configure_auth()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = asyncio.run(entrypoint(ctx))
