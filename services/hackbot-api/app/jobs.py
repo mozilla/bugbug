@@ -41,26 +41,50 @@ def _job_resource_name(job_name: str) -> str:
 
 
 _AGENT_CONTAINER_NAME = "agent"
+_BROKER_CONTAINER_NAME = "broker"
+
+
+def _broker_env() -> dict[str, str]:
+    """Env the API hands every broker on top of its deploy-time config."""
+    env: dict[str, str] = {}
+    if settings.phabricator.edge_key:
+        env["PHABRICATOR_EDGE_KEY"] = settings.phabricator.edge_key
+    return env
+
+
+def _has_broker(job_resource_name: str) -> bool:
+    job = _jobs_client().get_job(name=job_resource_name)
+    return any(
+        container.name == _BROKER_CONTAINER_NAME
+        for container in job.template.template.containers
+    )
+
+
+def _env_vars(env: dict[str, str]) -> list[run_v2.EnvVar]:
+    return [run_v2.EnvVar(name=k, value=v) for k, v in env.items()]
 
 
 def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
-    # Each agent's Job manifest declares two containers: `agent` (no
-    # tokens) and `broker` (holds tokens, fully configured at deploy
-    # time). Per-execution env overrides target only the agent
-    # container by name so the broker's env (Secret Manager-backed) is
-    # untouched.
-    overrides = run_v2.RunJobRequest.Overrides(
-        container_overrides=[
+    job_resource_name = _job_resource_name(job_name)
+    container_overrides = [
+        run_v2.RunJobRequest.Overrides.ContainerOverride(
+            name=_AGENT_CONTAINER_NAME, env=_env_vars(env_overrides)
+        )
+    ]
+    broker_env = _broker_env()
+    if broker_env and _has_broker(job_resource_name):
+        container_overrides.append(
             run_v2.RunJobRequest.Overrides.ContainerOverride(
-                name=_AGENT_CONTAINER_NAME,
-                env=[run_v2.EnvVar(name=k, value=v) for k, v in env_overrides.items()],
+                name=_BROKER_CONTAINER_NAME, env=_env_vars(broker_env)
             )
-        ],
+        )
+    overrides = run_v2.RunJobRequest.Overrides(
+        container_overrides=container_overrides,
         timeout={"seconds": settings.job_execution_timeout_seconds},
         task_count=1,
     )
     request = run_v2.RunJobRequest(
-        name=_job_resource_name(job_name),
+        name=job_resource_name,
         overrides=overrides,
     )
     operation = _jobs_client().run_job(request=request)
