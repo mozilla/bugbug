@@ -82,7 +82,7 @@ failure commit {failure_commit}.
      above: one line per push with how many tasks passed or failed the manifest,
      and a header naming the first failing and last passing push. Chunks are
      scheduled per manifest, so a green job does not mean the manifest ran; this
-     is the only reliable timeline. `{commit_range}` is roughly the last 100
+     is the only reliable timeline. `{commit_range}` is roughly the last 20
      pushes. If the last pass is older than the oldest push it covers, or the
      header says the failure predates the window, the culprit is not in this push:
      "classification" is "regression", "culprit_commit" null, "candidate_commits"

@@ -2,6 +2,8 @@ ARG BUGBUG_VERSION=latest
 
 FROM mozilla/bugbug-commit-retrieval:$BUGBUG_VERSION
 
+ENV UV_PYTHON_DOWNLOADS=never
+
 # Install dependencies first
 RUN --mount=type=bind,source=pyproject.toml,target=/tmp/workspace/pyproject.toml \
 	--mount=type=bind,source=uv.lock,target=/tmp/workspace/uv.lock \

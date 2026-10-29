@@ -19,6 +19,14 @@ from hackbot_runtime.actions import testrail as _testrail
 from hackbot_runtime.actions import try_server as _try_server
 from hackbot_runtime.actions.recorder import ActionsRecorder
 
+INSTRUCTIONS = """\
+Each recorded action returns its ID. A later action can use an earlier action's \
+result (`url`, or `bug_id` for a new bug) as `{{actions.<action_id>.<field>}}`; \
+it is filled in when the actions are applied. For example, if an action returned \
+`(ID: e42219b46c164b2c97785769d6bd1b3e)`, its `url` is \
+`{{actions.e42219b46c164b2c97785769d6bd1b3e.url}}`.
+"""
+
 
 def actions_server_for(
     recorder: ActionsRecorder | None,
@@ -47,7 +55,11 @@ def actions_server_for(
         wanted = set(types)
         tools = [t for t in tools if t.dotted in wanted]
     return recorder, build_sdk_server(
-        ACTIONS_SERVER_NAME, recorder, tools, prefix_namespace=True
+        ACTIONS_SERVER_NAME,
+        recorder,
+        tools,
+        prefix_namespace=True,
+        instructions=INSTRUCTIONS,
     )
 
 

@@ -1,19 +1,21 @@
 import asyncio
 import inspect
 import logging
+import os
 import sys
 import traceback
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import NoReturn
 
+import sentry_sdk
 from pydantic import ValidationError
 
 from hackbot_runtime import anthropic_wif, openai_wif, wandb_wif
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.results import HackbotAgentResult
-from hackbot_runtime.tracing import trace_agent
+from hackbot_runtime.tracing import resolve_agent_name, trace_agent
 
 log = logging.getLogger("hackbot_runtime")
 
@@ -49,6 +51,14 @@ def _configure_auth() -> None:
         log.info("Configured W&B WIF authentication")
 
 
+def _configure_sentry(entrypoint: Callable) -> None:
+    dsn = os.environ.get("SENTRY_DSN")
+    if not dsn:
+        return
+    sentry_sdk.init(dsn=dsn)
+    sentry_sdk.set_tag("agent", resolve_agent_name(entrypoint))
+
+
 def _configure_logging() -> None:
     if not logging.getLogger().handlers:
         logging.basicConfig(
@@ -64,7 +74,7 @@ def _ok_payload(ctx: HackbotContext, findings: dict) -> dict:
         "status": "ok",
         "error": None,
         "findings": findings,
-        "actions": ctx.actions.actions,
+        "actions": ctx.actions.list_actions(),
     }
 
 
@@ -75,7 +85,7 @@ def _error_payload(
         "status": "error",
         "error": error,
         "findings": {"traceback": traceback_str} if traceback_str else {},
-        "actions": ctx.actions.actions,
+        "actions": ctx.actions.list_actions(),
     }
 
 
@@ -188,10 +198,12 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
 
 
 def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
+    _configure_sentry(entrypoint)
     _configure_logging()
     ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
         raise SystemExit(2)
+    sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
         _configure_auth()
@@ -205,10 +217,12 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
 
 
 def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
+    _configure_sentry(entrypoint)
     _configure_logging()
     ctx = _load_hackbot(entrypoint, config)
     if ctx is None:
         raise SystemExit(2)
+    sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
         _configure_auth()
