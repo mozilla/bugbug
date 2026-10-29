@@ -107,6 +107,8 @@ async def push(
     Your working-directory changes are pushed as-is, so finish your edits first.
     This records the push for review rather than performing it, so you will not
     see the results.
+
+    Later actions can reference its `url`.
     """
     cleaned_tasks = [task.strip() for task in (tasks or []) if task and task.strip()]
     if cleaned_tasks and auto:

@@ -113,6 +113,8 @@ async def submit_patch(
     edits first, then call this once you are done. Calling it records the
     submission as a proposed action for review; it is not sent to Phabricator
     during the run.
+
+    Later actions can reference its `revision_id` and `url`.
     """
     _validate_summary(summary)
     params: dict = {
