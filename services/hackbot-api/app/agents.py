@@ -11,6 +11,7 @@ from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
     FrontendTriageInputs,
+    PerftestRepairInputs,
     TestPlanGeneratorInputs,
     TestRepairInputs,
     UpliftInputs,
@@ -133,6 +134,19 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         input_schema=TestRepairInputs,
         auto_apply_actions=False,
         always_apply_actions=frozenset({"email.send", "slack.post_message"}),
+    ),
+    "perftest-repair": AgentSpec(
+        name="perftest-repair",
+        description=(
+            "Investigate an intermittent perf test failure bug (mozperftest, "
+            "raptor/browsertime, talos): diagnose it, suggest a fix, push the "
+            "fix to try with retriggers, and report to Slack. It reads "
+            "Bugzilla but never writes to it."
+        ),
+        job_name="hackbot-agent-perftest-repair",
+        input_schema=PerftestRepairInputs,
+        # Push first, so the report's `{{actions.try.url}}` resolves.
+        always_apply_actions=frozenset({"try_server.push", "slack.post_message"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",

@@ -1,0 +1,9 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+
+# Only used when a run sets SKIP_FIREFOX_BUILD=false; most perf test fixes are to
+# harness or test scripts and are not verified with a local build.
+[firefox]
+enabled = true
+objdir = "objdir-perftest-repair"
