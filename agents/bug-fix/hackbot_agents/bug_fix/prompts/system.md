@@ -78,8 +78,6 @@ The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `try_ser
 
 When you record `phabricator_submit_patch` to create a new revision, do not also record `bugzilla_add_comment` in the same run. The patch description already appears as a Bugzilla comment, so another comment would be redundant.
 
-When recording a Try push, include its Treeherder URL as {{{{actions.<ref>.url}}}} in the Phabricator revision's test_plan. Record the Try push before submitting the Phabricator patch.
-
 Before calling any action tool, state in your response:
 
 - **What** action you are recording and **why** (cite the specific rule)

@@ -53,9 +53,8 @@ async def submit_patch(
         int | str,
         Field(
             description=(
-                "Bug this patch fixes: a bug number, or "
-                "{{actions.<ref>.bug_id}} for a bug filed by create_bug in "
-                "this run."
+                "Bug this patch fixes: a bug number, or a reference to a bug "
+                "filed by create_bug in this run."
             )
         ),
     ],
@@ -77,8 +76,7 @@ async def submit_patch(
         str | None,
         Field(
             description=(
-                "Revision test plan. If you recorded a Try push, include "
-                "its Treeherder URL using {{actions.<ref>.url}}."
+                "Revision test plan. If you recorded a Try push, link it here."
             )
         ),
     ] = None,
@@ -90,17 +88,6 @@ async def submit_patch(
                 "history. Do not restate the bug, narrate the investigation or "
                 "implementation process. Keep test and verification details in "
                 "test_plan instead."
-            ),
-        ),
-    ] = None,
-    ref: Annotated[
-        str | None,
-        Field(
-            description=(
-                "Optional label for this action so a later action (e.g. a "
-                "bugzilla.add_comment in the same run) can reference its "
-                "result once applied, via {{actions.<ref>.url}} in that "
-                "action's text."
             ),
         ),
     ] = None,
@@ -127,12 +114,7 @@ async def submit_patch(
     submission as a proposed action for review; it is not sent to Phabricator
     during the run.
 
-    Set `ref` if you want to reference the new revision's URL from another action
-    in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
-    bug comment).
-
-    To fix a bug you file in the same run, record ``bugzilla.create_bug`` with a
-    `ref` first, then pass `bug_id` as `{{actions.<ref>.bug_id}}`.
+    Later actions can reference its `revision_id` and `url`.
     """
     _validate_summary(summary, "submit_patch")
     params: dict = {
@@ -143,9 +125,7 @@ async def submit_patch(
     }
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
-    action = recorder.record(
-        SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning, ref=ref
-    )
+    action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 

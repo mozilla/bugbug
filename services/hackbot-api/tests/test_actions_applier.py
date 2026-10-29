@@ -1,6 +1,6 @@
 """Tests for the action applier.
 
-Covers the {{actions.<ref>.<field>}} placeholder resolver, the succeeded-run
+Covers the {{actions.<action_id>.<field>}} placeholder resolver, the succeeded-run
 gate + per-agent auto-apply opt-in and per-run consent in `on_run_completed`, and
 the manual `apply_all_pending` path — see app/actions_applier.py.
 """
