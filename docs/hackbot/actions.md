@@ -44,6 +44,8 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
 | `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`, `title`, `summary`, `test_plan`                  |
 | `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                           |
+| `github.add_comment` | Comment on a pull request conversation | `repo`, `pull_number`, `text` |
+| `github.add_inline_comments` | Review a pull request with inline comments | `repo`, `pull_number`, `comments`, `summary` |
 | `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
 | `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
 | `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
