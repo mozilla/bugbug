@@ -41,21 +41,32 @@ def _job_resource_name(job_name: str) -> str:
 
 
 _AGENT_CONTAINER_NAME = "agent"
+_BROKER_CONTAINER_NAME = "broker"
 
 
-def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
-    # Each agent's Job manifest declares two containers: `agent` (no
-    # tokens) and `broker` (holds tokens, fully configured at deploy
-    # time). Per-execution env overrides target only the agent
-    # container by name so the broker's env (Secret Manager-backed) is
-    # untouched.
+def _trigger_sync(
+    job_name: str,
+    env_overrides: dict[str, str],
+    broker_env_overrides: dict[str, str],
+) -> str:
+    # Each agent's Job manifest declares two containers: `agent` (no tokens)
+    # and `broker` (holds tokens, Secret Manager-backed). Per-execution env
+    # overrides target each container by name, so the broker only ever gets
+    # its own overrides.
+    container_overrides = [
+        run_v2.RunJobRequest.Overrides.ContainerOverride(
+            name=_AGENT_CONTAINER_NAME,
+            env=[run_v2.EnvVar(name=k, value=v) for k, v in env_overrides.items()],
+        ),
+        run_v2.RunJobRequest.Overrides.ContainerOverride(
+            name=_BROKER_CONTAINER_NAME,
+            env=[
+                run_v2.EnvVar(name=k, value=v) for k, v in broker_env_overrides.items()
+            ],
+        ),
+    ]
     overrides = run_v2.RunJobRequest.Overrides(
-        container_overrides=[
-            run_v2.RunJobRequest.Overrides.ContainerOverride(
-                name=_AGENT_CONTAINER_NAME,
-                env=[run_v2.EnvVar(name=k, value=v) for k, v in env_overrides.items()],
-            )
-        ],
+        container_overrides=container_overrides,
         timeout={"seconds": settings.job_execution_timeout_seconds},
         task_count=1,
     )
@@ -67,8 +78,14 @@ def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
     return operation.metadata.name
 
 
-async def trigger_execution(job_name: str, env_overrides: dict[str, str]) -> str:
-    return await asyncio.to_thread(_trigger_sync, job_name, env_overrides)
+async def trigger_execution(
+    job_name: str,
+    env_overrides: dict[str, str],
+    broker_env_overrides: dict[str, str],
+) -> str:
+    return await asyncio.to_thread(
+        _trigger_sync, job_name, env_overrides, broker_env_overrides
+    )
 
 
 def _execution_status_sync(execution_name: str) -> ExecutionStatus:

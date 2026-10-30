@@ -14,6 +14,7 @@ import uvicorn
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
+from hackbot_runtime import configure_broker_sentry
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
@@ -62,6 +63,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    configure_broker_sentry(main)
     inputs = BrokerInputs()
     app = build_app(inputs)
     uvicorn.run(app, host=inputs.host, port=inputs.port, log_config=None)

@@ -329,6 +329,38 @@ def test_agent_exception_reported_to_sentry_with_agent_tag(tmp_path, monkeypatch
     assert event["tags"]["run_id"] == "t"
 
 
+def test_broker_exception_reported_to_sentry_with_agent_tag(monkeypatch):
+    monkeypatch.setenv("SENTRY_DSN", "https://key@sentry.example/1")
+    events = []
+
+    class _Capture(Transport):
+        def capture_envelope(self, envelope):
+            events.extend(item.payload.json for item in envelope.items)
+
+    real_init = sentry_sdk.init
+
+    def init(**kwargs):
+        real_init(transport=_Capture(), **kwargs)
+
+    monkeypatch.setattr(runtime.sentry_sdk, "init", init)
+
+    def main():
+        pass
+
+    runtime.configure_broker_sentry(main)
+    try:
+        token = "real-api-key"  # noqa: F841
+        raise RuntimeError("broker down")
+    except RuntimeError:
+        sentry_sdk.capture_exception()
+    sentry_sdk.flush()
+
+    (event,) = [e for e in events if e.get("exception")]
+    assert event["tags"]["agent"] == "tests"
+    (frame,) = event["exception"]["values"][0]["stacktrace"]["frames"]
+    assert "vars" not in frame
+
+
 def test_publish_file_copies_locally_without_uploader(tmp_path):
     ctx = _ctx(tmp_path)
     log = tmp_path / "agent.log"
