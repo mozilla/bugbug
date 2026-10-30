@@ -93,7 +93,7 @@ def generate_push_status(
 
     ``label_state`` is ``culprit``, ``pending``, ``rejected`` or ``clean``. Only
     settled clean pushes are negatives, for every test identity and each of
-    their non-backout commits. ``settled`` is false for pushes older than the
+    their commits. ``settled`` is false for pushes older than the
     alerts window, whose alerts are not in the snapshot.
     """
     states = get_push_label_states(regressions)
@@ -126,13 +126,13 @@ def read_push_status() -> list[dict[str, Any]]:
 def iter_clean_commits(
     statuses: Iterable[dict[str, Any]],
 ) -> Iterator[tuple[dict[str, Any], dict[str, Any]]]:
-    """Yield ``(status, commit)`` for each non-backout commit of a settled clean push.
+    """Yield ``(status, commit)`` for each commit of a settled clean push.
 
-    These are the negative candidates shared by both model datasets.
+    These are the negative candidates shared by both model datasets. Backouts
+    are included, as they are among the positives: a revert is a real code
+    change, and one that regressed nothing is as clean as any other commit.
     """
     for status in statuses:
         if not status["settled"] or status["label_state"] != "clean":
             continue
-        for commit in status["commits"]:
-            if not commit["backout"]:
-                yield status, commit
+        yield from ((status, commit) for commit in status["commits"])

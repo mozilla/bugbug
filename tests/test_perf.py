@@ -12,7 +12,7 @@ import responses
 import zstandard
 
 from bugbug import db, perf
-from bugbug.perf import extraction, regression_commits
+from bugbug.perf import commit_risk, extraction, regression_commits
 
 RS = perf.RECORD_SEP
 US = perf.UNIT_SEP
@@ -1141,9 +1141,11 @@ def test_pairs_and_push_status_and_negatives() -> None:
     # Culprit pushes yield only their positives, never negatives.
     assert ("c", "talos-g1") not in labeled and ("d", "talos-g1") not in labeled
     assert ("e", "browsertime-tp6-firefox-amazon") not in labeled
-    # Clean pushes yield a negative per non-backout commit and candidate identity.
+    # Clean pushes yield a negative per commit and candidate identity, backouts
+    # included and flagged.
     assert labeled[("a", "talos-g1")] == 0
-    assert not any(k[0] == "f" for k in labeled)
+    assert labeled[("f", "talos-g1")] == 0
+    assert all(r["backout"] == (r["node"][0] == "f") for r in rows)
     assert labeled[("b", "browsertime-tp6-firefox-amazon")] == 0
     assert all("landing_id" in r and "push_id" in r for r in rows)
 
@@ -1191,8 +1193,8 @@ def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
     assert positives[0]["summary_ids"] == [100]
     assert "weight" not in positives[0] and "tier" not in positives[0]
     assert len(negatives) == 2
-    # Backouts and every commit of a culprit push are never negatives.
-    assert all(n["node"] not in ("c" * 40, "d" * 40, "f" * 40) for n in negatives)
+    # No commit of a culprit push is a negative.
+    assert all(n["node"] not in ("c" * 40, "d" * 40) for n in negatives)
 
     perf.assign_train_test_splits(selected, test_fraction=0.3)
     assert [r["split"] for r in selected] == ["train", "train", "test"]
@@ -1232,6 +1234,77 @@ def test_attach_commit_patches_skips_empty_diffs(monkeypatch) -> None:
     assert [e["node"][0] for e in exported] == ["2"]
 
 
+@pytest.mark.parametrize(
+    "changeset, expected_reason",
+    [
+        ({"desc": "Bug 1 - Change something"}, None),
+        ({"desc": "Backed out changeset abc123 for perf regressions"}, None),
+        ({"parents": ["p1", "p2"]}, "merge"),
+        (
+            {
+                "author": "moz-wptsync-bot <wptsync@mozilla.com>",
+                "desc": "Bug 1 [wpt PR 42] - Sync tests, a=testonly",
+            },
+            "wptsync",
+        ),
+        ({"desc": "Bug 1 - Sync tests\n\nwpt-pr: 42"}, "wptsync"),
+        (
+            {"desc": "Bug 1 - Reformat tree. # ignore-this-changeset"},
+            "ignore-this-changeset",
+        ),
+        # A backout is scored unless the change it reverts is itself ignored.
+        ({"desc": "Backed out changeset abc123\n\nwpt-pr: 42"}, "wptsync"),
+    ],
+)
+def test_ignore_reason_rules(changeset, expected_reason) -> None:
+    assert commit_risk.get_ignore_reason(changeset) == expected_reason
+
+
+def test_changeset_from_patch_reads_the_export_header() -> None:
+    patch = (
+        b"# HG changeset patch\n# User Developer <dev@example.com>\n# Date 1 0\n"
+        b"#      Thu Jan 01 00:00:00 1970 +0000\n# Node ID " + b"1" * 40 + b"\n"
+        b"# Parent  " + b"2" * 40 + b"\n# Parent  " + b"3" * 40 + b"\n"
+        b"Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset\n\n"
+        b"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n"
+    )
+    assert commit_risk.changeset_from_patch(patch) == {
+        "author": "Developer <dev@example.com>",
+        "parents": ["2" * 40, "3" * 40],
+        "desc": "Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset",
+    }
+
+
+def test_attach_commit_patches_skips_commits_the_predictor_ignores(
+    monkeypatch,
+) -> None:
+    records = [{"node": str(i) * 40} for i in range(1, 6)]
+    parent = b"# Parent  " + b"0" * 40 + b"\n"
+    headers = {
+        b"1": b"# User moz-wptsync-bot <wptsync@mozilla.com>\n"
+        + parent
+        + b"Bug 1 - Sync\n",
+        b"2": b"# User a@b.c\n" + parent + parent + b"Merge autoland to central\n",
+        b"3": b"# User a@b.c\n"
+        + parent
+        + b"Bug 2 - Reformat # ignore-this-changeset\n",
+        b"4": b"# User a@b.c\n" + parent + b"Backed out changeset 123456789abc\n",
+        b"5": b"# User a@b.c\n" + parent + b"Bug 3 - Ordinary change\n",
+    }
+
+    def fake_patches(repo_dir, revs):
+        return [
+            b"# HG changeset patch\n" + headers[rev[:1]] + b"\ndiff --git a/f b/f\n+x\n"
+            for rev in revs
+        ]
+
+    monkeypatch.setattr(regression_commits, "export_hg_patches", fake_patches)
+    exported = list(perf.attach_commit_patches(records, "/nonexistent"))
+    # Backouts are kept; merges, wpt syncs and ignore-this-changeset are dropped.
+    assert [e["node"][0] for e in exported] == ["4", "5"]
+    assert exported[0]["commit_message"] == "Backed out changeset 123456789abc"
+
+
 def test_revert_is_pinned_through_the_summary_bug() -> None:
     # Real case: a revert caused the regression. The sheriff linked the reverted
     # bug, whose regressed_by describes that bug's own history, not the revert.
@@ -1264,7 +1337,7 @@ def test_revert_is_pinned_through_the_summary_bug() -> None:
         [regression], statuses, negative_ratio=1, seed=0
     )
     assert [e["node"][0] for e in exported if e["label"] == 1] == ["9"]
-    assert all(not e["backout"] for e in exported if e["label"] == 0)
+    assert sum(e["label"] == 0 for e in exported) == 1
 
 
 def test_regression_window_is_bounded_by_push_time() -> None:
@@ -1306,12 +1379,13 @@ def test_labeled_window_excludes_pushes_before_the_alerts_window() -> None:
         (12, "c"),
         (12, "d"),
         (13, "e"),
+        (14, "f"),
     ]
     db.write(perf.PERF_PAIRS_DB, [])
     db.write(perf.PERF_PUSH_STATUS_DB, statuses)
     assert perf.read_push_status() == statuses
     negatives = {r["node"][0] for r in perf.iter_labeled_pairs({"talos-g1"})}
-    assert negatives == {"c", "d", "e"}  # a, b are unlabeled; f is a backout
+    assert negatives == {"c", "d", "e", "f"}  # a, b are unlabeled
 
     exported = perf.select_export_commits([], statuses, negative_ratio=1, seed=0)
     assert exported == []  # no positives, so no negatives are sampled

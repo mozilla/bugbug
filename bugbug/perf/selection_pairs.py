@@ -128,7 +128,7 @@ def iter_labeled_pairs(
                     "push_time": status["push_time"],
                     "node": commit["node"],
                     "bug_id": commit["bug_id"],
-                    "backout": False,
+                    "backout": commit["backout"],
                     "landing_id": commit["landing_id"],
                     "landing_size": commit["landing_size"],
                     "pinned_by": None,

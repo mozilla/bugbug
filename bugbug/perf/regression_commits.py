@@ -12,12 +12,14 @@ clean commits, ``assign_train_test_splits`` holds out the newest rows as the tes
 ``export`` command of ``scripts/perf_alerts_retriever.py`` runs the three.
 """
 
+import collections
 import logging
 import random
 from typing import Any, Iterable, Iterator
 
 import hglib
 
+from bugbug.perf.commit_risk import changeset_from_patch, get_ignore_reason
 from bugbug.perf.label_policy import POLICY_VERSION, POSITIVE_OUTCOMES
 from bugbug.perf.push_status import iter_clean_commits
 
@@ -151,11 +153,13 @@ def attach_commit_patches(
     """Attach commit message and diff from the local clone to each record.
 
     Commits are exported ``chunk_size`` at a time. A failing chunk is retried
-    one commit at a time. Revisions missing from the clone and commits with
-    an empty diff, such as merges, are dropped with a warning.
+    one commit at a time. Revisions missing from the clone, commits the
+    predictor never scores (:mod:`bugbug.perf.commit_risk`) and commits with
+    an empty diff are dropped with a warning.
     """
     missing = 0
     empty = 0
+    ignored: collections.Counter[str] = collections.Counter()
     for start in range(0, len(records), chunk_size):
         chunk = records[start : start + chunk_size]
         revs = [record["node"].encode("ascii") for record in chunk]
@@ -174,6 +178,10 @@ def attach_commit_patches(
             if patch is None:
                 missing += 1
                 continue
+            reason = get_ignore_reason(changeset_from_patch(patch))
+            if reason is not None:
+                ignored[reason] += 1
+                continue
             message, diff = parse_hg_export(patch)
             if not diff:
                 empty += 1
@@ -187,5 +195,11 @@ def attach_commit_patches(
 
     if missing:
         logger.warning("%d commits were not found in %s", missing, repo_dir)
+    if ignored:
+        logger.warning(
+            "%d commits the predictor never scores were skipped: %s",
+            sum(ignored.values()),
+            dict(ignored),
+        )
     if empty:
         logger.warning("%d commits with an empty diff were skipped", empty)

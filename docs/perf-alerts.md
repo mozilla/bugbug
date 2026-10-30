@@ -11,20 +11,21 @@ package.
 
 ## Code layout
 
-| Module                               | Role                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| `bugbug/redash.py`                   | generic client for ad-hoc SQL on STMO, reusable outside this pipeline |
-| `bugbug/perf/__init__.py`            | public API and dataset registration; `from bugbug import perf`        |
-| `bugbug/perf/label_policy.py`        | every hand-maintained table that decides labels, and `POLICY_VERSION` |
-| `bugbug/perf/task_labels.py`         | pure functions: label parsing, grouping hierarchy, exclusions         |
-| `bugbug/perf/extraction.py`          | query builders and fetch/parse for Treeherder, `fxci` and Bugzilla    |
-| `bugbug/perf/sql/`                   | the SQL templates                                                     |
-| `bugbug/perf/datasets.py`            | dataset paths, registrations, readers and the archive loader          |
-| `bugbug/perf/regression_labeling.py` | `PushIndex`, culprit pinning, labeled regression records              |
-| `bugbug/perf/push_status.py`         | per-push label state and settled flag; the shared source of negatives |
-| `bugbug/perf/selection_pairs.py`     | test selection pairs and the labeled pair stream                      |
-| `bugbug/perf/regression_commits.py`  | commit-level dataset for the regression predictor                     |
-| `bugbug/perf/task_costs.py`          | joining pushes to task costs                                          |
+| Module                               | Role                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| `bugbug/redash.py`                   | generic client for ad-hoc SQL on STMO, reusable outside this pipeline             |
+| `bugbug/perf/__init__.py`            | public API and dataset registration; `from bugbug import perf`                    |
+| `bugbug/perf/label_policy.py`        | every hand-maintained table that decides labels, and `POLICY_VERSION`             |
+| `bugbug/perf/task_labels.py`         | pure functions: label parsing, grouping hierarchy, exclusions                     |
+| `bugbug/perf/extraction.py`          | query builders and fetch/parse for Treeherder, `fxci` and Bugzilla                |
+| `bugbug/perf/sql/`                   | the SQL templates                                                                 |
+| `bugbug/perf/datasets.py`            | dataset paths, registrations, readers and the archive loader                      |
+| `bugbug/perf/regression_labeling.py` | `PushIndex`, culprit pinning, labeled regression records                          |
+| `bugbug/perf/push_status.py`         | per-push label state and settled flag; the shared source of negatives             |
+| `bugbug/perf/selection_pairs.py`     | test selection pairs and the labeled pair stream                                  |
+| `bugbug/perf/regression_commits.py`  | commit-level dataset for the regression predictor                                 |
+| `bugbug/perf/commit_risk.py`         | which commits the regression predictor never scores, shared with the HTTP service |
+| `bugbug/perf/task_costs.py`          | joining pushes to task costs                                                      |
 
 Dependencies point one way: `label_policy` imports nothing from the package,
 `task_labels` reads its tables, `extraction` and `regression_labeling` build on
@@ -133,12 +134,12 @@ grouping (the reverse is impossible):
   commit's bug within its push) and `landing_size`, plus `family`, `category`,
   `framework`, `application`, `platform_families`, `platform_labels`,
   `summary_ids` and `pinned_by`. These are the positives. Pinned regressions
-  label their culprit commits only; unpinned ones label every non-backout
-  commit of the push with `pinned_by` null so consumers can filter them.
+  label their culprit commits only; unpinned ones label every commit of the
+  push with `pinned_by` null so consumers can filter them.
   Likewise, `labels_from_signature` marks rows whose task labels were all
   copied from other alerts of the same signature.
 - `data/perf_push_status.json`: one row per push with `settled`, its
-  non-backout `commits` (node, bug id, landing id and size), and the test
+  `commits` (node, bug id, landing id, size and backout flag), and the test
   identities and platform families that ran. Negatives are not stored: every
   candidate identity on every commit of a settled push that is not a culprit
   push is a clean negative, and `perf_alerts.iter_labeled_pairs()` yields
@@ -152,7 +153,11 @@ the Mercurial clone and writes
 time based `split`. Negatives are sampled at `--negative-ratio` times the number of
 positives from the clean settled commits in `perf_push_status.json`, the same
 rule the selection pairs use, never a commit that is a culprit elsewhere.
-Commits whose diff is empty, such as merges, are skipped.
+Commits the predictor never scores are dropped, under the rules shared with the
+HTTP service in `bugbug/perf/commit_risk.py`: merges, automated `wptsync`
+imports and commits marked `ignore-this-changeset`. Backouts are kept, since a
+revert regresses like any other change. Commits whose diff is empty are
+skipped too.
 
 Flag defaults are the `DEFAULT_*` constants at the top of
 `scripts/perf_alerts_retriever.py`; the pipeline tasks pass no flags, so those
@@ -348,7 +353,7 @@ signature and task label:
 | `policy_version`                                 | int       | rules version                                                                                                                                           |
 
 A settled push whose `label_state` is `clean` is a negative for every
-candidate identity, and so is each of its non-backout commits;
+candidate identity, and so is each of its commits, backouts included;
 `iter_labeled_pairs()` materializes those negatives on the fly. Pending and
 rejected pushes yield neither positives nor negatives. At prediction time, commit scores
 are aggregated to the push by taking the maximum per test.
@@ -416,7 +421,9 @@ record as `policy_version`. Bump it when they change.
   commit of the push is labeled with `pinned_by` null. Each regression also
   records `regressed_by_agrees`, whether the bug link and the summary name the
   same push, as a quality signal.
-- Backout commits are never used as negatives.
+- Backouts are ordinary commits on both sides: a revert can be the culprit,
+  and a revert in a clean push is a negative. Rows keep the `backout` flag so
+  consumers can filter them.
 - Negatives are inferred, not observed: any settled push that is not a culprit
   is clean for every sheriffed test, because the backstop runs every
   performance test and any regression would have been detected and attributed.
