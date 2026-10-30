@@ -2459,7 +2459,7 @@ dev = [
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "searchfox", "vcs"], editable = "libs/agent-tools" },
     { name = "bugsy" },
-    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "claude-agent-sdk", specifier = ">=0.2.165" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },

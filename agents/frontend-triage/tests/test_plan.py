@@ -7,6 +7,8 @@ with nobody in between, so it is covered as closely as the hooks are.
 import re
 from pathlib import Path
 
+from claude_agent_sdk import ClaudeAgentOptions
+from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 from hackbot_agents.frontend_triage.agent import (
     load_system_prompt,
     may_apply_unattended,
@@ -17,6 +19,7 @@ from hackbot_agents.frontend_triage.agent import (
     parse_severity,
     parse_severity_assessment,
     render_scope,
+    write_system_prompt,
 )
 from hackbot_agents.frontend_triage.config import (
     TRIAGE_SCOPE,
@@ -107,7 +110,7 @@ def test_scope_json_matches_the_registry():
 def test_an_unknown_component_gets_every_component():
     # `rules/scoping.md` puts an unlisted component in scope, so guessing one component
     # for it would leave the run with less than it has today. Failing open costs the
-    # notes, which are a few kilobytes now, and nothing else.
+    # notes, which are about 150 KB now, and nothing else.
     assert guidance_for("Firefox", "Graphics") == TRIAGE_SCOPE
     assert guidance_for(None, None) == TRIAGE_SCOPE
 
@@ -124,6 +127,16 @@ def test_only_the_matching_component_reaches_the_prompt():
     # recognisable as one.
     for entry in TRIAGE_SCOPE:
         assert f"**{entry.key}**" in prompt, entry.key
+
+
+def test_a_long_prompt_goes_to_the_cli_as_a_file(tmp_path):
+    # Linux allows 128 KiB for one argv string, and the fallback prompt is past that.
+    # Inline, the CLI never started (bug 7289 on GitHub).
+    system_prompt = write_system_prompt("x" * 200_000, tmp_path)
+    options = ClaudeAgentOptions(system_prompt=system_prompt, cli_path="claude")
+    command = SubprocessCLITransport("", options)._build_command()
+    assert "--system-prompt-file" in command
+    assert max(len(arg.encode()) for arg in command) < 128 * 1024
 
 
 def test_a_nested_owner_wins_over_the_component_that_contains_it():

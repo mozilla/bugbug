@@ -3163,7 +3163,7 @@ def guidance_for(
     **Every** component for one we do not triage, or one the caller could not determine.
     `rules/scoping.md` puts an unlisted component in scope, so guessing would leave those
     runs with less than they have today; failing open costs only the notes, which are now
-    a few kilobytes rather than the whole of the deleted `rules/areas/`.
+    about 150 KB rather than the whole of the deleted `rules/areas/`.
     """
     entry = _SCOPE_BY_KEY.get(
         f"{(product or '').strip()} :: {(component or '').strip()}"
