@@ -110,7 +110,6 @@ def record_email(
     subject: str,
     body_markdown: str,
     attach_patch: bool = False,
-    ref: str | None = None,
 ) -> dict:
     """Record a report the agent was never asked to decide on.
 
@@ -126,7 +125,6 @@ def record_email(
     return recorder.record(
         ACTION_TYPE,
         _params(to, subject, body_markdown, attach_patch),
-        ref=ref,
     )
 
 

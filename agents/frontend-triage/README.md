@@ -83,6 +83,7 @@ and the channel each reports to:
 | `Firefox :: Tabbed Browser`                                     | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Tab Groups`                         | `#tabbrowser-triage-bots`                  |
 | `Firefox :: Tabbed Browser: Split View`                         | `#tabbrowser-triage-bots`                  |
+| `Toolkit :: Picture-in-Picture`                                 | `#pip-triage`                              |
 
 No doc path or URL is listed anywhere here. mozilla-central already records where a
 component is documented in its `SPHINX_TREES` declarations, so `docs.py` runs one
@@ -270,7 +271,7 @@ authorizes.
 
 ## Slack notification
 
-A run that applies itself reports two lines to the channel of the team that owns
+A run reports two lines to the channel of the team that owns
 the bug's component: the bug, linked, with the run's one-line summary, and a link
 to the run. An `S1` the run is confident about adds a `:red_circle:` and names the
 level as `(suggested S1)` — suggested, because nothing was written to the field.
@@ -279,9 +280,9 @@ which omits its severity block on the same threshold. Nothing else — the analy
 is on the bug, the detail is in the run, and the channel already says which
 component this is.
 
-The audience is the team whose bug was just written to by nobody, so only an
-auto-applied run notifies. A medium or low result wrote nothing to Bugzilla and
-stays silent, even if someone applies it by hand later.
+Every run notifies, whether or not it applied itself. A medium or low result wrote
+nothing to Bugzilla, so the message carries `HELD_NOTE` instead: the channel is the
+only place anyone learns there is an analysis waiting on a decision.
 
 Routing is the `channel` on each `TRIAGE_SCOPE` entry in `config.py`, looked up by
 `"<Product> :: <Component>"` through the derived `SLACK_CHANNELS` — so
@@ -296,8 +297,8 @@ Four things about that which are not obvious from reading the registry:
 - **There is deliberately no default channel**, since posting one team's triage into
   another team's channel is worse than silence.
 - **`TRIAGE_SCOPE` is narrower than what the agent will triage.** It is the routing
-  table, and it should stay in step with bugbot's `TRIAGED_COMPONENTS`, which decides
-  what arrives automatically. `scoping.md` puts _any_ user-facing Firefox defect in
+  table, and bugbot reads it, through the generated `scope.json`, to decide what
+  arrives automatically. `scoping.md` puts _any_ user-facing Firefox defect in
   scope, so a bug handed to the agent by hand in some other component is triaged
   normally and reports to nobody. The system prompt says so explicitly, because a list
   of components read as exhaustive is how an in-scope bug gets declared out of scope.
@@ -335,7 +336,8 @@ notifies. The run page shows the failed action.
 
 ## Adding a triage component
 
-One `ScopedComponent` entry in `config.py`, and a row in the table above:
+One `ScopedComponent` entry in `config.py`, a row in the table above, and a
+regenerated `scope.json`:
 
 ```python
 ScopedComponent(
@@ -369,8 +371,13 @@ ScopedComponent(
 - **`related`** ships another component's guidance alongside this one, for bugs that
   routinely turn out to be somewhere else.
 
-`tests/test_plan.py` fails if the entry has no `trees`, if a `related` key does not
-resolve, or if its `notes` name a path the citation hook would then refuse.
+Regenerate `scope.json` from this directory with
+`uv run python -c "from hackbot_agents.frontend_triage.config import scope_json; print(scope_json(), end='')" > scope.json`.
+bugbot fetches it from `master` to decide which components it sends here, so merging
+the entry is what turns automatic triage on; no bugbot change or release is needed.
+
+`tests/test_plan.py` fails if `scope.json` is stale, if the entry has no `trees`, if a
+`related` key does not resolve, or if its `notes` name a path the citation hook would then refuse.
 
 ## Registration
 

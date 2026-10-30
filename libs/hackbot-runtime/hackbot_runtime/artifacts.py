@@ -5,13 +5,24 @@ is configured the artifact is uploaded under ``key``; otherwise it is written
 to ``artifacts_dir / key`` so local/compose/direct runs leave everything
 retrievable on the host. Both branches use the same ``key``, so a downstream
 apply step resolves it identically against GCS or the local dir.
+
+A chained run reads its parent's artifacts back through signed URLs, see
+:func:`download_all`.
 """
 
 import json
 import shutil
 from pathlib import Path
 
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 from hackbot_runtime.uploader import SignedPolicyUploader
+
+_DOWNLOAD_RETRY = Retry(
+    total=5, backoff_factor=1, status_forcelist=[408, 429, *range(500, 600)]
+)
 
 
 def publish_file(
@@ -59,3 +70,20 @@ def publish_json(
         json.dumps(payload, indent=2, default=str).encode("utf-8"),
         "application/json",
     )
+
+
+def download_all(urls: dict[str, str], dest: Path) -> None:
+    """Download each ``key: signed URL`` to ``dest / key``."""
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=_DOWNLOAD_RETRY))
+    root = dest.resolve()
+    for key, url in urls.items():
+        path = (dest / key).resolve()
+        if not path.is_relative_to(root):
+            raise ValueError(f"artifact key {key!r} escapes {dest}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with session.get(url, stream=True, timeout=300) as response:
+            response.raise_for_status()
+            with path.open("wb") as fp:
+                for chunk in response.iter_content(chunk_size=1 << 20):
+                    fp.write(chunk)

@@ -16,6 +16,9 @@ cpu = "6"
 memory = "24Gi"
 timeout_seconds = 7200
 
+[deploy.workspace]
+size = "40Gi"
+
 [deploy.broker]
 cpu = "1"
 memory = "512Mi"

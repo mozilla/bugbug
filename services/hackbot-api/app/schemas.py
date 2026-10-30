@@ -140,6 +140,20 @@ class AutowebcompatDiagnosisInputs(AutowebcompatInputs):
 class AutowebcompatInterventionInputs(AutowebcompatInputs):
     """Inputs for the autowebcompat-intervention agent."""
 
+    revision_id: int | None = None
+    comment: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_follow_up(self) -> "AutowebcompatInterventionInputs":
+        if self.revision_id is not None:
+            if not self.comment:
+                raise ValueError("comment is required when revision_id is set")
+            if self.bug_id is None:
+                raise ValueError("bug_id is required when revision_id is set")
+        elif self.comment is not None:
+            raise ValueError("comment requires revision_id")
+        return self
+
 
 class BuildRepairInputs(BaseModel):
     # Failing Taskcluster build tasks {task_name: task_id}; the agent resolves the
@@ -157,6 +171,15 @@ class TestRepairInputs(BaseModel):
     # push, the last-green revision and the candidate commit range itself from the
     # task id (the listener only filters which failures are worth investigating).
     failure_tasks: dict[str, str]
+    model: str | None = None
+    max_turns: int | None = None
+
+
+class TestRepairFixInputs(BaseModel):
+    # The test-repair run to continue from; the investigation, verdict and failure
+    # logs come from its artifacts.
+    parent_run_id: UUID
+    skip_firefox_build: bool | None = None
     model: str | None = None
     max_turns: int | None = None
 

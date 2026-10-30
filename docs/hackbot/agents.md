@@ -53,7 +53,8 @@ or code.
 | Agent                     | Does                                                                                                                                                                        | Source | Firefox build | Auto-applies actions |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | :-----------: | :------------------: |
 | `bug-fix`                 | Triage a Bugzilla bug and produce a candidate fix as a Phabricator revision. Also handles `@hackbot` follow-ups on an existing revision, and Bugzilla `needinfo?` requests. |  yes   |      yes      |       **yes**        |
-| `test-repair`             | Classify a CI test failure as regression or intermittent, blame the culprit commit, propose a fix.                                                                          |  yes   |      yes      |       **yes**        |
+| `test-repair`             | Classify a CI test failure as regression or intermittent, blame the culprit commit, hand it on to `test-repair-fix`.                                                        |  yes   |      no       |          no          |
+| `test-repair-fix`         | Propose a patch for the culprit a `test-repair` run blamed, for its author to squash in and reland.                                                                         |  yes   |      yes      |          no          |
 | `build-repair`            | Analyze a Firefox build failure at a specific commit and produce a candidate fix.                                                                                           |  yes   |      yes      |          no          |
 | `frontend-triage`         | Read-only root-cause analysis and fix plan for a desktop frontend bug.                                                                                                      |  yes   |      no       |          no          |
 | `autowebcompat-repro`     | Reproduce a web-compatibility report in headless Firefox via DevTools MCP.                                                                                                  |   no   |      no       |          no          |
@@ -68,7 +69,10 @@ no checkout; they drive a Firefox binary through the DevTools MCP server.
 
 Several agents run in **two stages** — a read-only analysis stage that reaches a verdict,
 then a fix stage that only runs if the verdict warrants it. The two stages often use
-different models. This keeps a "nothing to fix here" outcome cheap.
+different models. This keeps a "nothing to fix here" outcome cheap. When the verdict is
+worth delivering before the fix, the stages are separate agents **chained** by an
+`agents.start_run` action, as `test-repair` → `test-repair-fix` are
+([actions.md](actions.md#chaining-agents)).
 
 Agents needing credentialed reads also ship a **broker sidecar** holding the API keys
 ([security.md](security.md)).
