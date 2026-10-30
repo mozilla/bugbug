@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from phabricator_client import PhabricatorSettings
 from pydantic import BaseModel, StringConstraints
@@ -25,6 +25,9 @@ class WebhookSettings(BaseModel):
     bot_phid: str = ""
     # The mention that triggers a bug-fix follow-up run.
     mention_token: str = "@hackbot"
+    # Slug of the Phabricator project whose members may trigger a run with a
+    # mention, e.g. the project mirroring a Bugzilla group.
+    authorized_group: str
 
 
 class BugzillaWebhookSettings(BaseModel):
@@ -34,6 +37,8 @@ class BugzillaWebhookSettings(BaseModel):
     secret: str
     # The Bugzilla account to which the needinfo request must be directed.
     bot_login: str = "hackbot@mozilla.tld"
+    # Name of the Bugzilla group whose members may trigger a run with a needinfo.
+    authorized_group: str
 
 
 class SlackSettings(BaseModel):
@@ -56,6 +61,7 @@ class Settings(BaseSettings):
 
     # Cloud SQL Postgres
     cloud_sql_instance: str = ""
+    cloud_sql_ip_type: Literal["PUBLIC", "PRIVATE", "PSC"] = "PUBLIC"
     db_user: str = ""
     db_pass: str = ""
     db_name: str = "hackbot"
@@ -78,10 +84,6 @@ class Settings(BaseSettings):
 
     phabricator: PhabricatorSettings
 
-    # Inbound webhook receiver config, embedded as a nested model and populated
-    # from WEBHOOK_<FIELD> env vars in this single parse (WEBHOOK_SECRET,
-    # WEBHOOK_BOT_PHID, WEBHOOK_MENTION_TOKEN).
-    # Required via its `secret` field, so WEBHOOK_SECRET must be set at startup.
     webhook: WebhookSettings
 
     # Bugzilla uses a separate shared-secret header and bot identity. These map
@@ -110,7 +112,6 @@ class Settings(BaseSettings):
     push_auth_service_account: str = ""
 
     # Run-completion email settings (see app/notifications.py).
-    hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str
     notification_sender: str
 
@@ -118,6 +119,7 @@ class Settings(BaseSettings):
     port: int = 8080
     environment: str = "development"
     sentry_dsn: str | None = None
+    agents_sentry_dsn: str
 
     model_config = {
         "env_file": ".env",

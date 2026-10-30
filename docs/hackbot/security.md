@@ -42,8 +42,8 @@ Today `bug-fix`, `build-repair`, `frontend-triage`, `autowebcompat-repro`,
 
 ## Workload Identity Federation
 
-Anthropic and W&B both accept a Google-signed OIDC identity token exchanged for a
-short-lived access token, so neither needs a static key in the container.
+Anthropic, OpenAI and W&B all accept a Google-signed OIDC identity token exchanged for a
+short-lived access token, so none needs a static key in the container.
 
 The runtime fetches that token from the GCP metadata server, writes it to a private file the
 SDK reads, and keeps refreshing it in the background — Google tokens outlive neither a long
@@ -53,6 +53,12 @@ run nor a single exchange, so the file has to stay fresh for the whole run
 Federation is enabled by the presence of `ANTHROPIC_FEDERATION_RULE_ID`. An
 `ANTHROPIC_API_KEY` set _alongside_ it is refused with an error, because the key would take
 precedence and silently shadow federation.
+
+OpenAI federation is enabled by the presence of `OPENAI_FEDERATION_RULE_ID`
+([hackbot_runtime/openai_wif.py](../../libs/hackbot-runtime/hackbot_runtime/openai_wif.py)),
+which exposes the token through `OPENAI_IDENTITY_TOKEN_FILE`. The token's audience defaults
+to `https://api.openai.com/v1` and can be overridden with `OPENAI_WIF_AUDIENCE`. Here
+WIF has precedence over an `OPENAI_API_KEY`, so a leftover key only logs a warning.
 
 ## The signed upload policy
 
@@ -97,8 +103,9 @@ authority. See [triggers.md](triggers.md).
 ## Authorizing `@hackbot` mentions
 
 A webhook signature proves the delivery came from Phabricator; it says nothing about _who_
-commented. So the comment author must additionally be a member of the `bmo-editbugs-team`
-project. [triggers.md](triggers.md) covers that check and the other guards on the path.
+commented. So the comment author must additionally be a member of a configured Phabricator
+project. A Bugzilla `needinfo?` is held to the same bar: the requester must be in a configured
+Bugzilla group. [triggers.md](triggers.md) covers that check and the other guards on the path.
 
 ## Authorizing Slack clicks
 

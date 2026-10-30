@@ -48,14 +48,14 @@ from bugbug.tools.code_review.review_context_schema import (
     parse_review_context_toml,
     tomllib,
 )
-from bugbug.tools.core.connection import get_http_client
+from bugbug.tools.core.connection import get_github_api_headers, get_http_client
 
 logger = getLogger(__name__)
 
 _PHAB_RE = re.compile(r"D(\d+)$")
 
 _review_context_cache: dict[
-    tuple[str, str, str], tuple[float, "ReviewContextConfig"]
+    tuple[str, str, str], tuple[float, ReviewContextConfig]
 ] = {}
 _REVIEW_CONTEXT_CACHE_TTL = 300  # seconds
 DEFAULT_REVIEW_CONTEXT_PATH = "review-context.toml"
@@ -90,7 +90,7 @@ class ExternalContentItem(BaseModel):
         action: RuleAction,
         matched_rules: list[str],
         trust_reason: str,
-    ) -> "ExternalContentItem":
+    ) -> ExternalContentItem:
         encoded = body.encode()
         return cls(
             name=name,
@@ -306,7 +306,10 @@ async def _fetch_revision(
         try:
             response = await get_http_client().get(
                 f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
-                headers={"Accept": "application/vnd.github.diff"},
+                headers={
+                    "Accept": "application/vnd.github.diff",
+                    **get_github_api_headers(),
+                },
                 timeout=30,
             )
             response.raise_for_status()
@@ -460,7 +463,7 @@ async def execute_actions(
                     trust_reason="github_repo_content",
                 )
             )
-        except (ValueError, ExternalContentLoadError):
+        except ValueError, ExternalContentLoadError:
             logger.error(
                 "Failed to load content for action %s", _action_to_dict(action)
             )
@@ -518,7 +521,7 @@ async def load_external_content_for_diff(
             review_context_path,
         )
         return []
-    except (tomllib.TOMLDecodeError, ReviewContextValidationError):
+    except tomllib.TOMLDecodeError, ReviewContextValidationError:
         logger.exception(
             "Could not parse review context from %s@%s:%s",
             review_context_repo,
@@ -533,7 +536,7 @@ async def load_external_content_for_diff(
 
     try:
         actions = collect_actions(diff, config, bug_component, extra_context_toml)
-    except (tomllib.TOMLDecodeError, ReviewContextValidationError):
+    except tomllib.TOMLDecodeError, ReviewContextValidationError:
         logger.exception("Could not parse extra review context")
         return []
 

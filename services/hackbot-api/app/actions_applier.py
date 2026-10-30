@@ -10,8 +10,6 @@ Application runs each pending row through the handler registry in
 never re-applied, so Pub/Sub retries and repeated manual applies are safe.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 from datetime import datetime, timedelta, timezone

@@ -11,8 +11,6 @@ candidate commit diffs and writes the verdict; stage 2 (fix) proposes a source
 patch and runs whenever stage 1 blamed a commit.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import subprocess
@@ -180,7 +178,7 @@ def _read_verdict(scratch_out: Path) -> dict:
         return {}
     try:
         return json.loads(path.read_text())
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return {}
 
 
@@ -268,14 +266,14 @@ async def _bootstrap(fx_ctx: FirefoxContext) -> None:
 def _as_float(value, default: float = 0.0) -> float:
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
 def _as_int(value) -> int | None:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -288,7 +286,7 @@ def _commit_message(repo: Path, sha: str) -> str:
             capture_output=True,
             text=True,
         ).stdout
-    except (subprocess.CalledProcessError, OSError):
+    except subprocess.CalledProcessError, OSError:
         return ""
 
 

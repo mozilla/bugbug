@@ -5,8 +5,6 @@ The ONLY module in agent-tools that imports claude-agent-sdk. Wraps a list of
 Requires the ``claude-sdk`` optional extra.
 """
 
-from __future__ import annotations
-
 import json
 
 from claude_agent_sdk import create_sdk_mcp_server

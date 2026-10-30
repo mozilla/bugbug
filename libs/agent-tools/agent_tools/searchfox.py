@@ -8,8 +8,6 @@ image. Network/request failures surface as a structured
 :class:`~agent_tools.registry.ToolError`.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated
 

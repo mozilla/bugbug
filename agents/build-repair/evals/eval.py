@@ -14,8 +14,6 @@ Usage:
     python -m evals.eval --trials 3 --parallelism 8
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import logging

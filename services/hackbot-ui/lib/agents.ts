@@ -5,6 +5,10 @@ export const AGENTS = [
   { value: "bug-fix", label: "bug-fix" },
   { value: "autowebcompat-repro", label: "autowebcompat-repro" },
   { value: "autowebcompat-diagnosis", label: "autowebcompat-diagnosis" },
+  {
+    value: "autowebcompat-intervention",
+    label: "autowebcompat-intervention",
+  },
   { value: "build-repair", label: "build-repair" },
   { value: "frontend-triage", label: "frontend-triage" },
   { value: "test-repair", label: "test-repair" },

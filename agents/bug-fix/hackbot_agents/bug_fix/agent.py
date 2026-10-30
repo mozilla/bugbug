@@ -6,8 +6,6 @@ and reaches Bugzilla via an out-of-process MCP broker (HTTP transport)
 that holds the Bugzilla token — the agent process itself never sees it.
 """
 
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 from shlex import quote
@@ -37,6 +35,8 @@ from .config import (
 
 HERE = Path(__file__).resolve().parent
 PROMPTS = HERE / "prompts"
+# The SDK's 1 MB default is too small for large messages.
+MAX_BUFFER_SIZE = 10 * 1024 * 1024
 
 
 class BugFixResult(HackbotAgentResult):
@@ -133,6 +133,8 @@ def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
         "ac_add_options --enable-debug\n"
         "ac_add_options --enable-optimize\n"
         "ac_add_options --enable-clang-plugin\n"
+        # For the evaluate_js_shell tool: desktop builds skip the JS shell.
+        "ac_add_options --enable-js-shell\n"
         f"mk_add_options MOZ_OBJDIR={quote(str(fx_ctx.objdir))}\n"
     )
 
@@ -217,6 +219,7 @@ async def run_bug_fix(
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
+        max_buffer_size=MAX_BUFFER_SIZE,
     )
 
     result_msg: ResultMessage | None = None
