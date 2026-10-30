@@ -27,7 +27,8 @@
 --   first_triaged             ts?      first sheriff action
 --   last_updated              ts       last change to the summary
 --   bug_number                int?     bug filed or linked by the sheriff
---   bug_status                int?     Perfherder's cached Bugzilla status code for that bug
+--   bug_status                int?     Perfherder's cached Bugzilla status code for that bug; the column was
+--                                      renamed bug_resolution on 2026-10-26, the stored name is kept
 --   bug_updated               ts?      when the bug was linked
 --   summary_manually_created  bool     summary created by hand
 --   summary_sheriffed         bool     false for automated monitor summaries
@@ -78,7 +79,7 @@ SELECT
   s.first_triaged,
   s.last_updated,
   s.bug_number,
-  s.bug_status,
+  s.bug_resolution AS bug_status,
   s.bug_updated,
   s.manually_created AS summary_manually_created,
   s.sheriffed AS summary_sheriffed,
