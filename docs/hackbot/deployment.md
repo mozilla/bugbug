@@ -73,7 +73,8 @@ Two things those files do not tell you:
   `BUGZILLA_WEBHOOK_SECRET` → `bugzilla_webhook.secret`, `SLACK_SIGNING_SECRET` →
   `slack.signing_secret`.
 - **An agent container's env arrives from three places.** Per-execution overrides from the
-  API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field); static
+  API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field, and
+  `PARENT_ARTIFACTS` for a chained run); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
   `OPENAI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`); and local-only fallbacks
   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`). Only the first

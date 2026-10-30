@@ -80,6 +80,11 @@ class HackbotContext(BaseSettings):
     # at a host-mounted dir; the default stays relative so it does not bake a
     # host path into the container.
     artifacts_dir: Path = Path("artifacts")
+    # Set on a run started by another run's `agents.start_run` action.
+    parent_run_id: str | None = None
+    # Signed download URLs for the parent's artifacts, by key. Unset locally,
+    # where the parent's artifacts are read from `artifacts_dir` instead.
+    parent_artifacts: dict[str, str] | None = None
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -100,6 +105,7 @@ class HackbotContext(BaseSettings):
     # prepared exactly once and a conflicting re-prepare is caught.
     _repo_path: Path | None = PrivateAttr(default=None)
     _prepared_ref: str | None = PrivateAttr(default=None)
+    _parent_artifacts_dir: Path | None = PrivateAttr(default=None)
 
     @classmethod
     def from_config(cls, config_path: Path) -> HackbotContext:
@@ -246,6 +252,22 @@ class HackbotContext(BaseSettings):
         and :meth:`publish_log` becomes a no-op.
         """
         return Path(tempfile.mkdtemp(prefix=f"hackbot-{self.run_id}-")) / "agent.log"
+
+    def fetch_parent_artifacts(self) -> None:
+        """Make the parent run's artifacts available; called by the runtime."""
+        if self.parent_artifacts is None:
+            self._parent_artifacts_dir = self.artifacts_dir / self.parent_run_id
+            return
+        dest = Path(tempfile.mkdtemp(prefix=f"hackbot-{self.parent_run_id}-"))
+        artifacts.download_all(self.parent_artifacts, dest)
+        self._parent_artifacts_dir = dest
+
+    @property
+    def parent_artifacts_dir(self) -> Path:
+        """The parent run's artifacts, under the keys it published them with."""
+        if self._parent_artifacts_dir is None:
+            raise RuntimeError("this run was not started by another run")
+        return self._parent_artifacts_dir
 
     @cached_property
     def actions(self) -> ActionsRecorder:

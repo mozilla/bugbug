@@ -47,6 +47,7 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
 | `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
 | `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
+| `agents.start_run`          | Start another agent on this run's output   | `agent`                                                         |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. Each tool returns the
@@ -109,6 +110,21 @@ retried event or a repeated manual apply-all is safe and resumes where it stoppe
 Actions from a run that is not `succeeded` are never applied. The subscription filters
 them out and the applier checks again, because acting on a run that never reached a
 verified-good state is not wanted even if it recorded something before erroring.
+
+## Chaining agents
+
+Agents stay small and single-purpose; one hands its work on to the next by recording
+`agents.start_run`. The model decides whether the work continues, and in which agent, but
+only among the agents its code declared with `allow_agents(recorder, [...])`; any other
+name is refused as a tool error, and a run that declared none can start nothing. Nothing
+starts until the run has succeeded and the action is applied, so the parent agent lists it
+in `always_apply_actions`.
+
+The handler starts the named agent with `{"parent_run_id": <this run>}`
+([agents_handler.py](../../services/hackbot-api/app/action_handlers/agents_handler.py)). An
+agent that accepts a parent declares a `parent_run_id` input; the API then checks the parent
+exists and has succeeded, and passes signed download URLs for its artifacts, which the
+runtime fetches before `main()` — see [runtime.md](runtime.md#chained-runs).
 
 ## Cross-action references
 

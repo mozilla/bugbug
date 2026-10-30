@@ -212,6 +212,33 @@ def _generate_artifact_download_url_sync(
     )
 
 
+def _generate_artifact_download_urls_sync(
+    run_id: str, artifact_names: list[str], expiration_seconds: int
+) -> dict[str, str]:
+    bucket = _client().bucket(settings.results_bucket)
+    return {
+        name: bucket.blob(f"{run_prefix(run_id)}{name}").generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(seconds=expiration_seconds),
+            method="GET",
+            credentials=_signing_credentials(),
+        )
+        for name in artifact_names
+    }
+
+
+async def generate_artifact_download_urls(
+    run_id: str, artifact_names: list[str], expiration_seconds: int
+) -> dict[str, str]:
+    """Signed GET URLs for artifacts already listed on the run, by name."""
+    return await asyncio.to_thread(
+        _generate_artifact_download_urls_sync,
+        run_id,
+        artifact_names,
+        expiration_seconds,
+    )
+
+
 async def generate_artifact_download_url(
     run_id: str, artifact_name: str, expiration_seconds: int = 600
 ) -> str | None:

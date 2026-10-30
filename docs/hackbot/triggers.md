@@ -7,7 +7,8 @@ start an execution directly, which is what keeps run state complete regardless o
 hackbot-ui ─────────────┐
 pulse-listener ─────────┤
 Phabricator webhook ────┼──> POST /agents/{agent}/runs ──> Cloud Run Job execution
-Bugzilla webhook ───────┘
+Bugzilla webhook ───────┤
+agents.start_run ───────┘
 ```
 
 ## hackbot-ui — humans
@@ -151,3 +152,10 @@ existing one. The needinfo flag is cleared automatically as a recorded
 `bugzilla.update_bug` action once the run produces at least one other action, coalesced with
 the reply comment into a single Bugzilla transaction (see [actions.md](actions.md)). A run
 that records nothing leaves the flag standing.
+
+## Agent chaining — another run
+
+A run continues its work in another agent by recording an `agents.start_run` action (see
+[actions.md](actions.md#chaining-agents)). Once the run has succeeded, the apply step starts
+the next agent over the same API, with the parent's run id as the only input and as the
+dedupe key, so a redelivered event cannot start it twice.
