@@ -12,13 +12,16 @@ visible in the hackbot UI before it lands and the apply step delivers it at most
 
 Two lines: the bug, and the run. The channel already says which product and component
 this is, the analysis is on the bug, and the detail is in the run -- so neither is
-repeated here. Confidence is not reported either, beyond whether the run was held. An
-S1 is the one thing worth pulling out of the bug, as it is the level someone
-may need to act on today -- but only one the run is confident about, on the same
-threshold that decides whether the comment mentions severity at all.
+repeated here. The comment itself sits in a collapsed container, so a reader can judge
+it without leaving Slack and the channel doesn't scroll past it. Confidence is not
+reported either, beyond whether the run was held. An S1 is the one thing worth pulling
+out of the bug, as it is the level someone may need to act on today -- but only one
+the run is confident about, on the same threshold that decides whether the comment
+mentions severity at all.
 """
 
 import logging
+import re
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL, record_message
@@ -32,6 +35,16 @@ logger = logging.getLogger(__name__)
 
 BUG_URL = "https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}"
 RUN_URL = HACKBOT_UI_URL.rstrip("/") + "/runs/{run_id}"
+
+# Slack rejects a section whose text is longer than this.
+SECTION_TEXT_LIMIT = 3000
+
+# What `hackbot_runtime.actions.bugzilla.add_comment` puts between the comment and
+# its feedback footer. The footer asks for a Bugzilla reaction, which Slack can't take.
+_FOOTER_SEPARATOR = "\n\n---\n\n"
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((\S+?)\)")
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 
 # The severity that gets a marker. S2-S4 are ordinary triage outcomes; an S1 is
 # somebody's afternoon.
@@ -103,6 +116,56 @@ def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
     return "\n".join(lines)
 
 
+def comment_from(actions: list[dict]) -> str | None:
+    """The comment this run wrote for the bug, or None if Slack shouldn't show it.
+
+    Read off the recorded action, after the recorder's hooks have expanded its
+    Searchfox placeholders, without the feedback footer. A private comment is left
+    out: the channel is a wider audience than the bug's insiders.
+    """
+    comments = [a for a in actions if a["type"] == "bugzilla.add_comment"]
+    if not comments or comments[-1]["params"].get("is_private"):
+        return None
+    text = comments[-1]["params"].get("text") or ""
+    body, _, _ = text.rpartition(_FOOTER_SEPARATOR)
+    return (body or text).strip() or None
+
+
+def _comment_mrkdwn(comment: str, bug_id: int) -> str:
+    """The Markdown comment as Slack mrkdwn, cut to fit one section.
+
+    A container can't hold a `markdown` block, so the comment's links, bold and
+    headings are rewritten for a mrkdwn section instead.
+    """
+    text = _MD_LINK.sub(lambda m: _link(m.group(2), m.group(1)), comment)
+    text = _MD_BOLD.sub(r"*\1*", text)
+    text = _MD_HEADING.sub(r"*\1*", text)
+    if len(text) > SECTION_TEXT_LIMIT:
+        more = "… " + _link(BUG_URL.format(bug_id=bug_id), "read the rest")
+        text = text[: SECTION_TEXT_LIMIT - len(more)].rstrip() + more
+    return text
+
+
+def _comment_block(result: FrontendTriageResult, comment: str) -> dict:
+    """The comment in a container that starts collapsed to its title."""
+    title = "Triage response" if result.auto_apply else "Proposed triage response"
+    return {
+        "type": "container",
+        "title": {"type": "plain_text", "text": title},
+        "is_collapsible": True,
+        "default_collapsed": True,
+        "child_blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": _comment_mrkdwn(comment, result.bug_id),
+                },
+            }
+        ],
+    }
+
+
 def _severity_field(result: FrontendTriageResult) -> str | None:
     """The level this run suggests, when it is sure enough to suggest one.
 
@@ -134,7 +197,8 @@ def _bug_fix_button(result: FrontendTriageResult, *, run_id: str) -> dict:
     model recorded unconverted is stored as the string "<slack_sdk.ButtonElement>"
     rather than failing, and only shows up when Slack rejects the message.
     """
-    label = "Fix this bug" if result.auto_apply else "Post analysis & fix"
+    # Names the agent rather than promising a fix: `bug-fix` may only comment.
+    label = "Run bug-fix agent" if result.auto_apply else "Post analysis & run bug-fix"
     confirm_text = (
         "This "
         if result.auto_apply
@@ -162,7 +226,9 @@ def _bug_fix_button(result: FrontendTriageResult, *, run_id: str) -> dict:
     ).to_dict()
 
 
-def build_blocks(result: FrontendTriageResult, *, run_id: str) -> list[dict]:
+def build_blocks(
+    result: FrontendTriageResult, *, run_id: str, comment: str | None = None
+) -> list[dict]:
     headline = f"*{_bug_link(result)}*"
     summary = _summary(result)
     if summary:
@@ -193,6 +259,9 @@ def build_blocks(result: FrontendTriageResult, *, run_id: str) -> list[dict]:
         blocks.append(
             {"type": "section", "text": {"type": "mrkdwn", "text": HELD_NOTE}}
         )
+
+    if comment:
+        blocks.append(_comment_block(result, comment))
 
     blocks.append(
         {
@@ -239,5 +308,7 @@ def record_notification(
         recorder,
         channel,
         build_message(result, run_id=run_id),
-        blocks=build_blocks(result, run_id=run_id),
+        blocks=build_blocks(
+            result, run_id=run_id, comment=comment_from(recorder.actions)
+        ),
     )

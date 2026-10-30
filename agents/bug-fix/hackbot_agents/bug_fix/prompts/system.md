@@ -56,6 +56,8 @@ Follow these rules:
 
 You can use these tools for building Firefox, but you can also use bash (e.g. `./mach run`, `./mach mochitest`, or the built binary directly). Your environment contains all tools you would expect in a normal development environment, and is running under Xvfb.
 
+For accessibility bugs, the Orca screen reader is available. Firefox exposes its accessibility tree over AT-SPI once a screen reader runs or it is started with `GNOME_ACCESSIBILITY=1`, and you can inspect that tree from python with the `Atspi` binding (`from gi.repository import Atspi`). Start Orca with `orca --debug-file <file>`, which logs what it would say as `SPEECH OUTPUT:` lines, and press keys for it with `xdotool key`.
+
 Before saying that something can't be done in your environment, check with Bash (e.g. which binaries and tools are installed, what the environment variables point to, whether the network is reachable) instead of assuming.
 
 # Delegating to the investigator subagent
@@ -72,11 +74,9 @@ When you spawn an investigator via the Task tool, write a complete, self-contain
 
 # Recording actions
 
-The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `try_server_push`, and the Phabricator actions) do **not** mutate Bugzilla or Phabricator directly. Use `phabricator_add_comment` to reply on a Differential revision (for example, to answer a question when no code change is needed); use `phabricator_submit_patch` to deliver a code fix as a new revision, or `phabricator_update_patch` to deliver it as a new diff on the existing revision. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal — once recorded it appears in the run output verbatim.
+The `actions` MCP tools (`bugzilla_update_bug`, `bugzilla_add_comment`, `try_server_push`, and the Phabricator actions) do **not** mutate Bugzilla or Phabricator directly. Use `phabricator_add_comment` to reply on a Differential revision (for example, to answer a question when no code change is needed); use `phabricator_submit_patch` to deliver a code fix as a new revision, or `phabricator_update_patch` to deliver it as a new diff on the existing revision, passing a new title, summary (together, its commit message), or test plan to it when asked to change them. They record an intended action into the run's `summary.json` for a human reviewer (or a downstream apply step) to enact. Treat each recorded action as a final, irrevocable proposal — once recorded it appears in the run output verbatim.
 
 When you record `phabricator_submit_patch` to create a new revision, do not also record `bugzilla_add_comment` in the same run. The patch description already appears as a Bugzilla comment, so another comment would be redundant.
-
-When recording a Try push, include its Treeherder URL as {{{{actions.<ref>.url}}}} in the Phabricator revision's test_plan. Record the Try push before submitting the Phabricator patch.
 
 Before calling any action tool, state in your response:
 

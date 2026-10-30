@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from .agent import BuildRepairResult, run_build_repair
 from .config import CHECKOUT_DEPTH, NOTIFY_ONLY_WITH_PATCH
 from .notify import build_email, recipients, resolve_author_email
-from .resolve import PushInfo, resolve_push
+from .resolve import PushInfo, linux_build_env, resolve_push
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ async def main(ctx: HackbotContext) -> BuildRepairResult:
         project=push.project,
         hg_revision=push.hg_revision,
         failure_tasks=inputs.failure_tasks,
+        ci_env=linux_build_env(task_id),
         run_try_push=inputs.run_try_push,
         model=inputs.model,
         max_turns=inputs.max_turns,

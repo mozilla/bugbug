@@ -17,6 +17,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+# For the Atspi binding, to inspect accessibility trees. PyGObject builds from
+# source, against headers only the image's builder has.
+a11y = ["pygobject>=3.52"]
 
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }

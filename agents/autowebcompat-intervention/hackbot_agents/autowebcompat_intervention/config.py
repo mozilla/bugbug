@@ -46,8 +46,15 @@ DEVTOOLS_TOOLS = [
     "mcp__firefox-devtools__restart_firefox",
 ]
 
+# Allowed actions for new invervention creation
 INTERVENTION_ACTIONS = [
     "phabricator.submit_patch",
+]
+
+# Allowed follow-up actions for existing intervention
+FOLLOW_UP_ACTIONS = [
+    "phabricator.update_patch",
+    "phabricator.add_comment",
 ]
 
 # Artifact builds download the binaries of the nearest ancestor commit that was
