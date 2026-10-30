@@ -283,11 +283,8 @@ async def _apply_pending_rows(
         if anchor is not None and pos != anchor:
             continue  # non-anchor member: applied together with its anchor
 
-        member_rows = (
-            [pending[i][0] for i in group_at[anchor]] if anchor is not None else [row]
-        )
-
         if anchor is not None:
+            member_rows = [pending[i][0] for i in group_at[anchor]]
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
@@ -296,6 +293,7 @@ async def _apply_pending_rows(
                 run, "bugzilla.update_bug", merge_resolved(entries), []
             )
         else:
+            member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
             outcome = await _dispatch(run, row.type, params, attachments)
 
