@@ -17,6 +17,7 @@ from hackbot_agents.frontend_triage.agent import (
 from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE
 from hackbot_agents.frontend_triage.notify import (
     HELD_NOTE,
+    SECTION_TEXT_LIMIT,
     build_blocks,
     build_message,
     channel_for,
@@ -300,6 +301,90 @@ def test_the_button_carries_what_the_receiver_needs_to_start_the_run():
         "dedupe_key": f"frontend-triage-run:{RUN_ID}",
         "apply_run_id": RUN_ID,
     }
+
+
+def test_the_button_names_the_agent_it_starts():
+    assert _block_of("actions")["elements"][0]["text"]["text"] == "Run bug-fix agent"
+    assert (
+        _block_of("actions", auto_apply=False)["elements"][0]["text"]["text"]
+        == "Post analysis & run bug-fix"
+    )
+
+
+# --- the comment, collapsed ---
+
+COMMENT = (
+    "## Root cause\n\n"
+    "**WeatherFeed** caches the old city in "
+    "[WeatherFeed.sys.mjs](https://searchfox.org/firefox-main/rev/abc/WeatherFeed.sys.mjs)."
+)
+FOOTER = (
+    "\n\n---\n\nIf you'd like to provide feedback on this comment, please use the "
+    "👍 or 👎 reaction."
+)
+
+
+def _container(comment: str = COMMENT + FOOTER, is_private: bool = False, **overrides):
+    recorder = ActionsRecorder()
+    recorder.record(
+        "bugzilla.add_comment",
+        {"bug_id": BUG_ID, "text": comment, "is_private": is_private},
+    )
+    action = record_notification(recorder, _result(**overrides), run_id=RUN_ID)
+    return next(
+        (b for b in action["params"]["blocks"] if b["type"] == "container"), None
+    )
+
+
+def test_the_comment_starts_collapsed_as_mrkdwn_without_its_footer():
+    assert _container() == {
+        "type": "container",
+        "title": {"type": "plain_text", "text": "Triage response"},
+        "is_collapsible": True,
+        "default_collapsed": True,
+        "child_blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Root cause*\n\n*WeatherFeed* caches the old city in "
+                    "<https://searchfox.org/firefox-main/rev/abc/WeatherFeed.sys.mjs"
+                    "|WeatherFeed.sys.mjs>.",
+                },
+            }
+        ],
+    }
+
+
+def test_a_held_comment_is_titled_as_proposed():
+    title = _container(auto_apply=False)["title"]["text"]
+    assert title == "Proposed triage response"
+
+
+def test_the_comment_sits_above_the_button():
+    recorder = ActionsRecorder()
+    recorder.record("bugzilla.add_comment", {"bug_id": BUG_ID, "text": COMMENT})
+    action = record_notification(recorder, _result(), run_id=RUN_ID)
+    kinds = [b["type"] for b in action["params"]["blocks"]]
+    assert kinds == ["section", "section", "container", "actions", "context"]
+
+
+def test_a_private_comment_stays_out_of_slack():
+    assert _container(is_private=True) is None
+
+
+def test_no_comment_means_no_container():
+    action = record_notification(ActionsRecorder(), _result(), run_id=RUN_ID)
+    assert all(b["type"] != "container" for b in action["params"]["blocks"])
+
+
+def test_a_long_comment_is_cut_to_fit_and_links_the_rest():
+    section = _container("x" * 5000)["child_blocks"][0]
+    text = section["text"]["text"]
+    assert len(text) <= SECTION_TEXT_LIMIT
+    assert text.endswith(
+        f"… <https://bugzilla.mozilla.org/show_bug.cgi?id={BUG_ID}|read the rest>"
+    )
 
 
 # --- the two renderings say the same things ---
