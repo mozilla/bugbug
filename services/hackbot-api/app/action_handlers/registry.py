@@ -4,6 +4,7 @@ from app.action_handlers.bugzilla_handler import (
     AddAttachmentHandler,
     AddCommentHandler,
     CreateBugHandler,
+    RequestInfoHandler,
     UpdateBugHandler,
 )
 from app.action_handlers.email_handler import SendEmailHandler
@@ -29,6 +30,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "bugzilla.add_comment": AddCommentHandler(),
     "bugzilla.add_attachment": AddAttachmentHandler(),
     "bugzilla.create_bug": CreateBugHandler(),
+    "bugzilla.request_info": RequestInfoHandler(),
     "phabricator.submit_patch": SubmitPatchHandler(),
     "phabricator.update_patch": UpdatePatchHandler(),
     "phabricator.add_comment": PhabricatorAddCommentHandler(),

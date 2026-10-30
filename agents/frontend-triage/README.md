@@ -228,7 +228,7 @@ handler registry far wider than the tools this agent was given.
 
 - `add_comment_hook` — one comment, public, on the bug being triaged.
 
-That is the whole list, because a comment is the only thing this agent can write.
+That is the whole list, because a comment is the only thing the model can write.
 It has no tool that changes a bug's fields: `severity` was the one field a ruleset
 directed it to set, and that is now a suggestion at the end of the comment for a
 human to apply, so `bugzilla.update_bug` left `ENABLED_ACTION_TYPES` rather than
@@ -237,6 +237,14 @@ staying on with no caller.
 A refusal reaches the agent as a tool error it can correct in the same run, and the
 action never lands in `summary.json`. The action _type_ needs no check:
 `ENABLED_ACTION_TYPES` decides which tools the actions server exposes at all.
+
+The one other write is recorded by code after the run. When the plan carries a
+`reporter_question`, `record_reporter_question()` in `agent.py` records a
+`bugzilla.request_info`: that text as a comment, with a `needinfo?` on the bug's
+`creator` in the same `PUT`. The requestee comes from the pre-flight lookup, never
+from the model. hackbot-api lists the type in this agent's `always_apply_actions`,
+so it is posted even when the diagnosis is held, because a medium- or
+low-confidence run is the one that needs the reporter's answer.
 
 Two further hooks shape the comment text as it is recorded:
 

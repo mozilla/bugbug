@@ -166,10 +166,13 @@ confidence (see `severity-assessment`).
 - **High** (you found the specific code and the cause is clear): record the
   plan comment.
 - **Medium** (plausible area, cause not pinned down): record the comment with
-  your best hypothesis and the open questions that would confirm it.
-- **Low** (could not localize): record a comment stating what you checked and
-  the specific information needed to proceed. Set `confidence` to low and
-  `root_cause` to null in the structured output.
+  your best hypothesis and the open questions that would confirm it. Questions
+  only the reporter can answer go in `reporter_question` instead, which reaches
+  the bug even though this comment is held.
+- **Low** (could not localize): record a comment stating what you checked, and
+  put the specific information you need from the reporter in
+  `reporter_question`. Set `confidence` to low and `root_cause` to null in the
+  structured output.
 
 ## Already-fixed / duplicate
 
