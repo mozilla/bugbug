@@ -4,8 +4,8 @@ import subprocess
 from types import SimpleNamespace
 
 import pytest
+from agent_tools.registry import ToolError
 from hackbot_agents.test_repair import agent
-from hackbot_agents.test_repair.config import BUILD_TOOL, SKIP_FIREFOX_BUILD
 from hackbot_agents.test_repair.prompts import MAX_TESTS_PER_GROUP
 from hackbot_agents.test_repair.resolve import (
     CommitRange,
@@ -13,8 +13,9 @@ from hackbot_agents.test_repair.resolve import (
     Investigation,
 )
 from hackbot_runtime import ActionsRecorder, AgentError
+from hackbot_runtime.actions import agents
 
-ACTION_TOOLS = {"mcp__actions__phabricator_submit_patch"}
+HANDOFF_TOOL = "mcp__actions__agents_start_run"
 
 
 def _result_msg(is_error=False):
@@ -81,14 +82,6 @@ def _investigation(
     )
 
 
-def _fx_ctx(tmp_path):
-    return SimpleNamespace(
-        source_dir=tmp_path / "src",
-        mozconfig=tmp_path / ".mozconfig",
-        objdir=tmp_path / "obj",
-    )
-
-
 def _run(
     tmp_path,
     verdicts,
@@ -98,10 +91,10 @@ def _run(
     groups=None,
     group_based=True,
     known_intermittent_bugs=None,
-    skip_firefox_build=SKIP_FIREFOX_BUILD,
     options_out=None,
     actions_recorder=None,
-    checkout=None,
+    hand_off=False,
+    published=None,
 ):
     repo = tmp_path / "src"
     repo.mkdir()
@@ -134,23 +127,23 @@ def _run(
             (scratch_out / "verdict.json").write_text(json.dumps(verdict))
         (scratch_out / "summary.md").write_text("the verdict")
         (scratch_out / "analysis.md").write_text("the reasoning")
+        if hand_off:
+            await agents.start_run(
+                actions_recorder, agent="test-repair-fix", reasoning="culprit found"
+            )
         return _result_msg(is_error=bool(results and results.pop(0)))
 
-    bootstrapped = []
-
-    async def fake_bootstrap(firefox_dir):
-        bootstrapped.append(firefox_dir)
-        return {"success": True}
-
     monkeypatch.setattr(agent, "_run_session", fake_session)
-    monkeypatch.setattr(agent, "bootstrap_firefox", fake_bootstrap)
-    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {"type": "sdk"})
+
+    def publish_file(key, path, content_type=None):
+        if published is not None:
+            published.append(key)
+        return key
 
     result = asyncio.run(
         agent.run_test_repair(
             bugzilla_mcp_server=None,
             source_repo=repo,
-            fx_ctx=_fx_ctx(tmp_path),
             investigation=_investigation(
                 head,
                 platform,
@@ -159,357 +152,144 @@ def _run(
                 known_intermittent_bugs=known_intermittent_bugs,
             ),
             scratch_out=scratch_out,
-            skip_firefox_build=skip_firefox_build,
             verbose=False,
             log=None,
+            publish_file=publish_file,
             actions_recorder=actions_recorder,
-            checkout=checkout,
         )
     )
     return result, calls, head
 
 
-# --- the fix stage works on the culprit itself ------------------------------ #
-
-
-def test_the_tree_moves_to_the_culprit_before_the_fix_stage(tmp_path, monkeypatch):
-    checked_out = []
-    _, calls, head = _run(
-        tmp_path, _blamed(), monkeypatch, checkout=lambda sha: checked_out.append(sha)
-    )
-    assert checked_out == [head]
-    assert f"The tree is checked out at {head} itself" in _flat(calls[1])
-    assert f"checked out at {head} itself" not in _flat(calls[0])
-
-
-def test_no_checkout_without_a_culprit(tmp_path, monkeypatch):
-    checked_out = []
-    _run(
-        tmp_path,
-        [{"classification": "intermittent", "culprit_commit": None}],
-        monkeypatch,
-        checkout=lambda sha: checked_out.append(sha),
-    )
-    assert checked_out == []
-
-
-def test_the_prompt_does_not_claim_a_checkout_that_did_not_happen(
-    tmp_path, monkeypatch
-):
-    _, calls, _ = _run(tmp_path, _blamed(), monkeypatch)
-    assert "checked out at" not in calls[1]
-
-
-def test_the_revision_stacks_on_the_culprits_own(tmp_path, monkeypatch):
-    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
-    _, calls, _ = _run(
-        tmp_path,
-        _blamed(),
-        monkeypatch,
-        actions_recorder=ActionsRecorder(),
-        checkout=lambda sha: sha,
-    )
-    assert "parent_revision_id=325120 (the culprit's own revision, D325120)" in calls[1]
-
-
-def test_no_stacking_unless_the_tree_moved_to_the_culprit(tmp_path, monkeypatch):
-    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
-    _, calls, _ = _run(
-        tmp_path, _blamed(), monkeypatch, actions_recorder=ActionsRecorder()
-    )
-    assert "D325120" not in calls[1]
-
-
-def test_a_failed_checkout_costs_the_stacking_not_the_run(tmp_path, monkeypatch):
-    monkeypatch.setattr(agent, "_revision_from_commit", lambda repo, sha: 325120)
-
-    def failing_checkout(sha):
-        raise RuntimeError("dirty tree")
-
-    result, calls, head = _run(
-        tmp_path,
-        _blamed(),
-        monkeypatch,
-        actions_recorder=ActionsRecorder(),
-        checkout=failing_checkout,
-    )
-    assert result.culprit_commit == head
-    assert "D325120" not in calls[1]
-    assert "checked out at" not in calls[1]
-
-
-def test_no_stacking_when_the_culprit_names_no_revision(tmp_path, monkeypatch):
-    # The scratch path lands in the prompt, so the test name must not carry the
-    # word this asserts on.
-    _, calls, _ = _run(
-        tmp_path,
-        _blamed(),
-        monkeypatch,
-        actions_recorder=ActionsRecorder(),
-        checkout=lambda sha: sha,
-    )
-    assert "parent_revision" not in calls[1]
-
-
-def test_the_revision_is_read_off_the_commit_footer(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    subprocess.run(
-        ["git", "-C", str(tmp_path), "config", "user.email", "t@example.com"],
-        check=True,
-    )
-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "T"], check=True)
-    subprocess.run(
-        [
-            "git",
-            "-C",
-            str(tmp_path),
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "Bug 555 - a fix r=me\n\nDifferential Revision: "
-            "https://phabricator.services.mozilla.com/D325120",
-        ],
-        check=True,
-    )
-    assert agent._revision_from_commit(tmp_path, "HEAD") == 325120
-    assert agent._bug_from_commit(tmp_path, "HEAD") == 555
-
-
-def test_no_revision_from_a_commit_without_a_footer(tmp_path):
-    assert agent._revision_from_commit(tmp_path, "HEAD") is None
-
-
-# --- submitting the patch for review ------------------------------------- #
-
-
-def _blamed(bug=1234567):
-    verdict = {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.9}
-    if bug is not None:
-        verdict["culprit_bug"] = bug
-    return [verdict, {**verdict, "proposed_patch": True}]
-
-
-def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
-    options = []
-    _run(
-        tmp_path,
-        _blamed(),
-        monkeypatch,
-        options_out=options,
-        actions_recorder=ActionsRecorder(),
-    )
-    analysis_opts, fix_opts = options
-
-    assert not ACTION_TOOLS & set(analysis_opts.allowed_tools)
-    assert "actions" not in analysis_opts.mcp_servers
-
-    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
-    assert "actions" in fix_opts.mcp_servers
-
-
-def test_fix_prompt_asks_for_a_revision_against_the_culprits_bug(tmp_path, monkeypatch):
-    _, calls, _ = _run(
-        tmp_path, _blamed(), monkeypatch, actions_recorder=ActionsRecorder()
-    )
-    assert "phabricator_submit_patch" not in calls[0]
-    assert "phabricator_submit_patch" in calls[1]
-    assert "bug_id=1234567" in calls[1]
-    assert '"Bug 1234567 - ' in calls[1]
-    assert "squashed into the culprit" in _flat(calls[1])
-
-
-@pytest.mark.parametrize(
-    ("bug", "recorder"),
-    [(1234567, None), (None, ActionsRecorder())],
-    ids=["no-recorder", "no-bug-anywhere"],
-)
-def test_reporting_is_skipped_without_a_recorder_and_a_bug(
-    tmp_path, monkeypatch, bug, recorder
-):
-    options = []
-    _, calls, _ = _run(
-        tmp_path,
-        _blamed(bug),
-        monkeypatch,
-        options_out=options,
-        actions_recorder=recorder,
-    )
-    for opts in options:
-        assert not ACTION_TOOLS & set(opts.allowed_tools)
-        assert "actions" not in opts.mcp_servers
-    assert "phabricator_submit_patch" not in calls[1]
-
-
-def test_the_culprits_subject_stands_in_for_a_missing_verdict_bug(
-    tmp_path, monkeypatch
-):
-    monkeypatch.setattr(agent, "_bug_from_commit", lambda repo, sha: 555)
-    options = []
-    _, calls, _ = _run(
-        tmp_path,
-        _blamed(None),
-        monkeypatch,
-        options_out=options,
-        actions_recorder=ActionsRecorder(),
-    )
-    assert set(options[1].allowed_tools) >= ACTION_TOOLS
-    assert "bug_id=555" in calls[1]
-
-
-def test_bug_is_read_off_the_local_commit_subject(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    subprocess.run(
-        ["git", "-C", str(tmp_path), "config", "user.email", "t@example.com"],
-        check=True,
-    )
-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "T"], check=True)
-    subprocess.run(
-        [
-            "git",
-            "-C",
-            str(tmp_path),
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "Bug 555 - an earlier fix r=me",
-        ],
-        check=True,
-    )
-    assert agent._bug_from_commit(tmp_path, "HEAD") == 555
-
-
-def test_no_bug_from_a_commit_git_cannot_read(tmp_path):
-    assert agent._bug_from_commit(tmp_path, "HEAD") is None
-
-
-def test_unsure_culprit_runs_fix_stage(tmp_path, monkeypatch):
-    result, calls, head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {
-                "recommendation": "backout",
-                "culprit_commit": "HEAD",
-                "confidence": 0.5,
-                "proposed_patch": True,
-            },
-        ],
-        monkeypatch,
-    )
-    assert len(calls) == 2  # analysis + fix
-    assert result.classification == "regression"
-    assert result.culprit_commit == head
-    # A patch is developer advice; the sheriff still backs the regression out.
-    assert result.recommendation == "backout"
-    assert result.proposed_patch is True
-    assert result.num_turns == 6
-
-
-def test_skip_firefox_build_still_patches_but_never_builds(tmp_path, monkeypatch):
-    # The fix stage is still worth running without a build: the patch is developer
-    # advice for the reland, and it costs nothing to compile it here.
-    options = []
-    result, calls, head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {
-                "recommendation": "backout",
-                "culprit_commit": "HEAD",
-                "confidence": 0.5,
-                "proposed_patch": True,
-            },
-        ],
-        monkeypatch,
-        skip_firefox_build=True,
-        options_out=options,
-    )
-    assert len(calls) == 2  # analysis + fix
-    assert result.culprit_commit == head
-    assert result.proposed_patch is True
-    # Nothing that leads to a build may have run.
-    assert not (tmp_path / ".mozconfig").exists()
-    # The build tool is not merely discouraged, it is not on offer.
-    for opts in options:
-        assert BUILD_TOOL not in opts.allowed_tools
-        assert "firefox" not in opts.mcp_servers
-    assert "Do not build" in calls[1]
-    assert "unverified" in calls[1]
-
-
-def test_not_building_is_the_default(tmp_path, monkeypatch):
-    # Pins config.SKIP_FIREFOX_BUILD: nothing is passed here, so a change to the
-    # default flips this test rather than silently changing every run.
-    assert SKIP_FIREFOX_BUILD is True
-    options = []
-    _result, calls, _head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-        ],
-        monkeypatch,
-        options_out=options,
-    )
-    assert not (tmp_path / ".mozconfig").exists()
-    assert BUILD_TOOL not in options[0].allowed_tools
-    assert "Do not build" in calls[1]
-
-
-def test_opting_into_the_build_verifies_the_fix(tmp_path, monkeypatch):
-    options = []
-    _result, calls, _head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-        ],
-        monkeypatch,
-        skip_firefox_build=False,
-        options_out=options,
-    )
-    assert (tmp_path / ".mozconfig").exists()
-    assert BUILD_TOOL in options[0].allowed_tools
-    assert "build_firefox tool" in calls[1]
-    assert "Do not build" not in calls[1]
-
-
-def test_a_confident_blame_still_gets_a_patch(tmp_path, monkeypatch):
-    # The fix stage used to be skipped above a confidence threshold, because the
-    # Firefox build it needed delayed the report. Without that build it is cheap
-    # enough to run on a confident blame too.
-    result, calls, head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.99},
-            {
-                "recommendation": "backout",
-                "culprit_commit": "HEAD",
-                "confidence": 0.99,
-                "proposed_patch": True,
-            },
-        ],
-        monkeypatch,
-    )
-    assert len(calls) == 2  # analysis + fix
-    assert result.culprit_commit == head
-    assert result.recommendation == "backout"
-    assert result.proposed_patch is True
-    assert not (tmp_path / ".mozconfig").exists()
-
-
-def test_no_culprit_skips_fix_stage(tmp_path, monkeypatch):
+def test_no_culprit_means_no_backout(tmp_path, monkeypatch):
     result, calls, _head = _run(
         tmp_path,
         [{"recommendation": "backout", "culprit_commit": None, "confidence": 0.3}],
         monkeypatch,
     )
-    assert len(calls) == 1  # no fix stage
     assert result.culprit_commit is None
-    assert result.proposed_patch is False
     assert result.recommendation == "do_not_backout"
+
+
+# --- handing a culprit on to test-repair-fix ------------------------------- #
+
+
+def _blamed():
+    return [{"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.9}]
+
+
+def test_the_hand_off_is_offered_with_a_recorder(tmp_path, monkeypatch):
+    options = []
+    _, calls, _ = _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        options_out=options,
+        actions_recorder=ActionsRecorder(),
+    )
+    assert HANDOFF_TOOL in options[0].allowed_tools
+    assert "actions" in options[0].mcp_servers
+    assert 'agent "test-repair-fix"' in _flat(calls[0])
+    assert "do not plan or attempt the fix" in _flat(calls[0])
+
+
+def test_the_analysis_neither_edits_nor_builds(tmp_path, monkeypatch):
+    options = []
+    _run(tmp_path, _blamed(), monkeypatch, options_out=options)
+    assert not {"Edit", "MultiEdit"} & set(options[0].allowed_tools)
+    assert options[0].add_dirs == [str(tmp_path)]
+    assert "git diff --stat" not in options[0].system_prompt["append"]
+
+
+@pytest.mark.parametrize("other", ["bug-fix", "build-repair", "test-repair"])
+def test_the_analysis_can_only_start_the_fix_agent(tmp_path, monkeypatch, other):
+    recorder = ActionsRecorder()
+    _run(tmp_path, _blamed(), monkeypatch, actions_recorder=recorder)
+    with pytest.raises(ToolError, match="allowed: test-repair-fix"):
+        asyncio.run(agents.start_run(recorder, agent=other, reasoning="why"))
+
+
+def test_no_hand_off_without_a_recorder(tmp_path, monkeypatch):
+    options = []
+    _, calls, _ = _run(tmp_path, _blamed(), monkeypatch, options_out=options)
+    assert HANDOFF_TOOL not in options[0].allowed_tools
+    assert "actions" not in options[0].mcp_servers
+    assert "test-repair-fix" not in calls[0]
+
+
+def test_the_analysis_never_builds(tmp_path, monkeypatch):
+    options = []
+    _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        options_out=options,
+        actions_recorder=ActionsRecorder(),
+    )
+    assert "firefox" not in options[0].mcp_servers
+    assert not any("firefox" in tool for tool in options[0].allowed_tools)
+
+
+def test_a_hand_off_publishes_what_the_fix_works_from(tmp_path, monkeypatch):
+    recorder = ActionsRecorder()
+    published = []
+    result, _, head = _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        actions_recorder=recorder,
+        hand_off=True,
+        published=published,
+    )
+    assert result.culprit_commit == head
+    assert [a["type"] for a in recorder.actions] == ["agents.start_run"]
+    assert {
+        "summary.md",
+        "analysis.md",
+        "verdict.json",
+        "logs/job_1/live_backing_log.log",
+    } <= set(published)
+
+
+def test_a_hand_off_without_a_culprit_is_dropped(tmp_path, monkeypatch):
+    recorder = ActionsRecorder()
+    published = []
+    _run(
+        tmp_path,
+        [{"recommendation": "backout", "culprit_commit": None}],
+        monkeypatch,
+        actions_recorder=recorder,
+        hand_off=True,
+        published=published,
+    )
+    assert recorder.actions == []
+    assert "verdict.json" not in published
+
+
+def test_no_hand_off_publishes_no_logs(tmp_path, monkeypatch):
+    published = []
+    _run(
+        tmp_path,
+        _blamed(),
+        monkeypatch,
+        actions_recorder=ActionsRecorder(),
+        published=published,
+    )
+    assert not any(key.startswith("logs/") for key in published)
+
+
+def test_the_prompt_names_the_checkout_path(tmp_path, monkeypatch):
+    # Only the scratch dir used to be named, so the agent cd'd there and then had
+    # to hunt the filesystem for the tree.
+    _result, calls, _head = _run(tmp_path, _blamed(), monkeypatch)
+    assert str(tmp_path / "src") in calls[0]
+
+
+def test_tree_searches_are_steered_to_git_grep(tmp_path, monkeypatch):
+    # An unbounded `grep -r` over the Firefox tree burns the whole Bash timeout.
+    options = []
+    _run(tmp_path, _blamed(), monkeypatch, options_out=options)
+    assert "`git grep`" in options[0].system_prompt["append"]
 
 
 def test_hallucinated_culprit_is_discarded(tmp_path, monkeypatch):
@@ -521,43 +301,6 @@ def test_hallucinated_culprit_is_discarded(tmp_path, monkeypatch):
     assert len(calls) == 1
     assert result.culprit_commit is None
     assert result.recommendation == "do_not_backout"
-
-
-def test_fix_stage_verdict_rewrite_keeps_analysis_culprit(tmp_path, monkeypatch):
-    # The fix stage may rewrite the whole file; the culprit must survive that.
-    result, _calls, head = _run(
-        tmp_path,
-        [
-            {
-                "recommendation": "backout",
-                "culprit_commit": "HEAD",
-                "culprit_bug": 123,
-                "confidence": 0.5,
-            },
-            {"recommendation": "backout", "proposed_patch": True},
-        ],
-        monkeypatch,
-    )
-    assert result.culprit_commit == head
-    assert result.culprit_bug == 123
-    assert result.confidence == 0.5
-    assert result.recommendation == "backout"
-
-
-def test_failed_fix_stage_still_publishes_analysis(tmp_path, monkeypatch):
-    result, calls, head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            None,
-        ],
-        monkeypatch,
-        results=[False, True],
-    )
-    assert len(calls) == 2
-    assert result.culprit_commit == head
-    assert result.recommendation == "backout"
-    assert result.analysis == "the reasoning"
 
 
 def test_range_prompt_does_not_assert_the_culprit(tmp_path, monkeypatch):
@@ -594,7 +337,6 @@ def test_assemble_tolerates_malformed_verdict_fields(tmp_path):
             "recommendation": "backout",
             "culprit_commit": "abc",
             "confidence": "high",
-            "culprit_bug": "n/a",
         },
         source_repo=tmp_path,
         total_turns=1,
@@ -652,23 +394,10 @@ def test_analysis_prompt_asks_for_the_whole_stack(tmp_path, monkeypatch):
     assert "whole stack has to be backed out" in _flat(calls[0])
 
 
-def test_analysis_prompt_rules_out_follow_ups(tmp_path, monkeypatch):
+def test_analysis_prompt_rules_out_fixing_forward(tmp_path, monkeypatch):
     _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
-    assert "Never suggest a follow-up patch" in _flat(calls[0])
-    assert "land in one push" in _flat(calls[0])
-
-
-def test_fix_prompt_keeps_the_backout_and_asks_for_a_squashed_reland(
-    tmp_path, monkeypatch
-):
-    _result, calls, _head = _run(
-        tmp_path,
-        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
-        monkeypatch,
-    )
-    assert "squash" in calls[1]
-    assert "not a follow-up" in _flat(calls[1])
-    assert 'leave "recommendation" as "backout"' in _flat(calls[1])
+    assert 'there is no "land a fix instead"' in _flat(calls[0])
+    assert '"small enough to fix forward" is not a reason' in _flat(calls[0])
 
 
 def test_resolve_culprit_normalizes_against_the_checkout(tmp_path):
@@ -684,34 +413,6 @@ def test_resolve_culprit_normalizes_against_the_checkout(tmp_path):
 
 def test_range_expr_is_relative_to_the_checkout():
     assert agent._range_expr(CommitRange("h" * 40, 5)) == "HEAD~5..HEAD"
-
-
-def test_both_stages_name_the_checkout_path(tmp_path, monkeypatch):
-    # Only the scratch dir used to be named, so the agent cd'd there and then had
-    # to hunt the filesystem for the tree -- in both stages.
-    _result, calls, _head = _run(
-        tmp_path,
-        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
-        monkeypatch,
-    )
-    repo = str(tmp_path / "src")
-    assert len(calls) == 2
-    for prompt in calls:
-        assert repo in prompt
-
-
-def test_both_stages_steer_tree_searches_to_git_grep(tmp_path, monkeypatch):
-    # An unbounded `grep -r` over the Firefox tree burns the whole Bash timeout.
-    options = []
-    _run(
-        tmp_path,
-        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
-        monkeypatch,
-        options_out=options,
-    )
-    assert len(options) == 2
-    for opts in options:
-        assert "`git grep`" in opts.system_prompt["append"]
 
 
 def test_all_failing_tests_are_listed(tmp_path, monkeypatch):
@@ -842,73 +543,6 @@ def test_rerun_recommendation_survives_without_a_culprit(tmp_path, monkeypatch):
     assert result.recommendation == "rerun"
 
 
-def test_linux_failure_expects_the_test_to_pass(tmp_path, monkeypatch):
-    _result, calls, _head = _run(
-        tmp_path,
-        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
-        monkeypatch,
-        skip_firefox_build=False,
-    )
-    assert "mach" in calls[1]
-    assert "They should pass." in calls[1]
-    assert "proves nothing" not in calls[1]
-
-
-def test_non_linux_failure_still_runs_the_test_but_discounts_a_pass(
-    tmp_path, monkeypatch
-):
-    # A failure on Linux is real evidence the patch is wrong; a pass says nothing
-    # about the failing platform, so it must not count as verification.
-    _result, calls, _head = _run(
-        tmp_path,
-        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
-        monkeypatch,
-        platform="windows11-64-24h2/opt",
-        skip_firefox_build=False,
-    )
-    assert "mach" in calls[1]
-    assert "proves nothing about windows11-64-24h2/opt" in calls[1]
-    assert "not verified" in calls[1]
-
-
-def _mozconfig_for(tmp_path, platform):
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    fx = _fx_ctx(tmp_path)
-    agent._write_mozconfig(fx, _investigation("h", platform=platform))
-    return fx.mozconfig.read_text()
-
-
-def test_mozconfig_mirrors_the_ci_build_variant(tmp_path):
-    opt = _mozconfig_for(tmp_path / "opt", "linux1804-64-qr/opt")
-    assert "--disable-debug" in opt and "--enable-optimize" in opt
-    assert "sanitizer" not in opt
-
-    dbg = _mozconfig_for(tmp_path / "dbg", "linux1804-64-qr/debug")
-    assert "--enable-debug" in dbg
-
-    # A plain build cannot trigger a sanitizer or coverage failure at all.
-    asan = _mozconfig_for(tmp_path / "asan", "linux1804-64-asan-qr/opt")
-    assert "--enable-address-sanitizer" in asan and "--disable-jemalloc" in asan
-
-    tsan = _mozconfig_for(tmp_path / "tsan", "linux1804-64-tsan-qr/opt")
-    assert "--enable-thread-sanitizer" in tsan
-
-    ccov = _mozconfig_for(tmp_path / "ccov", "linux1804-64-ccov/opt")
-    assert "--enable-coverage" in ccov
-
-
-def test_verify_step_states_the_container_limits(tmp_path, monkeypatch):
-    _result, calls, _head = _run(
-        tmp_path,
-        [{"culprit_commit": "HEAD"}, {"proposed_patch": True}],
-        monkeypatch,
-        platform="linux1804-64-qr/debug",
-        skip_firefox_build=False,
-    )
-    assert "virtual display" in calls[1]
-    assert "could not verify" in calls[1]
-
-
 def test_the_hg_revision_is_labelled_as_one(tmp_path, monkeypatch):
     # Every other revision in the prompt is a git hash; an unlabelled hg node
     # makes the agent run git commands against it and get exit 128.
@@ -917,29 +551,10 @@ def test_the_hg_revision_is_labelled_as_one(tmp_path, monkeypatch):
     assert "never to git" in _flat(calls[0])
 
 
-def test_mozconfig_overwrites_a_foreign_one(tmp_path):
-    # /workspace is shared with the other agents, so a leftover mozconfig points
-    # the build at a foreign objdir with foreign flags.
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    fx = _fx_ctx(tmp_path)
-    fx.mozconfig.write_text(
-        "ac_add_options --enable-release\n"
-        "mk_add_options MOZ_OBJDIR=/workspace/firefox/objdir-build-repair\n"
-    )
-    agent._write_mozconfig(fx, _investigation("h", platform="linux1804-64/opt"))
-    written = fx.mozconfig.read_text()
-    assert "objdir-build-repair" not in written
-    assert "--enable-release" not in written
-    assert str(fx.objdir) in written
-
-
 def test_analysis_prompt_offers_treeherder_cli(tmp_path, monkeypatch):
     _result, calls, _head = _run(
         tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-        ],
+        [{"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5}],
         monkeypatch,
     )
     prompt = _flat(calls[0])
@@ -979,14 +594,12 @@ def test_a_reported_blocker_fails_the_run(tmp_path, monkeypatch):
         return _result_msg()
 
     monkeypatch.setattr(agent, "_run_session", fake_session)
-    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {"type": "sdk"})
 
     with pytest.raises(AgentError) as excinfo:
         asyncio.run(
             agent.run_test_repair(
                 bugzilla_mcp_server=None,
                 source_repo=repo,
-                fx_ctx=_fx_ctx(tmp_path),
                 investigation=_investigation("headsha"),
                 scratch_out=scratch_out,
                 verbose=False,
@@ -994,19 +607,6 @@ def test_a_reported_blocker_fails_the_run(tmp_path, monkeypatch):
             )
         )
     assert "returned no jobs" in str(excinfo.value)
-
-
-def test_no_blocker_file_means_the_run_continues(tmp_path, monkeypatch):
-    result, calls, _head = _run(
-        tmp_path,
-        [
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-            {"recommendation": "backout", "culprit_commit": "HEAD", "confidence": 0.5},
-        ],
-        monkeypatch,
-    )
-    assert len(calls) == 2
-    assert result.recommendation == "backout"
 
 
 def test_a_verdict_without_a_retrieved_log_fails_the_run(tmp_path, monkeypatch):
@@ -1030,14 +630,12 @@ def test_a_verdict_without_a_retrieved_log_fails_the_run(tmp_path, monkeypatch):
         return _result_msg()
 
     monkeypatch.setattr(agent, "_run_session", fake_session)
-    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {"type": "sdk"})
 
     with pytest.raises(AgentError) as excinfo:
         asyncio.run(
             agent.run_test_repair(
                 bugzilla_mcp_server=None,
                 source_repo=repo,
-                fx_ctx=_fx_ctx(tmp_path),
                 investigation=_investigation("headsha"),
                 scratch_out=scratch_out,
                 verbose=False,
@@ -1045,3 +643,39 @@ def test_a_verdict_without_a_retrieved_log_fails_the_run(tmp_path, monkeypatch):
             )
         )
     assert "no failure log was retrieved" in str(excinfo.value)
+
+
+def test_the_culprits_bug_is_read_off_its_subject(tmp_path):
+    repo = tmp_path / "src"
+    repo.mkdir()
+    _git_repo(repo)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "Bug 555 - x"],
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    out = tmp_path / "out"
+    out.mkdir()
+    result = agent._assemble_result(
+        out,
+        verdict={"culprit_commit": head, "culprit_bug": 999},
+        source_repo=repo,
+        total_turns=1,
+        total_cost=0.0,
+        publish_file=None,
+    )
+    assert result.culprit_bug == 555
+
+
+def test_the_analysis_is_scoped_to_the_sheriffs_decision(tmp_path, monkeypatch):
+    _result, calls, _head = _run(tmp_path, [{"culprit_commit": None}], monkeypatch)
+    prompt = _flat(calls[0])
+    assert "Fixing the regression is not your job" in prompt
+    assert "culprit_bug" not in prompt
+    assert "Search for the bug the culprit landed under" not in prompt
+    assert "a sheriff reads to trust the recommendation" in prompt

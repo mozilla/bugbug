@@ -329,6 +329,7 @@ async def test_other_agents_do_not_auto_apply():
     assert AGENT_REGISTRY["test-repair"].always_apply_actions == {
         "email.send",
         "slack.post_message",
+        "agents.start_run",
     }
 
 

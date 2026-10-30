@@ -64,6 +64,7 @@ on:
           - agents/frontend-triage
           - agents/test-plan-generator
           - agents/test-repair
+          - agents/test-repair-fix
           - services/hackbot-api
           - services/hackbot-ui
       action:
