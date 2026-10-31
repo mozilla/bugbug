@@ -11,7 +11,8 @@ package. One more command, `bugbug-data-perf-commit-risk` in
 `scripts/perf_commit_risk_scorer.py`, scores every commit of the pushes
 snapshot with the perf regression predictor, so evaluations of scheduling
 strategies that depend on risk scores never have to call the prediction
-endpoint.
+endpoint. The simulator that replays those strategies over these datasets is
+described in [perf-scheduling-simulation.md](perf-scheduling-simulation.md).
 
 ## Code layout
 
