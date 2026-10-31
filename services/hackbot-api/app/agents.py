@@ -11,6 +11,7 @@ from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
     FrontendTriageInputs,
+    PerfTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairFixInputs,
     TestRepairInputs,
@@ -122,6 +123,19 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         # Except the Slack notification: for a held run it is the only signal that
         # an analysis is waiting, so holding it with the comment hides the run.
         always_apply_actions=frozenset({"slack.post_message"}),
+    ),
+    "perf-triage": AgentSpec(
+        name="perf-triage",
+        description=(
+            "Rate a Firefox performance bug with the Performance Impact "
+            "Calculator, analysing a linked profile, and set Performance Impact."
+        ),
+        job_name="hackbot-agent-perf-triage",
+        input_schema=PerfTriageInputs,
+        # Writes cf_performance_impact unattended, but only for runs whose rating
+        # held under every value of the inputs the bug left open (findings.auto_apply).
+        auto_apply_actions=True,
+        auto_apply_requires_consent=True,
     ),
     "test-repair": AgentSpec(
         name="test-repair",
