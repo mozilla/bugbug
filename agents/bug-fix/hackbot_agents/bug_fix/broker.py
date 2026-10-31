@@ -20,12 +20,12 @@ import logging
 from contextlib import asynccontextmanager
 
 import bugsy
-import uvicorn
 from agent_tools import bugzilla
 from agent_tools import phabricator as phabricator_tools
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.phabricator import PhabricatorContext
+from hackbot_runtime.broker import run_broker
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from phabricator_client import PhabricatorClient, PhabricatorSettings
 from phabricator_proxy import create_app as conduit_proxy
@@ -40,8 +40,6 @@ class BrokerInputs(BaseSettings):
     bugzilla_api_url: str
     bugzilla_api_key: str
     phabricator: PhabricatorSettings
-    host: str = "0.0.0.0"
-    port: int = 8765
 
     model_config = SettingsConfigDict(
         extra="ignore",
@@ -59,7 +57,8 @@ def _mcp_endpoint(manager: StreamableHTTPSessionManager):
     return handler
 
 
-def build_app(inputs: BrokerInputs) -> Starlette:
+def build_app() -> Starlette:
+    inputs = BrokerInputs()
     client = bugsy.Bugsy(
         api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
     )
@@ -84,10 +83,8 @@ def build_app(inputs: BrokerInputs) -> Starlette:
     async def lifespan(app):
         async with bugzilla_manager.run(), phabricator_manager.run():
             log.info(
-                "broker ready on %s:%d (bugzilla + phabricator read-only, "
-                "phabricator conduit proxy)",
-                inputs.host,
-                inputs.port,
+                "broker ready (bugzilla + phabricator read-only, "
+                "phabricator conduit proxy)"
             )
             yield
 
@@ -101,15 +98,5 @@ def build_app(inputs: BrokerInputs) -> Starlette:
     )
 
 
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    inputs = BrokerInputs()
-    app = build_app(inputs)
-    uvicorn.run(app, host=inputs.host, port=inputs.port, log_config=None)
-
-
 if __name__ == "__main__":
-    main()
+    run_broker(build_app)
