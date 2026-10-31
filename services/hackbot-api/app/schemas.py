@@ -23,6 +23,7 @@ class ArtifactRef(BaseModel):
 class RunSummary(BaseModel):
     status: str
     error: str | None = None
+    agent_version: str | None = None
     findings: dict[str, Any] = {}
     actions: list[dict[str, Any]] = []
 
