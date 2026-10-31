@@ -34,9 +34,18 @@ Each scored commit gets its own `risk_score`; the push-level `risk_score` is
 the maximum across the scored commits, or `null` when every commit in the push
 was ignored.
 
-The `risk_score` is the uncalibrated softmax probability for positive class
-`1`. It must not be interpreted as a calibrated probability for operational
-decision-making.
+The model's own `risk_score` is the raw softmax probability of the positive
+class `1`: it ranks commits but is not the probability of a regression, since
+the checkpoint was trained on far more positives than autoland produces. The
+HTTP service maps it through the calibration the
+[data pipeline](../perf-alerts.md) fits for the model version, an isotonic
+mapping from raw scores to observed culprit rates, and returns the calibrated
+value as `risk_score` with the model's output as `raw_risk_score`;
+`extra_data.calibrated` says whether a calibration was applied and
+`calibration_fitted_at` when it was fitted. Without a published calibration
+for the model version, such as a new checkpoint with too few culprits yet,
+`risk_score` is the raw value and `calibrated` is `false`. The CLI and the
+batch scorer report raw scores.
 
 ## Local inference with the CLI
 
@@ -72,7 +81,7 @@ export formats. A raw diff without a detectable message is still accepted,
 with a warning.
 
 The command prints the predicted binary `class`, both class probabilities in
-`prob`, and the uncalibrated positive-class `risk_score`.
+`prob`, and the model's raw positive-class `risk_score`.
 
 ## HTTP service
 
@@ -103,13 +112,14 @@ Example result:
 {
   "branch": "integration/autoland",
   "rev": "76383a875678",
-  "risk_score": 0.75,
+  "risk_score": 0.12,
   "commits": [
     {
       "node": "76383a875678",
       "prob": [0.25, 0.75],
       "class": 1,
-      "risk_score": 0.75,
+      "risk_score": 0.12,
+      "raw_risk_score": 0.75,
       "ignored_reason": null
     },
     {
@@ -117,6 +127,7 @@ Example result:
       "prob": null,
       "class": null,
       "risk_score": null,
+      "raw_risk_score": null,
       "ignored_reason": "merge"
     }
   ],
@@ -124,7 +135,8 @@ Example result:
     "model_name": "Perf Regression Predictor",
     "model_version": "perf-regression-predictor-v1",
     "max_length": 512,
-    "calibrated": false,
+    "calibrated": true,
+    "calibration_fitted_at": "2026-11-01T00:05:12+00:00",
     "commit_count": 2,
     "ignored_commit_count": 1
   }
@@ -132,10 +144,11 @@ Example result:
 ```
 
 The push-level `risk_score` is the maximum of the per-commit `risk_score`
-values of the scored commits in `commits`. Ignored commits have
-`ignored_reason` set and `null` for `prob`, `class` and `risk_score`; a `null`
-means "not scored", not "no risk". When every commit was ignored the push-level
-`risk_score` is `null` too.
+values of the scored commits in `commits`, calibrated when they are. Ignored
+commits have `ignored_reason` set and `null` for `prob`, `class`,
+`risk_score` and `raw_risk_score`; a `null` means "not scored", not "no
+risk". When every commit was ignored the push-level `risk_score` is `null`
+too.
 
 ## Batch scoring
 

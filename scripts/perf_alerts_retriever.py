@@ -5,12 +5,14 @@
 
 """Retrieve Perfherder alerts and derive performance regression datasets.
 
-Three commands, run in order by the Taskcluster pipeline: ``retrieve``
+Four commands, run in order by the Taskcluster pipeline: ``retrieve``
 snapshots alerts, pushes, regression bugs and task costs; ``generate`` applies
 the labeling policy to produce regressions, scheduling pairs and push status;
 ``export`` writes the commit dataset for the regression predictor from a local
-Mercurial clone. Each command reads the previous one's output through
-``bugbug.db``, downloading it from the Taskcluster index when absent locally.
+Mercurial clone; ``calibrate`` fits the mapping from the predictor's raw risk
+scores, as the commit risk scorer stored them, to observed culprit rates. Each
+command reads the others' output through ``bugbug.db``, downloading it from
+the Taskcluster index when absent locally.
 """
 
 import argparse
@@ -22,6 +24,7 @@ from dateutil.relativedelta import relativedelta
 
 from bugbug import bugzilla, db, redash
 from bugbug.perf import (
+    calibration,
     datasets,
     extraction,
     push_status,
@@ -51,6 +54,8 @@ DEFAULT_SETTLE_DAYS = 21
 DEFAULT_NEGATIVE_RATIO = 5.0
 DEFAULT_SEED = 0
 DEFAULT_TEST_FRACTION = 0.1
+DEFAULT_HOLDOUT_DAYS = 60
+DEFAULT_MIN_POSITIVES = 50
 
 
 def _download(path: str) -> None:
@@ -60,7 +65,7 @@ def _download(path: str) -> None:
 
 
 class Retriever:
-    """The three pipeline commands, over autoland (``bugbug.perf.label_policy.REPOSITORY``)."""
+    """The pipeline commands, over autoland (``bugbug.perf.label_policy.REPOSITORY``)."""
 
     def retrieve(
         self,
@@ -418,9 +423,92 @@ class Retriever:
             db.size(datasets.PERF_REGRESSION_COMMITS_DB),
         )
 
+    def calibrate(
+        self,
+        settle_days: int,
+        holdout_days: int,
+        min_positives: int,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> None:
+        """Fit the risk score calibration of every model version in the risk archive.
+
+        Culprit and clean commits come from the regressions and push status
+        rows, their raw scores from ``perf_commit_risk.json``. One record per
+        model version with at least ``min_positives`` culprits is written to
+        ``perf_risk_calibration.json``, with the reliability of a mapping
+        fitted without the newest ``holdout_days`` on those days.
+        """
+        for path in (
+            datasets.PERF_REGRESSIONS_DB,
+            datasets.PERF_PUSH_STATUS_DB,
+            datasets.PERF_COMMIT_RISK_DB,
+        ):
+            if not db.exists(path):
+                _download(path)
+
+        settle_before = self.get_settle_cutoff(settle_days, until)
+        logger.info(
+            "Calibration window: pushes from %s before %s",
+            since or "the snapshot start",
+            settle_before,
+        )
+        regressions = [
+            regression
+            for regression in datasets.get_perf_regressions()
+            if regression_labeling.is_within_window(
+                regression["push_time"], since, settle_before
+            )
+        ]
+        statuses = [
+            status
+            for status in push_status.read_push_status()
+            if regression_labeling.is_within_window(
+                status["push_time"], since, settle_before
+            )
+        ]
+
+        records = []
+        for version, scores in sorted(
+            calibration.scores_by_version(datasets.get_perf_commit_risk()).items()
+        ):
+            rows = calibration.label_scored_commits(regressions, statuses, scores)
+            record = calibration.build_calibration_record(
+                rows, version, holdout_days, min_positives
+            )
+            if record is None:
+                continue
+            records.append(record)
+            holdout = record["holdout"]
+            logger.info(
+                "%s: calibrated on %d commits with %d culprits (base rate %.2f%%), "
+                "%d breakpoints%s",
+                version,
+                record["commits"],
+                record["positives"],
+                100 * record["base_rate"],
+                len(record["x"]),
+                (
+                    "; holdout of %d commits: log loss %.4f raw, %.4f calibrated, "
+                    "ECE %.4f raw, %.4f calibrated"
+                    % (
+                        holdout["commits"],
+                        holdout["raw"]["log_loss"],
+                        holdout["calibrated"]["log_loss"],
+                        holdout["raw"]["ece"],
+                        holdout["calibrated"]["ece"],
+                    )
+                    if holdout
+                    else ""
+                ),
+            )
+        db.write(datasets.PERF_RISK_CALIBRATION_DB, records)
+        zstd_compress(datasets.PERF_RISK_CALIBRATION_DB)
+        logger.info("Wrote %d calibration records", len(records))
+
 
 def _add_window_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add the dataset window flags shared by ``generate`` and ``export``."""
+    """Add the dataset window flags shared by ``generate``, ``export`` and ``calibrate``."""
     parser.add_argument(
         "--settle-days",
         type=int,
@@ -531,6 +619,24 @@ def main() -> None:
         help="Share of commits, the newest by push date, held out as the test split. Default: %(default)s.",
     )
 
+    calibrate = subparsers.add_parser(
+        "calibrate",
+        help="Fit the mapping from the predictor's raw risk scores to culprit rates.",
+    )
+    _add_window_arguments(calibrate)
+    calibrate.add_argument(
+        "--holdout-days",
+        type=int,
+        default=DEFAULT_HOLDOUT_DAYS,
+        help="Newest days of labeled commits scored by a mapping fitted on the older ones, to report how the calibration holds up. Default: %(default)s.",
+    )
+    calibrate.add_argument(
+        "--min-positives",
+        type=int,
+        default=DEFAULT_MIN_POSITIVES,
+        help="Culprits a model version needs before its calibration is published. Default: %(default)s.",
+    )
+
     args = parser.parse_args()
     retriever = Retriever()
 
@@ -557,6 +663,14 @@ def main() -> None:
             args.since,
             args.until,
             args.refresh_repo,
+        )
+    elif args.op == "calibrate":
+        retriever.calibrate(
+            args.settle_days,
+            args.holdout_days,
+            args.min_positives,
+            args.since,
+            args.until,
         )
 
 

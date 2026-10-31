@@ -819,6 +819,39 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: perf-risk-calibration
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - perf-regressions-generator
+        - perf-commit-risk-scorer
+      payload:
+        maxRunTime: 3600
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-perf-alerts
+          - calibrate
+
+        artifacts:
+          public/perf_risk_calibration.json.zst:
+            path: /data/perf_risk_calibration.json.zst
+            type: file
+          public/perf_risk_calibration.json.version:
+            path: /data/perf_risk_calibration.json.version
+            type: file
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_risk_calibration.${version}
+        - index.project.bugbug.data_perf_risk_calibration.latest
+      metadata:
+        name: bugbug performance risk score calibration
+        description: bugbug mapping from perf regression predictor risk scores to observed culprit rates
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: rollback-test-task
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }

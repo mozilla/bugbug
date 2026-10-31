@@ -27,6 +27,7 @@ endpoint.
 | `bugbug/perf/selection_pairs.py`     | test selection pairs and the labeled pair stream                                                                                                |
 | `bugbug/perf/regression_commits.py`  | commit-level dataset for the regression predictor                                                                                               |
 | `bugbug/perf/commit_risk.py`         | the predictor's ignore rules and per-patch scoring, shared with the HTTP service and the training set export, and the batch scorer over a clone |
+| `bugbug/perf/calibration.py`         | the mapping from raw risk scores to culprit rates, fitted by `calibrate`, applied by the HTTP service and the simulator                         |
 | `bugbug/perf/task_costs.py`          | joining pushes to task costs                                                                                                                    |
 
 Dependencies point one way: `label_policy` imports nothing from the package,
@@ -195,6 +196,31 @@ mozilla-central. The model version is the checkpoint's own when its
 `bugbug_model.json` declares one, otherwise the name of the published
 artifact, such as `perf-regression-predictor-v1`; `--model-version`
 overrides it for a local checkpoint.
+
+`calibrate` turns those raw scores into probabilities. The predictor's
+`risk_score` ranks commits but is not a probability of a regression: the model
+was trained on far more positives than autoland produces, so a raw 0.6 is a
+risky commit, not a 60 percent chance. The taskgraph's risk-aware batching
+adds commit scores up as hazards, `-log(1 - score)`, which is the probability
+that at least one pending commit regressed only when each score is a
+probability, and a threshold tuned on raw scores drifts as their distribution
+moves. For each model version in `perf_commit_risk.json`, `calibrate` pairs the
+scored commits with the labels (the pinned culprit commits of positive
+regressions against the commits of settled clean pushes; the other commits of
+culprit pushes, unpinned regressions and pending or rejected pushes are
+unknown and left out), fits an isotonic regression of the culprit rate on
+the raw score over equal-count bins of 50 commits, so that no step of the
+mapping rests on the one or two top-scoring commits, and writes it as
+breakpoints to `data/perf_risk_calibration.json`, one record per model
+version with at least `--min-positives` (50) culprits. The mapping never
+reorders commits; it changes what a threshold means. The record
+also reports how a mapping fitted without the newest `--holdout-days` (60)
+does on those days: log loss, Brier score and expected calibration error of
+the raw and calibrated scores, and the precision and recall of the top 1, 2
+and 5 percent of commits, which calibration cannot change. The HTTP service
+applies the published mapping to the `risk_score` it returns and the
+simulator fits its own on its optimize window; the scorer keeps storing raw
+scores, so a refit never means rescoring the archive.
 
 Flag defaults are the `DEFAULT_*` constants at the top of
 `scripts/perf_alerts_retriever.py`; the pipeline tasks pass no flags, so those
@@ -413,15 +439,29 @@ are aggregated to the push by taking the maximum per test.
 
 ### `perf_commit_risk.json` (one record per commit and model version)
 
-| Field                                | Type          | Meaning                                                                           |
-| ------------------------------------ | ------------- | --------------------------------------------------------------------------------- |
-| `node`                               | str           | changeset hash                                                                    |
-| `push_id`, `pushlog_id`, `push_time` | int, int?, ts | the push the commit landed in, as in `perf_pushes.json`                           |
-| `ignored_reason`                     | str?          | `merge`, `wptsync` or `ignore-this-changeset` when the predictor skips the commit |
-| `risk_score`                         | float?        | probability of the positive class, uncalibrated; `null` for ignored commits       |
-| `prob`, `class`                      | list?, int?   | both class probabilities and the predicted class; `null` for ignored commits      |
-| `model_version`                      | str           | the checkpoint that produced the record; read one version at a time               |
-| `scored_at`                          | ts            | when the scorer run that produced the record started                              |
+| Field                                | Type          | Meaning                                                                                                                           |
+| ------------------------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `node`                               | str           | changeset hash                                                                                                                    |
+| `push_id`, `pushlog_id`, `push_time` | int, int?, ts | the push the commit landed in, as in `perf_pushes.json`                                                                           |
+| `ignored_reason`                     | str?          | `merge`, `wptsync` or `ignore-this-changeset` when the predictor skips the commit                                                 |
+| `risk_score`                         | float?        | the model's raw positive-class probability, which `perf_risk_calibration.json` maps to a culprit rate; `null` for ignored commits |
+| `prob`, `class`                      | list?, int?   | both class probabilities and the predicted class; `null` for ignored commits                                                      |
+| `model_version`                      | str           | the checkpoint that produced the record; read one version at a time                                                               |
+| `scored_at`                          | ts            | when the scorer run that produced the record started                                                                              |
+
+### `perf_risk_calibration.json` (one record per model version)
+
+| Field                               | Type            | Meaning                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model_version`                     | str             | the checkpoint whose raw scores the mapping takes                                                                                                                                                                                                                                                          |
+| `method`                            | str             | `isotonic`                                                                                                                                                                                                                                                                                                 |
+| `x`, `y`                            | list[float]     | breakpoints: increasing raw scores and the non-decreasing probability at each; interpolate linearly between them and take the nearest end outside                                                                                                                                                          |
+| `fit_window`                        | {since, until}  | push times of the oldest and newest labeled commit the mapping was fitted on                                                                                                                                                                                                                               |
+| `commits`, `positives`, `base_rate` | int, int, float | labeled scored commits fitted on, culprits among them, and their share                                                                                                                                                                                                                                     |
+| `bin_size`                          | int             | commits per equal-count bin the regression was fitted over                                                                                                                                                                                                                                                 |
+| `holdout`                           | obj?            | the newest `--holdout-days`: `since`, `until`, `commits`, `positives`, the `raw` and `calibrated` reliability (`log_loss`, `brier`, `ece`) of a mapping fitted on the older commits, and `ranking` (`precision_at_N_percent`, `recall_at_N_percent` for 1, 2 and 5); `null` without culprits on both sides |
+| `fitted_at`                         | ts              | when the `calibrate` run started                                                                                                                                                                                                                                                                           |
+| `policy_version`                    | int             | rules version                                                                                                                                                                                                                                                                                              |
 
 ## Labeling policy
 
@@ -720,7 +760,12 @@ uv run --extra perf-regression-predictor bugbug-data-perf-commit-risk \
 
 Inference runs on the CPU at roughly one commit per second, so bound a local
 run with `--since`, `--limit` or `--time-budget HOURS`; the next run continues
-where it stopped.
+where it stopped. With scores and labels in place, `calibrate` runs in
+seconds:
+
+```sh
+bugbug-data-perf-alerts calibrate --settle-days 7
+```
 
 Each command first tries to download the previous snapshot from the
 Taskcluster index and falls back to the files in `./data/`, logging a warning
@@ -761,11 +806,13 @@ and the two tasks run on different worker types, so the export passes
 runs after the retrieval in the `bugbug-perf-commit-risk` image with the same
 clone cache and flags, plus `--time-budget=20` so a run always writes its
 archive within the task's 24 hours; the first run over a year of commits
-takes several runs, later ones score the new pushes in minutes. Artifacts are
-indexed under `project.bugbug.data_perf_alerts`,
-`project.bugbug.data_perf_regressions`,
-`project.bugbug.data_perf_regression_commits` and
-`project.bugbug.data_perf_commit_risk`. Apart from the export's and scorer's
-`--repo-dir`, `--refresh-repo` and the scorer's `--time-budget`, the tasks
-pass no flags, so the `DEFAULT_*` constants in the two scripts are the
+takes several runs, later ones score the new pushes in minutes.
+`perf-risk-calibration` (compute-small, `bugbug-base` image) runs `calibrate`
+once the generator and the scorer are done. Artifacts are indexed under
+`project.bugbug.data_perf_alerts`, `project.bugbug.data_perf_regressions`,
+`project.bugbug.data_perf_regression_commits`,
+`project.bugbug.data_perf_commit_risk` and
+`project.bugbug.data_perf_risk_calibration`. Apart from the export's and
+scorer's `--repo-dir`, `--refresh-repo` and the scorer's `--time-budget`, the
+tasks pass no flags, so the `DEFAULT_*` constants in the two scripts are the
 production configuration.

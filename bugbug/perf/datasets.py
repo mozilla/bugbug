@@ -91,6 +91,14 @@ db.register(
     _index_url("data_perf_regressions", "perf_push_status.json"),
     1,
 )
+# Refitted whole every run from the commit risk archive and the labels, so not
+# an archive: one record per model version with enough culprits.
+PERF_RISK_CALIBRATION_DB = "data/perf_risk_calibration.json"
+db.register(
+    PERF_RISK_CALIBRATION_DB,
+    _index_url("data_perf_risk_calibration", "perf_risk_calibration.json"),
+    1,
+)
 
 
 def load_previous_snapshot(path: str) -> bool:
@@ -225,3 +233,7 @@ def get_perf_regression_commits() -> Iterator[dict[str, Any]]:
 
 def get_perf_commit_risk() -> Iterator[dict[str, Any]]:
     yield from db.read(PERF_COMMIT_RISK_DB)
+
+
+def get_perf_risk_calibration() -> Iterator[dict[str, Any]]:
+    yield from db.read(PERF_RISK_CALIBRATION_DB)

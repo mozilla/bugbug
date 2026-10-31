@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
+from datetime import timedelta
 
 import numpy as np
 import orjson
@@ -11,6 +12,7 @@ import pytest
 import requests
 import zstandard
 
+from bugbug.perf.calibration import Calibration
 from bugbug_http import models
 from bugbug_http.app import API_TOKEN, JobInfo
 
@@ -80,6 +82,7 @@ def _mock_repo(monkeypatch, changesets, patches_by_node):
     monkeypatch.setattr(
         models, "get_hgmo_stack_changesets", lambda branch, rev: changesets
     )
+    monkeypatch.setattr(models.RISK_CALIBRATIONS, "get", lambda model_version: None)
 
     def get_commit_patches(repo_dir, revs):
         exported_revs.append(list(revs))
@@ -198,6 +201,7 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
             "prob": [0.2, 0.8],
             "class": 1,
             "risk_score": 0.8,
+            "raw_risk_score": 0.8,
             "ignored_reason": None,
         },
         {
@@ -205,9 +209,82 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
             "prob": [0.9, 0.1],
             "class": 0,
             "risk_score": 0.1,
+            "raw_risk_score": 0.1,
             "ignored_reason": None,
         },
     ]
+    assert result["extra_data"]["calibrated"] is False
+    assert result["extra_data"]["calibration_fitted_at"] is None
+
+
+def test_worker_applies_the_published_calibration(monkeypatch) -> None:
+    fake_model = _ScoringModel(np.array([[0.3, 0.7]]))
+    monkeypatch.setattr(
+        fake_model,
+        "get_extra_data",
+        lambda: {"model_version": "v1", "calibrated": False},
+    )
+    _mock_repo(monkeypatch, [_changeset("node1hash")], {b"node1hash": PATCH_ONE})
+    monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: fake_model)
+    calibration = Calibration("v1", (0.1, 0.8), (0.01, 0.2), "2026-10-30T00:00:00")
+    monkeypatch.setattr(
+        models.RISK_CALIBRATIONS,
+        "get",
+        lambda model_version: calibration if model_version == "v1" else None,
+    )
+
+    assert (
+        models.classify_perf_regression("integration/autoland", "abc123def456") == "OK"
+    )
+
+    job = JobInfo(
+        models.classify_perf_regression, "integration/autoland", "abc123def456"
+    )
+    result = orjson.loads(
+        zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
+    )
+    # A raw 0.7 lies between the breakpoints 0.1 and 0.8, so it interpolates
+    # to about 0.173; the push-level score follows the calibrated commits.
+    commit = result["commits"][0]
+    assert commit["raw_risk_score"] == 0.7
+    assert commit["risk_score"] == pytest.approx(0.01 + 0.19 * 0.6 / 0.7)
+    assert result["risk_score"] == commit["risk_score"]
+    assert result["extra_data"]["model_version"] == "v1"
+    assert result["extra_data"]["calibrated"] is True
+    assert result["extra_data"]["calibration_fitted_at"] == "2026-10-30T00:00:00"
+
+
+def test_risk_calibrations_refresh_and_keep_the_last_load(monkeypatch) -> None:
+    calls: list[str] = []
+    records = [
+        {"model_version": "v1", "method": "isotonic", "x": [0.0, 1.0], "y": [0.0, 0.3]}
+    ]
+
+    def download(path):
+        calls.append(path)
+        return True
+
+    monkeypatch.setattr(models.db, "download", download)
+    monkeypatch.setattr(models.db, "exists", lambda path: True)
+    monkeypatch.setattr(models.db, "read", lambda path: iter(records))
+    cache = models.RiskCalibrations(timedelta(hours=6))
+
+    first = cache.get("v1")
+    assert first is not None and first.apply(0.5) == pytest.approx(0.15)
+    assert cache.get("v2") is None and cache.get(None) is None
+    # One download serves every lookup within the refresh interval.
+    assert calls == [models.PERF_RISK_CALIBRATION_DB]
+
+    def offline(path):
+        calls.append(path)
+        raise OSError("offline")
+
+    monkeypatch.setattr(models.db, "download", offline)
+    assert cache.loaded_at is not None
+    cache.loaded_at = cache.loaded_at - timedelta(hours=7)
+    kept = cache.get("v1")
+    assert kept is not None and kept.apply(1.0) == pytest.approx(0.3)
+    assert len(calls) == 2
 
 
 def test_worker_does_not_cache_hgmo_errors(monkeypatch) -> None:
@@ -314,6 +391,7 @@ def test_worker_skips_ignored_commits_with_reason(monkeypatch) -> None:
             "prob": None,
             "class": None,
             "risk_score": None,
+            "raw_risk_score": None,
             "ignored_reason": "merge",
         },
         {
@@ -321,6 +399,7 @@ def test_worker_skips_ignored_commits_with_reason(monkeypatch) -> None:
             "prob": [0.3, 0.7],
             "class": 1,
             "risk_score": 0.7,
+            "raw_risk_score": 0.7,
             "ignored_reason": None,
         },
         {
@@ -328,6 +407,7 @@ def test_worker_skips_ignored_commits_with_reason(monkeypatch) -> None:
             "prob": None,
             "class": None,
             "risk_score": None,
+            "raw_risk_score": None,
             "ignored_reason": "wptsync",
         },
     ]
