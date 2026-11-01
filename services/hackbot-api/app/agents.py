@@ -12,6 +12,7 @@ from app.schemas import (
     BuildRepairInputs,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
+    TestRepairFixInputs,
     TestRepairInputs,
     UpliftInputs,
 )
@@ -132,7 +133,20 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
         auto_apply_actions=False,
-        always_apply_actions=frozenset({"email.send", "slack.post_message"}),
+        always_apply_actions=frozenset(
+            {"email.send", "slack.post_message", "agents.start_run"}
+        ),
+    ),
+    "test-repair-fix": AgentSpec(
+        name="test-repair-fix",
+        description=(
+            "Propose a patch for the regression a test-repair run blamed, for the "
+            "culprit's author to squash into their patch and reland."
+        ),
+        job_name="hackbot-agent-test-repair-fix",
+        input_schema=TestRepairFixInputs,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",

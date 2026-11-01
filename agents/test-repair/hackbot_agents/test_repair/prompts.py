@@ -24,9 +24,6 @@ the Bugzilla and Phabricator tools you were given.
 - Stay in your working directory, the source tree: write scratch files by absolute
   path rather than `cd`-ing elsewhere. If a command reports "not a git repository",
   you have moved -- run `git -C <tree>` rather than hunting for the tree.
-- Review your edits with `git diff --stat` and `git diff -- <path>`, never
-  `git status`: after a build the objdir adds millions of untracked files and the
-  output runs to tens of MB.
 - Never read or cat a whole CI log; they run to six figures of lines. Read a window
   with `sed -n`, and clip the width as well as the line count with `| cut -c1-200`,
   because a single log line can be 10 KB.
@@ -36,8 +33,10 @@ MAX_TESTS_PER_GROUP = 100
 MAX_CANDIDATE_COMMITS = 5
 
 ANALYSIS_TEMPLATE = """\
-You are investigating a failing Firefox CI test to find the commit that broke it,
-or to establish that it is a known intermittent.
+You are investigating a failing Firefox CI test so that sheriffs can decide
+whether to back out a commit: find the commit that broke it, or establish that it
+is a known intermittent. Your output is the recommendation and the root cause
+that settles it. Fixing the regression is not your job.
 
 Failing test groups (manifests) and the tests that failed in each:
 {failing_tests}
@@ -122,8 +121,7 @@ failure commit {failure_commit}.
    tracking bug" entries. Search on the bare file name; a quicksearch on the full
    path often returns nothing. If one matches, the classification is
    "intermittent" and its id goes in "intermittent_bug", however suspicious a
-   commit looks. Search for the bug the culprit landed under too, for
-   "culprit_bug".
+   commit looks.
 5. Check whether the culprit sits in a stack: adjacent commits sharing a
    `Bug NNNNNN` subject are one stack. If commits sit on top of the culprit, the
    whole stack has to be backed out -- name it in summary.md, oldest sha first.
@@ -144,9 +142,10 @@ failure commit {failure_commit}.
      blocks. It is posted verbatim to Slack and has to answer "do I back this
      out?" at a glance. Open with the action -- back out <sha>, do not back out,
      or retrigger -- and the one fact that settles it, then say what failed.
-   - analysis.md: the developer's reference, readable in under a minute. Under 50
-     lines, in exactly these sections, each a short paragraph or a few bullets:
-       ## Verdict -- the action, the culprit and its bug, the confidence
+   - analysis.md: the brief technical analysis a sheriff reads to trust the
+     recommendation, readable in under a minute. Under 30 lines, in exactly these
+     sections, each a short paragraph or a few bullets:
+       ## Verdict -- the action, the culprit, the confidence
        ## Failure -- how the test fails, with the log line that shows it
        ## Cause -- the hunk in the culprit that produces that failure
        ## Ruled out -- a line per alternative you seriously weighed; drop the
@@ -157,14 +156,13 @@ failure commit {failure_commit}.
    - verdict.json: "classification" ("regression" or "intermittent"),
      "culprit_commit" (full sha from the range, or null), "candidate_commits" (up
      to {max_candidates} full shas, most to least likely, whenever no single
-     culprit convinces you; empty when one does), "culprit_bug" (int or null),
-     "intermittent_bug" (int or null), "recommendation" ("backout",
+     culprit convinces you; empty when one does), "intermittent_bug" (int or
+     null), "recommendation" ("backout",
      "do_not_backout" or "rerun") and "confidence" (0.0-1.0).
-
-"recommendation" is the sheriff's action, not advice for the developer. A genuine
-regression is always "backout"; there is no "land a fix instead". Never suggest a
-follow-up patch on top of the culprit, however small -- the related changes land
-in one push, so "small enough to fix forward" is not a reason to skip the backout.
+{fix_handoff}
+"recommendation" is the sheriff's action. A genuine regression is always
+"backout"; there is no "land a fix instead", and "small enough to fix forward" is
+not a reason to skip the backout.
 
 Use "rerun" when you cannot tell whether the failure is real and a retrigger would
 settle it. Prefer it over blaming a commit you are unsure of.
@@ -172,7 +170,7 @@ settle it. Prefer it over blaming a commit you are unsure of.
 Never guess a sha: one that is not in the range is discarded, and a wrong blame is
 worse than none.
 
-Do not edit any source files in this step.
+Do not edit any source files.
 """
 
 CANDIDATE_INTRO = """\
@@ -187,74 +185,9 @@ KNOWN_INTERMITTENTS_LINE = (
     " they explain this failure before blaming a commit.\n"
 )
 
-FIX_TEMPLATE = """\
-Commit {culprit_commit} regressed the failing test(s). Propose a minimal patch
-fixing the root cause you identified in {scratch_out}/analysis.md.
-
-The recommendation stays "backout". The patch is advice for the commit's author to
-squash into their existing patches and reland, so write it as a change to the
-original patch, not a follow-up on top of it.
-{tree_note}
-The source tree is at {source_repo} (your working directory).
-Editing: Read a file before you Edit or Write it -- both refuse until the file has
-been read, which costs a turn. To see how the culprit handled comparable files,
-run `git show {culprit_commit} -- <dir>` rather than guessing a sibling's name.
-
-Logs already fetched sit under {scratch_out}/logs.
-
-1. Make the smallest change that addresses the root cause. Do not add code
-   comments explaining the fix or what it replaced: the revision summary carries
-   that, and the patch is squashed into the author's own. Add a comment only where
-   the code would be unclear without it, as the surrounding code would.
-{verify_step}
-3. Append a "## Patch" section to {scratch_out}/analysis.md, under 10 lines: the
-   files it touches, the root cause it addresses, and whether it was verified.
-   The diff is attached, so do not walk through it.
-4. Add at most one sentence to {scratch_out}/summary.md saying a patch is
-   proposed and whether it is verified. Leave the rest of it alone.
-5. Update {scratch_out}/verdict.json in place, preserving its existing keys: set
-   "proposed_patch" to true if you made a fix, and leave "recommendation" as
-   "backout".
-{report}"""
-
-TREE_AT_CULPRIT = """
-The tree is checked out at {culprit_commit} itself, so the diff you leave stacks
-directly on that commit.
+FIX_HANDOFF_STEP = """\
+8. Once the documents are written, call the `agents_start_run` action with agent
+   "{agent}" if "culprit_commit" names the culprit. That agent fixes the culprit
+   for its author, starting from your analysis; do not plan or attempt the fix
+   yourself. Call it at most once.
 """
-
-PARENT_REVISION_ARG = (
-    " parent_revision_id={revision} (the culprit's own revision, D{revision}),"
-)
-
-REPORT_INSTRUCTIONS = """
-6. Submit the patch with the `phabricator_submit_patch` action: bug_id={bug_id},{parent}
-   a title of the form "Bug {bug_id} - <what the fix does>", a summary naming the
-   culprit commit and the failing test(s) and saying the patch is meant to be
-   squashed into the culprit and relanded, and a test_plan stating how it was
-   verified. If you are not confident in the patch, record nothing and say so in
-   your final message.
-"""
-
-VERIFY_LOCAL = """\
-2. Build with the build_firefox tool, then run the failing test(s) over Bash with
-   mach -- see the tree's AGENTS.md / CLAUDE.md for how it runs {harness} tests.
-   They should pass."""
-
-VERIFY_REMOTE = """\
-2. Build with the build_firefox tool, then run the failing test(s) over Bash with
-   mach -- see the tree's AGENTS.md / CLAUDE.md for how it runs {harness} tests.
-   This container is Linux and the failure is on {platform}: a failure here is
-   evidence the patch is wrong, but a pass proves nothing about {platform}. Report
-   a pass as "not verified" and say so in the summary sentence below."""
-
-VERIFY_SKIPPED = """\
-2. Do not build, and do not try to run the test(s); no build tool is available.
-   Check by reading instead that the patch compiles and addresses the root cause.
-   State in the summary sentence below that it is unverified, neither built nor
-   run."""
-
-ENVIRONMENT_NOTE = """
-   Environment: a Debian container with a virtual display and the build toolchain
-   bootstrapped, so mach can build and run GUI harnesses. It is not CI's image, so
-   a test that cannot run here at all is "could not verify", not a failure -- say
-   which it was."""

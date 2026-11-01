@@ -175,6 +175,15 @@ class TestRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
+class TestRepairFixInputs(BaseModel):
+    # The test-repair run to continue from; the investigation, verdict and failure
+    # logs come from its artifacts.
+    parent_run_id: UUID
+    skip_firefox_build: bool | None = None
+    model: str | None = None
+    max_turns: int | None = None
+
+
 class FrontendTriageInputs(BaseModel):
     bug_id: int
     model: str | None = None
