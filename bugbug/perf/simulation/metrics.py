@@ -16,7 +16,14 @@ from bugbug.perf.simulation.detection import Detection, Schedule
 from bugbug.perf.simulation.strategies import ALL
 from bugbug.perf.simulation.timeline import Timeline
 
-Latency = Literal["surface", "detect"]
+Latency = Literal["surface", "detect", "detect_pushes", "window_pushes"]
+# Metric key of each latency and the unit it is counted in.
+LATENCY_KEYS: dict[str, tuple[str, str]] = {
+    "detect": ("detect_hours", "hours"),
+    "surface": ("surface_hours", "hours"),
+    "detect_pushes": ("detect_pushes", "pushes"),
+    "window_pushes": ("window_pushes", "pushes"),
+}
 Cost = Literal["batches", "jobs"]
 Statistic = Literal["mean", "median", "p90", "max"]
 
@@ -85,6 +92,8 @@ def evaluate(
     surfaced = [d for d in detected if d.surfaced_index is not None]
     detect_hours = [d.detect_hours(timeline) or 0.0 for d in detected]
     surface_hours = [d.surface_hours(timeline) or 0.0 for d in surfaced]
+    detect_pushes = [float(d.detect_pushes or 0) for d in detected]
+    window_pushes = [float(d.window_pushes or 0) for d in detected]
     caught_at: collections.Counter = collections.Counter(
         (d.detected_index, d.label) for d in detected
     )
@@ -108,8 +117,8 @@ def evaluate(
         ),
         "detect_hours": _summary(detect_hours),
         "surface_hours": _summary(surface_hours),
-        "detect_pushes": _summary([float(d.detect_pushes or 0) for d in detected]),
-        "window_pushes": _summary([float(d.window_pushes or 0) for d in detected]),
+        "detect_pushes": _summary(detect_pushes),
+        "window_pushes": _summary(window_pushes),
         "merged": sum(count - 1 for count in caught_at.values() if count > 1),
     }
     if bootstrap_samples:
@@ -119,6 +128,12 @@ def evaluate(
         result["surface_hours"]["mean_ci95"] = bootstrap_mean(
             surface_hours, bootstrap_samples
         )
+        result["detect_pushes"]["mean_ci95"] = bootstrap_mean(
+            detect_pushes, bootstrap_samples
+        )
+        result["window_pushes"]["mean_ci95"] = bootstrap_mean(
+            window_pushes, bootstrap_samples
+        )
     return result
 
 
@@ -127,12 +142,28 @@ def is_feasible(result: dict[str, Any], baseline: dict[str, Any]) -> bool:
     return set(baseline["detected_ids"]) <= set(result["detected_ids"])
 
 
+def latency_key(latency: str) -> str:
+    """The metrics key holding the latency summary."""
+    return LATENCY_KEYS[latency][0]
+
+
+def latency_label(latency: str) -> str:
+    """How to name the latency in a report, such as ``detect hours``."""
+    key, unit = LATENCY_KEYS[latency]
+    return f"{key.split('_')[0]} {unit}"
+
+
 def objectives(
     result: dict[str, Any],
     cost: Cost = "jobs",
     latency: Latency = "detect",
     statistic: Statistic = "mean",
 ) -> tuple[float, float]:
-    """The two values optuna minimizes: cost and a summary of the latency in hours."""
-    value = result[f"{latency}_hours"][statistic]
+    """The two values optuna minimizes: cost and a summary of the latency.
+
+    ``detect`` and ``surface`` are hours from the culprit push; ``detect_pushes``
+    counts the pushes from the culprit to the detecting run and ``window_pushes``
+    the pushes a sheriff bisects, from the previous run to the detecting one.
+    """
+    value = result[latency_key(latency)][statistic]
     return float(result[cost]), float("inf") if value is None else float(value)

@@ -206,24 +206,26 @@ def resolve_strategy(spec: str, timeline: sim.Timeline, baseline: str) -> sim.St
     return sim.parse_strategy(spec)
 
 
-def _hours(summary: dict[str, Any]) -> str:
+def _stats(summary: dict[str, Any]) -> str:
     if summary["mean"] is None:
         return "-"
     return "{mean:.1f} / {median:.1f} / {p90:.1f} / {max:.1f}".format(**summary)
 
 
 def format_table(rows: list[tuple[str, dict[str, Any], bool]]) -> str:
-    """A markdown table of per-strategy results; hours are mean / median / p90 / max."""
+    """A markdown table of per-strategy results; latencies are mean / median / p90 / max."""
     header = (
         "| strategy | batches | jobs | regressions | detected | surfaced "
-        "| detect hours | surface hours | window pushes (mean) | merged | feasible |"
+        "| detect hours | surface hours | detect pushes | window pushes (mean) "
+        "| merged | feasible |"
     )
-    lines = [header, "|" + "---|" * 11]
+    lines = [header, "|" + "---|" * 12]
     for name, result, feasible in rows:
         lines.append(
             f"| {name} | {result['batches']} | {result['jobs']} | "
             f"{result['regressions']} | {result['detected']} | {result['surfaced']} | "
-            f"{_hours(result['detect_hours'])} | {_hours(result['surface_hours'])} | "
+            f"{_stats(result['detect_hours'])} | {_stats(result['surface_hours'])} | "
+            f"{_stats(result['detect_pushes'])} | "
             f"{(result['window_pushes']['mean'] or 0):.1f} | {result['merged']} | "
             f"{'yes' if feasible else 'NO'} |"
         )
@@ -304,7 +306,7 @@ def _objective_row(
     metrics = row["eval"]["metrics"]
     return (
         f"| {family} | {question} | {row['name']} | {metrics[cost]} | "
-        f"{metrics[f'{latency}_hours'][statistic]:.1f} | "
+        f"{metrics[sim.latency_key(latency)][statistic]:.1f} | "
         f"{metrics['detected']} of {metrics['regressions']} |"
     )
 
@@ -365,11 +367,12 @@ def cmd_optimize(args: argparse.Namespace) -> None:
         "baseline": {"optimize": baseline_optimize, "eval": baseline_eval},
         "families": {},
     }
+    label = sim.latency_label(args.latency)
     headline = [
         f"Baseline (production): {args.cost} {baseline_objectives[0]:.0f} and "
-        f"{args.statistic} {args.latency} hours {baseline_objectives[1]:.1f} on the "
+        f"{args.statistic} {label} {baseline_objectives[1]:.1f} on the "
         f"optimize window; {args.cost} {eval_objectives[0]:.0f} and {args.statistic} "
-        f"{args.latency} hours {eval_objectives[1]:.1f} on the eval window, "
+        f"{label} {eval_objectives[1]:.1f} on the eval window, "
         f"{baseline_eval['detected']} of "
         f"{baseline_eval['regressions']} regressions detected.",
         "Picks are made on the optimize window; the columns show their eval window results.",
@@ -380,13 +383,13 @@ def cmd_optimize(args: argparse.Namespace) -> None:
             else "Risk scores: the model's raw output."
         ),
         "",
-        f"| family | question | strategy | {args.cost} | {args.statistic} {args.latency} hours | detected |",
+        f"| family | question | strategy | {args.cost} | {args.statistic} {label} | detected |",
         "|---|---|---|---|---|---|",
     ]
     notes = []
     diagnostics = [
         f"| family | strategy | optimize {args.cost} | optimize {args.statistic} "
-        f"{args.latency} h | eval {args.cost} | eval {args.statistic} {args.latency} h |",
+        f"{label} | eval {args.cost} | eval {args.statistic} {label} |",
         "|---|---|---|---|---|---|",
     ]
     for family in families:
@@ -489,9 +492,9 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--latency",
-        choices=["detect", "surface"],
+        choices=["detect", "surface", "detect_pushes", "window_pushes"],
         default="detect",
-        help="Latency to optimize: until the first run after the culprit (default), which a schedule controls, or until Perfherder would alert, which mostly restates sparsity. Both are always reported.",
+        help="Latency to optimize: hours until the first run after the culprit (default), which a schedule controls; hours until Perfherder would alert, which mostly restates sparsity; pushes from the culprit to the detecting run, which quiet hours do not inflate; or pushes from the previous run to the detecting one, what a sheriff bisects. All are always reported.",
     )
     parser.add_argument(
         "--bootstrap",

@@ -229,6 +229,36 @@ class FixedInterval(Strategy):
         return None
 
 
+class CommitCount(Strategy):
+    """The whole suite once ``commits`` commits have landed since the last batch.
+
+    Commits the predictor would skip (merges, wptsync, ignored changesets)
+    are left out, so this is RASB with every score equal: the non-risk
+    reference a risk strategy has to beat, since a push holding more commits
+    is more likely to hold a culprit whatever the model says.
+    """
+
+    family = "commit_count"
+    search_space = {"commits": (2, 400, True)}
+
+    def __init__(self, commits: int) -> None:
+        super().__init__(commits=int(commits))
+
+    def reset(self) -> None:
+        self.started = False
+        self.pending = 0
+
+    def observe(self, push: Push) -> None:
+        self.pending += sum(1 for commit in push.commits if commit.scored)
+
+    def decide(self, push: Push) -> Decision:
+        if not self.started or self.pending >= self.params["commits"]:
+            self.started = True
+            self.pending = 0
+            return ALL
+        return None
+
+
 class TimeSinceBatch(Strategy):
     """The whole suite once ``hours`` have passed since the last batch."""
 
@@ -251,11 +281,19 @@ class TimeSinceBatch(Strategy):
         return None
 
 
+def _waited(push: Push, now: Push, unit: str) -> float:
+    """How long ``push`` has waited at ``now``: hours, or pushes landed after it."""
+    if unit == "pushes":
+        return float(now.index - push.index)
+    return (now.time - push.time).total_seconds() / 3600
+
+
 class RiskThreshold(Strategy):
     """The whole suite once the risk of the commits since the last batch reaches a threshold.
 
     Each scored commit contributes the hazard ``-ln(1 - r)``, plus
-    ``aging_rate`` per hour it has waited. With ``product`` aggregation the
+    ``aging_rate`` per hour it has waited, or per push landed after it when
+    ``aging_unit`` is ``pushes``. With ``product`` aggregation the
     batch is due when the probability that at least one commit regressed,
     ``1 - exp(-sum of hazards)``, reaches the threshold; with ``linear``
     aggregation when the sum of the aged scores ``1 - exp(-hazard)`` does.
@@ -265,6 +303,7 @@ class RiskThreshold(Strategy):
     family = "risk_threshold"
     aggregation: ClassVar[str] = "product"
     aged: ClassVar[bool] = False
+    aging_unit: ClassVar[str] = "hours"
 
     def __init__(self, threshold: float, aging_rate: float = 0.0) -> None:
         if self.aggregation == "product" and not 0 < threshold < 1:
@@ -318,7 +357,7 @@ class RiskThreshold(Strategy):
     def score(self, now: Push) -> float:
         hazards = []
         for push in self.pending:
-            waited = (now.time - push.time).total_seconds() / 3600
+            waited = _waited(push, now, self.aging_unit)
             for commit in push.commits:
                 if not commit.scored:
                     continue
@@ -376,20 +415,47 @@ class RapbLa(RiskThreshold):
     search_space = {"threshold": (0.05, 20.0, True), "aging_rate": (0.0005, 0.5, True)}
 
 
+class RapbPushes(Rapb):
+    """RAPB aged by pushes: ``aging_rate`` per push landed after each commit.
+
+    Without risk the aging alone trips a fixed number of pushes after the
+    last batch, so the family runs from RASB to a fixed interval as RAPB runs
+    from RASB to a time rule. Quiet hours cost nothing, as in the pushes
+    latency it is meant for.
+    """
+
+    family = "rapb_pushes"
+    aging_unit = "pushes"
+    search_space = {"threshold": (0.02, 0.98, False), "aging_rate": (0.0001, 0.5, True)}
+
+
+class RapbLaPushes(RapbLa):
+    """RAPB-LA aged by pushes; see ``RapbPushes``."""
+
+    family = "rapb_la_pushes"
+    aging_unit = "pushes"
+    search_space = {"threshold": (0.05, 20.0, True), "aging_rate": (0.0001, 0.5, True)}
+
+
 FAMILIES: dict[str, type[Strategy]] = {
     cls.family: cls
     for cls in (
         Production,
         RecordedProduction,
         FixedInterval,
+        CommitCount,
         TimeSinceBatch,
         Rasb,
         RasbLa,
         Rapb,
         RapbLa,
+        RapbPushes,
+        RapbLaPushes,
     )
 }
-RISK_FAMILIES = frozenset(cls.family for cls in (Rasb, RasbLa, Rapb, RapbLa))
+RISK_FAMILIES = frozenset(
+    cls.family for cls in FAMILIES.values() if issubclass(cls, RiskThreshold)
+)
 
 # The shadow schedulers' current parameters, from the ``experimental`` class
 # in gecko_taskgraph/optimize/__init__.py, keyed by shadow scheduler name.

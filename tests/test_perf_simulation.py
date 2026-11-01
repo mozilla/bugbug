@@ -76,6 +76,17 @@ def test_fixed_interval_and_dontbuild() -> None:
     assert sim.replay(sim.FixedInterval(5), timeline).decisions[10] is None
 
 
+def test_commit_count() -> None:
+    # One commit per push: a batch every 4 commits is a batch every 4 pushes.
+    timeline = make_timeline(12)
+    assert batches(sim.CommitCount(commits=4), timeline) == [0, 4, 8]
+    # Unscored commits do not count, DONTBUILD pushes still do.
+    timeline = make_timeline(12, risks={1: None, 2: None}, dontbuild=(4,))
+    assert batches(sim.CommitCount(commits=4), timeline) == [0, 6, 10]
+    assert sim.parse_strategy("commit_count:commits=24").params == {"commits": 24}
+    assert "commit_count" in sim.FAMILIES and "commit_count" not in sim.RISK_FAMILIES
+
+
 def test_time_since_batch() -> None:
     timeline = make_timeline(10, step_hours=1.0)
     assert batches(sim.TimeSinceBatch(3), timeline) == [0, 3, 6, 9]
@@ -128,6 +139,69 @@ def test_production_rule() -> None:
     # Push-count trigger: pushes every 6 minutes reach 20 pushes in 2 hours.
     dense = make_timeline(45, step_hours=0.1, pushlog_start=300)
     assert batches(sim.Production(), dense) == [0, 20, 40]
+
+
+def test_pushes_aged_families() -> None:
+    # Hourly pushes: a push is an hour, so aging by pushes matches aging by
+    # hours. Safe commits (hazard 0.0513) plus 0.02 per unit waited reach the
+    # 0.5 product threshold (hazard sum 0.693) seven pushes after a batch.
+    hourly = make_timeline(30, step_hours=1.0, pushlog_start=0)
+    dense = make_timeline(30, step_hours=0.1, pushlog_start=0)
+    assert batches(sim.RapbPushes(threshold=0.5, aging_rate=0.02), hourly) == [
+        0,
+        7,
+        14,
+        21,
+        28,
+    ]
+    assert batches(sim.Rapb(threshold=0.5, aging_rate=0.02), hourly) == [
+        0,
+        7,
+        14,
+        21,
+        28,
+    ]
+    # Pushes every 6 minutes: the pushes-aged family is unchanged, hours
+    # aging has ten times less to add and waits twelve pushes.
+    assert batches(sim.RapbPushes(threshold=0.5, aging_rate=0.02), dense) == [
+        0,
+        7,
+        14,
+        21,
+        28,
+    ]
+    assert batches(sim.Rapb(threshold=0.5, aging_rate=0.02), dense) == [0, 12, 24]
+    linear = sim.RapbLaPushes(threshold=0.5, aging_rate=0.02)
+    assert batches(linear, dense) == batches(linear, hourly)
+    assert batches(linear, hourly) == batches(
+        sim.RapbLa(threshold=0.5, aging_rate=0.02), hourly
+    )
+    assert linear.name == "rapb_la_pushes(aging_rate=0.02,threshold=0.5)"
+    for family in ("rapb_pushes", "rapb_la_pushes"):
+        assert family in sim.FAMILIES and family in sim.RISK_FAMILIES
+    assert "fixed_interval" not in sim.RISK_FAMILIES
+
+
+def test_latency_in_pushes() -> None:
+    assert sim.latency_key("detect") == "detect_hours"
+    assert sim.latency_key("detect_pushes") == "detect_pushes"
+    assert sim.latency_label("detect") == "detect hours"
+    assert sim.latency_label("surface") == "surface hours"
+    assert sim.latency_label("window_pushes") == "window pushes"
+    # Hourly pushes, a batch every 4 pushes, culprits at 5 and 6: both
+    # detected at 8, three and two pushes (and hours) later; the window
+    # spans 4 to 8 for both.
+    timeline = make_timeline(12, regressions=((1, 5, (L1,)), (2, 6, (L1,))))
+    schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
+    detections = sim.detect(schedule, timeline)
+    window = sim.Window(timeline.pushes[0].time, timeline.pushes[-1].time)
+    result = sim.evaluate(timeline, schedule, detections, window, bootstrap_samples=10)
+    assert sim.objectives(result, "jobs", "detect_pushes", "mean")[1] == 2.5
+    assert sim.objectives(result, "jobs", "window_pushes", "max")[1] == 4.0
+    assert sim.objectives(result, "jobs", "detect", "mean")[1] == 2.5
+    low, high = result["detect_pushes"]["mean_ci95"]
+    assert 2.0 <= low <= high <= 3.0
+    assert result["window_pushes"]["mean_ci95"] == (4.0, 4.0)
 
 
 def test_recorded_production_uses_the_pushes() -> None:

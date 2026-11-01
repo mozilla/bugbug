@@ -51,14 +51,16 @@ schedulers need to hand decisions from one task to the next: the replay sees
 the whole history in order. A strategy `observe`s every push and `decide`s
 what to run on it: `ALL` for the whole suite, a set of labels, or nothing.
 
-| Family                | A batch is due when                                                                                                                     |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `production_recorded` | the whole suite ran on the push in history, and `expanded_labels` where they ran; sheriff backfills are left out (the default baseline) |
-| `production`          | 20 pushes or 4 hours since the last backstop, the rule replayed; `expanded_labels` also run on every 10th pushlog id                    |
-| `fixed_interval`      | `push_interval` pushes have been made since the last batch, counted by pushlog id like the backstop                                     |
-| `time_since_batch`    | `hours` have passed since the last batch                                                                                                |
-| `rasb`, `rasb_la`     | the risk of the commits since the last batch reaches `threshold`: the probability at least one regressed, or their sum                  |
-| `rapb`, `rapb_la`     | as above with each commit's score aged by `aging_rate` per hour waited                                                                  |
+| Family                          | A batch is due when                                                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `production_recorded`           | the whole suite ran on the push in history, and `expanded_labels` where they ran; sheriff backfills are left out (the default baseline) |
+| `production`                    | 20 pushes or 4 hours since the last backstop, the rule replayed; `expanded_labels` also run on every 10th pushlog id                    |
+| `fixed_interval`                | `push_interval` pushes have been made since the last batch, counted by pushlog id like the backstop                                     |
+| `commit_count`                  | `commits` commits the predictor would score have landed since the last batch: RASB with every score equal                               |
+| `time_since_batch`              | `hours` have passed since the last batch                                                                                                |
+| `rasb`, `rasb_la`               | the risk of the commits since the last batch reaches `threshold`: the probability at least one regressed, or their sum                  |
+| `rapb`, `rapb_la`               | as above with each commit's score aged by `aging_rate` per hour waited                                                                  |
+| `rapb_pushes`, `rapb_la_pushes` | as above, aged by `aging_rate` per push landed after the commit instead of per hour                                                     |
 
 `PRESETS` holds the shadow schedulers' current parameters, keyed by their
 names (`perf_rasb`, ...), and `parse_strategy` reads `family:key=value,...`.
@@ -144,7 +146,10 @@ optimize window with two objectives to minimize, cost (`jobs` by default,
 which charges a batch the size of the suite at the time and counts
 production's expanded runs too; `batches` counts full-suite runs only)
 and the latency, `detect` by default since it is what a schedule
-controls, or `surface` with `--latency surface`, summarized by `--statistic`:
+controls, `surface` with `--latency surface`, or counted in pushes rather
+than hours: `detect_pushes`, from the culprit to the detecting run, which
+quiet hours do not inflate, or `window_pushes`, from the previous run to the
+detecting one, what a sheriff bisects. It is summarized by `--statistic`:
 the `mean` over the window's regressions by default, or `median`, `p90` or
 `max`; the maximum rests on a single regression per window, so it is the
 noisiest choice and the one least likely to transfer. Trials that fail the
