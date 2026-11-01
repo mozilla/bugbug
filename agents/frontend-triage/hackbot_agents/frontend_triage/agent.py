@@ -11,11 +11,10 @@ It reaches Bugzilla via an out-of-process MCP broker (HTTP transport) that holds
 the Bugzilla token -- the agent process itself never sees it.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import sys
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -30,6 +29,7 @@ from claude_agent_sdk import (
     McpServerConfig,
     ResultMessage,
 )
+from claude_agent_sdk.types import SystemPromptFile
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
@@ -235,24 +235,24 @@ async def fetch_product_component(
         return None, None
 
     try:
-        async with streamablehttp_client(url) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                res = await session.call_tool(
-                    "get_bugs",
-                    # `id` is not optional: `get_bugs` diffs requested against
-                    # returned ids to report inaccessible bugs, so leaving it out
-                    # of `include_fields` makes the tool itself raise KeyError.
-                    {"ids": [bug], "include_fields": "id,product,component"},
-                )
-                if res.isError:
-                    raise RuntimeError(
-                        "".join(getattr(c, "text", "") for c in res.content)
-                    )
-                bugs = json.loads(res.content[0].text).get("bugs") or []
-                if not bugs:
-                    return None, None
-                return bugs[0].get("product"), bugs[0].get("component")
+        async with (
+            streamablehttp_client(url) as (read, write, _),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            res = await session.call_tool(
+                "get_bugs",
+                # `id` is not optional: `get_bugs` diffs requested against
+                # returned ids to report inaccessible bugs, so leaving it out
+                # of `include_fields` makes the tool itself raise KeyError.
+                {"ids": [bug], "include_fields": "id,product,component"},
+            )
+            if res.isError:
+                raise RuntimeError("".join(getattr(c, "text", "") for c in res.content))
+            bugs = json.loads(res.content[0].text).get("bugs") or []
+            if not bugs:
+                return None, None
+            return bugs[0].get("product"), bugs[0].get("component")
     except Exception as e:  # - see docstring; every failure fails open
         print(
             f"[frontend_triage] component lookup failed ({type(e).__name__}: {e}); "
@@ -322,6 +322,19 @@ def load_system_prompt(
         component_index=render_component_index(),
         guidance=render_guidance(components, known_docs),
     )
+
+
+def write_system_prompt(prompt: str, directory: Path) -> SystemPromptFile:
+    """Write ``prompt`` into ``directory`` for the CLI to read with `--system-prompt-file`.
+
+    Passed inline, the prompt is a single argv string, and Linux refuses to exec anything
+    with one longer than 128 KiB (`MAX_ARG_STRLEN`). The prompt crosses that when it falls
+    back to every component's guidance, and the CLI then fails to start with `Argument
+    list too long`.
+    """
+    path = directory / "system.md"
+    path.write_text(prompt, encoding="utf-8")
+    return {"type": "file", "path": str(path)}
 
 
 def make_investigator() -> AgentDefinition:
@@ -671,7 +684,9 @@ async def run_frontend_triage(
     system_prompt = load_system_prompt(rules_dir, instructions, components, known_docs)
 
     options = ClaudeAgentOptions(
-        system_prompt=system_prompt,
+        system_prompt=write_system_prompt(
+            system_prompt, Path(tempfile.mkdtemp(prefix="frontend-triage-"))
+        ),
         mcp_servers={
             "bugzilla": bugzilla_mcp_server,
             "searchfox": searchfox_server,

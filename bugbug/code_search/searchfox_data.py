@@ -99,37 +99,34 @@ def find_symbol_definition(
                 for target_sym in target_symbols_left:
                     if target_sym in line:
                         obj = json.loads(line)
-                        if "syntax" in obj:
-                            syntax = obj["syntax"].split(",")
-                            if "def" in syntax and (
+                        syntax = obj.get("syntax", "").split(",")
+                        if (
+                            "def" in syntax
+                            and (
                                 target_sym_type_restriction is None
                                 or target_sym_type_restriction in syntax
-                            ):
-                                if (
-                                    not target_sym_is_pretty
-                                    or target_sym in obj["pretty"]
-                                ):
-                                    sym_found = target_sym
-                                    ret_obj = {}
-                                    ret_obj["name"] = obj["pretty"]
-                                    ret_obj["file"] = searchfox_file
-                                    ret_obj["target_line"] = int(
-                                        obj["loc"].split(":")[0]
-                                    )
+                            )
+                            and (
+                                not target_sym_is_pretty or target_sym in obj["pretty"]
+                            )
+                        ):
+                            sym_found = target_sym
+                            ret_obj = {}
+                            ret_obj["name"] = obj["pretty"]
+                            ret_obj["file"] = searchfox_file
+                            ret_obj["target_line"] = int(obj["loc"].split(":")[0])
 
-                                    if "nestingRange" in obj:
-                                        ret_obj["target_end_line"] = int(
-                                            obj["nestingRange"]
-                                            .split("-")[-1]
-                                            .split(":")[0]
-                                        )
-                                    else:
-                                        ret_obj["target_end_line"] = None
+                            if "nestingRange" in obj:
+                                ret_obj["target_end_line"] = int(
+                                    obj["nestingRange"].split("-")[-1].split(":")[0]
+                                )
+                            else:
+                                ret_obj["target_end_line"] = None
 
-                                    ret[target_sym].append(ret_obj)
+                            ret[target_sym].append(ret_obj)
 
-                                    if not target_sym_is_pretty:
-                                        break
+                            if not target_sym_is_pretty:
+                                break
 
                 if not target_sym_is_pretty and sym_found is not None:
                     target_symbols_left.remove(sym_found)
@@ -146,13 +143,11 @@ def default_read_mc_path(path):
 
 
 def extract_source(target_sym_file, target_sym_line, target_sym_end_line, read_mc_path):
-    current_lineno = 0
     target_source = None
     end_template = "%s}"
     end = None
-    for line in read_mc_path(target_sym_file):
+    for current_lineno, line in enumerate(read_mc_path(target_sym_file), start=1):
         line = line.rstrip()
-        current_lineno += 1
         if current_lineno == target_sym_line:
             target_source = []
 
@@ -231,31 +226,34 @@ def extract_function_approx(
         for line in fd:
             obj = json.loads(line)
             lineno = int(obj["loc"].split(":")[0])
-            if lineno >= line_start and lineno < line_stop and "syntax" in obj:
-                if "use" in obj["syntax"].split(","):
-                    if re.search(pattern, obj["pretty"]):
-                        for interface in interface_rewrites:
-                            if ("%s::" % interface) in obj["pretty"]:
-                                for item in obj["pretty"].split(" "):
-                                    if ("%s::" % interface) in item:
-                                        target_sym = item
-                                if not target_sym:
-                                    print(
-                                        "ERROR: Failed to extract pretty name for interface rewriting: %s"
-                                        % obj["pretty"]
-                                    )
-                                    return None
-                                print(
-                                    "Using pretty name for interface rewriting: %s"
-                                    % target_sym
-                                )
-                                target_sym_is_pretty = True
-                                target_sym_interface = interface
-                                break
-                        if target_sym is not None:
-                            break
-                        target_sym = obj["sym"]
+            if (
+                lineno >= line_start
+                and lineno < line_stop
+                and "syntax" in obj
+                and "use" in obj["syntax"].split(",")
+                and re.search(pattern, obj["pretty"])
+            ):
+                for interface in interface_rewrites:
+                    if ("%s::" % interface) in obj["pretty"]:
+                        for item in obj["pretty"].split(" "):
+                            if ("%s::" % interface) in item:
+                                target_sym = item
+                        if not target_sym:
+                            print(
+                                "ERROR: Failed to extract pretty name for interface rewriting: %s"
+                                % obj["pretty"]
+                            )
+                            return None
+                        print(
+                            "Using pretty name for interface rewriting: %s" % target_sym
+                        )
+                        target_sym_is_pretty = True
+                        target_sym_interface = interface
                         break
+                if target_sym is not None:
+                    break
+                target_sym = obj["sym"]
+                break
 
     # searchfox/363bddf92f7a2d58a5b87cac7b19a4c74c7544e5_linux64/gfx/2d/DataSurfaceHelpers.cpp:68:{"loc":"00037:36-67","source":1,"nestingRange":"39:25-56:0","syntax":"def,function","type":"already_AddRefed<DataSourceSurface> (const IntSize &, SurfaceFormat, const uint8_t *, int32_t)","pretty":"function mozilla::gfx::CreateDataSourceSurfaceFromData","sym":"_ZN7mozilla3gfx31CreateDataSourceSurfaceFromDataERKNS0_12IntSizeTypedINS0_12UnknownUnitsEEENS0_13SurfaceFormatEPKhi"}
 
@@ -335,10 +333,10 @@ def extract_function_approx(
                     current_lineno >= target_sym_line
                     and current_lineno <= target_sym_end_line
                 ):
-                    if "syntax" in obj:
-                        syntax = obj["syntax"].split(",")
-                        if "use" in syntax and "field" in syntax:
-                            field_syms.add(obj["sym"])
+                    syntax = obj.get("syntax", "").split(",")
+
+                    if "use" in syntax and "field" in syntax:
+                        field_syms.add(obj["sym"])
 
         # Step 5: Locate and annotate member definitions as comments (optional)
         result = find_symbol_definition(

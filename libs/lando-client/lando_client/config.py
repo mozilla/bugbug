@@ -1,7 +1,5 @@
 """Configuration for :class:`LandoClient`."""
 
-from __future__ import annotations
-
 from typing import Annotated
 from urllib.parse import urlsplit
 

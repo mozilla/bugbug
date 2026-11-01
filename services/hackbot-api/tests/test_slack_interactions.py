@@ -99,8 +99,7 @@ def client(monkeypatch, hackbot_client):
     app.dependency_overrides[webhooks.get_slack_handler] = build_request_handler
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: hackbot_client
     try:
-        with TestClient(app, raise_server_exceptions=False) as test_client:
-            yield test_client
+        yield TestClient(app, raise_server_exceptions=False)
     finally:
         app.dependency_overrides.clear()
 

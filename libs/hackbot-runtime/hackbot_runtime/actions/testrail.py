@@ -1,7 +1,5 @@
 """TestRail recordable actions."""
 
-from __future__ import annotations
-
 from typing import Annotated, Any, Literal
 
 from agent_tools.registry import ToolError, tool, tools_in
@@ -41,7 +39,7 @@ class TestRailCaseResultInput(BaseModel):
     @model_validator(mode="after")
     def failure_reason_required_for_non_passing_cases(
         self,
-    ) -> "TestRailCaseResultInput":
+    ) -> TestRailCaseResultInput:
         if self.status in {"failed", "unsuitable"} and not self.failure_reason:
             raise ValueError("failed or unsuitable cases must include failure_reason")
         return self
@@ -93,7 +91,7 @@ class TestRailCaseInput(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def expectations_must_include_verification(self) -> "TestRailCaseInput":
+    def expectations_must_include_verification(self) -> TestRailCaseInput:
         if not any(step.expectation for step in self.steps):
             raise ValueError("at least one step must include an expected result")
         return self
@@ -127,7 +125,7 @@ class SubmitTestPlanInput(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def case_ids_must_be_sequential(self) -> "SubmitTestPlanInput":
+    def case_ids_must_be_sequential(self) -> SubmitTestPlanInput:
         case_ids = [case.id for case in self.generated_test_cases]
         expected_ids = list(range(1, len(self.generated_test_cases) + 1))
         if case_ids != expected_ids:

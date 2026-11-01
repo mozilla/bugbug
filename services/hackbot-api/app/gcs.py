@@ -12,6 +12,7 @@ from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request as AuthRequest
 from google.cloud import storage
 
+from app.action_handlers.base import ArtifactTooLargeError
 from app.config import settings
 from app.schemas import ArtifactRef, RunSummary
 
@@ -144,21 +145,28 @@ async def read_summary(run_id: str) -> RunSummary | None:
     return await asyncio.to_thread(_read_summary_sync, run_id)
 
 
-def _download_artifact_bytes_sync(run_id: str, key: str) -> bytes:
+def _download_artifact_bytes_sync(run_id: str, key: str, max_bytes: int) -> bytes:
     bucket = _client().bucket(settings.results_bucket)
     blob = bucket.blob(f"{run_prefix(run_id)}{key}")
+    blob.reload()
+    if blob.size is not None and blob.size > max_bytes:
+        raise ArtifactTooLargeError(key, blob.size, max_bytes)
     return blob.download_as_bytes()
 
 
-async def download_artifact_bytes(run_id: str, key: str) -> bytes:
+async def download_artifact_bytes(
+    run_id: str, key: str, max_bytes: int | None = None
+) -> bytes:
     """Fetch the raw bytes of one artifact under a run's prefix.
 
-    Backs `app.action_handlers.base.ApplyContext.download_artifact`
-    for the action-applier — handlers ask for an artifact by its recorded key
-    (e.g. "attachments/0/file", "changes/changes.patch") without knowing GCS
-    is behind it.
+    Raises `ArtifactTooLargeError` rather than downloading anything bigger than
+    ``max_bytes`` (``settings.action_apply_max_bytes`` unless given).
     """
-    return await asyncio.to_thread(_download_artifact_bytes_sync, run_id, key)
+    if max_bytes is None:
+        max_bytes = settings.action_apply_max_bytes
+    return await asyncio.to_thread(
+        _download_artifact_bytes_sync, run_id, key, max_bytes
+    )
 
 
 def _list_artifacts_sync(run_id: str) -> list[ArtifactRef]:
@@ -201,6 +209,33 @@ def _generate_artifact_download_url_sync(
         expiration=datetime.timedelta(seconds=expiration_seconds),
         method="GET",
         credentials=_signing_credentials(),
+    )
+
+
+def _generate_artifact_download_urls_sync(
+    run_id: str, artifact_names: list[str], expiration_seconds: int
+) -> dict[str, str]:
+    bucket = _client().bucket(settings.results_bucket)
+    return {
+        name: bucket.blob(f"{run_prefix(run_id)}{name}").generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(seconds=expiration_seconds),
+            method="GET",
+            credentials=_signing_credentials(),
+        )
+        for name in artifact_names
+    }
+
+
+async def generate_artifact_download_urls(
+    run_id: str, artifact_names: list[str], expiration_seconds: int
+) -> dict[str, str]:
+    """Signed GET URLs for artifacts already listed on the run, by name."""
+    return await asyncio.to_thread(
+        _generate_artifact_download_urls_sync,
+        run_id,
+        artifact_names,
+        expiration_seconds,
     )
 
 

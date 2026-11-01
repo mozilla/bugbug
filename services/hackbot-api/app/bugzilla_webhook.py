@@ -1,8 +1,9 @@
 """Detection helpers for Bugzilla needinfo webhooks."""
 
-from __future__ import annotations
-
+import logging
 from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -41,9 +42,11 @@ def detect_needinfo_request(
     if actor_login == bot_login:
         return None
 
-    expected_added = f"? ({bot_login})"
+    # FIXME: Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=2079991
+    # (`changes` keeps only the last needinfo per update), so `added` may not
+    # name the bot; it is matched via `bug.flags` below instead.
     if not any(
-        change["field"] == "flag.needinfo" and change["added"] == expected_added
+        change["field"] == "flag.needinfo" and change["added"].startswith("?")
         for change in event["changes"]
     ):
         return None
@@ -60,6 +63,15 @@ def detect_needinfo_request(
     ]
     if not matching_flags:
         return None
+    if len(matching_flags) > 1:
+        # TODO: Handle all open requests (https://github.com/mozilla/bugbug/issues/6621).
+        log.warning(
+            "Bug %s has %d open Hackbot needinfo requests (flag IDs: %s); "
+            "only the newest will be processed",
+            bug_id,
+            len(matching_flags),
+            [flag["id"] for flag in matching_flags],
+        )
     # BMO returns flags ordered by ID, so a newly requested needinfo is the
     # last matching flag in the webhook's current bug snapshot.
     flag_id = matching_flags[-1]["id"]

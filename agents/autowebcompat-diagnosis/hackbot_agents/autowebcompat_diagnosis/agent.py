@@ -1,27 +1,21 @@
 """Firefox web-compatibility diagnosis agent."""
 
-from __future__ import annotations
-
+import json
 import logging
 import os
 import subprocess
 import tempfile
-from abc import ABC, abstractmethod
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Generic, Literal, Self
+from typing import Any
 
-from claude_agent_sdk import (
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-    McpServerConfig,
-    ResultMessage,
-)
-from hackbot_runtime import AgentError
-from hackbot_runtime.claude import Reporter
+from autowebcompat_tools.environment import Environment
+from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
+from autowebcompat_tools.result import ResultT
+from autowebcompat_tools.task import RunTracker, TaskConfig
+from autowebcompat_tools.task import Task as BaseTask
+from claude_agent_sdk import McpServerConfig
 from pydantic import BaseModel
 
 from .browser import ChromeBrowsers, FirefoxBrowsers
@@ -29,13 +23,10 @@ from .config import BUGZILLA_READ_TOOLS, CHROME_DEVTOOLS_TOOLS, DEVTOOLS_TOOLS
 from .mcp_servers import build_chrome_devtools_server, build_firefox_devtools_server
 from .result import (
     RESULT_SERVER_NAME,
-    SUBMIT_RESULT_TOOL,
     DiagnosisPlanResult,
     DiagnosisResult,
+    DiagnosisText,
     ReproScriptResult,
-    ResultCollector,
-    ResultT,
-    build_result_server,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -57,27 +48,6 @@ class FirefoxChannel(Enum):
     esr = "esr"
 
 
-@dataclass
-class BugIdInput:
-    bug_id: int
-    type: Literal["bug_id"] = "bug_id"
-
-    def subject(self) -> str:
-        return f" bug {self.bug_id}"
-
-
-@dataclass
-class BugDataInput:
-    bug_data: str
-    type: Literal["bug_data"] = "bug_data"
-
-    def subject(self) -> str:
-        return self.bug_data
-
-
-AutoWebcompatInput = BugIdInput | BugDataInput
-
-
 class AutowebcompatDiagnosisResult(BaseModel):
     reproduced: bool
     failure_reason: str | None
@@ -86,165 +56,15 @@ class AutowebcompatDiagnosisResult(BaseModel):
     testcase_url: str | None
 
 
-@dataclass
-class TaskConfig:
-    model: str | None = None
-    max_turns: int | None = None
-    effort: (
-        Literal["low"]
-        | Literal["medium"]
-        | Literal["high"]
-        | Literal["xhigh"]
-        | Literal["max"]
-        | None
-    ) = None
-    log: Path | None = None
-    verbose: bool = True
-    headless: bool = False
-
-
-@dataclass
-class TaskRun:
-    name: str
-    start_time: datetime
-    end_time: datetime
-    num_turns: int
-    total_cost_usd: float | None
-
-
-class RunTracker:
-    def __init__(self) -> None:
-        self.task_runs: list[TaskRun] = []
-        self.current_task: tuple[str, datetime] | None = None
-
-    @property
-    def num_turns(self) -> int:
-        return sum(item.num_turns for item in self.task_runs)
-
-    @property
-    def total_cost_usd(self) -> float:
-        return sum(
-            item.total_cost_usd
-            for item in self.task_runs
-            if item.total_cost_usd is not None
-        )
-
-    def start_task(self, name: str) -> None:
-        self.current_task = name, datetime.now()
-
-    def end_task(self, name: str, result_msg: ResultMessage) -> None:
-        if self.current_task is None:
-            logger.warning("Got end_task without start_task")
-            return
-        current_name, start_time = self.current_task
-        if current_name != name:
-            logger.warning(
-                "Got end_task with name %s but current_task was %s", name, current_name
-            )
-            self.current_task = None
-            return
-        self.task_runs.append(
-            TaskRun(
-                name=name,
-                start_time=start_time,
-                end_time=datetime.now(),
-                num_turns=result_msg.num_turns,
-                total_cost_usd=result_msg.total_cost_usd,
-            )
-        )
-
-
-class Task(ABC, Generic[ResultT]):
-    name: str = "unnamed-task"
-    result_server_name: str = RESULT_SERVER_NAME
-    submit_result_tool: str = SUBMIT_RESULT_TOOL
-    result_cls: type[ResultT]
+class Task(BaseTask[ResultT]):
+    result_server_name = RESULT_SERVER_NAME
 
     def __init__(self, task_config: TaskConfig, run_tracker: RunTracker):
-        self.task_config = task_config
-        self.run_tracker = run_tracker
-        self.allowed_tools = [
-            "Read",
-            "Write",
-            "Grep",
-            "Glob",
-            "Bash",
-            self.submit_result_tool,
-        ]
-
-        self.result_collector = ResultCollector(self.result_cls)
-        self.mcp_servers = {}
-
-        result_server = self.result_server()
-        if result_server is not None:
-            self.mcp_servers[self.result_server_name] = result_server
-
-    def add_mcp_server(
-        self, name: str, server: McpServerConfig, tools: list[str]
-    ) -> None:
-        self.mcp_servers[name] = server
-        self.allowed_tools.extend(tools)
-
-    def result_server(self) -> McpServerConfig | None:
-        return build_result_server(self.result_collector)
+        super().__init__(task_config, run_tracker)
+        self.allowed_tools.insert(1, "Write")
 
     def system_prompt(self) -> str:
         return (HERE / "prompts" / "system.md").read_text()
-
-    @abstractmethod
-    def user_prompt(self) -> str: ...
-
-    @abstractmethod
-    def subject(self) -> Any: ...
-
-    def agent_options(self) -> ClaudeAgentOptions:
-        return ClaudeAgentOptions(
-            system_prompt=self.system_prompt(),
-            mcp_servers=self.mcp_servers,
-            permission_mode="bypassPermissions",
-            allowed_tools=self.allowed_tools,
-            model=self.task_config.model,
-            max_turns=self.task_config.max_turns,
-            setting_sources=[],
-            # DevTools snapshots of complex pages serialize to JSON that can
-            # exceed the SDK's default 1 MiB message buffer (the reader dies
-            # fatally if it does). Raise it well above that ceiling.
-            max_buffer_size=10 * 1024 * 1024,
-            effort=self.task_config.effort,
-        )
-
-    async def run(self) -> ResultT:
-        self.run_tracker.start_task(self.name)
-        subject = self.subject()
-        preview = str(subject)
-        if len(preview) > 200:
-            preview = f"{preview[:200]}..."
-        logger.info("Running %s with %s", self.__class__.__name__, preview)
-
-        result_msg: ResultMessage | None = None
-        with Reporter(
-            verbose=self.task_config.verbose, log_path=self.task_config.log
-        ) as reporter:
-            reporter.header(subject)
-            async with ClaudeSDKClient(options=self.agent_options()) as client:
-                await client.query(self.user_prompt())
-                async for msg in client.receive_response():
-                    reporter.message(msg)
-                    if isinstance(msg, ResultMessage):
-                        result_msg = msg
-
-        if result_msg is None:
-            raise AgentError(f"{subject}: agent produced no result message")
-        self.run_tracker.end_task(self.name, result_msg)
-        if result_msg.is_error:
-            raise AgentError(
-                f"{subject} diagnosis failed: {result_msg.result or result_msg.subtype}"
-            )
-        if self.result_collector.result is None:
-            raise AgentError(
-                f"{subject}: agent finished without submitting a result via submit_result"
-            )
-        return self.result_collector.result
 
 
 def run_script(
@@ -501,6 +321,7 @@ class Diagnosis(Task):
         self.plan_result = plan_result
         self.repro_result = repro_result
         self.testcase_path = make_empty_temp_file(self.work_dir, "testcase=", ".html")
+        self.diagnosis_path = self.work_dir / "diagnosis.json"
         self.add_mcp_server(
             "firefox-devtools",
             build_firefox_devtools_server(
@@ -566,8 +387,11 @@ as your starting evidence.
    reproduces the same difference; if it does not, revise it until it does. If
    you cannot produce the testcase, leave `testcase_path` null.
 
-4. Submit your diagnosis via `submit_result` (see "Reporting your result"). Do
-   not propose a fix.
+5. Write your diagnosis to exactly {self.diagnosis_path} as a JSON object
+   matching this schema:
+{json.dumps(DiagnosisText.model_json_schema(), indent=2)}
+
+6. Submit your diagnosis via `submit_result` (see "Reporting your result").
 """
             )
         )
@@ -587,6 +411,12 @@ class DiagnosisResults:
         self.diagnosis_result: DiagnosisResult | None = None
 
     @property
+    def diagnosis(self) -> DiagnosisText | None:
+        if self.diagnosis_result is None:
+            return None
+        return self.diagnosis_result.diagnosis
+
+    @property
     def testcase_url(self) -> str | None:
         if self.diagnosis_result is None or self.diagnosis_result.testcase_path is None:
             return None
@@ -600,7 +430,7 @@ class DiagnosisResults:
         self.diagnosis_result = result
 
     def into_result(self) -> AutowebcompatDiagnosisResult:
-        diagnosis = self.diagnosis_result
+        diagnosis = self.diagnosis
         return AutowebcompatDiagnosisResult(
             reproduced=self.repro_result.reproduced,
             failure_reason=self.repro_result.failure_reason,
@@ -608,43 +438,6 @@ class DiagnosisResults:
             evidence=diagnosis.evidence if diagnosis is not None else None,
             testcase_url=self.testcase_url,
         )
-
-
-class Environment:
-    def __init__(self):
-        self.started_processes = []
-
-    def start(self, cmd: list[str]) -> None:
-        logging.info("Running %s", " ".join(cmd))
-        self.started_processes.append(subprocess.Popen(cmd))
-
-    def start_xvfb(self) -> None:
-        self.start(
-            [
-                "Xvfb",
-                os.environ["DISPLAY"],
-                "-screen",
-                "0",
-                "%sx%sx%s"
-                % (
-                    os.environ["SCREEN_WIDTH"],
-                    os.environ["SCREEN_HEIGHT"],
-                    os.environ["SCREEN_DEPTH"],
-                ),
-            ]
-        )
-        self.start(["fluxbox", "-display", os.environ["DISPLAY"]])
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *args, **kwargs) -> None:
-        for process in self.started_processes:
-            process.terminate()
-            try:
-                process.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                process.kill()
 
 
 async def run_autowebcompat_diagnosis(

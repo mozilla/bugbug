@@ -3,25 +3,24 @@
 import logging
 from typing import Annotated
 
-from cachetools import TTLCache
 from fastapi import APIRouter, Depends, Request, Response, status
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     require_bugzilla_webhook_secret,
     require_phabricator_signature,
 )
-from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
+from app.bugzilla_authorization import BugzillaAuthorizer
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
-from app.phabricator_authorization import (
-    AUTHORIZED_GROUP_PHID,
-    PhabricatorAuthorizer,
-)
+from app.database.connection import get_db
+from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     detect_mention_and_revision,
+    follow_up_agent,
     triggering_transaction_phids,
 )
 from app.slack.app import build_request_handler
@@ -72,7 +71,9 @@ def get_phabricator_authorizer(
     """Dependency: lazily create the app-scoped authorizer and its member cache."""
     authorizer = getattr(request.app.state, "phabricator_authorizer", None)
     if authorizer is None:
-        authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
+        authorizer = PhabricatorAuthorizer(
+            phab_client, settings.webhook.authorized_group
+        )
         request.app.state.phabricator_authorizer = authorizer
     return authorizer
 
@@ -84,18 +85,10 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
         authorizer = BugzillaAuthorizer(
             settings.bugzilla_api_url,
             settings.bugzilla_api_key,
-            AUTHORIZED_GROUP_NAME,
+            settings.bugzilla_webhook.authorized_group,
         )
         request.app.state.bugzilla_authorizer = authorizer
     return authorizer
-
-
-# Best-effort dedupe of retried BMO deliveries, keyed by the globally unique
-# needinfo flag ID. A later needinfo on the same bug receives a new flag ID.
-# TODO: Replace with DB-level deduplication (#6716).
-_seen_bugzilla_events: TTLCache = TTLCache(
-    maxsize=4096, ttl=settings.bugzilla_webhook.dedupe_ttl_seconds
-)
 
 
 @router.post(
@@ -108,21 +101,25 @@ async def phabricator_webhook(
     phab_client: Annotated[PhabricatorClient, Depends(get_phabricator_client)],
     authorizer: Annotated[PhabricatorAuthorizer, Depends(get_phabricator_authorizer)],
     api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     payload = await request.json()
 
     action = payload.get("action") or {}
     if action.get("test"):
         # Phabricator's "test" ping when a webhook is created/edited.
+        log.info("Phabricator webhook ignored: test ping")
         return
 
     obj = payload.get("object") or {}
     if obj.get("type") != "DREV":
+        log.warning("Phabricator webhook ignored: not a revision")
         return
 
     object_phid = obj.get("phid")
     triggering = triggering_transaction_phids(payload)
     if not object_phid or not triggering:
+        log.warning("Phabricator webhook ignored: no revision or transactions")
         return
 
     detected = await detect_mention_and_revision(
@@ -133,12 +130,15 @@ async def phabricator_webhook(
         authorizer=authorizer,
     )
     if detected is None:
+        log.info("Phabricator webhook ignored: no actionable @hackbot mention")
         return
+
+    agent = await follow_up_agent(db, detected.revision_id)
 
     # The anchor transaction identifies the submission, so a retried delivery
     # is answered with the run the first delivery created, on any instance.
     run = await api_client.trigger_run(
-        "bug-fix",
+        agent,
         {
             "bug_id": detected.bug_id,
             "revision_id": detected.revision_id,
@@ -155,7 +155,8 @@ async def phabricator_webhook(
         )
         return
     log.info(
-        "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention (%s)",
+        "Triggered %s run %s for D%s (bug %s) from @hackbot mention (%s)",
+        agent,
         run.run_id,
         detected.revision_id,
         detected.bug_id,
@@ -184,14 +185,6 @@ async def bugzilla_webhook(
     )
     if detected is None:
         return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
-    dedupe_key = f"ni{detected.flag_id}"
-    if dedupe_key in _seen_bugzilla_events:
-        log.info(
-            "Ignored duplicate Bugzilla needinfo webhook for bug %s (flag: %s)",
-            detected.bug_id,
-            detected.flag_id,
-        )
-        return {"status": "ignored", "reason": "duplicate delivery"}
 
     if not await authorizer.is_authorized(detected.user_login):
         log.info(
@@ -208,13 +201,24 @@ async def bugzilla_webhook(
             "bugzilla_needinfo_flag_id": detected.flag_id,
             "comment": detected.comment,
         },
+        dedupe_key=f"ni{detected.flag_id}",
     )
-    # Do not consume an event until run creation succeeds; a transient failure
-    # must remain retryable by Bugzilla.
-    _seen_bugzilla_events[dedupe_key] = True
+    if not run.is_new:
+        log.info(
+            "Duplicate Bugzilla delivery for bug %s (flag: %s) resolved to run %s",
+            detected.bug_id,
+            detected.flag_id,
+            run.run_id,
+        )
+        return {
+            "status": "ignored",
+            "reason": "duplicate delivery",
+            "run_id": run.run_id,
+        }
     log.info(
-        "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request",
+        "Triggered bug-fix run %s for Bugzilla bug %s from needinfo request (flag: %s)",
         run.run_id,
         detected.bug_id,
+        detected.flag_id,
     )
     return {"status": "triggered", "run_id": run.run_id}

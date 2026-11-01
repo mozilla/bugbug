@@ -31,3 +31,14 @@ def test_completed_execution_still_maps_normally(monkeypatch):
     monkeypatch.setattr(jobs, "_executions_client", lambda: client)
 
     assert jobs._execution_status_sync("e") is ExecutionStatus.succeeded
+
+
+def test_job_names_carry_the_environment_suffix(monkeypatch):
+    monkeypatch.setattr(jobs.settings, "gcp_project", "p")
+    monkeypatch.setattr(jobs.settings, "gcp_region", "us-west1")
+    monkeypatch.setattr(jobs.settings, "agent_job_suffix", "-dev")
+
+    assert (
+        jobs._job_resource_name("hackbot-agent-bug-fix")
+        == "projects/p/locations/us-west1/jobs/hackbot-agent-bug-fix-dev"
+    )

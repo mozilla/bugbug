@@ -19,6 +19,9 @@ from app.slack.listeners.actions.start_agent_run import (
 )
 from hackbot_client import ApplyActionsResponse, RunAction, RunStatus, TriggeredRun
 from pydantic import ValidationError
+from slack_bolt.context.ack.async_ack import AsyncAck
+from slack_bolt.context.async_context import AsyncBoltContext
+from slack_bolt.context.respond.async_respond import AsyncRespond
 
 test_logger = logging.getLogger(__name__)
 
@@ -81,20 +84,20 @@ def _message(*buttons: dict) -> dict:
 
 class TestStartAgentRun:
     def setup_method(self):
-        self.fake_ack = AsyncMock()
+        self.fake_ack = AsyncMock(spec=AsyncAck)
         self.fake_client = AsyncMock()
         self.fake_client.trigger_run.return_value = TriggeredRun(
             run_id=RUN_ID, agent="bug-fix", status=RunStatus.pending, is_new=True
         )
         self.fake_respond = AsyncMock(
-            return_value=SimpleNamespace(status_code=200, body="ok")
+            spec=AsyncRespond, return_value=SimpleNamespace(status_code=200, body="ok")
         )
         # The apply endpoint answers with every action of the run and its state
         # after the pass; by default here, all of them landed.
         self.fake_client.apply_actions.return_value = _actions(
             _applied("bugzilla.add_comment")
         )
-        self.context = {"hackbot_client": self.fake_client}
+        self.context = AsyncBoltContext({"hackbot_client": self.fake_client})
         self.body = {
             "user": {"id": "U0CLICKER"},
             "channel": {"id": "C0TRIAGE"},
@@ -179,22 +182,20 @@ class TestStartAgentRun:
             call.kwargs for call in self.fake_respond.await_args_list
         ]
 
-    async def test_a_click_that_started_nothing_says_where_the_run_is(self):
+    async def test_a_click_that_started_nothing_tells_the_clicker_nothing_privately(
+        self,
+    ):
+        # The button is swapped for a note linking the existing run, which is
+        # all the clicker needs.
         self.fake_client.trigger_run.return_value = self._triggered(
             is_new=False, status=RunStatus.running
         )
 
         await self._call()
 
-        (reply,) = [
-            call.kwargs
-            for call in self.fake_respond.await_args_list
-            if call.kwargs.get("response_type") == "ephemeral"
+        assert self._edits() == [
+            call.kwargs for call in self.fake_respond.await_args_list
         ]
-        assert "already triggered" in reply["text"]
-        assert RUN_ID in reply["text"]
-        # Only the clicker is told; the channel's copy is updated separately.
-        assert reply["replace_original"] is False
 
     async def test_a_collapsed_click_is_still_acknowledged(self):
         # It is a click Slack delivered and this app handled, whatever it caused.

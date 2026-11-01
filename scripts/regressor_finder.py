@@ -4,30 +4,25 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import concurrent.futures
 import os
-import subprocess
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Iterator, cast
 
 import dateutil.parser
-import tenacity
+import hglib
 from dateutil.relativedelta import relativedelta
-from libmozdata import vcs_map
-from microannotate import utils as microannotate_utils
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, labels, repository
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
-from bugbug.models.regressor import (
-    BUG_FIXING_COMMITS_DB,
-    BUG_INTRODUCING_COMMITS_DB,
-    TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
-)
-from bugbug.utils import ThreadPoolExecutorResult, download_model, zstd_compress
+from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, BUG_INTRODUCING_COMMITS_DB
+from bugbug.utils import download_model, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -35,8 +30,9 @@ logger = getLogger(__name__)
 thread_local = threading.local()
 
 MAX_MODIFICATION_NUMBER = 50
+# Leave some margin before the task deadline to upload the results.
+TIME_BUDGET = 20 * 3600
 RELATIVE_START_DATE = relativedelta(years=2)
-# Only needed because mercurial<->git mapping could be behind.
 RELATIVE_END_DATE = relativedelta(days=7)
 
 IGNORED_COMMITS_DB = "data/ignored_commits.json"
@@ -47,78 +43,89 @@ db.register(
 )
 
 
+def is_useless_line(line: str) -> bool:
+    line = line.strip()
+    return (
+        not line
+        or line == "#"
+        or line.startswith(("# ", "//", "/*", "*", "'''", '"""'))
+    )
+
+
+def get_deleted_lines(patch: bytes) -> dict[str, list[int]]:
+    """Get the lines deleted or modified by a patch, for each file it modifies.
+
+    The patch must be a git-style diff without context lines (i.e. -U0). Line
+    numbers refer to the files before the patch is applied.
+    """
+    deleted_lines: dict[str, list[int]] = {}
+    path = None
+    in_header = False
+    lineno = 0
+    for line in patch.decode("utf-8", "replace").split("\n"):
+        if line.startswith("diff --git "):
+            path = None
+            in_header = True
+        elif in_header and line.startswith("--- "):
+            if line != "--- /dev/null":
+                path = line[len("--- a/") :]
+                deleted_lines[path] = []
+        elif line.startswith("@@ "):
+            in_header = False
+            # e.g. "@@ -12,3 +12,4 @@" or "@@ -12 +12 @@"
+            lineno = int(line.split(" ")[1][1:].split(",")[0])
+        elif not in_header and path is not None and line.startswith("-"):
+            if not is_useless_line(line[1:]):
+                deleted_lines[path].append(lineno)
+            lineno += 1
+
+    return deleted_lines
+
+
+def find_bug_introducing_revs(
+    hg: hglib.client.hgclient,
+    rev: str,
+    ignored_revs_by_path: dict[str, list[str]],
+) -> set[str]:
+    """Find the commits which last touched the lines deleted or modified by a commit (SZZ)."""
+    patch = hg.rawcommand(hglib.util.cmdbuilder(b"diff", c=rev, git=True, unified=0))
+
+    # Skip huge changes, we'll likely be wrong with them.
+    num_files = patch.startswith(b"diff --git ") + patch.count(b"\ndiff --git ")
+    if num_files > MAX_MODIFICATION_NUMBER:
+        logger.info("Skipping %s as it is too big", rev)
+        return set()
+
+    bug_introducing_revs: set[str] = set()
+    for path, linenos in get_deleted_lines(patch).items():
+        if not linenos or path == "testing/web-platform/meta/MANIFEST.json":
+            continue
+
+        # Don't try to find the bug-introducing commit for modifications
+        # in the bug-fixing commit to non-source code files.
+        if repository.get_type(path) not in repository.SOURCE_CODE_TYPES_TO_EXT:
+            continue
+
+        skip = " + ".join(ignored_revs_by_path.get(path, [])) or None
+        annotate = hg.rawcommand(
+            hglib.util.cmdbuilder(
+                b"annotate",
+                b"path:" + path.encode("utf-8"),
+                r=f"p1({rev})",
+                w=True,
+                skip=skip,
+                T="{lines % '{node}\\n'}",
+            )
+        )
+        line_revs = annotate.decode("ascii").splitlines()
+        bug_introducing_revs.update(
+            line_revs[lineno - 1] for lineno in linenos if lineno <= len(line_revs)
+        )
+
+    return bug_introducing_revs
+
+
 class RegressorFinder(object):
-    def __init__(
-        self,
-        git_repo_url=None,
-        git_repo_dir=None,
-        tokenized_git_repo_url=None,
-        tokenized_git_repo_dir=None,
-    ):
-        self.git_repo_url = git_repo_url
-        self.git_repo_dir = git_repo_dir
-        self.tokenized_git_repo_url = tokenized_git_repo_url
-        self.tokenized_git_repo_dir = tokenized_git_repo_dir
-
-        with ThreadPoolExecutorResult(max_workers=3) as executor:
-            if self.git_repo_url is not None:
-                logger.info("Cloning %s to %s...", self.git_repo_url, self.git_repo_dir)
-                executor.submit(
-                    self.clone_git_repo, self.git_repo_url, self.git_repo_dir
-                )
-
-            if self.tokenized_git_repo_url is not None:
-                logger.info(
-                    "Cloning %s to %s...",
-                    self.tokenized_git_repo_url,
-                    self.tokenized_git_repo_dir,
-                )
-                executor.submit(
-                    self.clone_git_repo,
-                    self.tokenized_git_repo_url,
-                    self.tokenized_git_repo_dir,
-                )
-
-        logger.info("Initializing mapping between git and mercurial commits...")
-        self.init_mapping()
-
-    def clone_git_repo(self, repo_url, repo_dir):
-        if not os.path.exists(repo_dir):
-            for attempt in tenacity.Retrying(
-                wait=tenacity.wait_exponential(multiplier=2, min=2),
-                stop=tenacity.stop_after_attempt(7),
-            ):
-                with attempt:
-                    subprocess.run(
-                        ["git", "clone", "--quiet", repo_url, repo_dir],
-                        check=True,
-                    )
-
-            logger.info("%s cloned", repo_dir)
-
-        logger.info("Fetching %s", repo_dir)
-
-        for attempt in tenacity.Retrying(
-            wait=tenacity.wait_exponential(multiplier=2, min=2),
-            stop=tenacity.stop_after_attempt(7),
-        ):
-            with attempt:
-                subprocess.run(
-                    ["git", "fetch", "--quiet"],
-                    cwd=repo_dir,
-                    capture_output=True,
-                    check=True,
-                )
-
-        logger.info("%s fetched", repo_dir)
-
-    def init_mapping(self):
-        if self.tokenized_git_repo_url is not None:
-            (
-                self.tokenized_git_to_mercurial,
-                self.mercurial_to_tokenized_git,
-            ) = microannotate_utils.get_commit_mapping(self.tokenized_git_repo_dir)
-
     def get_commits_to_ignore(self) -> None:
         assert db.download(repository.COMMITS_DB)
 
@@ -302,230 +309,119 @@ class RegressorFinder(object):
         zstd_compress(BUG_FIXING_COMMITS_DB)
         db.upload(BUG_FIXING_COMMITS_DB)
 
-    def find_bug_introducing_commits(self, repo_dir, tokenized):
-        # from pydriller import GitRepository
-        # from pydriller.domain.commit import ModificationType
+    def find_bug_introducing_commits(self, repo_dir: str) -> None:
+        start_time = time.monotonic()
+
+        logger.info("Cloning Mercurial repository to %s...", repo_dir)
+        repository.clone(repo_dir)
 
         logger.info("Download commits to ignore...")
         assert db.download(IGNORED_COMMITS_DB)
-        commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
+        ignored_revs = {commit["rev"] for commit in db.read(IGNORED_COMMITS_DB)}
 
         logger.info("Download bug-fixing classifications...")
         assert db.download(BUG_FIXING_COMMITS_DB)
-        bug_fixing_commits = [
-            bug_fixing_commit
+        bug_fixing_revs = [
+            bug_fixing_commit["rev"]
             for bug_fixing_commit in db.read(BUG_FIXING_COMMITS_DB)
             if bug_fixing_commit["type"] in ["r", "d"]
         ]
 
-        if tokenized:
-            db_path = TOKENIZED_BUG_INTRODUCING_COMMITS_DB
-        else:
-            db_path = BUG_INTRODUCING_COMMITS_DB
-
-        def git_to_mercurial(revs):
-            if tokenized:
-                return (self.tokenized_git_to_mercurial[rev] for rev in revs)
-            else:
-                yield from vcs_map.git_to_mercurial(repo_dir, revs)
-
-        def mercurial_to_git(revs):
-            if tokenized:
-                return (self.mercurial_to_tokenized_git[rev] for rev in revs)
-            else:
-                yield from vcs_map.mercurial_to_git(repo_dir, revs)
-
         logger.info("Download previously found bug-introducing commits...")
-        db.download(db_path)
-
-        logger.info("Get previously found bug-introducing commits...")
-        prev_bug_introducing_commits = list(db.read(db_path))
-        prev_bug_introducing_commits_nodes = set(
+        db.download(BUG_INTRODUCING_COMMITS_DB)
+        prev_bug_fixing_revs = {
             bug_introducing_commit["bug_fixing_rev"]
-            for bug_introducing_commit in prev_bug_introducing_commits
-        )
+            for bug_introducing_commit in db.read(BUG_INTRODUCING_COMMITS_DB)
+        }
+        logger.info("Already classified %d commits...", len(prev_bug_fixing_revs))
+
+        logger.info("%d commits to analyze", len(bug_fixing_revs))
+        bug_fixing_revs = [
+            rev
+            for rev in bug_fixing_revs
+            if rev not in prev_bug_fixing_revs and rev not in ignored_revs
+        ]
         logger.info(
-            "Already classified %d commits...", len(prev_bug_introducing_commits)
+            "%d commits left to analyze after skipping already analyzed and ignored ones",
+            len(bug_fixing_revs),
         )
 
-        hashes_to_ignore = set(commit["rev"] for commit in commits_to_ignore)
+        # Collect, for each file touched by a bug-fixing commit, the ignored commits
+        # which touched it, so that annotate can skip over them.
+        logger.info("Download commits...")
+        assert db.download(repository.COMMITS_DB)
 
-        with open("git_hashes_to_ignore", "w") as f:
-            git_hashes = mercurial_to_git(
-                commit["rev"]
-                for commit in tqdm(commits_to_ignore)
-                if not tokenized or commit["rev"] in self.mercurial_to_tokenized_git
+        bug_fixing_revs_set = set(bug_fixing_revs)
+        bug_fixing_paths = set()
+        for commit in repository.get_commits(
+            include_no_bug=True, include_backouts=True, include_ignored=True
+        ):
+            if commit["node"] in bug_fixing_revs_set:
+                bug_fixing_paths.update(commit["files"])
+
+        ignored_revs_by_path: dict[str, list[str]] = defaultdict(list)
+        for commit in repository.get_commits(
+            include_no_bug=True, include_backouts=True, include_ignored=True
+        ):
+            if commit["node"] in ignored_revs:
+                for path in commit["files"]:
+                    if path in bug_fixing_paths:
+                        ignored_revs_by_path[path].append(commit["node"])
+
+        def find_bic(rev: str) -> list[dict]:
+            bug_introducing_revs = find_bug_introducing_revs(
+                thread_local.hg, rev, ignored_revs_by_path
             )
-            f.writelines("{}\n".format(git_hash) for git_hash in git_hashes)
 
-        logger.info("%d commits to analyze", len(bug_fixing_commits))
-
-        # Skip already found bug-introducing commits.
-        bug_fixing_commits = [
-            bug_fixing_commit
-            for bug_fixing_commit in bug_fixing_commits
-            if bug_fixing_commit["rev"] not in prev_bug_introducing_commits_nodes
-        ]
-
-        logger.info(
-            "%d commits left to analyze after skipping already analyzed ones",
-            len(bug_fixing_commits),
-        )
-
-        bug_fixing_commits = [
-            bug_fixing_commit
-            for bug_fixing_commit in bug_fixing_commits
-            if bug_fixing_commit["rev"] not in hashes_to_ignore
-        ]
-        logger.info(
-            "%d commits left to analyze after skipping the ones in the ignore list",
-            len(bug_fixing_commits),
-        )
-
-        if tokenized:
-            bug_fixing_commits = [
-                bug_fixing_commit
-                for bug_fixing_commit in bug_fixing_commits
-                if bug_fixing_commit["rev"] in self.mercurial_to_tokenized_git
+            # Add an empty result, just so that we don't reanalyze this again.
+            return [
+                {"bug_fixing_rev": rev, "bug_introducing_rev": bug_introducing_rev}
+                for bug_introducing_rev in sorted(bug_introducing_revs) or [""]
             ]
-            logger.info(
-                "%d commits left to analyze after skipping the ones with no git hash",
-                len(bug_fixing_commits),
-            )
 
-        # git_init_lock = threading.Lock()
+        def _init(repo_dir: str) -> None:
+            thread_local.hg = hglib.open(repo_dir)
 
-        # def _init(git_repo_dir):
-        #     with git_init_lock:
-        #         thread_local.git = GitRepository(git_repo_dir)
-        #         # Call get_head in order to make pydriller initialize the repository.
-        #         thread_local.git.get_head()
+        def append_compress_and_upload(results: list[dict]) -> None:
+            db.append(BUG_INTRODUCING_COMMITS_DB, results)
+            zstd_compress(BUG_INTRODUCING_COMMITS_DB)
+            db.upload(BUG_INTRODUCING_COMMITS_DB)
 
-        # def find_bic(bug_fixing_commit):
-        #     logger.info("Analyzing %s...", bug_fixing_commit["rev"])
+        workers = (os.cpu_count() or 1) + 1
+        logger.info(
+            "Analyzing %d commits using %d workers...", len(bug_fixing_revs), workers
+        )
 
-        #     git_fix_revision = tuple(mercurial_to_git([bug_fixing_commit["rev"]]))[0]
+        results: list[dict] = []
+        last_upload_time = time.monotonic()
+        with concurrent.futures.ThreadPoolExecutor(
+            initializer=_init, initargs=(repo_dir,), max_workers=workers
+        ) as executor:
+            futures = {executor.submit(find_bic, rev): rev for rev in bug_fixing_revs}
 
-        #     commit = thread_local.git.get_commit(git_fix_revision)
+            for future in tqdm(
+                concurrent.futures.as_completed(futures), total=len(futures)
+            ):
+                try:
+                    results += future.result()
+                except hglib.error.CommandError:
+                    logger.exception("Failed to analyze %s", futures[future])
 
-        #     # Skip huge changes, we'll likely be wrong with them.
-        #     if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
-        #         logger.info(
-        #             "Skipping {} as it is too big".format(bug_fixing_commit["rev"])
-        #         )
-        #         return None
+                if time.monotonic() - last_upload_time < 3600:
+                    continue
 
-        #     def get_modification_path(mod):
-        #         path = mod.new_path
-        #         if (
-        #             mod.change_type == ModificationType.RENAME
-        #             or mod.change_type == ModificationType.DELETE
-        #         ):
-        #             path = mod.old_path
-        #         return path
+                append_compress_and_upload(results)
+                results = []
+                last_upload_time = time.monotonic()
 
-        #     bug_introducing_modifications = {}
-        #     for modification in commit.modifications:
-        #         path = get_modification_path(modification)
+                # Stop early, so that the remaining commits are analyzed in the next run
+                # instead of losing everything when the task times out.
+                if time.monotonic() - start_time >= TIME_BUDGET:
+                    logger.info("Time budget exhausted, stopping")
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
 
-        #         if path == "testing/web-platform/meta/MANIFEST.json":
-        #             continue
-
-        #         # Don't try to find the bug-introducing commit for modifications
-        #         # in the bug-fixing commit to non-source code files.
-        #         if repository.get_type(path) not in repository.SOURCE_CODE_TYPES_TO_EXT:
-        #             continue
-
-        #         bug_introducing_modifications.update(
-        #             thread_local.git.get_commits_last_modified_lines(
-        #                 commit,
-        #                 modification=modification,
-        #                 hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore"),
-        #             )
-        #         )
-
-        #     logger.info(
-        #         "Found {} for {}".format(
-        #             bug_introducing_modifications, bug_fixing_commit["rev"]
-        #         )
-        #     )
-
-        #     bug_introducing_commits = []
-        #     for bug_introducing_hashes in bug_introducing_modifications.values():
-        #         for bug_introducing_hash in bug_introducing_hashes:
-        #             try:
-        #                 bug_introducing_commits.append(
-        #                     {
-        #                         "bug_fixing_rev": bug_fixing_commit["rev"],
-        #                         "bug_introducing_rev": tuple(
-        #                             git_to_mercurial([bug_introducing_hash])
-        #                         )[0],
-        #                     }
-        #                 )
-        #             except Exception as e:
-        #                 # Skip commits that are in git but not in mercurial, as they are too old (older than "Free the lizard").
-        #                 if not str(e).startswith("Missing git commit in the VCS map"):
-        #                     raise
-
-        #     # Add an empty result, just so that we don't reanalyze this again.
-        #     if len(bug_introducing_commits) == 0:
-        #         bug_introducing_commits.append(
-        #             {
-        #                 "bug_fixing_rev": bug_fixing_commit["rev"],
-        #                 "bug_introducing_rev": "",
-        #             }
-        #         )
-
-        #     return bug_introducing_commits
-
-        def compress_and_upload():
-            zstd_compress(db_path)
-            db.upload(db_path)
-
-        # workers = os.cpu_count() + 1
-        # logger.info(
-        #     "Analyzing %d commits using %d workers...",
-        #     len(bug_fixing_commits),
-        #     len(bug_fixing_commits),
-        # )
-
-        # with concurrent.futures.ThreadPoolExecutor(
-        #     initializer=_init, initargs=(repo_dir,), max_workers=workers
-        # ) as executor:
-
-        #     def results():
-        #         start_time = time.monotonic()
-
-        #         futures = {
-        #             executor.submit(find_bic, bug_fixing_commit): bug_fixing_commit[
-        #                 "rev"
-        #             ]
-        #             for bug_fixing_commit in bug_fixing_commits
-        #         }
-
-        #         for future in tqdm(
-        #             concurrent.futures.as_completed(futures),
-        #             total=len(futures),
-        #         ):
-        #             exc = future.exception()
-        #             if exc is not None:
-        #                 logger.info(
-        #                     "Exception %s while analyzing %s", exc, futures[future]
-        #                 )
-        #                 for f in futures:
-        #                     f.cancel()
-
-        #             result = future.result()
-        #             if result is not None:
-        #                 yield from result
-
-        #             if time.monotonic() - start_time >= 3600:
-        #                 compress_and_upload()
-        #                 start_time = time.monotonic()
-
-        #     db.append(db_path, results())
-
-        compress_and_upload()
+        append_compress_and_upload(results)
 
 
 def evaluate(bug_introducing_commits):
@@ -569,7 +465,7 @@ def evaluate(bug_introducing_commits):
     misassigned_regressors = 0
     for bug_id, regressor_bugs in tqdm(known_regressors.items()):
         # Get all commits which fixed the bug.
-        fix_commits = bug_to_commits_map[bug_id] if bug_id in bug_to_commits_map else []
+        fix_commits = bug_to_commits_map.get(bug_id, [])
         if len(fix_commits) == 0:
             continue
 
@@ -632,47 +528,22 @@ def main() -> None:
 
     parser.add_argument("what", choices=["to_ignore", "bug_fixing", "bug_introducing"])
     parser.add_argument(
-        "--git_repo_url", help="URL to the git repository on which to run SZZ."
-    )
-    parser.add_argument(
-        "--git_repo_dir", help="Path where the git repository will be cloned."
-    )
-    parser.add_argument(
-        "--tokenized_git_repo_url",
-        help="URL to the tokenized git repository on which to run SZZ.",
-    )
-    parser.add_argument(
-        "--tokenized_git_repo_dir",
-        help="Path where the tokenized git repository will be cloned.",
+        "--repo_dir",
+        help="Path to the Mercurial repository on which to run SZZ (it will be cloned if missing).",
     )
 
     args = parser.parse_args()
 
-    regressor_finder = RegressorFinder(
-        args.git_repo_url,
-        args.git_repo_dir,
-        args.tokenized_git_repo_url,
-        args.tokenized_git_repo_dir,
-    )
+    regressor_finder = RegressorFinder()
 
     if args.what == "to_ignore":
         regressor_finder.get_commits_to_ignore()
     elif args.what == "bug_fixing":
         regressor_finder.find_bug_fixing_commits()
     elif args.what == "bug_introducing":
-        assert args.git_repo_url or args.tokenized_git_repo_url
-
-        if args.git_repo_url:
-            assert not args.tokenized_git_repo_url
-            regressor_finder.find_bug_introducing_commits(args.git_repo_dir, False)
-            evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
-
-        if args.tokenized_git_repo_url:
-            assert not args.git_repo_url
-            regressor_finder.find_bug_introducing_commits(
-                args.tokenized_git_repo_dir, True
-            )
-            evaluate(db.read(TOKENIZED_BUG_INTRODUCING_COMMITS_DB))
+        assert args.repo_dir
+        regressor_finder.find_bug_introducing_commits(args.repo_dir)
+        evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
 
 
 if __name__ == "__main__":

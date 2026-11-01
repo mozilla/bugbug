@@ -1,0 +1,100 @@
+{
+    "schema_version": 1,
+    "generator": "hackbot-deploy",
+    "hash_algorithm": "sha256-canonical-json-v1",
+    "agents": {
+        "autowebcompat-diagnosis": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi"
+            },
+            "config_hash": "e885f3354ff8a74c",
+            "compatible": [
+                "e885f3354ff8a74c"
+            ]
+        },
+        "autowebcompat-repro": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi"
+            },
+            "config_hash": "9843f44b4f4cee92",
+            "compatible": [
+                "9843f44b4f4cee92"
+            ]
+        },
+        "bug-fix": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "workspace": {
+                "size": "40Gi"
+            },
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi"
+            },
+            "config_hash": "b7fa703d8856234e",
+            "compatible": [
+                "b7fa703d8856234e"
+            ]
+        },
+        "build-repair": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi"
+            },
+            "config_hash": "ae4c8525b6aecb26",
+            "compatible": [
+                "ae4c8525b6aecb26"
+            ]
+        },
+        "frontend-triage": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "broker": {
+                "cpu": "1",
+                "memory": "512Mi"
+            },
+            "config_hash": "dc535e086f833155",
+            "compatible": [
+                "dc535e086f833155"
+            ]
+        },
+        "test-plan-generator": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "config_hash": "8aed6b3c5c99e9c2",
+            "compatible": [
+                "8aed6b3c5c99e9c2"
+            ]
+        },
+        "test-repair": {
+            "runtime": "cloud_run_job",
+            "cpu": "6",
+            "memory": "24Gi",
+            "timeout_seconds": 7200,
+            "config_hash": "40f35310e8b2554b",
+            "compatible": [
+                "40f35310e8b2554b"
+            ]
+        }
+    }
+}

@@ -100,7 +100,7 @@ class BugFixInputs(AgentInputs):
     effort: str | None = None
 
     @model_validator(mode="after")
-    def _validate_mode(self) -> "BugFixInputs":
+    def _validate_mode(self) -> BugFixInputs:
         """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
         if self.bugzilla_needinfo_flag_id is not None:
             if self.revision_id is not None:
@@ -119,7 +119,9 @@ class BugFixInputs(AgentInputs):
         return self
 
 
-class AutowebcompatReproInputs(AgentInputs):
+class AutowebcompatInputs(AgentInputs):
+    """Inputs shared by the autowebcompat agents: a bug and Claude settings."""
+
     bug_data: str | None = None
     bug_id: int | None = None
     model: str | None = None
@@ -127,23 +129,35 @@ class AutowebcompatReproInputs(AgentInputs):
     effort: str | None = None
 
     @model_validator(mode="after")
-    def _require_subject(self) -> "AutowebcompatReproInputs":
+    def require_subject(self) -> AutowebcompatInputs:
         if self.bug_data is None and self.bug_id is None:
             raise ValueError("provide at least one of bug_data or bug_id")
         return self
 
 
-class AutowebcompatDiagnosisInputs(AgentInputs):
-    bug_data: str | None = None
-    bug_id: int | None = None
-    model: str | None = None
-    max_turns: int | None = None
-    effort: str | None = None
+class AutowebcompatReproInputs(AutowebcompatInputs):
+    """Inputs for the autowebcompat-repro agent."""
+
+
+class AutowebcompatDiagnosisInputs(AutowebcompatInputs):
+    """Inputs for the autowebcompat-diagnosis agent."""
+
+
+class AutowebcompatInterventionInputs(AutowebcompatInputs):
+    """Inputs for the autowebcompat-intervention agent."""
+
+    revision_id: int | None = None
+    comment: str | None = None
 
     @model_validator(mode="after")
-    def _require_subject(self) -> "AutowebcompatDiagnosisInputs":
-        if self.bug_data is None and self.bug_id is None:
-            raise ValueError("provide at least one of bug_data or bug_id")
+    def _validate_follow_up(self) -> "AutowebcompatInterventionInputs":
+        if self.revision_id is not None:
+            if not self.comment:
+                raise ValueError("comment is required when revision_id is set")
+            if self.bug_id is None:
+                raise ValueError("bug_id is required when revision_id is set")
+        elif self.comment is not None:
+            raise ValueError("comment requires revision_id")
         return self
 
 
@@ -163,6 +177,15 @@ class TestRepairInputs(AgentInputs):
     # push, the last-green revision and the candidate commit range itself from the
     # task id (the listener only filters which failures are worth investigating).
     failure_tasks: dict[str, str]
+    model: str | None = None
+    max_turns: int | None = None
+
+
+class TestRepairFixInputs(AgentInputs):
+    # The test-repair run to continue from; the investigation, verdict and failure
+    # logs come from its artifacts.
+    parent_run_id: UUID
+    skip_firefox_build: bool | None = None
     model: str | None = None
     max_turns: int | None = None
 

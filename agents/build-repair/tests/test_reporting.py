@@ -77,8 +77,7 @@ def _run(
             checkout=checkout,
         )
     )
-    assert len(sessions) == 2
-    return result, sessions[0], sessions[1]
+    return result, sessions[0], sessions[1] if len(sessions) > 1 else None
 
 
 # --- the fix stage works on the blamed commit itself ----------------------- #
@@ -104,18 +103,19 @@ def test_the_tree_moves_to_the_blamed_commit_before_the_fix_stage(
     assert "checked out at it" not in analysis_prompt
 
 
-def test_no_checkout_when_the_agent_blamed_nothing(tmp_path, monkeypatch):
+def test_no_fix_stage_when_the_agent_blamed_nothing(tmp_path, monkeypatch):
     checked_out = []
-    _, _, (_, fix_prompt) = _run(
+    result, _, fix = _run(
         tmp_path,
         monkeypatch,
         bug_id=1,
-        actions_recorder=None,
+        actions_recorder=ActionsRecorder(),
         blame="",
         checkout=lambda sha: checked_out.append(sha),
     )
+    assert fix is None
     assert checked_out == []
-    assert "broke the build" not in fix_prompt
+    assert result.blamed_commit is None
 
 
 def test_the_prompt_does_not_claim_a_checkout_that_did_not_happen(
@@ -221,7 +221,7 @@ def test_actions_are_wired_into_the_fix_stage_only(tmp_path, monkeypatch):
     assert not ACTION_TOOLS & set(analysis_opts.allowed_tools)
     assert "actions" not in analysis_opts.mcp_servers
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "actions" in fix_opts.mcp_servers
     assert "bugzilla" in fix_opts.mcp_servers
 
@@ -247,7 +247,7 @@ def test_the_pushs_bug_stands_in_for_an_unset_bug_id(tmp_path, monkeypatch):
         push_bug=2063979,
     )
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "bug_id=2063979" in fix_prompt
     assert '"Bug 2063979 - ' in fix_prompt
     assert result.bug_id == 2063979
@@ -343,7 +343,7 @@ def test_an_earlier_pushs_culprit_gets_its_bug_from_the_checkout(tmp_path, monke
         blame=earlier,
     )
 
-    assert ACTION_TOOLS <= set(fix_opts.allowed_tools)
+    assert set(fix_opts.allowed_tools) >= ACTION_TOOLS
     assert "bug_id=555" in fix_prompt
     assert result.bug_id == 555
     assert result.blamed_commit == earlier

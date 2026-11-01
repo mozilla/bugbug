@@ -12,10 +12,8 @@ endpoints are mapped to git; the agent enumerates the commits between them with
 ``git log`` in the checkout.
 """
 
-from __future__ import annotations
-
 import logging
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
@@ -40,12 +38,16 @@ _TIMEOUT = 30
 _TREEHERDER = "https://treeherder.mozilla.org/api/project"
 _FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
 _INTERMITTENT_KEYWORD = "intermittent-failure"
-# How far back the candidate window reaches. The agent narrows it itself with
-# `treeherder-cli --lookback N --suspects`, which reports the push a failure actually
-# started in -- including when that predates the push under investigation.
-RANGE_PUSHES = 100
+# How far back the candidate window reaches. Backstop pushes run every test at least
+# every 20 pushes (gecko_taskgraph/util/backstop.py), so a new failure starts within
+# it. The agent narrows it itself with `treeherder-cli --lookback N --suspects`, which
+# reports the push a failure actually started in -- including when that predates the
+# push under investigation.
+RANGE_PUSHES = 20
 # Bounds the shallow clone depth, and so the commits the agent can reach.
 MAX_RANGE_COMMITS = 500
+# What the analysis publishes for the test-repair-fix run it hands on to.
+INVESTIGATION_ARTIFACT = "investigation.json"
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,19 @@ class Investigation:
     # False for suites that report no test manifests (gtest, jittest, talos, ...).
     group_based: bool = True
     known_intermittent_bugs: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Investigation":
+        return cls(
+            **{
+                **data,
+                "failing_groups": [FailingGroup(**g) for g in data["failing_groups"]],
+                "commit_range": CommitRange(**data["commit_range"]),
+            }
+        )
 
     @property
     def failure_commit(self) -> str:
@@ -165,15 +180,15 @@ def sheriff_classification(project: str, task_id: str) -> str | None:
     """How a sheriff classified this failure while the run worked, if they did.
 
     A run takes long enough that the tree is often dealt with before it reports.
-    Best effort: None on any error, so the report goes out unmarked rather than
-    not at all.
+    Best effort: None on any error, so the report goes out as unclassified rather
+    than not at all.
     """
     try:
         jobs = (
             _get_json(f"{_TREEHERDER}/{project}/jobs/?task_id={task_id}").get("results")
             or []
         )
-    except (requests.exceptions.RequestException, ValueError):
+    except requests.exceptions.RequestException, ValueError:
         logger.warning("Could not re-read the classification of task %s", task_id)
         return None
     if not jobs:
@@ -187,9 +202,12 @@ def _open_intermittent_bugs(suggestion: dict) -> list[int]:
     matched = []
     for bug in (bugs.get("open_recent") or []) + (bugs.get("all_others") or []):
         keywords = [k.strip() for k in (bug.get("keywords") or "").split(",")]
-        if bug.get("id") and not bug.get("resolution"):
-            if _INTERMITTENT_KEYWORD in keywords:
-                matched.append(bug["id"])
+        if (
+            bug.get("id")
+            and not bug.get("resolution")
+            and _INTERMITTENT_KEYWORD in keywords
+        ):
+            matched.append(bug["id"])
     return matched
 
 
@@ -208,7 +226,7 @@ def _known_intermittent_bugs(project: str, task_id: str) -> list[int]:
         suggestions = _get_json(
             f"{_TREEHERDER}/{project}/jobs/{jobs[0]['id']}/bug_suggestions/"
         )
-    except (requests.exceptions.RequestException, ValueError, KeyError):
+    except requests.exceptions.RequestException, ValueError, KeyError:
         logger.warning("Could not read bug suggestions for task %s", task_id)
         return []
 

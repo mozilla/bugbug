@@ -6,8 +6,6 @@ proxy-level restrictions (code 101: endpoint not exposed, code 102: access
 denied) as a structured :class:`~agent_tools.registry.ToolError`.
 """
 
-from __future__ import annotations
-
 import base64
 import mimetypes
 from dataclasses import dataclass

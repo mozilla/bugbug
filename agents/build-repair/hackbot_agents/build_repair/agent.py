@@ -12,9 +12,9 @@ failure commit (via ``SOURCE_REF``) and collects the agent's edits into
 analysis artifacts.
 """
 
-from __future__ import annotations
-
+import contextlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -66,6 +66,7 @@ from .prompts import (
     PUSH_CONTEXT,
     REPORT_INSTRUCTIONS,
     SINGLE_COMMIT_CONTEXT,
+    SYSTEM_PROMPT_APPEND,
     TREE_AT_BLAME,
     TREEHERDER_STEP,
     TREEHERDER_STEP_NO_PUSH,
@@ -116,15 +117,54 @@ def _build_options(
     # sandbox and tools run without per-command permission prompts.
     return ClaudeAgentOptions(
         model=model,
+        system_prompt={
+            "type": "preset",
+            "preset": "claude_code",
+            "append": SYSTEM_PROMPT_APPEND,
+        },
         cwd=str(cwd),
         mcp_servers=mcp_servers,
         allowed_tools=allowed_tools,
-        disallowed_tools=["AskUserQuestion", "Task"],
+        disallowed_tools=["AskUserQuestion", "Task", "Skill"],
         add_dirs=[*ADDITIONAL_DIRS, str(scratch_dir)],
         permission_mode="bypassPermissions",
         effort=effort,
         max_turns=max_turns,
-        setting_sources=[],
+        # Loads the Firefox tree's CLAUDE.md, which imports its AGENTS.md.
+        setting_sources=["project"],
+        # Ignores the tree's .mcp.json; only mcp_servers are available.
+        extra_args={"strict-mcp-config": None},
+    )
+
+
+def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
+    """Build as the failing CI task did: its toolchains and mozconfig."""
+    fetches = [f"{f['task']}:{f['artifact']}" for f in json.loads(env["MOZ_FETCHES"])]
+    fetches_dir = fx_ctx.source_dir.parent / "fetches"
+    fetches_dir.mkdir(exist_ok=True)
+    # A reused workspace keeps the in-tree mozconfig, which mach refuses outside automation.
+    fx_ctx.mozconfig.unlink(missing_ok=True)
+    subprocess.run(
+        [str(fx_ctx.source_dir / "mach"), "--no-interactive", "artifact"]
+        + ["toolchain", "--from-task", *fetches],
+        cwd=fetches_dir,
+        check=True,
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+    )
+    # mach takes in-tree mozconfigs only in automation.
+    os.environ.update(
+        {
+            k: env[k]
+            for k in ("DISABLE_CLANG_PLUGIN", "FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS")
+            if k in env
+        },
+        MOZ_AUTOMATION="1",
+        MOZ_FETCHES_DIR=str(fetches_dir),
+    )
+    fx_ctx.mozconfig.write_text(
+        f'. "$topsrcdir/{env["MOZCONFIG"]}"\n'
+        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
     )
 
 
@@ -161,6 +201,7 @@ async def run_build_repair(
     project: str | None = None,
     hg_revision: str | None = None,
     failure_tasks: dict[str, str],
+    ci_env: dict[str, str] | None = None,
     run_try_push: bool = False,
     model: str | None = None,
     max_turns: int | None = None,
@@ -298,86 +339,88 @@ async def run_build_repair(
                 source_repo, blamed_commit
             )
 
-        at_blame = blamed_commit is not None and _checkout(checkout, blamed_commit)
-        # A child revision has to be based on its parent's commit, so the fix
-        # only stacks when the tree really moved there.
-        parent_revision = (
-            _revision_from_commit(source_repo, blamed_commit) if at_blame else None
-        )
-
-        # Reporting is confined to the fix stage: the analysis stage must not
-        # submit anything before there is a verified fix.
-        report = actions_recorder is not None and resolved_bug_id is not None
-        fix_mcp_servers = mcp_servers
-        fix_allowed_tools = allowed_tools
-        if report:
-            _, actions_server = actions_server_for(
-                actions_recorder, types=ENABLED_ACTION_TYPES
-            )
-            fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
-            fix_allowed_tools = [
-                *allowed_tools,
-                *actions_to_tool_names(ENABLED_ACTION_TYPES),
-            ]
-        elif actions_recorder is not None:
-            print(
-                f"[build_repair] no bug for blamed commit {blamed_commit}: the fix "
-                "will be produced but not submitted for review, since a "
-                "Phabricator revision is filed against a bug",
-                file=sys.stderr,
+        if blamed_commit is not None:
+            at_blame = _checkout(checkout, blamed_commit)
+            # A child revision has to be based on its parent's commit, so the fix
+            # only stacks when the tree really moved there.
+            parent_revision = (
+                _revision_from_commit(source_repo, blamed_commit) if at_blame else None
             )
 
-        fix_prompt = FIX_TEMPLATE.format(
-            target_software=TARGET_SOFTWARE,
-            source_repo=source_repo,
-            scratch_out=scratch_out,
-            blame_note=(
-                BLAME_NOTE.format(
+            # Reporting is confined to the fix stage: the analysis stage must not
+            # submit anything before there is a verified fix.
+            report = actions_recorder is not None and resolved_bug_id is not None
+            fix_mcp_servers = mcp_servers
+            fix_allowed_tools = allowed_tools
+            if report:
+                _, actions_server = actions_server_for(
+                    actions_recorder, types=ENABLED_ACTION_TYPES
+                )
+                fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
+                fix_allowed_tools = [
+                    *allowed_tools,
+                    *actions_to_tool_names(ENABLED_ACTION_TYPES),
+                ]
+            elif actions_recorder is not None:
+                print(
+                    f"[build_repair] no bug for blamed commit {blamed_commit}: the fix "
+                    "will be produced but not submitted for review, since a "
+                    "Phabricator revision is filed against a bug",
+                    file=sys.stderr,
+                )
+
+            fix_prompt = FIX_TEMPLATE.format(
+                target_software=TARGET_SOFTWARE,
+                source_repo=source_repo,
+                scratch_out=scratch_out,
+                blame_note=BLAME_NOTE.format(
                     blamed_commit=blamed_commit,
                     tree=TREE_AT_BLAME if at_blame else "",
-                )
-                if blamed_commit
-                else ""
-            ),
-            try_push=(
-                TRY_PUSH_INSTRUCTIONS.format(task_name=task_name)
-                if run_try_push
-                else ""
-            ),
-            report=(
-                REPORT_INSTRUCTIONS.format(
-                    bug_id=resolved_bug_id,
-                    parent=(
-                        PARENT_REVISION_ARG.format(revision=parent_revision)
-                        if parent_revision
-                        else ""
-                    ),
-                )
-                if report
-                else ""
-            ),
-        )
+                ),
+                try_push=(
+                    TRY_PUSH_INSTRUCTIONS.format(task_name=task_name)
+                    if run_try_push
+                    else ""
+                ),
+                report=(
+                    REPORT_INSTRUCTIONS.format(
+                        bug_id=resolved_bug_id,
+                        parent=(
+                            PARENT_REVISION_ARG.format(revision=parent_revision)
+                            if parent_revision
+                            else ""
+                        ),
+                    )
+                    if report
+                    else ""
+                ),
+            )
 
-        # Stage 2: fix (lower effort, edits the source tree and verifies it
-        # builds against a mozconfig that mirrors the failing CI config).
-        _write_mozconfig(fx_ctx)
-        fix_label = f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
-        reporter.header(f"{fix_label}: fix")
-        fix_opts = _build_options(
-            model=model or FIX_MODEL,
-            effort="low",
-            cwd=source_repo,
-            scratch_dir=scratch_dir,
-            mcp_servers=fix_mcp_servers,
-            allowed_tools=fix_allowed_tools,
-            max_turns=max_turns,
-        )
-        result_msg = await _run_session(
-            reporter, fix_opts, fix_prompt, captured, tracked
-        )
-        _check(result_msg, label, "fix")
-        total_cost += result_msg.total_cost_usd or 0.0
-        total_turns += result_msg.num_turns or 0
+            # Stage 2: fix (lower effort, edits the source tree and verifies it
+            # builds against a mozconfig that mirrors the failing CI config).
+            if ci_env:
+                _setup_ci_build(fx_ctx, ci_env)
+            else:
+                _write_mozconfig(fx_ctx)
+            fix_label = (
+                f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
+            )
+            reporter.header(f"{fix_label}: fix")
+            fix_opts = _build_options(
+                model=model or FIX_MODEL,
+                effort="low",
+                cwd=source_repo,
+                scratch_dir=scratch_dir,
+                mcp_servers=fix_mcp_servers,
+                allowed_tools=fix_allowed_tools,
+                max_turns=max_turns,
+            )
+            result_msg = await _run_session(
+                reporter, fix_opts, fix_prompt, captured, tracked
+            )
+            _check(result_msg, label, "fix")
+            total_cost += result_msg.total_cost_usd or 0.0
+            total_turns += result_msg.num_turns or 0
 
     summary = _read_doc(scratch_out, "summary", publish_file)
     analysis = _read_doc(scratch_out, "analysis", publish_file)
@@ -431,10 +474,9 @@ async def _run_session(
                         and not block.is_error
                     ):
                         name = pending.pop(block.tool_use_id)
-                        try:
+                        with contextlib.suppress(ValueError, TypeError):
                             captured[name] = json.loads(_result_text(block))
-                        except (ValueError, TypeError):
-                            pass
+
             elif isinstance(msg, ResultMessage):
                 result_msg = msg
     return result_msg
@@ -516,7 +558,7 @@ def _bug_from_commit(repo: Path, sha: str) -> int | None:
             capture_output=True,
             text=True,
         ).stdout
-    except (subprocess.CalledProcessError, OSError):
+    except subprocess.CalledProcessError, OSError:
         return None
     return _bug_from_desc(subject)
 
@@ -537,7 +579,7 @@ def _revision_from_commit(repo: Path, sha: str) -> int | None:
             capture_output=True,
             text=True,
         ).stdout
-    except (subprocess.CalledProcessError, OSError):
+    except subprocess.CalledProcessError, OSError:
         return None
     match = _REVISION_RE.search(body)
     return int(match.group(1)) if match else None
@@ -574,7 +616,7 @@ def _read_blame(scratch_out: Path) -> dict:
         return {}
     try:
         blame = json.loads(path.read_text())
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return {}
     return blame if isinstance(blame, dict) else {}
 

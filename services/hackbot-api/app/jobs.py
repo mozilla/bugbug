@@ -34,7 +34,10 @@ def _executions_client() -> run_v2.ExecutionsClient:
 def _job_resource_name(job_name: str) -> str:
     if not settings.gcp_project or not settings.gcp_region:
         raise RuntimeError("gcp_project and gcp_region must be configured")
-    return f"projects/{settings.gcp_project}/locations/{settings.gcp_region}/jobs/{job_name}"
+    return (
+        f"projects/{settings.gcp_project}/locations/{settings.gcp_region}"
+        f"/jobs/{job_name}{settings.agent_job_suffix}"
+    )
 
 
 _AGENT_CONTAINER_NAME = "agent"

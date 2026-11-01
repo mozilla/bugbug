@@ -8,8 +8,6 @@ when a component's docs are not under its code; the registration there is still 
 from the tree.
 """
 
-from __future__ import annotations
-
 import re
 import subprocess
 import sys

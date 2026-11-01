@@ -9,8 +9,6 @@ cannot read falls through to a triage. A needless triage costs a dollar; a wrong
 skipped bug costs a triage nobody notices is missing.
 """
 
-from __future__ import annotations
-
 import json
 import sys
 
@@ -63,19 +61,19 @@ async def fetch_bug(bugzilla_mcp_server: McpServerConfig, bug: int) -> dict:
         return {}
 
     try:
-        async with streamablehttp_client(url) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                res = await session.call_tool(
-                    "get_bugs",
-                    {"ids": [bug], "include_fields": BUG_FIELDS},
-                )
-                if res.isError:
-                    raise RuntimeError(
-                        "".join(getattr(c, "text", "") for c in res.content)
-                    )
-                bugs = json.loads(res.content[0].text).get("bugs") or []
-                return bugs[0] if bugs else {}
+        async with (
+            streamablehttp_client(url) as (read, write, _),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            res = await session.call_tool(
+                "get_bugs",
+                {"ids": [bug], "include_fields": BUG_FIELDS},
+            )
+            if res.isError:
+                raise RuntimeError("".join(getattr(c, "text", "") for c in res.content))
+            bugs = json.loads(res.content[0].text).get("bugs") or []
+            return bugs[0] if bugs else {}
     except Exception as e:  # - see docstring; every failure fails open
         print(
             f"[frontend_triage] pre-flight bug lookup failed "

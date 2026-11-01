@@ -1,7 +1,5 @@
 """Firefox QA test-plan generator and executor."""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

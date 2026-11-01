@@ -25,6 +25,7 @@
 #   PROJECT=my-proj REGION=us-central1 \
 #   HACKBOT_API_URL=https://hackbot-api-xxxx.run.app \
 #   PULSE_USER=my-pulse-user \
+#   SENTRY_DSN=https://...@sentry.io/... \
 #   ./deploy.sh
 set -euo pipefail
 
@@ -35,6 +36,7 @@ REPO="${REPO:-hackbot}"
 HACKBOT_API_URL="${HACKBOT_API_URL:?set HACKBOT_API_URL to the hackbot-api base URL}"
 PULSE_USER="${PULSE_USER:?set PULSE_USER (https://pulseguardian.mozilla.org)}"
 WATCHED_REPOS="${WATCHED_REPOS:-autoland}"
+SENTRY_DSN="${SENTRY_DSN:-}"
 
 SA_NAME="${SA_NAME:-hackbot-pulse-listener-run}"
 SA_EMAIL="${SA_EMAIL:-${SA_NAME}@${PROJECT}.iam.gserviceaccount.com}"
@@ -92,6 +94,7 @@ gcloud builds submit "${ROOT_DIR}" \
 echo "==> Deploying worker pool"
 ENV_VARS="HACKBOT_API_URL=${HACKBOT_API_URL},ENVIRONMENT=production"
 ENV_VARS="${ENV_VARS},PULSE_USER=${PULSE_USER},WATCHED_REPOS=${WATCHED_REPOS}"
+ENV_VARS="${ENV_VARS},SENTRY_DSN=${SENTRY_DSN}"
 
 gcloud beta run worker-pools deploy "${SERVICE}" \
   --image "${IMAGE}" \

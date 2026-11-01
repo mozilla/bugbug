@@ -59,3 +59,13 @@ DB_NAME=reviewhelper
 ```
 
 Ensure your Cloud Run service has the Cloud SQL connection configured in the deployment settings.
+
+Pushing to the `deploy/reviewhelper-api-dev` branch deploys to the dev environment.
+
+## GitHub review context
+
+Set `GITHUB_TOKEN` in the worker process environment to a GitHub personal access
+token for authenticated base-commit checks and landing-merge searches. The
+platform tools read it directly from the environment, like `PHABRICATOR_API_KEY`.
+A local `.env` must be exported into the process environment for these tools.
+Configure the token on both development and production workers.

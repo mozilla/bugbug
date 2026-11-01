@@ -1,7 +1,5 @@
 """Apply-side TestRail action for generated test cases."""
 
-from __future__ import annotations
-
 import logging
 from datetime import UTC, datetime
 from functools import lru_cache

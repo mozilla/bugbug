@@ -23,13 +23,6 @@ async def test_push_records_tasks_and_title():
     # No test_paths key at all when none were asked for, so the handler can
     # tell "not narrowed" from "narrowed to nothing".
     assert "test_paths" not in action["params"]
-    assert "ref" not in action
-
-
-async def test_push_ref_is_recorded():
-    rec = ActionsRecorder()
-    await try_server.push(rec, tasks=["build-linux64/opt"], reasoning="r", ref="try")
-    assert rec.actions[0]["ref"] == "try"
 
 
 async def test_push_strips_blank_task_labels():
@@ -123,7 +116,6 @@ def test_agent_facing_schema():
         "tests",
         "reasoning",
         "title",
-        "ref",
     }
 
 

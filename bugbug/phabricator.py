@@ -151,7 +151,7 @@ def download_revisions(rev_ids: Collection[int]) -> None:
     logger.info("Loaded %d revisions.", old_rev_count)
 
     new_rev_ids_list = sorted(list(new_rev_ids))
-    rev_ids_groups = itertools.batched(new_rev_ids_list, 100)
+    rev_ids_groups = itertools.batched(new_rev_ids_list, 100, strict=False)
 
     logger.info("%d revisions left to download", len(new_rev_ids_list))
 

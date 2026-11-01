@@ -2,7 +2,7 @@
 name = "phabricator-proxy"
 version = "0.1.0"
 description = "Mountable read-only Conduit proxy that holds the Phabricator key"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.109.0",
     "httpx>=0.26.0",

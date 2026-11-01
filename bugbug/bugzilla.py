@@ -234,7 +234,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
 
     new_bug_ids = sorted(list(new_bug_ids_set))
 
-    chunks = itertools.batched(new_bug_ids, Bugzilla.BUGZILLA_CHUNK_SIZE)
+    chunks = itertools.batched(new_bug_ids, Bugzilla.BUGZILLA_CHUNK_SIZE, strict=False)
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),
@@ -504,7 +504,7 @@ def get_comments(comment_ids: Iterable[int]) -> dict[int, tuple[BugDict, dict]]:
     normalized_ids = list(dict.fromkeys(map(int, comment_ids)))
     comments = {
         comment_id: comment
-        for comment_ids_batch in itertools.batched(normalized_ids, 100)
+        for comment_ids_batch in itertools.batched(normalized_ids, 100, strict=False)
         for comment_id, comment in fetch_comments(list(comment_ids_batch)).items()
     }
     bugs = get({comment["bug_id"] for comment in comments.values()})
@@ -611,8 +611,8 @@ def calculate_maintenance_effectiveness_indicator(
 
         return params
 
-    for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
-        for query_type in data.keys():
+    for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS:
+        for query_type in data:
             params = build_query(severity, query_type)
 
             r = utils.get_session("bugzilla").get(
@@ -628,10 +628,10 @@ def calculate_maintenance_effectiveness_indicator(
             data[query_type][severity] = r.json()["bug_count"]
 
     # Calculate number of bugs without severity set.
-    for query_type in data.keys():
+    for query_type in data:
         data[query_type]["--"] = data[query_type]["--"] - sum(
             data[query_type][s]
-            for s in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys()
+            for s in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS
             if s != "--"
         )
 
@@ -642,7 +642,7 @@ def calculate_maintenance_effectiveness_indicator(
     print("Before applying weights:")
     print(data)
 
-    for query_type in data.keys():
+    for query_type in data:
         # Apply weights.
         for (
             severity,

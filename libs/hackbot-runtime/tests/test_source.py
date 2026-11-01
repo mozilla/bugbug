@@ -112,3 +112,21 @@ def test_depth_reaches_older_push_ancestors(tmp_path):
         text=True,
     )
     assert int(count.stdout.strip()) == 3
+
+
+def test_depth_applies_to_fresh_clone_without_ref(tmp_path):
+    remote = tmp_path / "remote"
+    _make_remote(remote)
+    (remote / "README.md").write_text("second")
+    _commit(remote, "second")
+    (remote / "README.md").write_text("third")
+    _commit(remote, "third")
+    dest = tmp_path / "dest"
+    ensure_source_repo(dest, f"file://{remote}", depth=3)
+    count = subprocess.run(
+        ["git", "-C", str(dest), "rev-list", "--count", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert int(count.stdout.strip()) == 3

@@ -10,8 +10,6 @@ its capability declarations come from the agent's ``hackbot.toml``
 (:class:`HackbotConfig`), attached via :meth:`from_config`.
 """
 
-from __future__ import annotations
-
 import datetime
 import logging
 import os
@@ -25,9 +23,12 @@ from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts, changes
-from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
+from hackbot_runtime.actions.phabricator import (
+    PATCH_ACTION_TYPES,
+    SUBMIT_PATCH_ACTION_TYPE,
+)
 from hackbot_runtime.actions.recorder import ActionsRecorder
-from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES
+from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES, TRY_PUSH_ACTION_TYPE
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
 from hackbot_runtime.source import checkout_commit, ensure_source_repo
@@ -50,6 +51,15 @@ def _default_run_id() -> str:
     return f"local-{stamp}-{uuid.uuid4().hex[:6]}"
 
 
+def _wip_commit_message(actions: list[dict]) -> str:
+    """The patch title, else the try push title, for the agent's uncommitted work."""
+    for action_type in (SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
+        for action in actions:
+            if action["type"] == action_type and action["params"]["title"]:
+                return action["params"]["title"]
+    return changes.WIP_MESSAGE
+
+
 class HackbotContext(BaseSettings):
     """Platform capabilities + results plumbing handed to every agent's main().
 
@@ -70,6 +80,11 @@ class HackbotContext(BaseSettings):
     # at a host-mounted dir; the default stays relative so it does not bake a
     # host path into the container.
     artifacts_dir: Path = Path("artifacts")
+    # Set on a run started by another run's `agents.start_run` action.
+    parent_run_id: str | None = None
+    # Signed download URLs for the parent's artifacts, by key. Unset locally,
+    # where the parent's artifacts are read from `artifacts_dir` instead.
+    parent_artifacts: dict[str, str] | None = None
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -90,14 +105,15 @@ class HackbotContext(BaseSettings):
     # prepared exactly once and a conflicting re-prepare is caught.
     _repo_path: Path | None = PrivateAttr(default=None)
     _prepared_ref: str | None = PrivateAttr(default=None)
+    _parent_artifacts_dir: Path | None = PrivateAttr(default=None)
 
     @classmethod
-    def from_config(cls, config_path: Path) -> "HackbotContext":
+    def from_config(cls, config_path: Path) -> HackbotContext:
         """Build from ``hackbot.toml`` at ``config_path`` plus env-derived fields."""
         return cls.from_config_obj(load_config(config_path))
 
     @classmethod
-    def from_config_obj(cls, config: HackbotConfig) -> "HackbotContext":
+    def from_config_obj(cls, config: HackbotConfig) -> HackbotContext:
         """Build from an already-parsed config plus env-derived fields."""
         obj = cls()
         obj._config = config
@@ -188,7 +204,7 @@ class HackbotContext(BaseSettings):
         return self._repo_path
 
     @cached_property
-    def firefox(self) -> "FirefoxContext":
+    def firefox(self) -> FirefoxContext:
         """Firefox build paths derived from the prepared source checkout.
 
         Importing ``agent_tools.firefox`` lazily keeps the base runtime free of
@@ -237,6 +253,22 @@ class HackbotContext(BaseSettings):
         """
         return Path(tempfile.mkdtemp(prefix=f"hackbot-{self.run_id}-")) / "agent.log"
 
+    def fetch_parent_artifacts(self) -> None:
+        """Make the parent run's artifacts available; called by the runtime."""
+        if self.parent_artifacts is None:
+            self._parent_artifacts_dir = self.artifacts_dir / self.parent_run_id
+            return
+        dest = Path(tempfile.mkdtemp(prefix=f"hackbot-{self.parent_run_id}-"))
+        artifacts.download_all(self.parent_artifacts, dest)
+        self._parent_artifacts_dir = dest
+
+    @property
+    def parent_artifacts_dir(self) -> Path:
+        """The parent run's artifacts, under the keys it published them with."""
+        if self._parent_artifacts_dir is None:
+            raise RuntimeError("this run was not started by another run")
+        return self._parent_artifacts_dir
+
     @cached_property
     def actions(self) -> ActionsRecorder:
         return ActionsRecorder(self.uploader, artifacts_dir=self.run_artifacts_dir)
@@ -277,7 +309,10 @@ class HackbotContext(BaseSettings):
         if self._source_base is None:
             return None
         change_set = changes.collect(
-            self.repo_path, self._source_base, self._config.source.repo_url
+            self.repo_path,
+            self._source_base,
+            self._config.source.repo_url,
+            message=_wip_commit_message(self.actions.actions),
         )
         if change_set is None:
             return None

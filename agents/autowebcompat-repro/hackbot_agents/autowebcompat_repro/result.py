@@ -1,32 +1,16 @@
 """Structured result reporting for the autowebcompat-repro agent."""
 
-from __future__ import annotations
-
-import imghdr
 from pathlib import Path
-from typing import Annotated, Generic, Literal, TypeVar
+from typing import Annotated, Literal
 
-from claude_agent_sdk import McpServerConfig, create_sdk_mcp_server, tool
 from pydantic import (
     BaseModel,
     Field,
-    ValidationError,
     field_validator,
     model_validator,
 )
 
 RESULT_SERVER_NAME = "autowebcompat-repro"
-SUBMIT_RESULT_TOOL = f"mcp__{RESULT_SERVER_NAME}__submit_result"
-
-ResultT = TypeVar("ResultT", bound=BaseModel)
-
-
-class ResultCollector(Generic[ResultT]):
-    """Holds the result submitted by the agent, if any."""
-
-    def __init__(self, result_cls: type[ResultT]) -> None:
-        self._result_cls: type[ResultT] = result_cls
-        self.result: ResultT | None = None
 
 
 class TestPlanResult(BaseModel):
@@ -150,10 +134,18 @@ class ReproductionResult(BaseModel):
         if path is None:
             return None
 
-        if not path.exists():
-            raise ValueError(f"Screenshot path {path} doesn't exist")
-        if imghdr.what(str(path)) != "png":
+        png_signature = b"\x89PNG\r\n\x1a\n"
+        try:
+            with path.open("rb") as f:
+                is_png = f.read(len(png_signature)) == png_signature
+        except OSError as exc:
+            raise ValueError(
+                f"Cannot read screenshot path {path}: {exc.strerror}"
+            ) from exc
+
+        if not is_png:
             raise ValueError(f"Screenshot path {path} is not a valid PNG image")
+
         return path
 
 
@@ -253,33 +245,3 @@ class ChromeMaskResult(BaseModel):
             ),
         ),
     ]
-
-
-def build_result_server(collector: ResultCollector) -> McpServerConfig:
-    """Build an in-process MCP server exposing the ``submit_result`` tool.
-
-    The handler validates the payload against :class:`ReproductionResult` and stores
-    it on ``collector``. A validation error is returned to the model (as tool
-    output) so it can correct and resubmit rather than failing the run.
-    """
-
-    @tool(
-        "submit_result",
-        "Submit the final web-compatibility investigation result. Call exactly "
-        "once, at the end, after completing the investigation.",
-        {
-            **collector._result_cls.model_json_schema(),
-            "additionalProperties": False,
-        },
-    )
-    async def submit_result(args: dict) -> dict:
-        try:
-            collector.result = collector._result_cls.model_validate(args)
-        except ValidationError as exc:
-            return {
-                "content": [{"type": "text", "text": f"Invalid result: {exc}"}],
-                "is_error": True,
-            }
-        return {"content": [{"type": "text", "text": "Result recorded."}]}
-
-    return create_sdk_mcp_server(name=RESULT_SERVER_NAME, tools=[submit_result])

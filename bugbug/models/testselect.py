@@ -14,7 +14,7 @@ import pickle
 import random
 import statistics
 from functools import reduce
-from typing import Any, Callable, Collection, Iterable, Sequence, Set
+from typing import Any, Callable, Collection, Iterable, Mapping, Sequence, Set
 
 import numpy as np
 import xgboost
@@ -163,10 +163,7 @@ def _generate_equivalence_sets(
             try:
                 support, confidence = failing_together_stats[task2]
             except KeyError:
-                if not assume_redundant:
-                    confidence = 0.0
-                else:
-                    confidence = 1.0
+                confidence = 0.0 if not assume_redundant else 1.0
 
             if confidence >= min_redundancy_confidence:
                 add_to_groups(task1, task2)
@@ -200,9 +197,7 @@ def _get_equivalence_sets(min_redundancy_confidence: float):
             ) -> dict[str, tuple[float, float]]:
                 return failing_together_stats[config]
 
-            configs = (
-                configs_by_group[group] if group in configs_by_group else all_configs
-            )
+            configs = configs_by_group.get(group, all_configs)
 
             equivalence_sets[group] = _generate_equivalence_sets(
                 configs, min_redundancy_confidence, load_failing_together, True
@@ -271,7 +266,7 @@ def reduce_configs(
             solver.Add(sum_constraint >= 1)
 
     # Choose the best set of tasks that satisfy the constraints with the lowest cost.
-    solver.Minimize(sum(_get_cost(task) * task_vars[task] for task in task_vars.keys()))
+    solver.Minimize(sum(_get_cost(task) * task_vars[task] for task in task_vars))
 
     if _solve_optimization(solver):
         return {
@@ -308,11 +303,7 @@ def select_configs(
     config_group_vars = {
         (config, group): solver.BoolVar(f"{group}@{config}")
         for group in groups
-        for config in (
-            all_configs_by_group[group]
-            if group in all_configs_by_group
-            else all_configs
-        )
+        for config in all_configs_by_group.get(group, all_configs)
     }
 
     # Configs used by high-confidence groups are already committed; fix their
@@ -385,10 +376,10 @@ def select_configs(
     # group that can run either on the costly one or on a cheaper one, they'd both run
     # on the costly one (since we have to pay its setup cost anyway).
     solver.Minimize(
-        sum(10 * config_costs[c] * config_vars[c] for c in config_vars.keys())
+        sum(10 * config_costs[c] * config_vars[c] for c in config_vars)
         + sum(
             config_costs[config] * config_group_vars[(config, group)]
-            for config, group in config_group_vars.keys()
+            for config, group in config_group_vars
         )
     )
 
@@ -429,6 +420,30 @@ CONFIDENCE_LEVEL_TARGETS = {
 # a lower share suggests that the targets don't fit the runnables anymore (e.g. after many
 # manifests were split or added), and should be revisited.
 CONFIDENCE_LEVEL_MIN_CAUGHT = {"label": 0.6, "group": 0.85}
+
+
+def fit_calibration(
+    totals: Sequence[int], failures: Sequence[int]
+) -> tuple[list[float], list[float]] | None:
+    """Isotonic regression of the failure rate on the confidence, from counts per confidence (0, 0.01, ..., 1).
+
+    The confidences are not probabilities (the models are trained with class-balancing weights), but they rank
+    runnables well: the regression maps them to probabilities without changing their order. Returns the
+    regression's breakpoints, to interpolate, or None if there are no failures.
+    """
+    from sklearn.isotonic import IsotonicRegression
+
+    points = [(i / 100, n, f) for i, (n, f) in enumerate(zip(totals, failures)) if n]
+    if not any(f for _, _, f in points):
+        return None
+
+    regression = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
+    regression.fit(
+        [x for x, _, _ in points],
+        [f / n for _, n, f in points],
+        sample_weight=[n for _, n, _ in points],
+    )
+    return list(regression.X_thresholds_), list(regression.y_thresholds_)
 
 
 def compute_confidence_thresholds(
@@ -504,6 +519,7 @@ class TestSelectModel(Model):
         non_run_negative_weight=None,
         non_run_negative_sample_rate=None,
         recency_half_life=None,
+        suite_test_dirs=None,
     ):
         Model.__init__(self, lemmatization)
 
@@ -554,6 +570,9 @@ class TestSelectModel(Model):
         # Confidence thresholds for the levels in CONFIDENCE_LEVEL_TARGETS, computed on the test
         # pushes during the evaluation.
         self.confidence_thresholds: dict[str, float] | None = None
+        # Mapping from confidences to probabilities of failing (see fit_calibration), computed on the
+        # test pushes during the evaluation.
+        self.calibration: tuple[list[float], list[float]] | None = None
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
@@ -566,9 +585,9 @@ class TestSelectModel(Model):
 
         if granularity == "label":
             feature_extractors += [
-                test_scheduling_features.Platform(),
-                # test_scheduling_features.chunk(),
-                test_scheduling_features.Suite(),
+                test_scheduling_features.TaskNameTokens(),
+                test_scheduling_features.PushBuildFiles(),
+                test_scheduling_features.PushTaskFiles(suite_test_dirs),
             ]
         elif granularity in ("group", "config_group"):
             feature_extractors += [
@@ -662,9 +681,12 @@ class TestSelectModel(Model):
                 else:
                     passes.append(name)
 
-            if apply_filters:
-                if self.failures_skip and len(failures) > self.failures_skip:
-                    continue
+            if (
+                apply_filters
+                and self.failures_skip
+                and len(failures) > self.failures_skip
+            ):
+                continue
 
             pushes.append(
                 {
@@ -695,7 +717,16 @@ class TestSelectModel(Model):
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
     def items_gen(self, classes):
-        commit_map = get_commit_map()
+        # Only the commits of the pushes in the history (all the commits don't fit in memory).
+        commit_map = get_commit_map(
+            {
+                revision
+                for revs, _ in test_scheduling.get_test_scheduling_history(
+                    self.granularity
+                )
+                for revision in revs
+            }
+        )
 
         # With negative_sample_rate (non_run_negative_sample_rate for non-run negatives), keep all
         # failures but only a random (fixed, as the rows can be generated more than once) fraction of
@@ -792,6 +823,22 @@ class TestSelectModel(Model):
             ).items()
             if runnable_confidence >= confidence
         }
+
+    def calibrated_probabilities(
+        self, confidences: Mapping[str, float]
+    ) -> dict[str, float]:
+        """The probabilities of failing of runnables with the given confidences (unchanged if not calibrated).
+
+        The order of the runnables doesn't change, so selections by confidence are the same.
+        """
+        calibration = getattr(self, "calibration", None)
+        if calibration is None:
+            return dict(confidences)
+        names = list(confidences)
+        probabilities = np.interp(
+            [confidences[name] for name in names], calibration[0], calibration[1]
+        )
+        return {name: float(p) for name, p in zip(names, probabilities)}
 
     def get_confidences(
         self,
@@ -909,6 +956,9 @@ class TestSelectModel(Model):
         top_confidences: list[list[tuple[str, float]]] = []
         # Test pushes too old for their past failures to be known (see below).
         clamped_pushes = []
+        # Runnables and failing runnables per confidence (0, 0.01, ..., 1), for the calibration.
+        calibration_totals = [0] * 101
+        calibration_failures = [0] * 101
 
         # Select tests for all the pushes in the test set.
         for i, push in enumerate(tqdm(test_pushes.values())):
@@ -945,6 +995,10 @@ class TestSelectModel(Model):
                 continue
 
             confidences = self.get_confidences(commits, push_num)
+            failing = set(push["failures"])
+            for name, confidence in confidences.items():
+                calibration_totals[round(confidence * 100)] += 1
+                calibration_failures[round(confidence * 100)] += name in failing
             push["all_possibly_selected"] = {
                 name: confidence
                 for name, confidence in confidences.items()
@@ -965,6 +1019,22 @@ class TestSelectModel(Model):
             len(test_pushes),
             sum(1 for push in test_pushes.values() if len(push["failures"]) > 0),
         )
+
+        self.calibration = fit_calibration(calibration_totals, calibration_failures)
+        if self.calibration is not None:
+            logger.info(
+                "Calibration (confidence -> observed failure rate -> probability):"
+            )
+            for confidence in (0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95, 0.99):
+                b = round(confidence * 100)
+                logger.info(
+                    "  %.2f -> %s -> %.4f",
+                    confidence,
+                    f"{calibration_failures[b] / calibration_totals[b]:.4f}"
+                    if calibration_totals[b]
+                    else "-",
+                    np.interp(confidence, *self.calibration),
+                )
 
         confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]
         if targets and top_confidences:
@@ -1191,13 +1261,35 @@ class TestSelectModel(Model):
 
 
 class TestLabelSelectModel(TestSelectModel):
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=False, repo_dir: str = ""):
+        # The directories with the tests of some suites come from a Firefox tree (only its moz.build
+        # files are needed), and are stored with the model.
+        suite_test_dirs = None
+        if repo_dir:
+            suite_test_dirs = test_scheduling.get_suite_test_dirs(repo_dir)
+            logger.info(
+                "Test directories of the suites: %s",
+                {suite: len(dirs) for suite, dirs in suite_test_dirs.items()},
+            )
+        else:
+            logger.warning(
+                "No Firefox repository (repo_dir): the suite files features only include the "
+                "harnesses of the suites, not their tests"
+            )
+
         TestSelectModel.__init__(
             self,
             lemmatization,
             "label",
-            failures_skip=60,
+            suite_test_dirs=suite_test_dirs,
             xgboost_params=TUNED_XGBOOST_PARAMS,
+            # Train on more negatives than 1:1 undersampling would keep (~10 per positive), with
+            # sample weights balancing the classes.
+            balance_with_weights=True,
+            negative_sample_rate=0.05,
+            # Weighting positives by push size handles pushes breaking many tasks (e.g. all the
+            # Android builds) better than skipping them (the previous failures_skip=60).
+            positive_weight_k=5,
         )
 
 

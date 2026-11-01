@@ -2,6 +2,7 @@ import logging
 
 import taskcluster
 
+from app import lando
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -22,13 +23,18 @@ def get_task(task_id: str) -> dict:
 
 
 def get_hg_revision(task: dict) -> str | None:
-    """Return the GECKO_HEAD_REV (Mercurial revision) of a task, or None.
+    """Return the Mercurial revision of a task's push, or None.
 
     The revision is not in the pulse message, hence the task definition fetch.
-    GECKO_HEAD_REV is an hg revision; the build-repair agent needs a git SHA,
-    so callers must convert it (see app.lando.hg_to_git).
+    Some tasks of an hg push check out the GitHub mirror, so their GECKO_HEAD_REV
+    is a git SHA and is mapped back to hg. The build-repair agent needs a git SHA,
+    so callers must convert the result (see app.lando.hg_to_git).
     """
-    return task.get("payload", {}).get("env", {}).get("GECKO_HEAD_REV")
+    env = task.get("payload", {}).get("env", {})
+    rev = env.get("GECKO_HEAD_REV")
+    if rev and env.get("GECKO_HEAD_REPOSITORY", "").startswith("https://github.com/"):
+        return lando.git_to_hg(rev)
+    return rev
 
 
 def is_action_scheduled(task: dict) -> bool:

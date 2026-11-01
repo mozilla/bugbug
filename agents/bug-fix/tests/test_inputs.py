@@ -66,7 +66,7 @@ def test_bugzilla_needinfo_comment_context_is_in_prompt(tmp_path):
         "Check whether Bugzilla user user@example.com posted a comment at exactly "
         "2026-08-21T16:36:29."
     )
-    _, prompt = select_workflow(
+    prompt = select_workflow(
         bug=1,
         revision_id=None,
         comment=context,

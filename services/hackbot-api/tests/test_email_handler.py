@@ -6,6 +6,7 @@ attachments, error handling -- without touching a network.
 
 import base64
 import json
+import threading
 
 import pytest
 from app.action_handlers import email_handler
@@ -26,18 +27,21 @@ def _ctx(artifacts=None):
 
 class _FakeClient:
     sent = None
+    send_thread = None
 
     def __init__(self, api_key):
         self.api_key = api_key
 
     def send(self, message):
         _FakeClient.sent = message
+        _FakeClient.send_thread = threading.get_ident()
         return type("Response", (), {"status_code": 202})()
 
 
 @pytest.fixture(autouse=True)
 def _configured(monkeypatch):
     _FakeClient.sent = None
+    _FakeClient.send_thread = None
     monkeypatch.setenv("SENDGRID_API_KEY", "key")
     monkeypatch.setenv("NOTIFICATION_SENDER", "hackbot@mozilla.com")
     monkeypatch.setenv("NOTIFICATION_TEAM_EMAIL", "team@mozilla.com")
@@ -94,6 +98,15 @@ async def test_the_body_is_sent_as_both_text_and_html():
     assert contents[0]["type"] == "text/plain"
     assert contents[0]["value"] == "# Analysis\n\ntext"
     assert "<h1>Analysis</h1>" in contents[1]["value"]
+
+
+async def test_underscores_inside_words_are_not_emphasis():
+    await email_handler.SendEmailHandler().apply(
+        _params(body_markdown="test_ext_web_accessible_workers.js is _new_"),
+        _ctx(),
+    )
+    html = _FakeClient.sent.get()["content"][1]["value"]
+    assert "test_ext_web_accessible_workers.js is <em>new</em>" in html
 
 
 async def test_the_inline_diff_and_the_attachment_are_the_same_bytes():
@@ -207,3 +220,12 @@ async def test_a_sendgrid_error_is_not_a_delivered_email(monkeypatch):
     monkeypatch.setattr(sendgrid, "SendGridAPIClient", _boom)
     with pytest.raises(RuntimeError, match="sendgrid is down"):
         await email_handler.SendEmailHandler().apply(_params(), _ctx())
+
+
+async def test_the_blocking_send_runs_off_the_event_loop():
+    # SendGrid's client is synchronous; calling it on the loop thread would
+    # stall every other request until the HTTP call returns.
+    result = await email_handler.SendEmailHandler().apply(_params(), _ctx())
+    assert result.status == "applied"
+    assert _FakeClient.send_thread is not None
+    assert _FakeClient.send_thread != threading.get_ident()

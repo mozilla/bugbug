@@ -110,7 +110,7 @@ class Github:
         )
 
         # Fetch next page
-        while "next" in response_links.keys():
+        while "next" in response_links:
             next_page_data, response_links = self.fetch_issues(
                 response_links["next"]["url"], self.retrieve_events
             )
@@ -139,7 +139,7 @@ class Github:
 
         db.append(self.db_path, data)
         # Fetch next page
-        while "next" in response_links.keys():
+        while "next" in response_links:
             next_page_data, response_links = self.fetch_issues(
                 response_links["next"]["url"], self.retrieve_events
             )

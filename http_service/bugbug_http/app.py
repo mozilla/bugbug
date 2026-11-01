@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import gzip
 import itertools
 import logging
@@ -34,6 +35,7 @@ from bugbug.model import CommentModel
 from bugbug.models import get_model_class
 from bugbug_http.models import (
     MODELS_NAMES,
+    PUSH_CLASSIFIERS,
     classify_broken_site_report,
     classify_bug,
     classify_comment,
@@ -77,7 +79,7 @@ redis_conn = Redis(
     host=url.hostname,
     port=url.port if url.port is not None else 6379,
     password=url.password,
-    ssl=True if url.scheme == "rediss" else False,
+    ssl=(url.scheme == "rediss"),
     ssl_cert_reqs=None,
 )
 
@@ -111,12 +113,36 @@ class BugPrediction(Schema):
     extra_data = fields.Dict()
 
 
+class PerformanceRegressionCommitPrediction(Schema):
+    node = fields.String()
+    prob = fields.List(fields.Float())
+    predicted_class = fields.Integer(data_key="class")
+    risk_score = fields.Float()
+
+
+class PerformanceRegressionPrediction(Schema):
+    branch = fields.String()
+    rev = fields.String()
+    risk_score = fields.Float()
+    commits = fields.List(fields.Nested(PerformanceRegressionCommitPrediction))
+    extra_data = fields.Dict()
+
+
 class NotAvailableYet(Schema):
     ready = fields.Boolean(metadata={"enum": [False]})
 
 
 class ModelName(Schema):
     model_name = fields.String(metadata={"enum": MODELS_NAMES, "example": "component"})
+
+
+class PushModelName(Schema):
+    model_name = fields.String(
+        metadata={
+            "enum": sorted(PUSH_CLASSIFIERS),
+            "example": "perfregressionpredictor",
+        }
+    )
 
 
 class UnauthorizedError(Schema):
@@ -133,8 +159,17 @@ class Schedules(Schema):
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
+spec.components.schema(
+    PerformanceRegressionCommitPrediction.__name__,
+    schema=PerformanceRegressionCommitPrediction,
+)
+spec.components.schema(
+    PerformanceRegressionPrediction.__name__,
+    schema=PerformanceRegressionPrediction,
+)
 spec.components.schema(NotAvailableYet.__name__, schema=NotAvailableYet)
 spec.components.schema(ModelName.__name__, schema=ModelName)
+spec.components.schema(PushModelName.__name__, schema=PushModelName)
 spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
 spec.components.schema(BranchName.__name__, schema=BranchName)
 spec.components.schema(Schedules.__name__, schema=Schedules)
@@ -410,10 +445,7 @@ def is_prediction_invalidated(job, change_time):
     # If we have no last changed time, the bug was not classified yet or the bug was classified by an old worker
     if not saved_change_time:
         # We can have a result without a cache time
-        if redis_conn.exists(job.result_key):
-            return True
-
-        return False
+        return bool(redis_conn.exists(job.result_key))
 
     return saved_change_time.decode("utf-8") != change_time
 
@@ -432,13 +464,12 @@ def get_result(job: JobInfo) -> Any | None:
 
     if result:
         LOGGER.debug("Found %r", result)
-        try:
+
+        # Some job results were stored before compression was enabled.
+        # We can remove the exception handling after enough time has passed
+        # since 47114f4f47db6b73214cf946377be8da945d34b5.
+        with contextlib.suppress(zstandard.ZstdError):
             result = dctx.decompress(result)
-        except zstandard.ZstdError:
-            # Some job results were stored before compression was enabled.
-            # We can remove the exception handling after enough time has passed
-            # since 47114f4f47db6b73214cf946377be8da945d34b5.
-            pass
 
         assert result is not None  # mypy thinks it could be None
         return orjson.loads(result)
@@ -551,6 +582,76 @@ def model_prediction(model_name, bug_id):
                 model_name, [bug_id]
             )
             schedule_job(job_info, job_id=job_id, timeout=timeout)
+        status_code = 202
+        data = {"ready": False}
+
+    return compress_response(data, status_code)
+
+
+@application.route("/<model_name>/predict/push/<path:branch>/<rev>")
+@cross_origin()
+def model_prediction_push(model_name: str, branch: str, rev: str):
+    """
+    ---
+    get:
+      description: Classify a push using the given model, answer either 200 if the push is processed or 202 if the push is being processed
+      summary: Classify a single push
+      parameters:
+      - name: model_name
+        in: path
+        schema: PushModelName
+      - name: branch
+        in: path
+        required: true
+        schema:
+          BranchName
+      - name: rev
+        in: path
+        required: true
+        schema:
+          type: str
+          example: 76383a875678
+      responses:
+        200:
+          description: A single push prediction
+          content:
+            application/json:
+              schema: PerformanceRegressionPrediction
+        202:
+          description: A temporary answer for the push being processed
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if model_name not in PUSH_CLASSIFIERS:
+        return (
+            jsonify({"error": f"Model {model_name} doesn't support push predictions"}),
+            404,
+        )
+
+    # Support the string 'autoland' for convenience.
+    if branch == "autoland":
+        branch = "integration/autoland"
+
+    LOGGER.info(
+        "Received %s push prediction request for %s @ %s", model_name, branch, rev
+    )
+
+    job = JobInfo(PUSH_CLASSIFIERS[model_name], branch, rev)
+    data = get_result(job)
+    status_code = 200
+
+    if not data:
+        if not is_pending(job):
+            schedule_job(job)
         status_code = 202
         data = {"ready": False}
 
@@ -801,7 +902,7 @@ def batch_prediction(model_name):
 
     queueJobList: Queue = []
 
-    for bug_ids in itertools.batched(missing_bugs, 100):
+    for bug_ids in itertools.batched(missing_bugs, 100, strict=False):
         job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
     q.enqueue_many(queueJobList)
@@ -889,7 +990,7 @@ def batch_comment_prediction(model_name: str):
         data[str(comment_id)] = {"available": False}
 
     queue_jobs: list[Queue] = []
-    for comment_ids_batch in itertools.batched(missing_comments, 100):
+    for comment_ids_batch in itertools.batched(missing_comments, 100, strict=False):
         job_info, job_id, timeout = create_comment_classification_jobs(
             model_name, comment_ids_batch
         )
@@ -1073,7 +1174,7 @@ def batch_prediction_broken_site_report(model_name):
 
     queueJobList: Queue = []
 
-    for reports in itertools.batched(missing_reports, 100):
+    for reports in itertools.batched(missing_reports, 100, strict=False):
         job_info, job_id, timeout = create_broken_site_report_classification_jobs(
             model_name, reports
         )

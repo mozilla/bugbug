@@ -15,7 +15,11 @@ from bugbug.tools.core.platforms.phabricator import (
 
 logger = logging.getLogger(__name__)
 
-VISIBILITY_TIMEOUT = timedelta(minutes=5)
+# phab-bot can take longer than five minutes to make a revision public.
+# The worker returns 409 during this window so Cloud Tasks retries the original
+# task using the queue's exponential backoff. On the first attempt after the
+# deadline, a still-private revision fails permanently; failed rows stay intact.
+VISIBILITY_TIMEOUT = timedelta(minutes=30)
 
 
 class ReviewProcessingError(Exception):
@@ -165,16 +169,18 @@ async def _submit_review_to_phabricator(
         "differential.createcomment",
         revision_id=review_request.revision_id,
         attach_inlines=1,
-        message=(
-            create_main_review_comment(review_request, generated_comments)
-            if is_first_review
-            else None
+        message=create_main_review_comment(
+            review_request,
+            generated_comments,
+            include_feedback_note=is_first_review,
         ),
     )
 
 
 def create_main_review_comment(
-    review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
+    review_request: ReviewRequest,
+    generated_comments: Collection[GeneratedComment],
+    include_feedback_note: bool = True,
 ) -> str:
     """Create the main review comment that summarizes the review results."""
     diff_url = f"{settings.phabricator_url}/D{review_request.revision_id}?id={review_request.diff_id}"
@@ -182,15 +188,13 @@ def create_main_review_comment(
 
     if review_request.general_comment:
         parts.append(review_request.general_comment)
-        parts.append("\n---\n")
 
-    num_comments = len(generated_comments)
-    if num_comments > 0:
+    if generated_comments and include_feedback_note:
+        if review_request.general_comment:
+            parts.append("\n---\n")
         parts.append(
             "(NOTE) Please use {icon thumbs-up} / {icon thumbs-down} reactions on inline comments to provide feedback. "
             "This will have a significant impact on the quality of future reviews."
         )
-    else:
-        parts.append("(NOTE) Automated review completed with no comments.")
 
     return "\n".join(parts)

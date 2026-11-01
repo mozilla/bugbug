@@ -16,11 +16,9 @@ import pytest
 from app.auth import verify_phabricator_signature
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
+from app.database.connection import get_db
 from app.main import app
-from app.phabricator_authorization import (
-    AUTHORIZED_GROUP_PHID,
-    PhabricatorAuthorizer,
-)
+from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     DetectedMention,
     HackbotMention,
@@ -28,12 +26,14 @@ from app.phabricator_webhook import (
     anchor_transaction_phid,
     detect_mention_and_revision,
     find_hackbot_mentions,
+    follow_up_agent,
     resolve_revision,
     triggering_transaction_phids,
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
 from hackbot_client import RunStatus, TriggeredRun
+from sqlalchemy.dialects import postgresql
 
 SECRET = "test-secret"
 BUGZILLA_SECRET = "test-bugzilla-secret"
@@ -331,8 +331,8 @@ class _FakeClient:
     async def search_revision(self, phid):
         return self._revision
 
-    async def get_project_members(self, project_phid):
-        assert project_phid == AUTHORIZED_GROUP_PHID
+    async def get_project_members(self, project_slug):
+        assert project_slug == settings.webhook.authorized_group
         return self._members
 
 
@@ -351,7 +351,7 @@ async def test_resolve_revision_not_found():
     assert await resolve_revision(client, "PHID-DREV-x") == (None, None)
 
 
-async def test_detect_mention_requires_editbugs_membership(monkeypatch):
+async def test_detect_mention_requires_group_membership(monkeypatch):
     client = _FakeClient(
         {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
         members={"PHID-USER-authorized"},
@@ -370,12 +370,12 @@ async def test_detect_mention_requires_editbugs_membership(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result is None
 
 
-async def test_detect_mention_accepts_editbugs_member(monkeypatch):
+async def test_detect_mention_accepts_group_member(monkeypatch):
     client = _FakeClient(
         {"id": 42, "fields": {"bugzilla.bug-id": "12345"}},
         members={"PHID-USER-authorized"},
@@ -394,7 +394,7 @@ async def test_detect_mention_accepts_editbugs_member(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result == DetectedMention(
         comment=(
@@ -441,7 +441,7 @@ async def test_detect_mention_enriches_inline_anchor(monkeypatch):
         settings.webhook,
         "PHID-DREV-x",
         ["PHID-XACT-1"],
-        authorizer=PhabricatorAuthorizer(client, AUTHORIZED_GROUP_PHID),
+        authorizer=PhabricatorAuthorizer(client, settings.webhook.authorized_group),
     )
     assert result == DetectedMention(
         comment=(
@@ -609,18 +609,17 @@ def phab_client():
 
 
 @pytest.fixture
-def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client):
+def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client, db):
     monkeypatch.setattr(settings, "external_api_key", "test-api-key")
     monkeypatch.setattr(settings.webhook, "secret", SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "secret", BUGZILLA_SECRET)
     monkeypatch.setattr(settings.bugzilla_webhook, "bot_login", BUGZILLA_BOT_LOGIN)
-    # Fresh dedupe cache per test.
-    webhooks._seen_bugzilla_events.clear()
     app.dependency_overrides[webhooks.get_phabricator_client] = lambda: phab_client
     app.dependency_overrides[webhooks.get_phabricator_authorizer] = lambda: authorizer
     app.dependency_overrides[webhooks.get_bugzilla_authorizer] = lambda: (
         bugzilla_authorizer
     )
+    app.dependency_overrides[get_db] = lambda: db
     try:
         yield TestClient(app)
     finally:
@@ -665,13 +664,11 @@ def test_route_rejects_bad_signature(client):
 def test_route_ignores_test_ping(client):
     resp = _post(client, {"action": {"test": True}, "object": {"type": "DREV"}})
     assert resp.status_code == 202
-    assert resp.json()["status"] == "ignored"
 
 
 def test_route_ignores_non_drev(client):
     resp = _post(client, {"object": {"type": "TASK", "phid": "PHID-TASK-1"}})
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "not a revision"
 
 
 def test_route_ignores_no_mention(client, monkeypatch):
@@ -686,7 +683,6 @@ def test_route_ignores_no_mention(client, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json()["reason"] == "no actionable @hackbot mention"
 
 
 def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
@@ -703,10 +699,7 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
         },
     )
     assert resp.status_code == 202
-    assert resp.json() == {
-        "status": "triggered",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
+    assert resp.json() is None
     assert detect.call_args.args[0] is phab_client
     assert detect.call_args.kwargs["authorizer"] is authorizer
     assert fake_api.calls == [
@@ -757,14 +750,9 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
         "phab-txn:PHID-XACT-1",
         "phab-txn:PHID-XACT-2",
     ]
-    assert first.json()["status"] == "triggered"
-    # The retry is answered with the existing run rather than claimed as new.
-    assert retry.json() == {
-        "status": "ignored",
-        "reason": "duplicate delivery",
-        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
-    }
-    assert later.json()["status"] == "triggered"
+    for response in (first, retry, later):
+        assert response.status_code == 202
+        assert response.json() is None
 
 
 def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):
@@ -807,6 +795,50 @@ def test_route_surfaces_trigger_failure(client, monkeypatch):
         )
 
 
+@pytest.mark.parametrize(
+    ("creator", "expected_agent"),
+    [
+        ("autowebcompat-intervention", "autowebcompat-intervention"),
+        # A creator that can't follow up still gets bug-fix.
+        ("build-repair", "bug-fix"),
+    ],
+)
+def test_route_sends_follow_up_to_creating_agent(
+    client, db, monkeypatch, creator, expected_agent
+):
+    monkeypatch.setattr(
+        webhooks, "detect_mention_and_revision", AsyncMock(return_value=_DETECTED)
+    )
+    db.matches = [creator]
+    fake_api = _FakeHackbotClient()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+
+    resp = _post(
+        client,
+        {
+            "object": {"type": "DREV", "phid": "PHID-DREV-1"},
+            "transactions": [{"phid": "PHID-XACT-1"}],
+        },
+    )
+
+    assert resp.status_code == 202
+    assert [agent for agent, _ in fake_api.calls] == [expected_agent]
+
+
+async def test_follow_up_agent_looks_up_applied_submit_patch(db):
+    await follow_up_agent(db, 42)
+
+    sql = str(
+        db.stmt.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "run_actions.type = 'phabricator.submit_patch'" in sql
+    assert "run_actions.status = 'applied'" in sql
+    assert "run_actions.result ->> 'revision_id'" in sql
+    assert "= 42" in sql
+
+
 def test_bugzilla_route_ignores_non_object_payload(client):
     resp = _post_bugzilla(client, [])
     assert resp.status_code == 202
@@ -824,7 +856,7 @@ def test_bugzilla_route_rejects_bad_secret(client):
 def test_bugzilla_route_ignores_non_matching_event(client):
     response = _post_bugzilla(
         client,
-        _bugzilla_payload(added="? (someone@mozilla.com)"),
+        _bugzilla_payload(requestee="someone@mozilla.com"),
     )
     assert response.status_code == 202
     assert response.json() == {
@@ -868,47 +900,43 @@ def test_bugzilla_route_ignores_unauthorized_actor(client, bugzilla_authorizer):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
-    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
 
     response = _post_bugzilla(client, payload)
 
     assert response.status_code == 202
     assert response.json() == {"status": "ignored", "reason": "unauthorized user"}
     assert fake_api.calls == []
-    # The event stays unconsumed: the same flag can still trigger a run once
-    # the actor is authorized.
-    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
 
 
-def test_bugzilla_route_dedupes_retry_but_not_later_event(client):
+def test_bugzilla_route_keys_retry_same_but_later_event_differently(client):
     fake_api = _FakeHackbotClient()
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
 
     first = _post_bugzilla(client, payload)
-    duplicate = _post_bugzilla(client, payload)
+    retry = _post_bugzilla(client, payload)
     later = _post_bugzilla(
         client,
         _bugzilla_payload(flag_id=2187234, event_time="2026-08-07T19:00:05"),
     )
 
     assert first.json()["status"] == "triggered"
-    assert duplicate.json()["reason"] == "duplicate delivery"
+    # The retry is answered with the existing run rather than claimed as new.
+    assert retry.json() == {
+        "status": "ignored",
+        "reason": "duplicate delivery",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
     assert later.json()["status"] == "triggered"
-    assert len(fake_api.calls) == 2
+    assert fake_api.dedupe_keys == ["ni2187233", "ni2187233", "ni2187234"]
 
 
-def test_bugzilla_route_does_not_dedupe_failed_dispatch(client):
+def test_bugzilla_route_surfaces_failed_dispatch(client):
     class _FailingClient:
-        async def trigger_run(self, agent_name, inputs):
+        async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
             raise RuntimeError("run creation failed")
 
-    payload = _bugzilla_payload()
-    detected = detect_needinfo_request(payload, bot_login=BUGZILLA_BOT_LOGIN)
-    assert detected is not None
     app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
 
     with pytest.raises(RuntimeError, match="run creation failed"):
-        _post_bugzilla(client, payload)
-
-    assert f"ni{detected.flag_id}" not in webhooks._seen_bugzilla_events
+        _post_bugzilla(client, _bugzilla_payload())

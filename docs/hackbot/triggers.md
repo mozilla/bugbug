@@ -7,7 +7,8 @@ start an execution directly, which is what keeps run state complete regardless o
 hackbot-ui ─────────────┐
 pulse-listener ─────────┤
 Phabricator webhook ────┼──> POST /agents/{agent}/runs ──> Cloud Run Job execution
-Bugzilla webhook ───────┘
+Bugzilla webhook ───────┤
+agents.start_run ───────┘
 ```
 
 ## hackbot-ui — humans
@@ -49,8 +50,8 @@ An always-on Cloud Run **worker pool** (no HTTP port) that consumes `task-failed
 from `pulse.mozilla.org`, decides which failures are worth an agent, and dispatches
 `build-repair` (failed build tasks) or `test-repair` (failed test tasks). Dispatch is where
 its involvement ends: the agent reports its own result, as an `email.send` action (and, for
-test-repair, a Slack message) applied once the run has succeeded, and holds any proposed
-Phabricator revision for a human to apply.
+test-repair, a Slack message and a hand-off to test-repair-fix) applied once the run has
+succeeded, and holds any proposed Phabricator revision for a human to apply.
 
 **It holds no investigation logic.** Each agent resolves the push, the commit range and the
 failing tests itself from the task id. The listener only decides _what to hand off_ — which
@@ -84,10 +85,10 @@ Bugzilla bug id. A revision with no bug id is skipped — `bug-fix` needs one.
 Guards, each closing a specific failure mode:
 
 - **Loop prevention** — comments authored by the bot's own PHID are ignored.
-- **Authorization** — the comment author must belong to the `bmo-editbugs-team` Phabricator
-  project. Membership is cached with a short TTL; an unknown author triggers one refresh so
-  new members take effect promptly, then a cooldown so unauthorized deliveries don't cause a
-  Conduit call each.
+- **Authorization** — the comment author must belong to the Phabricator project whose slug
+  is set by `WEBHOOK_AUTHORIZED_GROUP`. Membership is cached with a short TTL; an unknown
+  author triggers one refresh so new members take effect promptly, then a cooldown so
+  unauthorized deliveries don't cause a Conduit call each.
 - **Dedupe** — one delivery is one submission. Its smallest mentioning comment transaction
   PHID is the run's database dedupe key, making the key independent of transaction order.
 
@@ -129,14 +130,14 @@ Guards, each closing a specific failure mode:
 - **Private bugs are never processed** — the check is `is_private is not False`, so a
   missing or non-boolean value fails closed.
 - **Dedupe** — retried deliveries are deduped by the **needinfo flag id**, which is globally
-  unique, so a later needinfo on the same bug gets a new id and still triggers. As on the
-  Phabricator side, the key is claimed **only after a successful trigger**, keeping a
-  transient failure retryable by BMO.
+  unique, so a later needinfo on the same bug gets a new id and still triggers. The flag id
+  is used as the run's database dedupe key, so retries reuse the existing run even after a
+  service restart.
 - **Latest flag wins** — BMO orders flags by id, so the last matching one is the newly
   requested one.
 
-Only requesters in Bugzilla's `editbugs` group are authorized (all Mozilla Corporation
-members belong to this group) — see
+Only requesters in the Bugzilla group set by `BUGZILLA_WEBHOOK_AUTHORIZED_GROUP` are
+authorized. See
 [bugzilla_authorization.py](../../services/hackbot-api/app/bugzilla_authorization.py).
 Membership is checked per login through Bugzilla's REST API.
 
@@ -151,3 +152,10 @@ existing one. The needinfo flag is cleared automatically as a recorded
 `bugzilla.update_bug` action once the run produces at least one other action, coalesced with
 the reply comment into a single Bugzilla transaction (see [actions.md](actions.md)). A run
 that records nothing leaves the flag standing.
+
+## Agent chaining — another run
+
+A run continues its work in another agent by recording an `agents.start_run` action (see
+[actions.md](actions.md#chaining-agents)). Once the run has succeeded, the apply step starts
+the next agent over the same API, with the parent's run id as the only input and as the
+dedupe key, so a redelivered event cannot start it twice.

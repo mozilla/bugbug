@@ -1,7 +1,5 @@
 """Download and install a prebuilt Firefox Nightly for the agent to drive."""
 
-from __future__ import annotations
-
 import logging
 import platform
 import shutil

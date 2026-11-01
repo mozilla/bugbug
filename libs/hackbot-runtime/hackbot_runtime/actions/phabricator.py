@@ -11,8 +11,6 @@ when it meant to update one (or invent a revision id) by getting one optional
 argument wrong.
 """
 
-from __future__ import annotations
-
 import re
 from typing import Annotated
 
@@ -21,10 +19,13 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
+SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
+UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
+
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
-PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
+PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
 
 _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
@@ -32,7 +33,7 @@ _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
 )
 
 
-def _validate_summary(summary: str | None) -> None:
+def _validate_summary(summary: str | None, tool_name: str) -> None:
     if not summary:
         return
 
@@ -41,14 +42,22 @@ def _validate_summary(summary: str | None) -> None:
         raise ToolError(
             f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
             "a line belongs in the Test Plan field. Move the verification details "
-            "to the test_plan argument and call submit_patch again."
+            f"to the test_plan argument and call {tool_name} again."
         )
 
 
 @tool
 async def submit_patch(
     recorder: ActionsRecorder,
-    bug_id: Annotated[int, Field(description="Bug this patch fixes.")],
+    bug_id: Annotated[
+        int | str,
+        Field(
+            description=(
+                "Bug this patch fixes: a bug number, or a reference to a bug "
+                "filed by create_bug in this run."
+            )
+        ),
+    ],
     title: Annotated[
         str,
         Field(
@@ -65,25 +74,20 @@ async def submit_patch(
     ],
     test_plan: Annotated[
         str | None,
-        Field(description="Revision test plan."),
+        Field(
+            description=(
+                "Revision test plan. If you recorded a Try push, link it here."
+            )
+        ),
     ] = None,
     summary: Annotated[
         str | None,
         Field(
             description=(
-                "Revision summary/description. Keep test and verification details "
-                "in test_plan instead."
-            ),
-        ),
-    ] = None,
-    ref: Annotated[
-        str | None,
-        Field(
-            description=(
-                "Optional label for this action so a later action (e.g. a "
-                "bugzilla.add_comment in the same run) can reference its "
-                "result once applied, via {{actions.<ref>.url}} in that "
-                "action's text."
+                "Revision summary/description. Keep it concise and useful for permanent "
+                "history. Do not restate the bug, narrate the investigation or "
+                "implementation process. Keep test and verification details in "
+                "test_plan instead."
             ),
         ),
     ] = None,
@@ -110,11 +114,9 @@ async def submit_patch(
     submission as a proposed action for review; it is not sent to Phabricator
     during the run.
 
-    Set `ref` if you want to reference the new revision's URL from another action
-    in the same run, written as `{{actions.<ref>.url}}` (for example, inside a
-    bug comment).
+    Later actions can reference its `revision_id` and `url`.
     """
-    _validate_summary(summary)
+    _validate_summary(summary, "submit_patch")
     params: dict = {
         "bug_id": bug_id,
         "title": title,
@@ -123,9 +125,7 @@ async def submit_patch(
     }
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
-    action = recorder.record(
-        "phabricator.submit_patch", params, reasoning=reasoning, ref=ref
-    )
+    action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 
@@ -145,6 +145,36 @@ async def update_patch(
     reasoning: Annotated[
         str, Field(description="Why you are updating this patch (for audit log).")
     ],
+    title: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New title for the revision: the commit message subject line. "
+                "Do not include reviewer annotations (r=... or r?...). "
+                "Leave unset to keep the same title."
+            )
+        ),
+    ] = None,
+    summary: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New summary for the revision: the commit message body. "
+                "Replaces the current summary entirely, so pass the full text. "
+                "Keep test and verification details in test_plan instead. "
+                "Leave unset to keep the same summary."
+            )
+        ),
+    ] = None,
+    test_plan: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New test plan for the revision. Replaces the current one "
+                "entirely. Leave unset to keep the same test plan."
+            )
+        ),
+    ] = None,
 ) -> str:
     """Submit your fix as a new diff on an existing Phabricator revision.
 
@@ -158,14 +188,19 @@ async def update_patch(
     first, then call this once you are done. Calling it records the submission as
     a proposed action for review; it is not sent to Phabricator during the run.
 
-    Only the diff changes: the revision keeps its title, summary, and bug
-    association exactly as they are.
+    The revision keeps its title, summary, test plan, and bug association
+    unless you pass a new title, summary, or test_plan.
     """
-    action = recorder.record(
-        "phabricator.update_patch",
-        {"revision_id": revision_id},
-        reasoning=reasoning,
-    )
+    _validate_summary(summary, "update_patch")
+
+    params: dict = {"revision_id": revision_id}
+    if title:
+        params["title"] = title
+    if summary:
+        params["summary"] = summary
+    if test_plan:
+        params["test_plan"] = test_plan
+    action = recorder.record(UPDATE_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 
