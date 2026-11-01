@@ -89,11 +89,7 @@ def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
     return value
 
 
-def _auto_apply_blocker(
-    spec: AgentSpec | None,
-    run: Run,
-    require_review: bool | None,
-) -> str | None:
+def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
     """Why `run`'s recorded actions need a human, or None if they may be applied.
 
     This holds no policy about what an agent may record. That is bounded on the agent
@@ -103,10 +99,6 @@ def _auto_apply_blocker(
     sure it was; it reports that as `findings.auto_apply`. This function honors both
     and fails closed.
     """
-    # Only an explicit review request overrides the agent's policy.
-    if require_review is True:
-        return "this run was requested with review required"
-
     if spec is None or not spec.auto_apply_actions:
         return "auto-apply is off for this agent"
 
@@ -120,12 +112,19 @@ def _auto_apply_blocker(
 
 
 def _should_auto_apply(
-    spec: AgentSpec | None, action_type: str, *, run_level_auto_apply: bool
+    spec: AgentSpec | None,
+    action_type: str,
+    *,
+    require_review: bool,
+    run_level_auto_apply: bool,
 ) -> bool:
     """Apply per-action overrides, falling back to the run-level decision."""
     if spec is None:
         return False
     if action_type in spec.never_apply_actions:
+        return False
+    # A review request holds every action, even `always_apply_actions`.
+    if require_review:
         return False
     if action_type in spec.always_apply_actions:
         return True
@@ -327,11 +326,7 @@ async def _apply_pending_rows(
                     results_by_ref[member.ref] = outcome.result
 
 
-async def on_run_completed(
-    db: AsyncSession,
-    run: Run,
-    require_review: bool | None,
-) -> None:
+async def on_run_completed(db: AsyncSession, run: Run) -> None:
     """Record a completed run's actions and auto-apply each eligible action.
 
     Called from the `apply-run-actions` push route. Actions are always recorded (so the
@@ -352,11 +347,14 @@ async def on_run_completed(
 
     spec = AGENT_REGISTRY.get(run.agent)
 
-    run_level_auto_apply = _auto_apply_blocker(spec, run, require_review) is None
+    run_level_auto_apply = _auto_apply_blocker(spec, run) is None
     to_apply: list[tuple[RunAction, list[dict]]] = []
     for action, attachments in rows:
         if _should_auto_apply(
-            spec, action.type, run_level_auto_apply=run_level_auto_apply
+            spec,
+            action.type,
+            require_review=run.inputs["require_review"],
+            run_level_auto_apply=run_level_auto_apply,
         ):
             to_apply.append((action, attachments))
 

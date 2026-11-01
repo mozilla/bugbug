@@ -251,7 +251,7 @@ UpliftSource = Annotated[
 ]
 
 
-class UpliftInputs(BaseModel):
+class UpliftInputs(AgentInputs):
     """Inputs for the uplift conflict-resolution agent."""
 
     # The stable branch ref to uplift onto, e.g. `release`, `beta`, `esr128`.

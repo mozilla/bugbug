@@ -31,25 +31,9 @@ async def _create(monkeypatch, payload: dict, agent: str = "bug-fix"):
 # --- what reaches the database ------------------------------------------- #
 
 
-async def test_explicit_review_is_persisted(monkeypatch):
-    run, _ = await _create(monkeypatch, {"bug_id": 1889001, "require_review": True})
-    assert run.inputs["require_review"] is True
-
-
-async def test_explicit_false_is_persisted(monkeypatch):
-    run, _ = await _create(monkeypatch, {"bug_id": 1889001, "require_review": False})
-    assert run.inputs["require_review"] is False
-
-
 async def test_omitted_flag_defaults_to_false(monkeypatch):
     run, _ = await _create(monkeypatch, {"bug_id": 1889001})
     assert run.inputs["require_review"] is False
-
-
-async def test_flag_is_stored_alongside_the_agents_own_inputs(monkeypatch):
-    run, _ = await _create(monkeypatch, {"bug_id": 1889001, "require_review": True})
-    assert run.inputs["bug_id"] == 1889001
-    assert run.inputs["require_review"] is True
 
 
 async def test_every_agent_accepts_and_persists_the_flag(monkeypatch):
@@ -92,20 +76,7 @@ async def test_non_boolean_flag_is_rejected(monkeypatch):
     assert getattr(exc.value, "status_code", None) == 422
 
 
-# uplift-resolve's inputs deliberately don't extend `AgentInputs`.
-_AGENTS_WITHOUT_REVIEW_FLAG = {"uplift-resolve"}
-
-
 def test_flag_is_declared_once_on_the_shared_base():
     assert "require_review" in AgentInputs.model_fields
-    for name, spec in AGENT_REGISTRY.items():
-        if name in _AGENTS_WITHOUT_REVIEW_FLAG:
-            continue
+    for spec in AGENT_REGISTRY.values():
         assert issubclass(spec.input_schema, AgentInputs)
-        assert "require_review" in spec.input_schema.model_fields
-
-
-def test_agents_without_the_flag_do_not_declare_it():
-    for name in _AGENTS_WITHOUT_REVIEW_FLAG:
-        schema = AGENT_REGISTRY[name].input_schema
-        assert "require_review" not in schema.model_fields

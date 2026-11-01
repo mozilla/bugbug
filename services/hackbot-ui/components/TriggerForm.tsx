@@ -71,10 +71,7 @@ export function TriggerForm() {
     e.preventDefault();
     setError(null);
 
-    // uplift-resolve's inputs have no `require_review`.
-    const inputs: Record<string, unknown> = isUpliftAgent
-      ? {}
-      : { require_review: requireReview };
+    const inputs: Record<string, unknown> = { require_review: requireReview };
 
     const parsedBugId = parseBugId(bugId);
     const hasBugId = parsedBugId !== null;
@@ -456,18 +453,16 @@ export function TriggerForm() {
         )}
       </div>
 
-      {!isUpliftAgent && (
-        <div className="field checkbox-field">
-          <label>
-            <input
-              type="checkbox"
-              checked={requireReview}
-              onChange={(e) => setRequireReview(e.target.checked)}
-            />
-            Review before publishing
-          </label>
-        </div>
-      )}
+      <div className="field checkbox-field">
+        <label>
+          <input
+            type="checkbox"
+            checked={requireReview}
+            onChange={(e) => setRequireReview(e.target.checked)}
+          />
+          Review before publishing
+        </label>
+      </div>
 
       <button type="submit" disabled={submitting}>
         {submitting ? "Triggering…" : `Trigger ${agent} agent`}

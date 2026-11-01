@@ -398,13 +398,7 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
                 run.run_id,
                 run.agent,
             )
-    await pubsub.publish_run_completed(
-        str(run.run_id),
-        run.agent,
-        run.status,
-        # Absent for agents whose inputs don't extend `AgentInputs` (uplift-resolve).
-        run.inputs.get("require_review"),
-    )
+    await pubsub.publish_run_completed(str(run.run_id), run.agent, run.status)
 
 
 def _has_unsubmitted_patch(
