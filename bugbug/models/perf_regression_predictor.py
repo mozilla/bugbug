@@ -276,7 +276,7 @@ class PerfRegressionPredictorModel(Model):
         )
 
     @classmethod
-    def load(cls, model_directory: str) -> "PerfRegressionPredictorModel":
+    def load(cls, model_directory: str) -> PerfRegressionPredictorModel:
         """Load a local Hugging Face checkpoint directory."""
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 

@@ -60,7 +60,7 @@ steps:
         images=(--agent-image "$$(cat /workspace/agent.digest)")
         if [ -f /workspace/broker.digest ]; then images+=(--broker-image "$$(cat /workspace/broker.digest)"); fi
         for env in dev stage; do
-          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy "${_AGENT}" --env "$$env" "$${images[@]}"
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy "agents/${_AGENT}" --env "$$env" "$${images[@]}"
           status=$$?
           if [ "$$status" -eq 3 ]; then
             echo "Waiting for infra: not deploying past $$env."

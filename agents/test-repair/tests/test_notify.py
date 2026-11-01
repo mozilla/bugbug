@@ -1,9 +1,7 @@
-import pytest
 from hackbot_agents.test_repair.agent import TestRepairResult
 from hackbot_agents.test_repair.notify import (
     build_email,
     build_message,
-    recipients,
     sheriff_action_required,
 )
 from hackbot_agents.test_repair.resolve import (
@@ -152,25 +150,6 @@ def test_names_a_known_intermittent():
     )
 
 
-def test_a_patch_is_advice_for_the_author_not_an_alternative_action():
-    message = _message(_result(proposed_patch=True))
-    assert "*test-repair: BACK OUT the culprit*" in message.splitlines()[0]
-    assert "squash it into the existing patches and reland" in message
-    assert "rather than landing it as a follow-up" in message
-    assert "The backout still stands." in message
-
-
-def test_the_patch_line_comes_before_the_run_link():
-    lines = _message(_result(proposed_patch=True)).splitlines()
-    patch = next(i for i, line in enumerate(lines) if "Patch attached" in line)
-    run = next(i for i, line in enumerate(lines) if "Hackbot run details" in line)
-    assert patch < run
-
-
-def test_no_patch_line_without_a_patch():
-    assert "Patch attached" not in _message()
-
-
 def test_lists_every_failing_group():
     groups = [FailingGroup(f"g{i}.ini", ["a.js"]) for i in range(4)]
     message = _message(investigation=_investigation(groups=groups))
@@ -197,13 +176,6 @@ def test_the_email_subject_names_the_failing_group_and_the_culprit():
     assert subject == (
         "[test-repair] toolkit/modules/tests/xpcshell/xpcshell.toml regressed by "
         f"{GIT_REVISION[:12]} (autoland)"
-    )
-
-
-def test_a_proposed_patch_is_announced_in_the_subject():
-    subject, _ = _email(_result(proposed_patch=True))
-    assert subject.endswith(
-        f"regressed by {GIT_REVISION[:12]} - patch proposed (autoland)"
     )
 
 
@@ -252,18 +224,6 @@ def test_the_recommendation_is_stated_without_shouting():
     assert "BACK OUT" not in body
 
 
-def test_sheriffs_are_not_mentioned():
-    subject, body = _email(
-        _result(proposed_patch=True),
-        culprit_author="author@mozilla.com",
-        classification="fixed by commit",
-    )
-    assert "sheriff" not in (subject + body).lower()
-    assert body.startswith("# Test failure analysis")
-    assert "- **Current Treeherder classification:** fixed by commit" in body
-    assert "the agent believes your" in body
-
-
 def test_candidates_are_listed_when_no_single_commit_was_blamed():
     _, body = _email(
         _result(
@@ -285,68 +245,6 @@ def test_the_intermittent_bug_is_named_when_nothing_was_blamed():
     )
 
 
-def test_the_author_is_addressed_when_there_is_a_patch_for_them():
-    assert recipients(_result(proposed_patch=True), "author@mozilla.com") == [
-        "author@mozilla.com"
-    ]
-
-
-def test_a_verdict_without_a_patch_reaches_nobody_individually():
-    # The handler still addresses the team.
-    assert recipients(_result(), "author@mozilla.com") == []
-
-
-def test_an_unknown_author_reaches_nobody_individually():
-    assert recipients(_result(proposed_patch=True), None) == []
-
-
-def test_the_author_is_addressed_after_a_backout():
-    assert recipients(
-        _result(proposed_patch=True), "author@mozilla.com", "fixed by commit"
-    ) == ["author@mozilla.com"]
-
-
-@pytest.mark.parametrize(
-    "classification", ["intermittent", "autoclassified intermittent"]
-)
-def test_the_author_is_not_addressed_while_classified_intermittent(classification):
-    assert (
-        recipients(_result(proposed_patch=True), "author@mozilla.com", classification)
-        == []
-    )
-
-
-def test_the_body_does_not_depend_on_who_receives_it():
-    def body(classification):
-        return _email(
-            _result(proposed_patch=True),
-            culprit_author="author@mozilla.com",
-            classification=classification,
-        )[1]
-
-    assert body("intermittent") == body("fixed by commit").replace(
-        "fixed by commit", "intermittent"
-    )
-
-
-def test_the_author_is_told_up_front_why_they_are_on_the_email():
-    _, body = _email(_result(proposed_patch=True), culprit_author="author@mozilla.com")
-    why = (
-        f"**author@mozilla.com**, the agent believes your [`{GIT_REVISION[:12]}`]"
-        f"({GIT_URL}) broke the tests below."
-    )
-    assert why in body
-    assert body.index(why) < body.index("- **Failing:**")
-    assert "not to land on its own" in body
-
-
-def test_no_author_note_when_nobody_is_addressed():
-    _, body = _email(culprit_author="author@mozilla.com")
-    assert "the agent believes your" not in body
-    _, body = _email(_result(proposed_patch=True))
-    assert "the agent believes your" not in body
-
-
 def test_agent_prose_nests_under_the_analysis_heading():
     _, body = _email(result=_result(analysis="# Root cause\n\ndetail"))
     assert "## Analysis" in body
@@ -365,53 +263,6 @@ def test_the_summary_stands_in_for_a_missing_analysis():
     assert "test_Region.js fails 20/20 times in chaos mode." in body
 
 
-def test_the_patch_section_frames_a_placeholder_the_apply_step_fills():
-    _, body = _email(result=_result(proposed_patch=True))
-    assert body.endswith("## Proposed patch\n\n```diff\n{patch}\n```")
-
-
-def test_no_patch_section_without_a_patch():
-    _, body = _email()
-    assert "Proposed patch" not in body
-    assert "{patch}" not in body
-
-
-def test_a_stacked_revision_comes_with_the_reland_recipe():
-    _, body = _email(
-        _result(proposed_patch=True), revision_pending=True, parent_revision=325120
-    )
-    assert (
-        "**Phabricator:** *Apply pending actions* on the "
-        "[run page](https://hackbot.moz.tools/runs/1218e630-78c8) files this patch as"
-        " a child revision of D325120. To reland:" in body
-    )
-    recipe = body.split("```\n", 2)[1]
-    assert recipe.splitlines() == [
-        "moz-phab patch D325120",
-        "moz-phab patch D<new> --apply-to @",
-        "git rebase -i @~1   # squash the fix into your patch",
-        "moz-phab patch D<next> --skip-dependencies   # each later patch in your stack",
-        "moz-phab submit",
-    ]
-    # The recipe comes before the diff, which can run long.
-    assert body.index("To reland:") < body.index("## Proposed patch")
-
-
-def test_an_unstacked_revision_says_how_to_pull_it_onto_the_patch():
-    _, body = _email(_result(proposed_patch=True), revision_pending=True)
-    assert (
-        "files this patch as a WIP revision on "
-        "[bug 2061487](https://bugzilla.mozilla.org/show_bug.cgi?id=2061487)." in body
-    )
-    assert "`moz-phab patch D<new> --apply-to @`, squash, and `moz-phab submit`" in body
-    assert "To reland:" not in body
-
-
-def test_no_submit_step_without_a_pending_revision():
-    _, body = _email(_result(proposed_patch=True))
-    assert "Phabricator" not in body
-
-
 def test_an_intermittent_verdict_is_still_emailed():
     # Unlike Slack, the email is not filtered by sheriff_action_required.
     subject, body = _email(
@@ -425,3 +276,14 @@ def test_an_intermittent_verdict_is_still_emailed():
         "[test-repair] Intermittent failure in toolkit/modules/tests/xpcshell/"
     )
     assert "- **Verdict:** intermittent, confidence 0.7; no backout" in body
+
+
+def test_the_verdict_email_carries_no_patch_and_addresses_no_author():
+    _, body = _email(
+        culprit_author="author@mozilla.com", classification="fixed by commit"
+    )
+    assert body.startswith("# Test failure analysis")
+    assert "- **Current Treeherder classification:** fixed by commit" in body
+    assert "author@mozilla.com**," not in body
+    assert "Proposed patch" not in body
+    assert "{patch}" not in body

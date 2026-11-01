@@ -1,3 +1,4 @@
+from app.action_handlers.agents_handler import StartRunHandler
 from app.action_handlers.base import ActionHandler
 from app.action_handlers.bugzilla_handler import (
     AddAttachmentHandler,
@@ -37,6 +38,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "email.send": SendEmailHandler(),
     "try_server.push": PushHandler(),
     "feedback.report_problem": ReportProblemHandler(),
+    "agents.start_run": StartRunHandler(),
 }
 
 

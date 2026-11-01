@@ -1,0 +1,26 @@
+services:
+  test-repair-fix-agent:
+    build:
+      context: ../..
+      dockerfile: agents/test-repair-fix/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      # The test-repair run to continue from. Locally its artifacts are read
+      # from /artifacts/<PARENT_RUN_ID>, where that run wrote them.
+      - PARENT_RUN_ID=${PARENT_RUN_ID:?error}
+      - SKIP_FIREFOX_BUILD=${SKIP_FIREFOX_BUILD:-}
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - ARTIFACTS_DIR=/artifacts
+    # Firefox's content processes need far more than Docker's default 64MB
+    # /dev/shm; browser tests crash without this.
+    shm_size: 2gb
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+
+volumes:
+  workspace:
+    name: bugbug_workspace

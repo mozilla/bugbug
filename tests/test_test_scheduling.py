@@ -1084,11 +1084,13 @@ def test_index_runs() -> None:
     push_data: list[PushResult] = [
         ((Revision("r0"),), Revision("f"), (Group("a"), Group("b")), (), ()),
         ((Revision("r1"),), Revision("f"), (Group("b"),), (), ()),
-        ((Revision("r3"),), Revision("f"), (Group("a"),), (), ()),
+        ((Revision("r3"),), Revision("f"), (Group("a"),), (Group("a"),), ()),
+        ((Revision("r4"),), Revision("f"), (Group("b"),), (), (Group("b"),)),
     ]
-    runs, rev_to_push = test_scheduling.index_runs(push_data)
-    assert runs == {"a": [0, 2], "b": [0, 1]}
-    assert rev_to_push == {"r0": 0, "r1": 1, "r3": 2}
+    runs, rev_to_push, regressions = test_scheduling.index_runs(push_data)
+    assert runs == {"a": [0, 2], "b": [0, 1, 3]}
+    assert rev_to_push == {"r0": 0, "r1": 1, "r3": 2, "r4": 3}
+    assert regressions == {"a": [2], "b": [3]}
 
 
 def test_get_non_run_negatives() -> None:
@@ -1120,6 +1122,29 @@ def test_get_non_run_negatives() -> None:
         )
         == []
     )
+    # The first later run failed, and the failure was attributed to that later push, or to one in
+    # between: it didn't verifiably pass with the push's changes.
+    for regression_index in (7, 6):
+        regressions: dict[Runnable, list[int]] = {Group("later"): [regression_index]}
+        assert (
+            test_scheduling.get_non_run_negatives(
+                5,
+                10,
+                candidates,
+                {Group("ran")},
+                runs,
+                10,
+                random.Random(0),
+                regressions,
+            )
+            == []
+        )
+    # A failure after a passing run, or outside of the window, doesn't matter.
+    runs[Group("later")] = [2, 7, 9]
+    regressions = {Group("later"): [2, 9, 11]}
+    assert test_scheduling.get_non_run_negatives(
+        5, 10, candidates, {Group("ran")}, runs, 10, random.Random(0), regressions
+    ) == [Group("later")]
 
 
 def test_filter_runnables_ignores_jstests() -> None:

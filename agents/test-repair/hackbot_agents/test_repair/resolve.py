@@ -13,7 +13,7 @@ endpoints are mapped to git; the agent enumerates the commits between them with
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
@@ -38,12 +38,16 @@ _TIMEOUT = 30
 _TREEHERDER = "https://treeherder.mozilla.org/api/project"
 _FAILURE_LINE_PREFIX = "TEST-UNEXPECTED"
 _INTERMITTENT_KEYWORD = "intermittent-failure"
-# How far back the candidate window reaches. The agent narrows it itself with
-# `treeherder-cli --lookback N --suspects`, which reports the push a failure actually
-# started in -- including when that predates the push under investigation.
-RANGE_PUSHES = 100
+# How far back the candidate window reaches. Backstop pushes run every test at least
+# every 20 pushes (gecko_taskgraph/util/backstop.py), so a new failure starts within
+# it. The agent narrows it itself with `treeherder-cli --lookback N --suspects`, which
+# reports the push a failure actually started in -- including when that predates the
+# push under investigation.
+RANGE_PUSHES = 20
 # Bounds the shallow clone depth, and so the commits the agent can reach.
 MAX_RANGE_COMMITS = 500
+# What the analysis publishes for the test-repair-fix run it hands on to.
+INVESTIGATION_ARTIFACT = "investigation.json"
 
 
 @dataclass(frozen=True)
@@ -78,6 +82,19 @@ class Investigation:
     # False for suites that report no test manifests (gtest, jittest, talos, ...).
     group_based: bool = True
     known_intermittent_bugs: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Investigation":
+        return cls(
+            **{
+                **data,
+                "failing_groups": [FailingGroup(**g) for g in data["failing_groups"]],
+                "commit_range": CommitRange(**data["commit_range"]),
+            }
+        )
 
     @property
     def failure_commit(self) -> str:
