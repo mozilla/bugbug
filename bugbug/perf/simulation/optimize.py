@@ -14,6 +14,7 @@ on the eval window, which the tuning never saw.
 import logging
 from typing import Any
 
+from bugbug.perf.simulation.capacity import CiSettings, simulate_ci
 from bugbug.perf.simulation.detection import detect, replay
 from bugbug.perf.simulation.metrics import (
     Cost,
@@ -40,12 +41,14 @@ def run(
     timeline: Timeline,
     windows: list[Window],
     bootstrap_samples: int = 0,
+    ci: CiSettings | None = None,
 ) -> list[dict[str, Any]]:
-    """Replay ``strategy`` once and evaluate it on each window."""
+    """Replay ``strategy`` once and evaluate it on each window, through CI when ``ci`` is given."""
     schedule = replay(strategy, timeline)
     detections = detect(schedule, timeline)
+    ci_result = simulate_ci(schedule, timeline, detections, ci) if ci else None
     return [
-        evaluate(timeline, schedule, detections, window, bootstrap_samples)
+        evaluate(timeline, schedule, detections, window, bootstrap_samples, ci_result)
         for window in windows
     ]
 
@@ -60,6 +63,8 @@ def optimize_family(
     cost: Cost = "jobs",
     latency: Latency = "detect",
     statistic: Statistic = "mean",
+    ci: CiSettings | None = None,
+    max_cost_ratio: float | None = None,
     **fixed_params: Any,
 ) -> Any:
     """Run one study for ``family`` on ``window`` and return it.
@@ -72,6 +77,9 @@ def optimize_family(
     pruned, so they never reach the front; see ``pruned_trials``.
     ``fixed_params`` are passed to every strategy as they are, outside the
     search. The space used is kept in the study's ``search_space`` attribute.
+    With ``ci``, trials whose plain job count exceeds ``max_cost_ratio`` times
+    the baseline's are pruned before the CI replay, which is what makes a
+    dense schedule expensive to evaluate.
     """
     import optuna
 
@@ -83,7 +91,13 @@ def optimize_family(
     def objective(trial: Any) -> tuple[float, float]:
         params = {**cls.suggest(trial, space), **fixed_params}
         strategy = cls(**params)
-        result = run(strategy, timeline, [window])[0]
+        if ci is not None and max_cost_ratio is not None:
+            plain_cost = "jobs" if cost == "total_jobs" else cost
+            plain = run(strategy, timeline, [window])[0]
+            if plain[plain_cost] > max_cost_ratio * baseline[plain_cost]:
+                trial.set_user_attr("metrics", plain)
+                raise optuna.TrialPruned()
+        result = run(strategy, timeline, [window], ci=ci)[0]
         trial.set_user_attr("metrics", result)
         if not is_feasible(result, baseline):
             raise optuna.TrialPruned()
@@ -156,13 +170,14 @@ def evaluate_points(
     latency: Latency = "detect",
     bootstrap_samples: int = 0,
     statistic: Statistic = "mean",
+    ci: CiSettings | None = None,
     **fixed_params: Any,
 ) -> list[dict[str, Any]]:
     """Re-run each Pareto point on another window, keeping its optimize-window values."""
     rows = []
     for point in points:
         strategy = FAMILIES[family](**{**point["params"], **fixed_params})
-        result = run(strategy, timeline, [window], bootstrap_samples)[0]
+        result = run(strategy, timeline, [window], bootstrap_samples, ci)[0]
         rows.append(
             {
                 "family": family,

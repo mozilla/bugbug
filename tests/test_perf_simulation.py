@@ -204,6 +204,264 @@ def test_latency_in_pushes() -> None:
     assert result["window_pushes"]["mean_ci95"] == (4.0, 4.0)
 
 
+def _capacity(workers: int, background: dict[int, float] | None = None):
+    """L1 and L2 on a small pool at 60 minutes a run; the rest of the suite on a huge one.
+
+    Three suite labels are mapped so the platform fallback sends the other
+    297 to the huge pool too, keeping the small pool's queue to L1 and L2.
+    """
+    suite = sorted(SUITE)[:3]
+    return sim.CapacityModel(
+        pools={
+            "hw/p": sim.PoolCapacity(
+                "hw/p", {"2026-05": workers}, listed_workers=workers
+            ),
+            "hw/suite": sim.PoolCapacity("hw/suite", {"2026-05": 1000}),
+        },
+        labels={
+            L1: sim.LabelRuntime("hw/p", 60.0),
+            L2: sim.LabelRuntime("hw/p", 60.0),
+            **{label: sim.LabelRuntime("hw/suite", 1.0) for label in suite},
+        },
+        background={"hw/p": background or {}, "hw/suite": {}},
+    )
+
+
+def _hours(when, since):
+    return (when - since).total_seconds() / 3600
+
+
+def test_capacity_model_round_trip_and_fallbacks() -> None:
+    model = _capacity(3, {int(START.timestamp() // 3600): 2.4})
+    data = json.loads(json.dumps(model.to_dict()))
+    again = sim.CapacityModel.from_dict(data)
+    assert again.pools["hw/p"].workers_at(START) == 3
+    # Months without data take the nearest earlier month, else the first.
+    assert again.pools["hw/p"].workers_at(START + timedelta(days=60)) == 3
+    assert again.pools["hw/p"].workers_at(START - timedelta(days=60)) == 3
+    # Background work rounds the free workers down to at least one.
+    assert again.available("hw/p", START) == 1
+    assert again.available("hw/p", START + timedelta(hours=1)) == 3
+    # A label of the same platform borrows the pool most of its labels use,
+    # and that pool's typical run time.
+    other = "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-p299"
+    assert other not in model.labels
+    assert model.pool_of(other) == "hw/suite"
+    assert model.minutes_of(other, "hw/suite") == 1.0
+    assert (
+        model.pool_of("test-android-hw-a55-14-0-aarch64-shippable/opt-raptor-x") is None
+    )
+
+
+def test_simulate_ci_queues_runs_and_backfills() -> None:
+    # Hourly pushes, a batch every 4 pushes, two regressions caught by the
+    # batch on push 8. L1 and L2 share one worker: the first completes 60
+    # minutes after the build, the second 120.
+    timeline = make_timeline(12, regressions=((1, 5, (L1,)), (2, 6, (L2,))))
+    schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
+    detections = sim.detect(schedule, timeline)
+    settings = sim.CiSettings(
+        _capacity(1),
+        build_minutes=99.0,
+        backfill="all",
+        record_waits=True,
+        alerting="detection",
+    )
+    result = sim.simulate_ci(schedule, timeline, detections, settings)
+    assert result.jobs == 3 * 302 and result.unknown_labels == 0
+    batch = timeline.pushes[8].time + timedelta(minutes=99)
+    first, second = sorted((result.detect_time[1], result.detect_time[2]))
+    assert first == batch + timedelta(minutes=60)
+    assert second == batch + timedelta(minutes=120)
+    # Backfills: L1 on pushes 5, 6, 7 and L2 on pushes 5, 6, 7 (push 4 ran).
+    assert result.backfill_jobs == {1: 3, 2: 3}
+    # Identification needs the culprit and the push before it: for culprit 5
+    # that is pushes 4 (ran in the batch) and 5 (backfilled); for culprit 6
+    # pushes 5 and 6, both backfilled. Everything queues behind the batch on
+    # the single worker, so identification comes after detection.
+    for summary_id in (1, 2):
+        identified = result.identify_time[summary_id]
+        assert identified is not None
+        assert identified > result.detect_time[summary_id]
+    assert result.waits["hw/p"][:2] == [0.0, 60.0]
+
+    # Two workers: both labels finish 60 minutes after the build and no run waits.
+    settings = sim.CiSettings(
+        _capacity(2),
+        build_minutes=99.0,
+        backfill="all",
+        record_waits=True,
+        alerting="detection",
+    )
+    result = sim.simulate_ci(schedule, timeline, detections, settings)
+    assert (
+        result.detect_time[1] == result.detect_time[2] == batch + timedelta(minutes=60)
+    )
+    assert result.waits["hw/p"] and all(wait == 0.0 for wait in result.waits["hw/p"])
+
+    # Without backfills the culprit of regression 2 is never identified: push
+    # 5 has no data for L2. Regression 1's culprit 5 is not identified either.
+    settings = sim.CiSettings(
+        _capacity(2), build_minutes=99.0, backfill="none", alerting="detection"
+    )
+    result = sim.simulate_ci(schedule, timeline, detections, settings)
+    assert result.backfill_jobs == {}
+    assert result.identify_time == {1: None, 2: None}
+
+    # Background work taking the second worker away for the batch's hour
+    # serializes the two runs again.
+    hour = int((batch).timestamp() // 3600)
+    model = _capacity(2, {hour: 1.0, hour + 1: 1.0})
+    result = sim.simulate_ci(
+        schedule,
+        timeline,
+        detections,
+        sim.CiSettings(model, 99.0, "none", alerting="detection"),
+    )
+    assert sorted((result.detect_time[1], result.detect_time[2]))[
+        1
+    ] == batch + timedelta(minutes=120)
+
+
+def test_alerting_modes_and_backfill_builds() -> None:
+    # 60 hourly pushes, a batch every 4, culprit 5 on L1 caught by the batch
+    # on push 8. Two workers: nothing queues.
+    timeline = make_timeline(60, regressions=((1, 5, (L1,)),))
+    schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
+    detections = sim.detect(schedule, timeline)
+    batch = timeline.pushes[8].time + timedelta(minutes=99)
+
+    # Today's rule: the alert needs 12 runs after the culprit, the 12th being
+    # the batch on push 52, and the backfills start when its L1 run completes.
+    today = sim.CiSettings(_capacity(2), build_minutes=99.0, alerting="fore_window")
+    result = sim.simulate_ci(schedule, timeline, detections, today)
+    assert result.detect_time[1] == batch + timedelta(minutes=60)
+    assert result.surface_time[1] == timeline.pushes[52].time + timedelta(
+        minutes=99 + 60
+    )
+    identified = result.identify_time[1]
+    assert identified is not None and identified > result.surface_time[1]
+    assert result.confirm_jobs == {} and result.backfill_jobs == {1: 3}
+
+    # Retrigger confirmation: two more runs of L1 on push 8 on a single
+    # worker, after L2 (60) and L1 (120) of the batch: done at 180 and 240.
+    # Push 5 ran nothing, so its backfill builds first: eligible at the alert
+    # plus the 99 minute build, then 60 minutes of run.
+    confirm = sim.CiSettings(
+        _capacity(1), build_minutes=99.0, alerting="retrigger", confirm_retriggers=2
+    )
+    result = sim.simulate_ci(schedule, timeline, detections, confirm)
+    assert result.detect_time[1] == batch + timedelta(minutes=120)
+    assert result.surface_time[1] == batch + timedelta(minutes=240)
+    assert result.confirm_jobs == {1: 2}
+    identified = result.identify_time[1]
+    assert identified is not None
+    assert identified >= result.surface_time[1] + timedelta(minutes=99 + 60)
+
+    # Sheriff at the first data point: the alert is the detection.
+    instant = sim.CiSettings(_capacity(2), build_minutes=99.0, alerting="detection")
+    result = sim.simulate_ci(schedule, timeline, detections, instant)
+    assert result.surface_time[1] == result.detect_time[1]
+
+    window = sim.Window(
+        timeline.pushes[0].time, timeline.pushes[-1].time + timedelta(hours=1)
+    )
+    metrics = sim.evaluate(timeline, schedule, detections, window, 0, result)
+    assert metrics["surfaced_ci"] == 1 and metrics["confirm_jobs"] == 0
+    assert metrics["total_jobs"] == metrics["jobs"] + metrics["backfill_jobs"]
+    assert sim.latency_label("surface_ci") == "surface hours"
+    assert sim.objectives(metrics, "total_jobs", "surface_ci", "mean")[
+        1
+    ] == pytest.approx(metrics["surface_ci_hours"]["mean"])
+
+
+def test_backfill_builds_follow_the_measured_share() -> None:
+    timeline = make_timeline(60, regressions=((1, 5, (L1,)),))
+    schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
+    detections = sim.detect(schedule, timeline)
+
+    def identified(share, rule):
+        model = _capacity(4)
+        model.pools["hw/p"].build_share = share
+        settings = sim.CiSettings(
+            model, build_minutes=99.0, alerting="detection", backfill_builds=rule
+        )
+        when = sim.simulate_ci(schedule, timeline, detections, settings).identify_time[
+            1
+        ]
+        assert when is not None
+        return when
+
+    # Backfills on pushes 5, 6, 7, none of which ran anything. With every such
+    # push holding a build they run at once; with none, each builds first.
+    assert identified(0.0, "measured") == identified(1.0, "measured") + timedelta(
+        minutes=99
+    )
+    assert identified(1.0, "always") == identified(0.0, "measured")
+    assert identified(None, "measured") == identified(0.0, "measured")
+    # The draw is stable per push and pool.
+    assert sim.capacity.build_present(1005, "hw/p", 0.5) == sim.capacity.build_present(
+        1005, "hw/p", 0.5
+    )
+    assert sim.capacity.build_present(1005, "hw/p", 1.0)
+    assert not sim.capacity.build_present(1005, "hw/p", 0.0)
+    assert sim.capacity.build_label_for_pool("releng-hardware/gecko-t-osx-1500-m4") == (
+        "build-macosx64-aarch64-shippable/opt"
+    )
+    assert sim.capacity.build_label_for_pool("releng-hardware/gecko-t-osx-1400-r8") == (
+        "build-macosx64-shippable/opt"
+    )
+    assert sim.capacity.build_label_for_pool(
+        "proj-autophone/gecko-t-lambda-perf-a55"
+    ) == ("build-android-aarch64-shippable/opt")
+    assert sim.capacity.build_label_for_pool("gecko-t/misc") is None
+
+
+def test_evaluate_with_ci_result_and_objectives() -> None:
+    timeline = make_timeline(12, regressions=((1, 5, (L1,)), (2, 6, (L2,))))
+    schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
+    detections = sim.detect(schedule, timeline)
+    settings = sim.CiSettings(
+        _capacity(2), build_minutes=60.0, backfill="all", alerting="detection"
+    )
+    ci = sim.simulate_ci(schedule, timeline, detections, settings)
+    window = sim.Window(
+        timeline.pushes[0].time, timeline.pushes[-1].time + timedelta(hours=1)
+    )
+    result = sim.evaluate(timeline, schedule, detections, window, 10, ci)
+    # Culprit 5 caught by the batch on push 8: 3 hours to the push, plus the
+    # hour of build and the hour of the run.
+    assert result["detect_hours"]["mean"] == 2.5
+    assert result["detect_ci_hours"]["mean"] == 4.5
+    assert result["identify_hours"]["mean"] > result["detect_ci_hours"]["mean"]
+    assert result["identified"] == 2
+    assert result["backfill_jobs"] == 6 and result["total_jobs"] == result["jobs"] + 6
+    assert "mean_ci95" in result["identify_hours"]
+    assert (
+        sim.objectives(result, "total_jobs", "identify", "mean")[0]
+        == result["total_jobs"]
+    )
+    assert sim.latency_label("detect_ci") == "detect hours"
+    assert sim.latency_label("identify") == "identify hours"
+    # A pool with its own measured eligible time ignores the settings' build time.
+    model = _capacity(2)
+    model.pools["hw/p"].eligible_minutes = 120.0
+    again = sim.CapacityModel.from_dict(json.loads(json.dumps(model.to_dict())))
+    assert again.pools["hw/p"].eligible_minutes == 120.0
+    ci = sim.simulate_ci(
+        schedule,
+        detections=detections,
+        timeline=timeline,
+        settings=sim.CiSettings(again, build_minutes=60.0, backfill="none"),
+    )
+    assert ci.detect_time[1] == timeline.pushes[8].time + timedelta(minutes=120 + 60)
+    plain = sim.evaluate(timeline, schedule, detections, window)
+    with pytest.raises(ValueError, match="capacity"):
+        sim.objectives(plain, "jobs", "detect_ci", "mean")
+    with pytest.raises(ValueError, match="capacity"):
+        sim.objectives(plain, "total_jobs", "detect", "mean")
+
+
 def test_recorded_production_uses_the_pushes() -> None:
     timeline = make_timeline(12, full=(0, 8))
     timeline.pushes[4].ran_labels = frozenset({L1, L2})

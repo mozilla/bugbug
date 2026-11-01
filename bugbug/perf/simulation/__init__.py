@@ -13,6 +13,16 @@ history into optimize and eval windows and ``optimize`` tunes parameters with
 optuna. See docs/perf-scheduling-simulation.md.
 """
 
+from bugbug.perf.simulation.capacity import (
+    CapacityModel,
+    CiResult,
+    CiSettings,
+    LabelRuntime,
+    PoolCapacity,
+    calibrate_scales,
+    fetch_capacity,
+    simulate_ci,
+)
 from bugbug.perf.simulation.detection import (
     FORE_WINDOW,
     Detection,
@@ -70,6 +80,11 @@ from bugbug.perf.simulation.timeline import (
 
 __all__ = [
     "ALL",
+    "CapacityModel",
+    "CiResult",
+    "CiSettings",
+    "LabelRuntime",
+    "PoolCapacity",
     "FAMILIES",
     "FORE_WINDOW",
     "FULL_SUITE_MIN_LABELS",
@@ -96,10 +111,12 @@ __all__ = [
     "Timeline",
     "Window",
     "bootstrap_mean",
+    "calibrate_scales",
     "default_bounds",
     "detect",
     "evaluate",
     "evaluate_points",
+    "fetch_capacity",
     "is_feasible",
     "latency_key",
     "latency_label",
@@ -114,4 +131,5 @@ __all__ = [
     "parse_strategy",
     "replay",
     "run",
+    "simulate_ci",
 ]

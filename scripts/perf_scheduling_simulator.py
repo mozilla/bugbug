@@ -15,13 +15,15 @@ newer window. Both read the datasets of the performance alerts pipeline from
 """
 
 import argparse
+import bisect
 import json
 import logging
-from datetime import datetime
+import statistics
+from datetime import datetime, timezone
 from typing import Any
 
-from bugbug import db
-from bugbug.perf import datasets, push_status
+from bugbug import db, redash
+from bugbug.perf import datasets, extraction, push_status
 from bugbug.perf import simulation as sim
 from bugbug.perf.calibration import (
     DEFAULT_MIN_POSITIVES,
@@ -206,20 +208,24 @@ def resolve_strategy(spec: str, timeline: sim.Timeline, baseline: str) -> sim.St
     return sim.parse_strategy(spec)
 
 
-def _stats(summary: dict[str, Any]) -> str:
-    if summary["mean"] is None:
+def _stats(summary: dict[str, Any] | None) -> str:
+    if summary is None or summary["mean"] is None:
         return "-"
     return "{mean:.1f} / {median:.1f} / {p90:.1f} / {max:.1f}".format(**summary)
 
 
 def format_table(rows: list[tuple[str, dict[str, Any], bool]]) -> str:
-    """A markdown table of per-strategy results; latencies are mean / median / p90 / max."""
+    """A markdown table of per-strategy results; latencies are mean / median / p90 / max.
+
+    The CI columns are filled when the strategies were replayed through the
+    capacity model (``--capacity``).
+    """
     header = (
         "| strategy | batches | jobs | regressions | detected | surfaced "
         "| detect hours | surface hours | detect pushes | window pushes (mean) "
-        "| merged | feasible |"
+        "| merged | ci detect hours | alert hours | identify hours | backfill jobs | feasible |"
     )
-    lines = [header, "|" + "---|" * 12]
+    lines = [header, "|" + "---|" * 16]
     for name, result, feasible in rows:
         lines.append(
             f"| {name} | {result['batches']} | {result['jobs']} | "
@@ -227,9 +233,46 @@ def format_table(rows: list[tuple[str, dict[str, Any], bool]]) -> str:
             f"{_stats(result['detect_hours'])} | {_stats(result['surface_hours'])} | "
             f"{_stats(result['detect_pushes'])} | "
             f"{(result['window_pushes']['mean'] or 0):.1f} | {result['merged']} | "
+            f"{_stats(result.get('detect_ci_hours'))} | "
+            f"{_stats(result.get('surface_ci_hours'))} | "
+            f"{_stats(result.get('identify_hours'))} | "
+            f"{result.get('backfill_jobs', '-')} | "
             f"{'yes' if feasible else 'NO'} |"
         )
     return "\n".join(lines)
+
+
+def ci_settings(args: argparse.Namespace) -> sim.CiSettings | None:
+    """The CI replay settings from ``--capacity`` and its companions, or None."""
+    if not getattr(args, "capacity", None):
+        if args.latency in ("detect_ci", "identify") or (
+            getattr(args, "cost", "jobs") == "total_jobs"
+        ):
+            raise SystemExit(
+                f"--latency {args.latency} / --cost total_jobs need --capacity"
+            )
+        return None
+    model = sim.CapacityModel.load(args.capacity)
+    logger.info(
+        "CI capacity model: %d pools, %d labels, build fallback %.0f min, backfill %s, alerting %s (%d retriggers)",
+        len(model.pools),
+        len(model.labels),
+        args.build_minutes,
+        args.backfill,
+        args.alerting,
+        args.confirm_retriggers,
+    )
+    return sim.CiSettings(
+        model,
+        args.build_minutes,
+        args.backfill,
+        args.sheriff_delay_minutes,
+        args.capacity_scale,
+        record_waits=args.op == "validate-capacity",
+        alerting=args.alerting,
+        confirm_retriggers=args.confirm_retriggers,
+        backfill_builds=args.backfill_builds,
+    )
 
 
 def cmd_simulate(args: argparse.Namespace) -> None:
@@ -252,19 +295,21 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     timeline, calibration = calibrate_timeline(
         timeline, args.calibration or "fit", risks, version, window, fit_on="before"
     )
+    ci = ci_settings(args)
 
     baseline = sim.run(
         production(timeline, args.baseline),
         timeline,
         [window],
         args.bootstrap,
+        ci,
     )[0]
     rows: list[tuple[str, dict[str, Any], bool]] = [("production", baseline, True)]
     for spec in specs:
         if spec == "production":
             continue
         strategy = resolve_strategy(spec, timeline, args.baseline)
-        result = sim.run(strategy, timeline, [window], args.bootstrap)[0]
+        result = sim.run(strategy, timeline, [window], args.bootstrap, ci)[0]
         rows.append((strategy.name, result, sim.is_feasible(result, baseline)))
 
     print(format_table(rows))
@@ -339,11 +384,13 @@ def cmd_optimize(args: argparse.Namespace) -> None:
     timeline, calibration = calibrate_timeline(
         timeline, args.calibration or "fit", risks, version, optimize_window
     )
+    ci = ci_settings(args)
     baseline_optimize, baseline_eval = sim.run(
         production(timeline, args.baseline),
         timeline,
         [optimize_window, eval_window],
         args.bootstrap,
+        ci,
     )
     baseline_objectives = sim.objectives(
         baseline_optimize, args.cost, args.latency, args.statistic
@@ -361,6 +408,20 @@ def cmd_optimize(args: argparse.Namespace) -> None:
             "seed": args.seed,
             "baseline": args.baseline,
             "calibration": calibration,
+            "ci": (
+                {
+                    "capacity": args.capacity,
+                    "build_minutes": args.build_minutes,
+                    "backfill": args.backfill,
+                    "sheriff_delay_minutes": args.sheriff_delay_minutes,
+                    "capacity_scale": args.capacity_scale,
+                    "alerting": args.alerting,
+                    "confirm_retriggers": args.confirm_retriggers,
+                    "backfill_builds": args.backfill_builds,
+                }
+                if ci
+                else None
+            ),
             "optimize_window": baseline_optimize["window"],
             "eval_window": baseline_eval["window"],
         },
@@ -403,6 +464,8 @@ def cmd_optimize(args: argparse.Namespace) -> None:
             args.cost,
             args.latency,
             args.statistic,
+            ci,
+            args.max_cost_ratio,
         )
         points = sim.pareto_points(study)
         rows = sim.evaluate_points(
@@ -414,6 +477,7 @@ def cmd_optimize(args: argparse.Namespace) -> None:
             args.latency,
             args.bootstrap,
             args.statistic,
+            ci,
         )
         picks = sim.matching_points(rows, baseline_objectives)
         pruned = sim.pruned_trials(study)
@@ -471,7 +535,183 @@ def cmd_optimize(args: argparse.Namespace) -> None:
         logger.info("Wrote %s", args.markdown)
 
 
+def cmd_fetch_capacity(args: argparse.Namespace) -> None:
+    client = redash.RedashClient(redash.get_redash_api_key())
+    until = args.until or datetime.now(timezone.utc)
+    model = sim.fetch_capacity(
+        client,
+        extraction.BIGQUERY_DATA_SOURCE_ID,
+        args.since,
+        until,
+        args.min_share,
+        not args.no_list_workers,
+    )
+    model.save(args.output)
+    print(
+        "| pool | workers by month (first, last) | listed now | autoland perf runs/day | observed wait p50/p90 min | run p50/p90 min | background busy (mean) |"
+    )
+    print("|---|---|---|---|---|---|---|")
+    for name, pool in sorted(model.pools.items(), key=lambda kv: -kv[1].runs_per_day):
+        months = sorted(pool.workers_by_month)
+        busy = model.background.get(name, {})
+        print(
+            f"| {name} | {pool.workers_by_month.get(months[0]) if months else '-'} ({months[0] if months else '-'}), "
+            f"{pool.workers_by_month.get(months[-1]) if months else '-'} ({months[-1] if months else '-'}) | "
+            f"{pool.listed_workers} | {pool.runs_per_day:.0f} | "
+            f"{pool.observed_wait_minutes.get('p50', 0):.0f} / {pool.observed_wait_minutes.get('p90', 0):.0f} | "
+            f"{pool.observed_run_minutes.get('p50', 0):.0f} / {pool.observed_run_minutes.get('p90', 0):.0f} | "
+            f"{(sum(busy.values()) / len(busy)) if busy else 0:.1f} |"
+        )
+    logger.info("Wrote %s: %d labels", args.output, len(model.labels))
+
+
+def cmd_validate_capacity(args: argparse.Namespace) -> None:
+    """Replay production through the model and compare its waits with the observed ones.
+
+    With ``--fit-scales`` each pool's scale is first fitted to the observed
+    median wait and written back into the capacity file.
+    """
+    timeline, _, _ = load_timeline(False, None, None, args.since)
+    since, until = sim.default_bounds(timeline)
+    window = sim.Window(args.since or since, args.until or until)
+    if args.warmup_pushes and len(timeline.pushes) > args.warmup_pushes:
+        window = sim.Window(
+            max(window.start, timeline.pushes[args.warmup_pushes].time), window.end
+        )
+    ci = ci_settings(args)
+    assert ci is not None
+    strategy = production(timeline, args.baseline)
+    schedule = sim.replay(strategy, timeline)
+    detections = sim.detect(schedule, timeline)
+    if args.fit_scales:
+        fitted = sim.calibrate_scales(ci.model, schedule, timeline, detections, ci)
+        ci.model.save(args.capacity)
+        logger.info("Fitted %d pool scales into %s", len(fitted), args.capacity)
+    result = sim.simulate_ci(schedule, timeline, detections, ci)
+    metrics = sim.evaluate(timeline, schedule, detections, window, 0, result)
+    pushes_in_window = [p for p in timeline.pushes if window.contains(p.time)]
+    print(
+        f"Production ({args.baseline}) on {window.start:%Y-%m-%d} to {window.end:%Y-%m-%d}: "
+        f"{metrics['batches']} batches, {metrics['jobs']} jobs, {result.unknown_labels} runs "
+        f"of labels with no pool dropped, {metrics['backfill_jobs']} backfill jobs for "
+        f"{metrics['regressions']} regressions.\n"
+        f"Detect hours at push time {metrics['detect_hours']['mean']:.2f}, at run completion "
+        f"{metrics['detect_ci_hours']['mean']:.2f}; alert ({args.alerting}) at {metrics['surface_ci_hours']['mean']:.2f} h "
+        f"over {metrics['surfaced_ci']} alerted; identify hours {metrics['identify_hours']['mean']:.2f} "
+        f"over {metrics['identified']} identified; {metrics['confirm_jobs']} confirming runs.\n"
+    )
+    print(
+        "| pool | workers (window end) | scale | eligible min | build share | listed now | observed autoland wait p50/p90 min | simulated wait p50/p90 min (batches) | simulated p50/p90 (backfills) | scheduled runs | utilization by our runs | background busy (mean) |"
+    )
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    end = pushes_in_window[-1].time if pushes_in_window else timeline.end
+    for name, pool in sorted(
+        ci.model.pools.items(), key=lambda kv: -kv[1].runs_per_day
+    ):
+        waits = sorted(result.waits.get(name, []))
+        sim_p50 = waits[len(waits) // 2] if waits else float("nan")
+        sim_p90 = (
+            waits[min(len(waits) - 1, int(0.9 * len(waits)))] if waits else float("nan")
+        )
+        backfills = sorted(result.backfill_waits.get(name, []))
+        bf_p50 = backfills[len(backfills) // 2] if backfills else float("nan")
+        bf_p90 = (
+            backfills[min(len(backfills) - 1, int(0.9 * len(backfills)))]
+            if backfills
+            else float("nan")
+        )
+        busy = ci.model.background.get(name, {})
+        print(
+            f"| {name} | {pool.workers_at(end)} | {pool.scale:.2f} | "
+            f"{pool.eligible_minutes if pool.eligible_minutes is None else round(pool.eligible_minutes)} | "
+            f"{'-' if pool.build_share is None else f'{100 * pool.build_share:.0f}%'} | {pool.listed_workers} | "
+            f"{pool.observed_wait_minutes.get('p50', 0):.0f} / {pool.observed_wait_minutes.get('p90', 0):.0f} | "
+            f"{sim_p50:.0f} / {sim_p90:.0f} | {bf_p50:.0f} / {bf_p90:.0f} | {len(waits)} | {100 * result.utilization[name]:.0f}% | "
+            f"{(sum(busy.values()) / len(busy)) if busy else 0:.1f} |"
+        )
+    fractions = _recorded_backfill_fractions(timeline, window)
+    if fractions:
+        print(
+            f"\nRecorded sheriff backfills on {len(fractions)} labeled regressions: a mean "
+            f"{100 * statistics.fmean(fractions):.0f}% of the pushes between the full runs "
+            f"around the culprit got the regressed label run; {sum(1 for f in fractions if f > 0)} "
+            f"regressions had any."
+        )
+
+
+def _recorded_backfill_fractions(
+    timeline: sim.Timeline, window: sim.Window
+) -> list[float]:
+    """Share of pushes between the recorded full runs around each culprit that ran a regressed label."""
+    full = [p.index for p in timeline.pushes if p.full_suite]
+    fractions = []
+    for regression in timeline.regressions:
+        if not regression.labels or not window.contains(regression.time):
+            continue
+        position = bisect.bisect_left(full, regression.push_index)
+        if position == 0 or position >= len(full):
+            continue
+        previous, detecting = full[position - 1], full[position]
+        between = [
+            timeline.pushes[i]
+            for i in range(previous + 1, detecting)
+            if not timeline.pushes[i].dontbuild
+        ]
+        if not between:
+            continue
+        ran = sum(1 for p in between if regression.labels & p.ran_labels)
+        fractions.append(ran / len(between))
+    return fractions
+
+
 def _add_common(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--capacity",
+        metavar="PATH",
+        help="CI capacity model written by fetch-capacity. Replays every run through one FIFO queue per worker pool, eligible --build-minutes after the push, then the sheriff's backfills, and adds the detect_ci and identify latencies and the total_jobs cost.",
+    )
+    parser.add_argument(
+        "--build-minutes",
+        type=float,
+        default=sim.capacity.DEFAULT_BUILD_MINUTES,
+        help="Minutes from a push to its tests becoming eligible: the build. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--backfill",
+        choices=["all", "none"],
+        default="all",
+        help="With --capacity: backfill the regressed labels on every push between the previous run and the catching one once a regression is caught, or not at all. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--capacity-scale",
+        type=float,
+        default=1.0,
+        help="With --capacity: share of each pool's workers effectively serving, to match the observed queue waits (validate-capacity). Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--alerting",
+        choices=["fore_window", "retrigger", "detection"],
+        default="fore_window",
+        help="With --capacity: when the alert that starts the sheriff's backfills is raised. fore_window (default): once 12 runs after the culprit have completed, as Perfherder does today. retrigger: once the first data point is confirmed by --confirm-retriggers more runs of the detecting test on the same push, every suspicion assumed right. detection: at the first data point, an upper bound.",
+    )
+    parser.add_argument(
+        "--confirm-retriggers",
+        type=int,
+        default=12,
+        help="With --alerting retrigger: runs of the detecting test on the detecting push that confirm a suspicion. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--backfill-builds",
+        choices=["measured", "always"],
+        default="measured",
+        help="With --capacity: whether a backfill on a push the schedule ran nothing on finds a shippable build. measured (default): with the pool's measured share of such pushes that have one, decided by a stable draw per push. always: never, so every such backfill builds first.",
+    )
+    parser.add_argument(
+        "--sheriff-delay-minutes",
+        type=float,
+        default=0.0,
+        help="With --capacity: minutes between the catching run completing and the backfills being triggered. Default: %(default)s.",
+    )
     parser.add_argument(
         "--since",
         type=parse_timestamp,
@@ -492,9 +732,17 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--latency",
-        choices=["detect", "surface", "detect_pushes", "window_pushes"],
+        choices=[
+            "detect",
+            "surface",
+            "detect_pushes",
+            "window_pushes",
+            "detect_ci",
+            "surface_ci",
+            "identify",
+        ],
         default="detect",
-        help="Latency to optimize: hours until the first run after the culprit (default), which a schedule controls; hours until Perfherder would alert, which mostly restates sparsity; pushes from the culprit to the detecting run, which quiet hours do not inflate; or pushes from the previous run to the detecting one, what a sheriff bisects. All are always reported.",
+        help="Latency to optimize: hours until the first run after the culprit (default), which a schedule controls; hours until Perfherder would alert, which mostly restates sparsity; pushes from the culprit to the detecting run, which quiet hours do not inflate; pushes from the previous run to the detecting one, what a sheriff bisects; or, with --capacity, hours until the catching run completes (detect_ci), until the alert is raised (surface_ci) or until the backfills pin the culprit (identify). All are always reported.",
     )
     parser.add_argument(
         "--bootstrap",
@@ -575,20 +823,67 @@ def main() -> None:
     optimize.add_argument("--seed", type=int, default=0, help="Sampler seed.")
     optimize.add_argument(
         "--cost",
-        choices=["jobs", "batches"],
+        choices=["jobs", "batches", "total_jobs"],
         default="jobs",
-        help="Cost objective: jobs counts every task run, a batch as the size of the suite at the time and production's expanded runs as well; batches counts full-suite runs only. Default: %(default)s.",
+        help="Cost objective: jobs counts every task run, a batch as the size of the suite at the time and production's expanded runs as well; batches counts full-suite runs only; total_jobs, with --capacity, adds the sheriff's backfills. Default: %(default)s.",
+    )
+    optimize.add_argument(
+        "--max-cost-ratio",
+        type=float,
+        default=None,
+        help="With --capacity: prune trials whose plain job count exceeds this multiple of production's before the CI replay, which dense schedules make slow. Default: no limit.",
     )
     optimize.add_argument(
         "--markdown", metavar="PATH", help="Write the summary table as markdown."
     )
     _add_common(optimize)
 
+    fetch = subparsers.add_parser(
+        "fetch-capacity",
+        help="Build the CI capacity model from the fxci dataset: pools, label run times, background load.",
+    )
+    fetch.add_argument("--since", type=parse_timestamp, required=True, metavar="DATE")
+    fetch.add_argument(
+        "--until",
+        type=parse_timestamp,
+        metavar="DATE",
+        help="Default: now. Use the span of the pushes you will replay.",
+    )
+    fetch.add_argument(
+        "--min-share",
+        type=float,
+        default=0.005,
+        help="Keep pools carrying at least this share of autoland perf runs. Default: %(default)s.",
+    )
+    fetch.add_argument(
+        "--no-list-workers",
+        action="store_true",
+        help="Skip the Taskcluster queue's current worker listing.",
+    )
+    fetch.add_argument("--output", metavar="PATH", required=True)
+
+    validate = subparsers.add_parser(
+        "validate-capacity",
+        help="Replay production through the capacity model and compare simulated queue waits with the observed ones.",
+    )
+    validate.add_argument(
+        "--fit-scales",
+        action="store_true",
+        help="Fit each pool's effective share of workers to the observed median wait and save it into the capacity file.",
+    )
+    _add_common(validate)
+
     args = parser.parse_args()
     if args.op == "simulate":
         cmd_simulate(args)
-    else:
+    elif args.op == "optimize":
         cmd_optimize(args)
+    elif args.op == "fetch-capacity":
+        cmd_fetch_capacity(args)
+    else:
+        if not args.capacity:
+            parser.error("validate-capacity needs --capacity")
+        cmd_validate_capacity(args)
 
 
 if __name__ == "__main__":

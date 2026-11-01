@@ -12,19 +12,34 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
+from bugbug.perf.simulation.capacity import CiResult
 from bugbug.perf.simulation.detection import Detection, Schedule
 from bugbug.perf.simulation.strategies import ALL
 from bugbug.perf.simulation.timeline import Timeline
 
-Latency = Literal["surface", "detect", "detect_pushes", "window_pushes"]
-# Metric key of each latency and the unit it is counted in.
+Latency = Literal[
+    "surface",
+    "detect",
+    "detect_pushes",
+    "window_pushes",
+    "detect_ci",
+    "surface_ci",
+    "identify",
+]
+# Metric key of each latency and the unit it is counted in. The last three
+# need the CI capacity model: detection at the completion of the catching run,
+# the alert under the replay's alerting mode, and identification once the
+# sheriff's backfills pin the culprit.
 LATENCY_KEYS: dict[str, tuple[str, str]] = {
     "detect": ("detect_hours", "hours"),
     "surface": ("surface_hours", "hours"),
     "detect_pushes": ("detect_pushes", "pushes"),
     "window_pushes": ("window_pushes", "pushes"),
+    "detect_ci": ("detect_ci_hours", "hours"),
+    "surface_ci": ("surface_ci_hours", "hours"),
+    "identify": ("identify_hours", "hours"),
 }
-Cost = Literal["batches", "jobs"]
+Cost = Literal["batches", "jobs", "total_jobs"]
 Statistic = Literal["mean", "median", "p90", "max"]
 
 
@@ -70,6 +85,7 @@ def evaluate(
     detections: list[Detection],
     window: Window,
     bootstrap_samples: int = 0,
+    ci: CiResult | None = None,
 ) -> dict[str, Any]:
     """Measure a schedule on the pushes and regressions whose time falls in ``window``.
 
@@ -77,7 +93,13 @@ def evaluate(
     covers the regressions whose culprit landed in the window, wherever they
     were caught: ``detect_hours`` is the time to the first run after the
     culprit and ``surface_hours`` the time until Perfherder would alert, over
-    the regressions where that run exists in the timeline.
+    the regressions where that run exists in the timeline. With a CI replay
+    ``ci``, ``detect_ci_hours`` runs to the completion of the catching run,
+    ``surface_ci_hours`` to the alert under the replay's alerting mode and
+    ``identify_hours`` to the sheriff's backfills pinning the culprit;
+    ``backfill_jobs`` and ``confirm_jobs`` count those backfills and the
+    confirming retriggers, and ``total_jobs`` adds both to the schedule's
+    own jobs.
     """
     indices = [push.index for push in timeline.pushes if window.contains(push.time)]
     batch_indices = [i for i in indices if schedule.decisions[i] == ALL]
@@ -134,6 +156,46 @@ def evaluate(
         result["window_pushes"]["mean_ci95"] = bootstrap_mean(
             window_pushes, bootstrap_samples
         )
+    if ci is not None:
+        detect_ci = [
+            (
+                ci.detect_time[d.regression.summary_id] - d.regression.time
+            ).total_seconds()
+            / 3600
+            for d in detected
+            if d.regression.summary_id in ci.detect_time
+        ]
+        surface_ci = [
+            (when - d.regression.time).total_seconds() / 3600
+            for d in detected
+            if (when := ci.surface_time.get(d.regression.summary_id)) is not None
+        ]
+        identify = [
+            (when - d.regression.time).total_seconds() / 3600
+            for d in detected
+            if (when := ci.identify_time.get(d.regression.summary_id)) is not None
+        ]
+        backfills = sum(
+            ci.backfill_jobs.get(d.regression.summary_id, 0) for d in selected
+        )
+        confirms = sum(
+            ci.confirm_jobs.get(d.regression.summary_id, 0) for d in selected
+        )
+        result["detect_ci_hours"] = _summary(detect_ci)
+        result["surface_ci_hours"] = _summary(surface_ci)
+        result["surfaced_ci"] = len(surface_ci)
+        result["identify_hours"] = _summary(identify)
+        result["identified"] = len(identify)
+        result["backfill_jobs"] = backfills
+        result["confirm_jobs"] = confirms
+        result["total_jobs"] = jobs + backfills + confirms
+        if bootstrap_samples:
+            for key, values in (
+                ("detect_ci_hours", detect_ci),
+                ("surface_ci_hours", surface_ci),
+                ("identify_hours", identify),
+            ):
+                result[key]["mean_ci95"] = bootstrap_mean(values, bootstrap_samples)
     return result
 
 
@@ -165,5 +227,10 @@ def objectives(
     counts the pushes from the culprit to the detecting run and ``window_pushes``
     the pushes a sheriff bisects, from the previous run to the detecting one.
     """
-    value = result[latency_key(latency)][statistic]
+    key = latency_key(latency)
+    if key not in result or cost not in result:
+        raise ValueError(
+            f"{latency} and total_jobs need the CI capacity model; pass --capacity"
+        )
+    value = result[key][statistic]
     return float(result[cost]), float("inf") if value is None else float(value)

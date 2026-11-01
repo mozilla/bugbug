@@ -129,6 +129,77 @@ history, for both windows, so that they stay comparable. Detection rate is a har
 objective: a strategy that runs nothing has zero cost and no latency to
 measure, and would otherwise win.
 
+### CI capacity
+
+Detection above is stamped at the push time of the catching run, as if
+results appeared the moment a batch is scheduled. A batch is a burst: the
+whole suite lands at once on pools that are mostly fixed hardware, so results
+arrive as workers free up, and a sheriff then backfills the pushes in
+between to find the culprit on the same pools. `capacity.py` models that.
+
+`CapacityModel` holds, per worker pool, the distinct workers it used each
+month, the observed queue waits and run times of autoland's perf runs, and
+the hourly occupancy of the pool by everything that is not autoland perf
+work, which a strategy replaces; per label, the pool it runs on and its
+median run time. `fetch-capacity` builds it from the fxci dataset in
+BigQuery through the STMO data source, over the span of the pushes to be
+replayed, keeping the pools that carry at least `--min-share` of autoland
+perf runs, and records the Taskcluster queue's current worker listing for
+reference. Labels the model has not seen take the pool their platform's
+other labels use and that pool's typical run time.
+
+`simulate_ci` replays a schedule through one FIFO queue per pool: every run
+of a batch becomes eligible a build time after its push, the pool's measured
+median from the decision task to its perf tests becoming pending, or
+`--build-minutes` for a pool without one; it takes a worker when one of the
+pool's workers is free of other work, and completes after the label's run
+time. A regression is detected at the completion of the detecting label's
+run on the detecting push, or at the median completion of that batch when
+the regression names no label.
+
+The alert that puts a sheriff to work comes later, and `--alerting` says
+when. `fore_window`, the default, is Perfherder today: the alert needs
+`FORE_WINDOW` (12) runs after the culprit, so it is raised when the 12th
+run completes. `retrigger` models a proposed change: the first data point
+is confirmed by `--confirm-retriggers` (12) more runs of the detecting test
+on the same push, and the alert is raised when they complete; every
+suspicion is assumed right, so the retriggers are only spent on real
+regressions. `detection` raises the alert at the first data point, an upper
+bound on how fast anyone could react. At the alert, with `--backfill all`,
+the regressed labels are submitted on every push between the previous run
+and the detecting one that has no data and is not DONTBUILD, after
+`--sheriff-delay-minutes`. Autoland builds a push only when something
+scheduled on it needs the build. A backfill on a push the schedule ran
+nothing on therefore finds a build only if other tests on the push needed
+one, which the replay cannot see; `fetch-capacity` measures, per pool, the
+share of pushes without a full perf suite that carry the pool's shippable
+build, and `--backfill-builds measured` (the default) decides each such push
+by a stable draw against that share, so the same push gets the same answer
+under every strategy. Without a build the backfill builds first and waits
+the pool's eligible time; `--backfill-builds always` charges every such
+backfill the build, a pessimistic bound. The culprit
+counts as identified when the culprit push and the push before it both have
+data for one regressed label. The pushes dataset shows sheriffs do backfill
+nearly the whole window, so that is the default; `--backfill none` leaves
+them out.
+
+With `--capacity PATH` on `simulate` or `optimize`, `evaluate` adds
+`detect_ci_hours`, `surface_ci_hours`, `identify_hours`, `backfill_jobs`,
+`confirm_jobs` and `total_jobs` (the schedule's jobs plus backfills and
+retriggers), and `--latency detect_ci`, `--latency surface_ci`,
+`--latency identify` and `--cost total_jobs` optimize on them.
+
+The model is optimistic on its own: workers seen in a month include machines
+down part of it, and hourly background averages smooth the bursts other
+projects cause. `validate-capacity` replays production through the model and
+prints, per pool, the observed and replayed wait quantiles, the share of the
+window the schedule's runs occupy and the recorded backfill behavior;
+`--fit-scales` first fits each pool's effective share of workers so the
+replayed median wait matches the observed one, saving the scales into the
+capacity file. Tail waits stay under the observed ones even then, since the
+bursts behind them are not modeled; comparisons between strategies, which all
+go through the same queues, are the intended use.
+
 ### Windows and optimization
 
 `make_windows` (`splits.py`) cuts the history chronologically at
@@ -266,6 +337,11 @@ agreement from the first time-triggered backstop on.
   evaluation replace every perf cadence at once.
 - Cost is job counts. Machine time per worker pool is available through
   `task_costs.py` and could replace it.
+- The CI capacity model has one FIFO queue per pool with hourly background
+  occupancy, a median build time per pool, no retriggers for noise and no
+  sheriff reaction time; it reproduces median waits once fitted, not the
+  tails. Regressions whose alert named no task label cannot be backfilled or
+  retriggered, so they count as identified at their alert.
 - Perfherder's alert threshold and the merging of nearby changes are not
   modeled; surfacing assumes one value per run per signature and no
   retriggers.
