@@ -15,6 +15,8 @@ import sentry_sdk
 from app.action_handlers.base import ActionResult, ApplyContext
 from app.config import settings
 
+_SENTRY_LEVELS = {"high": "error", "medium": "warning", "low": "info"}
+
 
 @cache
 def _client() -> sentry_sdk.Client:
@@ -28,7 +30,7 @@ class ReportProblemHandler:
         event_id = _client().capture_event(
             {
                 "message": params["title"],
-                "level": params["severity"],
+                "level": _SENTRY_LEVELS[params["severity"]],
                 "tags": {
                     "kind": "agent_feedback",
                     "agent": ctx.agent,

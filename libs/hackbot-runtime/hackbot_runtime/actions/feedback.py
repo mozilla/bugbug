@@ -19,8 +19,14 @@ ACTION_TYPE = "feedback.report_problem"
 async def report_problem(
     recorder: ActionsRecorder,
     severity: Annotated[
-        Literal["info", "warning", "error"],
-        Field(description="How much the problem gets in the way of your task."),
+        Literal["high", "medium", "low"],
+        Field(
+            description=(
+                "How much the problem affected your task: 'high' if it blocked "
+                "you from finishing, 'medium' if you finished with a workaround "
+                "or a worse result, 'low' if it was minor friction."
+            )
+        ),
     ],
     title: Annotated[
         str,

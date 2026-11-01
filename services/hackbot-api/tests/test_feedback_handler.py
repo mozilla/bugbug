@@ -18,7 +18,7 @@ async def test_report_is_sent_to_sentry_grouped_by_title(monkeypatch):
 
     result = await feedback_handler.ReportProblemHandler().apply(
         {
-            "severity": "warning",
+            "severity": "medium",
             "title": "No tool to read bug history",
             "message": "Needed it to see who changed the priority.",
         },
