@@ -74,6 +74,7 @@ async def checkout_revision(
     ctx: HackbotContext,
     revision_id: int,
     broker_url: str,
+    depth: int | None = None,
 ) -> None:
     """Prepare the source so it matches ``D<revision_id>`` before the agent runs.
 
@@ -90,7 +91,7 @@ async def checkout_revision(
 
     # Prepare the checkout explicitly at the stack's base commit. Must run
     # before anything else touches the source (prepare_repo raises otherwise).
-    repo = await ctx.prepare_repo(ref=stack.base_commit)
+    repo = await ctx.prepare_repo(ref=stack.base_commit, depth=depth)
     log.info(
         "Checking out D%s (base %s) before running the agent",
         revision_id,

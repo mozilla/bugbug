@@ -1,7 +1,10 @@
 # Test Repair Agent
 
-Two-stage Claude agent that finds the commit which regressed a failing Firefox CI
-test, or identifies the failure as a known intermittent, and proposes a fix. Agent
+Read-only Claude agent that decides whether sheriffs should back out a commit for a
+failing Firefox CI test: it finds the commit that regressed it, or identifies the
+failure as a known intermittent, and reports the root cause behind the
+recommendation. A blamed culprit is handed
+on to [test-repair-fix](../test-repair-fix/README.md), which proposes the patch. Agent
 logic in `hackbot_agents/test_repair/`.
 
 Run the Docker command below from the repo root, with secrets in a local `.env`
@@ -25,84 +28,58 @@ The agent gets the range (`base..head`), not a list of shas, and narrows it itse
 with `git log`. When the range is not known to reach a green run it is passed as
 `HEAD~N..HEAD` and the prompt stops asserting the culprit is in it.
 
-## Stages
+## Handing off the fix
 
-Stage 1 (analysis) is read-only and always runs. Stage 2 (fix) runs whenever
-stage 1 blamed a commit.
-
-By default the fix stage does not build (`SKIP_FIREFOX_BUILD`): the patch is
-written but never compiled or run, and is reported as unverified. With
-`SKIP_FIREFOX_BUILD=false` it writes a mozconfig mirroring the failing CI build
-(debug/opt, plus asan/tsan/ccov), runs `mach bootstrap`, builds, and runs the
-failing tests with mach. The container is Linux, so for a Windows or Mac failure a
-failure here is evidence the patch is wrong while a pass proves nothing.
+The analysis never edits the tree, builds or plans a fix. When it blames a culprit,
+the model calls the `agents.start_run` action for `test-repair-fix`, the only agent it
+may start, which works out the fix from the root cause. hackbot-api starts that run
+once this one has succeeded, so the verdict reaches sheriffs without waiting for a
+patch. A hand-off without a resolved culprit is dropped.
 
 ## Input
 
 - `FAILURE_TASKS` - failed Taskcluster test tasks,
   `{task_name: taskcluster_task_id}`. Everything else is resolved from the first
   task id.
-- `SKIP_FIREFOX_BUILD` (optional, default from `config.SKIP_FIREFOX_BUILD`) - skip
-  the build and report the patch as unverified.
 
 ## Output
 
-Stage 1:
+For sheriffs, deciding the backout:
 
 - `summary.md` - 2-3 sentences: the action, the fact that settles it, what failed
-- `analysis.md` - verdict, failure, cause and alternatives ruled out, under a page
+- `analysis.md` - a brief technical analysis: verdict, failure, cause and
+  alternatives ruled out, under 30 lines
+- `investigation.json` - the task id and the resolved investigation
 - `verdict.json` - `classification` (`regression` / `intermittent`),
-  `culprit_commit`, `candidate_commits`, `culprit_bug`, `intermittent_bug`,
-  `recommendation` (`backout` / `do_not_backout` / `rerun`) and `confidence`
+  `culprit_commit`, `candidate_commits`, `intermittent_bug`, `recommendation`
+  (`backout` / `do_not_backout` / `rerun`) and `confidence`; `culprit_bug` is read
+  off the culprit's commit subject;
+  the same fields land in `summary.json`'s `findings`
+
+On a hand-off, `verdict.json` and the failure logs (`logs/**/live_backing_log*`) are
+published too, for the fix run.
 
 `recommendation` is the action for the sheriff, so a genuine regression is always
-`backout`. A patch is reported separately, via `proposed_patch`, as advice for the
-developer to squash into their existing patches and reland.
-
-Stage 2:
-
-- A patch in Hackbot format
-
-## Submitting the patch
-
-The fix stage runs on a checkout of the culprit commit itself, so the patch is a
-change to that commit. When the culprit's bug is known -- `culprit_bug` from the
-verdict, else the bug named in the culprit's commit subject -- it records a
-`phabricator.submit_patch` action in `summary.json`: a WIP revision carrying the
-patch, stacked as a child of the culprit's own revision when its commit footer names
-one (`parent_revision_id`). Nothing reaches Phabricator during the run, and nothing is
-posted to the bug.
-
-A regression is always backed out, so the revision is not meant to land: the author
-applies the action from the Hackbot UI, pulls their revision and the child with
-`moz-phab patch`, squashes the fix in, resubmits and relands -- the email spells out
-the steps. Unlike the notifications below, the action waits for a human -- see
-`always_apply_actions` in [`agents.py`](../../services/hackbot-api/app/agents.py).
-Runs without an actions recorder, or whose culprit names no bug, produce the patch
-but record no revision.
+`backout`.
 
 ## Notifications
 
 A run whose verdict a sheriff has to act on records a `slack.post_message` action
 carrying it -- the recommendation, the classification and confidence, the failing job
 (linked to the push in Treeherder), the culprit or the candidates that could not be
-ruled out, and whether a patch is attached. A known intermittent -- `intermittent`
-classified `do_not_backout` -- is not posted: it asks nothing of a sheriff and is the
+ruled out. A known intermittent -- `intermittent` classified `do_not_backout` -- is
+not posted: it asks nothing of a sheriff and is the
 majority verdict, so it would be noise. An intermittent recommending `rerun` is still
 posted, since the retrigger is the sheriff's to run.
 
-Every verdict also records an `email.send` action carrying the full analysis and the
-proposed patch, for the hackbot team to track what the agent decided -- unfiltered. When
-the run proposed a patch, the culprit commit's author is addressed too, so they can
-squash it into their patches and reland (see `recipients` in
-[notify.py](hackbot_agents/test_repair/notify.py)); the team is copied apply-side.
-Treeherder is re-read just before it is recorded and the email shows the job's current
-classification. The author is not addressed while the job is classified intermittent.
+Every verdict also records an `email.send` action carrying the full analysis, for the
+hackbot team to track what the agent decided -- unfiltered. Treeherder is re-read just
+before it is recorded and the email shows the job's current classification. The
+culprit's author hears from the test-repair-fix run, which has a patch for them.
 
 Both are delivered by the apply step, not from the run, so they are visible in the
-hackbot UI before they land and are delivered at most once. Both always apply, so a
-succeeded run reports without waiting for a human; when a revision is pending, the
-email says how to apply it.
+hackbot UI before they land and are delivered at most once. Both always apply, as does
+the hand-off, so a succeeded run reports without waiting for a human.
 
 ## Test the agent
 

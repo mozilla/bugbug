@@ -53,7 +53,7 @@ steps:
       - |
         set -euo pipefail
         for env in dev stage; do
-          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy hackbot-api --env "$$env" --image "$$(cat /workspace/image.digest)"
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy services/hackbot-api --env "$$env" --image "$$(cat /workspace/image.digest)"
         done
 
   # After the deploy, so a Sentry outage can't hold one up.

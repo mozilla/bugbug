@@ -5,7 +5,9 @@ WORKDIR /app
 COPY services/hackbot-ui/package.json services/hackbot-ui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-FROM node:26-slim AS builder
+# Not slim: sentry-cli (used by the Sentry build plugin to upload source maps)
+# verifies TLS against the system CA store, which the slim image doesn't ship.
+FROM node:26 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY services/hackbot-ui/ .

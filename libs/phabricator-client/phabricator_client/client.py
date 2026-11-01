@@ -193,13 +193,15 @@ class PhabricatorClient:
             if user.get("phid")
         }
 
-    async def get_project_members(self, project_phid: str) -> frozenset[str]:
+    async def get_project_members(self, project_slug: str) -> frozenset[str]:
         """Return the user PHIDs belonging to a Phabricator project."""
         result = await self.conduit_request(
             "project.search",
-            constraints={"phids": [project_phid]},
+            constraints={"slugs": [project_slug]},
             attachments={"members": True},
         )
+        if not result["data"]:
+            raise ValueError(f"No Phabricator project with slug {project_slug!r}")
         members = result["data"][0]["attachments"]["members"]["members"]
         return frozenset(member["phid"] for member in members)
 

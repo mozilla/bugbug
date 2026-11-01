@@ -12,6 +12,7 @@ from app.schemas import (
     BuildRepairInputs,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
+    TestRepairFixInputs,
     TestRepairInputs,
     UpliftInputs,
 )
@@ -118,6 +119,9 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         # marked `auto_apply` qualify. Everything else stays for manual apply.
         auto_apply_actions=True,
         auto_apply_requires_consent=True,
+        # Except the Slack notification: for a held run it is the only signal that
+        # an analysis is waiting, so holding it with the comment hides the run.
+        always_apply_actions=frozenset({"slack.post_message"}),
     ),
     "test-repair": AgentSpec(
         name="test-repair",
@@ -129,7 +133,20 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-test-repair",
         input_schema=TestRepairInputs,
         auto_apply_actions=False,
-        always_apply_actions=frozenset({"email.send", "slack.post_message"}),
+        always_apply_actions=frozenset(
+            {"email.send", "slack.post_message", "agents.start_run"}
+        ),
+    ),
+    "test-repair-fix": AgentSpec(
+        name="test-repair-fix",
+        description=(
+            "Propose a patch for the regression a test-repair run blamed, for the "
+            "culprit's author to squash into their patch and reland."
+        ),
+        job_name="hackbot-agent-test-repair-fix",
+        input_schema=TestRepairFixInputs,
+        auto_apply_actions=False,
+        always_apply_actions=frozenset({"email.send"}),
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",
@@ -155,7 +172,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description=(
             "Write a Firefox webcompat intervention for a broken-site bug: "
             "confirm the breakage reproduces, write the intervention and a "
-            "test, verify that it fixes the site, and submit a patch."
+            "test, verify that it fixes the site, and submit a patch. Also "
+            "follows up on review comments on revisions it filed."
         ),
         job_name="hackbot-agent-autowebcompat-intervention",
         input_schema=AutowebcompatInterventionInputs,
