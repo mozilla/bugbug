@@ -30,6 +30,7 @@ import contextlib
 import json
 import math
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -775,6 +776,142 @@ def check_profile_analysis(binary, tmp_path, *, native_symbols):
         profiler_cli("stop", session=session, check=False)
 
 
+A11Y_PAGE = (
+    "<!DOCTYPE html><title>Probe page</title>"
+    "<h1>Hackbot heading</h1><button>Hackbot probe</button>"
+)
+
+# The probe page's accessibility tree as AT-SPI clients see it, skipping other
+# documents (the first-run page Firefox may open).
+ATSPI_TREE = """
+import gi
+
+gi.require_version("Atspi", "2.0")
+from gi.repository import Atspi
+
+def walk(node, depth):
+    role, name = node.get_role_name(), node.get_name()
+    if role == "document web" and name != "Probe page":
+        return
+    if depth is None and role == "document web":
+        depth = 0
+    if depth is not None:
+        print("  " * depth + f"{role}: {name}")
+    for i in range(node.get_child_count()):
+        if child := node.get_child_at_index(i):
+            walk(child, None if depth is None else depth + 1)
+
+desktop = Atspi.get_desktop(0)
+for i in range(desktop.get_child_count()):
+    app = desktop.get_child_at_index(i)
+    if app is not None and app.get_name() == "Firefox":
+        walk(app, None)
+"""
+
+
+@contextlib.contextmanager
+def firefox_showing(binary, page, profile, *, env=None):
+    """Firefox started from the agent's shell, showing ``page`` on the display."""
+    profile.mkdir()
+    # Neither the first-run page nor, in its place, the data reporting
+    # notification bar, which would take the focus.
+    (profile / "user.js").write_text(
+        'user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);\n'
+        'user_pref("datareporting.policy.firstRunURL", "");\n'
+    )
+    firefox = subprocess.Popen(
+        [binary, "--no-remote", "--profile", profile, page.as_uri()],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        yield firefox
+    finally:
+        firefox.terminate()
+        firefox.wait()
+
+
+def check_accessibility_tree(binary, tmp_path):
+    """Firefox's accessibility tree, as the agent would inspect it with Atspi."""
+    page = tmp_path / "a11y.html"
+    page.write_text(A11Y_PAGE)
+    # Firefox only exposes its tree when asked to: by this, or by a screen reader
+    # running.
+    env = {**os.environ, "GNOME_ACCESSIBILITY": "1"}
+    with firefox_showing(binary, page, tmp_path / "profile", env=env):
+        for _ in range(60):
+            time.sleep(1)
+            tree = run(["python", "-c", ATSPI_TREE], timeout=60).stdout
+            if "button:" in tree:
+                break
+    assert tree == (
+        "document web: Probe page\n  heading: Hackbot heading\n  button: Hackbot probe\n"
+    )
+
+
+def orca_speech(log):
+    """What Orca said, from its debug log."""
+    if not log.exists():
+        return []
+    return re.findall(r"SPEECH OUTPUT: '(.*)' \{", log.read_text(errors="replace"))
+
+
+def wait_for_speech(log, text, *, after=0, timeout=60):
+    """Wait for Orca to say something containing ``text``, after its first ``after``."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(text in said for said in orca_speech(log)[after:]):
+            return
+        time.sleep(0.5)
+    raise AssertionError(f"Orca didn't say {text!r}, only {orca_speech(log)[after:]}")
+
+
+def check_screen_reader(binary, tmp_path):
+    """The Orca screen reader reads Firefox's pages and follows the keyboard."""
+    page = tmp_path / "a11y.html"
+    page.write_text(A11Y_PAGE)
+    log = tmp_path / "orca.log"
+    # Orca reads pages out once they load, and keys pressed meanwhile stop it,
+    # with the focus left where it got to; only announce what's on the page.
+    prefs = tmp_path / "orca"
+    prefs.mkdir()
+    profile = {"profile": ["Default", "default"], "sayAllOnLoad": False}
+    (prefs / "user-settings.conf").write_text(
+        json.dumps(
+            {
+                "general": {},
+                "pronunciations": {},
+                "keybindings": {},
+                "profiles": {
+                    "default": {**profile, "pronunciations": {}, "keybindings": {}}
+                },
+            }
+        )
+    )
+    orca = subprocess.Popen(
+        ["orca", "--user-prefs", prefs, "--debug-file", log],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        wait_for_speech(log, "Screen reader on.")
+        with firefox_showing(binary, page, tmp_path / "profile"):
+            wait_for_speech(log, "Page has 1 heading.")
+            # Tab to the button, then back to the heading with Orca's own
+            # browse-mode navigation.
+            for key, text in (
+                ("Tab", "Hackbot probe button"),
+                ("h", "Hackbot heading"),
+            ):
+                said = len(orca_speech(log))
+                run(["xdotool", "key", key])
+                wait_for_speech(log, text, after=said)
+    finally:
+        orca.terminate()
+        orca.wait()
+
+
 def test_evaluate_testcase_without_crash(nightly):
     check_testcase_without_crash(nightly)
 
@@ -815,6 +952,14 @@ def test_firefox_content_sandbox(nightly, tmp_path):
 
 def test_firefox_profiler(nightly, tmp_path):
     check_profiler(nightly, tmp_path)
+
+
+def test_firefox_accessibility_tree(nightly, tmp_path):
+    check_accessibility_tree(nightly, tmp_path)
+
+
+def test_screen_reader(nightly, tmp_path):
+    check_screen_reader(nightly, tmp_path)
 
 
 @pytest.fixture
@@ -1031,6 +1176,8 @@ def test_full_build_and_tests(bootstrapped_checkout, tmp_path_factory):
     check_screenshot(fx.binary, tmp_path_factory.mktemp("screenshot"))
     check_content_sandbox(fx.binary, tmp_path_factory.mktemp("sandbox"))
     check_profiler(fx.binary, tmp_path_factory.mktemp("profiler"))
+    check_accessibility_tree(fx.binary, tmp_path_factory.mktemp("a11y"))
+    check_screen_reader(fx.binary, tmp_path_factory.mktemp("screen_reader"))
 
     step("Profiling a page and analyzing the profile")
     check_profile_analysis(

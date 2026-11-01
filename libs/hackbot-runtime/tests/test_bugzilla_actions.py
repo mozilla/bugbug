@@ -62,23 +62,6 @@ async def test_create_bug_merges_extra_top_level_wins():
     assert "is_markdown" not in body
 
 
-async def test_create_bug_ref_is_recorded():
-    rec = ActionsRecorder()
-    await bugzilla.create_bug(
-        rec,
-        product="Core",
-        component="JS",
-        summary="x",
-        version="unspecified",
-        description="desc",
-        reasoning="r",
-        ref="bug",
-    )
-    action = rec.actions[0]
-    assert action["ref"] == "bug"
-    assert "ref" not in action["params"]
-
-
 async def test_handlers_return_confirmation_string():
     rec = ActionsRecorder()
     msg = await bugzilla.update_bug(

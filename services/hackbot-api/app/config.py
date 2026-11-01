@@ -1,7 +1,16 @@
 from typing import Annotated, Literal
 
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from phabricator_client import PhabricatorSettings
-from pydantic import BaseModel, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+)
 from pydantic_settings import BaseSettings
 
 # An HMAC key that must actually be a key. Required alone only rejects a *missing*
@@ -53,6 +62,33 @@ class SlackSettings(BaseModel):
     bot_token: str
 
 
+class GitHubAppSettings(BaseModel):
+    # Never echo the private key back in a validation error.
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    app_id: Annotated[int, Field(gt=0)]
+    private_key: SecretStr
+    # Default installation for callers that don't pass one, e.g. a deployment
+    # that only ever talks to one org.
+    installation_id: Annotated[int | None, Field(gt=0)] = None
+
+    @field_validator("private_key")
+    @classmethod
+    def _check_private_key(cls, value: SecretStr) -> SecretStr:
+        # Env vars and secret stores often flatten the PEM's newlines to "\n".
+        pem = value.get_secret_value().replace("\\n", "\n").strip()
+        try:
+            key = load_pem_private_key(pem.encode(), password=None)
+        except ValueError, TypeError:
+            key = None
+        if not isinstance(key, RSAPrivateKey):
+            raise ValueError(
+                "must be the GitHub App's PEM-encoded RSA private key "
+                "(-----BEGIN RSA PRIVATE KEY----- ...)"
+            )
+        return SecretStr(pem)
+
+
 class Settings(BaseSettings):
     # GCP
     gcp_project: str = ""
@@ -83,6 +119,9 @@ class Settings(BaseSettings):
     external_api_key: str = ""
 
     phabricator: PhabricatorSettings
+
+    # Optional until the GitHub App credentials are deployed.
+    github: GitHubAppSettings | None = None
 
     webhook: WebhookSettings
 
@@ -125,6 +164,7 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",
+        "hide_input_in_errors": True,
         # Populate the nested `phabricator` / webhook models from their prefixed
         # env vars in this single parse.
         # max_split=1 splits only on the first underscore, so PHABRICATOR_API_KEY

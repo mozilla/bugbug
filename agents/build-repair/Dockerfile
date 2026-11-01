@@ -58,6 +58,9 @@ RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
 
+RUN mkdir /builds \
+    && for f in gls-gapi.data sb-gapi.data mozilla-desktop-geoloc-api.key; do echo no-secret > /builds/$f; done
+
 # Not ~/.cargo/bin, where `mach bootstrap` installs the Rust toolchain at runtime:
 # that directory is rustup-managed and inside the agent's HOME, so a root-owned copy
 # made at build time does not belong in it. /usr/local/bin is on PATH for every user
