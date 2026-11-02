@@ -14,6 +14,7 @@ def make_comment(comment_id, count, creator, text="Some text", tags=()):
         "id": comment_id,
         "count": count,
         "creator": creator,
+        "creation_time": f"2024-01-01T00:00:{count:02}Z",
         "text": text,
         "tags": list(tags),
     }
@@ -53,6 +54,22 @@ def test_get_spamcomment_labels(monkeypatch):
     assert classes == {11: 1, 12: 0}
     assert labels == [0, 1]
     assert model.commit_emails == {"dev@example.com"}
+
+    # The extraction pipeline is fitted on the labeled data.
+    commenter_experience = next(
+        fe
+        for fe in model.extraction_pipeline.named_steps[
+            "comment_extractor"
+        ].feature_extractors
+        if isinstance(fe, spamcomment.comment_features.CommenterExperience)
+    )
+    assert set(commenter_experience.comment_times) == {
+        "reporter@example.com",
+        "spammer@example.com",
+        "user@example.com",
+        "dev@example.com",
+        "someone@mozilla.com",
+    }
 
 
 def test_spamcomment_overwrite_classes():

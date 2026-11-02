@@ -42,6 +42,7 @@ class SpamCommentModel(CommentModel):
             comment_features.Weekday(),
             comment_features.UnknownLinkPositions(SAFE_DOMAINS),
             comment_features.CommentCreatorIsBugCreator(),
+            comment_features.CommenterExperience(),
         ]
 
         cleanup_functions = [
@@ -156,6 +157,11 @@ class SpamCommentModel(CommentModel):
         logger.info(
             "%d comments are classified as spam",
             sum(label == 1 for label in classes.values()),
+        )
+
+        # Features like CommenterExperience need to see the whole dataset first.
+        self.extraction_pipeline.fit(
+            lambda: (item for item, _ in self.items_gen(classes))
         )
 
         return classes, [0, 1]

@@ -4,9 +4,11 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import sys
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -91,6 +93,68 @@ class CommentCreatorIsBugCreator(CommentFeature):
         bug, comment = item
 
         return bug["creator"] == comment["creator"]
+
+
+class CommenterExperience(CommentFeature):
+    name = "# of Comments Previously Posted by the Commenter"
+
+    def __init__(self):
+        # During training, the sorted timestamps of the comments of each
+        # commenter. After loading a saved model, only the number of comments.
+        self.comment_times: dict[str, np.ndarray | int] = {}
+
+    @staticmethod
+    def _timestamp(comment) -> int:
+        return int(datetime.fromisoformat(comment["creation_time"]).timestamp())
+
+    def fit(self, items):
+        """Store when each commenter posted their comments.
+
+        All the comments of the bugs in `items` are used, not only the
+        comments in `items`, so that the bug descriptions and the comments
+        that are not part of the dataset are also counted.
+        """
+        seen_bugs = set()
+        comment_times = defaultdict(list)
+
+        for bug, _ in items:
+            if bug["id"] in seen_bugs:
+                continue
+            seen_bugs.add(bug["id"])
+
+            for comment in bug["comments"]:
+                comment_times[comment["creator"]].append(self._timestamp(comment))
+
+        self.comment_times = {
+            creator: np.sort(np.array(times, dtype=np.int64))
+            for creator, times in comment_times.items()
+        }
+
+        return self
+
+    def __getstate__(self):
+        # The comments classified after training are newer than all the comments
+        # seen during training, so we only need to keep the number of comments of
+        # each commenter. This keeps the saved model small.
+        state = self.__dict__.copy()
+        state["comment_times"] = {
+            creator: len(times) if isinstance(times, np.ndarray) else times
+            for creator, times in self.comment_times.items()
+        }
+        return state
+
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
+        times = self.comment_times.get(comment["creator"])
+        if times is None:
+            return 0
+
+        if isinstance(times, int):
+            return times
+
+        # Only count the comments posted before this one.
+        return int(np.searchsorted(times, self._timestamp(comment), side="left"))
 
 
 class NumberOfLinks(CommentFeature):
