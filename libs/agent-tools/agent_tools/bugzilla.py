@@ -6,6 +6,7 @@ proxy-level restrictions (code 101: endpoint not exposed, code 102: access
 denied) as a structured :class:`~agent_tools.registry.ToolError`.
 """
 
+import asyncio
 import base64
 import mimetypes
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from typing import Annotated, Any
 
 import bugsy
 from pydantic import Field
+from requests.adapters import HTTPAdapter
 
 from agent_tools.registry import ToolError, tool, tools_in
 
@@ -173,6 +175,10 @@ def _type_not_allowed_error(
     )
 
 
+# Connections kept per host: the most worker threads that `asyncio.to_thread` runs.
+POOL_SIZE = 32
+
+
 @dataclass
 class BugzillaContext:
     """Holds the live bugsy client.
@@ -182,6 +188,25 @@ class BugzillaContext:
     """
 
     client: bugsy.Bugsy
+    # Seconds before a Bugzilla request fails, or None for no limit. Without one, a
+    # request that hangs holds its worker thread for good.
+    timeout: float | None = None
+
+    def __post_init__(self) -> None:
+        adapter = _BugzillaAdapter(self.timeout, pool_maxsize=POOL_SIZE)
+        self.client.session.mount("https://", adapter)
+        self.client.session.mount("http://", adapter)
+
+
+class _BugzillaAdapter(HTTPAdapter):
+    """A pool for every worker thread, and a timeout for each request with none."""
+
+    def __init__(self, timeout: float | None, **kwargs):
+        self.timeout = timeout
+        super().__init__(**kwargs)
+
+    def send(self, request, timeout=None, **kwargs):
+        return super().send(request, timeout=timeout or self.timeout, **kwargs)
 
 
 def _bugsy_error(e: bugsy.BugsyException) -> ToolError:
@@ -206,6 +231,17 @@ def _bugsy_error(e: bugsy.BugsyException) -> ToolError:
     if hint:
         payload["hint"] = hint
     return ToolError(msg, payload=payload)
+
+
+async def _call(
+    ctx: "BugzillaContext", path: str, params: dict[str, Any] | None = None
+):
+    """`_request` in a worker thread.
+
+    bugsy blocks while it waits for Bugzilla. On the event loop, one slow request would
+    stop every other client of the same server, for example the subagents of a run.
+    """
+    return await asyncio.to_thread(_request, ctx, path, params)
 
 
 def _request(ctx: BugzillaContext, path: str, params: dict[str, Any] | None = None):
@@ -255,7 +291,7 @@ async def search_bugs(
     component, status, resolution, priority, severity, assigned_to, whiteboard,
     include_fields, limit.
     """
-    result = _request(ctx, "bug", params)
+    result = await _call(ctx, "bug", params)
     bugs = result.get("bugs", [])
     return {"count": len(bugs), "bugs": bugs}
 
@@ -299,7 +335,7 @@ async def get_bugs(
         "cf_crash_signature,url,version,op_sys,platform"
     )
     id_csv = ",".join(str(i) for i in ids)
-    result = _request(ctx, "bug", {"id": id_csv, "include_fields": include})
+    result = await _call(ctx, "bug", {"id": id_csv, "include_fields": include})
     bugs = result.get("bugs", [])
     returned = {b["id"] for b in bugs}
     inaccessible = [i for i in ids if i not in returned]
@@ -312,7 +348,9 @@ async def get_bugs(
         first, *rest = [b["id"] for b in bugs]
         cparams = {"ids": ",".join(str(i) for i in rest)} if rest else {}
         try:
-            cres = ctx.client.request(f"bug/{first}/comment", params=cparams)
+            cres = await asyncio.to_thread(
+                ctx.client.request, f"bug/{first}/comment", params=cparams
+            )
             comments_by_bug = {
                 int(bid): data["comments"] for bid, data in cres.get("bugs", {}).items()
             }
@@ -333,11 +371,66 @@ async def get_bugs(
 async def get_bug_comments(
     ctx: BugzillaContext,
     bug_id: Annotated[int, Field(description="Bug ID.")],
+    start: Annotated[
+        int,
+        Field(
+            ge=0,
+            description=(
+                "The number of the first comment to return, as Bugzilla numbers "
+                "them. Comment 0 is the description."
+            ),
+        ),
+    ] = 0,
+    limit: Annotated[
+        int | None,
+        Field(
+            ge=1,
+            description=(
+                "The maximum number of comments to return. To get all of them, do "
+                "not give it. Read a long thread in pages, so that each result stays "
+                "small."
+            ),
+        ),
+    ] = None,
 ) -> dict:
-    """Fetch all comments for a single bug."""
-    result = _request(ctx, f"bug/{bug_id}/comment")
+    """Fetch the comments of a single bug, all of them or one page.
+
+    `total` is the number of comments. `next_start` is the `start` of the next page,
+    and null on the last page.
+    """
+    result = await _call(ctx, f"bug/{bug_id}/comment")
     comments = result.get("bugs", {}).get(str(bug_id), {}).get("comments", [])
-    return {"bug_id": bug_id, "count": len(comments), "comments": comments}
+    later = [c for c in comments if c.get("count", 0) >= start]
+    page = later if limit is None else later[:limit]
+    more = len(page) < len(later)
+    return {
+        "bug_id": bug_id,
+        "total": len(comments),
+        "start": start,
+        "next_start": page[-1]["count"] + 1 if more else None,
+        "count": len(page),
+        "comments": page,
+    }
+
+
+@tool
+async def get_bug_history(
+    ctx: BugzillaContext,
+    bug_id: Annotated[int, Field(description="Bug ID.")],
+    new_since: Annotated[
+        str | None,
+        Field(description="Only changes after this time (`2026-10-13T18:01:21Z`)."),
+    ] = None,
+) -> dict:
+    """Who changed which fields of a bug, and when.
+
+    Each entry has `when`, `who` and `changes`. Each change has `field_name`, `added`
+    and `removed`.
+    """
+    params = {"new_since": new_since} if new_since else {}
+    result = await _call(ctx, f"bug/{bug_id}/history", params)
+    history = (result.get("bugs") or [{}])[0].get("history") or []
+    return {"bug_id": bug_id, "count": len(history), "history": history}
 
 
 @tool
@@ -369,7 +462,7 @@ async def get_bug_attachments(
     refuses gets a 'data_error' and does not take the rest of the response with
     it.
     """
-    result = _request(ctx, f"bug/{bug_id}/attachment", {"exclude_fields": "data"})
+    result = await _call(ctx, f"bug/{bug_id}/attachment", {"exclude_fields": "data"})
     atts = result.get("bugs", {}).get(str(bug_id), [])
     payload = {"bug_id": bug_id, "count": len(atts), "attachments": atts}
     if not include_data:
@@ -405,7 +498,7 @@ async def get_bug_attachments(
             )
         else:
             try:
-                one = _request(ctx, f"bug/attachment/{att['id']}")
+                one = await _call(ctx, f"bug/attachment/{att['id']}")
             except ToolError as e:
                 att["data_error"] = e.payload or {"message": str(e)}
                 errors += 1
@@ -456,7 +549,9 @@ async def download_attachment(
     """
     # Metadata first, so a refused attachment's bytes never leave Bugzilla. One
     # extra round trip on the happy path buys that.
-    meta = _request(ctx, f"bug/attachment/{attachment_id}", {"exclude_fields": "data"})
+    meta = await _call(
+        ctx, f"bug/attachment/{attachment_id}", {"exclude_fields": "data"}
+    )
 
     att = meta.get("attachments", {}).get(str(attachment_id))
     if att is None:
@@ -469,7 +564,7 @@ async def download_attachment(
     if not allowed:
         raise _type_not_allowed_error(attachment_id, att, effective)
 
-    full = _request(ctx, f"bug/attachment/{attachment_id}")
+    full = await _call(ctx, f"bug/attachment/{attachment_id}")
     data = full.get("attachments", {}).get(str(attachment_id), {}).get("data")
     if data is None:
         raise ToolError(

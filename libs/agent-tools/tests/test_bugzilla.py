@@ -29,6 +29,7 @@ async def test_exposes_read_only_tools():
         "search_bugs",
         "get_bugs",
         "get_bug_comments",
+        "get_bug_history",
         "get_bug_attachments",
         "download_attachment",
     }
@@ -379,3 +380,130 @@ def test_type_resolution_does_not_read_the_system_mime_database(monkeypatch):
 
     mp4 = {"file_name": "screencast.mp4", "content_type": "application/octet-stream"}
     assert bugzilla.attachment_type_allowed(mp4) == (False, "video/mp4")
+
+
+# Comment 2 is missing, as when a comment is hidden, so numbers and positions differ.
+THREAD = [{"id": 50 + n, "count": n, "text": f"c{n}"} for n in (0, 1, 3, 4, 5)]
+
+
+def _comments_client():
+    client = MagicMock()
+    client.request.return_value = {"bugs": {"1": {"comments": THREAD}}}
+    return client
+
+
+@pytest.mark.parametrize(
+    ("start", "limit", "expected", "next_start"),
+    [
+        (0, None, [0, 1, 3, 4, 5], None),
+        (0, 2, [0, 1], 2),
+        (2, 2, [3, 4], 5),
+        (3, 3, [3, 4, 5], None),
+        (5, 3, [5], None),
+        (6, 2, [], None),
+    ],
+)
+async def test_get_bug_comments_pages_by_comment_number(
+    start, limit, expected, next_start
+):
+    ctx = BugzillaContext(client=_comments_client())
+    res = await bugzilla.get_bug_comments(ctx, 1, start=start, limit=limit)
+    assert [c["count"] for c in res["comments"]] == expected
+    assert (res["total"], res["start"], res["count"]) == (5, start, len(expected))
+    assert res["next_start"] == next_start
+
+
+async def test_get_bug_comments_with_no_page_returns_every_comment():
+    res = await bugzilla.get_bug_comments(BugzillaContext(client=_comments_client()), 1)
+    assert res["count"] == res["total"] == 5
+    assert res["comments"] == THREAD
+
+
+async def test_get_bug_comments_takes_page_bounds():
+    config = build_sdk_server(
+        "bugzilla", BugzillaContext(client=MagicMock()), bugzilla.TOOLS
+    )
+    (tool,) = [
+        t for t in await _list(config["instance"]) if t.name == "get_bug_comments"
+    ]
+    props = tool.inputSchema["properties"]
+    assert set(props) == {"bug_id", "start", "limit"}
+    assert props["start"]["minimum"] == 0
+    assert props["limit"]["anyOf"][0]["minimum"] == 1
+
+
+async def test_get_bug_history_returns_the_entries():
+    entry = {
+        "when": "2026-10-13T18:01:21Z",
+        "who": "dev@example.com",
+        "changes": [{"field_name": "status", "added": "NEW", "removed": "UNCONFIRMED"}],
+    }
+    client = MagicMock()
+    client.request.return_value = {"bugs": [{"id": 1, "history": [entry]}]}
+    res = await bugzilla.get_bug_history(
+        BugzillaContext(client=client), 1, new_since="2026-10-01T00:00:00Z"
+    )
+    assert res == {"bug_id": 1, "count": 1, "history": [entry]}
+    client.request.assert_called_once_with(
+        "bug/1/history", params={"new_since": "2026-10-01T00:00:00Z"}
+    )
+
+
+async def test_get_bug_history_with_no_history_is_empty():
+    client = MagicMock()
+    client.request.return_value = {"bugs": []}
+    res = await bugzilla.get_bug_history(BugzillaContext(client=client), 1)
+    assert res == {"bug_id": 1, "count": 0, "history": []}
+    client.request.assert_called_once_with("bug/1/history", params={})
+
+
+async def test_a_slow_request_does_not_block_the_event_loop():
+    import asyncio
+    import time
+
+    client = MagicMock()
+
+    def slow(path, params=None):
+        time.sleep(0.3)
+        return {"bugs": [{"id": 1}]}
+
+    client.request.side_effect = slow
+    ctx = BugzillaContext(client=client)
+    start = time.monotonic()
+    await asyncio.gather(*(bugzilla.search_bugs(ctx, params={}) for _ in range(4)))
+    assert time.monotonic() - start < 0.9
+
+
+def test_the_context_sets_a_request_timeout():
+    client = bugsy.Bugsy(api_key="k", bugzilla_url="https://bugzilla.example.com/rest")
+    BugzillaContext(client=client, timeout=7)
+    adapter = client.session.get_adapter("https://bugzilla.example.com/rest/bug")
+    assert adapter.timeout == 7
+
+
+def test_the_context_sets_no_timeout_by_default():
+    client = bugsy.Bugsy(api_key="k", bugzilla_url="https://bugzilla.example.com/rest")
+    BugzillaContext(client=client)
+    adapter = client.session.get_adapter("https://bugzilla.example.com/rest/bug")
+    assert adapter.timeout is None
+
+
+def test_the_pool_keeps_a_connection_for_each_worker_thread():
+    client = bugsy.Bugsy(api_key="k", bugzilla_url="https://bugzilla.example.com/rest")
+    BugzillaContext(client=client)
+    adapter = client.session.get_adapter("https://bugzilla.example.com/rest/bug")
+    assert adapter._pool_maxsize == bugzilla.POOL_SIZE
+
+
+def test_the_timeout_adapter_keeps_a_timeout_that_the_caller_gives(monkeypatch):
+    from requests.adapters import HTTPAdapter
+
+    seen = {}
+    monkeypatch.setattr(
+        HTTPAdapter, "send", lambda self, req, **kw: seen.update(kw) or "sent"
+    )
+    adapter = bugzilla._BugzillaAdapter(timeout=7)
+    adapter.send(None)
+    assert seen["timeout"] == 7
+    adapter.send(None, timeout=3)
+    assert seen["timeout"] == 3
