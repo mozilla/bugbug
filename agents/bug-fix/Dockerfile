@@ -109,10 +109,9 @@ ENV DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/runtime-agent/bus
 # `mach bootstrap` installs the toolchain here at runtime; put it on PATH so the
 # agent's own `./mach build` (and the build_firefox tool) find rustc/clang,
 # evaluate_testcase finds minidump-stackwalk to symbolize crashes, and the
-# agent's shell finds node, samply and the developer tools (in ~/.cargo/bin, and
-# in ~/.mozbuild/bin those that run with that node, like the profiler-cli the
-# tree's skills analyze profiles with).
-ENV PATH="/home/agent/.cargo/bin:/home/agent/.mozbuild/bin:/home/agent/.mozbuild/clang/bin:/home/agent/.mozbuild/minidump-stackwalk:/home/agent/.mozbuild/node/bin:/home/agent/.mozbuild/samply:${PATH}"
+# agent's shell finds node, samply and the developer tools (in ~/.mozbuild/bin,
+# like the profiler-cli the tree's skills analyze profiles with).
+ENV PATH="/home/agent/.mozbuild/bin:/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:/home/agent/.mozbuild/minidump-stackwalk:/home/agent/.mozbuild/node/bin:/home/agent/.mozbuild/samply:${PATH}"
 # Likewise for Android, once bootstrapped for it: java, adb, aapt2, apksigner,
 # apkanalyzer, lint, sdkmanager. bootstrap_firefox links the versioned
 # directories they are in as `current`/`latest`.
