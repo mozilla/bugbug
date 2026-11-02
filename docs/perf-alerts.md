@@ -74,7 +74,8 @@ intact snapshot. Locally, an existing copy in `./data/` is used instead.
 Their format changes by these rules, also written above their registrations:
 
 - Store what the source returned. Fields computed from bugbug's rules, such as
-  normalized task labels, are derived when reading, so editing a rule never
+  normalized task labels or a commit's bug id and backout flag, are derived
+  when reading, so editing a rule applies to archived rows too and never
   changes the format.
 - Adding a field needs no version bump. Readers must treat it as optional,
   because archived rows that the source no longer returns never get it.
@@ -91,7 +92,8 @@ Their format changes by these rules, also written above their registrations:
   summary, signature, platform, push and task label fields. Refetched whole
   and merged into the previous snapshot, see Sources.
 - `data/perf_pushes.json`: one row per autoland push,
-  with its commits (revision, first line, bug id, backout flag) and the
+  with its commits (revision and first line; the bug id and backout flag are
+  derived when reading, so the current rules apply to archived pushes) and the
   performance jobs that ran on it (label, tier, total duration, and one entry
   per run with task id, retry id, result and duration). Jobs are picked by
   harness name markers; the harnesses' own unit tests and toolchain fetches
@@ -134,9 +136,12 @@ grouping (the reverse is impossible):
   summary that regressed it. Each row carries `push_id`, `landing_id` (the
   commit's bug within its push) and `landing_size`, plus `family`, `category`,
   `framework`, `application`, `platform_families`, `platform_labels`,
-  `summary_ids` and `pinned_by`. These are the positives. Pinned regressions
-  label their culprit commits only; unpinned ones label every commit of the
-  push with `pinned_by` null so consumers can filter them.
+  `summary_ids`, `pinned_by` and `attribution`. These are the positives. Pinned
+  regressions label their culprit commits only; unpinned ones label every
+  commit of the push with `pinned_by` null so consumers can filter them. A
+  pair named by several summaries keeps the strongest `pinned_by`, and
+  `attribution` (`commit`, `landing` or `push`) says how precisely the label
+  points at the commit.
   Likewise, `labels_from_signature` marks rows whose task labels were all
   copied from other alerts of the same signature.
 - `data/perf_push_status.json`: one row per push with `settled`, its
@@ -230,16 +235,16 @@ so edits to those tables reach archived alerts too.
 
 ### `perf_pushes.json` (one record per push)
 
-| Field                | Type | Meaning                                                                                                       |
-| -------------------- | ---- | ------------------------------------------------------------------------------------------------------------- |
-| `push_id`            | int  | Treeherder push id                                                                                            |
-| `repository`         | str  | always `autoland`                                                                                             |
-| `revision`           | str  | head changeset hash                                                                                           |
-| `time`               | ts   | when the push landed                                                                                          |
-| `author`             | str? | who pushed                                                                                                    |
-| `commits[]`          | list | in push order: `revision`, `desc` (first line), `bug_id` (int?, parsed from the first line), `backout` (bool) |
-| `perf_jobs[]`        | list | one entry per perf task label that ran: `label`, `tier` (int?), `duration` (total seconds), `runs[]`          |
-| `perf_jobs[].runs[]` | list | one entry per run: `task_id` (str?), `retry_id` (int?), `result` (str), `duration` (int?)                     |
+| Field                | Type | Meaning                                                                                                                                    |
+| -------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `push_id`            | int  | Treeherder push id                                                                                                                         |
+| `repository`         | str  | always `autoland`                                                                                                                          |
+| `revision`           | str  | head changeset hash                                                                                                                        |
+| `time`               | ts   | when the push landed                                                                                                                       |
+| `author`             | str? | who pushed                                                                                                                                 |
+| `commits[]`          | list | in push order: `revision`, `desc` (first line); readers add `bug_id` (int?) and `backout` (bool), derived from `desc` by the current rules |
+| `perf_jobs[]`        | list | one entry per perf task label that ran: `label`, `tier` (int?), `duration` (total seconds), `runs[]`                                       |
+| `perf_jobs[].runs[]` | list | one entry per run: `task_id` (str?), `retry_id` (int?), `result` (str), `duration` (int?)                                                  |
 
 ### `perf_alert_bugs.json` (one record per bug linked from a summary)
 
@@ -321,22 +326,23 @@ signature and task label:
 
 ### `perf_scheduling_pairs.json` (one record per culprit commit and test identity)
 
-| Field                                            | Type            | Meaning                                                                            |
-| ------------------------------------------------ | --------------- | ---------------------------------------------------------------------------------- |
-| `repository`, `push_id`, `revision`, `push_time` |                 | the culprit push (`revision` is its head)                                          |
-| `node`, `bug_id`, `backout`                      | str, int?, bool | the commit, the bug parsed from its message, and whether it is a backout or revert |
-| `landing_id`, `landing_size`                     | str, int        | `push_id:bug_id` and how many commits share it; group on it for landing rows       |
-| `pinned_by`                                      | str?            | how the commit was pinned; null when the whole push was labeled                    |
-| `test_name`                                      | str             | platform-independent test identity, e.g. `browsertime-tp6-firefox-amazon`          |
-| `family`, `category`                             | str             | grouping levels, e.g. `browsertime-tp6` and `page-load`                            |
-| `categories`                                     | list[str]       | every category of the test, primary first                                          |
-| `framework`, `application`                       | str             | harness and browser under test                                                     |
-| `label`                                          | int             | always 1; negatives are inferred, see `perf_push_status.json`                      |
-| `platform_families`                              | list[str]       | platform families that regressed, e.g. `["linux", "windows"]`                      |
-| `platform_labels`                                | list[str]       | the normalized task labels that regressed                                          |
-| `labels_from_signature`                          | bool            | every label in `platform_labels` was taken from other alerts of its signature      |
-| `summary_ids`                                    | list[int]       | summaries merged into this pair                                                    |
-| `policy_version`                                 | int             | rules version                                                                      |
+| Field                                            | Type            | Meaning                                                                                                                  |
+| ------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `repository`, `push_id`, `revision`, `push_time` |                 | the culprit push (`revision` is its head)                                                                                |
+| `node`, `bug_id`, `backout`                      | str, int?, bool | the commit, the bug parsed from its message, and whether it is a backout or revert                                       |
+| `landing_id`, `landing_size`                     | str, int        | `push_id:bug_id` and how many commits share it; group on it for landing rows                                             |
+| `pinned_by`                                      | str?            | how the commit was pinned, the strongest across merged summaries; null when the whole push was labeled                   |
+| `attribution`                                    | str             | `commit` (a pinned single-commit landing), `landing` (a pinned multi-commit landing) or `push` (unpinned, or a negative) |
+| `test_name`                                      | str             | platform-independent test identity, e.g. `browsertime-tp6-firefox-amazon`                                                |
+| `family`, `category`                             | str             | grouping levels, e.g. `browsertime-tp6` and `page-load`                                                                  |
+| `categories`                                     | list[str]       | every category of the test, primary first                                                                                |
+| `framework`, `application`                       | str             | harness and browser under test                                                                                           |
+| `label`                                          | int             | always 1; negatives are inferred, see `perf_push_status.json`                                                            |
+| `platform_families`                              | list[str]       | platform families that regressed, e.g. `["linux", "windows"]`                                                            |
+| `platform_labels`                                | list[str]       | the normalized task labels that regressed                                                                                |
+| `labels_from_signature`                          | bool            | every label in `platform_labels` was taken from other alerts of its signature                                            |
+| `summary_ids`                                    | list[int]       | summaries merged into this pair                                                                                          |
+| `policy_version`                                 | int             | rules version                                                                                                            |
 
 ### `perf_push_status.json` (one record per push)
 
@@ -358,19 +364,20 @@ are aggregated to the push by taking the maximum per test.
 
 ### `perf_regression_commits.json` (one record per commit)
 
-| Field                                   | Type           | Meaning                                                                                     |
-| --------------------------------------- | -------------- | ------------------------------------------------------------------------------------------- |
-| `node`                                  | str            | changeset hash                                                                              |
-| `repository`, `push_id`, `pushdate`     | str, int, ts   | the push the commit landed in                                                               |
-| `bug_id`                                | int?           | bug parsed from the commit message                                                          |
-| `landing_id`, `landing_size`, `backout` | str, int, bool | the commit's landing, and whether it is a backout; weight or group by landing when training |
-| `label`                                 | int            | 1 for culprit commits, 0 for sampled clean commits                                          |
-| `pinned_by`                             | str?           | as in `perf_regressions.json`; null for negatives and unpinned positives                    |
-| `summary_ids`                           | list[int]      | summaries that named this commit; empty for negatives                                       |
-| `split`                                 | str            | `train` or `test`, about the newest tenth, cut at a push time so no push is in both         |
-| `commit_message`                        | str            | full message from `hg export`, header lines removed                                         |
-| `diff`                                  | str            | the git-style diff from `hg export`                                                         |
-| `policy_version`                        | int            | rules version                                                                               |
+| Field                                   | Type           | Meaning                                                                                                                        |
+| --------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `node`                                  | str            | changeset hash                                                                                                                 |
+| `repository`, `push_id`, `pushdate`     | str, int, ts   | the push the commit landed in                                                                                                  |
+| `bug_id`                                | int?           | bug parsed from the commit message                                                                                             |
+| `landing_id`, `landing_size`, `backout` | str, int, bool | the commit's landing, and whether it is a backout; weight or group by landing when training                                    |
+| `label`                                 | int            | 1 for culprit commits, 0 for sampled clean commits                                                                             |
+| `pinned_by`                             | str?           | as in `perf_regressions.json`, the strongest across the summaries naming the commit; null for negatives and unpinned positives |
+| `attribution`                           | str            | `commit`, `landing` or `push`, as in the scheduling pairs                                                                      |
+| `summary_ids`                           | list[int]      | summaries that named this commit; empty for negatives                                                                          |
+| `split`                                 | str            | `train` or `test`, about the newest tenth, cut at a push time so no push is in both                                            |
+| `commit_message`                        | str            | full message from `hg export`, header lines removed                                                                            |
+| `diff`                                  | str            | the git-style diff from `hg export`                                                                                            |
+| `policy_version`                        | int            | rules version                                                                                                                  |
 
 ## Labeling policy
 
@@ -420,8 +427,8 @@ record as `policy_version`. Bump it when they change.
   commits), backouts included and flagged. The culprit landing is pinned when
   the regression bug's `regressed_by` names a bug landed in the push, when the
   summary links the culprit bug directly, or when the push holds a single
-  landing (a backout beside a real landing does not count). Otherwise every
-  commit of the push is labeled with `pinned_by` null. Each regression also
+  landing, a backout counting as one. Otherwise every commit of the push is
+  labeled with `pinned_by` null. Each regression also
   records `regressed_by_agrees`, whether the bug link and the summary name the
   same push, as a quality signal.
 - Backouts are ordinary commits on both sides: a revert can be the culprit,
@@ -436,6 +443,42 @@ record as `policy_version`. Bump it when they change.
 
 Task labels are normalized by dropping the `-qr` platform suffix and folding
 retired platforms into their successors through `PLATFORM_RENAMES`.
+
+### Interpreting the labels
+
+Things the datasets do not establish, which an evaluation has to account for:
+
+- A negative means that no confirmed regression was attributed to a settled
+  push, inferred from the backstop running every perf test; it is not a
+  per-test check that the test ran and measured flat on that push.
+  `identities_ran` in `perf_push_status.json` records what actually ran.
+- Positive labels are only as precise as `attribution` says: `commit` names
+  the change, `landing` a bug's commits, `push` every commit of the push. A
+  strict training view keeps `commit` rows; `landing_size` allows weighting.
+- Negatives come from clean pushes only. A change that regressed one test
+  contributes no negative for the tests it left alone, so the datasets say
+  little about which test a risky change affects.
+- Labels use the current state of Bugzilla and task labels learned from the
+  whole alert snapshot, including alerts newer than `--until`, which bounds
+  push dates rather than what was known at that time. The test split is
+  chronological but not a replay of what a model trained back then would have
+  seen; related changes such as relandings can sit on both sides of it.
+- The predictor export samples `--negative-ratio` clean commits per positive
+  and then drops ignored commits, missing patches and empty diffs, so its
+  class balance is neither production prevalence nor exactly the ratio asked
+  for; the counts are logged. Model outputs are scores, not probabilities,
+  until calibrated on data outside the training set.
+- Older alerts often have no task label, so a regression can be a predictor
+  positive without producing scheduling pairs; `label_from_signature` and
+  `labels_from_signature` flag the recovered ones, and `PLATFORM_RENAMES`
+  pools platforms while `platform_labels` keeps the original labels.
+- Positive pairs carry outcome evidence (`summary_ids`, `platform_families`,
+  `platform_labels`, `pinned_by`, `attribution`) that negatives do not. A
+  scheduler's features are the commit, its landing and the test identity;
+  the rest describes the label.
+- `build_label_prices()` prices labels from the whole cost snapshot by
+  default; pass `rows` bounded by date to price a historical decision with
+  what was known then.
 
 ### Exclusions
 

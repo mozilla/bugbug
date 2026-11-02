@@ -179,7 +179,9 @@ class Retriever:
         """
         pushes = {}
         if datasets.load_previous_snapshot(datasets.PERF_PUSHES_DB):
-            pushes = {push["push_id"]: push for push in datasets.get_perf_pushes()}
+            pushes = {
+                push["push_id"]: push for push in datasets.get_stored_perf_pushes()
+            }
 
         now = utcnow()
         time_from = datetime(

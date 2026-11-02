@@ -13,7 +13,7 @@ from urllib.parse import urljoin
 import requests
 
 from bugbug import db, utils
-from bugbug.perf.label_policy import REPOSITORY
+from bugbug.perf.label_policy import BACKOUT_RE, BUG_RE, REPOSITORY
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +34,8 @@ def _index_url(index: str, name: str) -> str:
 # by these rules:
 #
 # - Store what the source returned. Fields computed from bugbug's rules are
-#   derived when reading, as derive_alert_fields does, so editing a rule never
-#   changes the format.
+#   derived when reading, as derive_alert_fields and derive_push_fields do, so
+#   editing a rule applies to archived rows too and never changes the format.
 # - Adding a field needs no version bump. Readers must treat it as optional,
 #   because archived rows that the source no longer returns never get it.
 # - Renaming or removing a field, or changing what it means, needs a version
@@ -160,10 +160,33 @@ def get_perf_alerts() -> Iterator[dict[str, Any]]:
             yield alert
 
 
-def get_perf_pushes() -> Iterator[dict[str, Any]]:
+def derive_commit_fields(commit: dict[str, Any]) -> dict[str, Any]:
+    """Add the bug id and backout flag the current rules read from a commit's first line."""
+    desc = commit.get("desc") or ""
+    bug_match = BUG_RE.search(desc)
+    return {
+        **commit,
+        "bug_id": int(bug_match.group(1)) if bug_match else None,
+        "backout": BACKOUT_RE.match(desc) is not None,
+    }
+
+
+def derive_push_fields(push: dict[str, Any]) -> dict[str, Any]:
+    """A stored push with the derived fields of its commits, see ``derive_commit_fields``."""
+    commits = [derive_commit_fields(c) for c in push.get("commits", [])]
+    return {**push, "commits": commits}
+
+
+def get_stored_perf_pushes() -> Iterator[dict[str, Any]]:
+    """Pushes as stored, without derived fields; for extending the archive."""
     for push in db.read(PERF_PUSHES_DB):
         if push["repository"] == REPOSITORY:
             yield push
+
+
+def get_perf_pushes() -> Iterator[dict[str, Any]]:
+    for push in get_stored_perf_pushes():
+        yield derive_push_fields(push)
 
 
 def get_perf_alert_bugs() -> Iterator[dict[str, Any]]:

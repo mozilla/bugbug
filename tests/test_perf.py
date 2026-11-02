@@ -253,6 +253,35 @@ def test_alert_fields_are_derived_on_read() -> None:
     assert derived["normalized_labels"] == ["test-linux2404-64-shippable/opt-talos-g1"]
 
 
+def test_push_fields_are_derived_on_read() -> None:
+    # An archived push carries values an older rule computed; the reader
+    # replaces them, while the retriever's merge sees the row as stored.
+    db.write(
+        datasets.PERF_PUSHES_DB,
+        [
+            {
+                "push_id": 1,
+                "repository": "autoland",
+                "commits": [
+                    {"revision": "a" * 40, "desc": "Revert bug 7", "backout": False},
+                    {"revision": "b" * 40, "desc": "No bug - l10n"},
+                ],
+            }
+        ],
+    )
+    [push] = datasets.get_perf_pushes()
+    assert [(c["bug_id"], c["backout"]) for c in push["commits"]] == [
+        (7, True),
+        (None, False),
+    ]
+    [stored] = datasets.get_stored_perf_pushes()
+    assert stored["commits"][0] == {
+        "revision": "a" * 40,
+        "desc": "Revert bug 7",
+        "backout": False,
+    }
+
+
 def test_parse_push_row() -> None:
     row = {
         "push_id": 10,
@@ -268,14 +297,14 @@ def test_parse_push_row() -> None:
         ),
     }
     push = extraction.parse_push_row(row)
+    # The snapshot stores the source text only; the rules apply when reading.
     assert push["commits"][0] == {
         "revision": "a" * 40,
         "desc": "Bug 123 - Fix things r=me",
-        "bug_id": 123,
-        "backout": False,
     }
-    assert push["commits"][1]["backout"] is True
-    assert push["commits"][1]["bug_id"] is None
+    derived = datasets.derive_push_fields(push)["commits"]
+    assert derived[0]["bug_id"] == 123 and derived[0]["backout"] is False
+    assert derived[1]["bug_id"] is None and derived[1]["backout"] is True
     jobs = {job["label"]: job for job in push["perf_jobs"]}
     g1 = jobs["test-linux2404-64-shippable/opt-talos-g1"]
     assert g1["duration"] == 600
@@ -981,6 +1010,56 @@ def test_unlabeled_alerts_take_their_signature_label() -> None:
         ("c", "browsertime-tp6-firefox-amazon", False),
         ("c", "talos-g1", True),
     ]
+
+
+def test_stronger_attribution_survives_merging() -> None:
+    # An unpinned summary labels both commits of push 12; another summary pins
+    # commit c through its bug. c keeps the explicit evidence, d stays unpinned.
+    alerts = [
+        _alert(alert_id=1, summary_id=100, bug_number=None, summary_status=8),
+        _alert(alert_id=2, summary_id=101, bug_number=555),
+    ]
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
+    assert [(r["summary_id"], r["pinned_by"]) for r in regressions] == [
+        (100, None),
+        (101, "bug"),
+    ]
+    pairs = list(selection_pairs.generate_scheduling_pairs(regressions, push_index))
+    assert [
+        (p["node"][0], p["pinned_by"], p["attribution"], p["summary_ids"])
+        for p in pairs
+    ] == [
+        ("c", "bug", "commit", [100, 101]),
+        ("d", None, "push", [100]),
+    ]
+    statuses = list(push_status.generate_push_status(push_index, regressions, SETTLED))
+    exported = regression_commits.select_export_commits(
+        regressions, statuses, negative_ratio=0
+    )
+    assert [(r["node"][0], r["pinned_by"], r["attribution"]) for r in exported] == [
+        ("c", "bug", "commit"),
+        ("d", None, "push"),
+    ]
+    # The reverse order of summaries gives the same result.
+    reversed_regressions = list(reversed(regressions))
+    pairs = list(
+        selection_pairs.generate_scheduling_pairs(reversed_regressions, push_index)
+    )
+    assert [(p["node"][0], p["pinned_by"]) for p in pairs] == [
+        ("c", "bug"),
+        ("d", None),
+    ]
+
+
+def test_attribution_level() -> None:
+    assert regression_labeling.attribution_level(None, 1) == "push"
+    assert regression_labeling.attribution_level("single_landing", 1) == "commit"
+    assert regression_labeling.attribution_level("bug", 3) == "landing"
+    assert regression_labeling.stronger_pin(None, "single_landing") == "single_landing"
+    assert regression_labeling.stronger_pin("bug", "summary_bug") == "bug"
 
 
 def test_landings_group_commits_by_bug() -> None:

@@ -20,7 +20,7 @@ import re
 REPOSITORY = "autoland"
 
 # Bump whenever any table in this file changes: they all change what a label means.
-POLICY_VERSION = 2
+POLICY_VERSION = 3
 
 SUMMARY_STATUS = {
     0: "untriaged",
@@ -63,6 +63,15 @@ REJECTED_BUG_RESOLUTIONS = frozenset(("INVALID", "INACTIVE", "INCOMPLETE", "MOVE
 # Outcomes that make a summary a positive label. "pending" and "rejected"
 # summaries are neither positives nor negatives.
 POSITIVE_OUTCOMES = frozenset(("concluded", "attributed"))
+
+# How a culprit commit was pinned, strongest evidence first; a commit named by
+# several summaries keeps the strongest. None means the whole push was labeled.
+PINNED_BY_RANK = {"bug": 3, "summary_bug": 2, "single_landing": 1, None: 0}
+
+# Commit message rules: the bug a commit belongs to, and whether it is a
+# backout or revert. Applied when pushes are read, never stored.
+BUG_RE = re.compile(r"\b[Bb]ug\s+(\d+)")
+BACKOUT_RE = re.compile(r"^\s*(backed\s*out|backout|revert)", re.IGNORECASE)
 
 PERF_LABEL_MARKERS = ("-browsertime-", "-talos-", "-awsy", "-raptor-", "perftest-")
 

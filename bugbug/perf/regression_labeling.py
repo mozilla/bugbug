@@ -23,6 +23,7 @@ from bugbug.perf.label_policy import (
     CONFIRMED_SUMMARY_STATUSES,
     EXCLUDED_ALERT_STATUSES,
     EXCLUDED_SUMMARY_TAGS,
+    PINNED_BY_RANK,
     POLICY_VERSION,
     REJECTED_BUG_RESOLUTIONS,
     RESOLVED_SUMMARY_STATUSES,
@@ -132,6 +133,23 @@ def group_landings(push: dict[str, Any]) -> list[dict[str, Any]]:
         )
         landing["revisions"].append(commit["revision"])
     return list(grouped.values())
+
+
+def stronger_pin(current: str | None, candidate: str | None) -> str | None:
+    """The stronger of two ``pinned_by`` values, by ``PINNED_BY_RANK``."""
+    return candidate if PINNED_BY_RANK[candidate] > PINNED_BY_RANK[current] else current
+
+
+def attribution_level(pinned_by: str | None, landing_size: int) -> str:
+    """How precisely a positive label points at a commit.
+
+    ``commit`` when the pinned landing is a single commit, ``landing`` when it
+    holds several, and ``push`` when nothing was pinned and every commit of the
+    push carries the label.
+    """
+    if pinned_by is None:
+        return "push"
+    return "commit" if landing_size == 1 else "landing"
 
 
 def pin_culprit_commits(

@@ -6,7 +6,6 @@
 """Extraction from the Treeherder replica, BigQuery ``fxci`` and Bugzilla."""
 
 import logging
-import re
 from datetime import date, datetime, timedelta
 from importlib import resources
 from typing import Any, Iterable, Iterator
@@ -23,9 +22,6 @@ BIGQUERY_DATA_SOURCE_ID = 63
 
 RECORD_SEP = "\x1e"
 UNIT_SEP = "\x1f"
-
-BUG_RE = re.compile(r"\b[Bb]ug\s+(\d+)")
-BACKOUT_RE = re.compile(r"^\s*(backed\s*out|backout|revert)", re.IGNORECASE)
 
 
 def load_sql_template(name: str) -> str:
@@ -92,7 +88,8 @@ def parse_push_row(row: dict[str, Any]) -> dict[str, Any]:
 
     ``commits`` and ``perf_jobs`` arrive as strings packed with the ASCII
     record (0x1e) and unit (0x1f) separators used by the SQL template. Commits
-    become ``{revision, desc, bug_id, backout}``; job runs are grouped by label
+    become ``{revision, desc}``, their bug id and backout flag being derived
+    when read (``datasets.derive_push_fields``); job runs are grouped by label
     into ``{label, tier, duration, runs[]}``.
     """
     commits = []
@@ -100,15 +97,7 @@ def parse_push_row(row: dict[str, Any]) -> dict[str, Any]:
         if not record:
             continue
         revision, _, desc = record.partition(UNIT_SEP)
-        bug_match = BUG_RE.search(desc)
-        commits.append(
-            {
-                "revision": revision,
-                "desc": desc,
-                "bug_id": int(bug_match.group(1)) if bug_match else None,
-                "backout": BACKOUT_RE.match(desc) is not None,
-            }
-        )
+        commits.append({"revision": revision, "desc": desc})
 
     jobs: dict[str, dict[str, Any]] = {}
     for record in (row.get("perf_jobs") or "").split(RECORD_SEP):

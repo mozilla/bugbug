@@ -24,7 +24,7 @@ from bugbug.perf.push_status import (
     iter_clean_commits,
     read_push_status,
 )
-from bugbug.perf.regression_labeling import PushIndex
+from bugbug.perf.regression_labeling import PushIndex, attribution_level, stronger_pin
 
 
 def generate_scheduling_pairs(
@@ -34,8 +34,10 @@ def generate_scheduling_pairs(
 
     Pinned regressions label their culprit commits; unpinned ones label every
     commit of the push, with ``pinned_by`` null so consumers can filter them
-    out. ``labels_from_signature`` is true when every task label behind the
-    pair was taken from other alerts of its signature.
+    out. When several summaries name the same pair, ``pinned_by`` keeps the
+    strongest evidence among them and ``attribution`` says how precisely it
+    points at the commit. ``labels_from_signature`` is true when every task
+    label behind the pair was taken from other alerts of its signature.
     """
     pairs: dict[tuple[str, str], dict[str, Any]] = {}
     for regression in regressions:
@@ -80,6 +82,9 @@ def generate_scheduling_pairs(
                         "summary_ids": set(),
                         "policy_version": POLICY_VERSION,
                     }
+                pair["pinned_by"] = stronger_pin(
+                    pair["pinned_by"], regression["pinned_by"]
+                )
                 pair["platform_families"].add(runnable["platform_family"])
                 pair["platform_labels"].add(runnable["label"])
                 pair["labels_from_signature"] = (
@@ -91,6 +96,7 @@ def generate_scheduling_pairs(
         pair = pairs[key]
         for field in ("platform_families", "platform_labels", "summary_ids"):
             pair[field] = sorted(pair[field])
+        pair["attribution"] = attribution_level(pair["pinned_by"], pair["landing_size"])
         yield pair
 
 
@@ -132,6 +138,7 @@ def iter_labeled_pairs(
                     "landing_id": commit["landing_id"],
                     "landing_size": commit["landing_size"],
                     "pinned_by": None,
+                    "attribution": "push",
                     "test_name": identity,
                     "label": 0,
                     "policy_version": POLICY_VERSION,

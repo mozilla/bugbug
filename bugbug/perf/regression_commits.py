@@ -23,6 +23,7 @@ from bugbug import repository
 from bugbug.perf.commit_risk import changeset_from_export, get_ignore_reason
 from bugbug.perf.label_policy import POLICY_VERSION, POSITIVE_OUTCOMES
 from bugbug.perf.push_status import iter_clean_commits
+from bugbug.perf.regression_labeling import attribution_level, stronger_pin
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,8 @@ def select_export_commits(
 
     Positives are the ``culprit_commits`` of regressions with a positive
     outcome, or every commit of the push when none was pinned; commit fields
-    come from the push status rows. Negatives are drawn from
+    come from the push status rows, and a commit named by several regressions
+    keeps the strongest ``pinned_by``. Negatives are drawn from
     :func:`bugbug.perf.push_status.iter_clean_commits`, ``negative_ratio`` times the
     number of positives, using ``seed`` over a sorted candidate list so the
     sample does not depend on file order. Each commit lands in a single
@@ -72,6 +74,9 @@ def select_export_commits(
                     "pinned_by": regression["pinned_by"],
                     "summary_ids": [],
                 }
+            record["pinned_by"] = stronger_pin(
+                record["pinned_by"], regression["pinned_by"]
+            )
             record["summary_ids"].append(regression["summary_id"])
 
     candidates = sorted(
@@ -93,6 +98,10 @@ def select_export_commits(
     ]
 
     selected = list(positives.values()) + negatives
+    for record in selected:
+        record["attribution"] = attribution_level(
+            record["pinned_by"], record["landing_size"]
+        )
     selected.sort(key=lambda record: (record["pushdate"], record["node"]))
     logger.info(
         "Selected %d positive and %d negative commits for export",
