@@ -66,6 +66,7 @@ class RunDoc(BaseModel):
     status: RunStatus
     inputs: dict[str, Any]
     requested_by: str | None = None
+    requested_via: str | None = None
     dedupe_key: str | None = None
     created_at: datetime
     updated_at: datetime

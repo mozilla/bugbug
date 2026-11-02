@@ -63,13 +63,16 @@ def require_bugzilla_webhook_secret(
 def require_api_key(
     x_api_key: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
-) -> None:
-    """Accept either API key (X-API-Key) or service account token (Bearer)."""
+) -> str:
+    """Accept either API key (X-API-Key) or service account token (Bearer).
+
+    Returns the caller: the service account email, or "api-key".
+    """
     if x_api_key is not None:
         if settings.external_api_key and hmac.compare_digest(
             x_api_key, settings.external_api_key
         ):
-            return
+            return "api-key"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid X-API-Key",
@@ -94,11 +97,13 @@ def require_api_key(
             detail="Invalid credentials",
         ) from None
 
-    if claims.get("email") not in settings.allowed_service_accounts:
+    email = claims.get("email")
+    if email not in settings.allowed_service_accounts:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Service account not authorized",
         )
+    return email
 
 
 async def require_push_auth(authorization: str | None = Header(default=None)) -> None:
