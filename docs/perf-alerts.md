@@ -13,8 +13,6 @@ package.
 
 | Module                               | Role                                                                              |
 | ------------------------------------ | --------------------------------------------------------------------------------- |
-| `bugbug/redash.py`                   | generic client for ad-hoc SQL on STMO, reusable outside this pipeline             |
-| `bugbug/perf/__init__.py`            | public API and dataset registration; `from bugbug import perf`                    |
 | `bugbug/perf/label_policy.py`        | every hand-maintained table that decides labels, and `POLICY_VERSION`             |
 | `bugbug/perf/task_labels.py`         | pure functions: label parsing, grouping hierarchy, exclusions                     |
 | `bugbug/perf/extraction.py`          | query builders and fetch/parse for Treeherder, `fxci` and Bugzilla                |
@@ -551,49 +549,50 @@ label instead.
 ## Reading the data
 
 ```py
-from bugbug import db, perf
+from bugbug import db
+from bugbug.perf import datasets, selection_pairs
 
-db.download(perf.PERF_REGRESSIONS_DB)
-for regression in perf.get_perf_regressions():
+db.download(datasets.PERF_REGRESSIONS_DB)
+for regression in datasets.get_perf_regressions():
     print(regression["revision"], regression["pinned_by"], len(regression["runnables"]))
 
-db.download(perf.PERF_PAIRS_DB)
-db.download(perf.PERF_PUSH_STATUS_DB)
-for pair in perf.iter_labeled_pairs():
+db.download(datasets.PERF_PAIRS_DB)
+db.download(datasets.PERF_PUSH_STATUS_DB)
+for pair in selection_pairs.iter_labeled_pairs():
     # Positives carry family, category and platforms; negatives are inferred.
     print(pair["push_id"], pair["node"], pair["landing_id"], pair["test_name"], pair["label"])
 
-db.download(perf.PERF_REGRESSION_COMMITS_DB)
-for commit in perf.get_perf_regression_commits():
+db.download(datasets.PERF_REGRESSION_COMMITS_DB)
+for commit in datasets.get_perf_regression_commits():
     print(commit["label"], commit["landing_size"], commit["split"])
 ```
 
 ## Cost for evaluation
 
-`perf.load_task_costs()` indexes the costs snapshot by task id and
-`perf.summarize_push_cost(push, costs)` summarizes a push from the pushes
+`task_costs.load_task_costs()` indexes the costs snapshot by task id and
+`task_costs.summarize_push_cost(push, costs)` summarizes a push from the pushes
 snapshot into machine seconds per worker pool plus the known cloud cost. The
 `generate` operation logs how many perf runs could be matched to a pool and to
 a cloud cost, so a drop in coverage is visible in the task log.
 
 A shadow scheduler's choices never ran, so they cannot be priced from what
-ran. `perf.build_label_prices()` turns the snapshot into a price list instead: for
+ran. `task_costs.build_label_prices()` turns the snapshot into a price list instead: for
 each normalized label, its usual pool and median run duration, valid on any
 push because a task's duration barely depends on the commit under test.
-`perf.estimate_labels_cost(labels, prices)` then estimates machine seconds per pool for
+`task_costs.estimate_labels_cost(labels, prices)` then estimates machine seconds per pool for
 any set of labels, falling back to the median of the same family on the same
 platform family for labels with no history. Its output has the same
 `machine_seconds_by_pool` shape as `summarize_push_cost`, so a strategy's cost, the
 actual cost and the full-suite cost can be compared directly.
 
 ```py
-from bugbug import perf
+from bugbug.perf import datasets, task_costs
 
-costs = perf.load_task_costs()
-prices = perf.build_label_prices()
-for push in perf.get_perf_pushes():
-    actual = perf.summarize_push_cost(push, costs)
-    everything = perf.estimate_labels_cost((job["label"] for job in push["perf_jobs"]), prices)
+costs = task_costs.load_task_costs()
+prices = task_costs.build_label_prices()
+for push in datasets.get_perf_pushes():
+    actual = task_costs.summarize_push_cost(push, costs)
+    everything = task_costs.estimate_labels_cost((job["label"] for job in push["perf_jobs"]), prices)
     print(push["revision"], actual["machine_seconds_by_pool"], everything["machine_seconds_by_pool"])
 ```
 
@@ -629,25 +628,12 @@ the published snapshots without running `retrieve`.
 
 ### On Taskcluster
 
-Bugbug's data pipeline is the Taskcluster hook `project-bugbug/bugbug`, defined
-in `infra/taskcluster-hook-data-pipeline.json`. It fires on the 1st and 16th of
-each month and at the end of every deploy, and runs `infra/spawn_pipeline.py`
-over `infra/data-pipeline.yml`, which creates every task in that file with
-`${version}` set to the deployed bugbug version. The perf tasks are part of
-that graph, so running them in production takes no wiring beyond:
-
-1. Landing the change on master.
-2. A bugbug release, which builds the Docker images for the new version tag
-   and deploys them; the deploy fires the hook. The `bugbug-base` image gets
-   the `bugbug-data-perf-alerts` entry point from `pyproject.toml`.
-3. A `REDASH_API_KEY` entry in the Taskcluster secret
-   `project/bugbug/production`, ideally the key of a dedicated STMO user. The
-   retrieval task reads it through the Taskcluster proxy.
-
-The hook can also be triggered by hand from the Taskcluster UI, which runs the
-whole bugbug data pipeline since `spawn_pipeline.py` cannot launch a subset.
-Failures email `bugbug-team@mozilla.com`. Successful runs publish under the
-index routes below, after which `db.download()` fetches the datasets anywhere.
+The perf tasks are part of `infra/data-pipeline.yml`, so they run with the
+rest of the bugbug data pipeline once a release deploys them. The retrieval
+task reads `REDASH_API_KEY` from the Taskcluster secret
+`project/bugbug/production`, the entry the CI failures and try pushes
+retrievers already use. Successful runs publish under the index routes below,
+after which `db.download()` fetches the datasets anywhere.
 
 On the first run the alerts snapshot can only map the last four months of
 alerts to task labels and the pushes older than that have no jobs, both

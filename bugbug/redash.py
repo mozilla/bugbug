@@ -3,11 +3,17 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Minimal client for ad-hoc SQL on STMO (sql.telemetry.mozilla.org, Redash)."""
+"""Client for STMO (sql.telemetry.mozilla.org), Mozilla's Redash instance.
+
+Saved queries run by id with parameters and ad-hoc SQL runs on a data source;
+both go through the Redash jobs API and share its polling.
+"""
 
 import os
 import time
 from typing import Any
+
+import requests
 
 from bugbug import utils
 
@@ -26,7 +32,7 @@ def get_redash_api_key() -> str:
 
 
 class RedashClient:
-    """Run ad-hoc SQL on an STMO data source through the Redash jobs API."""
+    """Run saved queries and ad-hoc SQL on STMO through the Redash jobs API."""
 
     def __init__(
         self,
@@ -42,11 +48,37 @@ class RedashClient:
     def execute(
         self, data_source_id: int, query: str, timeout: float = 1800
     ) -> list[dict[str, Any]]:
+        """Run the SQL ``query`` on a data source and return its rows."""
         response = self.session.post(
             f"{self.base_url}/api/query_results",
             json={"data_source_id": data_source_id, "query": query, "max_age": 0},
             timeout=120,
         )
+        return self._rows(response, timeout)
+
+    def query(
+        self,
+        query_id: int,
+        parameters: dict[str, Any],
+        max_age: int = 1800,
+        timeout: float = 1800,
+    ) -> list[dict[str, Any]]:
+        """Run the saved query ``query_id`` with ``parameters`` and return its rows.
+
+        A stored result at most ``max_age`` seconds old is returned instead of
+        running the query again.
+        """
+        response = self.session.post(
+            f"{self.base_url}/api/queries/{query_id}/results",
+            json={"parameters": parameters, "max_age": max_age},
+            timeout=120,
+        )
+        return self._rows(response, timeout)
+
+    def _rows(
+        self, response: requests.Response, timeout: float
+    ) -> list[dict[str, Any]]:
+        """Return the rows of a query submission, waiting for its job if needed."""
         response.raise_for_status()
         body = response.json()
 
@@ -74,3 +106,8 @@ class RedashClient:
         )
         response.raise_for_status()
         return response.json()["query_result"]["data"]["rows"]
+
+
+def query_redash(query_id: int, parameters: dict[str, Any]) -> list[dict[str, Any]]:
+    """Run a saved STMO query with the configured API key."""
+    return RedashClient(get_redash_api_key()).query(query_id, parameters)

@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 
+from bugbug import repository
 from bugbug.model import Model
 
 MODEL_NAME = "Perf Regression Predictor"
@@ -79,17 +80,7 @@ class PatchCommitMessageExtractor:
 
     def __call__(self, patch: str) -> str | None:
         if patch.startswith("# HG changeset patch"):
-            message_lines: list[str] = []
-            metadata_finished = False
-            for line in patch.splitlines()[1:]:
-                if not metadata_finished and (line.startswith("#") or not line.strip()):
-                    continue
-                metadata_finished = True
-                if line.startswith(("diff -r ", "diff --git ")):
-                    break
-                message_lines.append(line)
-            message = "\n".join(message_lines).strip()
-            return message or None
+            return repository.parse_hg_export(patch).message or None
 
         if self.subject_pattern.search(patch):
             email_message = Parser(policy=policy.default).parsestr(patch)

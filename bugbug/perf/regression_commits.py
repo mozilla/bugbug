@@ -19,38 +19,12 @@ from typing import Any, Iterable, Iterator
 
 import hglib
 
-from bugbug.perf.commit_risk import changeset_from_patch, get_ignore_reason
+from bugbug import repository
+from bugbug.perf.commit_risk import changeset_from_export, get_ignore_reason
 from bugbug.perf.label_policy import POLICY_VERSION, POSITIVE_OUTCOMES
 from bugbug.perf.push_status import iter_clean_commits
 
 logger = logging.getLogger(__name__)
-
-
-def export_hg_patches(repo_dir: str, revs: list[bytes]) -> list[bytes]:
-    """Run ``hg export`` in git style for each revision within one client session."""
-    with hglib.open(repo_dir) as hg:
-        return [hg.export(revs=[rev], git=True) for rev in revs]
-
-
-def parse_hg_export(patch: bytes) -> tuple[str, str]:
-    """Split an ``hg export`` payload into commit message and diff.
-
-    The ``# ...`` header lines are dropped. The diff starts at the first
-    ``diff `` line and is empty for a commit with no file changes.
-    """
-    text = patch.decode("utf-8", "replace")
-    message_lines: list[str] = []
-    offset = 0
-    diff_start = len(text)
-    for line in text.splitlines(keepends=True):
-        if line.startswith("diff "):
-            diff_start = offset
-            break
-        offset += len(line)
-        if line.startswith("# "):
-            continue
-        message_lines.append(line)
-    return "".join(message_lines).strip(), text[diff_start:]
 
 
 def select_export_commits(
@@ -165,12 +139,12 @@ def attach_commit_patches(
         revs = [record["node"].encode("ascii") for record in chunk]
         patches: list[bytes | None]
         try:
-            patches = list(export_hg_patches(repo_dir, revs))
+            patches = list(repository.get_commit_patches(repo_dir, revs))
         except hglib.error.CommandError:
             patches = []
             for rev in revs:
                 try:
-                    patches.extend(export_hg_patches(repo_dir, [rev]))
+                    patches.extend(repository.get_commit_patches(repo_dir, [rev]))
                 except hglib.error.CommandError:
                     patches.append(None)
 
@@ -178,18 +152,18 @@ def attach_commit_patches(
             if patch is None:
                 missing += 1
                 continue
-            reason = get_ignore_reason(changeset_from_patch(patch))
+            export = repository.parse_hg_export(patch)
+            reason = get_ignore_reason(changeset_from_export(export))
             if reason is not None:
                 ignored[reason] += 1
                 continue
-            message, diff = parse_hg_export(patch)
-            if not diff:
+            if not export.diff:
                 empty += 1
                 continue
             yield {
                 **record,
-                "commit_message": message,
-                "diff": diff,
+                "commit_message": export.message,
+                "diff": export.diff,
                 "policy_version": POLICY_VERSION,
             }
 

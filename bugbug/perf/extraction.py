@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta
 from importlib import resources
 from typing import Any, Iterable, Iterator
 
-from bugbug import utils
+from bugbug import bugzilla
 from bugbug.perf.label_policy import REPOSITORY
 from bugbug.redash import RedashClient
 from bugbug.utils import utcnow
@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 TREEHERDER_DATA_SOURCE_ID = 89
 BIGQUERY_DATA_SOURCE_ID = 63
-BUGZILLA_REST_URL = "https://bugzilla.mozilla.org/rest/bug"
 
 RECORD_SEP = "\x1e"
 UNIT_SEP = "\x1f"
@@ -279,45 +278,28 @@ BUG_FIELDS = (
 
 
 def fetch_bugs(
-    bug_ids: Iterable[int], batch_size: int = 100, follow_duplicates: int = 3
+    bug_ids: Iterable[int], follow_duplicates: int = 3
 ) -> list[dict[str, Any]]:
-    """Fetch ``BUG_FIELDS`` for the given public bugs from the Bugzilla REST API.
+    """Fetch ``BUG_FIELDS`` of the given public bugs from Bugzilla.
 
     Bugs resolved as duplicates point at a canonical bug through ``dupe_of``;
     those targets are fetched too, up to ``follow_duplicates`` hops, so the
-    canonical resolution and ``regressed_by`` are available for labeling.
-    Public bugs need no credentials; ``BUGBUG_BUGZILLA_TOKEN`` is sent when
-    available to lift rate limits. The token's account may see restricted
-    bugs, and the result is published, so any bug in a Bugzilla group is
-    dropped and its ``dupe_of`` is never followed.
+    canonical resolution and ``regressed_by`` are available for labeling. The
+    result is published and the Bugzilla token, when one is configured, may
+    see restricted bugs, so any bug in a Bugzilla group is dropped and its
+    ``dupe_of`` is never followed.
     """
-    session = utils.get_session("bugzilla")
-    token = utils.get_secret("BUGZILLA_TOKEN", default_value="")
-    if token:
-        session.headers["X-Bugzilla-API-Key"] = token
-
     bugs: dict[int, dict[str, Any]] = {}
     requested: set[int] = set()
     restricted = 0
     pending = sorted(set(bug_ids))
     for _ in range(follow_duplicates + 1):
         requested.update(pending)
-        for start in range(0, len(pending), batch_size):
-            batch = pending[start : start + batch_size]
-            response = session.get(
-                BUGZILLA_REST_URL,
-                params={
-                    "id": ",".join(str(bug_id) for bug_id in batch),
-                    "include_fields": ",".join(BUG_FIELDS + ("groups",)),
-                },
-                timeout=120,
-            )
-            response.raise_for_status()
-            for bug in response.json()["bugs"]:
-                if bug.pop("groups"):
-                    restricted += 1
-                    continue
-                bugs[bug["id"]] = bug
+        for bug in bugzilla.get_fields(pending, BUG_FIELDS + ("groups",)).values():
+            if bug.pop("groups"):
+                restricted += 1
+                continue
+            bugs[bug["id"]] = bug
         pending = sorted(
             {bug["dupe_of"] for bug in bugs.values() if bug.get("dupe_of")} - requested
         )

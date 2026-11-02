@@ -53,6 +53,11 @@ def _response_json(response):
     return response.json
 
 
+def _diff_of(patch: bytes) -> str:
+    text = patch.decode("utf-8")
+    return text[text.index("diff --git") :]
+
+
 def _changeset(
     node: str,
     desc: str = "Bug 123456 - Change something",
@@ -162,15 +167,16 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
         models.classify_perf_regression("integration/autoland", "abc123def456") == "OK"
     )
 
-    # Each commit is scored separately, with its own message and full patch.
+    # Each commit is scored separately, with its own message and diff, split
+    # from the export the same way the training set is.
     assert fake_model.calls == [
         {
             "commit_message": "Bug 123456 - Make rendering faster",
-            "diff": PATCH_ONE.decode("utf-8"),
+            "diff": _diff_of(PATCH_ONE),
         },
         {
             "commit_message": "Bug 123456 - Avoid repeated work",
-            "diff": PATCH_TWO.decode("utf-8"),
+            "diff": _diff_of(PATCH_TWO),
         },
     ]
 

@@ -49,11 +49,12 @@ for bug in bugzilla.get_bugs():
 ## Performance Alerts and Regressions
 
 ```py
-from bugbug import db, perf
+from bugbug import db
+from bugbug.perf import datasets
 
-db.download(perf.PERF_REGRESSIONS_DB)
+db.download(datasets.PERF_REGRESSIONS_DB)
 
-for regression in perf.get_perf_regressions():
+for regression in datasets.get_perf_regressions():
     # One record per confirmed Perfherder regression summary, with the culprit
     # push, the pinned culprit commits, the outcome and the regressed
     # performance tests.

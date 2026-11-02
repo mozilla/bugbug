@@ -24,7 +24,6 @@ from bugbug.models import testconfigselect, testselect
 from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
-from bugbug.models.perf_regression_predictor import PatchCommitMessageExtractor
 from bugbug.perf.commit_risk import get_ignore_reason
 from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
@@ -387,16 +386,10 @@ def classify_perf_regression(branch: str, rev: str) -> str:
 
     # Score each commit separately. The service runs inference on CPU,
     # so we classify one at a time to keep memory flat.
-    extract_commit_message = PatchCommitMessageExtractor()
     for (index, _), patch in zip(to_score, patches):
-        patch_text = patch.decode("utf-8", "replace")
+        export = repository.parse_hg_export(patch)
         commit_probabilities = model.classify(
-            [
-                {
-                    "commit_message": extract_commit_message(patch_text) or "",
-                    "diff": patch_text,
-                }
-            ],
+            [{"commit_message": export.message, "diff": export.diff}],
             probabilities=True,
         )[0]
         commits[index].update(

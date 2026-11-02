@@ -198,6 +198,28 @@ def get(ids_or_query):
     return new_bugs
 
 
+def get_fields(
+    bug_ids: Iterable[int], include_fields: Iterable[str]
+) -> dict[int, BugDict]:
+    """Fetch only ``include_fields`` of the given bugs, keyed by id.
+
+    Unlike :func:`get`, no comments, attachments or history are requested and
+    ``BUGS_DB`` is left alone.
+    """
+    bugs: dict[int, BugDict] = {}
+    ids = sorted({int(bug_id) for bug_id in bug_ids})
+    if not ids:
+        return bugs
+
+    def bughandler(bug: BugDict) -> None:
+        bugs[int(bug["id"])] = bug
+
+    Bugzilla(
+        ids, include_fields=",".join(include_fields), bughandler=bughandler
+    ).get_data().wait()
+    return bugs
+
+
 def get_ids_between(date_from, date_to=None, security=False, resolution=None):
     params = {
         "f1": "creation_ts",

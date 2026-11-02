@@ -5,14 +5,15 @@
 
 import pytest
 
-from bugbug import db, perf
+from bugbug import db
+from bugbug.perf import datasets, regression_commits
 from scripts import perf_alerts_retriever
 
 
 @pytest.mark.parametrize("refresh_repo", [False, True])
 def test_export_refreshes_the_clone_only_when_asked(monkeypatch, refresh_repo) -> None:
-    db.write(perf.PERF_REGRESSIONS_DB, [])
-    db.write(perf.PERF_PUSH_STATUS_DB, [])
+    db.write(datasets.PERF_REGRESSIONS_DB, [])
+    db.write(datasets.PERF_PUSH_STATUS_DB, [])
     calls = []
     monkeypatch.setattr(
         perf_alerts_retriever,
@@ -24,7 +25,9 @@ def test_export_refreshes_the_clone_only_when_asked(monkeypatch, refresh_repo) -
         calls.append(("read", repo_dir))
         return []
 
-    monkeypatch.setattr(perf, "attach_commit_patches", attach_commit_patches)
+    monkeypatch.setattr(
+        regression_commits, "attach_commit_patches", attach_commit_patches
+    )
 
     perf_alerts_retriever.Retriever().export(
         "/cache/mozilla-central",

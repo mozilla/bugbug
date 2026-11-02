@@ -43,30 +43,10 @@ def get_ignore_reason(changeset: dict) -> str | None:
     return None
 
 
-def changeset_from_patch(patch: bytes) -> dict:
-    """Build the changeset fields the rules read from an ``hg export`` payload.
-
-    The header is the leading run of ``#`` lines: ``# User`` gives the author
-    and each ``# Parent`` line a parent, two for a merge. The description is
-    the text between the header and the first ``diff`` line.
-    """
-    author = ""
-    parents: list[str] = []
-    desc_lines: list[str] = []
-    in_header = True
-    for line in patch.decode("utf-8", "replace").splitlines():
-        if in_header and line.startswith("#"):
-            if line.startswith("# User "):
-                author = line[len("# User ") :].strip()
-            elif line.startswith("# Parent "):
-                parents.append(line[len("# Parent ") :].strip())
-            continue
-        in_header = False
-        if line.startswith("diff "):
-            break
-        desc_lines.append(line)
+def changeset_from_export(export: repository.HgExport) -> dict:
+    """Build the changeset fields the rules read from a parsed ``hg export``."""
     return {
-        "author": author,
-        "parents": parents,
-        "desc": "\n".join(desc_lines).strip(),
+        "author": export.author,
+        "parents": export.parents,
+        "desc": export.message,
     }

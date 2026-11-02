@@ -10,30 +10,42 @@ import pytest
 import requests
 import responses
 import zstandard
+from libmozdata.bugzilla import Bugzilla
 
-from bugbug import db, perf
-from bugbug.perf import commit_risk, extraction, regression_commits
+from bugbug import db, repository
+from bugbug.perf import (
+    commit_risk,
+    datasets,
+    extraction,
+    label_policy,
+    push_status,
+    regression_commits,
+    regression_labeling,
+    selection_pairs,
+    task_costs,
+    task_labels,
+)
 
-RS = perf.RECORD_SEP
-US = perf.UNIT_SEP
+RS = extraction.RECORD_SEP
+US = extraction.UNIT_SEP
 SETTLED = datetime(2030, 1, 1, tzinfo=timezone.utc)
 
 
 def test_split_and_normalize_label() -> None:
     label = "test-linux1804-64-shippable-qr/opt-browsertime-tp6-firefox-amazon"
-    assert perf.split_task_label(label) == (
+    assert task_labels.split_task_label(label) == (
         "linux1804-64-shippable-qr",
         "opt",
         "browsertime-tp6-firefox-amazon",
     )
     assert (
-        perf.normalize_task_label(label)
+        task_labels.normalize_task_label(label)
         == "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"
     )
-    assert perf.normalize_task_label("perftest-linux-domcount") == (
+    assert task_labels.normalize_task_label("perftest-linux-domcount") == (
         "perftest-linux-domcount"
     )
-    assert perf.normalize_platform("windows11-64-24h2-shippable") == (
+    assert task_labels.normalize_platform("windows11-64-24h2-shippable") == (
         "windows11-64-24h2-shippable"
     )
 
@@ -118,8 +130,8 @@ def test_split_and_normalize_label() -> None:
 def test_perftest_labels(
     label, platform, build, test_name, family, application, platform_family
 ) -> None:
-    assert perf.split_task_label(label) == (platform, build, test_name)
-    identity = perf.get_runnable_identity(label)
+    assert task_labels.split_task_label(label) == (platform, build, test_name)
+    identity = task_labels.get_runnable_identity(label)
     assert identity["test_name"] == test_name
     assert identity["family"] == family
     assert identity["application"] == application
@@ -131,25 +143,25 @@ def test_perftest_labels(
 def test_perftest_label_normalization_and_exclusion() -> None:
     old = "perftest-linux-ml-summarizer-perf-linux1804-64-shippable/opt"
     assert (
-        perf.normalize_task_label(old)
+        task_labels.normalize_task_label(old)
         == "perftest-linux-ml-summarizer-perf-linux2404-64-shippable/opt"
     )
     chrome = "perftest-android-hw-a55-background-resource-chrome"
-    assert perf.get_exclusion_reason(chrome) == "application"
+    assert task_labels.get_exclusion_reason(chrome) == "application"
     fenix = "perftest-android-hw-a55-background-resource-fenix"
-    assert perf.get_exclusion_reason(fenix) is None
-    assert perf.split_task_label("perftest-unknown") is None
+    assert task_labels.get_exclusion_reason(fenix) is None
+    assert task_labels.split_task_label("perftest-unknown") is None
 
 
 def test_runnable_identity() -> None:
-    identity = perf.get_runnable_identity(
+    identity = task_labels.get_runnable_identity(
         "test-android-hw-a55-14-0-aarch64-shippable/opt-browsertime-tp6m-fenix-amazon"
     )
     assert identity["test_name"] == "browsertime-tp6m-fenix-amazon"
     assert identity["platform_family"] == "android"
     assert identity["platform"] == "android-hw-a55-14-0-aarch64-shippable/opt"
-    assert perf.is_perf_task_label("test-linux2404-64-shippable/opt-talos-g1")
-    assert not perf.is_perf_task_label("test-linux2404-64/opt-mochitest-plain-1")
+    assert task_labels.is_perf_task_label("test-linux2404-64-shippable/opt-talos-g1")
+    assert not task_labels.is_perf_task_label("test-linux2404-64/opt-mochitest-plain-1")
 
 
 def test_merge_alerts_keeps_history_and_labels() -> None:
@@ -171,7 +183,7 @@ def test_merge_alerts_keeps_history_and_labels() -> None:
         _alert(alert_id=3, summary_created="2025-03-01T00:00:00", task_labels=None),
         _alert(alert_id=4, summary_created="2025-04-01T00:00:00"),
     ]
-    merged = perf.merge_alerts(previous, fetched)
+    merged = extraction.merge_alerts(previous, fetched)
     assert [a["alert_id"] for a in merged] == [1, 2, 3, 4]
     refreshed = merged[1]
     assert refreshed["summary_status"] == 7
@@ -184,26 +196,26 @@ def test_archive_readers_skip_other_repositories() -> None:
     # Snapshots retrieved before the pipeline became autoland-only can hold
     # mozilla-central rows; a merge push would list autoland culprits again.
     db.write(
-        perf.PERF_ALERTS_DB,
+        datasets.PERF_ALERTS_DB,
         [_alert(alert_id=1), _alert(alert_id=2, repository="mozilla-central")],
     )
     db.write(
-        perf.PERF_PUSHES_DB,
+        datasets.PERF_PUSHES_DB,
         [
             {"push_id": 1, "repository": "autoland"},
             {"push_id": 2, "repository": "mozilla-central"},
         ],
     )
     db.write(
-        perf.PERF_TASK_COSTS_DB,
+        datasets.PERF_TASK_COSTS_DB,
         [
             {"task_id": "A", "project": "autoland"},
             {"task_id": "B", "project": "mozilla-central"},
         ],
     )
-    assert [a["alert_id"] for a in perf.get_perf_alerts()] == [1]
-    assert [p["push_id"] for p in perf.get_perf_pushes()] == [1]
-    assert [c["task_id"] for c in perf.get_perf_task_costs()] == ["A"]
+    assert [a["alert_id"] for a in datasets.get_perf_alerts()] == [1]
+    assert [p["push_id"] for p in datasets.get_perf_pushes()] == [1]
+    assert [c["task_id"] for c in datasets.get_perf_task_costs()] == ["A"]
 
 
 def test_alert_fields_are_derived_on_read() -> None:
@@ -213,7 +225,7 @@ def test_alert_fields_are_derived_on_read() -> None:
         alert
     )
     # The current rename table applies to every alert, archived ones included.
-    derived = perf.derive_alert_fields(alert)
+    derived = regression_labeling.derive_alert_fields(alert)
     assert derived["summary_status_name"] == "fixed"
     assert derived["alert_status_name"] == "acknowledged"
     assert derived["normalized_labels"] == ["test-linux2404-64-shippable/opt-talos-g1"]
@@ -233,7 +245,7 @@ def test_parse_push_row() -> None:
             f"test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon{US}success{US}1200{US}2{US}T2{US}0"
         ),
     }
-    push = perf.parse_push_row(row)
+    push = extraction.parse_push_row(row)
     assert push["commits"][0] == {
         "revision": "a" * 40,
         "desc": "Bug 123 - Fix things r=me",
@@ -256,14 +268,14 @@ def test_parse_push_row() -> None:
 
 
 def test_costs_query_and_normalization() -> None:
-    query = perf.build_task_costs_query(
+    query = extraction.build_task_costs_query(
         datetime(2026, 9, 1).date(), datetime(2026, 9, 3).date()
     )
     assert 'submission_date >= "2026-09-01"' in query
     assert 'submission_date < "2026-09-03"' in query
     assert "tags.project = 'autoland'" in query
 
-    cost = perf.normalize_cost_row(
+    cost = extraction.normalize_cost_row(
         {
             "task_id": "T1",
             "label": "test-linux1804-64-shippable/opt-talos-g1",
@@ -276,17 +288,17 @@ def test_costs_query_and_normalization() -> None:
             "unexpected": "dropped",
         }
     )
-    assert set(cost) == set(perf.COST_FIELDS)
+    assert set(cost) == set(extraction.COST_FIELDS)
     assert cost["task_queue_id"] == "releng-hardware/gecko-t-linux-talos-2404"
     assert cost["submission_date"] is None
-    identity = perf.get_runnable_identity(cost["label"])
+    identity = task_labels.get_runnable_identity(cost["label"])
     assert identity["test_name"] == "talos-g1"
     assert identity["platform_family"] == "linux"
 
 
 def test_load_task_costs_filters_by_task_id() -> None:
     db.write(
-        perf.PERF_TASK_COSTS_DB,
+        datasets.PERF_TASK_COSTS_DB,
         [
             {
                 "task_id": "T1",
@@ -297,10 +309,12 @@ def test_load_task_costs_filters_by_task_id() -> None:
             {"task_id": "T2", "task_queue_id": "pool-b", "cost": 0.5, "costed_runs": 1},
         ],
     )
-    assert perf.load_task_costs({"T2"}) == {"T2": perf.TaskCost("pool-b", 0.5, 1)}
-    assert set(perf.load_task_costs()) == {"T1", "T2"}
+    assert task_costs.load_task_costs({"T2"}) == {
+        "T2": task_costs.TaskCost("pool-b", 0.5, 1)
+    }
+    assert set(task_costs.load_task_costs()) == {"T1", "T2"}
     pushes = [{"perf_jobs": [{"runs": [{"task_id": "T1"}, {"task_id": None}]}]}]
-    assert perf.collect_push_task_ids(pushes) == {"T1"}
+    assert task_costs.collect_push_task_ids(pushes) == {"T1"}
 
 
 def test_label_prices_and_price_labels() -> None:
@@ -315,16 +329,18 @@ def test_label_prices_and_price_labels() -> None:
         {"label": win_g1, "task_queue_id": "win-hw", "runs": 0, "duration": 0},
         {"label": None, "task_queue_id": "win-hw", "runs": 1, "duration": 1},
     ]
-    prices = perf.build_label_prices(rows)
+    prices = task_costs.build_label_prices(rows)
     # Renamed platforms merge; the median is over runs, the pool the most common.
     assert prices == {
-        amazon: perf.LabelPrice("linux-hw", 300, 4),
-        win_g1: perf.LabelPrice("win-hw", 40, 1),
+        amazon: task_costs.LabelPrice("linux-hw", 300, 4),
+        win_g1: task_costs.LabelPrice("win-hw", 40, 1),
     }
 
     ebay = "test-linux2404-64-shippable/opt-browsertime-tp6-firefox-ebay"
     mac_g1 = "test-macosx1470-64-shippable/opt-talos-g1"
-    summary = perf.estimate_labels_cost([old_amazon, win_g1, ebay, mac_g1], prices)
+    summary = task_costs.estimate_labels_cost(
+        [old_amazon, win_g1, ebay, mac_g1], prices
+    )
     # ebay borrows the tp6/linux price; mac talos has no sibling on macosx.
     assert summary == {
         "labels": 4,
@@ -364,10 +380,10 @@ def test_push_cost_summary() -> None:
         ]
     }
     costs = {
-        "T1": perf.TaskCost("releng-hardware/mac", None, None),
-        "T2": perf.TaskCost("gecko-t/linux", 0.4, 2),
+        "T1": task_costs.TaskCost("releng-hardware/mac", None, None),
+        "T2": task_costs.TaskCost("gecko-t/linux", 0.4, 2),
     }
-    summary = perf.summarize_push_cost(push, costs)
+    summary = task_costs.summarize_push_cost(push, costs)
     assert summary["runs"] == 3
     assert summary["runs_with_pool"] == 2
     assert summary["runs_with_cost"] == 1
@@ -379,13 +395,13 @@ def test_push_cost_summary() -> None:
 
 
 def test_sql_queries_are_parameterized() -> None:
-    query = perf.build_alerts_query(
+    query = extraction.build_alerts_query(
         datetime(2026, 1, 2).date(), datetime(2026, 2, 1).date()
     )
     assert "repo.name = 'autoland'" in query
     assert "s.created >= '2026-01-02'" in query
     assert "s.created < '2026-02-01'" in query
-    pushes = perf.build_pushes_query(datetime(2026, 1, 2), datetime(2026, 1, 3))
+    pushes = extraction.build_pushes_query(datetime(2026, 1, 2), datetime(2026, 1, 3))
     assert "repo.name = 'autoland'" in pushes
 
 
@@ -422,7 +438,7 @@ def _alert(**overrides):
         "task_ids": "T1|T2",
     }
     alert.update(overrides)
-    return perf.normalize_alert_row(alert)
+    return extraction.normalize_alert_row(alert)
 
 
 def _push(push_id, commits, jobs=(), time="2026-05-30T00:00:00"):
@@ -572,10 +588,10 @@ def _bugs():
     ],
 )
 def test_grouping_hierarchy(test_name, family, application, category) -> None:
-    grouping = perf.split_test_name(test_name)
+    grouping = task_labels.split_test_name(test_name)
     assert grouping["family"] == family
     assert grouping["application"] == application
-    assert perf.get_test_category(test_name) == category
+    assert task_labels.get_test_category(test_name) == category
 
 
 @pytest.mark.parametrize(
@@ -603,8 +619,8 @@ def test_grouping_hierarchy(test_name, family, application, category) -> None:
     ],
 )
 def test_test_categories(test_name, categories) -> None:
-    assert perf.get_test_categories(test_name) == categories
-    assert perf.get_test_category(test_name) == categories[0]
+    assert task_labels.get_test_categories(test_name) == categories
+    assert task_labels.get_test_category(test_name) == categories[0]
 
 
 def test_every_known_test_has_a_category() -> None:
@@ -680,7 +696,9 @@ def test_every_known_test_has_a_category() -> None:
         "perftest-places",
         "perftest-busy-trr",
     ]
-    uncategorized = [t for t in identities if perf.get_test_category(t) == "other"]
+    uncategorized = [
+        t for t in identities if task_labels.get_test_category(t) == "other"
+    ]
     assert uncategorized == []
 
 
@@ -689,18 +707,20 @@ def test_non_test_labels_are_excluded() -> None:
         "source-test-python-raptor-linux2404-64/opt",
         "toolchain-linux64-talos-pdfs",
     ):
-        assert not perf.is_perf_task_label(label)
-        assert perf.get_exclusion_reason(label) == "unparsed"
-    assert perf.is_perf_task_label("test-linux2404-64-shippable/opt-talos-g1")
-    assert perf.is_perf_task_label("perftest-linux-busy-trr-linux2404-64-shippable/opt")
+        assert not task_labels.is_perf_task_label(label)
+        assert task_labels.get_exclusion_reason(label) == "unparsed"
+    assert task_labels.is_perf_task_label("test-linux2404-64-shippable/opt-talos-g1")
+    assert task_labels.is_perf_task_label(
+        "perftest-linux-busy-trr-linux2404-64-shippable/opt"
+    )
     sample = (
         "test-linux2404-64-shippable/opt-browsertime-custom-firefox-browsertime-sample"
     )
-    assert perf.get_exclusion_reason(sample) == "canary"
+    assert task_labels.get_exclusion_reason(sample) == "canary"
 
 
 def test_runnable_identity_levels() -> None:
-    identity = perf.get_runnable_identity(
+    identity = task_labels.get_runnable_identity(
         "test-windows11-64-24h2-shippable/opt-browsertime-tp6-firefox-amazon"
     )
     assert identity["test_name"] == "browsertime-tp6-firefox-amazon"
@@ -714,46 +734,51 @@ def test_runnable_identity_levels() -> None:
 
 def test_exclusion_reasons() -> None:
     assert (
-        perf.get_exclusion_reason("build-linux64/opt", framework="build_metrics")
+        task_labels.get_exclusion_reason("build-linux64/opt", framework="build_metrics")
         == "framework"
     )
     assert (
-        perf.get_exclusion_reason(
+        task_labels.get_exclusion_reason(
             "test-linux2404-64-shippable/opt-browsertime-tp6-chrome-amazon"
         )
         == "application"
     )
     assert (
-        perf.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1-profiling")
+        task_labels.get_exclusion_reason(
+            "test-linux2404-64-shippable/opt-talos-g1-profiling"
+        )
         == "variant"
     )
     assert (
-        perf.get_exclusion_reason(
+        task_labels.get_exclusion_reason(
             "test-linux2404-64-shippable/opt-browsertime-tp6-profiling-firefox-amazon"
         )
         == "variant"
     )
     assert (
-        perf.get_exclusion_reason(
+        task_labels.get_exclusion_reason(
             "test-linux2404-64-shippable/opt-browsertime-regression-tests-firefox-constant"
         )
         == "canary"
     )
-    assert perf.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1") is None
+    assert (
+        task_labels.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1")
+        is None
+    )
     # Only the variants listed in the policy are excluded; swr is a real Firefox run.
     assert (
-        perf.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1-swr")
+        task_labels.get_exclusion_reason("test-linux2404-64-shippable/opt-talos-g1-swr")
         is None
     )
     assert (
-        perf.get_exclusion_reason(
+        task_labels.get_exclusion_reason(
             "test-android-hw-a55-14-0-aarch64-shippable/opt-browsertime-tp6m-fenix-amazon"
         )
         is None
     )
     # Signature application only matters when the label carries none.
     assert (
-        perf.get_exclusion_reason(
+        task_labels.get_exclusion_reason(
             "test-linux2404-64-shippable/opt-talos-g1", application="chrome"
         )
         is None
@@ -793,7 +818,7 @@ def test_exclusion_reasons() -> None:
 def test_exclusion_reasons_from_signature(
     label, framework, application, suite, expected
 ) -> None:
-    reason = perf.get_exclusion_reason(label, framework, application, suite)
+    reason = task_labels.get_exclusion_reason(label, framework, application, suite)
     assert reason == expected
 
 
@@ -822,14 +847,16 @@ def test_generate_regressions_applies_exclusions() -> None:
             task_labels="test-linux2404-64-shippable/opt-talos-g1-profiling",
         ),
     ]
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
     assert [r["summary_id"] for r in regressions] == [100]
     labels = [r["label"] for r in regressions[0]["runnables"]]
     assert labels == ["test-linux2404-64-shippable/opt-browsertime-tp6-firefox-amazon"]
     assert regressions[0]["runnables"][0]["family"] == "browsertime-tp6"
     assert regressions[0]["runnables"][0]["category"] == "page-load"
-    assert regressions[0]["policy_version"] == perf.POLICY_VERSION
+    assert regressions[0]["policy_version"] == label_policy.POLICY_VERSION
 
 
 def test_generate_regressions_excludes_unlabeled_alerts() -> None:
@@ -862,8 +889,10 @@ def test_generate_regressions_excludes_unlabeled_alerts() -> None:
             task_labels=None,
         ),
     ]
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
     assert [r["summary_id"] for r in regressions] == [100]
     assert [
         (r["signature_id"], r["suite"], r["label"]) for r in regressions[0]["runnables"]
@@ -906,15 +935,19 @@ def test_unlabeled_alerts_take_their_signature_label() -> None:
             ]
         ),
     ]
-    assert perf.get_signature_labels(map(perf.derive_alert_fields, alerts)) == {
+    assert regression_labeling.get_signature_labels(
+        map(regression_labeling.derive_alert_fields, alerts)
+    ) == {
         900: amazon_linux,
         901: amazon_windows,
         902: g1,
         904: g1_profiling,
     }
 
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
     assert [r["summary_id"] for r in regressions] == [100]
     assert [
         (r["signature_id"], r["label"], r["label_from_signature"])
@@ -927,7 +960,7 @@ def test_unlabeled_alerts_take_their_signature_label() -> None:
     ]
 
     # A pair is flagged only when every label behind it was copied.
-    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
+    pairs = list(selection_pairs.generate_scheduling_pairs(regressions, push_index))
     assert [
         (p["node"][0], p["test_name"], p["labels_from_signature"]) for p in pairs
     ] == [
@@ -947,7 +980,7 @@ def test_landings_group_commits_by_bug() -> None:
             ("g" * 40, "No Bug - l10n", None, False),
         ],
     )
-    result = perf.group_landings(push)
+    result = regression_labeling.group_landings(push)
     assert [
         (x["landing_id"], x["bug_id"], x["backout"], x["revisions"]) for x in result
     ] == [
@@ -956,7 +989,7 @@ def test_landings_group_commits_by_bug() -> None:
         (f"12:{'f' * 12}", None, True, ["f" * 40]),
         (f"12:{'g' * 12}", None, False, ["g" * 40]),
     ]
-    commits = perf.get_push_commits(push)
+    commits = push_status.get_push_commits(push)
     assert [
         (c["node"][0], c["landing_id"], c["landing_size"], c["backout"])
         for c in commits
@@ -984,22 +1017,24 @@ def test_pin_culprit_commits_rules() -> None:
             ("b" * 40, "Bug 7 - part 2", 7, False),
         ],
     )
-    assert perf.pin_culprit_commits(multi, {"regressed_by": [3]}, 555) == (
+    assert regression_labeling.pin_culprit_commits(
+        multi, {"regressed_by": [3]}, 555
+    ) == (
         ["c" * 40],
         "bug",
     )
     # The summary links the culprit bug directly instead of a regression bug.
-    assert perf.pin_culprit_commits(multi, {"regressed_by": []}, 4) == (
+    assert regression_labeling.pin_culprit_commits(multi, {"regressed_by": []}, 4) == (
         ["d" * 40],
         "summary_bug",
     )
-    assert perf.pin_culprit_commits(multi, None, None) == ([], None)
+    assert regression_labeling.pin_culprit_commits(multi, None, None) == ([], None)
     # A stack for one bug is one landing and pins as a whole.
-    assert perf.pin_culprit_commits(single, None, 999) == (
+    assert regression_labeling.pin_culprit_commits(single, None, 999) == (
         ["a" * 40, "b" * 40],
         "single_landing",
     )
-    assert perf.pin_culprit_commits(None, None, None) == ([], None)
+    assert regression_labeling.pin_culprit_commits(None, None, None) == ([], None)
 
 
 def test_generate_regressions_labels_and_pins_culprit() -> None:
@@ -1037,8 +1072,10 @@ def test_generate_regressions_labels_and_pins_culprit() -> None:
         # A push still inside the settle window is skipped.
         _alert(alert_id=6, summary_id=103, push_time="2031-01-01T00:00:00"),
     ]
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
     assert [r["summary_id"] for r in regressions] == [100, 102]
 
     first = regressions[0]
@@ -1104,10 +1141,12 @@ def test_pairs_and_push_status_and_negatives() -> None:
             task_labels="test-linux2404-64-shippable/opt-talos-g1",
         ),
     ]
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(perf.generate_regressions(alerts, push_index, _bugs(), SETTLED))
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
 
-    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
+    pairs = list(selection_pairs.generate_scheduling_pairs(regressions, push_index))
     assert [(p["push_id"], p["node"][0], p["test_name"]) for p in pairs] == [
         (12, "c", "browsertime-tp6-firefox-amazon"),
         (13, "e", "talos-g1"),
@@ -1122,7 +1161,7 @@ def test_pairs_and_push_status_and_negatives() -> None:
     assert not any(p["node"] == "d" * 40 for p in pairs)
     assert pairs[1]["pinned_by"] == "single_landing"
 
-    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
+    statuses = list(push_status.generate_push_status(push_index, regressions, SETTLED))
     by_id = {s["push_id"]: s for s in statuses}
     assert by_id[12]["label_state"] == "culprit" and by_id[10]["label_state"] == "clean"
     assert by_id[12]["identities_ran"] == ["browsertime-tp6-firefox-amazon", "talos-g1"]
@@ -1132,9 +1171,9 @@ def test_pairs_and_push_status_and_negatives() -> None:
     assert all(s["settled"] for s in statuses)
     assert "ambiguous" not in by_id[12]
 
-    db.write(perf.PERF_PAIRS_DB, pairs)
-    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
-    rows = list(perf.iter_labeled_pairs())
+    db.write(datasets.PERF_PAIRS_DB, pairs)
+    db.write(datasets.PERF_PUSH_STATUS_DB, statuses)
+    rows = list(selection_pairs.iter_labeled_pairs())
     labeled = {(r["node"][0], r["test_name"]): r["label"] for r in rows}
     assert labeled[("c", "browsertime-tp6-firefox-amazon")] == 1
     assert labeled[("e", "talos-g1")] == 1
@@ -1161,7 +1200,7 @@ def test_train_test_split_never_divides_a_push() -> None:
 
     # A 30% cutoff by count lands inside push t3; the whole push goes to test.
     selected = records()
-    perf.assign_train_test_splits(selected, test_fraction=0.3)
+    regression_commits.assign_train_test_splits(selected, test_fraction=0.3)
     assert [(r["node"], r["split"]) for r in selected] == [
         ("t1-0", "train"),
         ("t2-0", "train"),
@@ -1172,17 +1211,19 @@ def test_train_test_split_never_divides_a_push() -> None:
     ]
 
     selected = records()
-    perf.assign_train_test_splits(selected, test_fraction=0)
+    regression_commits.assign_train_test_splits(selected, test_fraction=0)
     assert {r["split"] for r in selected} == {"train"}
 
 
 def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
-    push_index = perf.PushIndex(_pushes())
+    push_index = regression_labeling.PushIndex(_pushes())
     regressions = list(
-        perf.generate_regressions([_alert()], push_index, _bugs(), SETTLED)
+        regression_labeling.generate_regressions(
+            [_alert()], push_index, _bugs(), SETTLED
+        )
     )
-    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
-    selected = perf.select_export_commits(
+    statuses = list(push_status.generate_push_status(push_index, regressions, SETTLED))
+    selected = regression_commits.select_export_commits(
         regressions, statuses, negative_ratio=2, seed=1
     )
     positives = [r for r in selected if r["label"] == 1]
@@ -1196,7 +1237,7 @@ def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
     # No commit of a culprit push is a negative.
     assert all(n["node"] not in ("c" * 40, "d" * 40) for n in negatives)
 
-    perf.assign_train_test_splits(selected, test_fraction=0.3)
+    regression_commits.assign_train_test_splits(selected, test_fraction=0.3)
     assert [r["split"] for r in selected] == ["train", "train", "test"]
 
     def fake_patches(repo_dir, revs):
@@ -1209,12 +1250,12 @@ def test_export_selects_commits_and_attaches_patches(monkeypatch) -> None:
             for rev in revs
         ]
 
-    monkeypatch.setattr(regression_commits, "export_hg_patches", fake_patches)
-    exported = list(perf.attach_commit_patches(selected, "/nonexistent"))
+    monkeypatch.setattr(repository, "get_commit_patches", fake_patches)
+    exported = list(regression_commits.attach_commit_patches(selected, "/nonexistent"))
     assert len(exported) == 3
     assert exported[-1]["commit_message"] == "Bug 3 - culprit\n\nMore text"
     assert exported[-1]["diff"].startswith("diff --git a/f b/f")
-    assert exported[-1]["policy_version"] == perf.POLICY_VERSION
+    assert exported[-1]["policy_version"] == label_policy.POLICY_VERSION
 
 
 def test_attach_commit_patches_skips_empty_diffs(monkeypatch) -> None:
@@ -1229,8 +1270,8 @@ def test_attach_commit_patches_skips_empty_diffs(monkeypatch) -> None:
             for rev in revs
         ]
 
-    monkeypatch.setattr(regression_commits, "export_hg_patches", fake_patches)
-    exported = list(perf.attach_commit_patches(records, "/nonexistent"))
+    monkeypatch.setattr(repository, "get_commit_patches", fake_patches)
+    exported = list(regression_commits.attach_commit_patches(records, "/nonexistent"))
     assert [e["node"][0] for e in exported] == ["2"]
 
 
@@ -1260,7 +1301,7 @@ def test_ignore_reason_rules(changeset, expected_reason) -> None:
     assert commit_risk.get_ignore_reason(changeset) == expected_reason
 
 
-def test_changeset_from_patch_reads_the_export_header() -> None:
+def test_changeset_from_export_reads_the_header() -> None:
     patch = (
         b"# HG changeset patch\n# User Developer <dev@example.com>\n# Date 1 0\n"
         b"#      Thu Jan 01 00:00:00 1970 +0000\n# Node ID " + b"1" * 40 + b"\n"
@@ -1268,7 +1309,7 @@ def test_changeset_from_patch_reads_the_export_header() -> None:
         b"Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset\n\n"
         b"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n"
     )
-    assert commit_risk.changeset_from_patch(patch) == {
+    assert commit_risk.changeset_from_export(repository.parse_hg_export(patch)) == {
         "author": "Developer <dev@example.com>",
         "parents": ["2" * 40, "3" * 40],
         "desc": "Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset",
@@ -1298,8 +1339,8 @@ def test_attach_commit_patches_skips_commits_the_predictor_ignores(
             for rev in revs
         ]
 
-    monkeypatch.setattr(regression_commits, "export_hg_patches", fake_patches)
-    exported = list(perf.attach_commit_patches(records, "/nonexistent"))
+    monkeypatch.setattr(repository, "get_commit_patches", fake_patches)
+    exported = list(regression_commits.attach_commit_patches(records, "/nonexistent"))
     # Backouts are kept; merges, wpt syncs and ignore-this-changeset are dropped.
     assert [e["node"][0] for e in exported] == ["4", "5"]
     assert exported[0]["commit_message"] == "Backed out changeset 123456789abc"
@@ -1320,20 +1361,22 @@ def test_revert_is_pinned_through_the_summary_bug() -> None:
         ],
         ["test-linux2404-64-shippable/opt-talos-g1"],
     )
-    push_index = perf.PushIndex(_pushes() + [revert])
+    push_index = regression_labeling.PushIndex(_pushes() + [revert])
     bugs = {2067590: {"id": 2067590, "regressed_by": [1947687]}}
     alerts = [_alert(summary_id=200, push_id=30, prev_push_id=14, bug_number=2067590)]
-    (regression,) = perf.generate_regressions(alerts, push_index, bugs, SETTLED)
+    (regression,) = regression_labeling.generate_regressions(
+        alerts, push_index, bugs, SETTLED
+    )
     assert regression["culprit_commits"] == ["9" * 40]
     assert regression["pinned_by"] == "summary_bug"
     assert regression["regressed_by_agrees"] is False
 
-    pairs = list(perf.generate_scheduling_pairs([regression], push_index))
+    pairs = list(selection_pairs.generate_scheduling_pairs([regression], push_index))
     assert [(p["node"][0], p["backout"], p["test_name"]) for p in pairs] == [
         ("9", True, "browsertime-tp6-firefox-amazon")
     ]
-    statuses = list(perf.generate_push_status(push_index, [regression], SETTLED))
-    exported = perf.select_export_commits(
+    statuses = list(push_status.generate_push_status(push_index, [regression], SETTLED))
+    exported = regression_commits.select_export_commits(
         [regression], statuses, negative_ratio=1, seed=0
     )
     assert [e["node"][0] for e in exported if e["label"] == 1] == ["9"]
@@ -1341,31 +1384,39 @@ def test_revert_is_pinned_through_the_summary_bug() -> None:
 
 
 def test_regression_window_is_bounded_by_push_time() -> None:
-    push_index = perf.PushIndex(_pushes())
+    push_index = regression_labeling.PushIndex(_pushes())
     cutoff = datetime(2026, 5, 30, 12, tzinfo=timezone.utc)
     # A summary opened after the cutoff still counts when its push is settled.
     late_summary = _alert(summary_created="2031-01-01T00:00:00")
-    kept = perf.generate_regressions([late_summary], push_index, _bugs(), cutoff)
+    kept = regression_labeling.generate_regressions(
+        [late_summary], push_index, _bugs(), cutoff
+    )
     assert [r["summary_id"] for r in kept] == [100]
     # Pushes at or after the cutoff, or before --since, are outside the window.
     push_time = datetime(2026, 5, 30, tzinfo=timezone.utc)
     assert not list(
-        perf.generate_regressions([late_summary], push_index, _bugs(), push_time)
+        regression_labeling.generate_regressions(
+            [late_summary], push_index, _bugs(), push_time
+        )
     )
     assert not list(
-        perf.generate_regressions(
+        regression_labeling.generate_regressions(
             [late_summary], push_index, _bugs(), cutoff, pushed_from=cutoff
         )
     )
-    assert perf.is_within_window("2026-05-30T00:00:00", push_time, cutoff)
-    assert not perf.is_within_window(None, None, cutoff)
+    assert regression_labeling.is_within_window(
+        "2026-05-30T00:00:00", push_time, cutoff
+    )
+    assert not regression_labeling.is_within_window(None, None, cutoff)
 
 
 def test_labeled_window_excludes_pushes_before_the_alerts_window() -> None:
     labeled_from = datetime(2026, 5, 29, 12, tzinfo=timezone.utc)
-    push_index = perf.PushIndex(_pushes())
+    push_index = regression_labeling.PushIndex(_pushes())
     # Pushes 10 (May 28) and 11 (May 29 00:00) predate the alerts window.
-    statuses = list(perf.generate_push_status(push_index, [], SETTLED, labeled_from))
+    statuses = list(
+        push_status.generate_push_status(push_index, [], SETTLED, labeled_from)
+    )
     assert [(s["push_id"], s["settled"]) for s in statuses] == [
         (10, False),
         (11, False),
@@ -1374,20 +1425,23 @@ def test_labeled_window_excludes_pushes_before_the_alerts_window() -> None:
         (14, True),
     ]
     assert [
-        (s["push_id"], c["node"][0]) for s, c in perf.iter_clean_commits(statuses)
+        (s["push_id"], c["node"][0])
+        for s, c in push_status.iter_clean_commits(statuses)
     ] == [
         (12, "c"),
         (12, "d"),
         (13, "e"),
         (14, "f"),
     ]
-    db.write(perf.PERF_PAIRS_DB, [])
-    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
-    assert perf.read_push_status() == statuses
-    negatives = {r["node"][0] for r in perf.iter_labeled_pairs({"talos-g1"})}
+    db.write(datasets.PERF_PAIRS_DB, [])
+    db.write(datasets.PERF_PUSH_STATUS_DB, statuses)
+    assert push_status.read_push_status() == statuses
+    negatives = {r["node"][0] for r in selection_pairs.iter_labeled_pairs({"talos-g1"})}
     assert negatives == {"c", "d", "e", "f"}  # a, b are unlabeled
 
-    exported = perf.select_export_commits([], statuses, negative_ratio=1, seed=0)
+    exported = regression_commits.select_export_commits(
+        [], statuses, negative_ratio=1, seed=0
+    )
     assert exported == []  # no positives, so no negatives are sampled
 
 
@@ -1433,7 +1487,9 @@ def _bug(bug_id, status="RESOLVED", resolution=None, regressed_by=(), dupe_of=No
 def test_regression_outcome(
     summary_status, bug, pinned_by, bug_number, expected
 ) -> None:
-    outcome = perf.decide_regression_outcome(summary_status, bug, pinned_by, bug_number)
+    outcome = regression_labeling.decide_regression_outcome(
+        summary_status, bug, pinned_by, bug_number
+    )
     assert outcome == expected
 
 
@@ -1444,13 +1500,13 @@ def test_canonical_bug_follows_duplicates() -> None:
         3: _bug(3, resolution="FIXED", regressed_by=[3]),
         4: _bug(4, resolution="DUPLICATE", dupe_of=99),
     }
-    assert perf.resolve_canonical_bug(bugs[1], bugs) == (bugs[3], 3)
-    assert perf.resolve_canonical_bug(bugs[3], bugs) == (bugs[3], None)
-    assert perf.resolve_canonical_bug(bugs[4], bugs) == (
+    assert regression_labeling.resolve_canonical_bug(bugs[1], bugs) == (bugs[3], 3)
+    assert regression_labeling.resolve_canonical_bug(bugs[3], bugs) == (bugs[3], None)
+    assert regression_labeling.resolve_canonical_bug(bugs[4], bugs) == (
         bugs[4],
         None,
     )  # target not fetched
-    assert perf.resolve_canonical_bug(None, bugs) == (None, None)
+    assert regression_labeling.resolve_canonical_bug(None, bugs) == (None, None)
 
 
 def test_generate_regressions_outcomes_and_label_states() -> None:
@@ -1513,8 +1569,10 @@ def test_generate_regressions_outcomes_and_label_states() -> None:
             signature_id=905,
         ),
     ]
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(perf.generate_regressions(alerts, push_index, bugs, SETTLED))
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, bugs, SETTLED)
+    )
     by_summary = {r["summary_id"]: r for r in regressions}
     assert sorted(by_summary) == [100, 101, 102, 103, 104]
 
@@ -1529,7 +1587,7 @@ def test_generate_regressions_outcomes_and_label_states() -> None:
     assert by_summary[104]["outcome"] == "attributed"
     assert by_summary[104]["summary_tags"] == ["harness"]
 
-    states = perf.get_push_label_states(regressions)
+    states = push_status.get_push_label_states(regressions)
     assert states == {
         12: "culprit",
         13: "culprit",
@@ -1539,19 +1597,19 @@ def test_generate_regressions_outcomes_and_label_states() -> None:
     }
 
     # Pairs come only from positives.
-    pairs = list(perf.generate_scheduling_pairs(regressions, push_index))
+    pairs = list(selection_pairs.generate_scheduling_pairs(regressions, push_index))
     assert sorted({p["push_id"] for p in pairs}) == [12, 13, 14]
 
-    statuses = list(perf.generate_push_status(push_index, regressions, SETTLED))
-    db.write(perf.PERF_PAIRS_DB, pairs)
-    db.write(perf.PERF_PUSH_STATUS_DB, statuses)
-    labeled = list(perf.iter_labeled_pairs({"talos-g1"}))
+    statuses = list(push_status.generate_push_status(push_index, regressions, SETTLED))
+    db.write(datasets.PERF_PAIRS_DB, pairs)
+    db.write(datasets.PERF_PUSH_STATUS_DB, statuses)
+    labeled = list(selection_pairs.iter_labeled_pairs({"talos-g1"}))
     negatives = {r["node"][0] for r in labeled if r["label"] == 0}
     assert (
         negatives == set()
     )  # pushes 10 and 11 are pending/rejected, the rest culprits
 
-    exported = perf.select_export_commits(
+    exported = regression_commits.select_export_commits(
         regressions, statuses, negative_ratio=5, seed=0
     )
     assert {e["node"][0] for e in exported if e["label"] == 1} == {"c", "e", "f"}
@@ -1575,8 +1633,10 @@ def test_unfetched_linked_bug_is_pending() -> None:
             signature_id=901,
         ),
     ]
-    push_index = perf.PushIndex(_pushes())
-    regressions = list(perf.generate_regressions(alerts, push_index, {}, SETTLED))
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, {}, SETTLED)
+    )
     by_summary = {r["summary_id"]: r for r in regressions}
 
     assert by_summary[100]["outcome"] == "pending"
@@ -1585,7 +1645,7 @@ def test_unfetched_linked_bug_is_pending() -> None:
     assert by_summary[101]["outcome"] == "attributed"
     assert by_summary[101]["pinned_by"] == "summary_bug"
     # The pending push yields neither positives nor negatives.
-    states = perf.get_push_label_states(regressions)
+    states = push_status.get_push_label_states(regressions)
     assert states == {12: "pending", 13: "culprit"}
 
 
@@ -1611,11 +1671,11 @@ def test_fetch_bugs_follows_duplicates() -> None:
 
     responses.add_callback(
         responses.GET,
-        extraction.BUGZILLA_REST_URL,
+        Bugzilla.API_URL,
         callback=reply,
         content_type="application/json",
     )
-    bugs = {b["id"]: b for b in perf.fetch_bugs([1])}
+    bugs = {b["id"]: b for b in extraction.fetch_bugs([1])}
     assert sorted(bugs) == [1, 2, 3]
     assert bugs[3]["resolution"] == "FIXED"
     requested = [c.request.params["id"] for c in responses.calls]
@@ -1649,11 +1709,11 @@ def test_fetch_bugs_drops_restricted_bugs() -> None:
 
     responses.add_callback(
         responses.GET,
-        extraction.BUGZILLA_REST_URL,
+        Bugzilla.API_URL,
         callback=reply,
         content_type="application/json",
     )
-    bugs = perf.fetch_bugs([1, 4])
+    bugs = extraction.fetch_bugs([1, 4])
     assert [bug["id"] for bug in bugs] == [1]
     assert "groups" not in bugs[0]
     # Restricted bug 2 is requested once and its duplicate link is not followed.
@@ -1661,7 +1721,7 @@ def test_fetch_bugs_drops_restricted_bugs() -> None:
     assert requested == ["1,4", "2"]
 
 
-ALERTS_URL = db.DATABASES[perf.PERF_ALERTS_DB]["url"]
+ALERTS_URL = db.DATABASES[datasets.PERF_ALERTS_DB]["url"]
 ALERTS_VERSION_URL = ALERTS_URL.replace(".zst", ".version")
 
 
@@ -1678,14 +1738,14 @@ def _publish_alerts(version, records=()):
 @responses.activate
 def test_previous_snapshot_is_downloaded() -> None:
     _publish_alerts(1, [{"alert_id": 7, "repository": "autoland"}])
-    assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
-    assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
+    assert datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB)
+    assert [alert["alert_id"] for alert in datasets.get_perf_alerts()] == [7]
 
 
 @responses.activate
 def test_first_run_starts_a_new_archive() -> None:
     responses.add(responses.GET, ALERTS_VERSION_URL, status=404)
-    assert not perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+    assert not datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB)
 
 
 @pytest.mark.parametrize(
@@ -1700,12 +1760,12 @@ def test_first_run_starts_a_new_archive() -> None:
 def test_unavailable_snapshot_is_never_started_over(version_reply) -> None:
     responses.add(responses.GET, ALERTS_VERSION_URL, **version_reply)
     with pytest.raises(RuntimeError, match="Not starting perf_alerts.json over"):
-        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+        datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB)
 
     # A local copy, as in local runs and reruns, is used instead.
-    db.write(perf.PERF_ALERTS_DB, [{"alert_id": 7, "repository": "autoland"}])
-    assert perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
-    assert [alert["alert_id"] for alert in perf.get_perf_alerts()] == [7]
+    db.write(datasets.PERF_ALERTS_DB, [{"alert_id": 7, "repository": "autoland"}])
+    assert datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB)
+    assert [alert["alert_id"] for alert in datasets.get_perf_alerts()] == [7]
 
 
 @responses.activate
@@ -1713,11 +1773,11 @@ def test_failed_snapshot_download_is_never_started_over() -> None:
     responses.add(responses.GET, ALERTS_VERSION_URL, body="1")
     responses.add(responses.HEAD, ALERTS_URL, status=403)
     with pytest.raises(RuntimeError, match="Could not download"):
-        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+        datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB)
 
 
 @responses.activate
 def test_snapshot_of_another_version_needs_a_converter() -> None:
     _publish_alerts(2)
     with pytest.raises(RuntimeError, match="needs a converter"):
-        perf.load_previous_snapshot(perf.PERF_ALERTS_DB)
+        datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB)

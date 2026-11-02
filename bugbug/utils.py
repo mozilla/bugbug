@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import concurrent.futures
-import enum
 import errno
 import json
 import logging
@@ -710,40 +709,3 @@ def git2hg(hash: str) -> str:
     r = get_session("lando").get(f"https://lando.moz.tools/api/git2hg/firefox/{hash}")
     r.raise_for_status()
     return r.json()["hg_hash"]
-
-
-class RedashQueryStatus(enum.IntEnum):
-    PENDING = 1
-    STARTED = 2
-    SUCCESS = 3
-    FAILURE = 4
-    CANCELLED = 5
-
-
-@tenacity.retry(
-    retry=tenacity.retry_if_exception_type(tenacity.TryAgain),
-    wait=tenacity.wait_exponential(multiplier=2, max=60),
-    stop=tenacity.stop_after_delay(1800),
-    reraise=True,
-)
-def query_redash(query_id, parameters):
-    r = get_session("redash").post(
-        f"https://sql.telemetry.mozilla.org/api/queries/{query_id}/results",
-        json={
-            "parameters": parameters,
-            "max_age": 1800,
-        },
-        headers={"Authorization": f"Key {get_secret('REDASH_API_KEY')}"},
-    )
-    if not r.ok:
-        raise Exception(f"Redash query error: {r.text}")
-
-    result = r.json()
-    if "query_result" not in result:
-        status = result.get("job", {}).get("status")
-        if status == RedashQueryStatus.FAILURE:
-            raise Exception(f"Redash query failed: {result}")
-        logger.warning("query_result not in result (status=%s): %s", status, result)
-        raise tenacity.TryAgain
-
-    return result["query_result"]["data"]["rows"]

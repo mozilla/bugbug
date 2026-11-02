@@ -20,9 +20,18 @@ from datetime import date, datetime, timedelta, timezone
 
 from dateutil.relativedelta import relativedelta
 
-from bugbug import db, perf, redash
+from bugbug import bugzilla, db, redash
+from bugbug.perf import (
+    datasets,
+    extraction,
+    push_status,
+    regression_commits,
+    regression_labeling,
+    selection_pairs,
+    task_costs,
+)
 from bugbug.repository import clone as clone_repository
-from bugbug.utils import parse_timestamp, utcnow, zstd_compress
+from bugbug.utils import get_secret, parse_timestamp, utcnow, zstd_compress
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,7 +60,7 @@ def _download(path: str) -> None:
 
 
 class Retriever:
-    """The three pipeline commands, over autoland (``perf.REPOSITORY``)."""
+    """The three pipeline commands, over autoland (``bugbug.perf.label_policy.REPOSITORY``)."""
 
     def retrieve(
         self,
@@ -82,13 +91,17 @@ class Retriever:
             self.retrieve_pushes(client, since, window_days, reretrieve_days)
 
         if not skip_bugs:
+            # Public bugs need no credentials; a token lifts the rate limits.
+            token = get_secret("BUGZILLA_TOKEN", default_value="")
+            if token:
+                bugzilla.set_token(token)
             bug_ids = {
                 alert["bug_number"]
-                for alert in perf.get_perf_alerts()
+                for alert in datasets.get_perf_alerts()
                 if alert["bug_number"]
             }
-            db.write(perf.PERF_ALERT_BUGS_DB, perf.fetch_bugs(bug_ids))
-            zstd_compress(perf.PERF_ALERT_BUGS_DB)
+            db.write(datasets.PERF_ALERT_BUGS_DB, extraction.fetch_bugs(bug_ids))
+            zstd_compress(datasets.PERF_ALERT_BUGS_DB)
 
         if not skip_costs:
             self.retrieve_costs(client, since, costs_window_days, reretrieve_days)
@@ -101,19 +114,19 @@ class Retriever:
         older alerts and of their task labels.
         """
         previous: list[dict] = []
-        if perf.load_previous_snapshot(perf.PERF_ALERTS_DB):
-            previous = list(perf.get_perf_alerts())
+        if datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB):
+            previous = list(datasets.get_perf_alerts())
 
-        fetched = list(perf.fetch_alerts(client, since))
-        merged = perf.merge_alerts(previous, fetched)
+        fetched = list(extraction.fetch_alerts(client, since))
+        merged = extraction.merge_alerts(previous, fetched)
         logger.info(
             "Alerts snapshot: %d fetched, %d kept from the previous snapshot, %d total",
             len(fetched),
             len(merged) - len(fetched),
             len(merged),
         )
-        db.write(perf.PERF_ALERTS_DB, merged)
-        zstd_compress(perf.PERF_ALERTS_DB)
+        db.write(datasets.PERF_ALERTS_DB, merged)
+        zstd_compress(datasets.PERF_ALERTS_DB)
 
     def retrieve_costs(
         self,
@@ -125,10 +138,10 @@ class Retriever:
         """Refresh the recent window of costs and keep older rows untouched."""
         today = utcnow().date()
         cutoff = since
-        have_previous = perf.load_previous_snapshot(perf.PERF_TASK_COSTS_DB)
+        have_previous = datasets.load_previous_snapshot(datasets.PERF_TASK_COSTS_DB)
         if have_previous:
             newest = max(
-                (row["submission_date"] for row in perf.get_perf_task_costs()),
+                (row["submission_date"] for row in datasets.get_perf_task_costs()),
                 default=None,
             )
             if newest:
@@ -138,17 +151,17 @@ class Retriever:
 
         def rows():
             if have_previous:
-                for row in perf.get_perf_task_costs():
+                for row in datasets.get_perf_task_costs():
                     if row["submission_date"] < cutoff.isoformat():
-                        yield perf.normalize_cost_row(row)
-            yield from perf.fetch_task_costs(client, cutoff, today, window_days)
+                        yield extraction.normalize_cost_row(row)
+            yield from extraction.fetch_task_costs(client, cutoff, today, window_days)
 
-        new_path = perf.PERF_TASK_COSTS_DB.replace(".json", "_new.json")
-        db.DATABASES[new_path] = db.DATABASES[perf.PERF_TASK_COSTS_DB]
+        new_path = datasets.PERF_TASK_COSTS_DB.replace(".json", "_new.json")
+        db.DATABASES[new_path] = db.DATABASES[datasets.PERF_TASK_COSTS_DB]
         db.write(new_path, rows())
-        os.replace(new_path, perf.PERF_TASK_COSTS_DB)
+        os.replace(new_path, datasets.PERF_TASK_COSTS_DB)
         del db.DATABASES[new_path]
-        zstd_compress(perf.PERF_TASK_COSTS_DB)
+        zstd_compress(datasets.PERF_TASK_COSTS_DB)
 
     def retrieve_pushes(
         self,
@@ -164,8 +177,8 @@ class Retriever:
         while its jobs are still running.
         """
         pushes = {}
-        if perf.load_previous_snapshot(perf.PERF_PUSHES_DB):
-            pushes = {push["push_id"]: push for push in perf.get_perf_pushes()}
+        if datasets.load_previous_snapshot(datasets.PERF_PUSHES_DB):
+            pushes = {push["push_id"]: push for push in datasets.get_perf_pushes()}
 
         now = utcnow()
         time_from = datetime(
@@ -181,14 +194,14 @@ class Retriever:
         # Jobs on the newest pushes are still running.
         time_to = now - timedelta(days=1)
 
-        for push in perf.fetch_pushes(client, time_from, time_to, window_days):
+        for push in extraction.fetch_pushes(client, time_from, time_to, window_days):
             pushes[push["push_id"]] = push
 
         db.write(
-            perf.PERF_PUSHES_DB,
+            datasets.PERF_PUSHES_DB,
             (pushes[push_id] for push_id in sorted(pushes)),
         )
-        zstd_compress(perf.PERF_PUSHES_DB)
+        zstd_compress(datasets.PERF_PUSHES_DB)
 
     def get_settle_cutoff(self, settle_days: int, until: datetime | None) -> datetime:
         """End of the dataset window; ``until`` can only tighten it."""
@@ -222,9 +235,9 @@ class Retriever:
         them. Finishes by logging how well the cost snapshot covers recent runs.
         """
         for path in (
-            perf.PERF_ALERTS_DB,
-            perf.PERF_PUSHES_DB,
-            perf.PERF_ALERT_BUGS_DB,
+            datasets.PERF_ALERTS_DB,
+            datasets.PERF_PUSHES_DB,
+            datasets.PERF_ALERT_BUGS_DB,
         ):
             if not db.exists(path):
                 _download(path)
@@ -237,34 +250,35 @@ class Retriever:
             labeled_from,
             settle_before,
         )
-        push_index = perf.PushIndex(perf.get_perf_pushes())
-        bugs = {bug["id"]: bug for bug in perf.get_perf_alert_bugs()}
+        push_index = regression_labeling.PushIndex(datasets.get_perf_pushes())
+        bugs = {bug["id"]: bug for bug in datasets.get_perf_alert_bugs()}
 
         regressions = list(
-            perf.generate_regressions(
-                perf.get_perf_alerts(), push_index, bugs, settle_before, since
+            regression_labeling.generate_regressions(
+                datasets.get_perf_alerts(), push_index, bugs, settle_before, since
             )
         )
-        db.write(perf.PERF_REGRESSIONS_DB, regressions)
-        zstd_compress(perf.PERF_REGRESSIONS_DB)
+        db.write(datasets.PERF_REGRESSIONS_DB, regressions)
+        zstd_compress(datasets.PERF_REGRESSIONS_DB)
 
         db.write(
-            perf.PERF_PAIRS_DB, perf.generate_scheduling_pairs(regressions, push_index)
+            datasets.PERF_PAIRS_DB,
+            selection_pairs.generate_scheduling_pairs(regressions, push_index),
         )
-        zstd_compress(perf.PERF_PAIRS_DB)
+        zstd_compress(datasets.PERF_PAIRS_DB)
 
         db.write(
-            perf.PERF_PUSH_STATUS_DB,
-            perf.generate_push_status(
+            datasets.PERF_PUSH_STATUS_DB,
+            push_status.generate_push_status(
                 push_index, regressions, settle_before, labeled_from
             ),
         )
-        zstd_compress(perf.PERF_PUSH_STATUS_DB)
+        zstd_compress(datasets.PERF_PUSH_STATUS_DB)
         logger.info(
             "Wrote %d regressions, %d pairs, %d push status rows",
             len(regressions),
-            db.size(perf.PERF_PAIRS_DB),
-            db.size(perf.PERF_PUSH_STATUS_DB),
+            db.size(datasets.PERF_PAIRS_DB),
+            db.size(datasets.PERF_PUSH_STATUS_DB),
         )
         self.report_cost_coverage(push_index)
 
@@ -272,16 +286,16 @@ class Retriever:
         """Earliest summary creation in the snapshot: pushes before it were never labeled."""
         created = [
             time
-            for alert in perf.get_perf_alerts()
+            for alert in datasets.get_perf_alerts()
             if (time := parse_timestamp(alert["summary_created"])) is not None
         ]
         return min(created) if created else None
 
-    def report_cost_coverage(self, push_index: perf.PushIndex) -> None:
+    def report_cost_coverage(self, push_index: regression_labeling.PushIndex) -> None:
         """Log how many recent perf runs match a cost record, so gaps are noticed early."""
-        if not db.exists(perf.PERF_TASK_COSTS_DB):
+        if not db.exists(datasets.PERF_TASK_COSTS_DB):
             try:
-                _download(perf.PERF_TASK_COSTS_DB)
+                _download(datasets.PERF_TASK_COSTS_DB)
             except Exception:
                 logger.warning("No perf task costs DB available, skipping coverage")
                 return
@@ -294,10 +308,10 @@ class Retriever:
             if (time := parse_timestamp(push["time"])) is not None
             and time >= recent_after
         ]
-        costs = perf.load_task_costs(perf.collect_push_task_ids(recent))
+        costs = task_costs.load_task_costs(task_costs.collect_push_task_ids(recent))
         totals = {"runs": 0, "runs_with_pool": 0, "runs_with_cost": 0}
         for push in recent:
-            summary = perf.summarize_push_cost(push, costs)
+            summary = task_costs.summarize_push_cost(push, costs)
             for key in totals:
                 totals[key] += summary[key]
         logger.info(
@@ -329,7 +343,7 @@ class Retriever:
         reverts local changes and strips unpushed commits, which is right for
         the pipeline's cache but not for a working checkout.
         """
-        for path in (perf.PERF_REGRESSIONS_DB, perf.PERF_PUSH_STATUS_DB):
+        for path in (datasets.PERF_REGRESSIONS_DB, datasets.PERF_PUSH_STATUS_DB):
             if not db.exists(path):
                 _download(path)
 
@@ -341,31 +355,35 @@ class Retriever:
         )
         regressions = [
             regression
-            for regression in perf.get_perf_regressions()
-            if perf.is_within_window(regression["push_time"], since, settle_before)
+            for regression in datasets.get_perf_regressions()
+            if regression_labeling.is_within_window(
+                regression["push_time"], since, settle_before
+            )
         ]
         statuses = [
             status
-            for status in perf.read_push_status()
-            if perf.is_within_window(status["push_time"], since, settle_before)
+            for status in push_status.read_push_status()
+            if regression_labeling.is_within_window(
+                status["push_time"], since, settle_before
+            )
         ]
-        selected = perf.select_export_commits(
+        selected = regression_commits.select_export_commits(
             regressions, statuses, negative_ratio, seed
         )
-        perf.assign_train_test_splits(selected, test_fraction)
+        regression_commits.assign_train_test_splits(selected, test_fraction)
 
         if refresh_repo:
             logger.info("Refreshing the Mercurial clone in %s", repo_dir)
             clone_repository(repo_dir)
 
         db.write(
-            perf.PERF_REGRESSION_COMMITS_DB,
-            perf.attach_commit_patches(selected, repo_dir),
+            datasets.PERF_REGRESSION_COMMITS_DB,
+            regression_commits.attach_commit_patches(selected, repo_dir),
         )
-        zstd_compress(perf.PERF_REGRESSION_COMMITS_DB)
+        zstd_compress(datasets.PERF_REGRESSION_COMMITS_DB)
         logger.info(
             "Wrote %d commits with patches",
-            db.size(perf.PERF_REGRESSION_COMMITS_DB),
+            db.size(datasets.PERF_REGRESSION_COMMITS_DB),
         )
 
 
