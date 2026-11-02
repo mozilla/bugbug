@@ -1,32 +1,24 @@
 """Small shared TestRail API client."""
 
-from typing import Any, TypeVar
+from typing import Any
 
 import httpx
-from pydantic import BaseModel, TypeAdapter
 
 from testrail_client.config import TestRailSettings
 from testrail_client.models import (
     TestRailCase,
     TestRailCaseType,
+    TestRailCaseTypesResponse,
     TestRailResult,
+    TestRailResultsResponse,
     TestRailRun,
     TestRailSection,
     TestRailStatus,
+    TestRailStatusesResponse,
     TestRailSuite,
     TestRailTemplate,
+    TestRailTemplatesResponse,
 )
-
-TestRailResource = TypeVar("TestRailResource", bound=BaseModel)
-
-
-def _validate_list(
-    response: dict[str, Any] | list[Any],
-    key: str,
-    model: type[TestRailResource],
-) -> list[TestRailResource]:
-    values = response.get(key, []) if isinstance(response, dict) else response
-    return TypeAdapter(list[model]).validate_python(values)
 
 
 class TestRailClient:
@@ -64,17 +56,17 @@ class TestRailClient:
 
     async def get_case_types(self) -> list[TestRailCaseType]:
         response = await self.request("GET", "get_case_types")
-        return _validate_list(response, "case_types", TestRailCaseType)
+        return TestRailCaseTypesResponse.model_validate(response).root
 
     async def get_templates(self) -> list[TestRailTemplate]:
         response = await self.request(
             "GET", f"get_templates/{self.settings.project_id}"
         )
-        return _validate_list(response, "templates", TestRailTemplate)
+        return TestRailTemplatesResponse.model_validate(response).root
 
     async def get_statuses(self) -> list[TestRailStatus]:
         response = await self.request("GET", "get_statuses")
-        return _validate_list(response, "statuses", TestRailStatus)
+        return TestRailStatusesResponse.model_validate(response).root
 
     async def add_suite(self, name: str) -> TestRailSuite:
         response = await self.request(
@@ -112,4 +104,4 @@ class TestRailClient:
             f"add_results_for_cases/{run_id}",
             {"results": results},
         )
-        return _validate_list(response, "results", TestRailResult)
+        return TestRailResultsResponse.model_validate(response).root

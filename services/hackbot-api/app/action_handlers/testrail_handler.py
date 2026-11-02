@@ -166,11 +166,9 @@ class SubmitTestPlanHandler:
                 created_case_ids[generated_id] = case_id
 
             case_ids = list(created_case_ids.values())
-            run_id = (
-                await client.add_run(_run_payload(suite_id, case_ids, summary))
-            ).id
+            run = await client.add_run(_run_payload(suite_id, case_ids, summary))
             await client.add_results_for_cases(
-                run_id,
+                run.id,
                 _executed_results(params, created_case_ids, status_ids),
             )
 
@@ -186,6 +184,6 @@ class SubmitTestPlanHandler:
                 "url": client.suite_url(suite_id),
                 "section_id": section_id,
                 "case_ids": case_ids,
-                "run_id": run_id,
+                "run_id": run.id,
             }
         )

@@ -79,7 +79,7 @@ class _FakeClient:
                 {"id": 101},
                 {"id": 102},
                 {"id": 301},
-                {"results": [{"id": 401}, {"id": 402}]},
+                [{"id": 401}, {"id": 402}],
             ]
         )
 
@@ -128,10 +128,9 @@ class _FakeClient:
 
     async def add_results_for_cases(self, run_id, results):
         self.calls.append(("add_results_for_cases", run_id, results))
-        response = self._next()
         return [
             testrail_models.TestRailResult.model_validate(value)
-            for value in response["results"]
+            for value in self._next()
         ]
 
     def suite_url(self, suite_id):

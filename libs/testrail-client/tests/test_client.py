@@ -51,7 +51,7 @@ def _capture_request(monkeypatch, payload) -> dict:
 
         async def request(self, method, url, **kwargs):
             captured.update(method=method, url=url, **kwargs)
-            return _FakeResponse(payload)
+            return _FakeResponse(payload(url) if callable(payload) else payload)
 
     monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
     return captured
@@ -104,7 +104,7 @@ async def test_request_requires_json_object_or_array(monkeypatch):
 async def test_endpoint_response_is_typed(monkeypatch):
     _capture_request(
         monkeypatch,
-        {"case_types": [{"id": "6", "name": "Functional", "future": True}]},
+        [{"id": "6", "name": "Functional", "future": True}],
     )
 
     result = await _client().get_case_types()
@@ -125,8 +125,37 @@ async def test_endpoint_response_is_validated(monkeypatch):
         await _client().get_case_types()
 
 
+@pytest.mark.parametrize(
+    ("method_name", "response"),
+    [
+        ("get_case_types", {"case_types": [{"id": 1, "name": "Functional"}]}),
+        ("get_templates", {"templates": [{"id": 1, "name": "Steps"}]}),
+        ("get_statuses", {"statuses": [{"id": 1, "name": "passed"}]}),
+        ("add_results_for_cases", {"results": [{"id": 1}]}),
+    ],
+)
+async def test_list_endpoints_reject_unexpected_response_shape(
+    monkeypatch, method_name, response
+):
+    _capture_request(monkeypatch, response)
+    client = _client()
+
+    with pytest.raises(ValidationError):
+        if method_name == "add_results_for_cases":
+            await client.add_results_for_cases(1, [])
+        else:
+            await getattr(client, method_name)()
+
+
 async def test_endpoint_wrappers(monkeypatch):
-    captured = _capture_request(monkeypatch, {"id": 10})
+    captured = _capture_request(
+        monkeypatch,
+        lambda url: (
+            [{"id": 10, "name": "Functional"}]
+            if "/get_" in url or "/add_results_for_cases/" in url
+            else {"id": 10}
+        ),
+    )
     client = _client()
 
     await client.get_case_types()

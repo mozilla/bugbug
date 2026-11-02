@@ -1,6 +1,6 @@
 """Typed TestRail domain models returned by the client."""
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, RootModel
 
 
 class TestRailModel(BaseModel):
@@ -40,3 +40,19 @@ class TestRailRun(TestRailModel):
 
 class TestRailResult(TestRailModel):
     id: int
+
+
+class TestRailCaseTypesResponse(RootModel[list[TestRailCaseType]]):
+    pass
+
+
+class TestRailTemplatesResponse(RootModel[list[TestRailTemplate]]):
+    pass
+
+
+class TestRailStatusesResponse(RootModel[list[TestRailStatus]]):
+    pass
+
+
+class TestRailResultsResponse(RootModel[list[TestRailResult]]):
+    pass
