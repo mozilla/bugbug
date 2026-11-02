@@ -10,7 +10,7 @@ async def test_report_is_sent_to_sentry_grouped_by_title(monkeypatch):
         def capture_envelope(self, envelope):
             events.extend(item.payload.json for item in envelope.items)
 
-    client = sentry_sdk.Client(dsn="https://key@sentry.example/1", transport=_Capture())
+    client = sentry_sdk.Client(dsn="https://key@sentry.example/1", default_integrations=False, transport=_Capture())
     monkeypatch.setattr(feedback_handler, "_client", lambda: client)
 
     async def download(_key):
@@ -19,6 +19,7 @@ async def test_report_is_sent_to_sentry_grouped_by_title(monkeypatch):
     result = await feedback_handler.ReportProblemHandler().apply(
         {
             "severity": "medium",
+            "type": "improvement",
             "title": "No tool to read bug history",
             "message": "Needed it to see who changed the priority.",
         },
@@ -31,6 +32,7 @@ async def test_report_is_sent_to_sentry_grouped_by_title(monkeypatch):
     assert event["level"] == "warning"
     assert event["tags"] == {
         "kind": "agent_feedback",
+        "feedback_type": "improvement",
         "agent": "bug-fix",
         "run_id": "run-1",
     }
@@ -39,3 +41,34 @@ async def test_report_is_sent_to_sentry_grouped_by_title(monkeypatch):
         event["contexts"]["feedback"]["message"]
         == "Needed it to see who changed the priority."
     )
+    assert event["contexts"]["feedback"]["type"] == "improvement"
+
+
+async def test_report_problem_defaults_type_when_missing(monkeypatch):
+    events = []
+
+    class _Capture(Transport):
+        def capture_envelope(self, envelope):
+            events.extend(item.payload.json for item in envelope.items)
+
+    client = sentry_sdk.Client(dsn="https://key@sentry.example/1", default_integrations=False, transport=_Capture())
+    monkeypatch.setattr(feedback_handler, "_client", lambda: client)
+
+    async def download(_key):
+        raise AssertionError("Feedback reports do not use artifacts")
+
+    result = await feedback_handler.ReportProblemHandler().apply(
+        {
+            "severity": "low",
+            "title": "Minor formatting issue",
+            "message": "The markdown formatting had an extra line.",
+        },
+        ApplyContext(run_id="run-2", agent="bug-fix", download_artifact=download),
+    )
+    client.close()
+
+    assert result.status == "applied"
+    (event,) = events
+    assert event["level"] == "info"
+    assert event["tags"]["feedback_type"] == "error"
+    assert event["contexts"]["feedback"]["type"] == "error"
