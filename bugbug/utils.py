@@ -750,21 +750,25 @@ def extract_urls_and_domains(
             - "urls": A list of extracted URLs.
             - "domains": A list of extracted domain names (excluding ignored domains if provided).
                         (Note: current domain extraction is basic and has limitations)
+            - "spans": A list of (start, end) character positions of the extracted URLs in the text.
     """
     if domains_to_ignore is None:
         domains_to_ignore = set()
 
     pattern = re.compile(r"(?:https?://|www\.)(?:[^\s/?#]+)+(?:[\/?#][^\s]*)?")
-    potential_urls = pattern.findall(text)
 
     domains = []
     urls = []
+    spans = []
 
-    for url in potential_urls:
+    for match in pattern.finditer(text):
+        # Drop trailing punctuation, e.g. "https://example.com," or "(https://example.com)".
+        url = match.group().rstrip(".,;:!?'\")]}>")
         url_info = tldextract.extract(url)
-        domain = url_info.registered_domain
+        domain = url_info.top_domain_under_public_suffix
         if domain and domain not in domains_to_ignore:
             domains.append(domain)
             urls.append(url)
+            spans.append((match.start(), match.start() + len(url)))
 
-    return {"urls": urls, "domains": domains}
+    return {"urls": urls, "domains": domains, "spans": spans}

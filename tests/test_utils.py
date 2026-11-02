@@ -573,3 +573,12 @@ def test_url_extraction(test_input, expected_urls, expected_domains):
 
     assert result["urls"] == expected_urls
     assert result["domains"] == expected_domains
+
+
+def test_url_extraction_spans():
+    """Tests that the positions of the extracted URLs are returned."""
+    text = "Visit https://www.example.com, not https://www.mozilla.com or www.spam.net"
+    result = utils.extract_urls_and_domains(text, {"mozilla.com"})
+
+    assert result["spans"] == [(6, 29), (62, 74)]
+    assert [text[start:end] for start, end in result["spans"]] == result["urls"]

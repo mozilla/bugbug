@@ -25,14 +25,14 @@ class SpamCommentModel(CommentModel):
     def __init__(self, lemmatization=True):
         CommentModel.__init__(self, lemmatization)
 
+        self.training_dbs.append(repository.COMMITS_DB)
+
         self.calculate_importance = False
 
         self.use_scale_pos_weight = True
 
-        self.commit_emails = {
-            commit["author_email"]
-            for commit in repository.get_commits(include_backouts=True)
-        }
+        # Filled in get_labels, after the training DBs have been downloaded.
+        self.commit_emails: set[str] = set()
 
         feature_extractors = [
             comment_features.NumberOfLinks(SAFE_DOMAINS),
@@ -40,8 +40,7 @@ class SpamCommentModel(CommentModel):
             comment_features.HourOfDay(),
             comment_features.DayOfYear(),
             comment_features.Weekday(),
-            comment_features.UnknownLinkAtBeginning(SAFE_DOMAINS),
-            comment_features.UnknownLinkAtEnd(SAFE_DOMAINS),
+            comment_features.UnknownLinkPositions(SAFE_DOMAINS),
             comment_features.CommentCreatorIsBugCreator(),
         ]
 
@@ -124,6 +123,11 @@ class SpamCommentModel(CommentModel):
     def get_labels(self):
         classes = {}
 
+        self.commit_emails = {
+            commit["author_email"]
+            for commit in repository.get_commits(include_backouts=True)
+        }
+
         self.__download_older_bugs_with_spam_comments()
 
         for bug in bugzilla.get_bugs():
@@ -132,7 +136,7 @@ class SpamCommentModel(CommentModel):
 
                 if any(
                     [
-                        comment["count"] == "0",
+                        comment["count"] == 0,
                         self.is_safe_comment(comment),
                         "[redacted -" in comment["text"],
                         "(comment removed)" in comment["text"],
@@ -156,19 +160,11 @@ class SpamCommentModel(CommentModel):
 
         return classes, [0, 1]
 
-    def items_gen(self, classes):
-        return (
-            ((bug, comment), classes[comment["id"]])
-            for bug in bugzilla.get_bugs()
-            for comment in bug["comments"]
-            if comment["id"] in classes
-        )
-
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()
 
-    def overwrite_classes(self, comments, classes, probabilities):
-        for i, comment in enumerate(comments):
+    def overwrite_classes(self, items, classes, probabilities):
+        for i, (_, comment) in enumerate(items):
             if self.is_safe_comment(comment):
                 if probabilities:
                     classes[i] = [1.0, 0.0]

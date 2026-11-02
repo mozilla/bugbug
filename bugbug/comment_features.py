@@ -44,7 +44,7 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
         items_iter = iter(items())
 
         def apply_transform(item):
-            bug, comment = item
+            _, comment = item
             data = {}
 
             for feature_extractor in self.feature_extractors:
@@ -66,8 +66,8 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
                     continue
 
                 if isinstance(res, (list, set)):
-                    for item in res:
-                        data[sys.intern(f"{item} in {feature_extractor_name}")] = True
+                    for value in res:
+                        data[sys.intern(f"{value} in {feature_extractor_name}")] = True
                     continue
 
                 data[feature_extractor_name] = res
@@ -113,15 +113,6 @@ class NumberOfLinks(CommentFeature):
         }
 
 
-class CharacterCount(CommentFeature):
-    name = "# of Characters in the Comment"
-
-    def __call__(self, item, **kwargs):
-        _, comment = item
-
-        return len(comment["text"])
-
-
 class WordCount(CommentFeature):
     name = "# of Words in the Comment"
 
@@ -131,8 +122,8 @@ class WordCount(CommentFeature):
         return len(comment["text"].split())
 
 
-class UnknownLinkAtBeginning(CommentFeature):
-    name = "Unknown Link found at Beginning of the Comment"
+class UnknownLinkPositions(CommentFeature):
+    name = "Position of Unknown Links in the Comment"
 
     def __init__(self, domains_to_ignore=None):
         self.known_domains = domains_to_ignore if domains_to_ignore else set()
@@ -140,25 +131,21 @@ class UnknownLinkAtBeginning(CommentFeature):
     def __call__(self, item, **kwargs):
         _, comment = item
 
-        urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
+        text = comment["text"].strip()
+        spans = extract_urls_and_domains(text, self.known_domains)["spans"]
 
-        words = comment["text"].split()
-        return words[0] in urls if words else False
+        if not spans:
+            return {
+                "Start of the first unknown link": -1,
+                "End of the last unknown link": -1,
+                "# of characters after the last unknown link": -1,
+            }
 
-
-class UnknownLinkAtEnd(CommentFeature):
-    name = "Unknown Link found at End of the Comment"
-
-    def __init__(self, domains_to_ignore=None):
-        self.known_domains = domains_to_ignore if domains_to_ignore else set()
-
-    def __call__(self, item, **kwargs):
-        _, comment = item
-
-        urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
-
-        words = comment["text"].split()
-        return words[-1] in urls if words else False
+        return {
+            "Start of the first unknown link": spans[0][0],
+            "End of the last unknown link": spans[-1][1],
+            "# of characters after the last unknown link": len(text) - spans[-1][1],
+        }
 
 
 class HourOfDay(CommentFeature):
@@ -172,7 +159,7 @@ class HourOfDay(CommentFeature):
 
 
 class Weekday(CommentFeature):
-    name = "Day of the Week (0-7)"
+    name = "Day of the Week (1-7)"
 
     def __call__(self, item, **kwargs):
         _, comment = item
@@ -181,49 +168,11 @@ class Weekday(CommentFeature):
         return comment_time.isoweekday()
 
 
-class PostedOnWeekend(CommentFeature):
-    name = "Comment was Posted on Weekend"
-
-    def __call__(self, item, **kwargs):
-        _, comment = item
-
-        comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
-        return comment_time.isoweekday() in (5, 6)
-
-
 class DayOfYear(CommentFeature):
-    name = "Day of the Year (0-366)"
+    name = "Day of the Year (1-366)"
 
     def __call__(self, item, **kwargs):
         _, comment = item
 
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
         return comment_time.timetuple().tm_yday
-
-
-class WeekOfYear(CommentFeature):
-    name = "Week of Year"
-
-    def __call__(self, item, **kwargs):
-        _, comment = item
-
-        comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
-        return comment_time.isocalendar()[1]
-
-
-class CommentTags(CommentFeature):
-    name = "Comment Tags"
-
-    def __init__(self, to_ignore=None):
-        self.to_ignore = to_ignore if to_ignore else set()
-
-    def __call__(self, item, **kwargs):
-        _, comment = item
-        tags = []
-
-        for tag in comment["tags"]:
-            if tag in self.to_ignore:
-                continue
-
-            tags.append(tag)
-        return tags

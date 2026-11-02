@@ -418,7 +418,7 @@ class Model:
 
             scale_pos_weight = (negative_samples / positive_samples) / 10
 
-            logger.info("Scale Pos Weight: %d", scale_pos_weight)
+            logger.info("Scale Pos Weight: %f", scale_pos_weight)
 
             self.clf.named_steps["estimator"].set_params(
                 scale_pos_weight=scale_pos_weight
