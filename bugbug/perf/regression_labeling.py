@@ -27,6 +27,7 @@ from bugbug.perf.label_policy import (
     REJECTED_BUG_RESOLUTIONS,
     RESOLVED_SUMMARY_STATUSES,
     SUMMARY_STATUS,
+    UNRESOLVED_SUMMARY_STATUSES,
 )
 from bugbug.perf.task_labels import (
     get_exclusion_reason,
@@ -57,13 +58,19 @@ def derive_alert_fields(alert: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def has_excluded_tag(tags: Iterable[str]) -> bool:
+    """Whether a summary tag, such as ``infra``, takes the summary out of labeling."""
+    return any(excluded in tag for tag in tags for excluded in EXCLUDED_SUMMARY_TAGS)
+
+
 def summary_is_confirmed(summary_status: str, tags: Iterable[str]) -> bool:
     """Whether sheriffs treated the summary as a real regression of the push."""
-    if summary_status not in CONFIRMED_SUMMARY_STATUSES:
-        return False
-    return not any(
-        excluded in tag for tag in tags for excluded in EXCLUDED_SUMMARY_TAGS
-    )
+    return summary_status in CONFIRMED_SUMMARY_STATUSES and not has_excluded_tag(tags)
+
+
+def summary_is_unresolved(summary_status: str, tags: Iterable[str]) -> bool:
+    """Whether sheriffs have not decided yet; the push is then neither clean nor culprit."""
+    return summary_status in UNRESOLVED_SUMMARY_STATUSES and not has_excluded_tag(tags)
 
 
 def alert_is_positive(alert: dict[str, Any]) -> bool:
@@ -200,10 +207,13 @@ def decide_regression_outcome(
     ``concluded``: the regression bug was resolved FIXED, WONTFIX or WORKSFORME.
     ``attributed``: the sheriff linked the culprit bug itself, or closed the
     summary without a regression bug. ``rejected``: the regression bug was
-    resolved as not a regression. ``pending``: still open, a duplicate whose
-    canonical bug is unknown, or a linked ``bug_number`` that was not fetched,
-    such as a restricted bug, whose verdict is unknown.
+    resolved as not a regression. ``pending``: the summary is still untriaged,
+    whatever its bug says; the bug is still open, a duplicate whose canonical
+    bug is unknown, or a linked ``bug_number`` that was not fetched, such as a
+    restricted bug, whose verdict is unknown.
     """
+    if summary_status_name in UNRESOLVED_SUMMARY_STATUSES:
+        return "pending"
     if pinned_by == "summary_bug":
         return "attributed"
     if bug is None:
@@ -261,10 +271,11 @@ def generate_regressions(
     settle_before: datetime,
     pushed_from: datetime | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """Turn stored alerts into one labeled record per confirmed regression summary.
+    """Turn stored alerts into one labeled record per regression summary.
 
-    Only summaries whose culprit push lies in ``[pushed_from, settle_before)``
-    are labeled. Bounding on push time, as negatives are, means a push counted
+    Confirmed summaries are labeled by their outcome and untriaged ones are
+    ``pending``; only summaries whose culprit push lies in
+    ``[pushed_from, settle_before)`` are considered. Bounding on push time, as negatives are, means a push counted
     as settled never had an alert dropped for being too recent. Each record
     holds the summary, its outcome, the culprit push with its landings and
     pinned commits, and the regressed runnables; skip reasons are counted and
@@ -286,7 +297,10 @@ def generate_regressions(
             stats["outside_window"] += 1
             continue
 
-        if not summary_is_confirmed(head["summary_status_name"], head["summary_tags"]):
+        status, tags = head["summary_status_name"], head["summary_tags"]
+        if not summary_is_confirmed(status, tags) and not summary_is_unresolved(
+            status, tags
+        ):
             stats["not_confirmed"] += 1
             continue
 

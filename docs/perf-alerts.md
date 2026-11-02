@@ -99,9 +99,10 @@ Their format changes by these rules, also written above their registrations:
   Pushes are retrieved incrementally in short windows and start three weeks
   before the alerts window, since Perfherder raises alerts up to two weeks
   after the culprit push; those lead pushes can be culprits but are never
-  negatives, because their own alerts predate the snapshot.
-  the most recent `--reretrieve-days` are refreshed on every run because jobs
-  keep completing.
+  negatives, because their own alerts predate the snapshot. The most recent
+  `--reretrieve-days` are refreshed on every run because jobs keep completing;
+  a refetched push keeps its stored jobs when the source returns fewer, since
+  Treeherder deletes jobs after 120 days.
 - `data/perf_alert_bugs.json`: the regression bugs referenced by summaries,
   plus the canonical bugs reached by following `dupe_of` up to three hops.
 - `data/perf_task_costs.json`: one row per performance task from `fxci`,
@@ -121,6 +122,8 @@ Their format changes by these rules, also written above their registrations:
 `data/perf_regressions.json`: one record per confirmed regression summary with
 the culprit push and revisions, its landings, the pinned culprit commits, and
 the regressed runnables in both signature and normalized task label form.
+Summaries still `untriaged` get a record too, with the `pending` outcome, so
+their push is not mistaken for a clean one.
 
 `generate` also writes the thin test selection datasets, at commit
 granularity so that landing-level and push-level views can be derived by
@@ -190,7 +193,7 @@ so edits to those tables reach archived alerts too.
 | Field                                              | Type            | Meaning                                                                                                                                                                                 |
 | -------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `alert_id`                                         | int             | Perfherder alert id                                                                                                                                                                     |
-| `alert_status`                                     | int             | 0 untriaged, 1 downstream, 2 reassigned, 3 invalid, 4 acknowledged, 5 confirming                                                                                                        |
+| `alert_status`                                     | int             | 0 untriaged, 1 downstream, 2 reassigned, 3 invalid, 4 acknowledged, 5 infra                                                                                                             |
 | `is_regression`                                    | bool            | direction of the shift; false is an improvement                                                                                                                                         |
 | `amount_pct`, `amount_abs`                         | float           | size of the shift, relative and absolute                                                                                                                                                |
 | `t_value`                                          | float           | Student t statistic the detector used to raise the alert                                                                                                                                |
@@ -276,7 +279,7 @@ reading.
 | `runs`            | int? | runs that started and finished, retries included                                                         |
 | `duration`        | int? | total machine seconds across those runs                                                                  |
 
-### `perf_regressions.json` (one record per confirmed regression summary)
+### `perf_regressions.json` (one record per confirmed or untriaged regression summary)
 
 | Field                              | Type         | Meaning                                                                                                                                                 |
 | ---------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -377,7 +380,11 @@ record as `policy_version`. Bump it when they change.
 - A summary enters labeling when its status is `investigating`, `wontfix`,
   `fixed` or `backedout` and it is not tagged `infra`. Harness-caused
   regressions are kept: a harness change is a repository change the scheduler
-  must react to, and `summary_tags` lets a consumer filter them.
+  must react to, and `summary_tags` lets a consumer filter them. An
+  `untriaged` summary enters as `pending`: Treeherder keeps a summary
+  untriaged while any of its alerts is, even next to an acknowledged
+  regression with a fixed bug, so its push is neither a positive nor a
+  negative until a sheriff triages it.
 - Whether it counts is then decided by the developer's verdict on the
   regression bug, which is far more current than the sheriff's summary status
   (most confirmed summaries stay `investigating` forever). Duplicates are
@@ -388,8 +395,9 @@ record as `policy_version`. Bump it when they change.
     regression bug, or closed the summary as `wontfix`, `fixed` or `backedout`
     without a bug. The bug's status describes the culprit change there, not
     the regression, so the link itself is taken as the conclusion.
-  - `pending`: the bug is still open, the summary is `investigating` with no
-    bug, the duplicate's canonical bug is unknown, or the linked bug is not in
+  - `pending`: the summary is still `untriaged`, the bug is still open, the
+    summary is `investigating` with no bug, the duplicate's canonical bug is
+    unknown, or the linked bug is not in
     `perf_alert_bugs.json` (for example a restricted bug), so the verdict is
     unknown.
   - `rejected`: the bug was resolved `INVALID`, `INACTIVE`, `INCOMPLETE` or
@@ -399,9 +407,9 @@ record as `policy_version`. Bump it when they change.
     (`label_state` in `perf_push_status.json`). Bugs resolve a median of eight
     days and up to three weeks after the summary, so pending records promote to
     concluded on later pipeline runs.
-- Within a confirmed summary, an alert counts when `is_regression` is set and
-  its status is not `downstream` or `invalid`. Summaries without such alerts are
-  dropped.
+- Within a summary, an alert counts when `is_regression` is set and its
+  status is not `downstream`, `invalid` or `infra`. Summaries without such
+  alerts are dropped.
 - Summaries whose culprit push is younger than `--settle-days` are skipped, as
   are such pushes in push data and negative sampling. Both bounds are on push
   time, so a push counted as settled never has an alert that was dropped as

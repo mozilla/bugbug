@@ -192,6 +192,28 @@ def test_merge_alerts_keeps_history_and_labels() -> None:
     assert merged[2]["task_labels"] == []
 
 
+def test_refreshed_push_keeps_jobs_the_source_expired() -> None:
+    g1 = "test-linux2404-64-shippable/opt-talos-g1"
+    commits = [("c" * 40, "Bug 3 - culprit", 3, False)]
+    stored = _push(12, commits, [g1])
+    stored["pushlog_id"] = 7
+    # Treeherder deleted the jobs: the stored ones and extra fields survive.
+    expired = _push(12, commits, [])
+    merged = extraction.merge_push(stored, expired)
+    assert merged["perf_jobs"] == stored["perf_jobs"]
+    assert merged["pushlog_id"] == 7
+    # A refetch with more runs, such as retriggers, replaces the stored jobs.
+    retriggered = _push(12, commits, [g1])
+    retriggered["perf_jobs"][0]["runs"].append(
+        {"task_id": "T12r", "retry_id": 1, "result": "success", "duration": 90}
+    )
+    assert (
+        extraction.merge_push(stored, retriggered)["perf_jobs"]
+        == retriggered["perf_jobs"]
+    )
+    assert extraction.merge_push(None, expired) is expired
+
+
 def test_archive_readers_skip_other_repositories() -> None:
     # Snapshots retrieved before the pipeline became autoland-only can hold
     # mozilla-central rows; a merge push would list autoland culprits again.
@@ -936,7 +958,11 @@ def test_unlabeled_alerts_take_their_signature_label() -> None:
     regressions = list(
         regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
     )
-    assert [r["summary_id"] for r in regressions] == [100]
+    # The untriaged summary is kept as pending so its push is not clean.
+    assert [(r["summary_id"], r["outcome"]) for r in regressions] == [
+        (100, "concluded"),
+        (200, "pending"),
+    ]
     assert [
         (r["signature_id"], r["label"], r["label_from_signature"])
         for r in regressions[0]["runnables"]
@@ -1483,6 +1509,9 @@ def _bug(bug_id, status="RESOLVED", resolution=None, regressed_by=(), dupe_of=No
         ("fixed", None, "single_landing", 1, "pending"),
         # Unless the sheriff linked the culprit bug, which the push itself shows.
         ("investigating", None, "summary_bug", 1, "attributed"),
+        # Untriaged summaries are pending whatever their bug says.
+        ("untriaged", _bug(1, resolution="FIXED"), "bug", 1, "pending"),
+        ("untriaged", None, "summary_bug", 1, "pending"),
     ],
 )
 def test_regression_outcome(
@@ -1492,6 +1521,67 @@ def test_regression_outcome(
         summary_status, bug, pinned_by, bug_number
     )
     assert outcome == expected
+
+
+def test_untriaged_summary_keeps_its_push_pending() -> None:
+    # Treeherder keeps a summary untriaged while any alert in it is, even when
+    # another alert was acknowledged and its bug fixed.
+    alerts = [
+        _alert(alert_id=1, summary_status=0),
+        _alert(alert_id=2, summary_status=0, alert_status=0, signature_id=901),
+        # An infra-tagged summary stays out whatever its status.
+        _alert(
+            alert_id=3,
+            summary_id=300,
+            summary_status=0,
+            summary_tags="infra",
+            push_id=13,
+            prev_push_id=12,
+        ),
+    ]
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
+    assert [(r["summary_id"], r["status"], r["outcome"]) for r in regressions] == [
+        (100, "untriaged", "pending")
+    ]
+    assert push_status.get_push_label_states(regressions) == {12: "pending"}
+    # Pending summaries are neither positives nor negatives.
+    assert (
+        list(selection_pairs.generate_scheduling_pairs(regressions, push_index)) == []
+    )
+    states = {
+        row["push_id"]: row["label_state"]
+        for row in push_status.generate_push_status(push_index, regressions, SETTLED)
+    }
+    assert states[12] == "pending" and states[13] == "clean"
+
+
+def test_infra_alerts_are_not_regressions() -> None:
+    g1 = "test-linux2404-64-shippable/opt-talos-g1"
+    alerts = [
+        _alert(alert_id=1, signature_id=900),
+        # Status 5 is Treeherder's "infra": the machine moved, not the push.
+        _alert(alert_id=2, signature_id=901, alert_status=5, task_labels=g1),
+    ]
+    derived = regression_labeling.derive_alert_fields(alerts[1])
+    assert derived["alert_status_name"] == "infra"
+    assert not regression_labeling.alert_is_positive(derived)
+    push_index = regression_labeling.PushIndex(_pushes())
+    regressions = list(
+        regression_labeling.generate_regressions(alerts, push_index, _bugs(), SETTLED)
+    )
+    assert [r["signature_id"] for r in regressions[0]["runnables"]] == [900]
+    # A summary with only infra alerts is dropped.
+    assert (
+        list(
+            regression_labeling.generate_regressions(
+                alerts[1:], push_index, _bugs(), SETTLED
+            )
+        )
+        == []
+    )
 
 
 def test_canonical_bug_follows_duplicates() -> None:

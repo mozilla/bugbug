@@ -20,7 +20,7 @@ import re
 REPOSITORY = "autoland"
 
 # Bump whenever any table in this file changes: they all change what a label means.
-POLICY_VERSION = 1
+POLICY_VERSION = 2
 
 SUMMARY_STATUS = {
     0: "untriaged",
@@ -40,13 +40,17 @@ ALERT_STATUS = {
     2: "reassigned",
     3: "invalid",
     4: "acknowledged",
-    5: "confirming",
+    5: "infra",
 }
 CONFIRMED_SUMMARY_STATUSES = frozenset(
     ("investigating", "wontfix", "fixed", "backedout")
 )
 RESOLVED_SUMMARY_STATUSES = frozenset(("wontfix", "fixed", "backedout"))
-EXCLUDED_ALERT_STATUSES = frozenset(("downstream", "invalid"))
+# Treeherder keeps a summary untriaged while any of its alerts is, even next
+# to an acknowledged regression with a fixed bug, so these are pending: no
+# label either way, and their push is not clean.
+UNRESOLVED_SUMMARY_STATUSES = frozenset(("untriaged",))
+EXCLUDED_ALERT_STATUSES = frozenset(("downstream", "invalid", "infra"))
 # Harness-caused regressions stay in: a harness change is a repository change
 # the scheduler must react to. Infra changes are not in any push.
 EXCLUDED_SUMMARY_TAGS = ("infra",)

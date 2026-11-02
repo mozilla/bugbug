@@ -193,6 +193,28 @@ def merge_alerts(
     )
 
 
+def _count_runs(push: dict[str, Any]) -> int:
+    return sum(len(job["runs"]) for job in push.get("perf_jobs", []))
+
+
+def merge_push(
+    previous: dict[str, Any] | None, fetched: dict[str, Any]
+) -> dict[str, Any]:
+    """Refresh a stored push with its refetched row.
+
+    Fetched fields win, except that the stored ``perf_jobs`` stay when they
+    hold more runs than the fetched ones: Treeherder deletes jobs after 120
+    days, so a refetch after a long gap returns the push without them. Fields
+    the fetch does not produce are kept as well.
+    """
+    if previous is None:
+        return fetched
+    merged = {**previous, **fetched}
+    if _count_runs(previous) > _count_runs(fetched):
+        merged["perf_jobs"] = previous["perf_jobs"]
+    return merged
+
+
 def fetch_pushes(
     client: RedashClient,
     time_from: datetime,

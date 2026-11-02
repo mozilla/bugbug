@@ -174,7 +174,8 @@ class Retriever:
 
         Pushes start ``PUSHES_LEAD_DAYS`` before the alerts so the culprit of
         the earliest alert is present, and stop a day ago so no push is stored
-        while its jobs are still running.
+        while its jobs are still running. A refetched push keeps the jobs the
+        source has deleted since, see :func:`extraction.merge_push`.
         """
         pushes = {}
         if datasets.load_previous_snapshot(datasets.PERF_PUSHES_DB):
@@ -195,7 +196,9 @@ class Retriever:
         time_to = now - timedelta(days=1)
 
         for push in extraction.fetch_pushes(client, time_from, time_to, window_days):
-            pushes[push["push_id"]] = push
+            pushes[push["push_id"]] = extraction.merge_push(
+                pushes.get(push["push_id"]), push
+            )
 
         db.write(
             datasets.PERF_PUSHES_DB,
