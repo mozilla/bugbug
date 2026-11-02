@@ -19,6 +19,10 @@ from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
 logger = logging.getLogger(__name__)
 
+# The number of recent autoland pushes whose target tasks are the known tasks. They include backstop
+# pushes, which target all tasks (one every 20 pushes or 4 hours).
+AUTOLAND_PUSHES = 50
+
 
 def boot_worker() -> None:
     # Clone autoland
@@ -113,19 +117,20 @@ def boot_worker() -> None:
         wait=tenacity.wait_exponential(multiplier=1, min=1, max=8),
     )
     def retrieve_schedulable_tasks() -> None:
+        # The pushes of the last week (many more than AUTOLAND_PUSHES, also during holidays).
         r = requests.get(
-            "https://hg.mozilla.org/integration/autoland/json-pushes?version=2&tipsonly=1"
+            "https://hg.mozilla.org/integration/autoland/json-pushes",
+            params={"version": "2", "tipsonly": "1", "startdate": "1 week ago"},
         )
         r.raise_for_status()
-        revs = [
-            push_obj["changesets"][0]
-            for push_id, push_obj in r.json()["pushes"].items()
-        ]
+        pushes = sorted(r.json()["pushes"].items(), key=lambda push: int(push[0]))
+        revs = [push_obj["changesets"][0] for _, push_obj in pushes[-AUTOLAND_PUSHES:]]
 
         logger.info("Retrieving known tasks from %s...", revs)
 
-        # Store in a file the list of tasks in the latest autoland pushes.
-        # We use more than one to protect ourselves from broken decision tasks.
+        # Store in a file the list of tasks in the latest autoland pushes. Pushes don't all target
+        # the same tasks (only some of them target almost all), so we use the union of the target
+        # tasks of many pushes, which also protects us from broken decision tasks.
         known_tasks = set()
         for rev in revs:
             r = requests.get(
@@ -133,13 +138,6 @@ def boot_worker() -> None:
             )
             if r.ok:
                 known_tasks.update(r.json())
-
-        # We also use a mozilla-central task, to be even more protected from broken decision tasks.
-        r = requests.get(
-            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.taskgraph.decision/artifacts/public/target-tasks.json"
-        )
-        if r.ok:
-            known_tasks.update(r.json())
 
         logger.info("Retrieved %d tasks", len(known_tasks))
 
