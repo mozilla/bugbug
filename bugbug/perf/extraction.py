@@ -223,9 +223,6 @@ COST_FIELDS = (
     "submission_date",
     "runs",
     "duration",
-    "cost",
-    "costed_runs",
-    "cloud_provider",
 )
 
 

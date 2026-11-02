@@ -309,18 +309,16 @@ class Retriever:
             and time >= recent_after
         ]
         costs = task_costs.load_task_costs(task_costs.collect_push_task_ids(recent))
-        totals = {"runs": 0, "runs_with_pool": 0, "runs_with_cost": 0}
+        totals = {"runs": 0, "runs_with_pool": 0}
         for push in recent:
             summary = task_costs.summarize_push_cost(push, costs)
             for key in totals:
                 totals[key] += summary[key]
         logger.info(
-            "Cost coverage over the last %d days: %d perf runs, %d with a worker "
-            "pool, %d with cloud cost",
+            "Cost coverage over the last %d days: %d perf runs, %d with a worker pool",
             COST_COVERAGE_DAYS,
             totals["runs"],
             totals["runs_with_pool"],
-            totals["runs_with_cost"],
         )
 
     def export(

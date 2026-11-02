@@ -1,7 +1,7 @@
 -- One row per performance task, with the worker pool it ran on, its runs and
--- machine time, and the attributed cloud cost when the pool is cloud hosted.
--- Hardware pools (releng-hardware, proj-autophone) carry no cloud billing, so
--- their cost stays NULL and machine time per pool is the cost unit for them.
+-- machine time. Machine time per pool is the cost unit: perf tasks run almost
+-- entirely on hardware pools (releng-hardware, proj-autophone), and fxci's
+-- cloud billing figures are confidential, so they are not read.
 --
 -- Runs against the fxci dataset in BigQuery through the STMO data source.
 -- Every table is partitioned by submission_date and filtered on it explicitly.
@@ -16,9 +16,6 @@
 --   submission_date  text    day the task was created, YYYY-MM-DD
 --   runs             int?    number of runs that started and finished
 --   duration         int?    total machine seconds across those runs
---   cost             float?  attributed dollars; NULL for hardware pools, which have no cloud billing
---   costed_runs      int?    runs that contributed to cost; NULL when cost is NULL
---   cloud_provider   text?   gcp or azure when costed, otherwise NULL
 WITH perf_tasks AS (
   SELECT
     task_id,
@@ -51,17 +48,6 @@ runs AS (
     AND started IS NOT NULL
     AND resolved IS NOT NULL
   GROUP BY task_id
-),
-costs AS (
-  SELECT
-    task_id,
-    SUM(run_cost) AS cost,
-    COUNT(*) AS costed_runs,
-    ANY_VALUE(cloud_provider) AS cloud_provider
-  FROM `moz-fx-data-shared-prod.fxci.task_run_costs`
-  WHERE submission_date >= "{date_from}"
-    AND submission_date < "{date_to}"
-  GROUP BY task_id
 )
 SELECT
   t.task_id,
@@ -72,11 +58,7 @@ SELECT
   t.task_queue_id,
   t.submission_date,
   r.runs,
-  r.duration,
-  c.cost,
-  c.costed_runs,
-  c.cloud_provider
+  r.duration
 FROM perf_tasks t
 LEFT JOIN runs r USING (task_id)
-LEFT JOIN costs c USING (task_id)
 ORDER BY t.submission_date, t.task_id

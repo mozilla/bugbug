@@ -283,12 +283,13 @@ def test_costs_query_and_normalization() -> None:
             "task_queue_id": "releng-hardware/gecko-t-linux-talos-2404",
             "runs": 1,
             "duration": 400,
-            "cost": None,
-            "costed_runs": None,
+            "cost": "dropped",
             "unexpected": "dropped",
         }
     )
     assert set(cost) == set(extraction.COST_FIELDS)
+    # The query never reads fxci's cloud billing, which is confidential.
+    assert "task_run_costs" not in query and "cost" not in extraction.COST_FIELDS
     assert cost["task_queue_id"] == "releng-hardware/gecko-t-linux-talos-2404"
     assert cost["submission_date"] is None
     identity = task_labels.get_runnable_identity(cost["label"])
@@ -300,18 +301,11 @@ def test_load_task_costs_filters_by_task_id() -> None:
     db.write(
         datasets.PERF_TASK_COSTS_DB,
         [
-            {
-                "task_id": "T1",
-                "task_queue_id": "pool-a",
-                "cost": None,
-                "costed_runs": None,
-            },
-            {"task_id": "T2", "task_queue_id": "pool-b", "cost": 0.5, "costed_runs": 1},
+            {"task_id": "T1", "task_queue_id": "pool-a"},
+            {"task_id": "T2", "task_queue_id": "pool-b"},
         ],
     )
-    assert task_costs.load_task_costs({"T2"}) == {
-        "T2": task_costs.TaskCost("pool-b", 0.5, 1)
-    }
+    assert task_costs.load_task_costs({"T2"}) == {"T2": "pool-b"}
     assert set(task_costs.load_task_costs()) == {"T1", "T2"}
     pushes = [{"perf_jobs": [{"runs": [{"task_id": "T1"}, {"task_id": None}]}]}]
     assert task_costs.collect_push_task_ids(pushes) == {"T1"}
@@ -379,19 +373,13 @@ def test_push_cost_summary() -> None:
             }
         ]
     }
-    costs = {
-        "T1": task_costs.TaskCost("releng-hardware/mac", None, None),
-        "T2": task_costs.TaskCost("gecko-t/linux", 0.4, 2),
-    }
+    costs = {"T1": "releng-hardware/mac", "T2": "gecko-t/linux"}
     summary = task_costs.summarize_push_cost(push, costs)
-    assert summary["runs"] == 3
-    assert summary["runs_with_pool"] == 2
-    assert summary["runs_with_cost"] == 1
-    assert summary["machine_seconds_by_pool"] == {
-        "releng-hardware/mac": 100,
-        "gecko-t/linux": 50,
+    assert summary == {
+        "runs": 3,
+        "runs_with_pool": 2,
+        "machine_seconds_by_pool": {"releng-hardware/mac": 100, "gecko-t/linux": 50},
     }
-    assert summary["cost"] == pytest.approx(0.2)
 
 
 def test_sql_queries_are_parameterized() -> None:

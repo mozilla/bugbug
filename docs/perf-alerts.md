@@ -35,7 +35,7 @@ both, `push_status` builds on `regression_labeling`, and `selection_pairs` and
 | Source                              | Access                            | What it provides                                                                                                                                                          |
 | ----------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Treeherder Postgres replica         | STMO (Redash) data source 89, SQL | Perfherder alerts, summaries and their statuses, signatures, pushes, commits, performance jobs                                                                            |
-| BigQuery `fxci` dataset             | STMO (Redash) data source 63, SQL | Worker pool, runs, machine time and attributed cloud cost of every performance task                                                                                       |
+| BigQuery `fxci` dataset             | STMO (Redash) data source 63, SQL | Worker pool, runs and machine time of every performance task                                                                                                              |
 | Bugzilla                            | REST API, optional token          | The regression bug of each summary and the canonical bugs its duplicates point at, with `regressed_by` to pin the culprit commit and the resolution to decide the outcome |
 | Mercurial clone (`mozilla-central`) | `hg export`                       | Commit messages and diffs for the regression predictor dataset                                                                                                            |
 
@@ -105,11 +105,11 @@ Their format changes by these rules, also written above their registrations:
 - `data/perf_alert_bugs.json`: the regression bugs referenced by summaries,
   plus the canonical bugs reached by following `dupe_of` up to three hops.
 - `data/perf_task_costs.json`: one row per performance task from `fxci`,
-  with the worker pool (`task_queue_id`), run count, machine time and, for
-  cloud hosted pools only, the attributed dollar cost. Hardware pools such as
-  `releng-hardware/*` and `proj-autophone/*`, which run almost every
-  performance test, have no cloud billing, so their `cost` is null and machine
-  time per pool is the cost unit. Rows keep only the source columns; derive
+  with the worker pool (`task_queue_id`), run count and machine time. Machine
+  time per pool is the cost unit: hardware pools such as `releng-hardware/*`
+  and `proj-autophone/*` run almost every performance test, and `fxci`'s cloud
+  billing figures are confidential, so the query never reads them and nothing
+  in the snapshot is priced in money. Rows keep only the source columns; derive
   test identities with `get_runnable_identity(label)`. Joins to the pushes
   snapshot on the task id of each job run. Like pushes, costs are retrieved
   incrementally: rows older than `--reretrieve-days` are kept and the recent
@@ -266,18 +266,15 @@ The columns of `perf_task_costs.sql` restricted to `COST_FIELDS`; the query's
 same information. Derive identities with `get_runnable_identity(label)` when
 reading.
 
-| Field             | Type   | Meaning                                                                                                  |
-| ----------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| `task_id`         | str    | Taskcluster task id; joins to `task_ids` in the alerts and to `perf_jobs[].runs[].task_id` in the pushes |
-| `label`           | str    | task label, e.g. `test-linux2404-64-shippable/opt-talos-g1`                                              |
-| `project`         | str    | always `autoland`                                                                                        |
-| `task_queue_id`   | str    | worker pool, e.g. `releng-hardware/gecko-t-linux-talos-2404`; also names the machine type                |
-| `submission_date` | str    | day the task was created, `YYYY-MM-DD`                                                                   |
-| `runs`            | int?   | runs that started and finished, retries included                                                         |
-| `duration`        | int?   | total machine seconds across those runs                                                                  |
-| `cost`            | float? | attributed dollars; null for hardware pools, which have no cloud billing                                 |
-| `costed_runs`     | int?   | runs that contributed to `cost`; null when `cost` is null                                                |
-| `cloud_provider`  | str?   | `gcp` or `azure` when costed, otherwise null                                                             |
+| Field             | Type | Meaning                                                                                                  |
+| ----------------- | ---- | -------------------------------------------------------------------------------------------------------- |
+| `task_id`         | str  | Taskcluster task id; joins to `task_ids` in the alerts and to `perf_jobs[].runs[].task_id` in the pushes |
+| `label`           | str  | task label, e.g. `test-linux2404-64-shippable/opt-talos-g1`                                              |
+| `project`         | str  | always `autoland`                                                                                        |
+| `task_queue_id`   | str  | worker pool, e.g. `releng-hardware/gecko-t-linux-talos-2404`; also names the machine type                |
+| `submission_date` | str  | day the task was created, `YYYY-MM-DD`                                                                   |
+| `runs`            | int? | runs that started and finished, retries included                                                         |
+| `duration`        | int? | total machine seconds across those runs                                                                  |
 
 ### `perf_regressions.json` (one record per confirmed regression summary)
 
@@ -571,9 +568,9 @@ for commit in datasets.get_perf_regression_commits():
 
 `task_costs.load_task_costs()` indexes the costs snapshot by task id and
 `task_costs.summarize_push_cost(push, costs)` summarizes a push from the pushes
-snapshot into machine seconds per worker pool plus the known cloud cost. The
-`generate` operation logs how many perf runs could be matched to a pool and to
-a cloud cost, so a drop in coverage is visible in the task log.
+snapshot into machine seconds per worker pool. The `generate` operation logs
+how many perf runs could be matched to a pool, so a drop in coverage is
+visible in the task log.
 
 A shadow scheduler's choices never ran, so they cannot be priced from what
 ran. `task_costs.build_label_prices()` turns the snapshot into a price list instead: for

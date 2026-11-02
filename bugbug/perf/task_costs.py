@@ -5,49 +5,34 @@
 
 """Cost helpers joining pushes to the perf task costs snapshot.
 
-Perf tasks mostly run on Mozilla's own hardware pools, which have no dollar
-cost in ``fxci``, so the usable unit is machine seconds per worker pool, with
-dollars added only for the few tasks that run in the cloud. These helpers are
-for evaluating what a selection strategy would have spent or saved: ``summarize_push_cost``
-prices what actually ran on a push, while ``build_label_prices`` and
-``estimate_labels_cost`` price any set of task labels, run or not, from each label's
-typical duration. The ``generate`` command also uses them to check that recent
-runs have cost data.
+The cost unit is machine seconds per worker pool: perf tasks run almost
+entirely on Mozilla's own hardware pools, and the snapshot carries no billing
+figures. These helpers are for evaluating what a selection strategy would have
+spent or saved: ``summarize_push_cost`` prices what actually ran on a push,
+while ``build_label_prices`` and ``estimate_labels_cost`` price any set of task
+labels, run or not, from each label's typical duration. The ``generate``
+command also uses them to check that recent runs have cost data.
 """
 
 import collections
 import statistics
-from typing import Any, Iterable, NamedTuple
+from typing import Any, Iterable, Mapping, NamedTuple
 
 from bugbug import db
 from bugbug.perf.datasets import PERF_TASK_COSTS_DB
 from bugbug.perf.task_labels import get_runnable_identity, normalize_task_label
 
 
-class TaskCost(NamedTuple):
-    """Compact cost record for one task.
+def load_task_costs(task_ids: set[str] | None = None) -> dict[str, str | None]:
+    """Map each task id of the perf task costs snapshot to its worker pool.
 
-    ``pool`` is the worker pool (``task_queue_id``), which also names the
-    machine type; ``cost`` is the dollar figure, ``None`` off the cloud; and
-    ``costed_runs`` says how many runs that figure covers.
-    """
-
-    pool: str | None
-    cost: float | None
-    costed_runs: int | None
-
-
-def load_task_costs(task_ids: set[str] | None = None) -> dict[str, TaskCost]:
-    """Index the perf task costs snapshot by Taskcluster task id.
-
-    Each row is reduced to a :class:`TaskCost`. Pass ``task_ids`` to keep only
-    the tasks of interest; the snapshot holds millions of rows, so consumers
-    should restrict it to the pushes they need, typically via ``collect_push_task_ids``.
+    The pool (``task_queue_id``) also names the machine type. Pass ``task_ids``
+    to keep only the tasks of interest; the snapshot holds millions of rows, so
+    consumers should restrict it to the pushes they need, typically via
+    ``collect_push_task_ids``.
     """
     return {
-        row["task_id"]: TaskCost(
-            row.get("task_queue_id"), row.get("cost"), row.get("costed_runs")
-        )
+        row["task_id"]: row.get("task_queue_id")
         for row in db.read(PERF_TASK_COSTS_DB)
         if task_ids is None or row["task_id"] in task_ids
     }
@@ -69,37 +54,28 @@ def collect_push_task_ids(pushes: Iterable[dict[str, Any]]) -> set[str]:
 
 
 def summarize_push_cost(
-    push: dict[str, Any], costs: dict[str, TaskCost]
+    push: dict[str, Any], costs: Mapping[str, str | None]
 ) -> dict[str, Any]:
-    """Summarize machine time per worker pool and known cloud cost of a push.
+    """Summarize the machine time per worker pool of a push.
 
-    Every perf job run is looked up in ``costs``; its duration is added to its
-    pool's tally, and its per-run share of the task's dollar cost is added to
-    the total when one exists. The result also counts how many runs matched a
-    pool and how many were priced, so coverage gaps are visible.
+    Every perf job run is looked up in ``costs`` (task id to pool, see
+    ``load_task_costs``) and its duration added to its pool's tally. The result
+    also counts how many runs matched a task, so coverage gaps are visible.
     """
     seconds_by_pool: collections.Counter = collections.Counter()
-    cost_total = 0.0
-    costed = 0
     matched = 0
     total = 0
     for job in push["perf_jobs"]:
         for run in job["runs"]:
             total += 1
-            cost = costs.get(run["task_id"]) if run["task_id"] else None
-            if cost is None:
+            if not run["task_id"] or run["task_id"] not in costs:
                 continue
             matched += 1
-            seconds_by_pool[cost.pool or "unknown"] += run["duration"] or 0
-            if cost.cost is not None and cost.costed_runs:
-                cost_total += cost.cost / cost.costed_runs
-                costed += 1
+            seconds_by_pool[costs[run["task_id"]] or "unknown"] += run["duration"] or 0
     return {
         "runs": total,
         "runs_with_pool": matched,
-        "runs_with_cost": costed,
         "machine_seconds_by_pool": dict(seconds_by_pool),
-        "cost": cost_total if costed else None,
     }
 
 
