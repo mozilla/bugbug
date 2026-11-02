@@ -508,14 +508,21 @@ def cmd_optimize(args: argparse.Namespace) -> None:
                 args.statistic,
             )
         )
-        if pruned:
-            missed = sorted({i for trial in pruned for i in trial["missed_ids"]})
+        sparse = [trial for trial in pruned if trial["pruned_for"] == "missed"]
+        costly = [trial for trial in pruned if trial["pruned_for"] == "cost"]
+        if sparse:
+            missed = sorted({i for trial in sparse for i in trial["missed_ids"]})
             names = ", ".join(
-                sim.FAMILIES[family](**trial["params"]).name for trial in pruned
+                sim.FAMILIES[family](**trial["params"]).name for trial in sparse
             )
             notes.append(
-                f"{family}: {len(pruned)} trials pruned as too sparse to catch "
+                f"{family}: {len(sparse)} trials pruned as too sparse to catch "
                 f"regressions {missed} before the pushes end: {names}."
+            )
+        if costly:
+            notes.append(
+                f"{family}: {len(costly)} trials pruned before the CI replay as "
+                f"costing more than {args.max_cost_ratio} times production."
             )
         diagnostics.extend(_front_rows(family, rows))
 

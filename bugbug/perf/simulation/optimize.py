@@ -96,6 +96,7 @@ def optimize_family(
             plain = run(strategy, timeline, [window])[0]
             if plain[plain_cost] > max_cost_ratio * baseline[plain_cost]:
                 trial.set_user_attr("metrics", plain)
+                trial.set_user_attr("pruned_for", "cost")
                 raise optuna.TrialPruned()
         result = run(strategy, timeline, [window], ci=ci)[0]
         trial.set_user_attr("metrics", result)
@@ -129,12 +130,14 @@ def optimize_family(
 
 
 def pruned_trials(study: Any) -> list[dict[str, Any]]:
-    """Trials pruned for missing a regression the baseline caught, with what they missed.
+    """Pruned trials: what they missed, or ``"cost"`` when pruned as too expensive.
 
     A batching family runs the whole suite on every batch, so it can only miss
     a regression when no batch follows it before the pushes end: the strategy
     went longer without a batch than the data can judge, which says nothing
-    about its correctness. For a selection family, a miss is a real gap.
+    about its correctness. For a selection family, a miss is a real gap. With
+    the CI model, trials over ``max_cost_ratio`` are pruned before the replay
+    and carry ``pruned_for`` set to ``cost``.
     """
     import optuna
 
@@ -142,6 +145,7 @@ def pruned_trials(study: Any) -> list[dict[str, Any]]:
         {
             "params": trial.params,
             "missed_ids": trial.user_attrs["metrics"]["missed_ids"],
+            "pruned_for": trial.user_attrs.get("pruned_for", "missed"),
         }
         for trial in study.trials
         if trial.state == optuna.trial.TrialState.PRUNED
