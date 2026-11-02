@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import platform
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -73,7 +72,6 @@ async def prepare_ci_build(
         "--from-task",
         *fetches,
         cwd=fetches_dir,
-        env=os.environ.copy(),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

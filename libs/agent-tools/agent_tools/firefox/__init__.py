@@ -37,14 +37,15 @@ class FirefoxContext:
     js_binary: Path
     # What bootstrap_firefox last set up, which build_firefox then builds for.
     application: str = "browser"
-    # Optional task env to mirror when build_firefox is called.
-    ci_env: dict[str, str] | None = field(default=None, repr=False)
     _ci_build_env: dict[str, str] | None = field(default=None, init=False, repr=False)
 
-    def configure_ci_build(self, env: dict[str, str] | None) -> None:
-        """Use a supported CI task's env for the next Firefox build."""
-        self.ci_env = env
-        self._ci_build_env = None
+    async def configure_ci_build(self, env: dict[str, str] | None) -> None:
+        """Fetch a CI task's toolchains and use its mozconfig, or clear overrides."""
+        self._ci_build_env = (
+            await prepare_ci_build(self.source_dir, self.mozconfig, self.objdir, env)
+            if env is not None
+            else None
+        )
 
     @property
     def android_mozconfig(self) -> Path:
@@ -167,10 +168,8 @@ async def build_firefox(
     For Android once ``bootstrap_firefox`` has been called for it, with the
     mozconfig it wrote for that; for desktop Firefox otherwise.
 
-    When configured with a supported CI task env, the first call fetches its
-    toolchains and uses its mozconfig. Slow on a full tree build (tens of minutes
-    cold, faster incremental); pass a `target` directory to build just the part
-    you changed. Returns JSON: success
+    Slow on a full tree build (tens of minutes cold, faster incremental); pass a
+    `target` directory to build just the part you changed. Returns JSON: success
     (bool), build_dir (str), message (str), stdout/stderr. Only call this if
     you've changed source or the binary is missing — check if the binary exists
     first.
@@ -178,16 +177,6 @@ async def build_firefox(
     firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
     mozconfig, objdir = ctx.build_config()
     mozconfig_p = Path(mozconfig_path) if mozconfig_path else mozconfig
-    if ctx.ci_env is not None and ctx._ci_build_env is None:
-        try:
-            ctx._ci_build_env = await prepare_ci_build(
-                firefox_dir_p, mozconfig_p, objdir, ctx.ci_env
-            )
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Error preparing the CI Firefox build: {type(e).__name__}: {e!s}",
-            }
     return await _build_firefox(
         firefox_dir_p,
         mozconfig_p,

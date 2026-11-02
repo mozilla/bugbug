@@ -170,7 +170,8 @@ Edit the source files in {source_repo} (your working directory) to repair the bu
 been read, which costs a turn. To see how a commit handled comparable files, run
 `git show <sha> -- <dir>` rather than guessing a sibling's name.
 
-Logs already fetched sit under {scratch_out}/logs. When the failing task has a supported Linux CI configuration, the first build_firefox call fetches its toolchains and writes the matching mozconfig. Otherwise the default mozconfig is already set up. Verify the fix compiles with the build_firefox tool, passing
+Logs already fetched sit under {scratch_out}/logs. The mozconfig and any supported
+CI toolchains are already set up. Verify the fix compiles with build_firefox, passing
 the directory of the file you changed as `target` (e.g. 'docshell/base') for a
 fast, focused build -- prefer this over a full tree build. If using the CI
 configuration, do not replace its toolchains with bootstrap; report a setup
