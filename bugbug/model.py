@@ -172,6 +172,8 @@ class Model:
 
         self.store_dataset = False
 
+        self.use_scale_pos_weight = False
+
         self.entire_dataset_training = False
 
         # DBs required for training.
@@ -214,6 +216,8 @@ class Model:
                 feature_name = f"Comments contain '{feature_name}'"
             elif type_ == "text":
                 feature_name = f"Combined text contains '{feature_name}'"
+            elif type_ == "comment_text":
+                feature_name = f"Comment text contains '{feature_name}'"
             elif type_ == "files":
                 feature_name = f"File '{feature_name}'"
             elif type_ == "filespathcomponents":
@@ -404,6 +408,21 @@ class Model:
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
+
+        # Use scale_pos_weight to help in extremely imbalanced datasets
+        if self.use_scale_pos_weight and is_binary:
+            negative_samples = sum(label == 0 for label in y_train)
+            positive_samples = sum(label == 1 for label in y_train)
+            logger.info("Negative Samples: %d", negative_samples)
+            logger.info("Positive Samples: %d", positive_samples)
+
+            scale_pos_weight = (negative_samples / positive_samples) / 10
+
+            logger.info("Scale Pos Weight: %d", scale_pos_weight)
+
+            self.clf.named_steps["estimator"].set_params(
+                scale_pos_weight=scale_pos_weight
+            )
 
         tracking_metrics = {}
 
