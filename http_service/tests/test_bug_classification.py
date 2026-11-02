@@ -4,12 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
-import json
 import time
+from types import SimpleNamespace
 
+import numpy as np
 import orjson
 
-from bugbug_http.app import API_TOKEN
+from bugbug_http import app, models
+from bugbug_http.app import API_TOKEN, JobInfo
 
 
 def retrieve_compressed_reponse(response):
@@ -124,7 +126,7 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     def do_request():
         return client.post(
             "/component/predict/batch",
-            data=json.dumps({"bugs": bug_ids}),
+            json={"bugs": bug_ids},
             headers={API_TOKEN: "test"},
         )
 
@@ -182,7 +184,7 @@ def test_model_predict_batch_broken_site_reports(client, jobs, add_result):
     def do_request():
         return client.post(
             "/invalidcompatibilityreport/predict/broken_site_report/batch",
-            data=json.dumps({"reports": reports}),
+            json={"reports": reports},
             headers={API_TOKEN: "test"},
         )
 
@@ -234,14 +236,14 @@ def test_for_missing_bugs(client, responses):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": all_bug_ids}),
+        json={"bugs": all_bug_ids},
         headers={API_TOKEN: "test"},
     )
     assert rv.status_code == 202
     bugs = retrieve_compressed_reponse(rv)["bugs"]
-    assert bugs.keys() == set(
-        map(str, all_bug_ids)
-    ), "All the queried bug IDs must be returned"
+    assert bugs.keys() == set(map(str, all_bug_ids)), (
+        "All the queried bug IDs must be returned"
+    )
 
 
 def test_empty_batch(client):
@@ -249,7 +251,7 @@ def test_empty_batch(client):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": []}),
+        json={"bugs": []},
         headers={API_TOKEN: "test"},
     )
 
@@ -264,7 +266,7 @@ def test_non_int_batch(client):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": bugs}),
+        json={"bugs": bugs},
         headers={API_TOKEN: "test"},
     )
 
@@ -289,7 +291,7 @@ def test_unknown_model(client):
 
     rv = client.post(
         f"/{unknown_model}/predict/batch",
-        data=json.dumps({"bugs": bugs}),
+        json={"bugs": bugs},
         headers={API_TOKEN: "test"},
     )
 
@@ -304,9 +306,120 @@ def test_no_api_key(client):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": bugs}),
+        json={"bugs": bugs},
         headers={},
     )
 
     assert rv.status_code == 401
     assert rv.json == {"message": "Error, missing X-API-KEY"}
+
+
+def test_comment_prediction(client, jobs, add_result, add_change_time, monkeypatch):
+    comment_id = 123
+    result = {"class": "spam", "extra_data": {}, "index": 1, "prob": [0, 1]}
+    monkeypatch.setattr(app, "is_comment_model", lambda model_name: True)
+    monkeypatch.setattr(
+        app,
+        "get_comments_last_change_time",
+        lambda comment_ids: {comment_id: "2026-09-21T00:00:00Z"},
+    )
+
+    def do_request():
+        return client.get(
+            f"/spamcomment/predict/comment/{comment_id}",
+            headers={API_TOKEN: "test"},
+        )
+
+    response = do_request()
+    assert response.status_code == 202
+    assert retrieve_compressed_reponse(response) == {"ready": False}
+
+    key = next(iter(jobs.values()))[0]
+    add_change_time(key, "2026-09-21T00:00:00Z")
+    add_result(key, result)
+
+    response = do_request()
+    assert response.status_code == 200
+    assert retrieve_compressed_reponse(response) == result
+
+
+def test_batch_comment_prediction(client, jobs, monkeypatch):
+    comment_ids = [123, 456]
+    monkeypatch.setattr(app, "is_comment_model", lambda model_name: True)
+    monkeypatch.setattr(
+        app,
+        "get_comments_last_change_time",
+        lambda requested_ids: {
+            comment_id: "2026-09-21T00:00:00Z" for comment_id in requested_ids
+        },
+    )
+
+    response = client.post(
+        "/spamcomment/predict/comment/batch",
+        json={"comments": comment_ids},
+        headers={API_TOKEN: "test"},
+    )
+
+    assert response.status_code == 202
+    assert retrieve_compressed_reponse(response) == {
+        "comments": {str(comment_id): {"ready": False} for comment_id in comment_ids}
+    }
+    job_keys = next(iter(jobs.values()))
+    assert job_keys[:2] == [
+        f"classify_comment:spamcomment_{comment_id}" for comment_id in comment_ids
+    ]
+    assert len(job_keys) == 3
+
+
+def test_inaccessible_comment_clears_cached_prediction(client, add_result, monkeypatch):
+    comment_id = 123
+    monkeypatch.setattr(app, "is_comment_model", lambda model_name: True)
+    monkeypatch.setattr(app, "get_comments_last_change_time", lambda comment_ids: {})
+    job = JobInfo(models.classify_comment, "spamcomment", comment_id)
+    add_result(job, {"class": "spam"})
+
+    response = client.get(
+        f"/spamcomment/predict/comment/{comment_id}",
+        headers={API_TOKEN: "test"},
+    )
+
+    assert response.status_code == 200
+    assert retrieve_compressed_reponse(response) == {"available": False}
+    assert app.redis_conn.get(job.result_key) is None
+
+
+def test_classify_comment_worker(monkeypatch):
+    bug = {"id": 10, "last_change_time": "2026-09-21T00:00:00Z"}
+    comment = {"id": 123, "bug_id": 10, "count": 1}
+    classified_items = []
+
+    class FakeModel:
+        le = SimpleNamespace(
+            inverse_transform=lambda indexes: np.array(["spam"] * len(indexes))
+        )
+
+        def classify(self, items, probabilities):
+            classified_items.extend(items)
+            return np.array([[0.1, 0.9]])
+
+        def get_extra_data(self):
+            return {}
+
+    monkeypatch.setattr(
+        models.bugzilla,
+        "get_comments",
+        lambda comment_ids: {123: (bug, comment)},
+    )
+    monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: FakeModel())
+
+    assert models.classify_comment("spamcomment", [123, 999], "token") == "OK"
+    assert classified_items == [(bug, comment)]
+    assert app.get_result(JobInfo(models.classify_comment, "spamcomment", 123)) == {
+        "prob": [0.1, 0.9],
+        "index": 1,
+        "class": "spam",
+        "extra_data": {},
+    }
+    assert app.get_result(JobInfo(models.classify_comment, "spamcomment", 999)) == {
+        "available": False
+    }

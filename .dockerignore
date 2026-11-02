@@ -97,5 +97,11 @@ venv/
 # Project-specific stuff
 cache/
 data/
-http_service/
 .taskcluster.yml
+
+# Node / Next.js build artifacts (absent on a fresh checkout, present locally)
+**/node_modules
+**/.next
+**/.env
+**/.env.local
+**/.env.sentry-build-plugin

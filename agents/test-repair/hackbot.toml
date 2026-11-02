@@ -1,0 +1,15 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+# The agent resolves the failure commit and candidate range from the task id at
+# startup, then prepares the tree at that commit, deep enough to reach the
+# last-green commit.
+
+# Infrastructure this agent runs on, applied by Terraform. Changing anything here
+# changes the agent's shape and goes through an infra PR; the image ships on
+# its own.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "6"
+memory = "24Gi"
+timeout_seconds = 7200

@@ -1,0 +1,641 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""Build-repair agent.
+
+Two-stage claude-agent-sdk agent that analyzes a Firefox build failure and
+implements a fix in the source tree. The runtime checks the tree out at the
+failure commit (via ``SOURCE_REF``) and collects the agent's edits into
+``changes.patch``; this module only orchestrates the agent and publishes the
+analysis artifacts.
+"""
+
+import contextlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from collections.abc import Callable
+from pathlib import Path
+
+from agent_tools import firefox
+from agent_tools.claude_sdk import build_sdk_server
+from agent_tools.firefox import FirefoxContext
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    McpServerConfig,
+    ResultMessage,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
+)
+from hackbot_agents.build_repair.try_push import TRY_TOOLS
+from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
+from hackbot_runtime.claude import Reporter
+
+from .config import (
+    ADDITIONAL_DIRS,
+    ALLOWED_TOOLS,
+    ANALYSIS_MODEL,
+    BUGZILLA_READ_TOOLS,
+    BUILD_TOOL,
+    CHECKOUT_DEPTH,
+    ENABLED_ACTION_TYPES,
+    FIREFOX_TOOLS,
+    FIX_MODEL,
+    TRY_PUSH_TOOL,
+)
+from .prompts import (
+    ANALYSIS_TEMPLATE,
+    BLAME_NOTE,
+    BLAME_STEP,
+    BUG_ANALYSIS_STEP,
+    BUG_CONTEXT,
+    CHECKOUT_HISTORY,
+    FIX_TEMPLATE,
+    PARENT_REVISION_ARG,
+    PUSH_COMMIT_LINE,
+    PUSH_CONTEXT,
+    REPORT_INSTRUCTIONS,
+    SINGLE_COMMIT_CONTEXT,
+    SYSTEM_PROMPT_APPEND,
+    TREE_AT_BLAME,
+    TREEHERDER_STEP,
+    TREEHERDER_STEP_NO_PUSH,
+    TRY_PUSH_INSTRUCTIONS,
+)
+from .resolve import _bug_from_desc, task_push
+
+TARGET_SOFTWARE = "Mozilla Firefox"
+
+
+class BuildRepairResult(HackbotAgentResult):
+    bug_id: int | None = None
+    git_commit: str
+    summary: str = ""
+    analysis: str = ""
+    local_build_verified: bool | None = None
+    try_build_passed: bool | None = None
+    lando_job_id: str | None = None
+    treeherder_url: str | None = None
+    # Which commit introduced the failure, or None when the agent found that none
+    # of the push's commits did (infra, toolchain, or already failing).
+    blamed_commit: str | None = None
+
+
+def _result_text(block: ToolResultBlock) -> str:
+    if isinstance(block.content, str):
+        return block.content
+    if isinstance(block.content, list):
+        return "\n".join(
+            c.get("text", "")
+            for c in block.content
+            if isinstance(c, dict) and c.get("type") == "text"
+        )
+    return str(block.content)
+
+
+def _build_options(
+    *,
+    model: str | None,
+    effort: str,
+    cwd: Path,
+    scratch_dir: Path,
+    mcp_servers: dict[str, McpServerConfig],
+    allowed_tools: list[str],
+    max_turns: int | None,
+) -> ClaudeAgentOptions:
+    # The agent always runs inside an isolated Docker container, so there is no
+    # sandbox and tools run without per-command permission prompts.
+    return ClaudeAgentOptions(
+        model=model,
+        system_prompt={
+            "type": "preset",
+            "preset": "claude_code",
+            "append": SYSTEM_PROMPT_APPEND,
+        },
+        cwd=str(cwd),
+        mcp_servers=mcp_servers,
+        allowed_tools=allowed_tools,
+        disallowed_tools=["AskUserQuestion", "Task", "Skill"],
+        add_dirs=[*ADDITIONAL_DIRS, str(scratch_dir)],
+        permission_mode="bypassPermissions",
+        effort=effort,
+        max_turns=max_turns,
+        # Loads the Firefox tree's CLAUDE.md, which imports its AGENTS.md.
+        setting_sources=["project"],
+        # Ignores the tree's .mcp.json; only mcp_servers are available.
+        extra_args={"strict-mcp-config": None},
+    )
+
+
+def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
+    """Build as the failing CI task did: its toolchains and mozconfig."""
+    fetches = [f"{f['task']}:{f['artifact']}" for f in json.loads(env["MOZ_FETCHES"])]
+    fetches_dir = fx_ctx.source_dir.parent / "fetches"
+    fetches_dir.mkdir(exist_ok=True)
+    # A reused workspace keeps the in-tree mozconfig, which mach refuses outside automation.
+    fx_ctx.mozconfig.unlink(missing_ok=True)
+    subprocess.run(
+        [str(fx_ctx.source_dir / "mach"), "--no-interactive", "artifact"]
+        + ["toolchain", "--from-task", *fetches],
+        cwd=fetches_dir,
+        check=True,
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+    )
+    # mach takes in-tree mozconfigs only in automation.
+    os.environ.update(
+        {
+            k: env[k]
+            for k in ("DISABLE_CLANG_PLUGIN", "FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS")
+            if k in env
+        },
+        MOZ_AUTOMATION="1",
+        MOZ_FETCHES_DIR=str(fetches_dir),
+    )
+    fx_ctx.mozconfig.write_text(
+        f'. "$topsrcdir/{env["MOZCONFIG"]}"\n'
+        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
+    )
+
+
+def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
+    """Write a mozconfig mirroring the failing CI build, unless one exists.
+
+    Verification only means something if the local build reproduces the failure
+    condition. Many failures (e.g. a variable used only inside a stripped
+    ``MOZ_DIAGNOSTIC_ASSERT``) compile fine in a default Nightly-style build and
+    fail only in a release-milestone build with warnings-as-errors. ``--enable-
+    release`` leaves ``MOZ_DIAGNOSTIC_ASSERT_ENABLED`` undefined and
+    ``--enable-warnings-as-errors`` promotes warnings to errors, so this config
+    surfaces that whole class locally.
+    """
+    if fx_ctx.mozconfig.exists():
+        return
+    fx_ctx.mozconfig.write_text(
+        "ac_add_options --enable-application=browser\n"
+        "ac_add_options --disable-debug\n"
+        "ac_add_options --enable-release\n"
+        "ac_add_options --enable-warnings-as-errors\n"
+        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
+    )
+
+
+async def run_build_repair(
+    *,
+    bugzilla_mcp_server: McpServerConfig,
+    source_repo: Path,
+    fx_ctx: FirefoxContext,
+    bug_id: int | None = None,
+    commit_bugs: dict[str, int] | None = None,
+    git_commits: list[str],
+    project: str | None = None,
+    hg_revision: str | None = None,
+    failure_tasks: dict[str, str],
+    ci_env: dict[str, str] | None = None,
+    run_try_push: bool = False,
+    model: str | None = None,
+    max_turns: int | None = None,
+    verbose: bool = False,
+    log: Path | None = None,
+    publish_file: Callable[[str, Path, str | None], str] | None = None,
+    actions_recorder: ActionsRecorder | None = None,
+    checkout: Callable[[str], str] | None = None,
+) -> BuildRepairResult:
+    """Analyze a build failure and implement a fix in ``source_repo``.
+
+    Pass ``checkout`` (``HackbotContext.checkout``) to move the tree to the blamed
+    commit before the fix stage, so the fix is a change to that commit and the
+    revision stacks on the commit's own.
+
+    Returns a :class:`BuildRepairResult`; raises :class:`AgentError` if a stage
+    ends in an error or produces no result.
+
+    ``commit_bugs`` maps each push commit to the bug it landed for (from the
+    pushlog, see ``resolve_push``). A run is never told which bug a failure
+    belongs to, so that mapping is what an unset ``bug_id`` falls back to.
+
+    Pass ``actions_recorder`` to let the fix stage submit the fix for review as a
+    Phabricator revision, recorded as a proposed action rather than submitted
+    here. Runs without a recorder, or with no bug for the blamed commit, only
+    produce the fix in the source tree.
+    """
+    if not git_commits:
+        raise AgentError("git_commits must contain at least one commit")
+    failure_commit = git_commits[0]
+    commit_bugs = commit_bugs or {}
+    # The failure commit's bug gives stage 1 its Bugzilla context. Which bug the
+    # *fix* is filed against is only settled once stage 1 picks the culprit out
+    # of the push, so it is resolved again below.
+    push_bug_id = bug_id if bug_id is not None else commit_bugs.get(failure_commit)
+    label = (
+        f"bug {push_bug_id}"
+        if push_bug_id is not None
+        else f"commit {failure_commit[:12]}"
+    )
+    print(f"[build_repair] repairing {label} at {failure_commit}", file=sys.stderr)
+
+    scratch_dir = Path(
+        tempfile.mkdtemp(prefix=f"build-repair-{push_bug_id or 'nobug'}-")
+    )
+    scratch_out = scratch_dir / "out"
+    scratch_out.mkdir(parents=True, exist_ok=True)
+
+    firefox_tools = [*firefox.TOOLS, *TRY_TOOLS] if run_try_push else firefox.TOOLS
+    firefox_server = build_sdk_server("firefox", fx_ctx, firefox_tools)
+    mcp_servers: dict[str, McpServerConfig] = {
+        "bugzilla": bugzilla_mcp_server,
+        "firefox": firefox_server,
+    }
+    allowed_tools = [
+        *ALLOWED_TOOLS,
+        *BUGZILLA_READ_TOOLS,
+        *FIREFOX_TOOLS,
+        *([TRY_PUSH_TOOL] if run_try_push else []),
+    ]
+
+    task_name = next(iter(failure_tasks), "")
+    if not (project and hg_revision) and failure_tasks:
+        # The eval harness drives the agent from git commits alone, but the logs
+        # only come from Treeherder, so the push has to be resolved either way.
+        try:
+            project, hg_revision = task_push(next(iter(failure_tasks.values())))
+        except Exception:
+            print("[build_repair] could not resolve the push", file=sys.stderr)
+    treeherder_step = (
+        TREEHERDER_STEP.format(
+            project=project,
+            hg_revision=hg_revision,
+            task_name=task_name,
+            scratch_out=scratch_out,
+        )
+        if project and hg_revision
+        else TREEHERDER_STEP_NO_PUSH.format(scratch_out=scratch_out)
+    )
+    analysis_prompt = ANALYSIS_TEMPLATE.format(
+        target_software=TARGET_SOFTWARE,
+        git_commit=failure_commit,
+        source_repo=source_repo,
+        push_context=_push_context(git_commits),
+        treeherder_step=treeherder_step,
+        blame_step=_blame_step(git_commits, scratch_out),
+        scratch_out=scratch_out,
+        bug_context=(
+            BUG_CONTEXT.format(bug_id=push_bug_id) if push_bug_id is not None else ""
+        ),
+        bug_step=(
+            BUG_ANALYSIS_STEP.format(bug_id=push_bug_id)
+            if push_bug_id is not None
+            else ""
+        ),
+        logs_num=3 if push_bug_id is not None else 2,
+    )
+    total_cost = 0.0
+    total_turns = 0
+    # Last JSON result of each tracked tool, keyed by tool name. Lets us report
+    # the actual local-build / try-push outcomes instead of guessing.
+    captured: dict[str, dict] = {}
+    tracked = {BUILD_TOOL, *([TRY_PUSH_TOOL] if run_try_push else [])}
+
+    with Reporter(verbose=verbose, log_path=log) as reporter:
+        # Stage 1: analysis (high effort, no source edits yet).
+        reporter.header(f"{label}: analysis")
+        analysis_opts = _build_options(
+            model=model or ANALYSIS_MODEL,
+            effort="high",
+            cwd=source_repo,
+            scratch_dir=scratch_dir,
+            mcp_servers=mcp_servers,
+            allowed_tools=allowed_tools,
+            max_turns=max_turns,
+        )
+        result_msg = await _run_session(
+            reporter, analysis_opts, analysis_prompt, captured, tracked
+        )
+        _check(result_msg, label, "analysis")
+        _check_blocked(scratch_out)
+        total_cost += result_msg.total_cost_usd or 0.0
+        total_turns += result_msg.num_turns or 0
+
+        # Which bug the fix belongs to is only settled now: when the push has
+        # several commits, stage 1 is what picks the culprit, and it is the
+        # culprit's bug a revision has to be filed against.
+        blamed_commit = _resolve_blame(scratch_out, git_commits)
+        resolved_bug_id = bug_id
+        if resolved_bug_id is None and blamed_commit is not None:
+            # A culprit from an earlier push is not in the pushlog mapping, but
+            # the checkout reaches CHECKOUT_DEPTH commits back, so its subject
+            # still names the bug.
+            resolved_bug_id = commit_bugs.get(blamed_commit) or _bug_from_commit(
+                source_repo, blamed_commit
+            )
+
+        if blamed_commit is not None:
+            at_blame = _checkout(checkout, blamed_commit)
+            # A child revision has to be based on its parent's commit, so the fix
+            # only stacks when the tree really moved there.
+            parent_revision = (
+                _revision_from_commit(source_repo, blamed_commit) if at_blame else None
+            )
+
+            # Reporting is confined to the fix stage: the analysis stage must not
+            # submit anything before there is a verified fix.
+            report = actions_recorder is not None and resolved_bug_id is not None
+            fix_mcp_servers = mcp_servers
+            fix_allowed_tools = allowed_tools
+            if report:
+                _, actions_server = actions_server_for(
+                    actions_recorder, types=ENABLED_ACTION_TYPES
+                )
+                fix_mcp_servers = {**mcp_servers, ACTIONS_SERVER_NAME: actions_server}
+                fix_allowed_tools = [
+                    *allowed_tools,
+                    *actions_to_tool_names(ENABLED_ACTION_TYPES),
+                ]
+            elif actions_recorder is not None:
+                print(
+                    f"[build_repair] no bug for blamed commit {blamed_commit}: the fix "
+                    "will be produced but not submitted for review, since a "
+                    "Phabricator revision is filed against a bug",
+                    file=sys.stderr,
+                )
+
+            fix_prompt = FIX_TEMPLATE.format(
+                target_software=TARGET_SOFTWARE,
+                source_repo=source_repo,
+                scratch_out=scratch_out,
+                blame_note=BLAME_NOTE.format(
+                    blamed_commit=blamed_commit,
+                    tree=TREE_AT_BLAME if at_blame else "",
+                ),
+                try_push=(
+                    TRY_PUSH_INSTRUCTIONS.format(task_name=task_name)
+                    if run_try_push
+                    else ""
+                ),
+                report=(
+                    REPORT_INSTRUCTIONS.format(
+                        bug_id=resolved_bug_id,
+                        parent=(
+                            PARENT_REVISION_ARG.format(revision=parent_revision)
+                            if parent_revision
+                            else ""
+                        ),
+                    )
+                    if report
+                    else ""
+                ),
+            )
+
+            # Stage 2: fix (lower effort, edits the source tree and verifies it
+            # builds against a mozconfig that mirrors the failing CI config).
+            if ci_env:
+                _setup_ci_build(fx_ctx, ci_env)
+            else:
+                _write_mozconfig(fx_ctx)
+            fix_label = (
+                f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
+            )
+            reporter.header(f"{fix_label}: fix")
+            fix_opts = _build_options(
+                model=model or FIX_MODEL,
+                effort="low",
+                cwd=source_repo,
+                scratch_dir=scratch_dir,
+                mcp_servers=fix_mcp_servers,
+                allowed_tools=fix_allowed_tools,
+                max_turns=max_turns,
+            )
+            result_msg = await _run_session(
+                reporter, fix_opts, fix_prompt, captured, tracked
+            )
+            _check(result_msg, label, "fix")
+            total_cost += result_msg.total_cost_usd or 0.0
+            total_turns += result_msg.num_turns or 0
+
+    summary = _read_doc(scratch_out, "summary", publish_file)
+    analysis = _read_doc(scratch_out, "analysis", publish_file)
+
+    build_result = captured.get(BUILD_TOOL)
+    try_result = captured.get(TRY_PUSH_TOOL, {})
+
+    return BuildRepairResult(
+        bug_id=resolved_bug_id,
+        git_commit=failure_commit,
+        summary=summary,
+        analysis=analysis,
+        local_build_verified=build_result.get("success") if build_result else None,
+        try_build_passed=try_result.get("try_build_passed"),
+        lando_job_id=try_result.get("lando_job_id"),
+        treeherder_url=try_result.get("treeherder_url"),
+        blamed_commit=blamed_commit,
+        num_turns=total_turns,
+        total_cost_usd=total_cost,
+    )
+
+
+async def _run_session(
+    reporter: Reporter,
+    options: ClaudeAgentOptions,
+    prompt: str,
+    captured: dict[str, dict],
+    tracked: set[str],
+) -> ResultMessage | None:
+    """Drive one agent session, capturing the last result of each tracked tool.
+
+    ``captured`` is keyed by tool name and updated in place with the parsed JSON
+    of each successful call to a tool in ``tracked`` (e.g. the local build and
+    the try push), so the caller can report real outcomes.
+    """
+    pending: dict[str, str] = {}
+    result_msg: ResultMessage | None = None
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        async for msg in client.receive_response():
+            reporter.message(msg)
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, ToolUseBlock) and block.name in tracked:
+                        pending[block.id] = block.name
+            elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+                for block in msg.content:
+                    if (
+                        isinstance(block, ToolResultBlock)
+                        and block.tool_use_id in pending
+                        and not block.is_error
+                    ):
+                        name = pending.pop(block.tool_use_id)
+                        with contextlib.suppress(ValueError, TypeError):
+                            captured[name] = json.loads(_result_text(block))
+
+            elif isinstance(msg, ResultMessage):
+                result_msg = msg
+    return result_msg
+
+
+def _check_blocked(scratch_out: Path) -> None:
+    """Fail the run unless the agent actually retrieved a failure log.
+
+    Analysing a failure whose log never arrived produces a confident verdict
+    invented from the diff alone (bug 6665), so a missing log is an error rather
+    than a verdict, and the error reaches the API and the UI. The agent is asked to
+    report the blocker itself in error.txt; the log check is what makes it a
+    guarantee rather than an instruction.
+    """
+    blocker = scratch_out / "error.txt"
+    if blocker.exists():
+        raise AgentError(blocker.read_text().strip() or "agent reported it was blocked")
+    logs = scratch_out / "logs"
+    if not any(logs.glob("**/*live_backing_log*")):
+        raise AgentError(
+            "no failure log was retrieved: treeherder-cli left nothing under "
+            f"{logs}, so any verdict would be guesswork"
+        )
+
+
+def _check(result_msg: ResultMessage | None, label: str, stage: str) -> None:
+    if result_msg is None:
+        raise AgentError(f"{label}: {stage} stage produced no result message")
+    if result_msg.is_error:
+        raise AgentError(
+            f"{label}: {stage} stage failed: {result_msg.result or result_msg.subtype}"
+        )
+
+
+def _read_doc(
+    scratch_out: Path,
+    key: str,
+    publish_file: Callable[[str, Path, str | None], str] | None,
+) -> str:
+    """Read a stage-1 output doc and, if a publisher is given, publish it."""
+    path = scratch_out / f"{key}.md"
+    if not path.exists():
+        return ""
+    if publish_file is not None:
+        publish_file(f"{key}.md", path, "text/markdown")
+    return path.read_text()
+
+
+def _push_context(git_commits: list[str]) -> str:
+    """Tell the agent exactly which commits make up the push.
+
+    Spelled out even for a single commit: without it the agent takes the parent
+    commit for a stacked one and blames it as part of the push.
+    """
+    history = CHECKOUT_HISTORY.format(depth=CHECKOUT_DEPTH)
+    if len(git_commits) == 1:
+        return SINGLE_COMMIT_CONTEXT.format(
+            commit=git_commits[0], checkout_history=history
+        )
+    commit_lines = "\n".join(PUSH_COMMIT_LINE.format(commit=c) for c in git_commits)
+    return PUSH_CONTEXT.format(commit_lines=commit_lines, checkout_history=history)
+
+
+def _blame_step(git_commits: list[str], scratch_out: Path) -> str:
+    """The blame.json instruction.
+
+    Asked for even on a single-commit push: without it the agent has no way to say
+    that the lone commit is innocent and the bustage came from somewhere else.
+    """
+    return BLAME_STEP.format(scratch_out=scratch_out)
+
+
+def _bug_from_commit(repo: Path, sha: str) -> int | None:
+    """The bug a commit landed for, read off its subject in the local checkout."""
+    try:
+        subject = subprocess.run(
+            ["git", "-C", str(repo), "log", "-1", "--format=%s", sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except subprocess.CalledProcessError, OSError:
+        return None
+    return _bug_from_desc(subject)
+
+
+_SHA_RE = re.compile(r"[0-9a-f]{7,40}$")
+_REVISION_RE = re.compile(
+    r"^Differential Revision: https://phabricator\.services\.mozilla\.com/D(\d+)",
+    re.MULTILINE,
+)
+
+
+def _revision_from_commit(repo: Path, sha: str) -> int | None:
+    """The Phabricator revision a commit landed from, off its footer."""
+    try:
+        body = subprocess.run(
+            ["git", "-C", str(repo), "log", "-1", "--format=%B", sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except subprocess.CalledProcessError, OSError:
+        return None
+    match = _REVISION_RE.search(body)
+    return int(match.group(1)) if match else None
+
+
+def _checkout(checkout: Callable[[str], str] | None, sha: str) -> bool:
+    """Move the tree to ``sha`` for the fix stage; False when it stays put.
+
+    Best effort: a checkout that fails costs the stacking, not the analysis.
+    """
+    if checkout is None:
+        return False
+    try:
+        checkout(sha)
+    except Exception as exc:
+        print(f"[build_repair] could not check out {sha}: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
+def _match_commit(sha: str | None, git_commits: list[str]) -> str | None:
+    """Match a (possibly abbreviated) git sha against the push commits."""
+    if not sha:
+        return None
+    for c in git_commits:
+        if c.startswith(sha) or sha.startswith(c):
+            return c
+    return None
+
+
+def _read_blame(scratch_out: Path) -> dict:
+    path = scratch_out / "blame.json"
+    if not path.exists():
+        return {}
+    try:
+        blame = json.loads(path.read_text())
+    except ValueError, OSError:
+        return {}
+    return blame if isinstance(blame, dict) else {}
+
+
+def _resolve_blame(scratch_out: Path, git_commits: list[str]) -> str | None:
+    """The commit the agent blamed, or None when it blamed none.
+
+    An explicit null is a verdict and is kept, and so is a commit outside the
+    push: the agent traced the failure to an earlier push, and reporting the
+    checked-out commit instead would contradict its own analysis (bug 6788).
+    Only a missing or unparsable file is not a verdict and falls back to the
+    failure commit.
+    """
+    if not git_commits:
+        return None
+    blame = _read_blame(scratch_out)
+    if "blamed_commit" not in blame:
+        return git_commits[0]
+    blamed = str(blame["blamed_commit"] or "").strip().lower()
+    if not _SHA_RE.match(blamed):
+        return None
+    return _match_commit(blamed, git_commits) or blamed

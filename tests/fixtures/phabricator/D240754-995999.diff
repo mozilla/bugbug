@@ -1,0 +1,28 @@
+diff --git a/dom/canvas/WebGLShaderValidator.cpp b/dom/canvas/WebGLShaderValidator.cpp
+--- a/dom/canvas/WebGLShaderValidator.cpp
++++ b/dom/canvas/WebGLShaderValidator.cpp
+@@ -33,19 +33,15 @@
+   options.enforcePackingRestrictions = true;
+   options.objectCode = true;
+   options.initGLPosition = true;
+   options.initializeUninitializedLocals = true;
+   options.initOutputVariables = true;
+-
+-#ifdef XP_MACOSX
+-  options.removeInvariantAndCentroidForESSL3 = true;
+-#else
+-  // We want to do this everywhere, but to do this on Mac, we need
+-  // to do it only on Mac OSX > 10.6 as this causes the shader
+-  // compiler in 10.6 to crash
+   options.clampIndirectArrayBounds = true;
+-#endif
++
++  if (kIsMacOS) {
++    options.removeInvariantAndCentroidForESSL3 = true;
++  }
+
+   if (gl->WorkAroundDriverBugs()) {
+     if (kIsMacOS) {
+       // Work around https://bugs.webkit.org/show_bug.cgi?id=124684,
+       // https://chromium.googlesource.com/angle/angle/+/5e70cf9d0b1bb
+

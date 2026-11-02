@@ -1,0 +1,27 @@
+"""Configuration for :class:`PhabricatorClient`.
+
+``PhabricatorSettings`` is a plain, validated config model with no env I/O, so
+it can be embedded in a larger settings object without triggering a second
+environment parse. Use :meth:`PhabricatorSettings.from_env` for standalone,
+env-driven config (e.g. the agents' Cloud Run Jobs).
+"""
+
+from typing import Annotated
+
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class PhabricatorSettings(BaseModel):
+    api_key: Annotated[str, Field(min_length=32, max_length=32)]
+    url: str = "https://phabricator.services.mozilla.com"
+    timeout_seconds: int = 60
+    edge_key: str | None = None
+
+    @classmethod
+    def from_env(cls) -> PhabricatorSettings:
+        return _PhabricatorEnvSettings()
+
+
+class _PhabricatorEnvSettings(PhabricatorSettings, BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PHABRICATOR_", extra="ignore")

@@ -40,13 +40,13 @@ def keyword_mapping(keyword):
         "bug-quality": "bmo-bug-quality",
     }
 
-    return mapping[keyword] if keyword in mapping else keyword
+    return mapping.get(keyword, keyword)
 
 
 def group_mapping(group):
     mapping = {"release-core-security": "core-security-release"}
 
-    return mapping[group] if group in mapping else group
+    return mapping.get(group, group)
 
 
 def cf_rank(val):
@@ -59,7 +59,7 @@ def cf_rank(val):
 # E.g. https://bugzilla.mozilla.org/rest/bug/1162372.
 def version_to_branch(version):
     if version.startswith("Firefox "):
-        return f'{version[len("Firefox "):]} Branch'
+        return f"{version[len('Firefox ') :]} Branch"
 
     return version
 
@@ -96,7 +96,7 @@ def product(product):
         "Browser": "Core",
     }
 
-    return mapping[product] if product in mapping else product
+    return mapping.get(product, product)
 
 
 def target_milestone(target_milestone):
@@ -105,9 +105,7 @@ def target_milestone(target_milestone):
 
     mapping = {"6.2.2": "6.2.2.1", "Firefox 3.7": "Firefox 4.0"}
 
-    return (
-        mapping[target_milestone] if target_milestone in mapping else target_milestone
-    )
+    return mapping.get(target_milestone, target_milestone)
 
 
 def null_str(val):
@@ -537,9 +535,9 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
 
 def rollback(bug, when=None, do_assert=False):
     def assert_or_log(msg):
-        msg = f'{msg}, in bug {bug["id"]}'
+        msg = f"{msg}, in bug {bug['id']}"
         if do_assert:
-            assert False, msg
+            raise AssertionError(msg)
         else:
             logger.error(msg)
 
@@ -655,7 +653,7 @@ def rollback(bug, when=None, do_assert=False):
                             break
 
                     if obj is None:
-                        assert_or_log(f'Attachment {change["attachment_id"]} not found')
+                        assert_or_log(f"Attachment {change['attachment_id']} not found")
                         continue
                 else:
                     obj = bug
@@ -747,7 +745,7 @@ def rollback(bug, when=None, do_assert=False):
 
                 if obj is None:
                     if change["comment_id"] != 14096735:
-                        assert_or_log(f'Comment {change["comment_id"]} not found')
+                        assert_or_log(f"Comment {change['comment_id']} not found")
                     continue
 
                 if obj["count"] != change["comment_count"]:
@@ -761,11 +759,12 @@ def rollback(bug, when=None, do_assert=False):
 
                 continue
 
-            if change["added"] != "---":
-                if field not in bug and not is_expected_inconsistent_field(
-                    field, last_product, bug["id"]
-                ):
-                    assert_or_log(f"{field} is not present")
+            if (
+                change["added"] != "---"
+                and field not in bug
+                and not is_expected_inconsistent_field(field, last_product, bug["id"])
+            ):
+                assert_or_log(f"{field} is not present")
 
             if field in bug and isinstance(bug[field], list):
                 if change["added"]:

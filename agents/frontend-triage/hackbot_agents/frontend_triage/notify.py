@@ -1,0 +1,314 @@
+"""The Slack message every triage run sends to the owning team's channel.
+
+Every run reports, whether or not it applied itself. At `confidence: high` its comment
+reaches the bug with nobody in between, and the team that owns the component has no
+other signal that it happened. Below that the comment is held, and the channel is the
+only place anyone learns there is an analysis waiting on a decision, so the message
+says so with `HELD_NOTE`.
+
+Recorded as a ``slack.post_message`` action rather than posted from the run, so it is
+visible in the hackbot UI before it lands and the apply step delivers it at most once
+(see ``hackbot_runtime.actions.slack``, and ``agents/test-repair`` for the same shape).
+
+Two lines: the bug, and the run. The channel already says which product and component
+this is, the analysis is on the bug, and the detail is in the run -- so neither is
+repeated here. The comment itself sits in a collapsed container, so a reader can judge
+it without leaving Slack and the channel doesn't scroll past it. Confidence is not
+reported either, beyond whether the run was held. An S1 is the one thing worth pulling
+out of the bug, as it is the level someone may need to act on today -- but only one
+the run is confident about, on the same threshold that decides whether the comment
+mentions severity at all.
+"""
+
+import logging
+import re
+
+from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.slack import HACKBOT_UI_URL, record_message
+from hackbot_runtime.slack_kit import create_start_agent_run_button
+from slack_sdk.models.blocks import ConfirmObject
+
+from .agent import FrontendTriageResult
+from .config import REPORTABLE_SEVERITY_CONFIDENCES, SLACK_CHANNELS
+
+logger = logging.getLogger(__name__)
+
+BUG_URL = "https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}"
+RUN_URL = HACKBOT_UI_URL.rstrip("/") + "/runs/{run_id}"
+
+# Slack rejects a section whose text is longer than this.
+SECTION_TEXT_LIMIT = 3000
+
+# What `hackbot_runtime.actions.bugzilla.add_comment` puts between the comment and
+# its feedback footer. The footer asks for a Bugzilla reaction, which Slack can't take.
+_FOOTER_SEPARATOR = "\n\n---\n\n"
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((\S+?)\)")
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
+
+# The severity that gets a marker. S2-S4 are ordinary triage outcomes; an S1 is
+# somebody's afternoon.
+URGENT_SEVERITY = "S1"
+
+
+HELD_NOTE = (
+    ":hourglass: *Held for review.* This analysis is recorded but not on the bug. "
+    "Starting the fix posts it first."
+)
+
+
+def _link(url: str, label: str) -> str:
+    return f"<{url}|{label}>"
+
+
+def channel_for(product: str | None, component: str | None) -> str | None:
+    """The channel that owns ``product :: component``, or None if none does.
+
+    Fails closed on a component that is not in :data:`~.config.SLACK_CHANNELS`, and on
+    either half being missing -- both values are the agent's report of what it read off
+    Bugzilla, so a run that garbled them sends nothing rather than posting into a
+    channel that did not ask for it.
+    """
+    if not product or not component:
+        return None
+    return SLACK_CHANNELS.get(f"{product.strip()} :: {component.strip()}")
+
+
+def _bug_link(result: FrontendTriageResult) -> str:
+    return _link(BUG_URL.format(bug_id=result.bug_id), f"Bug {result.bug_id}")
+
+
+def _summary(result: FrontendTriageResult) -> str:
+    return result.summary.strip() if result.summary else ""
+
+
+def _is_urgent(result: FrontendTriageResult) -> bool:
+    # Gated on the severity's own confidence, not the run's -- the two are independent,
+    # and a run that localized the cause precisely can still be unsure how bad the bug
+    # is. The comment drops its severity block on the same threshold, so without this
+    # Slack could shout S1 while the bug says nothing about severity at all.
+    #
+    # Both values arrive normalized from `parse_plan`.
+    assessment = result.severity_assessment
+    return bool(
+        assessment
+        and assessment.suggested == URGENT_SEVERITY
+        and assessment.confidence in REPORTABLE_SEVERITY_CONFIDENCES
+    )
+
+
+def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
+    headline = _bug_link(result)
+    summary = _summary(result)
+    if summary:
+        headline += f" — {summary}"
+    # The level is spelled out next to the emoji, so it still reads as an S1 for anyone
+    # whose client does not render one. "suggested", because a bare "(S1)" would read as
+    # the bug having been marked S1, and nothing was written to the field.
+    headline = f"*{headline}*"
+    if _is_urgent(result):
+        headline = f":red_circle: {headline} (suggested {URGENT_SEVERITY})"
+
+    lines = [headline]
+    if not result.auto_apply:
+        lines.append(HELD_NOTE)
+    lines.append(_link(RUN_URL.format(run_id=run_id), "frontend-triage run details"))
+    return "\n".join(lines)
+
+
+def comment_from(actions: list[dict]) -> str | None:
+    """The comment this run wrote for the bug, or None if Slack shouldn't show it.
+
+    Read off the recorded action, after the recorder's hooks have expanded its
+    Searchfox placeholders, without the feedback footer. A private comment is left
+    out: the channel is a wider audience than the bug's insiders.
+    """
+    comments = [a for a in actions if a["type"] == "bugzilla.add_comment"]
+    if not comments or comments[-1]["params"].get("is_private"):
+        return None
+    text = comments[-1]["params"].get("text") or ""
+    body, _, _ = text.rpartition(_FOOTER_SEPARATOR)
+    return (body or text).strip() or None
+
+
+def _comment_mrkdwn(comment: str, bug_id: int) -> str:
+    """The Markdown comment as Slack mrkdwn, cut to fit one section.
+
+    A container can't hold a `markdown` block, so the comment's links, bold and
+    headings are rewritten for a mrkdwn section instead.
+    """
+    text = _MD_LINK.sub(lambda m: _link(m.group(2), m.group(1)), comment)
+    text = _MD_BOLD.sub(r"*\1*", text)
+    text = _MD_HEADING.sub(r"*\1*", text)
+    if len(text) > SECTION_TEXT_LIMIT:
+        more = "… " + _link(BUG_URL.format(bug_id=bug_id), "read the rest")
+        text = text[: SECTION_TEXT_LIMIT - len(more)].rstrip() + more
+    return text
+
+
+def _comment_block(result: FrontendTriageResult, comment: str) -> dict:
+    """The comment in a container that starts collapsed to its title."""
+    title = "Triage response" if result.auto_apply else "Proposed triage response"
+    return {
+        "type": "container",
+        "title": {"type": "plain_text", "text": title},
+        "is_collapsible": True,
+        "default_collapsed": True,
+        "child_blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": _comment_mrkdwn(comment, result.bug_id),
+                },
+            }
+        ],
+    }
+
+
+def _severity_field(result: FrontendTriageResult) -> str | None:
+    """The level this run suggests, when it is sure enough to suggest one.
+
+    Never a level the bug received: this agent only comments (`ENABLED_ACTION_TYPES`),
+    and `rules/severity-assessment.md` tells it as much, so the label says suggested
+    rather than leaving a reader to assume the field was set. Below the reportable
+    threshold there is no field at all, on the same gate as the comment's severity
+    block and the headline's marker.
+    """
+    assessment = result.severity_assessment
+    if not assessment or assessment.confidence not in REPORTABLE_SEVERITY_CONFIDENCES:
+        return None
+    if not assessment.suggested:
+        return None
+    return f"*Suggested severity*\n{assessment.suggested}"
+
+
+def _component_field(result: FrontendTriageResult) -> str | None:
+    """Where the bug lives, for the channels that own more than one component."""
+    if not result.product or not result.component:
+        return None
+    return f"*Component*\n{result.product.strip()} :: {result.component.strip()}"
+
+
+def _bug_fix_button(result: FrontendTriageResult, *, run_id: str) -> dict:
+    """The one-press offer to go fix the bug this run just analyzed.
+
+    A dict, not the SDK model: `summary.json` is written with `default=str`, so a
+    model recorded unconverted is stored as the string "<slack_sdk.ButtonElement>"
+    rather than failing, and only shows up when Slack rejects the message.
+    """
+    # Names the agent rather than promising a fix: `bug-fix` may only comment.
+    label = "Run bug-fix agent" if result.auto_apply else "Post analysis & run bug-fix"
+    confirm_text = (
+        "This "
+        if result.auto_apply
+        else f"This posts the triage analysis to bug {result.bug_id}, then "
+    ) + (
+        "starts the `bug-fix` agent, which will comment on Bugzilla or submit "
+        "a revision to Phabricator on its own."
+    )
+
+    return create_start_agent_run_button(
+        label,
+        agent_name="bug-fix",
+        inputs={"bug_id": result.bug_id},
+        dedupe_key=f"frontend-triage-run:{run_id}",
+        apply_run_id=run_id,
+        confirm=ConfirmObject(
+            title=f"Start a fix for bug {result.bug_id}?",
+            text=confirm_text,
+            # Slack's defaults are a bare Yes/No, which reads as generic next to
+            # a button that writes to Bugzilla.
+            confirm="Yes, go ahead",
+            deny="Cancel",
+        ),
+        style="primary",
+    ).to_dict()
+
+
+def build_blocks(
+    result: FrontendTriageResult, *, run_id: str, comment: str | None = None
+) -> list[dict]:
+    headline = f"*{_bug_link(result)}*"
+    summary = _summary(result)
+    if summary:
+        headline += f"\n{summary}"
+    if _is_urgent(result):
+        # Worded as the text version words it: nothing was written to the severity
+        # field, so a bare "S1" would read as the bug having been marked one.
+        headline = f":red_circle: *suggested {URGENT_SEVERITY}* {headline}"
+
+    blocks: list[dict] = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": headline}}
+    ]
+
+    fields = [
+        field
+        for field in (_severity_field(result), _component_field(result))
+        if field is not None
+    ]
+    if fields:
+        blocks.append(
+            {
+                "type": "section",
+                "fields": [{"type": "mrkdwn", "text": field} for field in fields],
+            }
+        )
+
+    if not result.auto_apply:
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": HELD_NOTE}}
+        )
+
+    if comment:
+        blocks.append(_comment_block(result, comment))
+
+    blocks.append(
+        {
+            "type": "actions",
+            "elements": [_bug_fix_button(result, run_id=run_id)],
+        }
+    )
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Triaged by frontend-triage · "
+                    + _link(RUN_URL.format(run_id=run_id), "run details"),
+                }
+            ],
+        }
+    )
+    return blocks
+
+
+def record_notification(
+    recorder: ActionsRecorder, result: FrontendTriageResult, *, run_id: str
+) -> dict | None:
+    """Record the run's Slack message, if it has one to send.
+
+    Returns the recorded action, or None when the component has no channel. Lives here
+    rather than in ``__main__`` so the whole decision is testable without a
+    ``HackbotContext``.
+    """
+    channel = channel_for(result.product, result.component)
+    if channel is None:
+        logger.info(
+            "Bug %s: no Slack channel for %r :: %r; not reporting",
+            result.bug_id,
+            result.product,
+            result.component,
+        )
+        return None
+
+    logger.info("Bug %s: reporting triage to %s", result.bug_id, channel)
+    return record_message(
+        recorder,
+        channel,
+        build_message(result, run_id=run_id),
+        blocks=build_blocks(
+            result, run_id=run_id, comment=comment_from(recorder.actions)
+        ),
+    )

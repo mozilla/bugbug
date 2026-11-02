@@ -40,6 +40,7 @@ class PerformanceBugModel(BugModel):
             bug_features.HasCVEInAlias(),
             bug_features.HasAttachment(),
             bug_features.FiledVia(),
+            bug_features.BugType(),
         ]
 
         cleanup_functions = [

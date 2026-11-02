@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
+from pathlib import Path
 from typing import Sequence
 
 import pandas as pd
@@ -813,6 +814,39 @@ class Files(object):
         return commit["files"]
 
 
+class FilesPathComponents(object):
+    name = "filespathcomponents"
+
+    def __call__(self, commit, **kwargs):
+        return list(
+            {
+                part
+                for path in commit["files"]
+                for part in Path(path).parts
+                if part not in ("/", "")
+            }
+        )
+
+
+class PlatformKeywords(object):
+    def __init__(self, platform, keywords):
+        self.platform = platform
+        self.keywords = [kw.lower() for kw in keywords]
+        self.name = f"{platform} keywords"
+
+    def __call__(self, commit, **kwargs):
+        count = sum(
+            1
+            for path in commit["files"]
+            if any(
+                kw in part.lower() for part in Path(path).parts for kw in self.keywords
+            )
+        )
+        desc_lower = commit["desc"].lower()
+        count += sum(1 for kw in self.keywords if kw in desc_lower)
+        return count
+
+
 def _pass_through_tokenizer(doc):
     return doc
 
@@ -863,6 +897,15 @@ class Types(object):
         return commit["types"]
 
 
+class TypesCounts(object):
+    def __call__(self, commit, **kwargs):
+        counts: dict[str, int] = {}
+        for path in commit["files"]:
+            type_ = repository.get_type(path)
+            counts[f"{type_} count"] = counts.get(f"{type_} count", 0) + 1
+        return counts
+
+
 def merge_metrics(objects):
     metrics = {}
 
@@ -890,6 +933,7 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
     return repository.CommitDict(
         {
             "nodes": list(commit["node"] for commit in commits),
+            "desc": " ".join(commit["desc"] for commit in commits),
             "pushdate": commits[0]["pushdate"],
             "types": list(set(sum((commit["types"] for commit in commits), []))),
             "files": list(set(sum((commit["files"] for commit in commits), []))),
@@ -965,9 +1009,12 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
 
 class CommitExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, cleanup_functions):
-        assert len(set(type(fe) for fe in feature_extractors)) == len(
-            feature_extractors
-        ), "Duplicate Feature Extractors"
+        assert len(
+            set(
+                fe.name if hasattr(fe, "name") else type(fe)
+                for fe in feature_extractors
+            )
+        ) == len(feature_extractors), "Duplicate Feature Extractors"
         self.feature_extractors = feature_extractors
 
         assert len(set(type(cf) for cf in cleanup_functions)) == len(
@@ -1011,7 +1058,7 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
                 # FIXME: This is a workaround to pass the value to the
                 # union transformer independently. This will be dropped when we
                 # resolve https://github.com/mozilla/bugbug/issues/3876
-                if isinstance(feature_extractor, Files):
+                if isinstance(feature_extractor, (Files, FilesPathComponents)):
                     result[sys.intern(feature_extractor_name)] = res
                     continue
 

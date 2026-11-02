@@ -1,0 +1,118 @@
+name: Pull and Push Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to pull from Docker Hub"
+        required: true
+        type: string
+  # Bumping the prod version on master releases it to prod.
+  push:
+    branches:
+      - master
+    paths:
+      - infra/deploy_metadata.toml
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      source_tag: ${{ steps.release-tags.outputs.source_tag }}
+      release_tags: ${{ steps.release-tags.outputs.release_tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve source and release tags
+        id: release-tags
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          # Read the prod version from master, as dispatches check out the release tag.
+          git fetch --depth=1 origin master
+          git show FETCH_HEAD:infra/deploy_metadata.toml > "$RUNNER_TEMP/deploy_metadata.toml"
+
+          python3 infra/resolve_release_tag.py \
+            --metadata "$RUNNER_TEMP/deploy_metadata.toml" \
+            ${IMAGE_TAG:+--image-tag "$IMAGE_TAG"} >> $GITHUB_OUTPUT
+
+  push:
+    needs: resolve
+    environment: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      matrix:
+        base_tag: ${{ fromJSON(needs.resolve.outputs.release_tags) }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: gcp-auth
+        name: Google authentication
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: "access_token"
+          service_account: artifact-writer@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Generate versioned tag
+        id: versioned-tag
+        env:
+          BASE_TAG: ${{ matrix.base_tag }}
+        run: |
+          base_tag="$BASE_TAG"
+          registry="${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}"
+
+          # Configure gcloud auth using the token
+          echo "${{ steps.gcp-auth.outputs.access_token }}" | docker login -u oauth2accesstoken --password-stdin ${{ vars.GAR_LOCATION }}-docker.pkg.dev
+
+          # Find the highest version number for this base tag
+          version_number=1
+          while true; do
+            versioned_tag="${base_tag}-${version_number}"
+
+            # Check if image exists in registry
+            if gcloud container images describe "${registry}/bugbug-http-service:${versioned_tag}" --quiet >/dev/null 2>&1; then
+              version_number=$((version_number + 1))
+            else
+              break
+            fi
+          done
+
+          echo "versioned_tag=$versioned_tag" >> $GITHUB_OUTPUT
+
+      - name: Pull web image
+        env:
+          SOURCE_TAG: ${{ needs.resolve.outputs.source_tag }}
+        run: docker pull "mozilla/bugbug-http-service:$SOURCE_TAG"
+
+      - name: Pull worker image
+        env:
+          SOURCE_TAG: ${{ needs.resolve.outputs.source_tag }}
+        run: docker pull "mozilla/bugbug-http-service-bg-worker:$SOURCE_TAG"
+
+      - name: Log in to GAR for push
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ vars.GAR_LOCATION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
+
+      - name: Tag web image
+        env:
+          SOURCE_TAG: ${{ needs.resolve.outputs.source_tag }}
+        run: docker tag "mozilla/bugbug-http-service:$SOURCE_TAG" ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ steps.versioned-tag.outputs.versioned_tag }}
+
+      - name: Push web image
+        run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ steps.versioned-tag.outputs.versioned_tag }}
+
+      - name: Tag worker image
+        env:
+          SOURCE_TAG: ${{ needs.resolve.outputs.source_tag }}
+        run: docker tag "mozilla/bugbug-http-service-bg-worker:$SOURCE_TAG" ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ steps.versioned-tag.outputs.versioned_tag }}
+
+      - name: Push worker image
+        run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ steps.versioned-tag.outputs.versioned_tag }}

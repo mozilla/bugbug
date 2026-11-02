@@ -13,7 +13,6 @@ import pandas as pd
 import pytest
 import requests
 import responses
-import urllib3
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -309,7 +308,7 @@ def test_get_last_modified_error():
         headers={},
     )
 
-    with pytest.raises(urllib3.exceptions.MaxRetryError, match="Max retries exceeded"):
+    with pytest.raises(requests.exceptions.RetryError):
         utils.get_last_modified(url)
 
     assert not os.path.exists("prova.txt")
@@ -508,7 +507,7 @@ def test_StructuredColumnTransformer() -> None:
     ],
 )
 def test_url_extraction_ignore_domains(test_input, expected_urls, expected_domains):
-    """Tests extraction of URLs and domains while ignoring some domains"""
+    """Tests extraction of URLs and domains while ignoring some domains."""
     domains_to_ignore = {"mozilla.com", "mozilla.org"}
     result = utils.extract_urls_and_domains(test_input, domains_to_ignore)
 
@@ -569,7 +568,7 @@ def test_url_extraction_ignore_domains(test_input, expected_urls, expected_domai
     ],
 )
 def test_url_extraction(test_input, expected_urls, expected_domains):
-    """Tests extraction of URLs and domains without ignoring domains"""
+    """Tests extraction of URLs and domains without ignoring domains."""
     result = utils.extract_urls_and_domains(test_input)
 
     assert result["urls"] == expected_urls

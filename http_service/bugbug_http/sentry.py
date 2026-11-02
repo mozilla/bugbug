@@ -12,7 +12,9 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 from bugbug import get_bugbug_version
 
 
-def setup_sentry(dsn, integrations=[]):
+def setup_sentry(dsn, integrations=None):
+    if integrations is None:
+        integrations = []
     logging_integration = LoggingIntegration(
         # Default behaviour: INFO messages will be included as breadcrumbs
         level=logging.INFO,

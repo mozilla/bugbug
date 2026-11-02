@@ -163,21 +163,20 @@ def test_cache_thread():
         ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
     )
     mocksleep = MockSleep(mockdatetime)
-    with patch("datetime.datetime", mockdatetime):
-        with patch("time.sleep", mocksleep.sleep):
-            cache.get("key_a", force_store=True)
-            cache.start_ttl_thread()
+    with patch("datetime.datetime", mockdatetime), patch("time.sleep", mocksleep.sleep):
+        cache.get("key_a", force_store=True)
+        cache.start_ttl_thread()
 
-            # after one hour
-            mockdatetime.set_now(datetime(2019, 4, 1, 11))
-            assert cache.purge_count == 0
-            assert "key_a" in cache
-            assert mocksleep.wakeups_count == 0
+        # after one hour
+        mockdatetime.set_now(datetime(2019, 4, 1, 11))
+        assert cache.purge_count == 0
+        assert "key_a" in cache
+        assert mocksleep.wakeups_count == 0
 
-            # after two hours one minute
-            mockdatetime.set_now(datetime(2019, 4, 1, 12, 1))
+        # after two hours one minute
+        mockdatetime.set_now(datetime(2019, 4, 1, 12, 1))
 
-            purged_event.wait()
-            assert cache.purge_count == 1
-            assert "key_a" not in cache
-            assert mocksleep.wakeups_count == 1
+        purged_event.wait()
+        assert cache.purge_count == 1
+        assert "key_a" not in cache
+        assert mocksleep.wakeups_count == 1

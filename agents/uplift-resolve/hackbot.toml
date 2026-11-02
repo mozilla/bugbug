@@ -1,0 +1,8 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+# The checkout is pinned per-run to the target uplift branch (from
+# `target_branch`); the agent fetches and cherry-picks the sources onto it.
+
+# No [firefox] table: the agent resolves conflicts at the source level and
+# never builds Firefox, so the build toolchain is not prepared.

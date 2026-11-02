@@ -9,7 +9,7 @@ import sys
 from urllib.parse import urlparse
 
 from redis import Redis
-from rq import Connection, Worker
+from rq import Worker
 from sentry_sdk.integrations.rq import RqIntegration
 
 import bugbug_http.boot
@@ -31,14 +31,16 @@ def main():
         host=url.hostname,
         port=url.port if url.port is not None else 6379,
         password=url.password,
-        ssl=True if url.scheme == "rediss" else False,
+        ssl=(url.scheme == "rediss"),
         ssl_cert_reqs=None,
     )
-    with Connection(connection=redis_conn):
-        qs = sys.argv[1:] or ["default"]
+    qs = sys.argv[1:] or ["default"]
+    w = Worker(qs, connection=redis_conn)
 
-        w = Worker(qs)
-        w.work()
+    # Write readiness probe file.
+    open("/tmp/ready", "w").close()
+
+    w.work()
 
 
 if __name__ == "__main__":

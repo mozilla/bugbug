@@ -48,8 +48,10 @@ class RustCodeAnalysisServer:
             if thread_num is not None:
                 cmd += ["-j", str(thread_num)]
             self.proc = subprocess.Popen(cmd)
-        except FileNotFoundError:
-            raise RuntimeError("rust-code-analysis is required for code analysis")
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "rust-code-analysis is required for code analysis"
+            ) from exc
 
     def terminate(self):
         if self.proc is not None:

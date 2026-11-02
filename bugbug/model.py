@@ -9,9 +9,7 @@ from collections import defaultdict
 from os import makedirs, path
 from typing import Any
 
-import matplotlib
 import numpy as np
-import shap
 from imblearn.metrics import (
     classification_report_imbalanced,
     geometric_mean_score,
@@ -29,7 +27,7 @@ from xgboost import XGBModel
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
-from bugbug.nlp import SpacyVectorizer
+from bugbug.nlp import lemmatizing_tfidf_vectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
 logging.basicConfig(level=logging.INFO)
@@ -96,7 +94,7 @@ def classification_report_imbalanced_values(
 
     result = {"targets": {}}
 
-    for i, label in enumerate(labels):
+    for i in range(len(labels)):
         result["targets"][target_names[i]] = {
             "precision": precision[i],
             "recall": recall[i],
@@ -164,7 +162,7 @@ def sort_class_names(class_names):
 class Model:
     def __init__(self, lemmatization=False):
         if lemmatization:
-            self.text_vectorizer = SpacyVectorizer
+            self.text_vectorizer = lemmatizing_tfidf_vectorizer
         else:
             self.text_vectorizer = TfidfVectorizer
 
@@ -222,6 +220,8 @@ class Model:
                 feature_name = f"Comment text contains '{feature_name}'"
             elif type_ == "files":
                 feature_name = f"File '{feature_name}'"
+            elif type_ == "filespathcomponents":
+                feature_name = f"File path component '{feature_name}'"
             elif type_ not in ("data", "couple_data"):
                 raise ValueError(f"Unexpected feature type for: {full_feature_name}")
 
@@ -230,6 +230,12 @@ class Model:
         return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values):
+        # In the multi-class case, we have (n_samples, n_features, n_classes) and
+        # we need to normalize it to (n_classes, n_samples, n_features) for the logic
+        # below to work.
+        if isinstance(shap_values, np.ndarray) and shap_values.ndim == 3:
+            shap_values = np.moveaxis(shap_values, -1, 0)
+
         # returns top features for a shap_value matrix
         def get_top_features(cutoff, shap_values):
             # Calculate the values that represent the fraction of the model output variability attributable
@@ -321,7 +327,7 @@ class Model:
 
         # allow maximum of 3 columns in a row to fit the page better
         COLUMNS = 3
-        logger.info("Top {} features:".format(len(top_feature_names)))
+        logger.info("Top %s features:", len(top_feature_names))
         for i in range(0, len(top_feature_names), COLUMNS):
             table = []
             for item in shap_val:
@@ -341,7 +347,7 @@ class Model:
         feature_report = {"classes": {}, "average": {}}
         top_feature_names = []
 
-        for importance, index, is_pos in important_features["average"]:
+        for importance, index, _is_pos in important_features["average"]:
             feature_name = feature_names[int(index)]
 
             top_feature_names.append(feature_name)
@@ -361,6 +367,17 @@ class Model:
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
+
+    def get_sample_weights(self, y) -> np.ndarray | None:
+        """Subclasses can return a weight for each training sample, passed to the estimator."""
+        return None
+
+    def fit_classifier(self, X, y):
+        sample_weight = self.get_sample_weights(y)
+        if sample_weight is None:
+            self.clf.fit(X, y)
+        else:
+            self.clf.fit(X, y, estimator__sample_weight=sample_weight)
 
     def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
@@ -384,7 +401,7 @@ class Model:
             X = X[:limit]
             y = y[:limit]
 
-        logger.info(f"X: {X.shape}, y: {y.shape}")
+        logger.info("X: %s , y: %s", X.shape, y.shape)
 
         is_multilabel = isinstance(y[0], np.ndarray)
         is_binary = len(self.class_names) == 2
@@ -427,19 +444,26 @@ class Model:
                     "std": score.std() * 2,
                 }
                 logger.info(
-                    f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
+                    "%s: f%.4f (+/- %.4f)",
+                    scoring.capitalize(),
+                    score.mean(),
+                    (score.std() * 2),
                 )
 
-        logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
-        logger.info(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
+        logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
+        logger.info("X_test: %s, y_test: %s", X_test.shape, y_test.shape)
 
-        self.clf.fit(X_train, self.le.transform(y_train))
+        self.fit_classifier(X_train, self.le.transform(y_train))
         logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
 
         logger.info("Model trained")
 
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
+            # Imported lazily as they are slow to import and rarely needed.
+            import matplotlib.pyplot
+            import shap
+
             explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
             _X_train = get_transformer_pipeline(self.clf).transform(X_train)
             shap_values = explainer.shap_values(_X_train)
@@ -495,11 +519,11 @@ class Model:
         y_pred = self.le.inverse_transform(y_pred)
 
         if is_multilabel:
-            assert isinstance(
-                y_pred[0], np.ndarray
-            ), "The predictions should be multilabel"
+            assert isinstance(y_pred[0], np.ndarray), (
+                "The predictions should be multilabel"
+            )
 
-        logger.info(f"No confidence threshold - {len(y_test)} classified")
+        logger.info("No confidence threshold - %d classified", len(y_test))
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         else:
@@ -554,7 +578,7 @@ class Model:
                     y_pred_filter.append(argmax)
 
             if not is_multilabel:
-                y_pred_filter = np.array(y_pred_filter)
+                y_pred_filter = np.array(y_pred_filter, dtype=object)
                 y_pred_filter[classified_indices] = self.le.inverse_transform(
                     np.array(y_pred_filter[classified_indices], dtype=int)
                 )
@@ -567,7 +591,9 @@ class Model:
                 )
 
             logger.info(
-                f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"
+                "\nConfidence threshold > %s - %d classified",
+                confidence_threshold,
+                classified_num,
             )
             if is_multilabel:
                 confusion_matrix = metrics.multilabel_confusion_matrix(
@@ -598,9 +624,9 @@ class Model:
             X_train = X
             y_train = y
 
-            logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+            logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
-            self.clf.fit(X_train, self.le.transform(y_train))
+            self.fit_classifier(X_train, self.le.transform(y_train))
 
         model_directory = self.__class__.__name__.lower()
         makedirs(model_directory, exist_ok=True)
@@ -630,8 +656,17 @@ class Model:
         return tracking_metrics
 
     @staticmethod
-    def load(model_directory: str) -> "Model":
+    def load(model_directory: str) -> Model:
         model_path = path.join(model_directory, "model.pkl")
+
+        if not path.exists(model_path):
+            # Models stored in another format (e.g. a Hugging Face checkpoint)
+            # override load(). Dispatch to the class registered for this
+            # directory, whose name follows the `{model_name}model` convention.
+            model_class = Model._registered_class(model_directory)
+            if model_class is not None and model_class.load is not Model.load:
+                return model_class.load(model_directory)
+
         with open(model_path, "rb") as f:
             model = pickle.load(f)
 
@@ -640,6 +675,21 @@ class Model:
             model.clf.named_steps["estimator"].load_model(xgboost_model_path)
 
         return model
+
+    @staticmethod
+    def _registered_class(model_directory: str) -> type[Model] | None:
+        """Return the model class registered for a `{model_name}model` directory."""
+        # Imported here to avoid a circular import (bugbug.models imports us).
+        from bugbug.models import get_model_class
+
+        model_name = path.basename(path.normpath(model_directory))
+        if model_name.endswith("model"):
+            model_name = model_name[: -len("model")]
+
+        try:
+            return get_model_class(model_name)
+        except ValueError:
+            return None
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
@@ -653,9 +703,9 @@ class Model:
         background_dataset=None,
     ):
         assert items is not None
-        assert (
-            self.extraction_pipeline is not None and self.clf is not None
-        ), "The module needs to be initialized first"
+        assert self.extraction_pipeline is not None and self.clf is not None, (
+            "The module needs to be initialized first"
+        )
 
         if not isinstance(items, list):
             items = [items]
@@ -663,14 +713,13 @@ class Model:
         assert isinstance(items[0], (dict, tuple))
 
         X = self.extraction_pipeline.transform(lambda: items)
-        if probabilities:
-            classes = self.clf.predict_proba(X)
-        else:
-            classes = self.clf.predict(X)
+        classes = self.clf.predict_proba(X) if probabilities else self.clf.predict(X)
 
         classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
+            import shap
+
             pred_class_index = classes.argmax(axis=-1)[0]
             pred_class = self.le.inverse_transform([pred_class_index])[0]
 
@@ -833,7 +882,7 @@ class CommentModel(Model):
         for bug in bugzilla.get_bugs():
             for comment in bug["comments"]:
                 comment_id = comment["id"]
-                if comment["id"] not in classes:
+                if comment_id not in classes:
                     continue
 
-            yield (bug, comment), classes[comment_id]
+                yield (bug, comment), classes[comment_id]

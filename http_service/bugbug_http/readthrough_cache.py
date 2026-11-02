@@ -47,7 +47,7 @@ class ReadthroughTTLCache(Generic[Key, Value]):
         self.items_last_accessed[key] = datetime.datetime.now()
         if store_item:
             LOGGER.info(
-                f"Storing item with the following key in readthroughcache: {key}"
+                "Storing item with the following key in readthroughcache: %s", key
             )
             self.items_storage[key] = item
 
@@ -58,7 +58,8 @@ class ReadthroughTTLCache(Generic[Key, Value]):
         for key, time_last_touched in list(self.items_last_accessed.items()):
             if time_last_touched < purge_entries_before:
                 LOGGER.info(
-                    f"Evicting item with the following key from readthroughcache: {key}"
+                    "Evicting item with the following key from readthroughcache: %s",
+                    key,
                 )
                 del self.items_last_accessed[key]
                 del self.items_storage[key]

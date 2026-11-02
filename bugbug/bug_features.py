@@ -16,7 +16,9 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, bugzilla, repository
+from bugbug import bug_snapshot, bugzilla, repository, utils
+
+utils.setup_libmozdata()
 
 
 def field(bug, field):
@@ -52,7 +54,11 @@ class HasCrashSignature(SingleBugFeature):
 
 
 class Keywords(SingleBugFeature):
-    def __init__(self, to_ignore=set(), prefixes_to_ignore=set()):
+    def __init__(self, to_ignore=None, prefixes_to_ignore=None):
+        if prefixes_to_ignore is None:
+            prefixes_to_ignore = set()
+        if to_ignore is None:
+            to_ignore = set()
         self.to_ignore = to_ignore
         self.prefixes_to_ignore = prefixes_to_ignore
 
@@ -740,10 +746,7 @@ class IsPerformanceBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsMemoryBug(SingleBugFeature):
@@ -776,10 +779,7 @@ class IsMemoryBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsPowerBug(SingleBugFeature):
@@ -803,10 +803,7 @@ class IsPowerBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsSecurityBug(SingleBugFeature):
@@ -821,6 +818,7 @@ class IsSecurityBug(SingleBugFeature):
         self,
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
+        **kwargs,
     ) -> bool:
         if any(
             keyword.startswith(prefix)
@@ -830,10 +828,7 @@ class IsSecurityBug(SingleBugFeature):
             return True
 
         bug_whiteboard = bug["whiteboard"].lower()
-        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
-            return True
-
-        return False
+        return any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes)
 
 
 class IsCrashBug(SingleBugFeature):
@@ -847,20 +842,18 @@ class IsCrashBug(SingleBugFeature):
         self,
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
+        **kwargs,
     ) -> bool:
         # Checking for `[@` will exclude some bugs that do not have valid
         # signatures: https://mzl.la/46XAqRF
         if bug.get("cf_crash_signature") and "[@" in bug["cf_crash_signature"]:
             return True
 
-        if any(
+        return any(
             keyword.startswith(prefix)
             for keyword in bug["keywords"]
             for prefix in self.keyword_prefixes
-        ):
-            return True
-
-        return False
+        )
 
 
 class BugTypes(SingleBugFeature):
@@ -883,16 +876,22 @@ class BugTypes(SingleBugFeature):
         """Infer bug types based on various bug characteristics.
 
         Args:
-        - bug (bugzilla.BugDict): A dictionary containing bug data.
-        - bug_map (Optional[dict[int, bugzilla.BugDict]]): A mapping
-            of bug IDs to bug dictionaries. Default is None.
+            bug: A dictionary containing bug data.
+            bug_map: A mapping of bug IDs to bug dictionaries. Default is `None`.
 
         Returns:
-        - list[str]: A list of inferred bug types (e.g., "memory", "power",
-            "performance", "security", "crash").
+            A list of inferred bug types (e.g., `"memory"`, `"power"`,
+            `"performance"`, `"security"`, `"crash"`).
         """
         return [
             is_type.type_name
             for is_type in self.bug_type_extractors
             if is_type(bug, bug_map)
         ]
+
+
+class BugType(SingleBugFeature):
+    """Extracts the type of the bug."""
+
+    def __call__(self, bug, **kwargs):
+        return bug["type"]

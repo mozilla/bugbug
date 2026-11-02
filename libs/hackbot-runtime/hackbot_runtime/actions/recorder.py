@@ -1,0 +1,146 @@
+import copy
+import uuid
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
+
+from agent_tools.registry import ToolError
+
+from hackbot_runtime.artifacts import publish_file
+from hackbot_runtime.uploader import SignedPolicyUploader
+
+# Callback run on an action of one type before it is recorded. It receives the
+# action dict (``type``/``params``/``reasoning``) and
+# may mutate it in place; the return value is ignored. Raising aborts the
+# recording (nothing is appended and no attachment is published), so a hook
+# doubles as a validation gate: raise ``ToolError`` to report the reason back to
+# the agent.
+ActionHook = Callable[[dict], None]
+
+
+def confirmation(action: dict) -> str:
+    """Return the agent-facing confirmation for a recorded action."""
+    return f"Recorded {action['type']} (ID: {action['action_id']})."
+
+
+class ActionsRecorder:
+    """Collects structured actions an agent decided to take.
+
+    The runtime serialises the collected list into the
+    ``actions`` array of ``summary.json``; a downstream apply step picks
+    them up from there.
+
+    Framework-agnostic: knows nothing about MCP, LangChain, or any specific
+    action domain. Per-framework adapters wrap this and translate their
+    native tool calls into ``record(...)`` calls.
+
+    ``hooks`` maps an action type to the :data:`ActionHook` callbacks to run,
+    in order, before that action is appended. They live here rather than in the
+    action declarations so the runtime can attach behaviour that cuts across
+    domains (enrichment, validation) without every ``@tool`` handler knowing
+    about it.
+    """
+
+    def __init__(
+        self,
+        uploader: SignedPolicyUploader | None = None,
+        artifacts_dir: Path | None = None,
+        hooks: Mapping[str, Sequence[ActionHook]] = {},
+    ) -> None:
+        self._actions: dict[str, dict] = {}
+        self._uploader = uploader
+        self._artifacts_dir = artifacts_dir
+        self._hooks = {
+            action_type: list(action_hooks)
+            for action_type, action_hooks in hooks.items()
+        }
+
+    def add_hook(self, action_type: str, hook: ActionHook) -> None:
+        """Append ``hook`` to the hooks run for ``action_type``.
+
+        For wiring a hook after construction; it runs after any hook already
+        registered for that type.
+        """
+        self._hooks.setdefault(action_type, []).append(hook)
+
+    def record(
+        self,
+        action_type: str,
+        params: dict,
+        *,
+        reasoning: str | None = None,
+        attachments: dict[str, Path] | None = None,
+    ) -> dict:
+        """Record an action and return a detached copy with its ID.
+
+        ``action_type`` uses ``<domain>.<verb>`` (e.g. ``bugzilla.update_bug``,
+        ``phabricator.create_revision``). ``params`` is action-specific data
+        the apply step will need. ``attachments`` maps a logical name to a
+        local file path; each file is preserved under the stable key
+        ``attachments/<action_id>/<name>``: uploaded via the runtime
+        uploader when one is configured, otherwise copied into the local
+        artifacts directory (so it is retrievable from compose/direct runs).
+        The recorded action references it by that key; the original local path
+        is not persisted (it disappears with the container).
+
+        ``params`` may reference an earlier action's apply-time result by its
+        action ID (e.g. a Bugzilla comment's text containing
+        ``{{actions.<action_id>.url}}`` after a ``phabricator.submit_patch``
+        action). Resolved by the apply step, since the result doesn't exist yet
+        at record time.
+
+        Any hooks registered for ``action_type`` run on the action, in
+        registration order, and may still change it (see :data:`ActionHook`). A
+        hook that raises propagates to the caller and the action is not
+        recorded. Hooks run before ``attachments`` are published, so an aborted
+        recording leaves nothing behind: the action the hooks see carries no
+        ``attachments`` key yet.
+        """
+        action_id = uuid.uuid4().hex
+        action: dict = {
+            "type": action_type,
+            "params": params,
+            "reasoning": reasoning,
+        }
+
+        for hook in self._hooks.get(action_type, ()):
+            hook(action)
+
+        if attachments:
+            recorded_attachments: list[dict] = []
+            for name, path in attachments.items():
+                key = publish_file(
+                    self._uploader,
+                    self._artifacts_dir,
+                    f"attachments/{action_id}/{name}",
+                    path,
+                )
+                recorded_attachments.append({"name": name, "uploaded_key": key})
+            action["attachments"] = recorded_attachments
+
+        self._actions[action_id] = action
+        return _detach(action_id, action)
+
+    def list_actions(self) -> list[dict]:
+        """Return complete copies of the current actions with stable in-run IDs."""
+        return [
+            _detach(action_id, action) for action_id, action in self._actions.items()
+        ]
+
+    def remove_action(self, action_id: str) -> dict:
+        """Remove the action with the given ID and return a copy of it."""
+        action = self._actions.get(action_id)
+        if action is None:
+            raise ToolError(f"No recorded action with ID {action_id!r}.")
+
+        removed = _detach(action_id, action)
+        del self._actions[action_id]
+        return removed
+
+    @property
+    def actions(self) -> list[dict]:
+        return list(self._actions.values())
+
+
+def _detach(action_id: str, action: dict) -> dict:
+    """Return a detached copy of an action with its ID."""
+    return {**copy.deepcopy(action), "action_id": action_id}

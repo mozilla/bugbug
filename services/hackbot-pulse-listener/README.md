@@ -1,0 +1,147 @@
+# Hackbot Pulse Listener
+
+Its job is to **subscribe** to Taskcluster failure messages, **filter** them down to
+failures worth acting on, **dedupe** them, and dispatch a hackbot agent through the
+hackbot-api. It deliberately holds no investigation logic: each agent resolves the push
+and commits itself, so the listener only decides _what to hand off_. Reporting is the
+agent's too -- it records the email and Slack notification as actions.
+
+Failed **build** tasks go to `build-repair`; failed **test** tasks go to `test-repair`.
+
+## How it works
+
+1. **Subscribe.** Consume `task-failed` messages from `pulse.mozilla.org`.
+2. **Route** to a watched `project` (`WATCHED_REPOS`, default `autoland`), then by task
+   kind: build tasks (`tags.label` contains `build` and not `test`, so a failure is a
+   compilation/link error) take the build-repair path; test tasks take the test-repair
+   path. Fetch the task definition for `GECKO_HEAD_REV` (not in the message).
+3. **Discard what is not this push's failure**, on both paths:
+   - Tasks scheduled by an **action task** rather than by the push: `extra.parent` points
+     at the decision task (= the task group) for everything the push scheduled, and at the
+     action-callback task for a backfill or retrigger.
+   - Pushes that landed more than `MAX_PUSH_AGE_HOURS` ago (default 6, comfortably more
+     than a push needs to build and test). A failure can surface long after its push,
+     and by then the push has been superseded and a sheriff has dealt with it.
+4. **Dedupe** with in-memory TTL caches, both keyed by revision: one run per push per
+   agent, triggered on the first failing task worth investigating. The test-repair
+   agent works from a single task but reads the push's other failures itself, so a
+   second run for the same push would re-tread the same ground. A revision is recorded
+   only once a run is actually triggered, so a task rejected as intermittent or
+   inherited leaves the push open for the next one. A second cache spans pushes: a
+   failure already investigated on a recent push is skipped for
+   `GROUP_DEDUPE_TTL_SECONDS`, keyed by failing manifest — or, for a task compared as a
+   whole, by its label without the chunk number — since a broken manifest stays broken
+   on the pushes that follow.
+5. **Judge** whether the failure is worth a run. Every check fails open — an upstream
+   error runs the agent rather than dropping a possible regression.
+   - _Build:_ keep only failures this push introduced, waiting for an unsettled ancestor
+     build to finish first.
+   - _Test:_ first drop whatever a Treeherder classification says is not a new
+     regression (intermittent, infra, expected-fail, fixed-by-commit). Treeherder ingests
+     the job a minute or so behind us, and sheriffs classify it — mostly by hand — a
+     median of ~1 minute past the end of the job, ~11 minutes at p90 (measured over 40
+     recent autoland pushes), so this gate waits for the job to appear, briefly for its
+     log to be parsed (`TREEHERDER_LOG_PARSE_WAIT_SECONDS` — the failure lines the
+     intermittent gate and history check read are not there before), and then up to
+     `TREEHERDER_CLASSIFICATION_WAIT_SECONDS` for its verdict, unless the
+     [history check](#skipping-the-classification-wait) says no verdict is coming. It is
+     the cheap filter, and most test failures stop here, before any group is fetched or
+     any ancestor walked. What survives goes through the ancestor walk below, then
+     Treeherder is asked once more, since a verdict can still land while that walk runs.
+     The run carries only the task id.
+   - _Both:_ a walk is abandoned as soon as another task triggers the run for that
+     push. One push can emit dozens of failing tasks, and without this each one holds
+     a worker for the full wait only to find the push already handed off.
+6. **Budget.** At most `MAX_TEST_REPAIRS_PER_DAY` test-repair runs (default 100) may
+   start in any rolling 24 hours. A slot is taken when a run is triggered and given
+   back if the trigger fails, so only runs that really started count. Once the budget
+   is spent, later test failures stop before any Treeherder work. Build-repair is not
+   capped.
+7. **Dispatch.** `POST /agents/{agent}/runs`, and that is the end of the listener's
+   involvement. Reporting belongs to the agent: it records an `email.send` action (and,
+   for test-repair, a Slack message), which hackbot-api applies once the run has
+   succeeded. See [docs/hackbot/actions.md](../../docs/hackbot/actions.md).
+
+The dedupe caches, the daily budget and pending-run tracking are all in-memory, so
+a restart resets them.
+
+## Skipping the classification wait
+
+The wait costs the most on the failures worth repairing. On recent autoland jobs an
+intermittent is labelled a median of ~1.7 minutes after the job ends, 98% inside the
+wait; a genuine regression is labelled `fixed by commit` a median of ~7 minutes after,
+only 58% inside it. So a regression either sits out the whole
+`TREEHERDER_CLASSIFICATION_WAIT_SECONDS`, or a sheriff gets there first and the
+listener drops it as already classified.
+
+[`flakiness.py`](app/flakiness.py) short-circuits it with the
+[tests.firefox.dev](https://tests.firefox.dev) timings data — public Taskcluster index
+artifacts holding three weeks of every test's pass/fail record. When every test that
+failed here clears `FLAKINESS_MIN_RUNS` runs and `FLAKINESS_MAX_FAILURE_RATE`, it is no
+intermittent and no verdict is coming, so the classification already in hand is used
+as-is. The test names come from the bug suggestions the gate above already fetched, at
+no extra request. Anything the data cannot answer for — another harness, an unlisted or
+brand-new test, a failure naming no test, a read error — keeps the wait.
+
+Over 150 autoland pushes, 90% of those whose failure was eventually attributed to a
+commit skipped the wait, against 6 of 105 that turned out to be noise — and those 6
+still face the ancestor walk and the re-check after it. Expect more runs, not just
+faster ones: a regression a sheriff would have classified during the wait now reaches
+the agent. `MAX_TEST_REPAIRS_PER_DAY` is the backstop; watch it after deploying.
+
+## The ancestor walk
+
+Both paths ask the same question — did this push introduce the failure, or inherit it
+from an ancestor? — by walking the push's ancestors (mozci resolves the chain from the
+pushlog) until one gives a verdict on the failing unit. An ancestor still running is
+waited for on the build path, up to ten minutes before failing open. The test path steps
+over it instead and asks the next ancestor back: one that already failed still makes the
+failure inherited, one that passed makes it new within the last few pushes, which is
+answer enough when the agent works out the culprit commit itself. On autoland the parent
+push is nearly always still running when a failure arrives, and in a dry run waiting for
+it cost the full ten minutes on almost every real regression — the same ten minutes the
+[history check](#skipping-the-classification-wait) had just saved. Only when every
+ancestor back to the depth limit is unsettled does the test path wait too. A build has no
+group dedupe, so deciding from the grandparent would run build-repair once for this push
+and again for the parent once it fails; it keeps waiting. What differs is the unit
+compared:
+
+- _Build:_ the task **label**. A build label carries no chunk number, so it means the
+  same thing on every push: an ancestor whose same label passed makes the failure new,
+  one where it already failed makes it inherited.
+- _Test:_ each failing **manifest** (Treeherder's "group") separately, compared within
+  this task's own **configuration** — platform plus build option — and not by label. A
+  test label carries its chunk number and chunk assignments drift between pushes, so
+  comparing labels would make ancestors look as though they never ran the manifest,
+  whereas a manifest only appears on the tasks that actually ran it. Consulting one
+  configuration keeps a manifest already broken on another platform from masking a
+  genuine new failure here. Only the manifests that come back new are kept, and the task
+  is skipped if none do.
+- _Test with no manifests:_ a suite that reports no groups (gtest, talos, jittest, ...),
+  a task-level failure (crash, timeout, harness error), or a job that failed while every
+  manifest passed — a debug assertion count, a leak check; in a dry run all 23 of these
+  were real regressions — has nothing finer to compare, so the whole task is compared by
+  label as on the build path — except that a chunked label is reported as new rather
+  than compared, since the chunk covers different tests on each push. These cannot be
+  reproduced by re-running a manifest, but the agent can still identify the culprit
+  commit.
+
+## Run locally
+
+```bash
+export PULSE_USER=... PULSE_PASSWORD=...          # https://pulseguardian.mozilla.org
+export HACKBOT_API_URL=https://hackbot-api.../ HACKBOT_API_KEY=...
+export WATCHED_REPOS=autoland
+export DRY_RUN=true                               # log intended calls, don't POST
+uv run --package hackbot-pulse-listener python -m app
+```
+
+## Test
+
+```bash
+uv run --package hackbot-pulse-listener pytest services/hackbot-pulse-listener/tests
+```
+
+## Deploy
+
+Cloud Run worker pool (no HTTP). See `deploy.sh`.

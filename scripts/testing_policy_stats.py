@@ -24,18 +24,17 @@ class TestingPolicyStatsGenerator(object):
         if not os.path.exists(repo_dir):
             repository.clone(repo_dir)
         else:
-            repository.pull(repo_dir, "mozilla-central", "tip")
+            repository.pull(repo_dir, "mozilla-central", "default")
 
         logger.info("Downloading commits database...")
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         logger.info("Updating commits DB...")
-        for commit in repository.get_commits():
-            pass
+        latest_commit = collections.deque(repository.get_commits(), maxlen=1).pop()
 
         repository.download_commits(
             repo_dir,
-            rev_start="children({})".format(commit["node"]),
+            rev_start="children({})".format(latest_commit["node"]),
         )
 
         logger.info("Downloading revisions database...")

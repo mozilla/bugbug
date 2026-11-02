@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import concurrent.futures
+import enum
 import errno
 import json
 import logging
@@ -16,20 +17,23 @@ import urllib.parse
 from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
-from functools import lru_cache
+from functools import cache
+from importlib.metadata import PackageNotFoundError
 from typing import Any, Iterator
 
 import boto3
+import botocore
 import dateutil.parser
+import libmozdata
 import lmdb
 import numpy as np
 import psutil
 import requests
 import scipy
 import taskcluster
+import tenacity
 import tldextract
 import zstandard
-from pkg_resources import DistributionNotFound
 from requests.packages.urllib3.util.retry import Retry
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -77,7 +81,7 @@ class StructuredColumnTransformer(ColumnTransformer):
 
         transformer_names = (name for name, transformer, column in self.transformers_)
         types = []
-        for i, (f, transformer_name) in enumerate(zip(Xs, transformer_names)):
+        for f, transformer_name in zip(Xs, transformer_names):
             types.append((transformer_name, result.dtype, (f.shape[1],)))
 
         return result.view(np.dtype(types))
@@ -92,6 +96,17 @@ class DictExtractor(BaseEstimator, TransformerMixin):
 
     def transform(self, data):
         return np.array([elem[self.key] for elem in data]).reshape(-1, 1)
+
+
+class MergeText(BaseEstimator, TransformerMixin):
+    def __init__(self, cols):
+        self.cols = cols
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        return X[self.cols].apply(lambda row: " ".join(row), axis=1)
 
 
 class MissingOrdinalEncoder(OrdinalEncoder):
@@ -129,7 +144,7 @@ def get_taskcluster_options() -> dict:
     return options
 
 
-def get_secret(secret_id: str) -> Any:
+def get_secret(secret_id: str, default_value: str | None = None) -> Any:
     """Return the secret value."""
     env_variable_name = f"BUGBUG_{secret_id}"
 
@@ -146,7 +161,10 @@ def get_secret(secret_id: str) -> Any:
         secrets = taskcluster.Secrets(get_taskcluster_options())
         secret_bucket = secrets.get(tc_secret_id)
 
-        return secret_bucket["secret"][secret_id]
+        return secret_bucket["secret"].get(secret_id, default_value)
+
+    elif default_value is not None:
+        return default_value
 
     else:
         raise ValueError("Failed to find secret {}".format(secret_id))
@@ -158,7 +176,7 @@ def get_s3_credentials() -> dict:
     return response["credentials"]
 
 
-def upload_s3(paths: str) -> None:
+def upload_s3(paths: list[str]) -> None:
     credentials = get_s3_credentials()
 
     client = boto3.client(
@@ -172,6 +190,44 @@ def upload_s3(paths: str) -> None:
     for path in paths:
         assert path.startswith("data/")
         transfer.upload_file(path, "communitytc-bugbug", path)
+
+
+def exists_s3(path: str) -> bool:
+    credentials = get_s3_credentials()
+
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=credentials["accessKeyId"],
+        aws_secret_access_key=credentials["secretAccessKey"],
+        aws_session_token=credentials["sessionToken"],
+    )
+
+    try:
+        client.head_object(Bucket="communitytc-bugbug", Key=path)
+        return True
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] == "404":
+            return False
+        raise
+
+
+def list_s3(prefix: str) -> set[str]:
+    """Return the set of all S3 keys under *prefix* in the bugbug bucket."""
+    credentials = get_s3_credentials()
+
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=credentials["accessKeyId"],
+        aws_secret_access_key=credentials["secretAccessKey"],
+        aws_session_token=credentials["sessionToken"],
+    )
+
+    keys: set[str] = set()
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket="communitytc-bugbug", Prefix=prefix):
+        for obj in page.get("Contents", []):
+            keys.add(obj["Key"])
+    return keys
 
 
 def download_check_etag(url, path=None):
@@ -193,7 +249,13 @@ def download_check_etag(url, path=None):
     if old_etag == new_etag:
         return False
 
-    r = session.get(url, stream=True)
+    r = session.get(
+        url,
+        stream=True,
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
     r.raise_for_status()
 
     with open(path, "wb") as f:
@@ -223,21 +285,46 @@ def get_last_modified(url: str) -> datetime | None:
     return dateutil.parser.parse(r.headers["Last-Modified"])
 
 
-def download_model(model_name: str) -> str:
-    version = os.getenv("TAG")
-    if not version:
-        try:
-            version = f"v{get_bugbug_version()}"
-        except DistributionNotFound:
-            version = "latest"
+def _model_artifact_url(model_name: str) -> str | None:
+    """Return the model's `artifact_url` if published outside the Taskcluster index."""
+    # Imported here to avoid a circular import (model modules import utils).
+    from bugbug.models import get_model_class
 
+    try:
+        model_class = get_model_class(model_name)
+    except ValueError:
+        # Models missing from the registry may still exist in the Taskcluster
+        # index, so let download_model() try the index.
+        return None
+
+    return getattr(model_class, "artifact_url", None)
+
+
+def download_model(model_name: str) -> str:
+    """Download a model and unpack it to a `{model_name}model` directory.
+
+    Models are fetched from the Taskcluster index, unless the registered model
+    class declares an `artifact_url`, in which case that URL is used instead.
+    """
     path = f"{model_name}model"
-    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.tar.zst"
+    archive = f"{path}.tar.zst"
+
+    url = _model_artifact_url(model_name)
+    if url is None:
+        version = os.getenv("TAG")
+        if not version:
+            try:
+                version = f"v{get_bugbug_version()}"
+            except PackageNotFoundError:
+                version = "latest"
+        url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{archive}"
+
     logger.info("Downloading %s...", url)
-    updated = download_check_etag(url)
+    # Save it under our own name; the URL can end in anything.
+    updated = download_check_etag(url, archive)
     if updated:
-        extract_tar_zst(f"{path}.tar.zst")
-        os.remove(f"{path}.tar.zst")
+        extract_tar_zst(archive)
+        os.remove(archive)
     assert os.path.exists(path), "Decompressed directory exists"
     return path
 
@@ -253,9 +340,8 @@ def zstd_compress(path: str) -> None:
             "%s. Falling back to zstandard API, which could be slower.", error
         )
         cctx = zstandard.ZstdCompressor()
-        with open(path, "rb") as input_f:
-            with open(f"{path}.zst", "wb") as output_f:
-                cctx.copy_stream(input_f, output_f)
+        with open(path, "rb") as input_f, open(f"{path}.zst", "wb") as output_f:
+            cctx.copy_stream(input_f, output_f)
 
 
 def zstd_decompress(path: str) -> None:
@@ -269,27 +355,30 @@ def zstd_decompress(path: str) -> None:
             "%s. Falling back to zstandard API, which could be slower.", error
         )
         dctx = zstandard.ZstdDecompressor()
-        with open(f"{path}.zst", "rb") as input_f:
-            with open(path, "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
+        with open(f"{path}.zst", "rb") as input_f, open(path, "wb") as output_f:
+            dctx.copy_stream(input_f, output_f)
 
 
 @contextmanager
 def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
-        with open(path, "wb") as f:
-            with cctx.stream_writer(f) as compressor:
-                with tarfile.open(mode="w|", fileobj=compressor) as tar:
-                    yield tar
+        with (
+            open(path, "wb") as output_file,
+            cctx.stream_writer(output_file) as compressor,
+            tarfile.open(mode="w|", fileobj=compressor) as tar,
+        ):
+            yield tar
     elif mode == "r":
         dctx = zstandard.ZstdDecompressor()
-        with open(path, "rb") as f:
-            with dctx.stream_reader(f) as reader:
-                with tarfile.open(mode="r|", fileobj=reader) as tar:
-                    yield tar
+        with (
+            open(path, "rb") as input_file,
+            dctx.stream_reader(input_file) as reader,
+            tarfile.open(mode="r|", fileobj=reader) as tar,
+        ):
+            yield tar
     else:
-        assert False, f"Unexpected mode: {mode}"
+        raise AssertionError(f"Unexpected mode: {mode}")
 
 
 # Using tar directly is twice as fast than through Python!
@@ -331,7 +420,7 @@ def extract_file(path: str) -> None:
     elif str(path).endswith(".zst"):
         zstd_decompress(inner_path)
     else:
-        assert False, f"Unexpected compression type for {path}"
+        raise AssertionError(f"Unexpected compression type for {path}")
 
 
 class CustomJsonEncoder(json.JSONEncoder):
@@ -340,7 +429,7 @@ class CustomJsonEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
             return obj.item()
-        except (ValueError, IndexError, AttributeError, TypeError):
+        except ValueError, IndexError, AttributeError, TypeError:
             pass
 
         return super().default(obj)
@@ -368,9 +457,9 @@ class ExpQueue:
         return self.start_day + (self.list.maxlen - 1)
 
     def __getitem__(self, day: int) -> Any:
-        assert (
-            day >= self.start_day
-        ), f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
+        assert day >= self.start_day, (
+            f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
+        )
 
         if day < 0:
             return self.default
@@ -396,7 +485,7 @@ class ExpQueue:
 
             self.list.append(value)
         else:
-            assert False, "Can't insert in the past"
+            raise AssertionError("Can't insert in the past")
 
         assert day == self.last_day
 
@@ -432,6 +521,14 @@ class LMDBDict:
     def __setitem__(self, key: bytes, value: Any) -> None:
         self.txn.put(key, value, dupdata=False)
 
+    def keys(self):
+        cursor = self.txn.cursor()
+        for key, _value in cursor:
+            yield key.tobytes()
+
+    def get(self, key: bytes, default: Any = None) -> Any:
+        return self.txn.get(key, default)
+
 
 def get_free_tcp_port() -> int:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -462,7 +559,7 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_session(name: str) -> requests.Session:
     session = requests.Session()
 
@@ -480,11 +577,38 @@ def get_session(name: str) -> requests.Session:
     return session
 
 
-def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
-    """Load descriptions of patches in the stack for a given revision."""
-    url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
-    r = get_session("hgmo").get(url)
-    r.raise_for_status()
+def get_user_agent():
+    return get_secret("USER_AGENT", "bugbug")
+
+
+def setup_libmozdata():
+    libmozdata.config.set_config(libmozdata.config.ConfigEnv())
+    os.environ["LIBMOZDATA_CFG_USER-AGENT_NAME"] = get_user_agent()
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(7),
+    wait=tenacity.wait_exponential(multiplier=2, min=2),
+    reraise=True,
+)
+def get_automationrelevance(branch: str, revision: str) -> dict:
+    response = get_session("hgmo").get(
+        f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}",
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def get_hgmo_stack_changesets(branch: str, revision: str) -> list[dict]:
+    """Load the automationrelevance changesets in the stack for a given revision.
+
+    Each item is the raw hg.mozilla.org changeset object (``node``, ``desc``,
+    ``author``, ``parents``, ``backsoutnodes``, ...).
+    """
+    automation_relevance = get_automationrelevance(branch, revision)
 
     def should_skip(changeset):
         # Analyze all changesets if we are not on try.
@@ -501,13 +625,15 @@ def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
             return True
 
         # Don't analyze changesets which simply specify try parameters.
-        if changeset["files"] == ["try_task_config.json"]:
-            return True
+        return changeset["files"] == ["try_task_config.json"]
 
-        return False
+    return [c for c in automation_relevance["changesets"] if not should_skip(c)]
 
+
+def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
+    """Load the nodes of patches in the stack for a given revision."""
     return [
-        c["node"].encode("ascii") for c in r.json()["changesets"] if not should_skip(c)
+        c["node"].encode("ascii") for c in get_hgmo_stack_changesets(branch, revision)
     ]
 
 
@@ -561,12 +687,63 @@ def keep_as_is(x):
     return x
 
 
-def extract_urls_and_domains(text: str, domains_to_ignore: set = set()) -> dict:
+def hg2git(hash: str) -> str:
+    r = get_session("lando").get(f"https://lando.moz.tools/api/hg2git/firefox/{hash}")
+    r.raise_for_status()
+    return r.json()["git_hash"]
+
+
+def git2hg(hash: str) -> str:
+    r = get_session("lando").get(f"https://lando.moz.tools/api/git2hg/firefox/{hash}")
+    r.raise_for_status()
+    return r.json()["hg_hash"]
+
+
+class RedashQueryStatus(enum.IntEnum):
+    PENDING = 1
+    STARTED = 2
+    SUCCESS = 3
+    FAILURE = 4
+    CANCELLED = 5
+
+
+@tenacity.retry(
+    retry=tenacity.retry_if_exception_type(tenacity.TryAgain),
+    wait=tenacity.wait_exponential(multiplier=2, max=60),
+    stop=tenacity.stop_after_delay(1800),
+    reraise=True,
+)
+def query_redash(query_id, parameters):
+    r = get_session("redash").post(
+        f"https://sql.telemetry.mozilla.org/api/queries/{query_id}/results",
+        json={
+            "parameters": parameters,
+            "max_age": 1800,
+        },
+        headers={"Authorization": f"Key {get_secret('REDASH_API_KEY')}"},
+    )
+    if not r.ok:
+        raise Exception(f"Redash query error: {r.text}")
+
+    result = r.json()
+    if "query_result" not in result:
+        status = result.get("job", {}).get("status")
+        if status == RedashQueryStatus.FAILURE:
+            raise Exception(f"Redash query failed: {result}")
+        logger.warning("query_result not in result (status=%s): %s", status, result)
+        raise tenacity.TryAgain
+
+    return result["query_result"]["data"]["rows"]
+
+
+def extract_urls_and_domains(
+    text: str, domains_to_ignore: set[str] | None = None
+) -> dict:
     """Extracts URLs and domains from a given text, optionally filtering out ignored domains.
 
     Args:
-        - text: The input text string where URLs and domains need to be found.
-        - domains_to_ignore:  A set of domain names to exclude from the results. e.g. mozilla.com
+        text: The input text string where URLs and domains need to be found.
+        domains_to_ignore: A set of domain names to exclude from the results. e.g. mozilla.com
 
     Returns:
         A dictionary containing:
@@ -574,6 +751,9 @@ def extract_urls_and_domains(text: str, domains_to_ignore: set = set()) -> dict:
             - "domains": A list of extracted domain names (excluding ignored domains if provided).
                         (Note: current domain extraction is basic and has limitations)
     """
+    if domains_to_ignore is None:
+        domains_to_ignore = set()
+
     pattern = re.compile(r"(?:https?://|www\.)(?:[^\s/?#]+)+(?:[\/?#][^\s]*)?")
     potential_urls = pattern.findall(text)
 

@@ -1,0 +1,338 @@
+"""Tests for the shared Hackbot client."""
+
+from uuid import UUID
+
+import httpx
+import pytest
+from hackbot_client import (
+    HackbotAPIError,
+    HackbotClient,
+    HackbotInvalidResponseError,
+    RunStatus,
+)
+from hackbot_client import client as client_module
+
+RUN_ID = "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6"
+
+
+def _client(**kwargs) -> HackbotClient:
+    defaults = {
+        "base_url": "https://hackbot.example",
+        "api_key": "secret",
+    }
+    defaults.update(kwargs)
+    return HackbotClient(**defaults)
+
+
+def _capture_post(monkeypatch, response: httpx.Response) -> dict:
+    """Stub httpx.AsyncClient to answer with ``response`` and capture the call."""
+    captured: dict = {}
+
+    class _FakeAsyncClient:
+        def __init__(self, timeout=None):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, json=None, headers=None, params=None):
+            captured.update(url=url, json=json, headers=headers, params=params)
+            response.request = httpx.Request("POST", url)
+            return response
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
+    return captured
+
+
+def _unreachable(monkeypatch) -> None:
+    """Stub httpx.AsyncClient so that every request fails before any answer."""
+
+    class _UnreachableAsyncClient:
+        def __init__(self, timeout=None):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, **kwargs):
+            raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", _UnreachableAsyncClient)
+
+
+async def test_trigger_run_posts_inputs_and_returns_typed_reference(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        httpx.Response(
+            201,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
+        ),
+    )
+
+    run = await _client(base_url="https://hackbot.example/").trigger_run(
+        "bug-fix", {"bug_id": 1234}, on_behalf_of="user@example.com"
+    )
+
+    assert run.run_id == UUID(RUN_ID)
+    assert run.agent == "bug-fix"
+    assert run.status is RunStatus.pending
+    # `201`: this request is what started it.
+    assert run.is_new is True
+    assert captured == {
+        "timeout": 30.0,
+        "url": "https://hackbot.example/agents/bug-fix/runs",
+        "json": {"bug_id": 1234},
+        "headers": {
+            "X-API-Key": "secret",
+            "X-On-Behalf-Of": "user@example.com",
+        },
+        # No key means no client-assigned id on the create call.
+        "params": {},
+    }
+
+
+async def test_trigger_run_omits_attribution_when_not_provided(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        httpx.Response(
+            201,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
+        ),
+    )
+
+    await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+    assert captured["headers"] == {"X-API-Key": "secret"}
+
+
+async def test_trigger_run_raises_for_http_errors(monkeypatch):
+    _capture_post(monkeypatch, httpx.Response(401, json={"detail": "Invalid API key"}))
+
+    with pytest.raises(HackbotAPIError, match="HTTP 401"):
+        await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_raises_when_the_api_is_unreachable(monkeypatch):
+    _unreachable(monkeypatch)
+
+    with pytest.raises(HackbotAPIError, match="Hackbot API request failed"):
+        await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_rejects_an_invalid_success_response(monkeypatch):
+    _capture_post(monkeypatch, httpx.Response(201, json={"run_id": RUN_ID}))
+
+    with pytest.raises(HackbotInvalidResponseError, match=r"invalid run \(HTTP 201\)"):
+        await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_rejects_a_success_response_that_is_not_an_object(
+    monkeypatch,
+):
+    _capture_post(monkeypatch, httpx.Response(201, json=[]))
+
+    with pytest.raises(HackbotInvalidResponseError, match="not an object"):
+        await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_rejects_a_success_response_that_is_not_json(monkeypatch):
+    _capture_post(monkeypatch, httpx.Response(201, text="<html>oops</html>"))
+
+    with pytest.raises(HackbotInvalidResponseError, match="not JSON"):
+        await _client().trigger_run("bug-fix", {"bug_id": 1234})
+
+
+async def test_trigger_run_reports_a_deduplicated_run_as_not_new(monkeypatch):
+    # `200` rather than `201`: the key already belonged to this run, so the
+    # request that got this answer started nothing.
+    _capture_post(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "running"},
+        ),
+    )
+
+    run = await _client().trigger_run(
+        "bug-fix", {"bug_id": 1234}, dedupe_key="push:autoland:abc123"
+    )
+
+    assert run.run_id == UUID(RUN_ID)
+    assert run.is_new is False
+
+
+async def test_trigger_run_sends_the_dedupe_key_as_a_query_parameter(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        httpx.Response(
+            201,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
+        ),
+    )
+
+    await _client().trigger_run(
+        "bug-fix", {"bug_id": 1234}, dedupe_key="push:autoland:abc123"
+    )
+
+    assert captured["params"] == {"dedupe_key": "push:autoland:abc123"}
+
+
+async def test_apply_actions_posts_to_the_runs_apply_endpoint(monkeypatch):
+    captured = _capture_post(monkeypatch, httpx.Response(200, json=[]))
+
+    await _client(base_url="https://hackbot.example/").apply_actions(RUN_ID)
+
+    assert captured["url"] == f"https://hackbot.example/runs/{RUN_ID}/actions/apply"
+    assert captured["headers"] == {"X-API-Key": "secret"}
+
+
+async def test_apply_actions_returns_each_action_with_its_state(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json=[
+                {
+                    "idx": 0,
+                    "type": "bugzilla.add_comment",
+                    "params": {},
+                    "status": "applied",
+                },
+                {
+                    "idx": 1,
+                    "type": "slack.post_message",
+                    "params": {},
+                    "status": "failed",
+                    "error": "channel_not_found",
+                },
+            ],
+        ),
+    )
+
+    actions = await _client().apply_actions(RUN_ID)
+
+    # The response type, not a list the caller has to interrogate: whether the
+    # actions landed is the one thing the `200` does not say.
+    assert len(actions) == 2
+    assert [a.type for a in actions] == ["bugzilla.add_comment", "slack.post_message"]
+    assert actions.all_applied is False
+    assert [a.type for a in actions.unapplied] == ["slack.post_message"]
+    assert actions.failure_summary == "slack.post_message (channel_not_found)"
+
+
+async def test_apply_actions_reports_a_clean_pass_as_all_applied(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json=[
+                {
+                    "idx": 0,
+                    "type": "bugzilla.add_comment",
+                    "params": {},
+                    "status": "applied",
+                },
+                {
+                    "idx": 1,
+                    "type": "slack.post_message",
+                    "params": {},
+                    "status": "applied",
+                },
+            ],
+        ),
+    )
+
+    actions = await _client().apply_actions(RUN_ID)
+
+    assert actions.all_applied is True
+    assert actions.unapplied == []
+    assert actions.failure_summary == ""
+
+
+async def test_apply_actions_on_a_run_with_no_actions_is_all_applied(monkeypatch):
+    # Vacuously true, and the caller should read it that way: nothing failed.
+    _capture_post(monkeypatch, httpx.Response(200, json=[]))
+
+    actions = await _client().apply_actions(RUN_ID)
+
+    assert len(actions) == 0
+    assert actions.all_applied is True
+
+
+async def test_apply_actions_raises_for_http_errors(monkeypatch):
+    _capture_post(monkeypatch, httpx.Response(404, json={"detail": "Run not found"}))
+
+    with pytest.raises(HackbotAPIError, match="HTTP 404"):
+        await _client().apply_actions(RUN_ID)
+
+
+async def test_apply_actions_raises_when_the_api_is_unreachable(monkeypatch):
+    _unreachable(monkeypatch)
+
+    with pytest.raises(HackbotAPIError, match="Hackbot API request failed"):
+        await _client().apply_actions(RUN_ID)
+
+
+async def test_apply_actions_rejects_an_invalid_success_response(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(200, json=[{"idx": 0, "type": "bugzilla.add_comment"}]),
+    )
+
+    with pytest.raises(
+        HackbotInvalidResponseError, match=r"invalid action list \(HTTP 200\)"
+    ):
+        await _client().apply_actions(RUN_ID)
+
+
+async def test_apply_actions_rejects_a_success_response_that_is_not_json(monkeypatch):
+    _capture_post(monkeypatch, httpx.Response(200, text="<html>oops</html>"))
+
+    with pytest.raises(HackbotInvalidResponseError, match="not JSON"):
+        await _client().apply_actions(RUN_ID)
+
+
+async def test_trigger_run_with_service_account_auth(monkeypatch):
+    """Client mints a Bearer token from the key file, audience is base_url."""
+    captured = _capture_post(
+        monkeypatch,
+        httpx.Response(
+            201,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
+        ),
+    )
+
+    class _FakeCredentials:
+        token = None
+
+        @property
+        def token_state(self):
+            if self.token is None:
+                return client_module.credentials.TokenState.INVALID
+            return client_module.credentials.TokenState.FRESH
+
+        def refresh(self, request):
+            self.token = "fake.jwt.token"
+
+    def mock_from_service_account_file(filename, target_audience):
+        captured.update(filename=filename, audience=target_audience)
+        return _FakeCredentials()
+
+    monkeypatch.setattr(
+        client_module.service_account.IDTokenCredentials,
+        "from_service_account_file",
+        mock_from_service_account_file,
+    )
+
+    client = _client(api_key="", key_file="/path/key.json")
+    await client.trigger_run("bug-fix", {"bug_id": 1234})
+
+    assert captured["filename"] == "/path/key.json"
+    assert captured["audience"] == "https://hackbot.example"
+    assert captured["headers"] == {"Authorization": "Bearer fake.jwt.token"}

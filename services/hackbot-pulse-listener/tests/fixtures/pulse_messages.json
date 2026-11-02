@@ -1,0 +1,892 @@
+[
+  {
+    "payload": {
+      "status": {
+        "taskId": "QKbYKE7STVy3_DM6J9NKXw",
+        "provisionerId": "releng-hardware",
+        "workerType": "gecko-t-osx-1400-r8",
+        "taskQueueId": "releng-hardware/gecko-t-osx-1400-r8",
+        "schedulerId": "gecko-level-1",
+        "projectId": "none",
+        "taskGroupId": "DJziYijSR9qv-cGTDdS92w",
+        "priority": "very-low",
+        "deadline": "2026-06-26T21:22:49.913Z",
+        "expires": "2026-07-23T21:22:49.913Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "mdc1",
+            "workerId": "macmini-r8-381",
+            "takenUntil": "2026-06-25T22:47:29.995Z",
+            "scheduled": "2026-06-25T21:36:27.697Z",
+            "started": "2026-06-25T21:36:28.598Z",
+            "resolved": "2026-06-25T22:35:05.200Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "macosx",
+          "kind": "web-platform-tests",
+          "label": "test-macosx1470-64/opt-web-platform-tests-webgpu-backlog-long-1",
+          "project": "try",
+          "retrigger": "true",
+          "test-suite": "web-platform-tests",
+          "trust-domain": "gecko",
+          "test-platform": "macosx1470-64/opt",
+          "tests_grouped": "1",
+          "createdForUser": "aleiserson@mozilla.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "mdc1",
+      "workerId": "macmini-r8-381",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.QKbYKE7STVy3_DM6J9NKXw.0.mdc1.macmini-r8-381.releng-hardware.gecko-t-osx-1400-r8.gecko-level-1.DJziYijSR9qv-cGTDdS92w._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "TISFEWXiRD-Fg4ifDcLm5A",
+        "provisionerId": "releng-hardware",
+        "workerType": "gecko-t-osx-1015-r8",
+        "taskQueueId": "releng-hardware/gecko-t-osx-1015-r8",
+        "schedulerId": "comm-level-1",
+        "projectId": "none",
+        "taskGroupId": "VuZl_WA9QKq3m4U7zIVcUA",
+        "priority": "low",
+        "deadline": "2026-06-26T13:31:23.330Z",
+        "expires": "2026-07-23T13:31:23.330Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "mdc1",
+            "workerId": "macmini-r8-209",
+            "takenUntil": "2026-06-25T23:27:40.611Z",
+            "scheduled": "2026-06-25T13:39:15.145Z",
+            "started": "2026-06-25T23:07:40.613Z",
+            "resolved": "2026-06-25T23:17:25.349Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "macosx",
+          "kind": "test",
+          "label": "test-macosx1015-64-qr/debug-mochitest-thunderbird-2",
+          "project": "try-comm-central",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome-thunderbird",
+          "trust-domain": "comm",
+          "test-platform": "macosx1015-64-qr/debug",
+          "tests_grouped": "1",
+          "createdForUser": "h.w.forms@arcor.de",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "mdc1",
+      "workerId": "macmini-r8-209",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.TISFEWXiRD-Fg4ifDcLm5A.0.mdc1.macmini-r8-209.releng-hardware.gecko-t-osx-1015-r8.comm-level-1.VuZl_WA9QKq3m4U7zIVcUA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "TWIXsqxDTame750yV3a_0A",
+        "provisionerId": "gecko-t",
+        "workerType": "t-linux-docker-noscratch-amd",
+        "taskQueueId": "gecko-t/t-linux-docker-noscratch-amd",
+        "schedulerId": "gecko-level-1",
+        "projectId": "none",
+        "taskGroupId": "ea3Ml2aSTM2XtJSn5x9OgA",
+        "priority": "very-low",
+        "deadline": "2026-06-26T22:29:42.935Z",
+        "expires": "2026-07-23T22:29:42.935Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "us-east1-c",
+            "workerId": "4411950482911664357",
+            "takenUntil": "2026-06-25T23:21:38.581Z",
+            "scheduled": "2026-06-25T22:43:40.477Z",
+            "started": "2026-06-25T22:44:38.441Z",
+            "resolved": "2026-06-25T23:17:28.610Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "linux",
+          "kind": "web-platform-tests",
+          "label": "test-linux2404-64/opt-web-platform-tests-async-9",
+          "project": "try",
+          "retrigger": "true",
+          "test-suite": "web-platform-tests",
+          "test-variant": "async-event-dispatching",
+          "trust-domain": "gecko",
+          "test-platform": "linux2404-64/opt",
+          "tests_grouped": "1",
+          "createdForUser": "hikezoe.birchill@mozilla.com",
+          "worker-implementation": "docker-worker"
+        }
+      },
+      "workerGroup": "us-east1-c",
+      "workerId": "4411950482911664357",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.TWIXsqxDTame750yV3a_0A.0.us-east1-c.4411950482911664357.gecko-t.t-linux-docker-noscratch-amd.gecko-level-1.ea3Ml2aSTM2XtJSn5x9OgA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "CLwxQmXLQFunTzlzrzshOg",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "b49IIC4mRAGhUGzjpvP0jQ",
+        "priority": "low",
+        "deadline": "2026-06-26T20:21:36.160Z",
+        "expires": "2027-06-25T20:21:36.160Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "southindia",
+            "workerId": "vm-c53ljhlksec57kwlo3atvgxoxvt5wctd2ma",
+            "takenUntil": "2026-06-25T23:30:14.189Z",
+            "scheduled": "2026-06-25T22:18:46.436Z",
+            "started": "2026-06-25T22:19:13.295Z",
+            "resolved": "2026-06-25T23:19:31.591Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-8",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "mozilla@kaply.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "southindia",
+      "workerId": "vm-c53ljhlksec57kwlo3atvgxoxvt5wctd2ma",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.CLwxQmXLQFunTzlzrzshOg.0.southindia.vm-c53ljhlksec57kwlo3atvgxoxvt5wctd2ma.gecko-t.win11-64-25h2.gecko-level-3.b49IIC4mRAGhUGzjpvP0jQ._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "d4YZWZQXR-SdCVwlrVTTUA",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "b49IIC4mRAGhUGzjpvP0jQ",
+        "priority": "low",
+        "deadline": "2026-06-26T20:21:36.156Z",
+        "expires": "2027-06-25T20:21:36.156Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "southindia",
+            "workerId": "vm-t8mqfiqktf2mzzqnjzm4iaek5dqgelspc09",
+            "takenUntil": "2026-06-25T23:30:22.934Z",
+            "scheduled": "2026-06-25T22:18:46.462Z",
+            "started": "2026-06-25T22:19:22.411Z",
+            "resolved": "2026-06-25T23:19:37.633Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-2",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "mozilla@kaply.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "southindia",
+      "workerId": "vm-t8mqfiqktf2mzzqnjzm4iaek5dqgelspc09",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.d4YZWZQXR-SdCVwlrVTTUA.0.southindia.vm-t8mqfiqktf2mzzqnjzm4iaek5dqgelspc09.gecko-t.win11-64-25h2.gecko-level-3.b49IIC4mRAGhUGzjpvP0jQ._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "EJXnn6xsQ4OeDMK3W1aksg",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "b49IIC4mRAGhUGzjpvP0jQ",
+        "priority": "low",
+        "deadline": "2026-06-26T20:21:36.160Z",
+        "expires": "2027-06-25T20:21:36.160Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "westus3",
+            "workerId": "vm-gm0hjns2r2q6os6d6n0jngdliu65qqsbmlf",
+            "takenUntil": "2026-06-25T23:30:32.889Z",
+            "scheduled": "2026-06-25T22:18:46.487Z",
+            "started": "2026-06-25T22:19:32.554Z",
+            "resolved": "2026-06-25T23:19:38.966Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-7",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "mozilla@kaply.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "westus3",
+      "workerId": "vm-gm0hjns2r2q6os6d6n0jngdliu65qqsbmlf",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.EJXnn6xsQ4OeDMK3W1aksg.0.westus3.vm-gm0hjns2r2q6os6d6n0jngdliu65qqsbmlf.gecko-t.win11-64-25h2.gecko-level-3.b49IIC4mRAGhUGzjpvP0jQ._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "cnTkiN1YROGfMWecDxyMEQ",
+        "provisionerId": "gecko-t",
+        "workerType": "t-linux-docker-noscratch-amd",
+        "taskQueueId": "gecko-t/t-linux-docker-noscratch-amd",
+        "schedulerId": "gecko-level-1",
+        "projectId": "none",
+        "taskGroupId": "ea3Ml2aSTM2XtJSn5x9OgA",
+        "priority": "very-low",
+        "deadline": "2026-06-26T22:29:42.413Z",
+        "expires": "2026-07-23T22:29:42.413Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "us-west1-b",
+            "workerId": "525836151908471198",
+            "takenUntil": "2026-06-25T23:39:39.063Z",
+            "scheduled": "2026-06-25T22:44:50.986Z",
+            "started": "2026-06-25T22:45:38.942Z",
+            "resolved": "2026-06-25T23:19:39.842Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "linux",
+          "kind": "web-platform-tests",
+          "label": "test-linux2404-64/debug-web-platform-tests-async-12",
+          "project": "try",
+          "retrigger": "true",
+          "test-suite": "web-platform-tests",
+          "test-variant": "async-event-dispatching",
+          "trust-domain": "gecko",
+          "test-platform": "linux2404-64/debug",
+          "tests_grouped": "1",
+          "createdForUser": "hikezoe.birchill@mozilla.com",
+          "worker-implementation": "docker-worker"
+        }
+      },
+      "workerGroup": "us-west1-b",
+      "workerId": "525836151908471198",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.cnTkiN1YROGfMWecDxyMEQ.0.us-west1-b.525836151908471198.gecko-t.t-linux-docker-noscratch-amd.gecko-level-1.ea3Ml2aSTM2XtJSn5x9OgA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "DPltHwhPTI29TinNU_XBbw",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "K3dxP_ueQcueqrIFkLqwAA",
+        "priority": "low",
+        "deadline": "2026-06-26T20:22:15.472Z",
+        "expires": "2027-06-25T20:22:15.472Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "canadacentral",
+            "workerId": "vm-oxyh6fj4tz0aaicetdxwaqmjphnymqusaz6",
+            "takenUntil": "2026-06-25T23:31:17.350Z",
+            "scheduled": "2026-06-25T22:19:36.851Z",
+            "started": "2026-06-25T22:20:16.923Z",
+            "resolved": "2026-06-25T23:20:25.989Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-7",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "agoloman@mozilla.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "canadacentral",
+      "workerId": "vm-oxyh6fj4tz0aaicetdxwaqmjphnymqusaz6",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.DPltHwhPTI29TinNU_XBbw.0.canadacentral.vm-oxyh6fj4tz0aaicetdxwaqmjphnymqusaz6.gecko-t.win11-64-25h2.gecko-level-3.K3dxP_ueQcueqrIFkLqwAA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "DEt854d0QAOgI-OZsHoMmw",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "K3dxP_ueQcueqrIFkLqwAA",
+        "priority": "low",
+        "deadline": "2026-06-26T20:22:15.468Z",
+        "expires": "2027-06-25T20:22:15.468Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "southindia",
+            "workerId": "vm-ytkzofbcsxkitaq19prrnqpg6vq5jq3ailg",
+            "takenUntil": "2026-06-25T23:31:13.812Z",
+            "scheduled": "2026-06-25T22:19:36.839Z",
+            "started": "2026-06-25T22:20:12.929Z",
+            "resolved": "2026-06-25T23:20:28.897Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-13",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "agoloman@mozilla.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "southindia",
+      "workerId": "vm-ytkzofbcsxkitaq19prrnqpg6vq5jq3ailg",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.DEt854d0QAOgI-OZsHoMmw.0.southindia.vm-ytkzofbcsxkitaq19prrnqpg6vq5jq3ailg.gecko-t.win11-64-25h2.gecko-level-3.K3dxP_ueQcueqrIFkLqwAA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "AlWS0HmFQiKPjBS1HcFAzw",
+        "provisionerId": "releng-hardware",
+        "workerType": "gecko-t-osx-1015-r8",
+        "taskQueueId": "releng-hardware/gecko-t-osx-1015-r8",
+        "schedulerId": "comm-level-1",
+        "projectId": "none",
+        "taskGroupId": "VuZl_WA9QKq3m4U7zIVcUA",
+        "priority": "low",
+        "deadline": "2026-06-26T13:31:23.054Z",
+        "expires": "2026-07-23T13:31:23.054Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "mdc1",
+            "workerId": "macmini-r8-77",
+            "takenUntil": "2026-06-25T23:28:29.702Z",
+            "scheduled": "2026-06-25T13:42:42.448Z",
+            "started": "2026-06-25T23:08:29.704Z",
+            "resolved": "2026-06-25T23:20:29.089Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "macosx",
+          "kind": "test",
+          "label": "test-macosx1015-64-qr/opt-xpcshell-4",
+          "project": "try-comm-central",
+          "retrigger": "true",
+          "test-suite": "xpcshell",
+          "trust-domain": "comm",
+          "test-platform": "macosx1015-64-qr/opt",
+          "tests_grouped": "1",
+          "createdForUser": "h.w.forms@arcor.de",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "mdc1",
+      "workerId": "macmini-r8-77",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.AlWS0HmFQiKPjBS1HcFAzw.0.mdc1.macmini-r8-77.releng-hardware.gecko-t-osx-1015-r8.comm-level-1.VuZl_WA9QKq3m4U7zIVcUA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "YO-gvnzTTGS7INXYIN8Nbg",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "b49IIC4mRAGhUGzjpvP0jQ",
+        "priority": "low",
+        "deadline": "2026-06-26T20:21:36.156Z",
+        "expires": "2027-06-25T20:21:36.156Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "centralindia",
+            "workerId": "vm-qf6plze9qdes12vlwojguayb66pk1vqrdz0",
+            "takenUntil": "2026-06-25T23:31:12.293Z",
+            "scheduled": "2026-06-25T22:18:46.606Z",
+            "started": "2026-06-25T22:20:11.674Z",
+            "resolved": "2026-06-25T23:20:29.185Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-15",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "mozilla@kaply.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "centralindia",
+      "workerId": "vm-qf6plze9qdes12vlwojguayb66pk1vqrdz0",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.YO-gvnzTTGS7INXYIN8Nbg.0.centralindia.vm-qf6plze9qdes12vlwojguayb66pk1vqrdz0.gecko-t.win11-64-25h2.gecko-level-3.b49IIC4mRAGhUGzjpvP0jQ._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "YV2f3tnLSCyXUIG4EDq5Xw",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "b49IIC4mRAGhUGzjpvP0jQ",
+        "priority": "low",
+        "deadline": "2026-06-26T20:21:36.153Z",
+        "expires": "2027-06-25T20:21:36.153Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "centralindia",
+            "workerId": "vm-uussuzjr5yzwxdeekeggdet9hyushkx30tm",
+            "takenUntil": "2026-06-25T23:31:12.727Z",
+            "scheduled": "2026-06-25T22:18:46.629Z",
+            "started": "2026-06-25T22:20:12.243Z",
+            "resolved": "2026-06-25T23:20:30.629Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-4",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "mozilla@kaply.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "centralindia",
+      "workerId": "vm-uussuzjr5yzwxdeekeggdet9hyushkx30tm",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.YV2f3tnLSCyXUIG4EDq5Xw.0.centralindia.vm-uussuzjr5yzwxdeekeggdet9hyushkx30tm.gecko-t.win11-64-25h2.gecko-level-3.b49IIC4mRAGhUGzjpvP0jQ._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "dtOy4UGdTHm2s5XCVuNkqA",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "K3dxP_ueQcueqrIFkLqwAA",
+        "priority": "low",
+        "deadline": "2026-06-26T20:22:15.473Z",
+        "expires": "2027-06-25T20:22:15.473Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "northcentralus",
+            "workerId": "vm-fpfcr7qcafdv8bktbhzwmz07xcsbq2ohk4h",
+            "takenUntil": "2026-06-25T23:31:33.280Z",
+            "scheduled": "2026-06-25T22:19:36.866Z",
+            "started": "2026-06-25T22:20:32.966Z",
+            "resolved": "2026-06-25T23:20:41.142Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-11",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "agoloman@mozilla.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "northcentralus",
+      "workerId": "vm-fpfcr7qcafdv8bktbhzwmz07xcsbq2ohk4h",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.dtOy4UGdTHm2s5XCVuNkqA.0.northcentralus.vm-fpfcr7qcafdv8bktbhzwmz07xcsbq2ohk4h.gecko-t.win11-64-25h2.gecko-level-3.K3dxP_ueQcueqrIFkLqwAA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "fRj5qgRVS4adFANUGOexwA",
+        "provisionerId": "gecko-t",
+        "workerType": "win11-64-25h2",
+        "taskQueueId": "gecko-t/win11-64-25h2",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "K3dxP_ueQcueqrIFkLqwAA",
+        "priority": "low",
+        "deadline": "2026-06-26T20:22:15.474Z",
+        "expires": "2027-06-25T20:22:15.474Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "westus",
+            "workerId": "vm-slqhmhydqni6evb1vuglbaat8icl5saifla",
+            "takenUntil": "2026-06-25T23:31:38.392Z",
+            "scheduled": "2026-06-25T22:19:36.878Z",
+            "started": "2026-06-25T22:20:38.071Z",
+            "resolved": "2026-06-25T23:20:45.381Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "windows",
+          "kind": "mochitest",
+          "label": "test-windows11-32-25h2-shippable/opt-mochitest-browser-chrome-5",
+          "project": "autoland",
+          "retrigger": "true",
+          "test-type": "mochitest",
+          "test-suite": "mochitest-browser-chrome",
+          "trust-domain": "gecko",
+          "test-platform": "windows11-32-25h2-shippable/opt",
+          "tests_grouped": "1",
+          "createdForUser": "agoloman@mozilla.com",
+          "worker-implementation": "generic-worker"
+        }
+      },
+      "workerGroup": "westus",
+      "workerId": "vm-slqhmhydqni6evb1vuglbaat8icl5saifla",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.fRj5qgRVS4adFANUGOexwA.0.westus.vm-slqhmhydqni6evb1vuglbaat8icl5saifla.gecko-t.win11-64-25h2.gecko-level-3.K3dxP_ueQcueqrIFkLqwAA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "ZFZw8IBSSWKrZmgZcdpUKA",
+        "provisionerId": "gecko-t",
+        "workerType": "t-linux-docker-noscratch-amd",
+        "taskQueueId": "gecko-t/t-linux-docker-noscratch-amd",
+        "schedulerId": "gecko-level-1",
+        "projectId": "none",
+        "taskGroupId": "ea3Ml2aSTM2XtJSn5x9OgA",
+        "priority": "very-low",
+        "deadline": "2026-06-26T22:29:42.408Z",
+        "expires": "2026-07-23T22:29:42.408Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "us-central1-b",
+            "workerId": "1690275899809730974",
+            "takenUntil": "2026-06-25T23:39:44.587Z",
+            "scheduled": "2026-06-25T22:44:51.205Z",
+            "started": "2026-06-25T22:45:44.383Z",
+            "resolved": "2026-06-25T23:21:01.122Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "linux",
+          "kind": "web-platform-tests",
+          "label": "test-linux2404-64/debug-web-platform-tests-async-1",
+          "project": "try",
+          "retrigger": "true",
+          "test-suite": "web-platform-tests",
+          "test-variant": "async-event-dispatching",
+          "trust-domain": "gecko",
+          "test-platform": "linux2404-64/debug",
+          "tests_grouped": "1",
+          "createdForUser": "hikezoe.birchill@mozilla.com",
+          "worker-implementation": "docker-worker"
+        }
+      },
+      "workerGroup": "us-central1-b",
+      "workerId": "1690275899809730974",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.ZFZw8IBSSWKrZmgZcdpUKA.0.us-central1-b.1690275899809730974.gecko-t.t-linux-docker-noscratch-amd.gecko-level-1.ea3Ml2aSTM2XtJSn5x9OgA._",
+    "redelivered": false,
+    "cc": []
+  },
+  {
+    "payload": {
+      "status": {
+        "taskId": "f_BW7zM6RCi8p_Ah5i57Qg",
+        "provisionerId": "gecko-t",
+        "workerType": "t-linux-docker-amd",
+        "taskQueueId": "gecko-t/t-linux-docker-amd",
+        "schedulerId": "gecko-level-3",
+        "projectId": "none",
+        "taskGroupId": "cXOzgHGNRt25Mv8Aq5TvLw",
+        "priority": "low",
+        "deadline": "2026-06-26T22:51:20.160Z",
+        "expires": "2027-06-25T22:51:20.160Z",
+        "retriesLeft": 5,
+        "state": "failed",
+        "runs": [
+          {
+            "runId": 0,
+            "state": "failed",
+            "reasonCreated": "scheduled",
+            "reasonResolved": "failed",
+            "workerGroup": "us-central1-b",
+            "workerId": "9170129125611932268",
+            "takenUntil": "2026-06-25T23:36:36.096Z",
+            "scheduled": "2026-06-25T23:16:35.979Z",
+            "started": "2026-06-25T23:16:36.098Z",
+            "resolved": "2026-06-25T23:21:06.146Z"
+          }
+        ]
+      },
+      "runId": 0,
+      "task": {
+        "tags": {
+          "os": "linux",
+          "kind": "source-test",
+          "label": "source-test-node-newtab-unit-tests",
+          "project": "autoland",
+          "retrigger": "true",
+          "trust-domain": "gecko",
+          "createdForUser": "dwhisman@mozilla.com",
+          "worker-implementation": "docker-worker"
+        }
+      },
+      "workerGroup": "us-central1-b",
+      "workerId": "9170129125611932268",
+      "version": 1
+    },
+    "exchange": "exchange/taskcluster-queue/v1/task-failed",
+    "routingKey": "primary.f_BW7zM6RCi8p_Ah5i57Qg.0.us-central1-b.9170129125611932268.gecko-t.t-linux-docker-amd.gecko-level-3.cXOzgHGNRt25Mv8Aq5TvLw._",
+    "redelivered": false,
+    "cc": []
+  }
+]

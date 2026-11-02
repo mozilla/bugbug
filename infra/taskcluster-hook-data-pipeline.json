@@ -1,4 +1,10 @@
 {
+  "bindings": [
+    {
+      "exchange": "exchange/taskcluster-queue/v1/task-completed",
+      "routingKeyPattern": "route.project.bugbug.deploy_ending"
+    }
+  ],
   "schedule": ["0 0 1,16 * *"],
   "metadata": {
     "description": "",
@@ -13,7 +19,7 @@
       "$fromNow": "2 hours"
     },
     "expires": {
-      "$fromNow": "1 month"
+      "$fromNow": "1 year"
     },
     "extra": {},
     "metadata": {
@@ -31,19 +37,18 @@
         "taskclusterProxy": true
       },
       "command": [
-        "/usr/local/bin/python3",
+        "python",
         "/code/spawn_pipeline.py",
         "/code/data-pipeline.yml"
       ],
       "image": "mozilla/bugbug-spawn-pipeline",
       "maxRunTime": 7200
     },
-    "priority": "normal",
+    "priority": "lowest",
     "provisionerId": "proj-bugbug",
     "retries": 5,
     "routes": [
-      "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
-      "notify.irc-channel.#bugbug.on-failed",
+      "notify.email.bugbug-team@mozilla.com.on-failed",
       "index.project.bugbug.data-pipeline-start"
     ],
     "schedulerId": "-",
@@ -52,7 +57,7 @@
     "workerType": "batch"
   },
   "triggerSchema": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "type": "object"
   }
 }

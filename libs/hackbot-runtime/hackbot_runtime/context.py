@@ -1,0 +1,346 @@
+"""The single object an agent's ``main()`` receives from the runtime.
+
+``HackbotContext`` is what an agent author touches. It answers for everything
+the platform provides — the prepared source checkout, Firefox build paths,
+model-provider credentials — plus the results/artifacts/actions plumbing, so the
+author never cares how or from where those come.
+
+Its platform fields are read from the environment (the orchestrator sets them);
+its capability declarations come from the agent's ``hackbot.toml``
+(:class:`HackbotConfig`), attached via :meth:`from_config`.
+"""
+
+import datetime
+import logging
+import os
+import tempfile
+import uuid
+from functools import cached_property
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated
+
+from pydantic import Field, PrivateAttr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from hackbot_runtime import artifacts, changes
+from hackbot_runtime.actions.phabricator import (
+    PATCH_ACTION_TYPES,
+    SUBMIT_PATCH_ACTION_TYPE,
+)
+from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES, TRY_PUSH_ACTION_TYPE
+from hackbot_runtime.config import HackbotConfig, load_config
+from hackbot_runtime.providers import AnthropicAuth
+from hackbot_runtime.source import checkout_commit, ensure_source_repo
+from hackbot_runtime.uploader import SignedPolicyUploader
+
+if TYPE_CHECKING:
+    from agent_tools.firefox import FirefoxContext
+
+log = logging.getLogger("hackbot_runtime.context")
+
+
+def _default_run_id() -> str:
+    """A unique, sortable id for runs that don't get one from the platform.
+
+    The orchestrator sets ``RUN_ID`` explicitly in production; this fallback
+    keeps local/compose/direct runs unique (so per-run artifact dirs don't
+    collide). The ``local-`` prefix marks it as not platform-assigned.
+    """
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return f"local-{stamp}-{uuid.uuid4().hex[:6]}"
+
+
+def _wip_commit_message(actions: list[dict]) -> str:
+    """The patch title, else the try push title, for the agent's uncommitted work."""
+    for action_type in (SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
+        for action in actions:
+            if action["type"] == action_type and action["params"]["title"]:
+                return action["params"]["title"]
+    return changes.WIP_MESSAGE
+
+
+class HackbotContext(BaseSettings):
+    """Platform capabilities + results plumbing handed to every agent's main().
+
+    `run_id` defaults to a generated unique id (the orchestrator overrides it via
+    ``RUN_ID`` in production). The results-upload fields are optional so local-dev
+    runs (compose, scripts) can start the agent without a signed POST policy — in
+    that case results are written into the local artifacts dir rather than
+    uploaded.
+    """
+
+    run_id: Annotated[str, Field(default_factory=_default_run_id)]
+    results_prefix: str = ""
+    results_policy_url: str | None = None
+    results_policy_fields: dict[str, str] = {}
+    # Base for locally-persisted artifacts when no uploader is configured
+    # (compose/direct runs). Each run is namespaced under it by run_id (see
+    # `run_artifacts_dir`). Overridable via ARTIFACTS_DIR — compose points this
+    # at a host-mounted dir; the default stays relative so it does not bake a
+    # host path into the container.
+    artifacts_dir: Path = Path("artifacts")
+    # Set on a run started by another run's `agents.start_run` action.
+    parent_run_id: str | None = None
+    # Signed download URLs for the parent's artifacts, by key. Unset locally,
+    # where the parent's artifacts are read from `artifacts_dir` instead.
+    parent_artifacts: dict[str, str] | None = None
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    # Capability declarations from hackbot.toml (not env); attached after
+    # construction via from_config()/from_config_obj().
+    _config: HackbotConfig = PrivateAttr(default_factory=HackbotConfig)
+    # The commit the source checkout started from, recorded when source_repo is
+    # prepared. Stays None for agents that never touch source, which is how
+    # publish_changes() knows there are no changes to collect.
+    _source_base: str | None = PrivateAttr(default=None)
+    # The commit the checkout was *fetched* at, which unlike `_source_base` is
+    # always a published commit the remote can resolve. The two differ once a
+    # caller seeds the checkout with local commits (see `record_source_base`),
+    # and consumers that hand a base to another service — Lando, for a try push
+    # — need this one rather than a sha that only exists in this container.
+    _published_base: str | None = PrivateAttr(default=None)
+    # The prepared checkout path + the ref it was prepared at, so the source is
+    # prepared exactly once and a conflicting re-prepare is caught.
+    _repo_path: Path | None = PrivateAttr(default=None)
+    _prepared_ref: str | None = PrivateAttr(default=None)
+    _parent_artifacts_dir: Path | None = PrivateAttr(default=None)
+
+    @classmethod
+    def from_config(cls, config_path: Path) -> HackbotContext:
+        """Build from ``hackbot.toml`` at ``config_path`` plus env-derived fields."""
+        return cls.from_config_obj(load_config(config_path))
+
+    @classmethod
+    def from_config_obj(cls, config: HackbotConfig) -> HackbotContext:
+        """Build from an already-parsed config plus env-derived fields."""
+        obj = cls()
+        obj._config = config
+        return obj
+
+    @property
+    def config(self) -> HackbotConfig:
+        return self._config
+
+    # --- Platform capabilities (declared in hackbot.toml) ------------- #
+
+    async def prepare_repo(
+        self, ref: str | None = None, depth: int | None = None
+    ) -> Path:
+        """Clone/refresh the source checkout (prerequisite) and return its path.
+
+        Call this once, up front; afterwards read :attr:`repo_path`. ``ref``
+        selects the checkout point (e.g. a Phabricator revision's base commit);
+        when omitted it falls back to ``SOURCE_REF`` then the ``[source].ref`` in
+        ``hackbot.toml``. ``depth`` bounds the shallow fetch (agents that need
+        history — e.g. build-repair — pass it explicitly). The path comes from
+        ``SOURCE_REPO`` or ``[source].checkout_path``. Passing a ``ref`` that
+        conflicts with an already-prepared checkout raises.
+        """
+        if self._config.source is None:
+            raise RuntimeError(
+                "This agent did not declare a [source] in hackbot.toml; "
+                "no source repository is available."
+            )
+        resolved_ref = ref or os.environ.get("SOURCE_REF") or self._config.source.ref
+        if self._repo_path is not None:
+            if ref is not None and ref != self._prepared_ref:
+                raise RuntimeError(
+                    f"source already prepared at ref {self._prepared_ref!r}; "
+                    f"cannot re-prepare at {ref!r} (prepare it before first use)"
+                )
+            return self._repo_path
+
+        env_path = os.environ.get("SOURCE_REPO")
+        path = Path(env_path) if env_path else self._config.source.checkout_path
+        ensure_source_repo(path, self._config.source.repo_url, resolved_ref, depth)
+        # Record where the agent starts editing, so publish_changes() can later
+        # diff the final tree against it. Best-effort: a failure here must not
+        # break the agent's access to source — it only disables change capture.
+        try:
+            self._source_base = self._published_base = changes.base_commit(path)
+        except Exception:
+            log.warning("Could not record source base commit at %s", path)
+        self._repo_path = path
+        self._prepared_ref = resolved_ref
+        return path
+
+    def record_source_base(self) -> None:
+        """Re-record the commit the agent starts editing from (current HEAD).
+
+        :meth:`prepare_repo` records it at checkout time. A caller that then
+        seeds the checkout with commits that are not the agent's work — e.g. the
+        unlanded ancestors of a stacked Phabricator revision, see
+        ``revision.checkout_revision`` — calls this afterwards so
+        :meth:`publish_changes` collects only what the agent itself did.
+        """
+        self._source_base = changes.base_commit(self.repo_path)
+
+    def checkout(self, ref: str) -> str:
+        """Move the prepared checkout to ``ref`` and start the agent's edits there.
+
+        For work that belongs on a different commit than the one the source was
+        prepared at. What the run publishes -- its patch, its Phabricator diff, its
+        try push -- is then taken against ``ref``, so a revision built from it
+        stacks on that commit. Returns the full sha. The tree must be clean.
+
+        ``ref`` must be a commit the clone already holds, and it becomes the base
+        rather than part of the diff. That is the difference from
+        :func:`hackbot_runtime.revision.checkout_revision`, which rebuilds a
+        revision from its Phabricator diffs so the agent can revise it.
+        """
+        checkout_commit(self.repo_path, ref)
+        self._source_base = self._published_base = changes.base_commit(self.repo_path)
+        return self._source_base
+
+    @property
+    def repo_path(self) -> Path:
+        """The prepared source checkout path. Call :meth:`prepare_repo` first."""
+        if self._repo_path is None:
+            raise RuntimeError(
+                "source repo not prepared; call prepare_repo() before repo_path"
+            )
+        return self._repo_path
+
+    @cached_property
+    def firefox(self) -> FirefoxContext:
+        """Firefox build paths derived from the prepared source checkout.
+
+        Importing ``agent_tools.firefox`` lazily keeps the base runtime free of
+        the ``agent-tools[firefox]`` extra for agents that don't need it.
+        """
+        if self._config.firefox is None or not self._config.firefox.enabled:
+            raise RuntimeError(
+                "This agent did not declare an enabled [firefox] in "
+                "hackbot.toml; no Firefox build is available."
+            )
+        from agent_tools.firefox import FirefoxContext
+
+        return FirefoxContext.from_source_repo(
+            self.repo_path, objdir=self._config.firefox.objdir
+        )
+
+    @cached_property
+    def anthropic(self) -> AnthropicAuth:
+        """Anthropic credentials (validated on first key access)."""
+        return AnthropicAuth()
+
+    # --- Results / artifacts / actions plumbing ----------------------- #
+
+    @cached_property
+    def uploader(self) -> SignedPolicyUploader | None:
+        if not self.results_policy_url:
+            return None
+        return SignedPolicyUploader(
+            url=self.results_policy_url,
+            fields=self.results_policy_fields,
+            prefix=self.results_prefix,
+        )
+
+    @cached_property
+    def run_artifacts_dir(self) -> Path:
+        """Per-run local artifacts directory: ``artifacts_dir / run_id``."""
+        return self.artifacts_dir / self.run_id
+
+    @cached_property
+    def log_path(self) -> Path:
+        """A writable path for the agent's run log; published by the runtime.
+
+        The parent dir is created on first access (so a ``Reporter`` can open the
+        file straight away). Agents that never write a log just leave it absent,
+        and :meth:`publish_log` becomes a no-op.
+        """
+        return Path(tempfile.mkdtemp(prefix=f"hackbot-{self.run_id}-")) / "agent.log"
+
+    def fetch_parent_artifacts(self) -> None:
+        """Make the parent run's artifacts available; called by the runtime."""
+        if self.parent_artifacts is None:
+            self._parent_artifacts_dir = self.artifacts_dir / self.parent_run_id
+            return
+        dest = Path(tempfile.mkdtemp(prefix=f"hackbot-{self.parent_run_id}-"))
+        artifacts.download_all(self.parent_artifacts, dest)
+        self._parent_artifacts_dir = dest
+
+    @property
+    def parent_artifacts_dir(self) -> Path:
+        """The parent run's artifacts, under the keys it published them with."""
+        if self._parent_artifacts_dir is None:
+            raise RuntimeError("this run was not started by another run")
+        return self._parent_artifacts_dir
+
+    @cached_property
+    def actions(self) -> ActionsRecorder:
+        return ActionsRecorder(self.uploader, artifacts_dir=self.run_artifacts_dir)
+
+    def publish_file(
+        self, key: str, path: Path, content_type: str | None = None
+    ) -> str:
+        """Upload ``path`` under ``key``, else copy it into the artifacts dir."""
+        return artifacts.publish_file(
+            self.uploader, self.run_artifacts_dir, key, path, content_type
+        )
+
+    def publish_json(self, key: str, payload: dict) -> str:
+        """Upload ``payload`` JSON under ``key``, else write it to artifacts."""
+        return artifacts.publish_json(
+            self.uploader, self.run_artifacts_dir, key, payload
+        )
+
+    @property
+    def source_changed(self) -> bool:
+        """Whether this run will publish a patch, for a notification to gate on.
+
+        Read-only: the patch itself belongs to the apply step, which reads the
+        published artifact (see hackbot-api's ``app/action_handlers/email_handler.py``).
+        """
+        if self._repo_path is None or self._source_base is None:
+            return False
+        return changes.has_changes(self._repo_path, self._source_base)
+
+    def publish_changes(
+        self,
+        patch_key: str = changes.PATCH_ARTIFACT,
+        meta_key: str = "changes/changes.json",
+        phabricator_diff_key: str = "changes/phabricator_diff.json",
+        try_push_key: str = "changes/try_push.json",
+    ) -> str | None:
+        """Collect the agent's source-tree changes and publish them as artifacts."""
+        if self._source_base is None:
+            return None
+        change_set = changes.collect(
+            self.repo_path,
+            self._source_base,
+            self._config.source.repo_url,
+            message=_wip_commit_message(self.actions.actions),
+        )
+        if change_set is None:
+            return None
+        artifacts.publish_bytes(
+            self.uploader,
+            self.run_artifacts_dir,
+            patch_key,
+            change_set.patch,
+            "text/x-patch",
+        )
+        self.publish_json(meta_key, change_set.metadata)
+
+        recorded_types = {action["type"] for action in self.actions.actions}
+
+        if recorded_types & PATCH_ACTION_TYPES:
+            diff_payload = changes.build_phabricator_diff(
+                self.repo_path, self._source_base, self._config.source.repo_url
+            )
+            if diff_payload is not None:
+                self.publish_json(phabricator_diff_key, diff_payload)
+
+        if recorded_types & TRY_ACTION_TYPES:
+            # From the *published* base, not `_source_base`: Lando has to
+            # resolve the base commit in its own clone, and it pushes the patch
+            # series onto it — so the series has to carry any locally-seeded
+            # commits (a stacked revision's ancestors) rather than assume them.
+            try_payload = changes.build_try_push(self.repo_path, self._published_base)
+            if try_payload is not None:
+                self.publish_json(try_push_key, try_payload)
+
+        return patch_key

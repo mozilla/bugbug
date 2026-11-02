@@ -1,13 +1,15 @@
-cff-version: 1.1.0
+cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
+type: software
 authors:
   - family-names: Castelluccio
     given-names: Marco
     orcid: https://orcid.org/0000-0002-3285-5121
     affiliation: Mozilla
 title: bugbug
-version: 0.0.436
 doi: 10.5281/zenodo.4911345
-date-released: 2021-08-02
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.4911345
 repository-code: https://github.com/mozilla/bugbug
 license: MPL-2.0

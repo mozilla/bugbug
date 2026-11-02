@@ -3,34 +3,42 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import bisect
 import collections
+import glob
 import itertools
 import logging
+import math
 import os
 import pickle
+import random
 import re
 import shelve
 import shutil
 import struct
+import tomllib
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Callable,
+    Collection,
     Deque,
     Generator,
     Iterable,
     Iterator,
+    NamedTuple,
     NewType,
+    Sequence,
     Set,
     Union,
     cast,
 )
 
-import requests
 from tqdm import tqdm
 
 from bugbug import db, repository
-from bugbug.utils import ExpQueue, LMDBDict
+from bugbug.utils import ExpQueue, LMDBDict, get_session, get_user_agent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,6 +106,12 @@ db.register(
 
 HISTORICAL_TIMESPAN = 4500
 
+# Lookback windows used when computing past failure features. These roughly
+# correspond to one week, two weeks, and one month of pushes on autoland.
+PAST_FAILURES_LOOKBACK_WEEK = 700
+PAST_FAILURES_LOOKBACK_TWO_WEEKS = 1400
+PAST_FAILURES_LOOKBACK_MONTH = 2800
+
 JOBS_TO_CONSIDER = ("test-", "build-")
 JOBS_TO_IGNORE = (
     "docker-image-",
@@ -106,15 +120,27 @@ JOBS_TO_IGNORE = (
     "-awsy-",
     "-raptor-",
     "-talos-",
+    "perftest",
     "browsertime",
     "backlog",
     # inclusive test suites -- these *only* run when certain files have changed
-    "-test-verify-",
-    "-test-coverage-",
+    "-test-verify",
+    "-test-coverage",
     "jittest",
     "jsreftest",
     "android-hw-gfx",
+    "build-extensions-browser",
 )
+
+
+# Manifests of suites which are scheduled as whole tasks rather than by manifest
+# (e.g. jsreftest, whose tasks are in JOBS_TO_IGNORE).
+GROUPS_TO_IGNORE = ("jstests.list",)
+
+
+def is_ignored_group(runnable: Runnable) -> bool:
+    group = runnable[1] if isinstance(runnable, tuple) else runnable
+    return os.path.basename(group) in GROUPS_TO_IGNORE
 
 
 class UnexpectedGranularityError(ValueError):
@@ -136,7 +162,11 @@ def filter_runnables(
             and not any(j in task for j in JOBS_TO_IGNORE)
         )
     else:
-        return tuple(runnable for runnable in runnables if runnable in all_runnables)
+        return tuple(
+            runnable
+            for runnable in runnables
+            if runnable in all_runnables and not is_ignored_group(runnable)
+        )
 
 
 def rename_task(task: str) -> str:
@@ -191,6 +221,273 @@ def rename_runnables(
         )
     else:
         raise UnexpectedGranularityError(granularity)
+
+
+# How many pushes after a culprit to look for runs of its regressed groups.
+CONFIG_SELECT_MAX_LATER = 100
+
+
+def config_platform_family(config: str) -> str:
+    """The platform of a config without its version (e.g. macosx for test-macosx1500-aarch64/debug-*).
+
+    For the usual platforms it is the OS family (android, linux, macosx, windows).
+    """
+    platform = config.removeprefix("test-").split("/")[0]
+    match = re.match(r"[a-z]+", platform)
+    return match.group(0) if match else ""
+
+
+def config_tokens(config: str) -> tuple[str, ...]:
+    """The tokens of a config (split on "-" and "/"), without numbers and the suite placeholder.
+
+    E.g. test-windows11-64-25h2/debug-*-swr has the tokens test, windows11, 25h2, debug and swr. As
+    for the tokens of task names, they're shared by related configs (all debug configs, all swr
+    configs, ...), so new platforms and variants don't need any update. The platform family is also
+    a token (windows here), so a new version of a platform shares the history of the previous ones.
+    """
+    tokens = tuple(
+        token
+        for token in re.split(r"[-/]", config)
+        if token and token != "*" and not token.isdigit()
+    )
+    family = config_platform_family(config)
+    return tokens + (family,) if family and family not in tokens else tokens
+
+
+def config_platform_token(config: str) -> str:
+    """The platform token of a config (e.g. windows11 for test-windows11-64-25h2/debug-*)."""
+    tokens = config_tokens(config)
+    return tokens[1] if len(tokens) > 1 else ""
+
+
+CONFIG_DIMENSIONS = ("family", "platform", "build", "variant")
+
+
+def config_dimensions(config: str) -> dict[str, str]:
+    """The dimensions of a config: OS family, platform, build type and variant.
+
+    E.g. test-linux2404-64/debug-*-swr -> family=linux, platform=linux2404-64, build=debug, variant=swr.
+    The family is the platform without its version; sanitizers in the platform (test-linux2404-64-tsan/opt-*)
+    are the build type; the variant is "plain" if there is none.
+    """
+    platform, _, rest = config.removeprefix("test-").partition("/")
+    build_part, _, variant_part = rest.partition("-*")
+    build_tokens = [t for t in build_part.split("-") if t and t != "geckoview"]
+    build = build_tokens[0] if build_tokens else "opt"
+    for sanitizer in ("asan", "tsan", "ccov"):
+        if f"-{sanitizer}" in platform:
+            build = sanitizer
+    variants = build_tokens[1:] + [t for t in variant_part.split("-") if t]
+    return {
+        "family": config_platform_family(config),
+        "platform": platform,
+        "build": build,
+        "variant": "-".join(variants) or "plain",
+    }
+
+
+# Path tokens hinting that a file is specific to an OS family.
+PLATFORM_PATH_KEYWORDS = {
+    "windows": frozenset(
+        (
+            "win",
+            "windows",
+            "win32",
+            "win64",
+            "wmf",
+            "dxgi",
+            "d3d",
+            "d3d11",
+            "d3d12",
+            "dcomp",
+            "uia",
+            "msaa",
+            "ia2",
+            "winrt",
+            "msix",
+            "nsis",
+            "hresult",
+            "dwrite",
+            "directwrite",
+        )
+    ),
+    "macosx": frozenset(
+        (
+            "mac",
+            "macos",
+            "macosx",
+            "cocoa",
+            "osx",
+            "darwin",
+            "coreaudio",
+            "corefoundation",
+        )
+    ),
+    "linux": frozenset(
+        (
+            "linux",
+            "gtk",
+            "wayland",
+            "x11",
+            "dbus",
+            "gnome",
+            "pulse",
+            "alsa",
+            "vaapi",
+            "dmabuf",
+        )
+    ),
+    "android": frozenset(("android", "geckoview", "fenix", "kotlin", "gradle", "jni")),
+}
+PLATFORM_PATH_SUFFIXES = {"macosx": (".mm",), "android": (".java", ".kt")}
+
+
+def get_path_platform_hints(paths: Iterable[str]) -> dict[str, int]:
+    """How many of the paths hint at each OS family (see PLATFORM_PATH_KEYWORDS)."""
+    hints: collections.Counter[str] = collections.Counter()
+    for path in paths:
+        tokens = set(re.split(r"[/._\-]", path.lower()))
+        for family, keywords in PLATFORM_PATH_KEYWORDS.items():
+            if (
+                tokens & keywords
+                or path.endswith(PLATFORM_PATH_SUFFIXES.get(family, ()))
+                or (family == "android" and path.startswith("mobile/android/"))
+            ):
+                hints[family] += 1
+    return dict(hints)
+
+
+class ConfigSelectRegression(NamedTuple):
+    push_index: int
+    revs: tuple[Revision, ...]
+    group: Group
+    # Configs the group failed on.
+    failed: frozenset[str]
+    # Configs with a known outcome: the failed ones, and those known to have passed.
+    observed: frozenset[str]
+
+
+def _clean_configs(configs: Iterable[str]) -> set[str]:
+    return {rename_task(config) for config in configs if "-test-verify" not in config}
+
+
+def _configs_by_group(config_groups: Iterable[Runnable]) -> dict[Group, set[str]]:
+    result: dict[Group, set[str]] = collections.defaultdict(set)
+    for config, group in cast(Iterable[ConfigGroup], config_groups):
+        # Groups only run (or failing) on ignored configs (e.g. test-verify) are left out, so a group
+        # whose only failures are on them isn't a regression.
+        configs = _clean_configs((config,))
+        if configs:
+            result[Group(group.split(":")[0])] |= configs
+    return result
+
+
+def get_config_select_regressions(
+    push_data_factory: Callable[[], Iterable[PushResult]],
+    recent_pushes: int = 1000,
+) -> tuple[list[ConfigSelectRegression], set[str]]:
+    """The regressions of config/group push data, with the configs they failed on and passed on.
+
+    A config the regressed group ran on without failing passed, both on the culprit push and on the
+    following pushes up to the one with the fix (at most CONFIG_SELECT_MAX_LATER pushes later):
+    mozci blames failures in that window on the culprit (mozilla/bugbug#1858). Unless the config's first
+    run after the culprit failed and the failure was attributed to a later push (e.g. because the config
+    didn't run on the culprit): with no run in between, the attribution can't tell the pushes apart, so
+    the config didn't verifiably pass. A failure after a pass doesn't matter (as in get_non_run_negatives).
+
+    Also returns the configs that ran in the last `recent_pushes` pushes, used to name the configs of
+    the tasks in the current task graph (see testconfigselect.live_candidates).
+    """
+    rev_index: dict[Revision, int] = {}
+    culprits: list[
+        tuple[
+            int,
+            tuple[Revision, ...],
+            Revision,
+            dict[Group, set[str]],
+            dict[Group, set[str]],
+        ]
+    ] = []
+    failures_at: dict[int, dict[Group, set[str]]] = {}
+    num_pushes = 0
+    for index, push in enumerate(push_data_factory()):
+        (
+            revisions,
+            fix_revision,
+            push_tasks,
+            possible_regressions,
+            likely_regressions,
+        ) = push
+        num_pushes += 1
+        for revision in revisions:
+            rev_index[revision] = index
+        if possible_regressions or likely_regressions:
+            failed = _configs_by_group(
+                tuple(possible_regressions) + tuple(likely_regressions)
+            )
+            failures_at[index] = failed
+            culprits.append(
+                (
+                    index,
+                    tuple(revisions),
+                    fix_revision,
+                    failed,
+                    _configs_by_group(push_tasks),
+                )
+            )
+
+    # Later pushes whose runs we need: push index -> group -> culprit indices.
+    needed: dict[int, dict[Group, set[int]]] = collections.defaultdict(
+        lambda: collections.defaultdict(set)
+    )
+    windows: dict[int, range] = {}
+    for index, _, fix_revision, failed, _ in culprits:
+        end = index + 1
+        if fix_revision in rev_index and rev_index[fix_revision] > index:
+            end = min(rev_index[fix_revision], index + CONFIG_SELECT_MAX_LATER + 1)
+        windows[index] = range(index + 1, end)
+        for later in windows[index]:
+            for group in failed:
+                needed[later][group].add(index)
+
+    # The first push of the window each config ran the group on.
+    later_runs: dict[tuple[int, Group], dict[str, int]] = collections.defaultdict(dict)
+    recent: set[str] = set()
+    for index, push in enumerate(push_data_factory()):
+        groups_needed = needed.get(index)
+        if groups_needed is None and index < num_pushes - recent_pushes:
+            continue
+
+        for group, configs in _configs_by_group(push[2]).items():
+            if index >= num_pushes - recent_pushes:
+                recent |= configs
+            for culprit in groups_needed.get(group, ()) if groups_needed else ():
+                for config in configs:
+                    later_runs[(culprit, group)].setdefault(config, index)
+
+    regressions = []
+    for index, culprit_revs, _, failed, culprit_runs in culprits:
+        for group in sorted(failed):
+            first_failure: dict[str, int] = {}
+            for later in windows[index]:
+                for config in failures_at.get(later, {}).get(group, ()):
+                    first_failure.setdefault(config, later)
+            passed = culprit_runs.get(group, set()) | {
+                config
+                for config, first_run in later_runs.get((index, group), {}).items()
+                if first_failure.get(config, first_run + 1) > first_run
+            }
+            regressions.append(
+                ConfigSelectRegression(
+                    index,
+                    culprit_revs,
+                    group,
+                    frozenset(failed[group]),
+                    frozenset(passed | failed[group]),
+                )
+            )
+
+    return regressions, recent
 
 
 def get_push_data(
@@ -316,7 +613,9 @@ class PastFailures:
         elif granularity == "group":
             past_failures_db = os.path.join("data", PAST_FAILURES_GROUP_DB)
         elif granularity == "config_group":
-            assert False, "config_group granularity not supported for past failures"
+            raise AssertionError(
+                "config_group granularity not supported for past failures"
+            )
         else:
             raise UnexpectedGranularityError(granularity)
         self.granularity = granularity
@@ -403,9 +702,9 @@ def remove_failing_together_db(granularity: str) -> None:
 
 def close_failing_together_db(granularity: str) -> None:
     global failing_together
-    assert (
-        granularity in failing_together
-    ), f"Failing together probabilities DB for {granularity} granularity was not open"
+    assert granularity in failing_together, (
+        f"Failing together probabilities DB for {granularity} granularity was not open"
+    )
     failing_together[granularity].close()
     failing_together.pop(granularity)
 
@@ -442,7 +741,7 @@ def generate_failing_together_probabilities(
 
     for (
         revisions,
-        fix_revision,
+        _fix_revision,
         tasks,
         likely_regressions,
         candidate_regressions,
@@ -461,7 +760,7 @@ def generate_failing_together_probabilities(
             groups = itertools.groupby(
                 sorted(all_tasks, key=lambda x: x[1]), key=lambda x: x[1]
             )
-            for manifest, group_tasks in groups:
+            for _manifest, group_tasks in groups:
                 count_runs_and_failures(group_tasks)
         else:
             all_available_configs |= all_tasks_set
@@ -504,7 +803,7 @@ def generate_failing_together_probabilities(
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
         logger.info(
-            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            "%s - %s redundancy confidence %f, support %f (%d over %d).",
             couple[0],
             couple[1],
             confidence,
@@ -520,7 +819,7 @@ def generate_failing_together_probabilities(
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
         logger.info(
-            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            "%s - %s redundancy confidence %f, support %f (%d over %d).",
             couple[0],
             couple[1],
             confidence,
@@ -645,13 +944,108 @@ def set_touched_together(f1: str, f2: str) -> None:
         )
 
 
-def update_touched_together() -> Generator[None, Revision | None, None]:
+def _increment_touched_together(touched_together: LMDBDict, key: bytes) -> None:
+    try:
+        touched_together[key] = struct.pack(
+            "I", struct.unpack("I", touched_together[key])[0] + 1
+        )
+    except KeyError:
+        touched_together[key] = struct.pack("I", 1)
+
+
+def _get_touched_together_count(touched_together: LMDBDict, key: bytes) -> int:
+    try:
+        return struct.unpack("I", touched_together[key])[0]
+    except KeyError:
+        return 0
+
+
+def update_cochanges(
+    touched_together: LMDBDict, files: list[str], runnable_dirs: Collection[str]
+) -> None:
+    """Count the co-changes of source directories and runnable directories in a commit.
+
+    A commit co-changes a source directory and a runnable directory if it modifies a file directly in
+    the source directory (outside any runnable directory) and a file in the runnable directory or in
+    one of its subdirectories. The commits touching each source and runnable directory, and their
+    total, are counted too, to compute the pointwise mutual information (get_cochange_pmi).
+    """
+    source_dirs = set()
+    touched_runnable_dirs = set()
+    for f in files:
+        dirs = []
+        d = os.path.dirname(f)
+        while d:
+            dirs.append(d)
+            d = os.path.dirname(d)
+        file_runnable_dirs = [d for d in dirs if d in runnable_dirs]
+        if file_runnable_dirs:
+            touched_runnable_dirs.update(file_runnable_dirs)
+        elif dirs:
+            source_dirs.add(dirs[0])
+
+    _increment_touched_together(touched_together, b"cochange_total")
+    for source_dir in source_dirs:
+        _increment_touched_together(
+            touched_together, f"cochange_source${source_dir}".encode("utf-8")
+        )
+    for runnable_dir in touched_runnable_dirs:
+        _increment_touched_together(
+            touched_together, f"cochange_runnable${runnable_dir}".encode("utf-8")
+        )
+    for source_dir in source_dirs:
+        for runnable_dir in touched_runnable_dirs:
+            _increment_touched_together(
+                touched_together,
+                f"cochange_pair${source_dir}${runnable_dir}".encode("utf-8"),
+            )
+
+
+def get_cochange_pmi(source_dirs: Iterable[str], runnable_dirs: Iterable[str]) -> float:
+    """Maximum pointwise mutual information of the co-changes of the source and runnable directories.
+
+    log(n(d, r) * N / (n(d) * n(r))) for a source directory d and a runnable directory r, where N is
+    the number of commits counted by update_cochanges: how much more often they were changed
+    together than by chance. 0 if they were never changed together (or less often than by chance).
+    Unlike the raw co-change counts, it doesn't favor directories which are changed very often.
+    """
+    touched_together = get_touched_together_db(True)
+    total = _get_touched_together_count(touched_together, b"cochange_total")
+    if total == 0:
+        return 0.0
+
+    best = 0.0
+    for source_dir in source_dirs:
+        source_count = _get_touched_together_count(
+            touched_together, f"cochange_source${source_dir}".encode("utf-8")
+        )
+        if source_count == 0:
+            continue
+        for runnable_dir in runnable_dirs:
+            count = _get_touched_together_count(
+                touched_together,
+                f"cochange_pair${source_dir}${runnable_dir}".encode("utf-8"),
+            )
+            if count == 0:
+                continue
+            runnable_count = _get_touched_together_count(
+                touched_together, f"cochange_runnable${runnable_dir}".encode("utf-8")
+            )
+            best = max(best, math.log(count * total / (source_count * runnable_count)))
+    return best
+
+
+def update_touched_together(
+    runnable_dirs: Collection[str] = (),
+) -> Generator[None, Revision | None, None]:
+    """Update the touched together DB with the commits up to the revisions sent to the generator.
+
+    With runnable_dirs (the directories of the runnables, see get_runnable_dirs), also count their
+    co-changes with source directories (see update_cochanges).
+    """
+    runnable_dirs = set(runnable_dirs)
     touched_together = get_touched_together_db(False)
-    last_analyzed = (
-        touched_together[b"last_analyzed"]
-        if b"last_analyzed" in touched_together
-        else None
-    )
+    last_analyzed = touched_together.get(b"last_analyzed")
 
     # We can start once we get to the last revision we added in the previous run.
     can_start = last_analyzed is None
@@ -681,6 +1075,9 @@ def update_touched_together() -> Generator[None, Revision | None, None]:
                     list(set(os.path.dirname(f) for f in commit["files"])), 2
                 ):
                     set_touched_together(d1, d2)
+
+                if runnable_dirs:
+                    update_cochanges(touched_together, commit["files"], runnable_dirs)
 
         elif last_analyzed == commit["node"].encode("ascii"):
             can_start = True
@@ -722,9 +1119,15 @@ def _read_and_update_past_failures(
         value = cur[round(push_num / 100)]
 
         values_total.append(value)
-        values_prev_700.append(value - cur[round((push_num - 700) / 100)])
-        values_prev_1400.append(value - cur[round((push_num - 1400) / 100)])
-        values_prev_2800.append(value - cur[round((push_num - 2800) / 100)])
+        values_prev_700.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_WEEK) / 100)]
+        )
+        values_prev_1400.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_TWO_WEEKS) / 100)]
+        )
+        values_prev_2800.append(
+            value - cur[round((push_num - PAST_FAILURES_LOOKBACK_MONTH) / 100)]
+        )
 
         if is_regression:
             cur[round(push_num / 100)] = value + 1
@@ -737,6 +1140,87 @@ def _read_and_update_past_failures(
         sum(values_prev_1400),
         sum(values_prev_2800),
     )
+
+
+WPT_ROOTS = ("testing/web-platform/mozilla", "testing/web-platform")
+
+
+# How many pushes after a push we look for a later run of a runnable that didn't run on it.
+NON_RUN_NEGATIVES_MAX_LATER = 100
+
+
+def index_runs(
+    push_data: Iterable[PushResult],
+) -> tuple[dict[Runnable, list[int]], dict[Revision, int], dict[Runnable, list[int]]]:
+    """Index the runs of the runnables.
+
+    Returns each runnable's (sorted) indices of the pushes it ran on, each revision's push index, and
+    each runnable's (sorted) indices of the pushes it was reported as a (possible or likely) regression of.
+    """
+    runs: dict[Runnable, list[int]] = collections.defaultdict(list)
+    rev_to_push: dict[Revision, int] = {}
+    regressions: dict[Runnable, list[int]] = collections.defaultdict(list)
+    for i, (revisions, _, push_runnables, possible, likely) in enumerate(push_data):
+        for revision in revisions:
+            rev_to_push[revision] = i
+        for runnable in push_runnables:
+            runs[runnable].append(i)
+        for runnable in set(possible) | set(likely):
+            regressions[runnable].append(i)
+    return runs, rev_to_push, regressions
+
+
+def get_non_run_negatives(
+    push_index: int,
+    end_index: int,
+    candidates: Sequence[Runnable],
+    excluded: Set[Runnable],
+    runs: dict[Runnable, list[int]],
+    count: int,
+    rng: random.Random,
+    regressions: dict[Runnable, list[int]] | None = None,
+) -> list[Runnable]:
+    """Sample runnables that didn't run on a push but are known to have passed with its changes.
+
+    A runnable that didn't run on the push is a verified negative if it ran on a later push while the
+    push's changes were still in the tree (up to `end_index`, i.e. before the push was backed out), since
+    a failure there would have been attributed to the push as a regression. Unless its first run after the
+    push failed and the failure was attributed to a later push (`regressions`, see index_runs): with no run
+    in between, the attribution can't tell the pushes apart, so the runnable didn't verifiably pass. A
+    failure after a pass doesn't matter, as the pass happened with the push's changes.
+    """
+    pool = [c for c in candidates if c not in excluded]
+    sampled = rng.sample(pool, min(count, len(pool)))
+    verified = []
+    for runnable in sampled:
+        push_indices = runs.get(runnable, [])
+        pos = bisect.bisect_right(push_indices, push_index)
+        if pos >= len(push_indices) or push_indices[pos] > end_index:
+            continue
+
+        first_run = push_indices[pos]
+        regression_indices = regressions.get(runnable, []) if regressions else []
+        pos = bisect.bisect_right(regression_indices, push_index)
+        if pos < len(regression_indices) and regression_indices[pos] <= first_run:
+            continue
+
+        verified.append(runnable)
+    return verified
+
+
+def get_runnable_dirs(group: str) -> tuple[str, ...]:
+    """Return the directories whose co-changes are relevant for a group.
+
+    Manifest groups are files, so their tests are in the manifest's directory.
+    WPT groups are the directories containing the tests, and their expectations
+    live in the corresponding directory under meta/ (which is what usually
+    changes together with Gecko code, as tests mostly come from upstream).
+    """
+    for root in WPT_ROOTS:
+        if group.startswith(f"{root}/tests/"):
+            return (group, f"{root}/meta/{group[len(root) + len('/tests/') :]}")
+
+    return (os.path.dirname(group),)
 
 
 def generate_data(
@@ -755,18 +1239,22 @@ def generate_data(
 
     for runnable in runnables:
         if granularity != "label":
-            if isinstance(runnable, tuple):
-                runnable_dir = os.path.dirname(runnable[1])
-            else:
-                runnable_dir = os.path.dirname(runnable)
+            runnable_dirs = get_runnable_dirs(
+                runnable[1] if isinstance(runnable, tuple) else runnable
+            )
 
             touched_together_files = sum(
                 get_touched_together(source_file, runnable_dir)
                 for source_file in commit["files"]
+                for runnable_dir in runnable_dirs
             )
             touched_together_directories = sum(
                 get_touched_together(source_file_dir, runnable_dir)
                 for source_file_dir in source_file_dirs
+                for runnable_dir in runnable_dirs
+            )
+            touched_together_pmi = get_cochange_pmi(
+                set(source_file_dirs), runnable_dirs
             )
 
         is_possible_regression = runnable in possible_regressions
@@ -868,26 +1356,333 @@ def generate_data(
         if granularity != "label":
             obj["touched_together_files"] = touched_together_files
             obj["touched_together_directories"] = touched_together_directories
+            obj["touched_together_pmi"] = touched_together_pmi
 
         yield obj
 
 
 def get_failure_bugs(since: datetime, until: datetime) -> list[dict[str, int]]:
-    r = requests.get(
+    r = get_session("treeherder").get(
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
         ),
-        headers={"Accept": "application/json", "User-Agent": "bugbug"},
+        headers={"Accept": "application/json", "User-Agent": get_user_agent()},
     )
     r.raise_for_status()
     return r.json()
 
 
 def get_test_info(date: datetime) -> dict[str, Any]:
-    r = requests.get(
+    r = get_session("firefox-ci-tc").get(
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.pushdate.{}.latest.source.test-info-all/artifacts/public/test-info-all-tests.json".format(
             date.strftime("%Y.%m.%d")
-        )
+        ),
+        headers={
+            "User-Agent": get_user_agent(),
+        },
     )
     r.raise_for_status()
     return r.json()
+
+
+manifest_by_path: dict[str, set[str]] | None = None
+
+# If a modified file is close to more manifests than this, it is too broad
+# (e.g. dom/moz.build) for the sibling heuristic to be informative, so we
+# don't schedule any of them and leave the decision to the model.
+# The moz.build variables listing the test manifests of some of the suites selected by the label model.
+_SUITE_MANIFEST_VARIABLES = {
+    "marionette": "MARIONETTE_MANIFESTS",
+    "telemetry-tests": "TELEMETRY_TESTS_CLIENT_MANIFESTS",
+    "firefox-ui": "FIREFOX_UI_FUNCTIONAL_MANIFESTS",
+}
+_SUITE_MANIFEST_LIST_RES = {
+    suite: re.compile(r"\b%s\s*\+?=\s*\[(.*?)\]" % variable, re.S)
+    for suite, variable in _SUITE_MANIFEST_VARIABLES.items()
+}
+_STRING_RE = re.compile(r"[\"']([^\"']+)[\"']")
+_GTEST_LIBRARY_RE = re.compile(r"FINAL_LIBRARY\s*=\s*[\"']xul-gtest[\"']")
+_CPP_UNIT_TESTS_RE = re.compile(r"\bCPP_UNIT_TESTS\b|CppUnitTests\(")
+
+
+def get_suite_test_dirs(repo_dir: str) -> dict[str, tuple[str, ...]]:
+    """The directories with the tests of some suites selected by the label model, from a Firefox tree.
+
+    They come from the moz.build files: the directories of the manifests of the marionette,
+    telemetry-tests-client and firefox-ui suites, the directories built into the gtest library, and
+    the directories with C++ unit tests. Only the moz.build files are needed (e.g. a sparse checkout).
+    """
+    dirs: dict[str, set[str]] = {
+        suite: set()
+        for suite in list(_SUITE_MANIFEST_VARIABLES) + ["gtest", "cppunittest"]
+    }
+    for root, subdirs, files in os.walk(repo_dir):
+        rel_root = os.path.relpath(root, repo_dir)
+        subdirs[:] = [
+            d
+            for d in subdirs
+            if not d.startswith((".", "obj-"))
+            and d != "node_modules"
+            and not (rel_root == "." and d == "third_party")
+        ]
+        if "moz.build" not in files:
+            continue
+
+        base = "" if rel_root == "." else rel_root.replace(os.sep, "/")
+        with open(os.path.join(root, "moz.build"), errors="replace") as f:
+            text = f.read()
+
+        for suite, list_re in _SUITE_MANIFEST_LIST_RES.items():
+            for m in list_re.finditer(text):
+                for manifest in _STRING_RE.findall(m.group(1)):
+                    manifest_dir = os.path.normpath(
+                        os.path.join(base, os.path.dirname(manifest))
+                    )
+                    dirs[suite].add(f"{manifest_dir}/")
+        if _GTEST_LIBRARY_RE.search(text):
+            dirs["gtest"].add(f"{base}/")
+        if _CPP_UNIT_TESTS_RE.search(text):
+            dirs["cppunittest"].add(f"{base}/")
+
+    return {suite: tuple(sorted(suite_dirs)) for suite, suite_dirs in dirs.items()}
+
+
+MAX_SIBLING_MANIFESTS = 42
+
+
+def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
+    global manifest_by_path
+
+    repo_dir = Path(repo_dir_str)
+
+    manifests = set()
+
+    if manifest_by_path is None:
+        manifest_by_path = collections.defaultdict(set)
+
+        for toml_path in repo_dir.rglob("*.toml"):
+            # HACK: These are not test manifests, skip them.
+            if (
+                toml_path.name in ("Cargo.toml", "pyproject.toml")
+                or toml_path.parent.name == "test-manifest-toml"
+                or "third_party" in toml_path.parts
+                or "manifestparser" in toml_path.parts
+            ):
+                continue
+
+            with open(toml_path, "rb") as toml_f:
+                data = tomllib.load(toml_f)
+
+            # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
+            if "DEFAULT" not in data and not any(
+                key.startswith("test") for key in data
+            ):
+                continue
+
+            toml_rel = toml_path.relative_to(repo_dir)
+            toml_dir = toml_path.parent
+
+            # The manifest path itself, so we schedule it when it is touched.
+            manifest_by_path[str(toml_rel)].add(str(toml_rel))
+
+            # Collect head files.
+            head_value = data.get("DEFAULT", {}).get("head", [])
+            head_files = (
+                head_value if isinstance(head_value, list) else head_value.split(" ")
+            )
+            for head_file in head_files:
+                if not head_file.strip():
+                    continue
+
+                manifest_by_path[
+                    str((toml_dir / head_file).resolve().relative_to(repo_dir))
+                ].add(str(toml_rel))
+
+            # Collect support files.
+            def collect_support_files(value, toml_dir=toml_dir, toml_rel=toml_rel):
+                support_files = value.get("support-files", [])
+                if isinstance(support_files, str):
+                    support_files = [support_files]
+
+                for support_file in support_files:
+                    if not support_file.strip():
+                        continue
+
+                    if support_file.startswith("!"):
+                        support_file = support_file[1:]
+
+                    if support_file.startswith("/"):
+                        support_file_path = (repo_dir / support_file[1:]).resolve()
+                    else:
+                        support_file_path = (toml_dir / support_file).resolve()
+
+                    if "*" in support_file:
+                        files = [
+                            Path(f)
+                            for f in glob.glob(str(support_file_path), recursive=True)
+                        ]
+                    else:
+                        files = [support_file_path]
+
+                    for f in files:
+                        manifest_by_path[str(f.relative_to(repo_dir))].add(
+                            str(toml_rel)
+                        )
+
+            collect_support_files(data.get("DEFAULT", {}))
+
+            # Collect test files.
+            for key, val in data.items():
+                if key != "DEFAULT" and isinstance(val, dict):
+                    collect_support_files(val)
+
+                    manifest_by_path[
+                        str((toml_dir / key).resolve().relative_to(repo_dir))
+                    ].add(str(toml_rel))
+
+    for path in paths:
+        # If a manifest, a test, or a support file is modified, run the manifest that includes it.
+        if path in manifest_by_path:
+            manifests.update(manifest_by_path[path])
+        # Skip root-level files, otherwise we'd walk the whole repository and
+        # schedule every manifest.
+        elif (repo_dir / path).parent != repo_dir:
+            # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
+            sibling_manifests: set[str] = set()
+            for sibling in (repo_dir / path).parent.rglob("*"):
+                if sibling.is_dir() and repository.is_test(f"{str(sibling)}/"):
+                    sibling_manifests.update(
+                        str(f.relative_to(repo_dir))
+                        for f in sibling.rglob("*.toml")
+                        if f.is_file()
+                    )
+
+            if len(sibling_manifests) <= MAX_SIBLING_MANIFESTS:
+                manifests.update(sibling_manifests)
+
+        # If a web-platform test or meta is modified, run the relevant web-platform folder.
+        if not any(path.endswith(ignore) for ignore in ("/META.yml", "/README.md")):
+            for base in ("testing/web-platform/mozilla", "testing/web-platform"):
+                if path.startswith(f"{base}/meta/") or path.startswith(
+                    f"{base}/tests/"
+                ):
+                    sub = "meta" if "/meta/" in path else "tests"
+
+                    relative = Path(path).relative_to(f"{base}/{sub}")
+
+                    test_root = repo_dir / base / "tests"
+                    cur_dir = test_root / relative.parent
+
+                    def is_wpt_file(p: Path) -> bool:
+                        return any(
+                            str(p).endswith(suffix)
+                            for suffix in (".html", ".any.js", ".worker.js")
+                        )
+
+                    def has_wpt_files(d: Path) -> bool:
+                        return d.is_dir() and any(is_wpt_file(p) for p in d.iterdir())
+
+                    while cur_dir != test_root and not has_wpt_files(cur_dir):
+                        cur_dir = cur_dir.parent
+
+                    # Ignore files in top level "meta" or "tests".
+                    if len(cur_dir.parts) == 1:
+                        break
+
+                    if has_wpt_files(cur_dir):
+                        manifests.add(str(cur_dir.relative_to(repo_dir)))
+
+                    break
+
+    return manifests
+
+
+_GTEST_RE = re.compile(rb"^[ \t]*(?:TEST|TEST_F)\(", re.MULTILINE)
+_GTEST_FOLDERS = ("gtest", "gtests", "googletest")
+_CPPUNIT_INFRA_FILES = {
+    "testing/remotecppunittests.py",
+    "testing/runcppunittests.py",
+    "testing/cppunittest.toml",
+}
+
+
+def _get_cppunit_test_names(repo_dir: Path) -> set[str]:
+    try:
+        with open(repo_dir / "testing" / "cppunittest.toml", "rb") as f:
+            data = tomllib.load(f)
+        return {f"{key}.cpp" for key in data if key != "DEFAULT"}
+    except FileNotFoundError:
+        logger.error(
+            "testing/cppunittest.toml wasn't found, cppunit heuristic won't work"
+        )
+        return set()
+
+
+def find_tasks_for_paths(
+    repo_dir_str: str, known_tasks: tuple[str, ...], paths: list[str]
+) -> list[str]:
+    repo_dir = Path(repo_dir_str)
+
+    select_gtest = False
+    select_cppunit = False
+    select_rusttests = False
+
+    # Any Rust file is modified.
+    for path in paths:
+        if repository.get_type(path) == "Rust":
+            select_rusttests = True
+            break
+
+    # Any file in a gtest folder is modified.
+    for path in paths:
+        if any(f"/{gtest_path}/" in path for gtest_path in _GTEST_FOLDERS):
+            select_gtest = True
+            break
+
+    # Any file in a folder close to a gtest folder is modified (e.g. dom/media/CubebUtils.cpp and we have dom/media/gtest/).
+    if not select_gtest:
+        for path in paths:
+            # Skip root-level files, otherwise we'd walk the whole repository.
+            if (repo_dir / path).parent == repo_dir:
+                continue
+
+            for sibling in (repo_dir / path).parent.rglob("*"):
+                if sibling.is_dir() and any(
+                    part in _GTEST_FOLDERS for part in sibling.parts
+                ):
+                    select_gtest = True
+                    break
+            if select_gtest:
+                break
+
+    # Any C/C++ file containing gtests is modified.
+    if not select_gtest:
+        for path in paths:
+            if repository.get_type(path) in ["C/C++", "Objective-C/C++"]:
+                try:
+                    with open(repo_dir / path, "rb") as f:
+                        select_gtest = _GTEST_RE.search(f.read()) is not None
+                        if select_gtest:
+                            break
+                except OSError:
+                    pass
+
+    # Cppunit: run if infrastructure files are modified, or any .cpp file whose
+    # name matches a stem listed in testing/cppunittest.toml is modified.
+    cppunit_test_names = _get_cppunit_test_names(repo_dir)
+    for path in paths:
+        if path in _CPPUNIT_INFRA_FILES or Path(path).name in cppunit_test_names:
+            select_cppunit = True
+            break
+
+    selected_tasks = []
+
+    for task in known_tasks:
+        if select_gtest and "gtest" in task:
+            selected_tasks.append(task)
+        if select_cppunit and "cppunit" in task:
+            selected_tasks.append(task)
+        if select_rusttests and "rusttests" in task:
+            selected_tasks.append(task)
+
+    return selected_tasks

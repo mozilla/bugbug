@@ -1,0 +1,233 @@
+"""Phabricator-domain recordable actions.
+
+Mirrors ``actions/bugzilla.py``'s shape: the handler records an intended
+change (nothing is submitted to Phabricator here) and returns a short
+confirmation string. See ``actions/handlers/phabricator_handler.py`` for the
+apply side.
+
+Creating a revision and updating one are deliberately two tools: each takes
+only the parameters its own case needs, so the agent cannot create a revision
+when it meant to update one (or invent a revision id) by getting one optional
+argument wrong.
+"""
+
+import re
+from typing import Annotated
+
+from agent_tools.registry import ToolError, tool, tools_in
+from pydantic import Field
+
+from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+
+SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
+UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
+
+# Both patch actions submit the working directory's changes as a diff, so
+# anything gated on "this run submits a patch" — today the diff artifact built
+# in ``context.publish_changes`` — has to cover both types.
+PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
+
+_PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
+    r"^(?:Test Plan|Testplan|Tested|Tests):",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _validate_summary(summary: str | None, tool_name: str) -> None:
+    if not summary:
+        return
+
+    match = _PHABRICATOR_TEST_PLAN_HEADER_RE.search(summary)
+    if match:
+        raise ToolError(
+            f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
+            "a line belongs in the Test Plan field. Move the verification details "
+            f"to the test_plan argument and call {tool_name} again."
+        )
+
+
+@tool
+async def submit_patch(
+    recorder: ActionsRecorder,
+    bug_id: Annotated[
+        int | str,
+        Field(
+            description=(
+                "Bug this patch fixes: a bug number, or a reference to a bug "
+                "filed by create_bug in this run."
+            )
+        ),
+    ],
+    title: Annotated[
+        str,
+        Field(
+            description=(
+                "Title for the new revision: a single line describing the fix, "
+                "as you would write a commit message subject. Do not include "
+                "reviewer annotations (r=... or r?...): reviewer selection is "
+                "handled on the Phabricator side."
+            )
+        ),
+    ],
+    reasoning: Annotated[
+        str, Field(description="Why you are submitting this patch (for audit log).")
+    ],
+    test_plan: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Revision test plan. If you recorded a Try push, link it here."
+            )
+        ),
+    ] = None,
+    summary: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Revision summary/description. Keep it concise and useful for permanent "
+                "history. Do not restate the bug, narrate the investigation or "
+                "implementation process. Keep test and verification details in "
+                "test_plan instead."
+            ),
+        ),
+    ] = None,
+    parent_revision_id: Annotated[
+        int | None,
+        Field(
+            description=(
+                "The revision this patch stacks on (the number after D), when it "
+                "belongs on top of an existing revision rather than on its own."
+            ),
+        ),
+    ] = None,
+) -> str:
+    """Submit your fix for review as a new Phabricator revision.
+
+    This is how you deliver a code fix. Do not attach the patch to a bug: a
+    Phabricator revision is the correct destination for a fix, not a bug
+    attachment. If the fix belongs on a revision that already exists (for
+    example, you were asked for changes on it), use ``update_patch`` instead.
+
+    You do not supply a patch file. Your final code changes in the working
+    directory are submitted as the revision's diff, so make and verify all your
+    edits first, then call this once you are done. Calling it records the
+    submission as a proposed action for review; it is not sent to Phabricator
+    during the run.
+
+    Later actions can reference its `revision_id` and `url`.
+    """
+    _validate_summary(summary, "submit_patch")
+    params: dict = {
+        "bug_id": bug_id,
+        "title": title,
+        "summary": summary,
+        "test_plan": test_plan,
+    }
+    if parent_revision_id is not None:
+        params["parent_revision_id"] = parent_revision_id
+    action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
+    return confirmation(action)
+
+
+@tool
+async def update_patch(
+    recorder: ActionsRecorder,
+    revision_id: Annotated[
+        int,
+        Field(
+            description=(
+                "The existing Phabricator revision to attach the new diff to, as "
+                "a number (12345 for D12345). Only pass a revision id you were "
+                "given or read from the bug: never guess one."
+            )
+        ),
+    ],
+    reasoning: Annotated[
+        str, Field(description="Why you are updating this patch (for audit log).")
+    ],
+    title: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New title for the revision: the commit message subject line. "
+                "Do not include reviewer annotations (r=... or r?...). "
+                "Leave unset to keep the same title."
+            )
+        ),
+    ] = None,
+    summary: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New summary for the revision: the commit message body. "
+                "Replaces the current summary entirely, so pass the full text. "
+                "Keep test and verification details in test_plan instead. "
+                "Leave unset to keep the same summary."
+            )
+        ),
+    ] = None,
+    test_plan: Annotated[
+        str | None,
+        Field(
+            description=(
+                "New test plan for the revision. Replaces the current one "
+                "entirely. Leave unset to keep the same test plan."
+            )
+        ),
+    ] = None,
+) -> str:
+    """Submit your fix as a new diff on an existing Phabricator revision.
+
+    Use this only when a revision for this work already exists (for example, you
+    are addressing review comments on it) and you know its id. To deliver a fix
+    that has no revision yet, use ``submit_patch`` instead. If the review only
+    asks a question and no code change is warranted, use ``add_comment``.
+
+    You do not supply a patch file. Your final code changes in the working
+    directory are submitted as the new diff, so make and verify all your edits
+    first, then call this once you are done. Calling it records the submission as
+    a proposed action for review; it is not sent to Phabricator during the run.
+
+    The revision keeps its title, summary, test plan, and bug association
+    unless you pass a new title, summary, or test_plan.
+    """
+    _validate_summary(summary, "update_patch")
+
+    params: dict = {"revision_id": revision_id}
+    if title:
+        params["title"] = title
+    if summary:
+        params["summary"] = summary
+    if test_plan:
+        params["test_plan"] = test_plan
+    action = recorder.record(UPDATE_PATCH_ACTION_TYPE, params, reasoning=reasoning)
+    return confirmation(action)
+
+
+@tool
+async def add_comment(
+    recorder: ActionsRecorder,
+    revision_id: Annotated[
+        int, Field(description="Differential revision to comment on (the D number).")
+    ],
+    text: Annotated[str, Field(description="Comment body (Remarkup supported).")],
+    reasoning: Annotated[
+        str, Field(description="Why you are recording this comment (for audit log).")
+    ],
+) -> str:
+    """Record an intended comment on a Phabricator revision.
+
+    Use this to reply on a revision — for example, to answer a question — when
+    no code change is required. This does not deliver a fix: to submit code
+    changes, use ``submit_patch`` instead. Recorded into the run summary for
+    human review; nothing is posted to Phabricator during the run.
+    """
+    action = recorder.record(
+        "phabricator.add_comment",
+        {"revision_id": revision_id, "text": text},
+        reasoning=reasoning,
+    )
+    return confirmation(action)
+
+
+TOOLS = tools_in(__name__)

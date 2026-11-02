@@ -1,0 +1,173 @@
+"""Tests for the phabricator recording tools (submit/update patch, comment)."""
+
+import pytest
+from agent_tools.registry import ToolError
+from hackbot_runtime.actions import ActionsRecorder, phabricator
+
+
+async def test_submit_records_test_plan():
+    rec = ActionsRecorder()
+    await phabricator.submit_patch(
+        rec,
+        bug_id=1,
+        title="Fix the thing",
+        test_plan="uv run pytest tests/test_thing.py (passed)",
+        reasoning="r",
+        summary="Details",
+    )
+    action = rec.actions[0]
+    assert action["type"] == "phabricator.submit_patch"
+    assert action["params"] == {
+        "bug_id": 1,
+        "title": "Fix the thing",
+        "summary": "Details",
+        "test_plan": "uv run pytest tests/test_thing.py (passed)",
+    }
+
+
+async def test_submit_records_the_parent_revision_only_when_stacked():
+    rec = ActionsRecorder()
+    await phabricator.submit_patch(
+        rec, bug_id=1, title="Fix", reasoning="r", parent_revision_id=325120
+    )
+    await phabricator.submit_patch(rec, bug_id=1, title="Fix", reasoning="r")
+    assert rec.actions[0]["params"]["parent_revision_id"] == 325120
+    assert "parent_revision_id" not in rec.actions[1]["params"]
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["Tests", "tests", "Test Plan", "Testplan", "Tested"],
+)
+async def test_submit_rejects_test_plan_headers(header):
+    rec = ActionsRecorder()
+
+    with pytest.raises(ToolError) as exc:
+        await phabricator.submit_patch(
+            rec,
+            bug_id=1,
+            title="Fix",
+            reasoning="r",
+            summary=f"Explanation\n\n{header}: details",
+        )
+
+    assert header in str(exc.value)
+    assert "test_plan argument" in str(exc.value)
+    assert rec.actions == []
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        None,
+        "",
+        "Testing: details",
+        "Some Tests: details",
+        " Tests: already indented",
+    ],
+)
+async def test_submit_accepts_safe_summary(summary):
+    rec = ActionsRecorder()
+
+    await phabricator.submit_patch(
+        rec,
+        bug_id=1,
+        title="Fix",
+        reasoning="r",
+        summary=summary,
+    )
+
+    assert rec.actions[0]["params"]["summary"] == summary
+
+
+async def test_submit_requires_title():
+    rec = ActionsRecorder()
+    with pytest.raises(TypeError):
+        await phabricator.submit_patch(rec, bug_id=1, reasoning="r")
+
+
+async def test_submit_accepts_missing_test_plan():
+    rec = ActionsRecorder()
+    await phabricator.submit_patch(rec, bug_id=1, title="Fix", reasoning="r")
+    assert rec.actions[0]["params"]["test_plan"] is None
+
+
+async def test_update_records_only_the_revision_id():
+    rec = ActionsRecorder()
+    await phabricator.update_patch(rec, revision_id=12345, reasoning="r")
+    action = rec.actions[0]
+    assert action["type"] == "phabricator.update_patch"
+    # Without new fields, nothing about the revision itself changes.
+    assert action["params"] == {"revision_id": 12345}
+
+
+async def test_update_records_only_the_given_fields():
+    rec = ActionsRecorder()
+    await phabricator.update_patch(
+        rec, revision_id=42, title="Bug 1 - Better title", reasoning="r"
+    )
+    assert rec.actions[0]["params"] == {
+        "revision_id": 42,
+        "title": "Bug 1 - Better title",
+    }
+
+
+async def test_update_ignores_empty_fields():
+    rec = ActionsRecorder()
+    await phabricator.update_patch(
+        rec, revision_id=42, title="", summary="", test_plan="", reasoning="r"
+    )
+    assert rec.actions[0]["params"] == {"revision_id": 42}
+
+
+async def test_update_rejects_test_plan_headers():
+    rec = ActionsRecorder()
+    with pytest.raises(ToolError) as exc:
+        await phabricator.update_patch(
+            rec, revision_id=42, summary="Why\n\nTests: ran them", reasoning="r"
+        )
+    assert "call update_patch again" in str(exc.value)
+    assert rec.actions == []
+
+
+async def test_update_requires_revision_id():
+    rec = ActionsRecorder()
+    with pytest.raises(TypeError):
+        await phabricator.update_patch(rec, reasoning="r")
+
+
+def test_agent_facing_schemas_are_case_specific():
+    """The point of the split: create takes no revision id, update demands one."""
+    submit = next(t for t in phabricator.TOOLS if t.name == "submit_patch")
+    update = next(t for t in phabricator.TOOLS if t.name == "update_patch")
+
+    assert "revision_id" not in submit.input_schema["properties"]
+    assert set(submit.input_schema["required"]) == {
+        "bug_id",
+        "title",
+        "reasoning",
+    }
+    assert "test_plan" in submit.input_schema["properties"]
+
+    # An update demands the revision id; a new title, summary or test plan is
+    # optional, the bug id is never the agent's to change, and there is no new
+    # URL to reference.
+    assert set(update.input_schema["required"]) == {"revision_id", "reasoning"}
+    assert set(update.input_schema["properties"]) == {
+        "revision_id",
+        "reasoning",
+        "title",
+        "summary",
+        "test_plan",
+    }
+
+
+async def test_add_comment_records_revision_and_text():
+    rec = ActionsRecorder()
+    await phabricator.add_comment(
+        rec, revision_id=42, text="Here is the answer.", reasoning="r"
+    )
+    action = rec.actions[0]
+    assert action["type"] == "phabricator.add_comment"
+    assert action["params"]["revision_id"] == 42
+    assert action["params"]["text"].startswith("Here is the answer.")

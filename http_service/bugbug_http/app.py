@@ -3,12 +3,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import gzip
+import itertools
 import logging
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Sequence
 from urllib.parse import urlparse
 
@@ -29,18 +31,25 @@ from rq.job import Job
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from bugbug import bugzilla, get_bugbug_version, utils
+from bugbug.model import CommentModel
+from bugbug.models import get_model_class
 from bugbug_http.models import (
     MODELS_NAMES,
+    PUSH_CLASSIFIERS,
     classify_broken_site_report,
     classify_bug,
+    classify_comment,
     classify_issue,
     get_config_specific_groups,
     schedule_tests,
+    schedule_tests_from_patch,
 )
 from bugbug_http.sentry import setup_sentry
 
 if os.environ.get("SENTRY_DSN"):
     setup_sentry(dsn=os.environ.get("SENTRY_DSN"), integrations=[FlaskIntegration()])
+
+utils.setup_libmozdata()
 
 API_TOKEN = "X-Api-Key"
 
@@ -70,7 +79,7 @@ redis_conn = Redis(
     host=url.hostname,
     port=url.port if url.port is not None else 6379,
     password=url.password,
-    ssl=True if url.scheme == "rediss" else False,
+    ssl=(url.scheme == "rediss"),
     ssl_cert_reqs=None,
 )
 
@@ -100,34 +109,67 @@ LOGGER = logging.getLogger()
 class BugPrediction(Schema):
     prob = fields.List(fields.Float())
     index = fields.Integer()
-    suggestion = fields.Str()
+    suggestion = fields.String()
+    extra_data = fields.Dict()
+
+
+class PerformanceRegressionCommitPrediction(Schema):
+    node = fields.String()
+    prob = fields.List(fields.Float())
+    predicted_class = fields.Integer(data_key="class")
+    risk_score = fields.Float()
+
+
+class PerformanceRegressionPrediction(Schema):
+    branch = fields.String()
+    rev = fields.String()
+    risk_score = fields.Float()
+    commits = fields.List(fields.Nested(PerformanceRegressionCommitPrediction))
     extra_data = fields.Dict()
 
 
 class NotAvailableYet(Schema):
-    ready = fields.Boolean(enum=[False])
+    ready = fields.Boolean(metadata={"enum": [False]})
 
 
 class ModelName(Schema):
-    model_name = fields.Str(enum=MODELS_NAMES, example="component")
+    model_name = fields.String(metadata={"enum": MODELS_NAMES, "example": "component"})
+
+
+class PushModelName(Schema):
+    model_name = fields.String(
+        metadata={
+            "enum": sorted(PUSH_CLASSIFIERS),
+            "example": "perfregressionpredictor",
+        }
+    )
 
 
 class UnauthorizedError(Schema):
-    message = fields.Str(default="Error, missing X-API-KEY")
+    message = fields.String(dump_default="Error, missing X-API-KEY")
 
 
 class BranchName(Schema):
-    branch = fields.Str(example="autoland")
+    branch = fields.String(metadata={"example": "autoland"})
 
 
 class Schedules(Schema):
-    tasks = fields.List(fields.Str)
-    groups = fields.List(fields.Str)
+    tasks = fields.List(fields.String())
+    groups = fields.List(fields.String())
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
+spec.components.schema(
+    PerformanceRegressionCommitPrediction.__name__,
+    schema=PerformanceRegressionCommitPrediction,
+)
+spec.components.schema(
+    PerformanceRegressionPrediction.__name__,
+    schema=PerformanceRegressionPrediction,
+)
 spec.components.schema(NotAvailableYet.__name__, schema=NotAvailableYet)
 spec.components.schema(ModelName.__name__, schema=ModelName)
+spec.components.schema(PushModelName.__name__, schema=PushModelName)
 spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
 spec.components.schema(BranchName.__name__, schema=BranchName)
 spec.components.schema(Schedules.__name__, schema=Schedules)
@@ -239,6 +281,24 @@ def create_bug_classification_jobs(
     )
 
 
+def create_comment_classification_jobs(
+    model_name: str, comment_ids: Sequence[int]
+) -> tuple[JobInfo, str, int]:
+    job_id = get_job_id()
+    redis_conn.mset(
+        {
+            JobInfo(classify_comment, model_name, comment_id).mapping_key: job_id
+            for comment_id in comment_ids
+        }
+    )
+
+    return (
+        JobInfo(classify_comment, model_name, comment_ids, BUGZILLA_TOKEN),
+        job_id,
+        BUGZILLA_JOB_TIMEOUT,
+    )
+
+
 def create_broken_site_report_classification_jobs(
     model_name: str, reports: list[dict]
 ) -> tuple[JobInfo, str, int]:
@@ -288,38 +348,38 @@ def is_pending(job):
     job_id = redis_conn.get(job.mapping_key)
 
     if not job_id:
-        LOGGER.debug(f"No job ID mapping {job_id}, False")
+        LOGGER.debug("No job ID mapping %s, False", job_id)
         return False
 
     try:
         job = Job.fetch(job_id.decode("ascii"), connection=redis_conn)
     except NoSuchJobError:
-        LOGGER.debug(f"No job in DB for {job_id}, False")
+        LOGGER.debug("No job in DB for %s, False", job_id)
         # The job might have expired from redis
         return False
 
     job_status = job.get_status()
     if job_status == "started":
-        LOGGER.debug(f"Job {job_id} is running, True")
+        LOGGER.debug("Job %s is running, True", job_id)
         return True
 
     # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
     timeout_datetime = job.enqueued_at + timedelta(seconds=job.timeout)
-    utcnow = datetime.utcnow()
+    utcnow = datetime.now(timezone.utc)
     if timeout_datetime < utcnow:
         # Remove the timeouted job so it will be requeued
         job.cancel()
         job.cleanup()
 
-        LOGGER.debug(f"Job timeout {job_id}, False")
+        LOGGER.debug("Job timeout %s, False", job_id)
 
         return False
 
     if job_status == "queued":
-        LOGGER.debug(f"Job {job_id} is queued, True")
+        LOGGER.debug("Job %s is queued, True", job_id)
         return True
 
-    LOGGER.debug(f"Job {job_id} has status {job_status}, False")
+    LOGGER.debug("Job %s has status %s, False", job_id, job_status)
 
     return False
 
@@ -347,6 +407,20 @@ def get_bugs_last_change_time(bug_ids):
     return bugs
 
 
+def get_comments_last_change_time(comment_ids: Sequence[int]) -> dict[int, str]:
+    bugzilla.set_token(BUGZILLA_TOKEN)
+    return {
+        comment_id: bug["last_change_time"]
+        for comment_id, (bug, _) in bugzilla.get_comments(comment_ids).items()
+    }
+
+
+def is_comment_model(model_name: str) -> bool:
+    return model_name in MODELS_NAMES and issubclass(
+        get_model_class(model_name), CommentModel
+    )
+
+
 def get_github_issues_update_time(
     owner: str, repo: str, issue_nums: Sequence[int]
 ) -> dict:
@@ -371,35 +445,31 @@ def is_prediction_invalidated(job, change_time):
     # If we have no last changed time, the bug was not classified yet or the bug was classified by an old worker
     if not saved_change_time:
         # We can have a result without a cache time
-        if redis_conn.exists(job.result_key):
-            return True
-
-        return False
+        return bool(redis_conn.exists(job.result_key))
 
     return saved_change_time.decode("utf-8") != change_time
 
 
 def clean_prediction_cache(job):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
-    LOGGER.debug(f"Cleaning results for {job}")
+    LOGGER.debug("Cleaning results for %s", job)
 
     redis_conn.delete(job.result_key)
     redis_conn.delete(job.change_time_key)
 
 
 def get_result(job: JobInfo) -> Any | None:
-    LOGGER.debug(f"Checking for existing results at {job.result_key}")
+    LOGGER.debug("Checking for existing results at %s", job.result_key)
     result = redis_conn.get(job.result_key)
 
     if result:
-        LOGGER.debug(f"Found {result!r}")
-        try:
+        LOGGER.debug("Found %r", result)
+
+        # Some job results were stored before compression was enabled.
+        # We can remove the exception handling after enough time has passed
+        # since 47114f4f47db6b73214cf946377be8da945d34b5.
+        with contextlib.suppress(zstandard.ZstdError):
             result = dctx.decompress(result)
-        except zstandard.ZstdError:
-            # Some job results were stored before compression was enabled.
-            # We can remove the exception handling after enough time has passed
-            # since 47114f4f47db6b73214cf946377be8da945d34b5.
-            pass
 
         assert result is not None  # mypy thinks it could be None
         return orjson.loads(result)
@@ -427,6 +497,25 @@ def compress_response(data: dict, status_code: int):
     response.headers["Content-Type"] = "application/json"
 
     return response
+
+
+def has_diff_content(patch: str) -> bool:
+    """Check if a patch contains actual diff content.
+
+    A valid patch should have at least one diff block with hunks.
+    Empty patches may have headers (From, Date, Subject) but no actual diffs.
+
+    :param patch: The patch content as a string
+    :type patch: str
+    :return: True if the patch has diff content, False otherwise
+    :rtype: bool
+    """
+    # Check for Git diff markers that indicate actual changes
+    has_diff_header = "\ndiff --git" in patch
+    has_hunk = "\n@@" in patch
+
+    # A valid patch needs both a diff header and at least one hunk
+    return has_diff_header and has_hunk
 
 
 @application.route("/<model_name>/predict/<int:bug_id>")
@@ -493,6 +582,76 @@ def model_prediction(model_name, bug_id):
                 model_name, [bug_id]
             )
             schedule_job(job_info, job_id=job_id, timeout=timeout)
+        status_code = 202
+        data = {"ready": False}
+
+    return compress_response(data, status_code)
+
+
+@application.route("/<model_name>/predict/push/<path:branch>/<rev>")
+@cross_origin()
+def model_prediction_push(model_name: str, branch: str, rev: str):
+    """
+    ---
+    get:
+      description: Classify a push using the given model, answer either 200 if the push is processed or 202 if the push is being processed
+      summary: Classify a single push
+      parameters:
+      - name: model_name
+        in: path
+        schema: PushModelName
+      - name: branch
+        in: path
+        required: true
+        schema:
+          BranchName
+      - name: rev
+        in: path
+        required: true
+        schema:
+          type: str
+          example: 76383a875678
+      responses:
+        200:
+          description: A single push prediction
+          content:
+            application/json:
+              schema: PerformanceRegressionPrediction
+        202:
+          description: A temporary answer for the push being processed
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if model_name not in PUSH_CLASSIFIERS:
+        return (
+            jsonify({"error": f"Model {model_name} doesn't support push predictions"}),
+            404,
+        )
+
+    # Support the string 'autoland' for convenience.
+    if branch == "autoland":
+        branch = "integration/autoland"
+
+    LOGGER.info(
+        "Received %s push prediction request for %s @ %s", model_name, branch, rev
+    )
+
+    job = JobInfo(PUSH_CLASSIFIERS[model_name], branch, rev)
+    data = get_result(job)
+    status_code = 200
+
+    if not data:
+        if not is_pending(job):
+            schedule_job(job)
         status_code = 202
         data = {"ready": False}
 
@@ -743,13 +902,102 @@ def batch_prediction(model_name):
 
     queueJobList: Queue = []
 
-    for i in range(0, len(missing_bugs), 100):
-        bug_ids = missing_bugs[i : (i + 100)]
+    for bug_ids in itertools.batched(missing_bugs, 100, strict=False):
         job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
     q.enqueue_many(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
+
+
+@application.route("/<model_name>/predict/comment/<int:comment_id>")
+@cross_origin()
+def comment_prediction(model_name: str, comment_id: int):
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if not is_comment_model(model_name):
+        return jsonify({"error": f"Model {model_name} is not a comment model"}), 404
+
+    job = JobInfo(classify_comment, model_name, comment_id)
+    change_time = get_comments_last_change_time([comment_id]).get(comment_id)
+    if change_time is None:
+        clean_prediction_cache(job)
+        return compress_response({"available": False}, 200)
+
+    if is_prediction_invalidated(job, change_time):
+        clean_prediction_cache(job)
+
+    data = get_result(job)
+    status_code = 200
+    if not data:
+        if not is_pending(job):
+            job_info, job_id, timeout = create_comment_classification_jobs(
+                model_name, [comment_id]
+            )
+            schedule_job(job_info, job_id=job_id, timeout=timeout)
+        data = {"ready": False}
+        status_code = 202
+
+    return compress_response(data, status_code)
+
+
+@application.route("/<model_name>/predict/comment/batch", methods=["POST"])
+@cross_origin()
+def batch_comment_prediction(model_name: str):
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if not is_comment_model(model_name):
+        return jsonify({"error": f"Model {model_name} is not a comment model"}), 404
+
+    batch_body = orjson.loads(request.data)
+    validator = Validator()
+    if not validator.validate(
+        batch_body,
+        {
+            "comments": {
+                "type": "list",
+                "minlength": 1,
+                "schema": {"type": "integer"},
+            }
+        },
+    ):
+        return jsonify({"errors": validator.errors}), 400
+
+    comment_ids = batch_body["comments"]
+    change_times = get_comments_last_change_time(comment_ids)
+    data = {}
+    missing_comments = []
+    status_code = 200
+
+    for comment_id in comment_ids:
+        job = JobInfo(classify_comment, model_name, comment_id)
+        change_time = change_times.get(comment_id)
+        if change_time is not None:
+            if is_prediction_invalidated(job, change_time):
+                clean_prediction_cache(job)
+
+            data[str(comment_id)] = get_result(job)
+            if not data[str(comment_id)]:
+                if not is_pending(job):
+                    missing_comments.append(comment_id)
+                data[str(comment_id)] = {"ready": False}
+                status_code = 202
+            continue
+
+        clean_prediction_cache(job)
+        data[str(comment_id)] = {"available": False}
+
+    queue_jobs: list[Queue] = []
+    for comment_ids_batch in itertools.batched(missing_comments, 100, strict=False):
+        job_info, job_id, timeout = create_comment_classification_jobs(
+            model_name, comment_ids_batch
+        )
+        queue_jobs.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
+    q.enqueue_many(queue_jobs)
+
+    return compress_response({"comments": data}, status_code)
 
 
 @application.route("/<model_name>/predict/broken_site_report/batch", methods=["POST"])
@@ -926,8 +1174,7 @@ def batch_prediction_broken_site_report(model_name):
 
     queueJobList: Queue = []
 
-    for i in range(0, len(missing_reports), 100):
-        reports = missing_reports[i : (i + 100)]
+    for reports in itertools.batched(missing_reports, 100, strict=False):
         job_info, job_id, timeout = create_broken_site_report_classification_jobs(
             model_name, reports
         )
@@ -992,6 +1239,125 @@ def push_schedules(branch, rev):
 
     if not is_pending(job):
         schedule_job(job)
+    return jsonify({"ready": False}), 202
+
+
+@application.route("/patch/<base_rev>/<patch_hash>/schedules", methods=["GET", "POST"])
+@cross_origin()
+def patch_schedules(base_rev, patch_hash):
+    """
+    ---
+    get:
+      description: Get results of patch-based test selection.
+      summary: Get test selection results for a previously submitted patch.
+      parameters:
+      - name: base_rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+        description: The base commit hash that the patch is based on
+      - name: patch_hash
+        in: path
+        schema:
+          type: str
+          example: abc123def456
+        description: Hash of the patch content for unique identification
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    post:
+      description: Submit a patch for test selection analysis.
+      summary: Determine which tests and tasks should run for a patch.
+      parameters:
+      - name: base_rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+        description: The base commit hash that the patch is based on
+      - name: patch_hash
+        in: path
+        schema:
+          type: str
+          example: abc123def456
+        description: Hash of the patch content for unique identification
+      requestBody:
+        description: The patch content in git diff format
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    job = JobInfo(schedule_tests_from_patch, base_rev, patch_hash)
+    data = get_result(job)
+    if data:
+        # We don't need to read the POST data to find the response in the cache
+        # because the hash of the data is in the URL. However, we must consume
+        # the request body for POST requests before returning the cached response
+        # to avoid the client receiving a response before finishing sending the body.
+        if request.method == "POST":
+            _ = request.data
+        return compress_response(data, 200)
+
+    if not is_pending(job):
+        if request.method != "POST":
+            return jsonify({"error": "Patch not submitted yet"}), 404
+
+        patch = request.data.decode("utf-8")
+        if not patch:
+            return jsonify({"error": "Empty patch"}), 400
+
+        if not has_diff_content(patch):
+            return jsonify({"error": "Patch contains no diff content"}), 400
+
+        patch_key = f"bugbug:patch:{patch_hash}"
+        redis_conn.set(patch_key, patch)
+        redis_conn.expire(patch_key, 7 * 24 * 3600)  # 7 days expiration
+
+        LOGGER.info("Stored patch with hash %s", patch_hash)
+
+        schedule_job(job)
+
     return jsonify({"ready": False}), 202
 
 
@@ -1063,3 +1429,8 @@ def swagger():
 @application.route("/doc")
 def doc():
     return render_template("doc.html")
+
+
+@application.route("/__lbheartbeat__")
+def heartbeat():
+    return ""

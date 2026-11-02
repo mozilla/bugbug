@@ -1,0 +1,504 @@
+"""Tests for the Slack notification an auto-applied run records.
+
+Pure functions, no network: nothing is posted from the run, so there is nothing to
+mock. What matters is that only an auto-applied run in a component with a channel
+records anything at all, since the alternative is posting into a channel that did not
+ask for it.
+"""
+
+import json
+import re
+
+import pytest
+from hackbot_agents.frontend_triage.agent import (
+    FrontendTriageResult,
+    SeverityAssessment,
+)
+from hackbot_agents.frontend_triage.config import TRIAGE_SCOPE
+from hackbot_agents.frontend_triage.notify import (
+    HELD_NOTE,
+    SECTION_TEXT_LIMIT,
+    build_blocks,
+    build_message,
+    channel_for,
+    record_notification,
+)
+from hackbot_runtime.actions import ActionsRecorder
+
+BUG_ID = 1968342
+RUN_ID = "1218e630-78c8"
+BUG_LINK = f"<https://bugzilla.mozilla.org/show_bug.cgi?id={BUG_ID}|Bug {BUG_ID}>"
+RUN_LINK = f"<https://hackbot.moz.tools/runs/{RUN_ID}|frontend-triage run details>"
+SUMMARY = "Weather widget shows the previous city after changing location"
+
+
+def _result(**overrides) -> FrontendTriageResult:
+    fields = {
+        "bug_id": BUG_ID,
+        "num_turns": 14,
+        "product": "Firefox",
+        "component": "New Tab Page",
+        "summary": SUMMARY,
+        "confidence": "high",
+        "actionable": True,
+        "auto_apply": True,
+        "severity_assessment": SeverityAssessment(
+            suggested="S3", confidence="high", rationale="visible but recoverable"
+        ),
+    }
+    return FrontendTriageResult(**{**fields, **overrides})
+
+
+def _message(**overrides) -> str:
+    return build_message(_result(**overrides), run_id=RUN_ID)
+
+
+def test_reports_the_bug_and_the_run_in_two_lines():
+    assert _message().splitlines() == [
+        f"*{BUG_LINK} — {SUMMARY}*",
+        RUN_LINK,
+    ]
+
+
+def test_an_s1_is_marked_and_named():
+    # The level is spelled out next to the emoji so it still reads as an S1 where the
+    # emoji doesn't render.
+    line = _message(
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="high")
+    ).splitlines()[0]
+    assert line == f":red_circle: *{BUG_LINK} — {SUMMARY}* (suggested S1)"
+
+
+def test_a_medium_confidence_s1_is_still_marked():
+    line = _message(
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="medium")
+    ).splitlines()[0]
+    assert line.startswith(":red_circle: ")
+
+
+def test_an_s1_the_run_is_unsure_of_is_unmarked():
+    # The comment drops its severity block below medium, so a marker here would have
+    # Slack shout S1 while the bug says nothing about severity at all.
+    for confidence in ("low", None):
+        line = _message(
+            severity_assessment=SeverityAssessment(
+                suggested="S1", confidence=confidence
+            )
+        ).splitlines()[0]
+        assert line == f"*{BUG_LINK} — {SUMMARY}*", confidence
+
+
+def test_every_other_severity_is_unmarked():
+    for suggested in ("S2", "S3", "S4", None):
+        line = _message(
+            severity_assessment=SeverityAssessment(
+                suggested=suggested, confidence="high"
+            )
+        ).splitlines()[0]
+        assert line == f"*{BUG_LINK} — {SUMMARY}*", suggested
+    # A run that could not assess severity reports none at all.
+    line = _message(severity_assessment=None).splitlines()[0]
+    assert line == f"*{BUG_LINK} — {SUMMARY}*"
+
+
+def test_a_missing_summary_leaves_the_bug_link_alone():
+    for summary in (None, "", "   "):
+        assert _message(summary=summary).splitlines() == [f"*{BUG_LINK}*", RUN_LINK]
+
+
+def test_the_channel_belongs_to_the_component():
+    # Derived from the registry rather than one assert per component, so adding a
+    # component is one entry in config.py and no test edit. The invariants a loop
+    # cannot express are asserted concretely in the tests below.
+    for entry in TRIAGE_SCOPE:
+        assert channel_for(entry.product, entry.component) == entry.channel
+
+
+def test_whitespace_around_either_half_is_stripped():
+    # Surrounding whitespace is the agent's, not Bugzilla's.
+    assert channel_for(" Firefox ", " New Tab Page ") == "#hnt-dev-triage"
+    assert channel_for("Firefox", "Messaging System") == "#omc-triage"
+
+
+def test_the_registry_names_each_component_once():
+    # A duplicate key collapses silently in the derived `SLACK_CHANNELS`, so the second
+    # entry's channel would win with nothing to show it had. That is the failure mode a
+    # registry has as it grows, and it is invisible in a diff that only adds a line.
+    keys = [entry.key for entry in TRIAGE_SCOPE]
+    assert len(keys) == len(set(keys))
+
+
+def test_every_channel_is_a_channel_name():
+    # Slack rejects an unknown channel at apply time, long after the Bugzilla comment
+    # and severity change have landed, and the run page is the only place it shows. A
+    # missing `#` or a stray capital is the whole cost of that, so catch it here.
+    for entry in TRIAGE_SCOPE:
+        assert entry.channel.startswith("#"), entry.key
+        assert entry.channel == entry.channel.strip().lower(), entry.key
+        assert " " not in entry.channel, entry.key
+
+
+def test_the_installer_and_the_updater_share_a_channel():
+    # One team triages both, and a key that is off by a character notifies nobody
+    # rather than failing, so each one is asserted rather than assumed from the other.
+    triage = "#installer-updater-bug-triage"
+    assert channel_for("Toolkit", "Application Update") == triage
+    assert channel_for("Firefox", "Installer") == triage
+
+
+def test_an_unowned_component_has_no_channel():
+    # Fails closed rather than falling back to a default: another team's channel is a
+    # worse outcome than silence.
+    #
+    # `Address Bar` is a component this agent will triage if handed one -- scoping.md
+    # puts any user-facing Firefox defect in scope -- but it is not in `TRIAGE_SCOPE`,
+    # so no team is told. That is the case worth pinning: in scope and unrouted are
+    # different questions, and only the second one is this function's business.
+    assert channel_for("Firefox", "Address Bar") is None
+    assert channel_for("Core", "New Tab Page") is None
+    # A component name is only owned within its own product: `History` routes to
+    # #firefox-android-dev-info under Firefox for Android and nowhere at all under Firefox --
+    # which has no `History` component in the first place, only `Bookmarks & History`.
+    assert channel_for("Firefox", "History") is None
+    assert channel_for("Firefox", None) is None
+    assert channel_for(None, "New Tab Page") is None
+    assert channel_for("", "") is None
+
+
+def test_an_auto_applied_run_records_one_slack_action():
+    recorder = ActionsRecorder()
+    action = record_notification(recorder, _result(), run_id=RUN_ID)
+
+    assert action is not None
+    assert [a["type"] for a in recorder.actions] == ["slack.post_message"]
+    assert action["params"]["channel"] == "#hnt-dev-triage"
+    assert action["params"]["text"] == build_message(_result(), run_id=RUN_ID)
+    # The layout travels with the text, which stays the fallback.
+    assert action["params"]["blocks"] == build_blocks(_result(), run_id=RUN_ID)
+
+
+# --- the Block Kit layout ---
+
+
+def _blocks(**overrides) -> list[dict]:
+    return build_blocks(_result(**overrides), run_id=RUN_ID)
+
+
+def _block_of(kind: str, **overrides) -> dict | None:
+    return next((b for b in _blocks(**overrides) if b["type"] == kind), None)
+
+
+def test_the_layout_reads_bug_then_facts_then_button_then_run():
+    assert [b["type"] for b in _blocks()] == [
+        "section",
+        "section",
+        "actions",
+        "context",
+    ]
+
+
+def test_the_headline_links_the_bug_and_puts_the_summary_under_it():
+    assert _blocks()[0] == {
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": f"*{BUG_LINK}*\n{SUMMARY}"},
+    }
+
+
+def test_a_bug_with_no_summary_is_just_the_link():
+    for summary in (None, "", "   "):
+        assert _blocks(summary=summary)[0]["text"]["text"] == f"*{BUG_LINK}*"
+
+
+def test_an_s1_leads_the_headline():
+    # Marked and named, so it still reads as an S1 where the emoji does not render,
+    # and named "suggested" because nothing was written to the severity field.
+    headline = _blocks(
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="high")
+    )[0]["text"]["text"]
+    assert headline == f":red_circle: *suggested S1* *{BUG_LINK}*\n{SUMMARY}"
+
+
+@pytest.mark.parametrize("confidence", ["high", "medium"])
+def test_an_s1_the_run_is_unsure_of_still_leads(confidence):
+    # The same gate the comment's severity block uses: reportable means marked.
+    headline = _blocks(
+        severity_assessment=SeverityAssessment(suggested="S1", confidence=confidence)
+    )[0]["text"]["text"]
+    assert headline.startswith(":red_circle: *suggested S1*")
+
+
+def test_an_s1_below_the_threshold_is_not_marked():
+    # At `low` the agent says nothing about severity anywhere, so Slack must not
+    # shout a level the bug itself never mentions.
+    headline = _blocks(
+        severity_assessment=SeverityAssessment(suggested="S1", confidence="low")
+    )[0]["text"]["text"]
+    assert headline == f"*{BUG_LINK}*\n{SUMMARY}"
+
+
+def test_the_fields_grid_carries_the_severity_and_the_component():
+    assert _blocks()[1]["fields"] == [
+        {"type": "mrkdwn", "text": "*Suggested severity*\nS3"},
+        {"type": "mrkdwn", "text": "*Component*\nFirefox :: New Tab Page"},
+    ]
+
+
+def test_the_severity_is_always_labelled_a_suggestion():
+    # This agent only comments; it cannot set the field, so no confidence makes the
+    # level something the bug received.
+    for confidence in ("high", "medium"):
+        fields = _blocks(
+            severity_assessment=SeverityAssessment(
+                suggested="S2", confidence=confidence
+            )
+        )[1]["fields"]
+        assert fields[0]["text"] == "*Suggested severity*\nS2"
+
+
+def test_a_severity_below_the_threshold_is_not_reported():
+    # Same gate as the marker and as the comment's severity block.
+    fields = _blocks(
+        severity_assessment=SeverityAssessment(suggested="S2", confidence="low")
+    )[1]["fields"]
+    assert [f["text"] for f in fields] == ["*Component*\nFirefox :: New Tab Page"]
+
+
+def test_a_field_with_nothing_to_say_is_dropped():
+    fields = _blocks(severity_assessment=None)[1]["fields"]
+    assert [f["text"] for f in fields] == ["*Component*\nFirefox :: New Tab Page"]
+    # And with none of them, the grid itself goes rather than rendering empty.
+    assert [b["type"] for b in _blocks(severity_assessment=None, product=None)] == [
+        "section",
+        "actions",
+        "context",
+    ]
+
+
+def test_the_run_sits_in_the_context_line():
+    element = _block_of("context")["elements"][0]
+    assert element["text"] == (
+        "Triaged by frontend-triage · "
+        f"<https://hackbot.moz.tools/runs/{RUN_ID}|run details>"
+    )
+
+
+# --- the button (#6739) ---
+
+
+def _button_value(**overrides) -> dict:
+    return json.loads(_block_of("actions", **overrides)["elements"][0]["value"])
+
+
+def test_the_button_carries_what_the_receiver_needs_to_start_the_run():
+    # The one thing here worth pinning: this value crosses a process boundary and
+    # is parsed by hackbot-api, so a wrong `dedupe_key` silently buys a second run
+    # per click and a wrong `apply_run_id` starts the agent on an unanalysed bug.
+    # Neither shows up anywhere else, and neither moves when this file is
+    # rearranged.
+    assert _button_value() == {
+        "agent_name": "bug-fix",
+        "inputs": {"bug_id": BUG_ID},
+        "dedupe_key": f"frontend-triage-run:{RUN_ID}",
+        "apply_run_id": RUN_ID,
+    }
+
+
+def test_the_button_names_the_agent_it_starts():
+    assert _block_of("actions")["elements"][0]["text"]["text"] == "Run bug-fix agent"
+    assert (
+        _block_of("actions", auto_apply=False)["elements"][0]["text"]["text"]
+        == "Post analysis & run bug-fix"
+    )
+
+
+# --- the comment, collapsed ---
+
+COMMENT = (
+    "## Root cause\n\n"
+    "**WeatherFeed** caches the old city in "
+    "[WeatherFeed.sys.mjs](https://searchfox.org/firefox-main/rev/abc/WeatherFeed.sys.mjs)."
+)
+FOOTER = (
+    "\n\n---\n\nIf you'd like to provide feedback on this comment, please use the "
+    "👍 or 👎 reaction."
+)
+
+
+def _container(comment: str = COMMENT + FOOTER, is_private: bool = False, **overrides):
+    recorder = ActionsRecorder()
+    recorder.record(
+        "bugzilla.add_comment",
+        {"bug_id": BUG_ID, "text": comment, "is_private": is_private},
+    )
+    action = record_notification(recorder, _result(**overrides), run_id=RUN_ID)
+    return next(
+        (b for b in action["params"]["blocks"] if b["type"] == "container"), None
+    )
+
+
+def test_the_comment_starts_collapsed_as_mrkdwn_without_its_footer():
+    assert _container() == {
+        "type": "container",
+        "title": {"type": "plain_text", "text": "Triage response"},
+        "is_collapsible": True,
+        "default_collapsed": True,
+        "child_blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Root cause*\n\n*WeatherFeed* caches the old city in "
+                    "<https://searchfox.org/firefox-main/rev/abc/WeatherFeed.sys.mjs"
+                    "|WeatherFeed.sys.mjs>.",
+                },
+            }
+        ],
+    }
+
+
+def test_a_held_comment_is_titled_as_proposed():
+    title = _container(auto_apply=False)["title"]["text"]
+    assert title == "Proposed triage response"
+
+
+def test_the_comment_sits_above_the_button():
+    recorder = ActionsRecorder()
+    recorder.record("bugzilla.add_comment", {"bug_id": BUG_ID, "text": COMMENT})
+    action = record_notification(recorder, _result(), run_id=RUN_ID)
+    kinds = [b["type"] for b in action["params"]["blocks"]]
+    assert kinds == ["section", "section", "container", "actions", "context"]
+
+
+def test_a_private_comment_stays_out_of_slack():
+    assert _container(is_private=True) is None
+
+
+def test_no_comment_means_no_container():
+    action = record_notification(ActionsRecorder(), _result(), run_id=RUN_ID)
+    assert all(b["type"] != "container" for b in action["params"]["blocks"])
+
+
+def test_a_long_comment_is_cut_to_fit_and_links_the_rest():
+    section = _container("x" * 5000)["child_blocks"][0]
+    text = section["text"]["text"]
+    assert len(text) <= SECTION_TEXT_LIMIT
+    assert text.endswith(
+        f"… <https://bugzilla.mozilla.org/show_bug.cgi?id={BUG_ID}|read the rest>"
+    )
+
+
+# --- the two renderings say the same things ---
+
+_LINK = re.compile(r"<([^|>]+)\|([^>]+)>")
+# Punctuation that only ever joins words: dropped so that "(S1)" and "*S1*" are the
+# same fact said twice, rather than two tokens that happen to look alike.
+_PUNCTUATION = "*()·,—"
+
+
+def _visible_text(blocks: list[dict]) -> str:
+    """Every string a reader sees in `blocks`, whatever block it sits in."""
+    parts: list[str] = []
+    for block in blocks:
+        if isinstance(block.get("text"), dict):
+            parts.append(block["text"]["text"])
+        for field in block.get("fields", []):
+            parts.append(field["text"])
+        for element in block.get("elements", []):
+            if isinstance(element.get("text"), dict):
+                parts.append(element["text"]["text"])
+            elif isinstance(element.get("text"), str):
+                parts.append(element["text"])
+    return "\n".join(parts)
+
+
+def _facts(text: str) -> set[str]:
+    """What `text` tells a reader, as words, with link markup reduced to its label."""
+    labelled = _LINK.sub(lambda match: match.group(2), text)
+    return {word.strip(_PUNCTUATION) for word in labelled.split()} - {""}
+
+
+def _urls(text: str) -> set[str]:
+    return {match.group(1) for match in _LINK.finditer(text)}
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {},
+        {"summary": None},
+        {"severity_assessment": None},
+        {"severity_assessment": SeverityAssessment(suggested="S1", confidence="high")},
+        {
+            "severity_assessment": SeverityAssessment(
+                suggested="S1", confidence="medium"
+            )
+        },
+        {"product": None, "component": None},
+    ],
+    ids=[
+        "ordinary",
+        "no-summary",
+        "no-severity",
+        "urgent",
+        "urgent-suggested",
+        "no-component",
+    ],
+)
+def test_the_blocks_say_everything_the_fallback_text_says(overrides):
+    # The blocks are what almost everyone reads, and the text is what Slack falls back
+    # to. They may lay the same facts out differently, but nothing may be in the
+    # fallback and missing from the blocks: that would be a fact only the people
+    # reading a push notification ever see.
+    result = _result(**overrides)
+    text = build_message(result, run_id=RUN_ID)
+    blocks = _visible_text(build_blocks(result, run_id=RUN_ID))
+
+    assert _facts(text) <= _facts(blocks)
+    # Labels may be worded differently; the things they link to may not.
+    assert _urls(text) <= _urls(blocks)
+
+
+def test_a_held_run_says_its_analysis_is_not_on_the_bug():
+    result = _result(auto_apply=False, confidence="medium")
+    text = build_message(result, run_id=RUN_ID)
+    blocks = build_blocks(result, run_id=RUN_ID)
+
+    assert any(b["type"] == "actions" for b in blocks)
+    # It says the analysis is not on the bug, in both renderings.
+    assert HELD_NOTE in text
+    assert any(b.get("text", {}).get("text") == HELD_NOTE for b in blocks)
+
+
+def test_a_run_with_nothing_to_fix_still_reports():
+    # Every run reports, so the owning team sees an out-of-scope verdict too rather
+    # than the run disappearing without a trace.
+    recorder = ActionsRecorder()
+    action = record_notification(
+        recorder,
+        _result(actionable=False, auto_apply=False, confidence="low"),
+        run_id=RUN_ID,
+    )
+
+    assert action is not None
+    assert [a["type"] for a in recorder.actions] == ["slack.post_message"]
+    assert HELD_NOTE in action["params"]["text"]
+
+
+def test_a_run_that_reported_no_verdict_still_reports():
+    # `is not False`, matching `may_apply_unattended`: a plan that did not parse is
+    # treated as having something to fix rather than as out of scope.
+    recorder = ActionsRecorder()
+    assert (
+        record_notification(recorder, _result(actionable=None), run_id=RUN_ID)
+        is not None
+    )
+
+
+def test_a_run_in_an_unowned_component_reports_nothing():
+    recorder = ActionsRecorder()
+    assert (
+        record_notification(recorder, _result(component="Address Bar"), run_id=RUN_ID)
+        is None
+    )
+    assert record_notification(recorder, _result(component=None), run_id=RUN_ID) is None
+    assert recorder.actions == []

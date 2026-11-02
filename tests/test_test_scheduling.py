@@ -3,14 +3,24 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
+import math
 from datetime import datetime
+from typing import Any
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
 from bugbug import repository, test_scheduling
 from bugbug.repository import CommitDict
-from bugbug.test_scheduling import ConfigGroup, Group, Revision, Task
+from bugbug.test_scheduling import (
+    ConfigGroup,
+    Group,
+    PushResult,
+    Revision,
+    Runnable,
+    Task,
+)
 from bugbug.utils import ExpQueue
 
 
@@ -300,10 +310,8 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
     assert test_scheduling.get_touched_together("layout/file.cpp", "dom/tests") == 0
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
-    try:
+    with contextlib.suppress(StopIteration):
         update_touched_together_gen.send(None)
-    except StopIteration:
-        pass
 
     # Ensure we can still read the DB after closing.
     assert test_scheduling.get_touched_together("dom", "layout/tests") == 1
@@ -563,6 +571,65 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
 
+def test_cochange_pmi(monkeypatch: MonkeyPatch) -> None:
+    test_scheduling.touched_together = None
+
+    commits = [
+        {
+            "node": "commit1",
+            "backedoutby": "",
+            "files": ["dom/file1.cpp", "dom/tests/manifest1.ini"],
+        },
+        {
+            "node": "commitbackedout",
+            "backedoutby": "commitbackout",
+            "files": ["dom/file1.cpp", "layout/tests/manifest2.ini"],
+        },
+        {
+            "node": "commit2",
+            "backedoutby": "",
+            "files": ["dom/file2.cpp", "layout/tests/manifest2.ini"],
+        },
+        {
+            "node": "commit3",
+            "backedoutby": "",
+            "files": ["layout/file.cpp", "dom/tests/sub/test.js"],
+        },
+        {
+            "node": "commit4",
+            "backedoutby": "",
+            "files": ["dom/file1.cpp", "dom/tests/manifest1.ini"],
+        },
+    ]
+    monkeypatch.setattr(repository, "get_commits", lambda: commits)
+
+    update_touched_together_gen = test_scheduling.update_touched_together(
+        {"dom/tests", "layout/tests"}
+    )
+    next(update_touched_together_gen)
+    update_touched_together_gen.send(Revision("commit4"))
+    with contextlib.suppress(StopIteration):
+        update_touched_together_gen.send(None)
+
+    # 4 commits (the backed-out one is skipped); dom was changed in 3 of them, layout in 1, dom/tests
+    # (including its subdirectories) in 3, layout/tests in 1.
+    assert test_scheduling.get_cochange_pmi(["layout"], ["dom/tests"]) == pytest.approx(
+        math.log(1 * 4 / (1 * 3))
+    )
+    assert test_scheduling.get_cochange_pmi(["dom"], ["layout/tests"]) == pytest.approx(
+        math.log(1 * 4 / (3 * 1))
+    )
+    # Changed together less often than by chance: 2 * 4 / (3 * 3) < 1.
+    assert test_scheduling.get_cochange_pmi(["dom"], ["dom/tests"]) == 0.0
+    # Never changed together.
+    assert test_scheduling.get_cochange_pmi(["layout"], ["layout/tests"]) == 0.0
+    assert test_scheduling.get_cochange_pmi(["toolkit"], ["dom/tests"]) == 0.0
+    # The maximum over the directories.
+    assert test_scheduling.get_cochange_pmi(
+        ["dom", "layout"], ["dom/tests", "layout/tests"]
+    ) == pytest.approx(math.log(4 / 3))
+
+
 @pytest.mark.parametrize("granularity", ["group", "label"])
 def test_generate_data(granularity: str) -> None:
     past_failures = test_scheduling.PastFailures(granularity, False)
@@ -649,6 +716,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
 
@@ -679,6 +747,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -721,6 +790,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -750,6 +820,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -792,6 +863,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -821,6 +893,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -857,6 +930,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
 
@@ -899,6 +973,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -928,6 +1003,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
 
@@ -970,6 +1046,7 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[0] == obj
     obj = {
@@ -999,8 +1076,114 @@ def test_generate_data(granularity: str) -> None:
     }
     if granularity == "group":
         obj["touched_together_directories"] = 0
+        obj["touched_together_pmi"] = 0.0
         obj["touched_together_files"] = 0
     assert data[1] == obj
+
+
+def test_index_runs() -> None:
+    push_data: list[PushResult] = [
+        ((Revision("r0"),), Revision("f"), (Group("a"), Group("b")), (), ()),
+        ((Revision("r1"),), Revision("f"), (Group("b"),), (), ()),
+        ((Revision("r3"),), Revision("f"), (Group("a"),), (Group("a"),), ()),
+        ((Revision("r4"),), Revision("f"), (Group("b"),), (), (Group("b"),)),
+    ]
+    runs, rev_to_push, regressions = test_scheduling.index_runs(push_data)
+    assert runs == {"a": [0, 2], "b": [0, 1, 3]}
+    assert rev_to_push == {"r0": 0, "r1": 1, "r3": 2, "r4": 3}
+    assert regressions == {"a": [2], "b": [3]}
+
+
+def test_get_non_run_negatives() -> None:
+    import random
+
+    runs: dict[Runnable, list[int]] = {
+        # Ran on the push itself: excluded by the caller.
+        Group("ran"): [5],
+        # Ran on a later push before the end: verified.
+        Group("later"): [2, 7],
+        # Only ran after the end (e.g. after the backout): unknown.
+        Group("too_late"): [12],
+        # Never ran after the push: unknown.
+        Group("before"): [1, 3],
+    }
+    candidates: list[Runnable] = [
+        Group("ran"),
+        Group("later"),
+        Group("too_late"),
+        Group("before"),
+    ]
+    assert test_scheduling.get_non_run_negatives(
+        5, 10, candidates, {Group("ran")}, runs, 10, random.Random(0)
+    ) == [Group("later")]
+    # With a count of 0, nothing is sampled.
+    assert (
+        test_scheduling.get_non_run_negatives(
+            5, 10, candidates, {Group("ran")}, runs, 0, random.Random(0)
+        )
+        == []
+    )
+    # The first later run failed, and the failure was attributed to that later push, or to one in
+    # between: it didn't verifiably pass with the push's changes.
+    for regression_index in (7, 6):
+        regressions: dict[Runnable, list[int]] = {Group("later"): [regression_index]}
+        assert (
+            test_scheduling.get_non_run_negatives(
+                5,
+                10,
+                candidates,
+                {Group("ran")},
+                runs,
+                10,
+                random.Random(0),
+                regressions,
+            )
+            == []
+        )
+    # A failure after a passing run, or outside of the window, doesn't matter.
+    runs[Group("later")] = [2, 7, 9]
+    regressions = {Group("later"): [2, 9, 11]}
+    assert test_scheduling.get_non_run_negatives(
+        5, 10, candidates, {Group("ran")}, runs, 10, random.Random(0), regressions
+    ) == [Group("later")]
+
+
+def test_filter_runnables_ignores_jstests() -> None:
+    jstests = Group("tests/jsreftest/tests/js/src/tests/jstests.list")
+    mochitest = Group("dom/base/test/mochitest.toml")
+    groups = (jstests, mochitest)
+    assert test_scheduling.filter_runnables(groups, set(groups), "group") == (
+        mochitest,
+    )
+
+    config_groups = (
+        ConfigGroup(("test-linux1804-64/opt-*", jstests)),
+        ConfigGroup(("test-linux1804-64/opt-*", mochitest)),
+    )
+    assert test_scheduling.filter_runnables(
+        config_groups, set(config_groups), "config_group"
+    ) == (config_groups[1],)
+
+
+def test_get_runnable_dirs() -> None:
+    assert test_scheduling.get_runnable_dirs("dom/base/test/mochitest.toml") == (
+        "dom/base/test",
+    )
+    assert test_scheduling.get_runnable_dirs("layout/reftests/bugs/reftest.list") == (
+        "layout/reftests/bugs",
+    )
+    assert test_scheduling.get_runnable_dirs(
+        "testing/web-platform/tests/css/css-grid"
+    ) == (
+        "testing/web-platform/tests/css/css-grid",
+        "testing/web-platform/meta/css/css-grid",
+    )
+    assert test_scheduling.get_runnable_dirs(
+        "testing/web-platform/mozilla/tests/webgpu"
+    ) == (
+        "testing/web-platform/mozilla/tests/webgpu",
+        "testing/web-platform/mozilla/meta/webgpu",
+    )
 
 
 def test_fallback_on_ini() -> None:
@@ -1023,3 +1206,579 @@ def test_fallback_on_ini() -> None:
     past_failures.set("browser.toml", ExpQueue(0, 1, 22))
     assert_val("browser.toml", 22)
     assert_val("browser.ini", 42)
+
+
+def test_find_manifests_for_paths(tmp_path) -> None:
+    (tmp_path / "dom" / "battery" / "test").mkdir(parents=True)
+    (tmp_path / "dom" / "battery" / "test" / "mochitest.toml").touch()
+    (tmp_path / "dom" / "battery" / "test" / "chrome.toml").touch()
+
+    manifest = """[DEFAULT]
+head = "../prova.js"
+support-files = [
+  "!/absolute_path_with_glob/*.js",
+  "!/absolute_path_with_subdirglob/**",
+  "relative/path.png"
+]
+
+["test_resolve_uris_ipc.js"]
+"""
+
+    manifest2 = """[DEFAULT]
+head = ""
+support-files = ""
+
+["test_resolve_uris_ipc.js"]
+"""
+
+    (tmp_path / "test").mkdir(parents=True)
+    (tmp_path / "test" / "chrome.toml").write_text(manifest)
+    (tmp_path / "test" / "mochitest.toml").write_text(manifest2)
+    (tmp_path / "absolute_path_with_glob" / "subdir").mkdir(parents=True)
+    (tmp_path / "absolute_path_with_glob" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_glob" / "asd.png").touch()
+    (tmp_path / "absolute_path_with_glob" / "subdir" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_subdirglob" / "subdir").mkdir(parents=True)
+    (tmp_path / "absolute_path_with_subdirglob" / "asd.js").touch()
+    (tmp_path / "absolute_path_with_subdirglob" / "subdir" / "asd.js").touch()
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["dom/battery/BatteryManager.cpp"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["dom/battery/BatteryManager.cpp", "test/chrome.toml"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+        "test/chrome.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["prova.js"]) == {
+        "test/chrome.toml"
+    }
+
+    # A root-level file that is not referenced by any manifest must not
+    # schedule every manifest in the repository.
+    (tmp_path / "mach").touch()
+    assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["mach"]) == set()
+
+    # A file close to too many manifests (e.g. dom/moz.build) must not
+    # schedule all of them.
+    (tmp_path / "hub" / "moz.build").parent.mkdir(parents=True)
+    (tmp_path / "hub" / "moz.build").touch()
+    for i in range(test_scheduling.MAX_SIBLING_MANIFESTS):
+        (tmp_path / "hub" / f"component{i}" / "test").mkdir(parents=True)
+        (tmp_path / "hub" / f"component{i}" / "test" / "mochitest.toml").touch()
+
+    assert (
+        len(test_scheduling.find_manifests_for_paths(str(tmp_path), ["hub/moz.build"]))
+        == test_scheduling.MAX_SIBLING_MANIFESTS
+    )
+
+    (tmp_path / "hub" / "one_more" / "test").mkdir(parents=True)
+    (tmp_path / "hub" / "one_more" / "test" / "mochitest.toml").touch()
+
+    assert (
+        test_scheduling.find_manifests_for_paths(str(tmp_path), ["hub/moz.build"])
+        == set()
+    )
+
+    # The cap applies per path, so a narrow file is still scheduled when
+    # modified together with a broad one.
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["hub/moz.build", "dom/battery/BatteryManager.cpp"]
+    ) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["test/test_resolve_uris_ipc.js"]
+    ) == {
+        "test/chrome.toml",
+        "test/mochitest.toml",
+    }
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["test/relative/path.png"]
+    ) == {"test/chrome.toml"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_glob/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["absolute_path_with_glob/asd.png"]
+        )
+        == set()
+    )
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["absolute_path_with_glob/subdir/asd.js"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_subdirglob/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path), ["absolute_path_with_subdirglob/subdir/asd.js"]
+    ) == {"test/chrome.toml"}
+
+    (tmp_path / "testing/web-platform/tests/html/semantics").mkdir(parents=True)
+    (tmp_path / "testing/web-platform/tests/.gitignore").touch()
+    (
+        tmp_path
+        / "testing/web-platform/tests/html/semantics/rellist-feature-detection.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/tests/html/semantics/META.yml").touch()
+    (tmp_path / "testing/web-platform/tests/html/semantics/interactive-elements").mkdir(
+        parents=True
+    )
+    (
+        tmp_path
+        / "testing/web-platform/tests/html/semantics/interactive-elements"
+        / "contextmenu-historical.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/mozilla/meta/pointerevents").mkdir(parents=True)
+    (
+        tmp_path
+        / "testing/web-platform/mozilla/meta/pointerevents/pointerevent_click_during_parent_capture.html.ini"
+    ).touch()
+    (tmp_path / "testing/web-platform/mozilla/tests/pointerevents").mkdir(parents=True)
+    (
+        tmp_path
+        / "testing/web-platform/mozilla/tests/pointerevents/pointerevent_click_during_parent_capture.html"
+    ).touch()
+    (tmp_path / "testing/web-platform/tests/encrypted-media/content").mkdir(
+        parents=True
+    )
+    (
+        tmp_path
+        / "testing/web-platform/tests/encrypted-media/clearkey-events.https.html"
+    ).touch()
+    (
+        tmp_path
+        / "testing/web-platform/tests/encrypted-media/content/content-metadata.js"
+    ).touch()
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["testing/web-platform/tests/.gitignore"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        ["testing/web-platform/tests/html/semantics/rellist-feature-detection.html"],
+    ) == {"testing/web-platform/tests/html/semantics"}
+
+    assert (
+        test_scheduling.find_manifests_for_paths(
+            str(tmp_path), ["testing/web-platform/tests/html/semantics/META.yml"]
+        )
+        == set()
+    )
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        [
+            "testing/web-platform/tests/html/semantics/interactive-elements/contextmenu-historical.html"
+        ],
+    ) == {"testing/web-platform/tests/html/semantics/interactive-elements"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        [
+            "testing/web-platform/mozilla/meta/pointerevents/pointerevent_click_during_parent_capture.html.ini"
+        ],
+    ) == {"testing/web-platform/mozilla/tests/pointerevents"}
+
+    assert test_scheduling.find_manifests_for_paths(
+        str(tmp_path),
+        ["testing/web-platform/tests/encrypted-media/content/content-metadata.js"],
+    ) == {"testing/web-platform/tests/encrypted-media"}
+
+
+def test_find_tasks_for_paths(tmp_path) -> None:
+    known_tasks = (
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-mochitest-browser-chrome-1proc",
+        "test-linux64/opt-gtest-e10s",
+        "test-linux64/opt-cppunit",
+        "test-linux64/opt-rusttests",
+    )
+
+    # Set up a minimal cppunittest.toml listing two test names.
+    (tmp_path / "testing").mkdir(parents=True)
+    (tmp_path / "testing" / "cppunittest.toml").write_text(
+        '[DEFAULT]\n\n["TestArray"]\n\n["TestArrayUtils"]\n'
+    )
+
+    # Non-C/C++ file containing GTest patterns should not trigger gtest selection.
+    (tmp_path / "script.py").write_bytes(b"TEST(Foo, Bar) {}")
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["script.py"])
+        == []
+    )
+
+    # C/C++ file without GTest patterns should not trigger gtest selection.
+    (tmp_path / "source.cpp").write_bytes(b"int main() { return 0; }")
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["source.cpp"])
+        == []
+    )
+
+    # C/C++ file with TEST macro selects tasks containing "gtest".
+    (tmp_path / "test_foo.cpp").write_bytes(b"TEST(FooTest, Bar) {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["test_foo.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # C/C++ file with TEST_F macro also triggers gtest selection.
+    (tmp_path / "test_fixture.cpp").write_bytes(b"TEST_F(FooFixture, Bar) {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["test_fixture.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # Non-existent C/C++ file raises OSError which is silently skipped.
+    assert (
+        test_scheduling.find_tasks_for_paths(
+            str(tmp_path), known_tasks, ["nonexistent.cpp"]
+        )
+        == []
+    )
+
+    # No paths -> no tasks selected.
+    assert test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, []) == []
+
+    # known_tasks without any "gtest" task -> empty even when GTest file present.
+    assert (
+        test_scheduling.find_tasks_for_paths(
+            str(tmp_path),
+            ("test-linux64/opt-mochitest-browser-chrome-1proc",),
+            ["test_foo.cpp"],
+        )
+        == []
+    )
+
+    # Two paths: one C/C++ with GTest patterns and one without -> gtest tasks selected.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["source.cpp", "test_foo.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # File whose path contains a gtest folder triggers gtest selection regardless of content.
+    (tmp_path / "dom" / "media" / "gtest").mkdir(parents=True)
+    (tmp_path / "dom" / "media" / "gtest" / "TestCubeb.cpp").write_bytes(
+        b"// no test macros\n"
+    )
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["dom/media/gtest/TestCubeb.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # File in a folder adjacent to a gtest subfolder triggers gtest selection.
+    (tmp_path / "dom" / "media" / "CubebUtils.cpp").write_bytes(b"int foo() {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["dom/media/CubebUtils.cpp"]
+    ) == [
+        "test-linux64/opt-gtest-1proc",
+        "test-linux64/opt-gtest-e10s",
+    ]
+
+    # Rust file triggers rusttests selection.
+    (tmp_path / "servo").mkdir()
+    (tmp_path / "servo" / "lib.rs").write_bytes(b"pub fn foo() {}\n")
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["servo/lib.rs"]
+    ) == ["test-linux64/opt-rusttests"]
+
+    # Non-Rust file does not trigger rusttests selection.
+    assert "test-linux64/opt-rusttests" not in test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["servo/foo.cpp"]
+    )
+
+    # Modifying testing/cppunittest.toml itself triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/cppunittest.toml"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # Modifying testing/remotecppunittests.py triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/remotecppunittests.py"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # Modifying testing/runcppunittests.py triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["testing/runcppunittests.py"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # A .cpp file whose stem is listed in cppunittest.toml triggers cppunit selection.
+    assert test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["mfbt/TestArrayUtils.cpp"]
+    ) == ["test-linux64/opt-cppunit"]
+
+    # A .cpp file whose stem is not listed in cppunittest.toml does not trigger cppunit.
+    assert "test-linux64/opt-cppunit" not in test_scheduling.find_tasks_for_paths(
+        str(tmp_path), known_tasks, ["mfbt/TestUnknown.cpp"]
+    )
+
+    # Empty known_tasks -> always empty.
+    assert (
+        test_scheduling.find_tasks_for_paths(str(tmp_path), (), ["test_foo.cpp"]) == []
+    )
+
+
+def test_get_suite_test_dirs(tmp_path) -> None:
+    def write(path, content):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(content)
+
+    write(
+        "browser/components/moz.build",
+        'MARIONETTE_MANIFESTS += ["sessionstore/test/marionette/manifest.toml"]\n',
+    )
+    write(
+        "toolkit/components/telemetry/moz.build",
+        "TELEMETRY_TESTS_CLIENT_MANIFESTS += [\n"
+        '    "tests/marionette/tests/manifest.toml",\n'
+        "]\n",
+    )
+    write("xpcom/tests/gtest/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+    write("mfbt/tests/moz.build", 'CppUnitTests(["TestArray"])\n')
+    write("dom/base/moz.build", 'MOCHITEST_MANIFESTS += ["test/mochitest.toml"]\n')
+    # Third-party code and object directories are skipped.
+    write("third_party/foo/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+    write("obj-x86_64-pc-linux-gnu/moz.build", 'FINAL_LIBRARY = "xul-gtest"\n')
+
+    assert test_scheduling.get_suite_test_dirs(str(tmp_path)) == {
+        "marionette": ("browser/components/sessionstore/test/marionette/",),
+        "telemetry-tests": ("toolkit/components/telemetry/tests/marionette/tests/",),
+        "firefox-ui": (),
+        "gtest": ("xpcom/tests/gtest/",),
+        "cppunittest": ("mfbt/tests/",),
+    }
+
+
+def test_config_tokens() -> None:
+    # The platform family (windows) is a token too.
+    assert test_scheduling.config_tokens("test-windows11-64-25h2/debug-*-swr") == (
+        "test",
+        "windows11",
+        "25h2",
+        "debug",
+        "swr",
+        "windows",
+    )
+    assert test_scheduling.config_tokens(
+        "test-android-em-14-x86_64/opt-geckoview-*-nofis"
+    ) == ("test", "android", "em", "x86_64", "opt", "geckoview", "nofis")
+    assert test_scheduling.config_platform_token("test-macosx1500-aarch64/opt-*") == (
+        "macosx1500"
+    )
+    assert test_scheduling.config_platform_token("weird") == ""
+
+
+def test_config_platform_family() -> None:
+    assert test_scheduling.config_platform_family("test-macosx1500-aarch64/opt-*") == (
+        "macosx"
+    )
+    assert test_scheduling.config_platform_family("test-macosx1015-64-qr/opt-*") == (
+        "macosx"
+    )
+    assert (
+        test_scheduling.config_platform_family("test-linux2404-64/debug-*") == "linux"
+    )
+    assert test_scheduling.config_platform_family(
+        "test-android-em-14-x86_64/opt-geckoview-*"
+    ) == ("android")
+    assert test_scheduling.config_platform_family("test-windows11-64-25h2/opt-*") == (
+        "windows"
+    )
+
+
+def test_get_path_platform_hints() -> None:
+    assert test_scheduling.get_path_platform_hints(
+        [
+            "widget/cocoa/nsCocoaWindow.mm",
+            "mozglue/baseprofiler/core/shared-libraries-macos.cc",
+            "widget/windows/nsWindow.cpp",
+            "mobile/android/geckoview/build.gradle",
+            "dom/base/Document.cpp",
+        ]
+    ) == {"macosx": 2, "windows": 1, "android": 1}
+
+
+def test_get_config_select_regressions() -> None:
+    LINUX = "test-linux2404-64/opt-*"
+    WIN = "test-windows11-64-25h2/debug-*"
+    MAC = "test-macosx1500-aarch64/opt-*"
+    ANDROID = "test-android-em-14-x86_64/opt-geckoview-*"
+    G = Group("dom/base/test/mochitest.toml")
+
+    pushes: list[Any] = [
+        # The culprit: G failed on WIN, ran (and passed) on LINUX.
+        (["rev0"], "rev3", [(LINUX, G), (WIN, G)], [], [(WIN, G)]),
+        # A later push: G passed on MAC; it failed on ANDROID, but mozci attributed that failure to
+        # this push, so it isn't a pass for the culprit.
+        (["rev1"], None, [(MAC, G), (ANDROID, G)], [(ANDROID, G)], []),
+        # The test-verify config isn't a config; the chunk suffix of the group is dropped.
+        (
+            ["rev2"],
+            None,
+            [("test-linux2404-64/opt-*-test-verify", G), (LINUX, f"{G}:chunk1")],
+            [],
+            [],
+        ),
+        # The push with the fix: its runs are not counted.
+        (["rev3"], None, [("test-windows11-64-24h2/opt-*", G)], [], []),
+    ]
+
+    regressions, recent_configs = test_scheduling.get_config_select_regressions(
+        lambda: iter(pushes), recent_pushes=2
+    )
+
+    culprit, later = regressions
+    assert culprit == test_scheduling.ConfigSelectRegression(
+        0, (Revision("rev0"),), G, frozenset({WIN}), frozenset({WIN, LINUX, MAC})
+    )
+    # The later push's own regression (no fix in the data: only its own runs are known).
+    assert later == test_scheduling.ConfigSelectRegression(
+        1, (Revision("rev1"),), G, frozenset({ANDROID}), frozenset({ANDROID, MAC})
+    )
+    # The configs that ran in the last two pushes.
+    assert recent_configs == {LINUX, "test-windows11-64-24h2/opt-*"}
+
+
+def test_get_config_select_regressions_failure_after_later_pass() -> None:
+    LINUX = "test-linux2404-64/opt-*"
+    WIN = "test-windows11-64-25h2/debug-*"
+    MAC = "test-macosx1500-aarch64/opt-*"
+    G = Group("dom/base/test/mochitest.toml")
+
+    pushes: list[Any] = [
+        # The culprit: G failed on WIN.
+        (["rev0"], "rev4", [(WIN, G)], [], [(WIN, G)]),
+        # LINUX and MAC didn't run on the culprit. LINUX passed here...
+        (["rev1"], None, [(LINUX, G)], [], []),
+        # ... and failed here, attributed to this push: it passed with the culprit's changes. MAC's first
+        # run after the culprit failed, attributed to this push: it didn't verifiably pass.
+        (["rev2"], None, [(LINUX, G), (MAC, G)], [(LINUX, G), (MAC, G)], []),
+        # A later pass of MAC doesn't count, as its first run failed.
+        (["rev3"], None, [(MAC, G)], [], []),
+        # The push with the fix.
+        (["rev4"], None, [], [], []),
+    ]
+
+    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+
+    assert regressions[0] == test_scheduling.ConfigSelectRegression(
+        0, (Revision("rev0"),), G, frozenset({WIN}), frozenset({WIN, LINUX})
+    )
+
+
+def test_get_config_select_regressions_ignored_configs_only() -> None:
+    LINUX = "test-linux2404-64/opt-*"
+    VERIFY = "test-linux2404-64/opt-*-test-verify"
+    G = Group("dom/base/test/mochitest.toml")
+    G2 = Group("dom/base/test/browser.toml")
+
+    pushes: list[Any] = [
+        # G only failed on the test-verify config: it isn't a regression. G2 regressed.
+        (["rev0"], None, [(VERIFY, G), (LINUX, G2)], [], [(VERIFY, G), (LINUX, G2)]),
+        # Only test-verify failures.
+        (["rev1"], None, [(VERIFY, G)], [(VERIFY, G)], []),
+    ]
+
+    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+
+    assert regressions == [
+        test_scheduling.ConfigSelectRegression(
+            0, (Revision("rev0"),), G2, frozenset({LINUX}), frozenset({LINUX})
+        )
+    ]
+
+
+def test_get_config_select_regressions_window_is_capped(monkeypatch) -> None:
+    monkeypatch.setattr(test_scheduling, "CONFIG_SELECT_MAX_LATER", 2)
+    G = "dom/base/test/mochitest.toml"
+    A, B, C = "test-a/opt-*", "test-b/opt-*", "test-c/opt-*"
+
+    pushes: list[Any] = [
+        (["rev0"], "rev4", [(A, G)], [(A, G)], []),
+        (["rev1"], None, [(B, G)], [], []),
+        (["rev2"], None, [], [], []),
+        # More than CONFIG_SELECT_MAX_LATER pushes after the culprit.
+        (["rev3"], None, [(C, G)], [], []),
+        (["rev4"], None, [], [], []),
+    ]
+
+    (regression,), _ = test_scheduling.get_config_select_regressions(
+        lambda: iter(pushes)
+    )
+    assert regression.observed == frozenset({A, B})
+
+
+@pytest.mark.parametrize(
+    "config,dimensions",
+    [
+        (
+            "test-linux2404-64/debug-*-swr",
+            {
+                "family": "linux",
+                "platform": "linux2404-64",
+                "build": "debug",
+                "variant": "swr",
+            },
+        ),
+        (
+            "test-linux2404-64-tsan/opt-*",
+            {
+                "family": "linux",
+                "platform": "linux2404-64-tsan",
+                "build": "tsan",
+                "variant": "plain",
+            },
+        ),
+        (
+            "test-android-em-14-x86_64/debug-geckoview-*-nofis",
+            {
+                "family": "android",
+                "platform": "android-em-14-x86_64",
+                "build": "debug",
+                "variant": "nofis",
+            },
+        ),
+        (
+            "test-macosx1500-aarch64/opt-*-swr-a11y-checks",
+            {
+                "family": "macosx",
+                "platform": "macosx1500-aarch64",
+                "build": "opt",
+                "variant": "swr-a11y-checks",
+            },
+        ),
+    ],
+)
+def test_config_dimensions(config: str, dimensions: dict[str, str]) -> None:
+    assert test_scheduling.config_dimensions(config) == dimensions
