@@ -14,7 +14,6 @@ analysis artifacts.
 
 import contextlib
 import json
-import os
 import re
 import subprocess
 import sys
@@ -137,37 +136,6 @@ def _build_options(
     )
 
 
-def _setup_ci_build(fx_ctx: FirefoxContext, env: dict[str, str]) -> None:
-    """Build as the failing CI task did: its toolchains and mozconfig."""
-    fetches = [f"{f['task']}:{f['artifact']}" for f in json.loads(env["MOZ_FETCHES"])]
-    fetches_dir = fx_ctx.source_dir.parent / "fetches"
-    fetches_dir.mkdir(exist_ok=True)
-    # A reused workspace keeps the in-tree mozconfig, which mach refuses outside automation.
-    fx_ctx.mozconfig.unlink(missing_ok=True)
-    subprocess.run(
-        [str(fx_ctx.source_dir / "mach"), "--no-interactive", "artifact"]
-        + ["toolchain", "--from-task", *fetches],
-        cwd=fetches_dir,
-        check=True,
-        stdout=sys.stderr,
-        stderr=sys.stderr,
-    )
-    # mach takes in-tree mozconfigs only in automation.
-    os.environ.update(
-        {
-            k: env[k]
-            for k in ("DISABLE_CLANG_PLUGIN", "FORCE_GCC", "PERFHERDER_EXTRA_OPTIONS")
-            if k in env
-        },
-        MOZ_AUTOMATION="1",
-        MOZ_FETCHES_DIR=str(fetches_dir),
-    )
-    fx_ctx.mozconfig.write_text(
-        f'. "$topsrcdir/{env["MOZCONFIG"]}"\n'
-        f"mk_add_options MOZ_OBJDIR={fx_ctx.objdir}\n"
-    )
-
-
 def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
     """Write a mozconfig mirroring the failing CI build, unless one exists.
 
@@ -250,6 +218,8 @@ async def run_build_repair(
     scratch_out = scratch_dir / "out"
     scratch_out.mkdir(parents=True, exist_ok=True)
 
+    if ci_env is not None:
+        fx_ctx.configure_ci_build(ci_env)
     firefox_tools = [*firefox.TOOLS, *TRY_TOOLS] if run_try_push else firefox.TOOLS
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox_tools)
     mcp_servers: dict[str, McpServerConfig] = {
@@ -398,9 +368,7 @@ async def run_build_repair(
 
             # Stage 2: fix (lower effort, edits the source tree and verifies it
             # builds against a mozconfig that mirrors the failing CI config).
-            if ci_env:
-                _setup_ci_build(fx_ctx, ci_env)
-            else:
+            if not ci_env:
                 _write_mozconfig(fx_ctx)
             fix_label = (
                 f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
