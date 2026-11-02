@@ -37,7 +37,6 @@ def _run(
     blame=None,
     checkout=None,
     ci_env=None,
-    fx_ctx=None,
 ):
     """Run the agent with both sessions faked, returning their (options, prompt).
 
@@ -62,14 +61,11 @@ def _run(
     monkeypatch.setattr(agent, "_run_session", fake_session)
     monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {"type": "sdk"})
 
-    fx_ctx = fx_ctx or SimpleNamespace(
-        mozconfig=tmp_path / ".mozconfig", objdir=tmp_path / "objdir"
-    )
     result = asyncio.run(
         agent.run_build_repair(
             bugzilla_mcp_server={"type": "http", "url": "http://broker/mcp"},
             source_repo=tmp_path,
-            fx_ctx=fx_ctx,
+            fx_ctx=agent.FirefoxContext.from_source_repo(tmp_path, objdir="objdir"),
             bug_id=bug_id,
             commit_bugs={FAILURE_COMMIT: push_bug} if push_bug else {},
             git_commits=[FAILURE_COMMIT],
@@ -84,25 +80,25 @@ def _run(
     return result, sessions[0], sessions[1] if len(sessions) > 1 else None
 
 
-def test_ci_build_env_is_attached_to_firefox_context(tmp_path, monkeypatch):
+@pytest.mark.parametrize("blame", [None, ""])
+def test_ci_build_is_configured_only_for_the_fix_stage(tmp_path, monkeypatch, blame):
     env = {"MOZCONFIG": "browser/config/mozconfigs/linux64/nightly"}
     configured = []
-    fx_ctx = SimpleNamespace(
-        mozconfig=tmp_path / ".mozconfig",
-        objdir=tmp_path / "objdir",
-        configure_ci_build=configured.append,
-    )
 
+    async def configure(self, env):
+        configured.append(env)
+
+    monkeypatch.setattr(agent.FirefoxContext, "configure_ci_build", configure)
     _run(
         tmp_path,
         monkeypatch,
         bug_id=1,
         actions_recorder=None,
         ci_env=env,
-        fx_ctx=fx_ctx,
+        blame=blame,
     )
 
-    assert configured == [env]
+    assert configured == ([env] if blame is None else [])
 
 
 # --- the fix stage works on the blamed commit itself ----------------------- #

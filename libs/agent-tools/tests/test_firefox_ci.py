@@ -1,6 +1,7 @@
 import json
 import os
 
+import pytest
 from agent_tools import firefox
 from agent_tools.firefox import ci_build
 
@@ -54,7 +55,7 @@ def test_linux_build_env_skips_unsupported_tasks(monkeypatch):
         assert ci_build.linux_build_env("T") is None
 
 
-async def test_build_firefox_prepares_ci_build_once_per_context_and_resets_stale_mozconfig(
+async def test_ci_build_setup_supports_reused_workspaces_without_changing_process_env(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(ci_build.platform, "machine", lambda: "x86_64")
@@ -73,19 +74,25 @@ async def test_build_firefox_prepares_ci_build_once_per_context_and_resets_stale
         "#!/bin/sh\n"
         f'if [ "$1" = "--no-interactive" ]; then '
         f'[ ! -e "{src}/.mozconfig" ] || exit 41; fi\n'
+        'if [ "$1" = build ]; then\n'
+        '  [ "$MOZ_AUTOMATION" = 1 ] || exit 42\n'
+        f'  [ "$MOZ_FETCHES_DIR" = "{tmp_path}/fetches" ] || exit 43\n'
+        '  [ "$DISABLE_CLANG_PLUGIN" = 1 ] || exit 44\n'
+        '  [ "$PERFHERDER_EXTRA_OPTIONS" = x11 ] || exit 45\n'
+        "fi\n"
         f'echo "$*" >> "{mach_log}"\n'
     )
     mach.chmod(0o755)
     (src / ".mozconfig").write_text("left by the previous run\n")
 
     first = firefox.FirefoxContext.from_source_repo(src, objdir=str(objdir))
-    first.configure_ci_build(ENV)
+    await first.configure_ci_build(ENV)
     assert (await firefox.build_firefox(first, target="image"))["success"]
     assert (await firefox.build_firefox(first, target="image"))["success"]
 
     # A new runtime context models the next local run reusing the same volume.
     second = firefox.FirefoxContext.from_source_repo(src, objdir=str(objdir))
-    second.configure_ci_build(ENV)
+    await second.configure_ci_build(ENV)
     assert (await firefox.build_firefox(second, target="image"))["success"]
 
     commands = mach_log.read_text().splitlines()
@@ -105,9 +112,24 @@ async def test_build_firefox_prepares_ci_build_once_per_context_and_resets_stale
     assert "MOZ_FETCHES_DIR" not in os.environ
     assert "PERFHERDER_EXTRA_OPTIONS" not in os.environ
     assert "DISABLE_CLANG_PLUGIN" not in os.environ
-    assert first._ci_build_env == {
-        "PERFHERDER_EXTRA_OPTIONS": "x11",
-        "DISABLE_CLANG_PLUGIN": "1",
-        "MOZ_AUTOMATION": "1",
-        "MOZ_FETCHES_DIR": str(tmp_path / "fetches"),
-    }
+    assert first.mozconfig.read_text().splitlines() == [
+        '. "$topsrcdir/browser/config/mozconfigs/linux64/nightly"',
+        f"mk_add_options MOZ_OBJDIR={objdir}",
+    ]
+    await first.configure_ci_build(None)
+    assert first._ci_build_env is None
+
+
+async def test_failed_ci_setup_does_not_write_a_build_mozconfig(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_build.platform, "machine", lambda: "x86_64")
+    mach = tmp_path / "mach"
+    mach.write_text("#!/bin/sh\necho toolchain-download-failed >&2\nexit 1\n")
+    mach.chmod(0o755)
+    ctx = firefox.FirefoxContext.from_source_repo(tmp_path)
+    ctx.mozconfig.write_text("left by the previous run\n")
+
+    with pytest.raises(RuntimeError, match="toolchain-download-failed"):
+        await ctx.configure_ci_build(ENV)
+
+    assert not ctx.mozconfig.exists()
+    assert ctx._ci_build_env is None

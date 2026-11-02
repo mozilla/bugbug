@@ -218,8 +218,6 @@ async def run_build_repair(
     scratch_out = scratch_dir / "out"
     scratch_out.mkdir(parents=True, exist_ok=True)
 
-    if ci_env is not None:
-        fx_ctx.configure_ci_build(ci_env)
     firefox_tools = [*firefox.TOOLS, *TRY_TOOLS] if run_try_push else firefox.TOOLS
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox_tools)
     mcp_servers: dict[str, McpServerConfig] = {
@@ -368,7 +366,9 @@ async def run_build_repair(
 
             # Stage 2: fix (lower effort, edits the source tree and verifies it
             # builds against a mozconfig that mirrors the failing CI config).
-            if not ci_env:
+            if ci_env:
+                await fx_ctx.configure_ci_build(ci_env)
+            else:
                 _write_mozconfig(fx_ctx)
             fix_label = (
                 f"bug {resolved_bug_id}" if resolved_bug_id is not None else label
