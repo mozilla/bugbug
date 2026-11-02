@@ -18,6 +18,9 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
+# Appended to every recorded comment, below `COMMENT_FOOTER_SEPARATOR`. The separator is
+# public so an agent's hooks can tell the agent's prose from the runtime's trailer.
+COMMENT_FOOTER_SEPARATOR = "\n\n---\n\n"
 _COMMENT_FOOTER = (
     "If you'd like to provide feedback on this comment, please use the 👍 or 👎 "
     "reaction."
@@ -83,7 +86,7 @@ async def add_comment(
     Use is_private=true for security-sensitive notes. Recorded into the run
     summary for human review — does not post to Bugzilla.
     """
-    text_with_footer = text.rstrip() + "\n\n---\n\n" + _COMMENT_FOOTER
+    text_with_footer = text.rstrip() + COMMENT_FOOTER_SEPARATOR + _COMMENT_FOOTER
     action = recorder.record(
         "bugzilla.add_comment",
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
