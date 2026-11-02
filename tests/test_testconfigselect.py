@@ -263,8 +263,10 @@ def test_select_configs(trained_model) -> None:
 
 
 def test_select_configs_very_likely_runs_on_every_family(trained_model) -> None:
-    # A high threshold: one config per group, except for very likely regressions.
-    selected = trained_model.select_configs({G: 0.5, G2: 1.0}, 1.0, CANDIDATES)
+    # A high threshold: one config per group, except for very likely regressions, whatever their risk.
+    selected = trained_model.select_configs(
+        {G: 0.5, G2: 0.01}, 1.0, CANDIDATES, very_likely_groups={G2}
+    )
     assert len(selected[G]) == 1
     assert {
         testconfigselect.test_scheduling.config_platform_family(c) for c in selected[G2]
@@ -274,7 +276,12 @@ def test_select_configs_very_likely_runs_on_every_family(trained_model) -> None:
 def test_select_configs_allowed_families(trained_model) -> None:
     # A patch only building on Windows: only Windows configs, even for very likely regressions.
     selected = trained_model.select_configs(
-        {G: 1.0, G2: 0.9}, 0.0005, CANDIDATES, ["widget/windows/a.cpp"], {"windows"}
+        {G: 1.0, G2: 0.9},
+        0.0005,
+        CANDIDATES,
+        ["widget/windows/a.cpp"],
+        {"windows"},
+        very_likely_groups={G},
     )
     assert selected == {G: [WINDOWS], G2: [WINDOWS]}
 

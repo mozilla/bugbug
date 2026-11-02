@@ -64,9 +64,6 @@ POSITIVE_WEIGHT_K = 5
 # running one more group.
 SETUP_COST_MULTIPLIER = 1
 MAX_STEPS = 14
-# Groups at least this likely to regress (e.g. the manifests including the modified tests) run on at
-# least one config of each OS family.
-VERY_HIGH_RISK = 0.99
 EVALUATION_THRESHOLDS = (0.05, 0.02, 0.01, 0.005, 0.003, 0.002, 0.001, 0.0005)
 
 
@@ -522,14 +519,15 @@ class ConfigSelector:
         candidates_by_group: Mapping[str, Sequence[str]],
         patch_files: Collection[str] = (),
         allowed_families: Collection[str] | None = None,
+        very_likely_groups: Collection[str] = (),
     ) -> dict[str, list[str]]:
         """Select the configs to run the groups of a push on.
 
         `group_risks` maps each group to its probability of regressing (e.g. from the group selection
         model). Candidates are the configs in `candidates_by_group` (see live_candidates). A config
         is added to a group while the risk times the gain in the probability of catching the group's
-        regression, divided by the config's cost, is at least `threshold`. Groups at least
-        VERY_HIGH_RISK likely to regress also get a config of each OS family.
+        regression, divided by the config's cost, is at least `threshold`. `very_likely_groups` (e.g.
+        the manifests including the modified tests) also get a config of each OS family.
 
         `patch_files` are the files modified by the push. If `allowed_families` is given (the OS
         families building the modified files, see build_platforms), configs of other families are
@@ -552,7 +550,7 @@ class ConfigSelector:
                 continue
 
             required: frozenset[str] = frozenset()
-            if risk >= VERY_HIGH_RISK:
+            if group in very_likely_groups:
                 required = frozenset(
                     test_scheduling.config_platform_family(c) for c in candidates
                 )

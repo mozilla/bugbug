@@ -409,10 +409,13 @@ TUNED_XGBOOST_PARAMS = {"n_estimators": 400, "learning_rate": 0.03, "max_depth":
 
 # Number of runnables per push that the model should select at each confidence level used by the
 # Firefox taskgraph (e.g. bugbug-*-low/medium/high): roughly what the models selected at the fixed
-# 0.7/0.8/0.9 thresholds before the sample weighting and tuning changed their scale.
+# 0.7/0.8/0.9 thresholds before the sample weighting and tuning changed their scale. Groups at the
+# "very_high" level run on a config of each OS family (see the HTTP service's config selection):
+# in offline evaluations, failing pushes caught at the same cost were ~2.3 points higher with one
+# such group per push, and about as high with 0.5 to 3.
 CONFIDENCE_LEVEL_TARGETS = {
     "label": {"low": 26.0, "medium": 15.0, "high": 5.5},
-    "group": {"low": 103.0, "medium": 36.0, "high": 11.0},
+    "group": {"low": 103.0, "medium": 36.0, "high": 11.0, "very_high": 1.0},
 }
 
 # Minimum share of the failing test pushes where the model selects a failure at the "low"

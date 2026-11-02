@@ -8,7 +8,7 @@ import os
 from collections import defaultdict
 from datetime import timedelta
 from functools import lru_cache
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Collection, Sequence
 from urllib.parse import urlparse
 
 import orjson
@@ -508,11 +508,14 @@ def get_build_platforms() -> build_platforms.BuildPlatforms | None:
 
 
 def select_configs(
-    groups: dict[str, float], modified_paths: list[str]
+    groups: dict[str, float],
+    modified_paths: list[str],
+    very_likely_groups: Collection[str] = (),
 ) -> dict[str, list[str]]:
     """The configs to run each group on (patterns over task labels, e.g. test-linux2404-64/opt-*).
 
-    `groups` maps groups to their probability of regressing.
+    `groups` maps groups to their probability of regressing; `very_likely_groups` run on a config of
+    each OS family.
     """
     selected: dict[str, list[str]] = {}
     try:
@@ -528,6 +531,7 @@ def select_configs(
             get_live_config_candidates(),
             modified_paths,
             None if platforms == build_platforms.ALL_PLATFORMS else platforms,
+            very_likely_groups,
         )
     except Exception:
         LOGGER.exception("Failed to select configs, running groups on all of them")
@@ -877,13 +881,23 @@ def _analyze_patch(
     )
     # Config selection weighs groups by their probability of regressing, not by their confidence.
     risks = testgroupselect_model.calibrated_probabilities(groups)
+    # The manifests including the modified tests, and the groups selected with at least the group
+    # model's "very_high" confidence (their calibrated risk is much lower than their confidence), run
+    # on a config of each OS family.
+    very_high_confidence = groups_thresholds.get("very_high")
+    very_likely_groups = {
+        group
+        for group, confidence in groups.items()
+        if very_high_confidence is not None and confidence >= very_high_confidence
+    }
     for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
         risks[group] = 1.0
+        very_likely_groups.add(group)
     for group in backout_groups:
         groups[group] = 1.0
 
-    config_groups = select_configs(risks, modified_paths)
+    config_groups = select_configs(risks, modified_paths, very_likely_groups)
     # The recently failing manifests run on all configs, as the failures might be specific to
     # their configuration.
     for group in backout_groups:
