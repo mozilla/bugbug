@@ -1,0 +1,37 @@
+services:
+  gecko-triage-broker:
+    build:
+      context: ../..
+      dockerfile: agents/gecko-triage/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+    expose:
+      - "8765"
+
+  gecko-triage-agent:
+    build:
+      context: ../..
+      dockerfile: agents/gecko-triage/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      - TEAM=${TEAM:-}
+      - BROKER_URL=http://gecko-triage-broker:8765
+      - SOURCE_REPO=/workspace/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - BOT_ALIASES
+      # No uploader locally: summary/logs are written under /artifacts/<run_id>,
+      # bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      gecko-triage-broker:
+        condition: service_started
+
+volumes:
+  workspace:

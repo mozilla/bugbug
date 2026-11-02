@@ -1,0 +1,16 @@
+# The step limits of each Claude Code session of a run, and the cost limit of the run.
+# A limit stops a session that loops. 0 means no limit. `TURN_LIMITS_FILE` names another
+# file in place of this one, for example a local file with every limit at 0.
+
+[turns]
+main = 60
+investigator = 30
+bug_investigator = 50
+profile_analyst = 30
+log_analyst = 30
+spec_checker = 30
+duplicate_hunter = 16
+close_verifier = 25
+
+[budget]
+max_usd = 5.0
