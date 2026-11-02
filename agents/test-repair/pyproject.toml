@@ -5,7 +5,7 @@ description = "Cloud Run Job image that runs the test-repair agent for hackbot-a
 requires-python = ">=3.14"
 dependencies = [
     "hackbot-runtime[claude-sdk,phabricator]",
-    "agent-tools[bugzilla,firefox]",
+    "agent-tools[bugzilla]",
     "claude-agent-sdk>=0.2.165",
     "mcp>=1.0.0",
     "requests",

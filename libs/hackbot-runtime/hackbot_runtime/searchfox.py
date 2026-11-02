@@ -7,7 +7,7 @@ SHA, it writes a placeholder and this module substitutes the prefix:
 
     [browser/base/content/browser.js#412]({{searchfox.permalink}}/browser/base/content/browser.js#412)
 
-Mirrors the ``{{actions.<ref>.url}}`` convention, but expands at *record* time
+Mirrors the ``{{actions.<action_id>.url}}`` convention, but expands at *record* time
 rather than apply time: unlike a prior action's result, the revision is known
 before the agent runs, and expanding early means the comment awaiting review in
 ``summary.json`` shows the real URLs a human can click.

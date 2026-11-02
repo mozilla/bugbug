@@ -74,17 +74,17 @@ class Definitions:
 
 @dataclass(frozen=True)
 class AllPredicate:
-    children: list["Predicate"]
+    children: list[Predicate]
 
 
 @dataclass(frozen=True)
 class AnyPredicate:
-    children: list["Predicate"]
+    children: list[Predicate]
 
 
 @dataclass(frozen=True)
 class NotPredicate:
-    child: "Predicate"
+    child: Predicate
 
 
 @dataclass(frozen=True)

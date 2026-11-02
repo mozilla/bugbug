@@ -6,20 +6,12 @@
 """Models and tool allowlist for the test-repair agent."""
 
 ANALYSIS_MODEL = "claude-opus-5-5"
-FIX_MODEL = "claude-opus-5-5"
 
-# Building costs ten-odd minutes and only verifies a patch the sheriff does not act
-# on, so the fix stage proposes an unverified patch unless a run asks otherwise.
-SKIP_FIREFOX_BUILD = True
+# The agent a blamed culprit is handed on to for a patch.
+FIX_AGENT = "test-repair-fix"
 
 # Where the verdict is reported.
 SLACK_CHANNEL = "#sheriff-notifications"
-
-# Recordable action types the fix stage may take, by dotted id. Submitting the
-# patch for review is the only one: the author reviews it in the Hackbot UI and
-# then in Phabricator. It needs a bug to file the revision against, so it is
-# wired only when the culprit's bug is known (see run_test_repair).
-ENABLED_ACTION_TYPES = ["phabricator.submit_patch"]
 
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
@@ -30,24 +22,12 @@ BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__download_attachment",
 ]
 
-# Only the build tool: evaluate_testcase / evaluate_js_shell do not run CI's
-# harnesses, so the agent runs the failing test itself with mach over Bash.
-BUILD_TOOL = "mcp__firefox__build_firefox"
-FIREFOX_TOOLS = [BUILD_TOOL]
-
 ALLOWED_TOOLS = [
     "Read",
     "Grep",
     "Glob",
     "Bash",
-    "Edit",
     "Write",
-    "MultiEdit",
     "WebFetch",
     "WebSearch",
-]
-
-ADDITIONAL_DIRS = [
-    "~/.mozbuild",
-    "~/.cache/uv/",
 ]

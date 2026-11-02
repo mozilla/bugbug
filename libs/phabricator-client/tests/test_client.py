@@ -245,11 +245,17 @@ async def test_get_project_members(monkeypatch):
             }
         },
     )
-    assert await _client().get_project_members("PHID-PROJ-1") == frozenset(
+    assert await _client().get_project_members("some-project") == frozenset(
         {"PHID-USER-1", "PHID-USER-2"}
     )
-    assert captured["params"]["constraints"] == {"phids": ["PHID-PROJ-1"]}
+    assert captured["params"]["constraints"] == {"slugs": ["some-project"]}
     assert captured["params"]["attachments"] == {"members": True}
+
+
+async def test_get_project_members_unknown_slug(monkeypatch):
+    _capture_post(monkeypatch, {"result": {"data": []}})
+    with pytest.raises(ValueError, match="missing-project"):
+        await _client().get_project_members("missing-project")
 
 
 async def test_query_latest_diff_picks_highest_id(monkeypatch):

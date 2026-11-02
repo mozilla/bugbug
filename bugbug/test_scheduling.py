@@ -27,6 +27,7 @@ from typing import (
     Generator,
     Iterable,
     Iterator,
+    NamedTuple,
     NewType,
     Sequence,
     Set,
@@ -220,6 +221,273 @@ def rename_runnables(
         )
     else:
         raise UnexpectedGranularityError(granularity)
+
+
+# How many pushes after a culprit to look for runs of its regressed groups.
+CONFIG_SELECT_MAX_LATER = 100
+
+
+def config_platform_family(config: str) -> str:
+    """The platform of a config without its version (e.g. macosx for test-macosx1500-aarch64/debug-*).
+
+    For the usual platforms it is the OS family (android, linux, macosx, windows).
+    """
+    platform = config.removeprefix("test-").split("/")[0]
+    match = re.match(r"[a-z]+", platform)
+    return match.group(0) if match else ""
+
+
+def config_tokens(config: str) -> tuple[str, ...]:
+    """The tokens of a config (split on "-" and "/"), without numbers and the suite placeholder.
+
+    E.g. test-windows11-64-25h2/debug-*-swr has the tokens test, windows11, 25h2, debug and swr. As
+    for the tokens of task names, they're shared by related configs (all debug configs, all swr
+    configs, ...), so new platforms and variants don't need any update. The platform family is also
+    a token (windows here), so a new version of a platform shares the history of the previous ones.
+    """
+    tokens = tuple(
+        token
+        for token in re.split(r"[-/]", config)
+        if token and token != "*" and not token.isdigit()
+    )
+    family = config_platform_family(config)
+    return tokens + (family,) if family and family not in tokens else tokens
+
+
+def config_platform_token(config: str) -> str:
+    """The platform token of a config (e.g. windows11 for test-windows11-64-25h2/debug-*)."""
+    tokens = config_tokens(config)
+    return tokens[1] if len(tokens) > 1 else ""
+
+
+CONFIG_DIMENSIONS = ("family", "platform", "build", "variant")
+
+
+def config_dimensions(config: str) -> dict[str, str]:
+    """The dimensions of a config: OS family, platform, build type and variant.
+
+    E.g. test-linux2404-64/debug-*-swr -> family=linux, platform=linux2404-64, build=debug, variant=swr.
+    The family is the platform without its version; sanitizers in the platform (test-linux2404-64-tsan/opt-*)
+    are the build type; the variant is "plain" if there is none.
+    """
+    platform, _, rest = config.removeprefix("test-").partition("/")
+    build_part, _, variant_part = rest.partition("-*")
+    build_tokens = [t for t in build_part.split("-") if t and t != "geckoview"]
+    build = build_tokens[0] if build_tokens else "opt"
+    for sanitizer in ("asan", "tsan", "ccov"):
+        if f"-{sanitizer}" in platform:
+            build = sanitizer
+    variants = build_tokens[1:] + [t for t in variant_part.split("-") if t]
+    return {
+        "family": config_platform_family(config),
+        "platform": platform,
+        "build": build,
+        "variant": "-".join(variants) or "plain",
+    }
+
+
+# Path tokens hinting that a file is specific to an OS family.
+PLATFORM_PATH_KEYWORDS = {
+    "windows": frozenset(
+        (
+            "win",
+            "windows",
+            "win32",
+            "win64",
+            "wmf",
+            "dxgi",
+            "d3d",
+            "d3d11",
+            "d3d12",
+            "dcomp",
+            "uia",
+            "msaa",
+            "ia2",
+            "winrt",
+            "msix",
+            "nsis",
+            "hresult",
+            "dwrite",
+            "directwrite",
+        )
+    ),
+    "macosx": frozenset(
+        (
+            "mac",
+            "macos",
+            "macosx",
+            "cocoa",
+            "osx",
+            "darwin",
+            "coreaudio",
+            "corefoundation",
+        )
+    ),
+    "linux": frozenset(
+        (
+            "linux",
+            "gtk",
+            "wayland",
+            "x11",
+            "dbus",
+            "gnome",
+            "pulse",
+            "alsa",
+            "vaapi",
+            "dmabuf",
+        )
+    ),
+    "android": frozenset(("android", "geckoview", "fenix", "kotlin", "gradle", "jni")),
+}
+PLATFORM_PATH_SUFFIXES = {"macosx": (".mm",), "android": (".java", ".kt")}
+
+
+def get_path_platform_hints(paths: Iterable[str]) -> dict[str, int]:
+    """How many of the paths hint at each OS family (see PLATFORM_PATH_KEYWORDS)."""
+    hints: collections.Counter[str] = collections.Counter()
+    for path in paths:
+        tokens = set(re.split(r"[/._\-]", path.lower()))
+        for family, keywords in PLATFORM_PATH_KEYWORDS.items():
+            if (
+                tokens & keywords
+                or path.endswith(PLATFORM_PATH_SUFFIXES.get(family, ()))
+                or (family == "android" and path.startswith("mobile/android/"))
+            ):
+                hints[family] += 1
+    return dict(hints)
+
+
+class ConfigSelectRegression(NamedTuple):
+    push_index: int
+    revs: tuple[Revision, ...]
+    group: Group
+    # Configs the group failed on.
+    failed: frozenset[str]
+    # Configs with a known outcome: the failed ones, and those known to have passed.
+    observed: frozenset[str]
+
+
+def _clean_configs(configs: Iterable[str]) -> set[str]:
+    return {rename_task(config) for config in configs if "-test-verify" not in config}
+
+
+def _configs_by_group(config_groups: Iterable[Runnable]) -> dict[Group, set[str]]:
+    result: dict[Group, set[str]] = collections.defaultdict(set)
+    for config, group in cast(Iterable[ConfigGroup], config_groups):
+        # Groups only run (or failing) on ignored configs (e.g. test-verify) are left out, so a group
+        # whose only failures are on them isn't a regression.
+        configs = _clean_configs((config,))
+        if configs:
+            result[Group(group.split(":")[0])] |= configs
+    return result
+
+
+def get_config_select_regressions(
+    push_data_factory: Callable[[], Iterable[PushResult]],
+    recent_pushes: int = 1000,
+) -> tuple[list[ConfigSelectRegression], set[str]]:
+    """The regressions of config/group push data, with the configs they failed on and passed on.
+
+    A config the regressed group ran on without failing passed, both on the culprit push and on the
+    following pushes up to the one with the fix (at most CONFIG_SELECT_MAX_LATER pushes later):
+    mozci blames failures in that window on the culprit (mozilla/bugbug#1858). Unless the config's first
+    run after the culprit failed and the failure was attributed to a later push (e.g. because the config
+    didn't run on the culprit): with no run in between, the attribution can't tell the pushes apart, so
+    the config didn't verifiably pass. A failure after a pass doesn't matter (as in get_non_run_negatives).
+
+    Also returns the configs that ran in the last `recent_pushes` pushes, used to name the configs of
+    the tasks in the current task graph (see testconfigselect.live_candidates).
+    """
+    rev_index: dict[Revision, int] = {}
+    culprits: list[
+        tuple[
+            int,
+            tuple[Revision, ...],
+            Revision,
+            dict[Group, set[str]],
+            dict[Group, set[str]],
+        ]
+    ] = []
+    failures_at: dict[int, dict[Group, set[str]]] = {}
+    num_pushes = 0
+    for index, push in enumerate(push_data_factory()):
+        (
+            revisions,
+            fix_revision,
+            push_tasks,
+            possible_regressions,
+            likely_regressions,
+        ) = push
+        num_pushes += 1
+        for revision in revisions:
+            rev_index[revision] = index
+        if possible_regressions or likely_regressions:
+            failed = _configs_by_group(
+                tuple(possible_regressions) + tuple(likely_regressions)
+            )
+            failures_at[index] = failed
+            culprits.append(
+                (
+                    index,
+                    tuple(revisions),
+                    fix_revision,
+                    failed,
+                    _configs_by_group(push_tasks),
+                )
+            )
+
+    # Later pushes whose runs we need: push index -> group -> culprit indices.
+    needed: dict[int, dict[Group, set[int]]] = collections.defaultdict(
+        lambda: collections.defaultdict(set)
+    )
+    windows: dict[int, range] = {}
+    for index, _, fix_revision, failed, _ in culprits:
+        end = index + 1
+        if fix_revision in rev_index and rev_index[fix_revision] > index:
+            end = min(rev_index[fix_revision], index + CONFIG_SELECT_MAX_LATER + 1)
+        windows[index] = range(index + 1, end)
+        for later in windows[index]:
+            for group in failed:
+                needed[later][group].add(index)
+
+    # The first push of the window each config ran the group on.
+    later_runs: dict[tuple[int, Group], dict[str, int]] = collections.defaultdict(dict)
+    recent: set[str] = set()
+    for index, push in enumerate(push_data_factory()):
+        groups_needed = needed.get(index)
+        if groups_needed is None and index < num_pushes - recent_pushes:
+            continue
+
+        for group, configs in _configs_by_group(push[2]).items():
+            if index >= num_pushes - recent_pushes:
+                recent |= configs
+            for culprit in groups_needed.get(group, ()) if groups_needed else ():
+                for config in configs:
+                    later_runs[(culprit, group)].setdefault(config, index)
+
+    regressions = []
+    for index, culprit_revs, _, failed, culprit_runs in culprits:
+        for group in sorted(failed):
+            first_failure: dict[str, int] = {}
+            for later in windows[index]:
+                for config in failures_at.get(later, {}).get(group, ()):
+                    first_failure.setdefault(config, later)
+            passed = culprit_runs.get(group, set()) | {
+                config
+                for config, first_run in later_runs.get((index, group), {}).items()
+                if first_failure.get(config, first_run + 1) > first_run
+            }
+            regressions.append(
+                ConfigSelectRegression(
+                    index,
+                    culprit_revs,
+                    group,
+                    frozenset(failed[group]),
+                    frozenset(passed | failed[group]),
+                )
+            )
+
+    return regressions, recent
 
 
 def get_push_data(
@@ -883,16 +1151,23 @@ NON_RUN_NEGATIVES_MAX_LATER = 100
 
 def index_runs(
     push_data: Iterable[PushResult],
-) -> tuple[dict[Runnable, list[int]], dict[Revision, int]]:
-    """Map each runnable to the (sorted) indices of the pushes it ran on, and each revision to its push index."""
+) -> tuple[dict[Runnable, list[int]], dict[Revision, int], dict[Runnable, list[int]]]:
+    """Index the runs of the runnables.
+
+    Returns each runnable's (sorted) indices of the pushes it ran on, each revision's push index, and
+    each runnable's (sorted) indices of the pushes it was reported as a (possible or likely) regression of.
+    """
     runs: dict[Runnable, list[int]] = collections.defaultdict(list)
     rev_to_push: dict[Revision, int] = {}
-    for i, (revisions, _, push_runnables, _, _) in enumerate(push_data):
+    regressions: dict[Runnable, list[int]] = collections.defaultdict(list)
+    for i, (revisions, _, push_runnables, possible, likely) in enumerate(push_data):
         for revision in revisions:
             rev_to_push[revision] = i
         for runnable in push_runnables:
             runs[runnable].append(i)
-    return runs, rev_to_push
+        for runnable in set(possible) | set(likely):
+            regressions[runnable].append(i)
+    return runs, rev_to_push, regressions
 
 
 def get_non_run_negatives(
@@ -903,12 +1178,16 @@ def get_non_run_negatives(
     runs: dict[Runnable, list[int]],
     count: int,
     rng: random.Random,
+    regressions: dict[Runnable, list[int]] | None = None,
 ) -> list[Runnable]:
     """Sample runnables that didn't run on a push but are known to have passed with its changes.
 
     A runnable that didn't run on the push is a verified negative if it ran on a later push while the
     push's changes were still in the tree (up to `end_index`, i.e. before the push was backed out), since
-    a failure there would have been attributed to the push as a regression.
+    a failure there would have been attributed to the push as a regression. Unless its first run after the
+    push failed and the failure was attributed to a later push (`regressions`, see index_runs): with no run
+    in between, the attribution can't tell the pushes apart, so the runnable didn't verifiably pass. A
+    failure after a pass doesn't matter, as the pass happened with the push's changes.
     """
     pool = [c for c in candidates if c not in excluded]
     sampled = rng.sample(pool, min(count, len(pool)))
@@ -916,8 +1195,16 @@ def get_non_run_negatives(
     for runnable in sampled:
         push_indices = runs.get(runnable, [])
         pos = bisect.bisect_right(push_indices, push_index)
-        if pos < len(push_indices) and push_indices[pos] <= end_index:
-            verified.append(runnable)
+        if pos >= len(push_indices) or push_indices[pos] > end_index:
+            continue
+
+        first_run = push_indices[pos]
+        regression_indices = regressions.get(runnable, []) if regressions else []
+        pos = bisect.bisect_right(regression_indices, push_index)
+        if pos < len(regression_indices) and regression_indices[pos] <= first_run:
+            continue
+
+        verified.append(runnable)
     return verified
 
 

@@ -3,26 +3,25 @@ FROM python:3.14 AS builder
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
+
+# To build PyGObject (the a11y extra), which has no Linux wheels.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgirepository-2.0-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install external deps without building workspace members.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=VERSION,target=VERSION \
-    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-bug-fix
+    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-bug-fix --extra a11y
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
-    uv sync --locked --no-dev --no-editable --package hackbot-agent-bug-fix
-
-# profiler-cli, the Firefox Profiler's command-line analyzer. It runs with the
-# node `mach bootstrap` installs, so this stage only installs it.
-FROM node:24-trixie-slim AS profiler-cli
-ARG PROFILER_CLI_VERSION=0.10.0
-RUN npm install --global --prefix /opt/profiler-cli --no-fund --no-audit \
-        @firefox-devtools/profiler-cli@${PROFILER_CLI_VERSION}
+    uv sync --locked --no-dev --no-editable --package hackbot-agent-bug-fix --extra a11y
 
 FROM python:3.14 AS base
 
@@ -63,6 +62,11 @@ RUN apt-get update \
         ffmpeg pipewire wireplumber pipewire-pulse pulseaudio-utils \
         # Headless display and session bus, started by docker-entrypoint.sh.
         dbus-x11 x11-xserver-utils fluxbox xvfb \
+        # Accessibility: the AT-SPI bus Firefox exposes its accessibility tree
+        # on, the Atspi typelib to inspect it from Python (with PyGObject from
+        # the a11y extra), the Orca screen reader, and xdotool to press keys
+        # for it. NVDA and JAWS are Windows-only.
+        at-spi2-core gir1.2-atspi-2.0 orca xdotool \
     && rm -rf /var/lib/apt/lists/*
 
 # Gecko media tests use the pipewire audiotestsrc plugin as a dummy sound
@@ -71,11 +75,6 @@ RUN apt-get update \
 RUN install -d -o root -g root -m 755 /etc/pipewire \
     && sed -e '/^context.spa-libs = {/,/^}$/ s/#\(audiotestsrc\)/\1/' \
         /usr/share/pipewire/pipewire.conf > /etc/pipewire/pipewire.conf
-
-# The Firefox tree's agent skills profile with samply and analyze profiles with
-# the Firefox Profiler's profiler-cli. samply and node come from `mach
-# bootstrap`, profiler-cli from the stage above.
-COPY --from=profiler-cli /opt/profiler-cli /opt/profiler-cli
 
 # The tree's skills run Python helper scripts with `uv run`.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -110,9 +109,9 @@ ENV DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/runtime-agent/bus
 # `mach bootstrap` installs the toolchain here at runtime; put it on PATH so the
 # agent's own `./mach build` (and the build_firefox tool) find rustc/clang,
 # evaluate_testcase finds minidump-stackwalk to symbolize crashes, and the
-# agent's shell finds node, samply and the developer tools (in ~/.cargo/bin),
-# and the profiler-cli that runs with that node.
-ENV PATH="/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:/home/agent/.mozbuild/minidump-stackwalk:/home/agent/.mozbuild/node/bin:/home/agent/.mozbuild/samply:/opt/profiler-cli/bin:${PATH}"
+# agent's shell finds node, samply and the developer tools (in ~/.mozbuild/bin,
+# like the profiler-cli the tree's skills analyze profiles with).
+ENV PATH="/home/agent/.mozbuild/bin:/home/agent/.cargo/bin:/home/agent/.mozbuild/clang/bin:/home/agent/.mozbuild/minidump-stackwalk:/home/agent/.mozbuild/node/bin:/home/agent/.mozbuild/samply:${PATH}"
 # Likewise for Android, once bootstrapped for it: java, adb, aapt2, apksigner,
 # apkanalyzer, lint, sdkmanager. bootstrap_firefox links the versioned
 # directories they are in as `current`/`latest`.

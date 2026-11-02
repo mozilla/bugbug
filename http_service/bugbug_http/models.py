@@ -8,7 +8,7 @@ import os
 from collections import defaultdict
 from datetime import timedelta
 from functools import lru_cache
-from typing import Any, Sequence
+from typing import Any, Collection, Sequence
 from urllib.parse import urlparse
 
 import orjson
@@ -17,10 +17,10 @@ import zstandard
 from redis import Redis
 from urllib3.util.retry import Retry
 
-from bugbug import bugzilla, repository, test_scheduling, utils
+from bugbug import bugzilla, build_platforms, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
-from bugbug.models import testselect
+from bugbug.models import testconfigselect, testselect
 from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
@@ -43,6 +43,7 @@ MODELS_NAMES = [
     "spambug",
     "testlabelselect",
     "testgroupselect",
+    "testconfigselectvalue",
     "accessibility",
     "performancebug",
     "worksforme",
@@ -449,6 +450,67 @@ def get_known_tasks() -> tuple[str, ...]:
         return tuple(line.strip() for line in f)
 
 
+# The model selecting the configs to run the selected groups on (as accurate as the other config
+# selection models, and much cheaper to train and run).
+CONFIG_SELECTION_MODEL = "testconfigselectvalue"
+# Minimum risk-weighted gain in the probability of catching a group's regression per unit of cost for
+# adding a config to it (see ConfigSelector.select_configs): selects about as many configs as the
+# previous "failing together" selection, catching more failures.
+CONFIG_SELECTION_THRESHOLD = 0.00015
+
+
+@lru_cache(maxsize=None)
+def get_live_config_candidates() -> dict[str, list[str]]:
+    """The configs of the tasks scheduled on autoland that run each group."""
+    with open("manifests_by_task.json", "rb") as f:
+        manifests_by_task = orjson.loads(f.read())
+    model = MODEL_CACHE.get(CONFIG_SELECTION_MODEL)
+    return testconfigselect.live_candidates(manifests_by_task, model.known_configs)
+
+
+@lru_cache(maxsize=None)
+def get_build_platforms() -> build_platforms.BuildPlatforms | None:
+    try:
+        with open("build_platforms.json", "rb") as f:
+            return build_platforms.BuildPlatforms(orjson.loads(f.read()))
+    except FileNotFoundError:
+        return None
+
+
+def select_configs(
+    groups: dict[str, float],
+    modified_paths: list[str],
+    very_likely_groups: Collection[str] = (),
+) -> dict[str, list[str]]:
+    """The configs to run each group on (patterns over task labels, e.g. test-linux2404-64/opt-*).
+
+    `groups` maps groups to their probability of regressing; `very_likely_groups` run on a config of
+    each OS family.
+    """
+    selected: dict[str, list[str]] = {}
+    try:
+        index = get_build_platforms()
+        platforms = (
+            index.find_platforms_for_paths(modified_paths)
+            if index is not None
+            else build_platforms.ALL_PLATFORMS
+        )
+        selected = MODEL_CACHE.get(CONFIG_SELECTION_MODEL).select_configs(
+            groups,
+            CONFIG_SELECTION_THRESHOLD,
+            get_live_config_candidates(),
+            modified_paths,
+            None if platforms == build_platforms.ALL_PLATFORMS else platforms,
+            very_likely_groups,
+        )
+    except Exception:
+        LOGGER.exception("Failed to select configs, running groups on all of them")
+
+    # The taskgraph removes the tasks of a group that has no matching config, so a group without
+    # selected configs (e.g. not found in the current task graph) runs on all of them.
+    return {group: selected.get(group) or ["*"] for group in groups}
+
+
 def schedule_tests(branch: str, rev: str) -> str:
     """Select the tasks and manifests to run for a push and store the result in Redis.
 
@@ -787,12 +849,29 @@ def _analyze_patch(
         if commits
         else {}
     )
+    # Config selection weighs groups by their probability of regressing, not by their confidence.
+    risks = testgroupselect_model.calibrated_probabilities(groups)
+    # The manifests including the modified tests, and the groups selected with at least the group
+    # model's "very_high" confidence (their calibrated risk is much lower than their confidence), run
+    # on a config of each OS family.
+    very_high_confidence = groups_thresholds.get("very_high")
+    very_likely_groups = {
+        group
+        for group, confidence in groups.items()
+        if very_high_confidence is not None and confidence >= very_high_confidence
+    }
     for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
+        risks[group] = 1.0
+        very_likely_groups.add(group)
     for group in backout_groups:
         groups[group] = 1.0
 
-    config_groups = testselect.select_configs(groups, 0.9)
+    config_groups = select_configs(risks, modified_paths, very_likely_groups)
+    # The recently failing manifests run on all configs, as the failures might be specific to
+    # their configuration.
+    for group in backout_groups:
+        config_groups[group] = ["*"]
 
     data = {
         "tasks": tasks,

@@ -55,7 +55,7 @@ logger = getLogger(__name__)
 _PHAB_RE = re.compile(r"D(\d+)$")
 
 _review_context_cache: dict[
-    tuple[str, str, str], tuple[float, "ReviewContextConfig"]
+    tuple[str, str, str], tuple[float, ReviewContextConfig]
 ] = {}
 _REVIEW_CONTEXT_CACHE_TTL = 300  # seconds
 DEFAULT_REVIEW_CONTEXT_PATH = "review-context.toml"
@@ -90,7 +90,7 @@ class ExternalContentItem(BaseModel):
         action: RuleAction,
         matched_rules: list[str],
         trust_reason: str,
-    ) -> "ExternalContentItem":
+    ) -> ExternalContentItem:
         encoded = body.encode()
         return cls(
             name=name,

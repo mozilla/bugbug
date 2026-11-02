@@ -38,6 +38,7 @@ perf-regression-predictor = ["bugbug[perf-regression-predictor]"]
 [project.scripts]
 bugbug-http-worker = "bugbug_http.worker:main"
 bugbug-http-pulse-listener = "bugbug_http.listener:main"
+bugbug-http-refresh-data = "bugbug_http.refresh:main"
 
 [tool.uv.sources]
 bugbug = { workspace = true }
