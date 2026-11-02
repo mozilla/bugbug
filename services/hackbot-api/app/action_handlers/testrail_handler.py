@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from testrail_client import TestRailClient
+from testrail_client import TestRailClient, TestRailResultInput, TestRailStep
 
 from app.action_handlers.base import ActionResult, ApplyContext
 
@@ -51,29 +51,12 @@ async def _resolve_status_ids(client: TestRailClient) -> dict[str, int]:
     }
 
 
-def _case_payload(
-    test_case: dict[str, Any],
-    case_type_id: int,
-    template_id: int,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "title": test_case["title"],
-        "type_id": case_type_id,
-        "template_id": template_id,
-        "labels": [_CASE_LABEL],
-        "custom_steps_separated": _separated_steps(test_case),
-    }
-    if test_case.get("preconditions"):
-        payload["custom_preconds"] = test_case["preconditions"]
-    return payload
-
-
-def _separated_steps(test_case: dict[str, Any]) -> list[dict[str, str]]:
+def _separated_steps(test_case: dict[str, Any]) -> list[TestRailStep]:
     return [
-        {
-            "content": str(step["action"]),
-            "expected": str(step.get("expectation") or ""),
-        }
+        TestRailStep(
+            content=str(step["action"]),
+            expected=str(step.get("expectation") or ""),
+        )
         for step in test_case.get("steps", [])
     ]
 
@@ -95,34 +78,20 @@ def _executed_results(
     params: dict[str, Any],
     created_case_ids: dict[int, int],
     status_ids: dict[str, int],
-) -> list[dict[str, Any]]:
+) -> list[TestRailResultInput]:
     """One TestRail result per generated case, in generation order.
 
     ``SubmitTestPlanHandler.apply`` has already checked that every case carries a
     recognised status, so indexing here cannot silently drop one.
     """
     return [
-        {
-            "case_id": created_case_ids[int(test_case["id"])],
-            "status_id": status_ids[test_case["result"]["status"]],
-            "comment": _result_comment(test_case["result"]),
-        }
+        TestRailResultInput(
+            case_id=created_case_ids[int(test_case["id"])],
+            status_id=status_ids[test_case["result"]["status"]],
+            comment=_result_comment(test_case["result"]),
+        )
         for test_case in params["generated_test_cases"]
     ]
-
-
-def _run_payload(
-    suite_id: int, case_ids: list[int], description: str
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "name": _run_name(),
-        "include_all": False,
-        "case_ids": case_ids,
-        "suite_id": suite_id,
-    }
-    if description:
-        payload["description"] = description
-    return payload
 
 
 class SubmitTestPlanHandler:
@@ -160,13 +129,23 @@ class SubmitTestPlanHandler:
                 generated_id = int(test_case["id"])
                 case = await client.add_case(
                     section_id,
-                    _case_payload(test_case, case_type_id, template_id),
+                    title=test_case["title"],
+                    type_id=case_type_id,
+                    template_id=template_id,
+                    steps=_separated_steps(test_case),
+                    preconditions=test_case.get("preconditions"),
+                    labels=[_CASE_LABEL],
                 )
                 case_id = case.id
                 created_case_ids[generated_id] = case_id
 
             case_ids = list(created_case_ids.values())
-            run = await client.add_run(_run_payload(suite_id, case_ids, summary))
+            run = await client.add_run(
+                suite_id=suite_id,
+                case_ids=case_ids,
+                name=_run_name(),
+                description=summary,
+            )
             await client.add_results_for_cases(
                 run.id,
                 _executed_results(params, created_case_ids, status_ids),

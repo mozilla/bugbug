@@ -42,6 +42,21 @@ class TestRailResult(TestRailModel):
     id: int
 
 
+class TestRailStep(TestRailModel):
+    """One step of a case using the "Test Case (Steps)" template."""
+
+    content: str
+    expected: str = ""
+
+
+class TestRailResultInput(TestRailModel):
+    """One result to record against a case in a run."""
+
+    case_id: int
+    status_id: int
+    comment: str = ""
+
+
 class TestRailCaseTypesResponse(RootModel[list[TestRailCaseType]]):
     pass
 

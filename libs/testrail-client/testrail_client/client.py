@@ -10,11 +10,13 @@ from testrail_client.models import (
     TestRailCaseType,
     TestRailCaseTypesResponse,
     TestRailResult,
+    TestRailResultInput,
     TestRailResultsResponse,
     TestRailRun,
     TestRailSection,
     TestRailStatus,
     TestRailStatusesResponse,
+    TestRailStep,
     TestRailSuite,
     TestRailTemplate,
     TestRailTemplatesResponse,
@@ -84,11 +86,47 @@ class TestRailClient:
         )
         return TestRailSection.model_validate(response)
 
-    async def add_case(self, section_id: int, payload: dict[str, Any]) -> TestRailCase:
+    async def add_case(
+        self,
+        section_id: int,
+        *,
+        title: str,
+        type_id: int,
+        template_id: int,
+        steps: list[TestRailStep],
+        preconditions: str | None = None,
+        labels: list[str] | None = None,
+    ) -> TestRailCase:
+        payload: dict[str, Any] = {
+            "title": title,
+            "type_id": type_id,
+            "template_id": template_id,
+            "custom_steps_separated": [step.model_dump() for step in steps],
+        }
+        if preconditions:
+            payload["custom_preconds"] = preconditions
+        if labels:
+            payload["labels"] = labels
         response = await self.request("POST", f"add_case/{section_id}", payload)
         return TestRailCase.model_validate(response)
 
-    async def add_run(self, payload: dict[str, Any]) -> TestRailRun:
+    async def add_run(
+        self,
+        *,
+        suite_id: int,
+        case_ids: list[int],
+        name: str,
+        description: str | None = None,
+    ) -> TestRailRun:
+        """Create a run holding only ``case_ids``, not every case in the suite."""
+        payload: dict[str, Any] = {
+            "name": name,
+            "suite_id": suite_id,
+            "include_all": False,
+            "case_ids": case_ids,
+        }
+        if description:
+            payload["description"] = description
         response = await self.request(
             "POST",
             f"add_run/{self.settings.project_id}",
@@ -97,11 +135,11 @@ class TestRailClient:
         return TestRailRun.model_validate(response)
 
     async def add_results_for_cases(
-        self, run_id: int, results: list[dict[str, Any]]
+        self, run_id: int, results: list[TestRailResultInput]
     ) -> list[TestRailResult]:
         response = await self.request(
             "POST",
             f"add_results_for_cases/{run_id}",
-            {"results": results},
+            {"results": [result.model_dump() for result in results]},
         )
         return TestRailResultsResponse.model_validate(response).root
