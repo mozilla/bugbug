@@ -136,8 +136,8 @@ def pin_culprit_commits(
 
     Rules, in order: the regression bug's ``regressed_by`` names a bug landed
     in the push; the summary links the culprit bug itself; the push holds a
-    single landing. Otherwise nothing is pinned and the push as a whole is the
-    culprit.
+    single landing, a backout counting as one since a revert can regress too.
+    Otherwise nothing is pinned and the push as a whole is the culprit.
     """
     if push is None:
         return [], None
@@ -164,11 +164,8 @@ def pin_culprit_commits(
         if pinned:
             return pinned, "summary_bug"
 
-    # A backout sharing a push with a real landing does not make it ambiguous.
-    real = [landing for landing in push_landings if not landing["backout"]]
-    candidates = real or push_landings
-    if len(candidates) == 1:
-        return list(candidates[0]["revisions"]), "single_landing"
+    if len(push_landings) == 1:
+        return list(push_landings[0]["revisions"]), "single_landing"
 
     return [], None
 

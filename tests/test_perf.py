@@ -1017,6 +1017,19 @@ def test_pin_culprit_commits_rules() -> None:
         "summary_bug",
     )
     assert regression_labeling.pin_culprit_commits(multi, None, None) == ([], None)
+    # A backout can regress too, so a landing next to one is ambiguous unless a
+    # bug names the culprit.
+    mixed = _push(
+        30,
+        [
+            ("e" * 40, "Bug 8 - landing", 8, False),
+            ("f" * 40, "Backed out changeset 0123456789ab (bug 9)", 9, True),
+        ],
+    )
+    assert regression_labeling.pin_culprit_commits(mixed, None, None) == ([], None)
+    assert regression_labeling.pin_culprit_commits(
+        mixed, {"regressed_by": [9]}, None
+    ) == (["f" * 40], "bug")
     # A stack for one bug is one landing and pins as a whole.
     assert regression_labeling.pin_culprit_commits(single, None, 999) == (
         ["a" * 40, "b" * 40],
