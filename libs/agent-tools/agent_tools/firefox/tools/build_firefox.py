@@ -11,6 +11,7 @@ async def build_firefox(
     mozconfig_path: Path,
     objdir: Path,
     target: str | None = None,
+    env_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build Firefox using a specified mozconfig.
 
@@ -23,6 +24,7 @@ async def build_firefox(
         target: Optional build target (e.g. a directory like ``docshell/base``).
             When set, only that target is built -- far faster than a full tree
             build and enough to verify a localized fix compiles.
+        env_overrides: Environment required by a task-specific CI build.
 
     Returns:
         Dict with build result information (success, build_dir, message,
@@ -42,6 +44,7 @@ async def build_firefox(
             }
 
         env = os.environ.copy()
+        env.update(env_overrides or {})
         env["MOZCONFIG"] = str(mozconfig_path.resolve())
         env["CLAUDECODE"] = "1"
 

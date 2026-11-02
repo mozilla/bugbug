@@ -122,6 +122,21 @@ locally against the checkout.
 full tree, much less incrementally. An agent that only needs to confirm a localized fix
 compiles should pass `target` to build one directory instead of the whole tree.
 
+For a CI reproduction, an agent with a failed Taskcluster task can configure the Firefox
+context before starting the tool server:
+
+```python
+from agent_tools.firefox import linux_build_env
+
+ctx.firefox.configure_ci_build(linux_build_env(task_id))
+```
+
+On supported x86-64 Linux tasks, `build_firefox` then fetches the task's toolchains and
+writes its mozconfig on the first call. The context reuses that setup for later builds in
+the same run; a new context removes a stale in-tree mozconfig before fetching, so local
+runs can reuse the workspace volume. Unsupported tasks and non-x86-64 hosts keep the
+agent's normal build configuration.
+
 ## Adding a tool
 
 1. Write the handler in the right domain module, `@tool`-decorated, `ctx` first, returning
