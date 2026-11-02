@@ -409,6 +409,7 @@ def _clear_github_env(monkeypatch):
         "GITHUB_BOT_LOGIN",
         "GITHUB_MENTION_TOKEN",
         "GITHUB_ALLOWED_ROLES",
+        "GITHUB_WEBHOOK_SECRET",
     ):
         monkeypatch.delenv(name, raising=False)
 

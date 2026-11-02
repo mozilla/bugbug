@@ -3,7 +3,15 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
@@ -11,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     require_bugzilla_webhook_secret,
+    require_github_signature,
     require_phabricator_signature,
 )
 from app.bugzilla_authorization import BugzillaAuthorizer
@@ -19,6 +28,7 @@ from app.config import settings
 from app.database.connection import get_db
 from app.github import GitHubApp
 from app.github_authorization import GitHubAuthorizer
+from app.github_webhook import detect_mention, resolve_head_sha
 from app.hackbot_client import get_hackbot_client
 from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
@@ -86,21 +96,30 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
     return authorizer
 
 
-def get_github_authorizer(request: Request) -> GitHubAuthorizer:
-    """Dependency: lazily create the app-scoped authorizer and its role cache."""
-    authorizer = getattr(request.app.state, "github_authorizer", None)
-    if authorizer is None:
+def get_github_app(request: Request) -> GitHubApp:
+    """Dependency: lazily create the app-scoped App client and its token cache."""
+    github_app = getattr(request.app.state, "github_app", None)
+    if github_app is None:
         if settings.github is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="GitHub App is not configured",
             )
+        # Its calls run inside a webhook delivery, which GitHub abandons after
+        # 10 seconds. Each lookup is bounded; without retries, a 5xx also fails
+        # at once instead of spending that budget on githubkit's backoff.
+        github_app = GitHubApp(settings.github, auto_retry=False)
+        request.app.state.github_app = github_app
+    return github_app
+
+
+def get_github_authorizer(request: Request) -> GitHubAuthorizer:
+    """Dependency: lazily create the app-scoped authorizer and its role cache."""
+    authorizer = getattr(request.app.state, "github_authorizer", None)
+    if authorizer is None:
+        github_app = get_github_app(request)
         authorizer = GitHubAuthorizer(
-            # A check runs inside a webhook delivery, which GitHub abandons
-            # after 10 seconds. The authorizer bounds the whole lookup; without
-            # retries, a 5xx also fails closed at once instead of spending that
-            # budget on githubkit's backoff.
-            GitHubApp(settings.github, auto_retry=False),
+            github_app,
             settings.github.allowed_roles,
             settings.github.bot_login,
         )
@@ -237,5 +256,103 @@ async def bugzilla_webhook(
         run.run_id,
         detected.bug_id,
         detected.flag_id,
+    )
+    return {"status": "triggered", "run_id": run.run_id}
+
+
+@router.post(
+    "/github",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_github_signature)],
+)
+async def github_webhook(
+    request: Request,
+    api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
+    github_app: Annotated[GitHubApp, Depends(get_github_app)],
+    authorizer: Annotated[GitHubAuthorizer, Depends(get_github_authorizer)],
+    x_github_event: Annotated[str | None, Header()] = None,
+    x_github_delivery: Annotated[str | None, Header()] = None,
+) -> dict:
+    """Trigger a bug-fix run for an ``@hackbot`` mention on a pull request."""
+    if x_github_event == "ping":
+        # Sent once when the App's webhook is created or its URL changes.
+        return {"status": "ignored", "reason": "ping"}
+
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        return {"status": "ignored", "reason": "payload is not a JSON object"}
+
+    mention = detect_mention(
+        x_github_event, payload, mention_token=settings.github.mention_token
+    )
+    if mention is None:
+        return {"status": "ignored", "reason": "no actionable mention"}
+
+    if not await authorizer.is_authorized(
+        mention.installation_id, mention.owner, mention.repo, mention.sender
+    ):
+        log.info(
+            "Ignored GitHub mention on %s#%s (delivery %s): %s is not authorized",
+            mention.full_name,
+            mention.pr_number,
+            x_github_delivery,
+            mention.sender.get("login"),
+        )
+        return {"status": "ignored", "reason": "unauthorized user"}
+
+    head_sha = mention.head_sha
+    if head_sha is None:
+        try:
+            head_sha = await resolve_head_sha(github_app, mention)
+        except TimeoutError:
+            log.warning(
+                "Timed out looking up the head of %s#%s (delivery %s)",
+                mention.full_name,
+                mention.pr_number,
+                x_github_delivery,
+            )
+            # A 5xx marks the delivery failed in the App's settings, where it
+            # can be redelivered; no run was created, so no key is spent.
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Timed out looking up the pull request",
+            ) from None
+        if head_sha is None:
+            return {"status": "ignored", "reason": "pull request is not open"}
+
+    # The comment or review ID identifies the request, so a redelivery (which
+    # GitHub sends only on request) is answered with the run it first created.
+    run = await api_client.trigger_run(
+        "bug-fix",
+        {
+            "github_repo": mention.full_name,
+            "github_pr_number": mention.pr_number,
+            "github_head_sha": head_sha,
+            "comment": mention.comment,
+        },
+        dedupe_key=mention.dedupe_key,
+    )
+    if not run.is_new:
+        log.info(
+            "Duplicate GitHub delivery %s for %s#%s (%s) resolved to run %s",
+            x_github_delivery,
+            mention.full_name,
+            mention.pr_number,
+            mention.dedupe_key,
+            run.run_id,
+        )
+        return {
+            "status": "ignored",
+            "reason": "duplicate delivery",
+            "run_id": run.run_id,
+        }
+    log.info(
+        "Triggered bug-fix run %s for %s#%s from %s mention by %s (%s)",
+        run.run_id,
+        mention.full_name,
+        mention.pr_number,
+        settings.github.mention_token,
+        mention.sender_login,
+        mention.dedupe_key,
     )
     return {"status": "triggered", "run_id": run.run_id}

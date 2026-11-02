@@ -47,6 +47,44 @@ async def require_phabricator_signature(
         )
 
 
+def verify_github_signature(
+    raw_body: bytes, signature: str | None, secret: str
+) -> bool:
+    """Constant-time-check GitHub's ``X-Hub-Signature-256``.
+
+    GitHub signs each delivery with HMAC-SHA256 over the raw request body, keyed
+    by the App's webhook secret, and sends ``sha256=<hex digest>``. Only SHA-256
+    is accepted: the legacy ``X-Hub-Signature`` (SHA-1) header is never read.
+    """
+    if not secret or not signature or not signature.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(f"sha256={expected}", signature)
+
+
+async def require_github_signature(
+    request: Request,
+    x_hub_signature_256: str | None = Header(default=None),
+) -> None:
+    """Reject the request unless GitHub's webhook signature is valid.
+
+    The App and its secret are optional until deployed, so a missing one
+    answers 503 (not configured) rather than 401 (bad signature).
+    """
+    secret = settings.github and settings.github.webhook_secret
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="GitHub webhook is not configured",
+        )
+    raw = await request.body()
+    if not verify_github_signature(raw, x_hub_signature_256, secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing webhook signature",
+        )
+
+
 def require_bugzilla_webhook_secret(
     x_bugzilla_webhook_secret: str = Header(),
 ) -> None:
