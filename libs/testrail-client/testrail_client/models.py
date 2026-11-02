@@ -42,6 +42,21 @@ class Result(_Model):
     id: int
 
 
+class Step(_Model):
+    """One step of a case using the "Test Case (Steps)" template."""
+
+    content: str
+    expected: str = ""
+
+
+class ResultInput(_Model):
+    """One result to record against a case in a run."""
+
+    case_id: int
+    status_id: int
+    comment: str = ""
+
+
 class _CaseTypesResponse(RootModel[list[CaseType]]):
     pass
 
