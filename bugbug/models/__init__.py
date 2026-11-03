@@ -31,6 +31,7 @@ MODELS = {
     "regressor": "bugbug.models.regressor.RegressorModel",
     "severity": "bugbug.models.severity.SeverityModel",
     "spambug": "bugbug.models.spambug.SpamBugModel",
+    "spamcomment": "bugbug.models.spamcomment.SpamCommentModel",
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "testlabelselect": "bugbug.models.testselect.TestLabelSelectModel",
     "testgroupselect": "bugbug.models.testselect.TestGroupSelectModel",
