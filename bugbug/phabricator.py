@@ -5,7 +5,7 @@
 
 import itertools
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Collection, Iterator, NewType
 
 import tenacity
@@ -298,9 +298,9 @@ def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
         )
 
     if last_exclusion_end_date is not None:
-        return datetime.utcnow() - last_exclusion_end_date
+        return datetime.now(timezone.utc) - last_exclusion_end_date
     else:
-        return datetime.utcnow() - creation_date
+        return datetime.now(timezone.utc) - creation_date
 
 
 def fetch_diff_from_url(
