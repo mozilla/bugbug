@@ -35,6 +35,9 @@ services:
       - ARTIFACTS_DIR=/artifacts
     volumes:
       - workspace:/workspace
+      - cargo:/home/agent/.cargo
+      - rustup:/home/agent/.rustup
+      - mozbuild:/home/agent/.mozbuild
       - ${HOME}/hackbot/artifacts:/artifacts
     depends_on:
       build-repair-broker:
@@ -67,3 +70,6 @@ services:
 volumes:
   workspace:
     name: hackbot_workspace
+  cargo:
+  rustup:
+  mozbuild:

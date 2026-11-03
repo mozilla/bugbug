@@ -55,8 +55,8 @@ RUN apt-get update \
 COPY agents/build-repair/hackbot.toml /app/hackbot.toml
 
 RUN useradd --create-home --shell /bin/bash agent \
-    && mkdir -p /workspace \
-    && chown agent:agent /workspace
+    && mkdir -p /workspace /home/agent/.cargo /home/agent/.rustup /home/agent/.mozbuild \
+    && chown agent:agent /workspace /home/agent/.cargo /home/agent/.rustup /home/agent/.mozbuild
 
 RUN mkdir /builds \
     && for f in gls-gapi.data sb-gapi.data mozilla-desktop-geoloc-api.key; do echo no-secret > /builds/$f; done
