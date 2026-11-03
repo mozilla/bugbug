@@ -124,34 +124,27 @@ compiles should pass `target` to build one directory instead of the whole tree.
 
 ### Native and artifact builds
 
-Agents keep ownership of their mozconfig. An agent that needs native builds can opt
-into shared preparation before starting its tool server:
+Bug-fix opts into setup before its first native build:
 
 ```python
 ctx.firefox.bootstrap_before_build = True
 ```
 
-The first native `build_firefox` call runs the existing bootstrap tool before compiling.
-It leaves the agent's mozconfig unchanged. Preparation and builds are serialized within
-that context, including subagent calls. Failed preparation stops the build and can be
-retried; source errors do not repeat bootstrap. Readiness lasts only for that context
-and source directory. Use `bootstrap_firefox` explicitly after changing the checkout
-within a session.
+Bootstrap runs once per context and keeps the mozconfig unchanged. Setup failure stops
+builds; triage-only runs do no setup. Other agents must opt in. After changing the
+checkout within a session, run `bootstrap_firefox` again.
 
-Bug-fix opts in. Other agents do not gain automatic downloads, and triage-only runs do
-not prepare anything. For a desktop artifact build, select
+For desktop artifact builds, select
 `bootstrap_firefox(application="browser_artifact_mode")` and supply an artifact
-mozconfig; subsequent builds skip native bootstrap. Selecting `application="browser"`
-returns to native desktop builds without changing the desktop mozconfig. Android keeps
-its existing explicit application selection and separate generated mozconfig.
+mozconfig. Use `application="browser"` to switch back. Android keeps its explicit
+bootstrap selection and separate mozconfig.
 
-A directory-only build is a compile check, not a complete browser for running tests.
-An ignored-directory warning is a build failure even if mach exits successfully.
+Directory builds check compilation; they do not produce a complete browser.
+Ignored targets fail.
 
 ### Reproducing a CI task
 
-An agent can explicitly configure the Firefox context from a Taskcluster build task
-before starting the tool server:
+Before building:
 
 ```python
 from agent_tools.firefox import linux_build_env
@@ -159,23 +152,14 @@ from agent_tools.firefox import linux_build_env
 await ctx.firefox.configure_ci_build(linux_build_env(task_id))
 ```
 
-This fetches the task's toolchains and writes its mozconfig for supported Linux tasks
-on x86-64 hosts. Call it once before building; later `build_firefox` calls reuse the
-setup. It removes a stale in-tree mozconfig before fetching, so local runs can reuse
-the workspace volume. CI environment overrides apply only to build subprocesses.
-Unsupported tasks and non-x86-64 hosts keep the agent's normal build configuration.
-This is the only shared setup path that replaces the desktop mozconfig. Configured CI
-builds do not also run ordinary bootstrap.
+For supported Linux tasks on x86-64, this downloads the task's tools, replaces the
+mozconfig, and skips ordinary bootstrap. Unsupported tasks leave the config unchanged.
 
-### Local cache reuse
+### Local caches
 
-The Compose services for bug-fix and build-repair retain `.cargo`, `.rustup`, and
-`.mozbuild` in named volumes alongside the workspace. Autowebcompat-intervention retains
-`.mozbuild` for artifact downloads. Image directories belong to the agent so new volumes
-are writable. These volumes do not mount the rest of the agent's home directory.
-
-This changes local Compose runs only. Cloud Run workspaces remain fresh; no remote
-sccache backend, deployment resources, or production storage is changed.
+Compose retains `.cargo`, `.rustup`, and `.mozbuild` for bug-fix and build-repair, and
+`.mozbuild` for autowebcompat-intervention—not the whole home directory. These mounts
+do not change Cloud Run storage or resources, or configure remote sccache.
 
 ## Adding a tool
 
