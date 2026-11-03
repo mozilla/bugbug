@@ -104,8 +104,9 @@ def get_github_authorizer(request: Request) -> GitHubAuthorizer:
             )
         authorizer = GitHubAuthorizer(
             # A check runs inside a webhook delivery, which GitHub abandons
-            # after 10 seconds; githubkit's retry backoff on 5xx would outlast
-            # that, so fail closed at once instead.
+            # after 10 seconds. The authorizer bounds the whole lookup; without
+            # retries, a 5xx also fails closed at once instead of spending that
+            # budget on githubkit's backoff.
             GitHubApp(settings.github, auto_retry=False),
             settings.github_webhook.allowed_roles,
         )

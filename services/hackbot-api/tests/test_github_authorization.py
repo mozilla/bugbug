@@ -1,13 +1,19 @@
 """Tests for GitHub webhook sender authorization."""
 
+import asyncio
 import json
+import time
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 from app.config import GitHubAppSettings, GitHubWebhookSettings, Settings
 from app.github import GitHubApp
-from app.github_authorization import GitHubAuthorizer, is_bot_sender
+from app.github_authorization import (
+    DEFAULT_LOOKUP_TIMEOUT_SECONDS,
+    GitHubAuthorizer,
+    is_bot_sender,
+)
 from app.routers.webhooks import get_github_authorizer
 from cachetools import TTLCache
 from cryptography.hazmat.primitives import serialization
@@ -35,12 +41,22 @@ class _FakeGitHub:
 
     ``roles`` maps a lowercased login to its ``role_name``; a login missing from
     it gets a 404, like a user who isn't a collaborator. ``status`` forces every
-    permission check to fail with that status instead.
+    permission check to fail with that status instead. ``mint_delay`` and
+    ``permission_delay`` slow those responses down by that many seconds.
     """
 
-    def __init__(self, roles: dict[str, str], status: int | None = None):
+    def __init__(
+        self,
+        roles: dict[str, str],
+        status: int | None = None,
+        *,
+        mint_delay: float = 0,
+        permission_delay: float = 0,
+    ):
         self.roles = roles
         self.status = status
+        self.mint_delay = mint_delay
+        self.permission_delay = permission_delay
         self.requests: list[httpx.Request] = []
 
     @property
@@ -55,6 +71,7 @@ class _FakeGitHub:
         self.requests.append(request)
         path = request.url.path
         if path.endswith("/access_tokens"):
+            await asyncio.sleep(self.mint_delay)
             expires_at = datetime.now(UTC) + timedelta(hours=1)
             return httpx.Response(
                 201,
@@ -64,6 +81,7 @@ class _FakeGitHub:
                 },
             )
         if path.endswith("/permission"):
+            await asyncio.sleep(self.permission_delay)
             if self.status is not None:
                 return httpx.Response(self.status, json={"message": "nope"})
             login = path.split("/")[-2]
@@ -177,6 +195,29 @@ async def test_token_mint_failure_is_denied(pem):
     authorizer = GitHubAuthorizer(github_app, ALLOWED_ROLES)
 
     assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+
+
+async def test_slow_lookup_is_denied_and_not_cached(pem):
+    fake = _FakeGitHub({"dev": "admin"}, permission_delay=5)
+    authorizer, _ = _authorizer(pem, fake, lookup_timeout_seconds=0.1)
+
+    started = time.monotonic()
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    # Gave up at the deadline rather than waiting for GitHub.
+    assert time.monotonic() - started < 2
+
+    # Once GitHub is fast again, the user isn't stuck with the timed-out answer.
+    fake.permission_delay = 0
+    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+
+
+async def test_deadline_covers_token_mint_and_lookup_together(pem):
+    # Each request fits the deadline alone; a cold check makes both in turn.
+    fake = _FakeGitHub({"dev": "admin"}, mint_delay=0.3, permission_delay=0.3)
+    authorizer, _ = _authorizer(pem, fake, lookup_timeout_seconds=0.5)
+
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert len(fake.mint_requests) == 1
 
 
 async def test_bot_login_is_denied_without_a_lookup(pem):
@@ -418,5 +459,7 @@ def test_dependency_is_app_scoped(monkeypatch, pem):
     first = get_github_authorizer(request)
     assert isinstance(first, GitHubAuthorizer)
     assert get_github_authorizer(request) is first
-    # Fails within GitHub's webhook timeout instead of retrying 5xx.
+    # Fails within GitHub's 10-second webhook timeout instead of retrying 5xx
+    # or waiting on a slow GitHub.
     assert first._github_app._github_options["auto_retry"] is False
+    assert first._lookup_timeout_seconds == DEFAULT_LOOKUP_TIMEOUT_SECONDS < 10

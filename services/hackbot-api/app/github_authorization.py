@@ -6,6 +6,7 @@ is no repository or organization allowlist: which repositories are reachable is
 decided by where the GitHub App is installed.
 """
 
+import asyncio
 import logging
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
@@ -17,6 +18,11 @@ from githubkit.exception import RequestFailed
 from app.github import GitHubApp
 
 log = logging.getLogger(__name__)
+
+# GitHub abandons a webhook delivery that isn't answered within 10 seconds. A
+# cold check mints a token and then fetches the role, one after the other, so
+# bound the whole lookup and leave the handler time to respond.
+DEFAULT_LOOKUP_TIMEOUT_SECONDS = 5.0
 
 # GET /repos/{owner}/{repo}/collaborators/{username}/permission is listed under
 # the "Metadata" repository permission (read) in GitHub's "Permissions required
@@ -63,8 +69,10 @@ class GitHubAuthorizer:
         *,
         cache_ttl_seconds: int = 300,
         cache_maxsize: int = 4096,
+        lookup_timeout_seconds: float = DEFAULT_LOOKUP_TIMEOUT_SECONDS,
     ) -> None:
         self._github_app = github_app
+        self._lookup_timeout_seconds = lookup_timeout_seconds
         self._allowed_roles = frozenset(role.lower() for role in allowed_roles)
         self._cache: TTLCache[tuple[int, str, str, str], bool] = TTLCache(
             maxsize=cache_maxsize,
@@ -78,7 +86,8 @@ class GitHubAuthorizer:
 
         ``installation_id``, ``owner`` and ``repo`` must come from the webhook
         payload, never from user-written text. Fails closed: an unknown user, a
-        role outside the allowed set, or any error denies.
+        role outside the allowed set, any error, or a lookup that outlasts
+        ``lookup_timeout_seconds`` denies.
         """
         if login.lower().endswith("[bot]"):
             return False
@@ -90,7 +99,18 @@ class GitHubAuthorizer:
             return cached
 
         try:
-            role = await self._get_role_name(installation_id, owner, repo, login)
+            async with asyncio.timeout(self._lookup_timeout_seconds):
+                role = await self._get_role_name(installation_id, owner, repo, login)
+        except TimeoutError:
+            log.warning(
+                "GitHub permission check for %s on %s/%s timed out after %ss",
+                login,
+                owner,
+                repo,
+                self._lookup_timeout_seconds,
+            )
+            # Don't cache: a slow GitHub shouldn't lock a user out.
+            return False
         except RequestFailed as e:
             if e.response.status_code != 404:
                 log.warning(
