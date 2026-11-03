@@ -92,6 +92,7 @@ def test_resolve_investigation_assembles_context(monkeypatch):
         "tags": {
             "project": "autoland",
             "test-suite": "mochitest-browser-chrome",
+            "tests_grouped": "1",
             "test-platform": "linux1804-64-qr/debug",
         },
         "payload": {"env": {"GECKO_HEAD_REV": "hghead"}},
