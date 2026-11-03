@@ -93,6 +93,18 @@ async def build_firefox(
         else:
             returncode, stdout_output, stderr_output = await mach_build()
 
+        if (
+            target
+            and returncode == 0
+            and "is a subdirectory and was ignored" in stdout_output + stderr_output
+        ):
+            return {
+                "success": False,
+                "message": f"Firefox build skipped the requested target {target!r}",
+                "stdout": stdout_output,
+                "stderr": stderr_output,
+            }
+
         if returncode == 0:
             return {
                 "success": True,

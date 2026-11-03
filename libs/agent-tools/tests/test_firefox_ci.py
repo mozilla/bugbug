@@ -86,6 +86,7 @@ async def test_ci_build_setup_supports_reused_workspaces_without_changing_proces
     (src / ".mozconfig").write_text("left by the previous run\n")
 
     first = firefox.FirefoxContext.from_source_repo(src, objdir=str(objdir))
+    first.bootstrap_before_build = True
     await first.configure_ci_build(ENV)
     assert (await firefox.build_firefox(first, target="image"))["success"]
     assert (await firefox.build_firefox(first, target="image"))["success"]

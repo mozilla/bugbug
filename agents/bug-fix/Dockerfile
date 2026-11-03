@@ -98,8 +98,8 @@ COPY agents/bug-fix/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash agent \
-    && mkdir -p /workspace \
-    && chown agent:agent /workspace \
+    && mkdir -p /workspace /home/agent/.cargo /home/agent/.rustup /home/agent/.mozbuild \
+    && chown agent:agent /workspace /home/agent/.cargo /home/agent/.rustup /home/agent/.mozbuild \
     # Xvfb runs unprivileged and cannot create its own socket directory.
     && mkdir -p /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix \

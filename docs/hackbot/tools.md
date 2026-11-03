@@ -122,8 +122,36 @@ locally against the checkout.
 full tree, much less incrementally. An agent that only needs to confirm a localized fix
 compiles should pass `target` to build one directory instead of the whole tree.
 
-For a CI reproduction, an agent with a failed Taskcluster task can configure the Firefox
-context before starting the tool server:
+### Native and artifact builds
+
+Agents keep ownership of their mozconfig. An agent that needs native builds can opt
+into shared preparation before starting its tool server:
+
+```python
+ctx.firefox.bootstrap_before_build = True
+```
+
+The first native `build_firefox` call runs the existing bootstrap tool before compiling.
+It leaves the agent's mozconfig unchanged. Preparation and builds are serialized within
+that context, including subagent calls. Failed preparation stops the build and can be
+retried; source errors do not repeat bootstrap. Readiness lasts only for that context
+and source directory. Use `bootstrap_firefox` explicitly after changing the checkout
+within a session.
+
+Bug-fix opts in. Other agents do not gain automatic downloads, and triage-only runs do
+not prepare anything. For a desktop artifact build, select
+`bootstrap_firefox(application="browser_artifact_mode")` and supply an artifact
+mozconfig; subsequent builds skip native bootstrap. Selecting `application="browser"`
+returns to native desktop builds without changing the desktop mozconfig. Android keeps
+its existing explicit application selection and separate generated mozconfig.
+
+A directory-only build is a compile check, not a complete browser for running tests.
+An ignored-directory warning is a build failure even if mach exits successfully.
+
+### Reproducing a CI task
+
+An agent can explicitly configure the Firefox context from a Taskcluster build task
+before starting the tool server:
 
 ```python
 from agent_tools.firefox import linux_build_env
@@ -136,6 +164,18 @@ on x86-64 hosts. Call it once before building; later `build_firefox` calls reuse
 setup. It removes a stale in-tree mozconfig before fetching, so local runs can reuse
 the workspace volume. CI environment overrides apply only to build subprocesses.
 Unsupported tasks and non-x86-64 hosts keep the agent's normal build configuration.
+This is the only shared setup path that replaces the desktop mozconfig. Configured CI
+builds do not also run ordinary bootstrap.
+
+### Local cache reuse
+
+The Compose services for bug-fix and build-repair retain `.cargo`, `.rustup`, and
+`.mozbuild` in named volumes alongside the workspace. Autowebcompat-intervention retains
+`.mozbuild` for artifact downloads. Image directories belong to the agent so new volumes
+are writable. These volumes do not mount the rest of the agent's home directory.
+
+This changes local Compose runs only. Cloud Run workspaces remain fresh; no remote
+sccache backend, deployment resources, or production storage is changed.
 
 ## Adding a tool
 

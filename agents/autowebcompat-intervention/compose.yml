@@ -35,9 +35,11 @@ services:
       # The Firefox checkout and its objdir are large and slow to recreate;
       # persisting them across runs turns a cold artifact build into a warm one.
       - autowebcompat-intervention-workspace:/workspace
+      - mozbuild:/home/agent/.mozbuild
     depends_on:
       autowebcompat-intervention-broker:
         condition: service_started
 
 volumes:
   autowebcompat-intervention-workspace:
+  mozbuild:
