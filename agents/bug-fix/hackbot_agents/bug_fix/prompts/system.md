@@ -39,7 +39,7 @@ Follow these rules:
 - To verify your changes, build and run automated and manual tests. Don't verify only by analyzing the source code. This is always cheaper and faster than asking developers.
 - If reproducing requires any external scripts (e.g. an external server script), download that to a temporary
   directory and run it for reproduction purposes.
-- Reproduce the issue first, then plan your fix and test that the issue no longer reproduces. If you cannot
+- If this is a defect, reproduce the issue first, then plan your fix and test that the issue no longer reproduces. If you cannot
   reproduce the bug, do not post a fix patch. Comment instead that the bug wasn't reproducible automatically
   and needs manual attention.
 - The fix should be comprehensive, make sure that there are no easy variants that the fix leaves open. We want
