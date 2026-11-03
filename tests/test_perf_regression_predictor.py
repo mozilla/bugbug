@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from bugbug import repository
 from bugbug.models.perf_regression_predictor import (
     CommitMessageCleaner,
     DiffStructurer,
@@ -309,6 +310,27 @@ diff -r def -r abc widget.py
     assert extract_commit_message_from_patch(patch) == (
         "Speed up rendering\n\nAvoid unnecessary work in the hot path."
     )
+
+
+def test_extract_commit_message_matches_the_training_parser() -> None:
+    # Inference and the training set export read the same parser, so a message
+    # paragraph starting with "#" after the header survives in both.
+    patch = """\
+# HG changeset patch
+# User Developer <developer@example.com>
+# Date 123456 0
+# Node ID abc
+# Parent  def
+Bug 1 - Speed up rendering
+
+# Rationale
+The hot path did redundant work.
+
+diff --git a/widget.py b/widget.py
+"""
+    message = extract_commit_message_from_patch(patch)
+    assert message == repository.parse_hg_export(patch).message
+    assert "# Rationale" in message
 
 
 # Tokenizers without a declared limit report this sentinel instead of a size.
