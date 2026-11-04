@@ -109,6 +109,7 @@ def get_github_authorizer(request: Request) -> GitHubAuthorizer:
             # budget on githubkit's backoff.
             GitHubApp(settings.github, auto_retry=False),
             settings.github.allowed_roles,
+            settings.github.bot_login,
         )
         request.app.state.github_authorizer = authorizer
     return authorizer

@@ -84,7 +84,13 @@ class GitHubAppSettings(BaseModel):
     # Repository roles (the API's ``role_name``) allowed to trigger a run on
     # that repository. Anything else, including triage, read and custom roles,
     # is denied.
-    allowed_roles: frozenset[str] = frozenset({"admin", "maintain", "write"})
+    allowed_roles: Annotated[
+        frozenset[
+            Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+        ],
+        # An empty set would deny every trigger with nothing saying why.
+        Field(min_length=1),
+    ] = frozenset({"admin", "maintain", "write"})
 
     @field_validator("private_key")
     @classmethod
@@ -101,15 +107,6 @@ class GitHubAppSettings(BaseModel):
                 "(-----BEGIN RSA PRIVATE KEY----- ...)"
             )
         return SecretStr(pem)
-
-    @field_validator("allowed_roles")
-    @classmethod
-    def _normalize_roles(cls, value: frozenset[str]) -> frozenset[str]:
-        roles = frozenset(role.strip().lower() for role in value) - {""}
-        if not roles:
-            # An empty set would deny every trigger with nothing saying why.
-            raise ValueError("must name at least one repository role")
-        return roles
 
 
 class Settings(BaseSettings):

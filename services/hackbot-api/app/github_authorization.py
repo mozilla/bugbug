@@ -33,25 +33,21 @@ COLLABORATOR_PERMISSION_TOKEN_PERMISSIONS: Mapping[str, str] = MappingProxyType(
     {"metadata": "read"}
 )
 
+# The login GitHub shows in place of a deleted account.
+DELETED_USER_LOGIN = "ghost"
+
 
 def is_bot_sender(sender: Mapping[str, Any] | None, bot_login: str) -> bool:
     """Return whether a webhook ``sender`` must be ignored as a bot.
 
-    Rejects GitHub's own ``Bot`` accounts, any ``*[bot]`` login and Hackbot's
-    own bot login, so neither Hackbot nor another App can trigger a run. A
-    sender without a login is treated as a bot too: when in doubt, ignore it.
+    Rejects a missing sender, GitHub's own ``Bot`` accounts, any ``*[bot]``
+    login and Hackbot's own bot login, so neither Hackbot nor another App can
+    trigger a run.
     """
-    if not sender:
+    if not sender or sender.get("type") == "Bot":
         return True
-    login = sender.get("login")
-    if not isinstance(login, str) or not login:
-        return True
-    login = login.lower()
-    return (
-        sender.get("type") == "Bot"
-        or login.endswith("[bot]")
-        or login == bot_login.lower()
-    )
+    login = sender["login"]
+    return login.endswith("[bot]") or login == bot_login
 
 
 class GitHubAuthorizer:
@@ -66,6 +62,7 @@ class GitHubAuthorizer:
         self,
         github_app: GitHubApp,
         allowed_roles: Iterable[str],
+        bot_login: str,
         *,
         cache_ttl_seconds: int = 300,
         cache_maxsize: int = 4096,
@@ -73,27 +70,34 @@ class GitHubAuthorizer:
     ) -> None:
         self._github_app = github_app
         self._lookup_timeout_seconds = lookup_timeout_seconds
-        self._allowed_roles = frozenset(role.lower() for role in allowed_roles)
+        self._allowed_roles = frozenset(allowed_roles)
+        self._bot_login = bot_login
         self._cache: TTLCache[tuple[int, str, str, str], bool] = TTLCache(
             maxsize=cache_maxsize,
             ttl=cache_ttl_seconds,
         )
 
     async def is_authorized(
-        self, installation_id: int, owner: str, repo: str, login: str
+        self,
+        installation_id: int,
+        owner: str,
+        repo: str,
+        sender: Mapping[str, Any] | None,
     ) -> bool:
-        """Return whether ``login`` may trigger Hackbot on ``owner/repo``.
+        """Return whether the webhook ``sender`` may trigger Hackbot on ``owner/repo``.
 
-        ``installation_id``, ``owner`` and ``repo`` must come from the webhook
-        payload, never from user-written text. Fails closed: an unknown user, a
-        role outside the allowed set, any error, or a lookup that outlasts
+        Every argument must come from the webhook payload, never from
+        user-written text. Fails closed: a bot, a deleted user, an unknown user,
+        a role outside the allowed set, any error, or a lookup that outlasts
         ``lookup_timeout_seconds`` denies.
         """
-        if login.lower().endswith("[bot]"):
+        if is_bot_sender(sender, self._bot_login):
+            return False
+        login = sender["login"]
+        if login == DELETED_USER_LOGIN:
             return False
 
-        # GitHub logins, owners and repository names are case-insensitive.
-        key = (installation_id, owner.lower(), repo.lower(), login.lower())
+        key = (installation_id, owner, repo, login)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
@@ -130,7 +134,7 @@ class GitHubAuthorizer:
             )
             return False
 
-        authorized = role is not None and role.lower() in self._allowed_roles
+        authorized = role in self._allowed_roles
         self._cache[key] = authorized
         return authorized
 

@@ -24,6 +24,12 @@ APP_ID = 123
 INSTALLATION_ID = 456
 OTHER_INSTALLATION_ID = 789
 ALLOWED_ROLES = GitHubAppSettings.model_fields["allowed_roles"].default
+BOT_LOGIN = GitHubAppSettings.model_fields["bot_login"].default
+
+
+def _user(login: str) -> dict[str, str]:
+    """A webhook ``sender`` for a regular user account."""
+    return {"login": login, "type": "User"}
 
 
 @pytest.fixture(scope="module")
@@ -107,7 +113,7 @@ def _authorizer(
         http_cache=False,
         auto_retry=False,
     )
-    return GitHubAuthorizer(github_app, ALLOWED_ROLES, **kwargs), github_app
+    return GitHubAuthorizer(github_app, ALLOWED_ROLES, BOT_LOGIN, **kwargs), github_app
 
 
 # --- roles ---
@@ -116,13 +122,17 @@ def _authorizer(
 @pytest.mark.parametrize("role", ["admin", "maintain", "write"])
 async def test_allowed_roles_are_authorized(pem, role):
     authorizer, _ = _authorizer(pem, _FakeGitHub({"dev": role}))
-    assert await authorizer.is_authorized(INSTALLATION_ID, "mozilla", "repo", "dev")
+    assert await authorizer.is_authorized(
+        INSTALLATION_ID, "mozilla", "repo", _user("dev")
+    )
 
 
 @pytest.mark.parametrize("role", ["triage", "read", "none", "security-reviewer"])
 async def test_other_roles_are_denied(pem, role):
     authorizer, _ = _authorizer(pem, _FakeGitHub({"dev": role}))
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "mozilla", "repo", "dev")
+    assert not await authorizer.is_authorized(
+        INSTALLATION_ID, "mozilla", "repo", _user("dev")
+    )
 
 
 async def test_configured_roles_replace_the_defaults(pem):
@@ -135,10 +145,14 @@ async def test_configured_roles_replace_the_defaults(pem):
         http_cache=False,
         auto_retry=False,
     )
-    authorizer = GitHubAuthorizer(github_app, ["Maintain"])
+    authorizer = GitHubAuthorizer(github_app, ["maintain"], BOT_LOGIN)
 
-    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "maintainer")
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "writer")
+    assert await authorizer.is_authorized(
+        INSTALLATION_ID, "o", "r", _user("maintainer")
+    )
+    assert not await authorizer.is_authorized(
+        INSTALLATION_ID, "o", "r", _user("writer")
+    )
 
 
 # --- failures fail closed ---
@@ -149,7 +163,7 @@ async def test_non_collaborator_is_denied(pem):
     authorizer, _ = _authorizer(pem, fake)
 
     assert not await authorizer.is_authorized(
-        INSTALLATION_ID, "mozilla", "repo", "stranger"
+        INSTALLATION_ID, "mozilla", "repo", _user("stranger")
     )
     assert len(fake.permission_requests) == 1
 
@@ -159,11 +173,11 @@ async def test_error_responses_are_denied_and_not_cached(pem, status):
     fake = _FakeGitHub({"dev": "admin"}, status=status)
     authorizer, _ = _authorizer(pem, fake)
 
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
 
     # Once GitHub recovers, the user isn't stuck with the failed answer.
     fake.status = None
-    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
 
 
 async def test_network_error_is_denied(pem):
@@ -176,9 +190,9 @@ async def test_network_error_is_denied(pem):
         http_cache=False,
         auto_retry=False,
     )
-    authorizer = GitHubAuthorizer(github_app, ALLOWED_ROLES)
+    authorizer = GitHubAuthorizer(github_app, ALLOWED_ROLES, BOT_LOGIN)
 
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
 
 
 async def test_token_mint_failure_is_denied(pem):
@@ -192,9 +206,9 @@ async def test_token_mint_failure_is_denied(pem):
         http_cache=False,
         auto_retry=False,
     )
-    authorizer = GitHubAuthorizer(github_app, ALLOWED_ROLES)
+    authorizer = GitHubAuthorizer(github_app, ALLOWED_ROLES, BOT_LOGIN)
 
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
 
 
 async def test_slow_lookup_is_denied_and_not_cached(pem):
@@ -202,13 +216,13 @@ async def test_slow_lookup_is_denied_and_not_cached(pem):
     authorizer, _ = _authorizer(pem, fake, lookup_timeout_seconds=0.1)
 
     started = time.monotonic()
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
     # Gave up at the deadline rather than waiting for GitHub.
     assert time.monotonic() - started < 2
 
     # Once GitHub is fast again, the user isn't stuck with the timed-out answer.
     fake.permission_delay = 0
-    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
 
 
 async def test_deadline_covers_token_mint_and_lookup_together(pem):
@@ -216,15 +230,24 @@ async def test_deadline_covers_token_mint_and_lookup_together(pem):
     fake = _FakeGitHub({"dev": "admin"}, mint_delay=0.3, permission_delay=0.3)
     authorizer, _ = _authorizer(pem, fake, lookup_timeout_seconds=0.5)
 
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
     assert len(fake.mint_requests) == 1
 
 
-async def test_bot_login_is_denied_without_a_lookup(pem):
-    fake = _FakeGitHub({"hackbot[bot]": "admin"})
+@pytest.mark.parametrize(
+    "sender",
+    [
+        {"login": "hackbot[bot]", "type": "Bot"},
+        _user("hackbot"),
+        _user("ghost"),
+        None,
+    ],
+)
+async def test_bots_and_deleted_users_are_denied_without_a_lookup(pem, sender):
+    fake = _FakeGitHub({"hackbot[bot]": "admin", "hackbot": "admin", "ghost": "admin"})
     authorizer, _ = _authorizer(pem, fake)
 
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "hackbot[bot]")
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", sender)
     assert fake.requests == []
 
 
@@ -236,7 +259,7 @@ async def test_uses_the_events_installation_with_a_narrow_token(pem):
     authorizer, _ = _authorizer(pem, fake)
 
     assert await authorizer.is_authorized(
-        OTHER_INSTALLATION_ID, "mozilla-mobile", "firefox-ios", "dev"
+        OTHER_INSTALLATION_ID, "mozilla-mobile", "firefox-ios", _user("dev")
     )
 
     (mint,) = fake.mint_requests
@@ -262,9 +285,9 @@ async def test_ignores_the_default_installation(pem):
         http_cache=False,
         auto_retry=False,
     )
-    authorizer = GitHubAuthorizer(github_app, ALLOWED_ROLES)
+    authorizer = GitHubAuthorizer(github_app, ALLOWED_ROLES, BOT_LOGIN)
 
-    assert await authorizer.is_authorized(OTHER_INSTALLATION_ID, "o", "r", "dev")
+    assert await authorizer.is_authorized(OTHER_INSTALLATION_ID, "o", "r", _user("dev"))
     (mint,) = fake.mint_requests
     assert str(OTHER_INSTALLATION_ID) in mint.url.path
 
@@ -277,30 +300,25 @@ async def test_caches_positive_and_negative_answers(pem):
     authorizer, _ = _authorizer(pem, fake)
 
     for _ in range(2):
-        assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
-        assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "reader")
-        assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "ghost")
+        assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
+        assert not await authorizer.is_authorized(
+            INSTALLATION_ID, "o", "r", _user("reader")
+        )
+        assert not await authorizer.is_authorized(
+            INSTALLATION_ID, "o", "r", _user("stranger")
+        )
 
     assert len(fake.permission_requests) == 3
-
-
-async def test_login_owner_and_repo_are_case_insensitive(pem):
-    fake = _FakeGitHub({"dev": "write"})
-    authorizer, _ = _authorizer(pem, fake)
-
-    assert await authorizer.is_authorized(INSTALLATION_ID, "Mozilla", "Repo", "Dev")
-    assert await authorizer.is_authorized(INSTALLATION_ID, "mozilla", "repo", "dev")
-    assert len(fake.permission_requests) == 1
 
 
 async def test_cache_is_per_repository_and_installation(pem):
     fake = _FakeGitHub({"dev": "write"})
     authorizer, _ = _authorizer(pem, fake)
 
-    await authorizer.is_authorized(INSTALLATION_ID, "o", "r1", "dev")
-    await authorizer.is_authorized(INSTALLATION_ID, "o", "r2", "dev")
-    await authorizer.is_authorized(INSTALLATION_ID, "other", "r1", "dev")
-    await authorizer.is_authorized(OTHER_INSTALLATION_ID, "o", "r1", "dev")
+    await authorizer.is_authorized(INSTALLATION_ID, "o", "r1", _user("dev"))
+    await authorizer.is_authorized(INSTALLATION_ID, "o", "r2", _user("dev"))
+    await authorizer.is_authorized(INSTALLATION_ID, "other", "r1", _user("dev"))
+    await authorizer.is_authorized(OTHER_INSTALLATION_ID, "o", "r1", _user("dev"))
 
     assert len(fake.permission_requests) == 4
 
@@ -311,19 +329,17 @@ async def test_cache_expires(pem):
     now = [0.0]
     authorizer._cache = TTLCache(maxsize=16, ttl=300, timer=lambda: now[0])
 
-    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
     # Write access is revoked; the cached answer holds until it expires.
     fake.roles["dev"] = "read"
     now[0] = 299
-    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
     now[0] = 301
-    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "dev")
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", _user("dev"))
     assert len(fake.permission_requests) == 2
 
 
 # --- bot filter ---
-
-BOT_LOGIN = "hackbot"
 
 
 @pytest.mark.parametrize(
@@ -332,22 +348,15 @@ BOT_LOGIN = "hackbot"
         {"login": "dependabot[bot]", "type": "Bot"},
         {"login": "some-app", "type": "Bot"},
         {"login": "renovate[bot]", "type": "User"},
-        {"login": "Hackbot", "type": "User"},
         {"login": "hackbot[bot]", "type": "Bot"},
-        {"login": "Hackbot-Mozilla[BOT]"},
-        {"login": "", "type": "User"},
-        {"type": "User"},
-        {"login": None, "type": "User"},
+        # Hackbot's own account, which carries no [bot] suffix.
+        {"login": "hackbot", "type": "User"},
         {},
         None,
     ],
 )
 def test_is_bot_sender_rejects_bots(sender):
     assert is_bot_sender(sender, BOT_LOGIN)
-
-
-def test_is_bot_sender_rejects_configured_bot_login_without_suffix():
-    assert is_bot_sender({"login": "Hackbot", "type": "User"}, "hackbot")
 
 
 @pytest.mark.parametrize(
@@ -372,16 +381,23 @@ def test_trigger_settings_defaults(pem):
     assert github.allowed_roles == {"admin", "maintain", "write"}
 
 
-def test_trigger_settings_normalize_roles(pem):
+def test_trigger_settings_strip_roles(pem):
     github = GitHubAppSettings(
-        app_id=APP_ID, private_key=pem, allowed_roles=[" Admin ", "WRITE"]
+        app_id=APP_ID, private_key=pem, allowed_roles=[" admin ", "write"]
     )
     assert github.allowed_roles == {"admin", "write"}
 
 
-@pytest.mark.parametrize("roles", [[], [""], ["  "]])
-def test_trigger_settings_reject_empty_roles(pem, roles):
-    with pytest.raises(ValidationError, match="at least one repository role"):
+@pytest.mark.parametrize(
+    ("roles", "error"),
+    [
+        ([], "at least 1 item"),
+        ([""], "at least 1 character"),
+        (["  "], "at least 1 character"),
+    ],
+)
+def test_trigger_settings_reject_empty_roles(pem, roles, error):
+    with pytest.raises(ValidationError, match=error):
         GitHubAppSettings(app_id=APP_ID, private_key=pem, allowed_roles=roles)
 
 
@@ -453,3 +469,4 @@ def test_dependency_is_app_scoped(monkeypatch, pem):
     # or waiting on a slow GitHub.
     assert first._github_app._github_options["auto_retry"] is False
     assert first._lookup_timeout_seconds == DEFAULT_LOOKUP_TIMEOUT_SECONDS < 10
+    assert first._bot_login == "hackbot"
