@@ -12,8 +12,10 @@ from datetime import datetime
 from typing import Any
 
 import matplotlib.pyplot as plt
+import mozci.errors
 import mozci.push
 from dateutil.relativedelta import relativedelta
+from mozci.task import get_configuration
 from pandas import DataFrame
 from tqdm import tqdm
 
@@ -36,9 +38,24 @@ def analyze_shadow_schedulers(
 ) -> dict[str, Any]:
     schedulers = []
 
-    for name, config_groups in push.generate_all_shadow_scheduler_config_groups():
-        if isinstance(config_groups, mozci.errors.TaskNotFound):
+    try:
+        names = push.shadow_scheduler_names
+    except mozci.errors.TaskNotFound:
+        # The push has no decision task (e.g. DONTBUILD pushes).
+        names = []
+
+    for name in names:
+        try:
+            tasks = push.get_shadow_scheduler_tasks(name)
+        except mozci.errors.TaskNotFound, mozci.errors.ArtifactNotFound:
+            # The shadow scheduler failed or didn't run on this push.
             continue
+
+        config_groups = {
+            (get_configuration(task), group)
+            for task in tasks
+            for group in task["attributes"].get("test_manifests", [])
+        }
 
         schedulers.append(
             {
@@ -102,6 +119,7 @@ def go(months: int) -> None:
                     try:
                         yield future.result()
                     except Exception:
+                        # Transient failures, the push will be analyzed again on the next run.
                         traceback.print_exc()
 
                     # Upload every 10 minutes.
