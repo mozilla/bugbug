@@ -76,7 +76,9 @@ Two things those files do not tell you:
   API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field, and
   `PARENT_ARTIFACTS` for a chained run); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
-  `OPENAI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`); and local-only fallbacks
+  `OPENAI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`, and, to route through Otari,
+  `OTARI_BASE_URL`, with the Anthropic federation ids pointing at Otari's rule and
+  organization); and local-only fallbacks
   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`). Only the first
   varies per run.
 
