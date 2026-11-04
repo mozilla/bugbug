@@ -9,7 +9,7 @@ import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Any
+from typing import Any, Iterable, Iterator
 
 import matplotlib.pyplot as plt
 import mozci.errors
@@ -32,6 +32,17 @@ db.register(
     4,
 )
 
+# Maximum number of pushes being analyzed at the same time. Shadow scheduler
+# artifacts can be tens of MB each, so we can't have too many in flight.
+MAX_IN_FLIGHT = 16
+
+# Attributes where mozci memoizes large artifacts on Push objects.
+PUSH_MEMOIZED_ATTRIBUTES = (
+    "_decision_task",
+    "_scheduled_task_labels",
+    "_get_shadow_scheduler_tasks",
+)
+
 
 def analyze_shadow_schedulers(
     push: mozci.push.Push,
@@ -39,36 +50,87 @@ def analyze_shadow_schedulers(
     schedulers = []
 
     try:
-        names = push.shadow_scheduler_names
-    except mozci.errors.TaskNotFound:
-        # The push has no decision task (e.g. DONTBUILD pushes).
-        names = []
-
-    for name in names:
         try:
-            tasks = push.get_shadow_scheduler_tasks(name)
-        except mozci.errors.TaskNotFound, mozci.errors.ArtifactNotFound:
-            # The shadow scheduler failed or didn't run on this push.
-            continue
+            names = push.shadow_scheduler_names
+        except mozci.errors.TaskNotFound:
+            # The push has no decision task (e.g. DONTBUILD pushes).
+            names = []
 
-        config_groups = {
-            (get_configuration(task), group)
-            for task in tasks
-            for group in task["attributes"].get("test_manifests", [])
-        }
+        # The task graph is not needed anymore.
+        for attr in PUSH_MEMOIZED_ATTRIBUTES:
+            push.__dict__.pop(attr, None)
 
-        schedulers.append(
-            {
-                "name": name,
-                "scheduled": list(config_groups),
+        for name in names:
+            try:
+                tasks = push.get_shadow_scheduler_tasks(name)
+            except mozci.errors.TaskNotFound, mozci.errors.ArtifactNotFound:
+                # The shadow scheduler failed or didn't run on this push.
+                continue
+            finally:
+                push.__dict__.pop("_get_shadow_scheduler_tasks", None)
+
+            config_groups = {
+                (get_configuration(task), group)
+                for task in tasks
+                for group in task["attributes"].get("test_manifests", [])
             }
-        )
+            del tasks
+
+            schedulers.append(
+                {
+                    "name": name,
+                    "scheduled": list(config_groups),
+                }
+            )
+    finally:
+        for attr in PUSH_MEMOIZED_ATTRIBUTES:
+            push.__dict__.pop(attr, None)
 
     return {
         "id": push.rev,
         "date": push.date,
         "schedulers": schedulers,
     }
+
+
+def bounded_executor_map(
+    executor: concurrent.futures.Executor,
+    fn,
+    iterables: Iterable[tuple],
+    max_in_flight: int,
+) -> Iterator[concurrent.futures.Future]:
+    """Like executor.map, but yielding futures in completion order.
+
+    Unlike executor.map, tasks are not all submitted at once and references to
+    completed futures are not kept, so results can be garbage collected.
+    """
+    iterator = iter(iterables)
+    pending: set[concurrent.futures.Future] = set()
+
+    def submit_next() -> bool:
+        try:
+            args = next(iterator)
+        except StopIteration:
+            return False
+        pending.add(executor.submit(fn, *args))
+        return True
+
+    try:
+        for _ in range(max_in_flight):
+            if not submit_next():
+                break
+
+        while pending:
+            done, _ = concurrent.futures.wait(
+                pending, return_when=concurrent.futures.FIRST_COMPLETED
+            )
+            for future in done:
+                pending.remove(future)
+                submit_next()
+                yield future
+    finally:
+        for future in pending:
+            future.cancel()
 
 
 def go(months: int) -> None:
@@ -90,51 +152,51 @@ def go(months: int) -> None:
         to_date=to_date.strftime("%Y-%m-%d"),
         branch="autoland",
     )
-
     pushes = [push for push in pushes if push.rev not in known_scheduler_stats]
+    del known_scheduler_stats
+
+    # make_push_objects links each push to its parent and child, which means that
+    # no push can be garbage collected as long as one of them is alive. We don't
+    # need the links, so remove them.
+    for push in pushes:
+        push._parent = None
+        push._child = None
+
     logger.info("%d left to analyze", len(pushes))
 
     def compress_and_upload() -> None:
         utils.zstd_compress(SHADOW_SCHEDULER_STATS_DB)
         db.upload(SHADOW_SCHEDULER_STATS_DB)
 
+    results: list[dict[str, Any]] = []
+
+    def flush() -> None:
+        db.append(SHADOW_SCHEDULER_STATS_DB, results)
+        results.clear()
+        compress_and_upload()
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = tuple(
-            executor.submit(
-                analyze_shadow_schedulers,
-                push,
-            )
-            for push in pushes
+        futures = bounded_executor_map(
+            executor,
+            analyze_shadow_schedulers,
+            ((push,) for push in pushes),
+            MAX_IN_FLIGHT,
         )
-        del pushes
 
-        def results():
-            start_time = time.monotonic()
-
+        start_time = time.monotonic()
+        for future in tqdm(futures, total=len(pushes)):
             try:
-                for future in tqdm(
-                    concurrent.futures.as_completed(futures),
-                    total=len(futures),
-                ):
-                    try:
-                        yield future.result()
-                    except Exception:
-                        # Transient failures, the push will be analyzed again on the next run.
-                        traceback.print_exc()
-
-                    # Upload every 10 minutes.
-                    if time.monotonic() - start_time >= 600:
-                        compress_and_upload()
-                        start_time = time.monotonic()
+                results.append(future.result())
             except Exception:
-                for f in futures:
-                    f.cancel()
+                # Transient failures, the push will be analyzed again on the next run.
+                traceback.print_exc()
 
-                raise
+            # Upload every 10 minutes.
+            if time.monotonic() - start_time >= 600:
+                flush()
+                start_time = time.monotonic()
 
-        db.append(SHADOW_SCHEDULER_STATS_DB, results())
-
-    compress_and_upload()
+    flush()
 
 
 def plot_graph(df: DataFrame, title: str, file_path: str) -> None:
