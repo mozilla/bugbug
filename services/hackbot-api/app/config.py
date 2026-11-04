@@ -72,6 +72,20 @@ class GitHubAppSettings(BaseModel):
     # that only ever talks to one org.
     installation_id: Annotated[int | None, Field(gt=0)] = None
 
+    # Who may trigger Hackbot from GitHub, and how. All defaulted, so only the
+    # App credentials are required. The webhook secret is left to the endpoint
+    # that verifies deliveries (#7053).
+
+    # Hackbot's own GitHub account, so its comments never re-trigger a run.
+    # Every ``*[bot]`` login, such as the App's, is ignored regardless.
+    bot_login: str = "hackbot"
+    # The mention that triggers a run.
+    mention_token: str = "@hackbot"
+    # Repository roles (the API's ``role_name``) allowed to trigger a run on
+    # that repository. Anything else, including triage, read and custom roles,
+    # is denied.
+    allowed_roles: frozenset[str] = frozenset({"admin", "maintain", "write"})
+
     @field_validator("private_key")
     @classmethod
     def _check_private_key(cls, value: SecretStr) -> SecretStr:
@@ -87,25 +101,6 @@ class GitHubAppSettings(BaseModel):
                 "(-----BEGIN RSA PRIVATE KEY----- ...)"
             )
         return SecretStr(pem)
-
-
-class GitHubWebhookSettings(BaseModel):
-    """Who may trigger Hackbot from GitHub, and how it is triggered.
-
-    Populated from GITHUB_WEBHOOK_* env vars. Everything is defaulted, so a
-    deployment without GitHub config still starts. The webhook secret is left to
-    the endpoint that verifies deliveries (#7053).
-    """
-
-    # Hackbot's own GitHub account, so its comments never re-trigger a run.
-    # Every ``*[bot]`` login, such as the App's, is ignored regardless.
-    bot_login: str = "hackbot"
-    # The mention that triggers a run.
-    mention_token: str = "@hackbot"
-    # Repository roles (the API's ``role_name``) allowed to trigger a run on
-    # that repository. Anything else, including triage, read and custom roles,
-    # is denied.
-    allowed_roles: frozenset[str] = frozenset({"admin", "maintain", "write"})
 
     @field_validator("allowed_roles")
     @classmethod
@@ -151,11 +146,6 @@ class Settings(BaseSettings):
 
     # Optional until the GitHub App credentials are deployed.
     github: GitHubAppSettings | None = None
-
-    # GITHUB_WEBHOOK_* vars also match the ``github`` field's GITHUB_ prefix, so
-    # setting any of them without the App credentials fails startup on
-    # github.app_id. That is intended: the webhook can't work without the App.
-    github_webhook: GitHubWebhookSettings = GitHubWebhookSettings()
 
     webhook: WebhookSettings
 

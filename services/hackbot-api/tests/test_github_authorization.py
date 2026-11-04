@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from app.config import GitHubAppSettings, GitHubWebhookSettings, Settings
+from app.config import GitHubAppSettings, Settings
 from app.github import GitHubApp
 from app.github_authorization import (
     DEFAULT_LOOKUP_TIMEOUT_SECONDS,
@@ -23,7 +23,7 @@ from pydantic import ValidationError
 APP_ID = 123
 INSTALLATION_ID = 456
 OTHER_INSTALLATION_ID = 789
-ALLOWED_ROLES = GitHubWebhookSettings().allowed_roles
+ALLOWED_ROLES = GitHubAppSettings.model_fields["allowed_roles"].default
 
 
 @pytest.fixture(scope="module")
@@ -365,22 +365,24 @@ def test_is_bot_sender_accepts_users(sender):
 # --- settings ---
 
 
-def test_webhook_settings_defaults():
-    webhook = GitHubWebhookSettings()
-    assert webhook.bot_login == "hackbot"
-    assert webhook.mention_token == "@hackbot"
-    assert webhook.allowed_roles == {"admin", "maintain", "write"}
+def test_trigger_settings_defaults(pem):
+    github = GitHubAppSettings(app_id=APP_ID, private_key=pem)
+    assert github.bot_login == "hackbot"
+    assert github.mention_token == "@hackbot"
+    assert github.allowed_roles == {"admin", "maintain", "write"}
 
 
-def test_webhook_settings_normalize_roles():
-    webhook = GitHubWebhookSettings(allowed_roles=[" Admin ", "WRITE"])
-    assert webhook.allowed_roles == {"admin", "write"}
+def test_trigger_settings_normalize_roles(pem):
+    github = GitHubAppSettings(
+        app_id=APP_ID, private_key=pem, allowed_roles=[" Admin ", "WRITE"]
+    )
+    assert github.allowed_roles == {"admin", "write"}
 
 
 @pytest.mark.parametrize("roles", [[], [""], ["  "]])
-def test_webhook_settings_reject_empty_roles(roles):
+def test_trigger_settings_reject_empty_roles(pem, roles):
     with pytest.raises(ValidationError, match="at least one repository role"):
-        GitHubWebhookSettings(allowed_roles=roles)
+        GitHubAppSettings(app_id=APP_ID, private_key=pem, allowed_roles=roles)
 
 
 def _clear_github_env(monkeypatch):
@@ -388,43 +390,32 @@ def _clear_github_env(monkeypatch):
         "GITHUB_APP_ID",
         "GITHUB_PRIVATE_KEY",
         "GITHUB_INSTALLATION_ID",
-        "GITHUB_WEBHOOK_BOT_LOGIN",
-        "GITHUB_WEBHOOK_MENTION_TOKEN",
-        "GITHUB_WEBHOOK_ALLOWED_ROLES",
+        "GITHUB_BOT_LOGIN",
+        "GITHUB_MENTION_TOKEN",
+        "GITHUB_ALLOWED_ROLES",
     ):
         monkeypatch.delenv(name, raising=False)
 
 
 def test_settings_start_without_github_config(monkeypatch):
     _clear_github_env(monkeypatch)
-    loaded = Settings(_env_file=None)
-    assert loaded.github is None
-    assert loaded.github_webhook == GitHubWebhookSettings()
+    assert Settings(_env_file=None).github is None
 
 
-def test_settings_read_webhook_env(monkeypatch, pem):
+def test_settings_read_trigger_env(monkeypatch, pem):
     _clear_github_env(monkeypatch)
     monkeypatch.setenv("GITHUB_APP_ID", str(APP_ID))
     monkeypatch.setenv("GITHUB_PRIVATE_KEY", pem)
-    monkeypatch.setenv("GITHUB_WEBHOOK_BOT_LOGIN", "other[bot]")
-    monkeypatch.setenv("GITHUB_WEBHOOK_MENTION_TOKEN", "@other")
-    monkeypatch.setenv("GITHUB_WEBHOOK_ALLOWED_ROLES", '["admin"]')
+    monkeypatch.setenv("GITHUB_BOT_LOGIN", "other[bot]")
+    monkeypatch.setenv("GITHUB_MENTION_TOKEN", "@other")
+    monkeypatch.setenv("GITHUB_ALLOWED_ROLES", '["admin"]')
 
     loaded = Settings(_env_file=None)
 
     assert loaded.github.app_id == APP_ID
-    assert loaded.github_webhook.bot_login == "other[bot]"
-    assert loaded.github_webhook.mention_token == "@other"
-    assert loaded.github_webhook.allowed_roles == {"admin"}
-
-
-def test_settings_reject_webhook_env_without_app(monkeypatch):
-    # GITHUB_WEBHOOK_* share the App's GITHUB_ prefix, so configuring the
-    # webhook without the App fails loudly instead of starting half-configured.
-    _clear_github_env(monkeypatch)
-    monkeypatch.setenv("GITHUB_WEBHOOK_BOT_LOGIN", "other[bot]")
-    with pytest.raises(ValidationError, match="github.app_id"):
-        Settings(_env_file=None)
+    assert loaded.github.bot_login == "other[bot]"
+    assert loaded.github.mention_token == "@other"
+    assert loaded.github.allowed_roles == {"admin"}
 
 
 # --- dependency ---

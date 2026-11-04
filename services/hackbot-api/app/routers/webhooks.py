@@ -108,7 +108,7 @@ def get_github_authorizer(request: Request) -> GitHubAuthorizer:
             # retries, a 5xx also fails closed at once instead of spending that
             # budget on githubkit's backoff.
             GitHubApp(settings.github, auto_retry=False),
-            settings.github_webhook.allowed_roles,
+            settings.github.allowed_roles,
         )
         request.app.state.github_authorizer = authorizer
     return authorizer
