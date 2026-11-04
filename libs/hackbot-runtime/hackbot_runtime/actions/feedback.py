@@ -14,6 +14,8 @@ from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 ACTION_TYPE = "feedback.report_problem"
 
+FeedbackType = Literal["blocker", "improvement", "error", "question"]
+
 
 @tool
 async def report_problem(
@@ -45,6 +47,16 @@ async def report_problem(
             )
         ),
     ],
+    type: Annotated[
+        FeedbackType,
+        Field(
+            description=(
+                "The category of feedback: 'blocker' if you are completely blocked, "
+                "'improvement' for suggestions or feature requests, 'error' for "
+                "unexpected behavior or failures, 'question' for ambiguities."
+            )
+        ),
+    ] = "error",
 ) -> str:
     """Report a problem to the Hackbot developers.
 
@@ -52,7 +64,13 @@ async def report_problem(
     problem, then continue your task.
     """
     action = recorder.record(
-        ACTION_TYPE, {"severity": severity, "title": title, "message": message}
+        ACTION_TYPE,
+        {
+            "severity": severity,
+            "type": type,
+            "title": title,
+            "message": message,
+        },
     )
     return confirmation(action)
 
