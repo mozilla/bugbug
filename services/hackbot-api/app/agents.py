@@ -10,6 +10,7 @@ from app.schemas import (
     AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
+    EvaluatorInputs,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairFixInputs,
@@ -180,5 +181,15 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-autowebcompat-intervention",
         input_schema=AutowebcompatInterventionInputs,
         auto_apply_actions=True,
+    ),
+    "evaluator": AgentSpec(
+        name="evaluator",
+        description=(
+            "Run an agent over an eval dataset, grade every example, and log the "
+            "evaluation to Weave."
+        ),
+        job_name="hackbot-agent-evaluator",
+        input_schema=EvaluatorInputs,
+        execution_timeout_seconds=48 * 60 * 60,
     ),
 }

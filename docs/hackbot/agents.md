@@ -61,6 +61,7 @@ or code.
 | `autowebcompat-diagnosis` | Diagnose the root cause of a reproduced web-compatibility issue by comparing Firefox and Chrome via DevTools MCP, and produce a reduced HTML testcase.                      |   no   |      no       |          no          |
 | `test-plan-generator`     | Generate Firefox QA test cases, run them through DevTools MCP, report results.                                                                                              |   no   |      no       |          no          |
 | `uplift-resolve`          | Resolve the merge conflicts from cherry-picking patches onto a stable uplift branch, and return the resolved patch with a confidence level.                                 |  yes   |      no       |          no          |
+| `evaluator`               | Run an agent over an eval dataset, grade every example, and log the evaluation to Weave.                                                                                    |  yes   |      yes      |          no          |
 
 Two shapes recur. **Source agents** (`bug-fix`, `test-repair`, `build-repair`) check out
 Firefox, often build it, edit the tree, and let the runtime capture the diff. **Browser
