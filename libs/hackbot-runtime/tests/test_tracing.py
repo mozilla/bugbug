@@ -1,7 +1,7 @@
 """Tests for Weave tracing setup and agent-name derivation."""
 
 import pytest
-from hackbot_runtime import tracing, wandb_wif
+from hackbot_runtime import tracing, wif
 from opentelemetry.sdk.trace import TracerProvider
 from weave.conversation.agent_context import resolve_agent_name as weave_agent_name
 
@@ -15,7 +15,7 @@ def _entrypoint_at(path: str):
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch):
-    for var in ("WANDB_API_KEY", wandb_wif.TOKEN_FILE_ENV, "WEAVE_PROJECT"):
+    for var in ("WANDB_API_KEY", wif.WandbWifSettings.token_file_env, "WEAVE_PROJECT"):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -62,7 +62,7 @@ def test_init_weave_enabled_by_wif_token_file(monkeypatch):
     monkeypatch.setattr(
         weave, "init", lambda project, **kw: calls.update(project=project)
     )
-    monkeypatch.setenv(wandb_wif.TOKEN_FILE_ENV, "/run/wandb-identity-token")
+    monkeypatch.setenv(wif.WandbWifSettings.token_file_env, "/run/wandb-identity-token")
 
     assert tracing._init_weave() is True
     assert calls == {"project": tracing.DEFAULT_WEAVE_PROJECT}
