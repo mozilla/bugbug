@@ -45,6 +45,8 @@ class AgentSpec:
     # reported as an error. Agents that may legitimately finish without acting (or
     # without Phabricator submission tools) must not set it.
     expects_actions: bool = False
+    # How long an execution may run; the API-wide default when unset.
+    execution_timeout_seconds: int | None = None
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:

@@ -190,7 +190,10 @@ async def create_run(
     await db.commit()
 
     try:
-        policy = await gcs.generate_results_policy(str(run_id))
+        timeout = (
+            agent.execution_timeout_seconds or settings.job_execution_timeout_seconds
+        )
+        policy = await gcs.generate_results_policy(str(run_id), timeout)
         env_overrides: dict[str, str] = {
             "RUN_ID": str(run_id),
             "RESULTS_BUCKET": settings.results_bucket,
@@ -201,7 +204,9 @@ async def create_run(
             **(agent.build_env or model_to_env)(inputs),
             **(await _parent_artifacts_env(parent)),
         }
-        execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
+        execution_name = await jobs.trigger_execution(
+            agent.job_name, env_overrides, timeout
+        )
     except Exception as exc:
         log.exception("Failed to start execution for run %s", run_id)
         run.status = RunStatus.failed.value
