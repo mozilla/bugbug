@@ -135,7 +135,7 @@ class EvaluationAction(enum.Enum):
 
 @dataclass
 class SuggestionFeedback:
-    id: int
+    id: int | str
     comment: str
     file_path: str
     action: Literal["APPROVE", "REJECT", "IGNORE"]
