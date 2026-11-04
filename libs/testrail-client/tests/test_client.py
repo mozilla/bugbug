@@ -3,8 +3,10 @@
 import httpx
 import pytest
 from pydantic import ValidationError
+from testrail_client import TestRailCaseType as CaseType
 from testrail_client import TestRailClient as Client
 from testrail_client import TestRailSettings as Settings
+from testrail_client import TestRailSuite as Suite
 from testrail_client import client as client_module
 
 
@@ -49,7 +51,7 @@ def _capture_request(monkeypatch, payload) -> dict:
 
         async def request(self, method, url, **kwargs):
             captured.update(method=method, url=url, **kwargs)
-            return _FakeResponse(payload)
+            return _FakeResponse(payload(url) if callable(payload) else payload)
 
     monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
     return captured
@@ -99,8 +101,61 @@ async def test_request_requires_json_object_or_array(monkeypatch):
         await _client().request("GET", "get_projects")
 
 
+async def test_endpoint_response_is_typed(monkeypatch):
+    _capture_request(
+        monkeypatch,
+        [{"id": "6", "name": "Functional", "future": True}],
+    )
+
+    result = await _client().get_case_types()
+
+    assert result == [CaseType(id=6, name="Functional")]
+
+
+async def test_single_resource_response_is_typed(monkeypatch):
+    _capture_request(monkeypatch, {"id": "10", "name": "Suite"})
+
+    assert await _client().add_suite("Suite") == Suite(id=10)
+
+
+async def test_endpoint_response_is_validated(monkeypatch):
+    _capture_request(monkeypatch, [{"name": "Functional"}])
+
+    with pytest.raises(ValidationError):
+        await _client().get_case_types()
+
+
+@pytest.mark.parametrize(
+    ("method_name", "response"),
+    [
+        ("get_case_types", {"case_types": [{"id": 1, "name": "Functional"}]}),
+        ("get_templates", {"templates": [{"id": 1, "name": "Steps"}]}),
+        ("get_statuses", {"statuses": [{"id": 1, "name": "passed"}]}),
+        ("add_results_for_cases", {"results": [{"id": 1}]}),
+    ],
+)
+async def test_list_endpoints_reject_unexpected_response_shape(
+    monkeypatch, method_name, response
+):
+    _capture_request(monkeypatch, response)
+    client = _client()
+
+    with pytest.raises(ValidationError):
+        if method_name == "add_results_for_cases":
+            await client.add_results_for_cases(1, [])
+        else:
+            await getattr(client, method_name)()
+
+
 async def test_endpoint_wrappers(monkeypatch):
-    captured = _capture_request(monkeypatch, {"id": 10})
+    captured = _capture_request(
+        monkeypatch,
+        lambda url: (
+            [{"id": 10, "name": "Functional"}]
+            if "/get_" in url or "/add_results_for_cases/" in url
+            else {"id": 10}
+        ),
+    )
     client = _client()
 
     await client.get_case_types()
