@@ -187,7 +187,6 @@ def test_latency_in_pushes() -> None:
     assert sim.latency_key("detect") == "detect_hours"
     assert sim.latency_key("detect_pushes") == "detect_pushes"
     assert sim.latency_label("detect") == "detect hours"
-    assert sim.latency_label("surface") == "surface hours"
     assert sim.latency_label("window_pushes") == "window pushes"
     # Hourly pushes, a batch every 4 pushes, culprits at 5 and 6: both
     # detected at 8, three and two pushes (and hours) later; the window
@@ -365,7 +364,6 @@ def test_simulate_ci_queues_runs_and_backfills() -> None:
         build_minutes=99.0,
         backfill="all",
         record_waits=True,
-        alerting="detection",
     )
     result = sim.simulate_ci(schedule, timeline, detections, settings)
     assert result.jobs == 3 * 302 and result.unknown_labels == 0
@@ -391,7 +389,6 @@ def test_simulate_ci_queues_runs_and_backfills() -> None:
         build_minutes=99.0,
         backfill="all",
         record_waits=True,
-        alerting="detection",
     )
     result = sim.simulate_ci(schedule, timeline, detections, settings)
     assert (
@@ -401,9 +398,7 @@ def test_simulate_ci_queues_runs_and_backfills() -> None:
 
     # Without backfills the culprit of regression 2 is never identified: push
     # 5 has no data for L2. Regression 1's culprit 5 is not identified either.
-    settings = sim.CiSettings(
-        _capacity(2), build_minutes=99.0, backfill="none", alerting="detection"
-    )
+    settings = sim.CiSettings(_capacity(2), build_minutes=99.0, backfill="none")
     result = sim.simulate_ci(schedule, timeline, detections, settings)
     assert result.backfill_jobs == {}
     assert result.identify_time == {1: None, 2: None}
@@ -416,70 +411,54 @@ def test_simulate_ci_queues_runs_and_backfills() -> None:
         schedule,
         timeline,
         detections,
-        sim.CiSettings(model, 99.0, "none", alerting="detection"),
+        sim.CiSettings(model, 99.0, "none"),
     )
     assert sorted((result.detect_time[1], result.detect_time[2]))[
         1
     ] == batch + timedelta(minutes=120)
 
 
-def test_alerting_modes_and_backfill_builds() -> None:
+def test_detection_starts_the_backfills() -> None:
     # 60 hourly pushes, a batch every 4, culprit 5 on L1 caught by the batch
-    # on push 8. Two workers: nothing queues.
+    # on push 8. Two workers: nothing queues. The backfills start when its
+    # L1 run completes and identification follows them.
     timeline = make_timeline(60, regressions=((1, 5, (L1,)),))
     schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
     detections = sim.detect(schedule, timeline)
     batch = timeline.pushes[8].time + timedelta(minutes=99)
-
-    # Today's rule: the alert needs 12 runs after the culprit, the 12th being
-    # the batch on push 52, and the backfills start when its L1 run completes.
-    today = sim.CiSettings(_capacity(2), build_minutes=99.0, alerting="fore_window")
-    result = sim.simulate_ci(schedule, timeline, detections, today)
+    result = sim.simulate_ci(
+        schedule, timeline, detections, sim.CiSettings(_capacity(2), 99.0)
+    )
     assert result.detect_time[1] == batch + timedelta(minutes=60)
-    assert result.surface_time[1] == timeline.pushes[52].time + timedelta(
-        minutes=99 + 60
-    )
     identified = result.identify_time[1]
-    assert identified is not None and identified > result.surface_time[1]
-    assert result.confirm_jobs == {} and result.backfill_jobs == {1: 3}
+    assert identified is not None and identified > result.detect_time[1]
+    assert result.backfill_jobs == {1: 3}
 
-    # Retrigger confirmation: two more runs of L1 on push 8 on a single
-    # worker, after L2 (60) and L1 (120) of the batch: done at 180 and 240.
-    # Push 5 ran nothing, so its backfill builds first: eligible at the alert
-    # plus the 99 minute build, then 60 minutes of run.
-    confirm = sim.CiSettings(
-        _capacity(1), build_minutes=99.0, alerting="retrigger", confirm_retriggers=2
+    # Push 5 ran nothing, so its backfill builds first: eligible at the
+    # detection plus the 99 minute build, then 60 minutes of run.
+    result = sim.simulate_ci(
+        schedule, timeline, detections, sim.CiSettings(_capacity(1), 99.0)
     )
-    result = sim.simulate_ci(schedule, timeline, detections, confirm)
-    assert result.detect_time[1] == batch + timedelta(minutes=120)
-    assert result.surface_time[1] == batch + timedelta(minutes=240)
-    assert result.confirm_jobs == {1: 2}
     identified = result.identify_time[1]
     assert identified is not None
-    assert identified >= result.surface_time[1] + timedelta(minutes=99 + 60)
-
-    # Sheriff at the first data point: the alert is the detection.
-    instant = sim.CiSettings(_capacity(2), build_minutes=99.0, alerting="detection")
-    result = sim.simulate_ci(schedule, timeline, detections, instant)
-    assert result.surface_time[1] == result.detect_time[1]
+    assert identified >= result.detect_time[1] + timedelta(minutes=99 + 60)
 
     window = sim.Window(
         timeline.pushes[0].time, timeline.pushes[-1].time + timedelta(hours=1)
     )
     metrics = sim.evaluate(timeline, schedule, detections, window, 0, result)
-    assert metrics["surfaced_ci"] == 1 and metrics["confirm_jobs"] == 0
+    assert metrics["identified"] == 1
     assert metrics["total_jobs"] == metrics["jobs"] + metrics["backfill_jobs"]
-    assert sim.latency_label("surface_ci") == "surface hours"
-    assert sim.objectives(metrics, "total_jobs", "surface_ci", "mean")[
+    assert sim.objectives(metrics, "total_jobs", "identify", "mean")[
         1
-    ] == pytest.approx(metrics["surface_ci_hours"]["mean"])
+    ] == pytest.approx(metrics["identify_hours"]["mean"])
 
 
 def test_ci_detection_follows_the_first_label_to_complete() -> None:
     # Culprit 5 regressed both labels. L2 sorts first, so push order detects
     # through it, but its runs take five hours and L1's one; on three
-    # workers nothing queues, L1 completes first and the detection, the
-    # alert and the confirming retriggers follow it.
+    # workers nothing queues, L1 completes first and the detection and the
+    # backfills follow it.
     timeline = make_timeline(60, regressions=((1, 5, (L1, L2)),))
     schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
     detections = sim.detect(schedule, timeline)
@@ -490,27 +469,19 @@ def test_ci_detection_follows_the_first_label_to_complete() -> None:
     model.labels[L2] = sim.LabelRuntime("hw/p", 300.0)
     batch = timeline.pushes[8].time + timedelta(minutes=99)
 
-    today = sim.CiSettings(model, build_minutes=99.0, backfill="none")
-    result = sim.simulate_ci(schedule, timeline, detections, today)
-    assert result.detect_time[1] == batch + timedelta(minutes=60)
-    assert result.surface_time[1] == timeline.pushes[52].time + timedelta(
-        minutes=99 + 60
+    result = sim.simulate_ci(
+        schedule, timeline, detections, sim.CiSettings(model, build_minutes=99.0)
     )
-
-    confirm = sim.CiSettings(
-        model, build_minutes=99.0, alerting="retrigger", confirm_retriggers=1
-    )
-    result = sim.simulate_ci(schedule, timeline, detections, confirm)
     assert result.detect_time[1] == batch + timedelta(minutes=60)
-    assert result.surface_time[1] == batch + timedelta(minutes=120)
-    assert result.confirm_jobs == {1: 1}
+    # Both labels are backfilled on pushes 5 to 7 from that moment.
+    assert result.backfill_jobs == {1: 6}
 
 
 def test_identification_waits_for_the_sheriff() -> None:
     # Every push runs the suite, so the culprit and the push before it have
-    # data long before the alert; the sheriff still identifies the culprit
-    # only once turned to the alert, 30 minutes after it is raised. A
-    # regression naming no label is identified then too.
+    # data when the detecting run completes; the sheriff still identifies
+    # the culprit only once turned to it, 30 minutes later. A regression
+    # naming no label is identified then too.
     timeline = make_timeline(60, regressions=((1, 5, (L1,)), (2, 7, ())))
     schedule = sim.replay(sim.FixedInterval(push_interval=1), timeline)
     detections = sim.detect(schedule, timeline)
@@ -519,12 +490,9 @@ def test_identification_waits_for_the_sheriff() -> None:
     )
     result = sim.simulate_ci(schedule, timeline, detections, settings)
     assert result.detect_time[1] == timeline.pushes[5].time + timedelta(minutes=99 + 60)
-    assert result.surface_time[1] == timeline.pushes[16].time + timedelta(
-        minutes=99 + 60
-    )
     assert result.backfill_jobs == {}
     for summary_id in (1, 2):
-        assert result.identify_time[summary_id] == result.surface_time[
+        assert result.identify_time[summary_id] == result.detect_time[
             summary_id
         ] + timedelta(minutes=30)
 
@@ -537,9 +505,7 @@ def test_backfill_builds_follow_the_measured_share() -> None:
     def identified(share, rule):
         model = _capacity(4)
         model.pools["hw/p"].build_share = share
-        settings = sim.CiSettings(
-            model, build_minutes=99.0, alerting="detection", backfill_builds=rule
-        )
+        settings = sim.CiSettings(model, build_minutes=99.0, backfill_builds=rule)
         when = sim.simulate_ci(schedule, timeline, detections, settings).identify_time[
             1
         ]
@@ -575,9 +541,7 @@ def test_evaluate_with_ci_result_and_objectives() -> None:
     timeline = make_timeline(12, regressions=((1, 5, (L1,)), (2, 6, (L2,))))
     schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
     detections = sim.detect(schedule, timeline)
-    settings = sim.CiSettings(
-        _capacity(2), build_minutes=60.0, backfill="all", alerting="detection"
-    )
+    settings = sim.CiSettings(_capacity(2), build_minutes=60.0, backfill="all")
     ci = sim.simulate_ci(schedule, timeline, detections, settings)
     window = sim.Window(
         timeline.pushes[0].time, timeline.pushes[-1].time + timedelta(hours=1)
@@ -644,14 +608,10 @@ def test_detect_and_metrics() -> None:
     )
     schedule = sim.replay(sim.FixedInterval(4), timeline)
     assert schedule.batch_indices == [0, 4, 8, 12, 16]
-    detections = sim.detect(schedule, timeline, fore_window=2)
+    detections = sim.detect(schedule, timeline)
     first = detections[0]
-    assert (first.detected_index, first.previous_index, first.surfaced_index) == (
-        8,
-        4,
-        12,
-    )
-    assert first.detect_hours(timeline) == 3 and first.surface_hours(timeline) == 7
+    assert (first.detected_index, first.previous_index) == (8, 4)
+    assert first.detect_hours(timeline) == 3
     assert first.detect_pushes == 3 and first.window_pushes == 4
     assert detections[3].detected_index == 12 and detections[3].label is None
     assert detections[4].detected_index is None and detections[4].window_pushes is None
@@ -664,14 +624,9 @@ def test_detect_and_metrics() -> None:
         result["pushes_per_batch"]["mean"] == 4
         and result["hours_between_batches"]["max"] == 4
     )
-    assert (
-        result["regressions"] == 4
-        and result["detected"] == 4
-        and result["surfaced"] == 4
-    )
+    assert result["regressions"] == 4 and result["detected"] == 4
     assert result["detected_ids"] == [1, 2, 3, 4] and result["missed_ids"] == []
     assert result["detect_hours"]["mean"] == pytest.approx((3 + 2 + 1 + 0) / 4)
-    assert result["surface_hours"]["mean"] == pytest.approx((7 + 6 + 5 + 4) / 4)
     assert result["merged"] == 1
     assert result["detect_hours"]["mean_ci95"] is not None
 
@@ -689,22 +644,16 @@ def test_detect_and_metrics() -> None:
     sparse = sim.evaluate(timeline, schedule, detections, whole)
     assert not sim.is_feasible(sparse, baseline)
 
-    # Catching everything is not enough: here the baseline surfaces the
-    # regression at its 12th run after the culprit and the sparse schedule
-    # not before the pushes end, so the latter is feasible on detection only.
-    timeline = make_timeline(100, regressions=[(1, 5, [L1])])
-    whole = sim.Window(timeline.start, timeline.end + timedelta(seconds=1))
-    schedule, detections = _replay_and_detect(sim.FixedInterval(2), timeline)
-    baseline = sim.evaluate(timeline, schedule, detections, whole)
-    schedule, detections = _replay_and_detect(sim.FixedInterval(10), timeline)
-    sparse = sim.evaluate(timeline, schedule, detections, whole)
-    assert baseline["surface_hours"]["ids"] == [1]
-    assert sparse["detect_hours"]["ids"] == [1] and sparse["surface_hours"]["ids"] == []
-    assert sim.is_feasible(sparse, baseline)
-    assert not sim.is_feasible(sparse, baseline, "surface")
-    assert sim.missed_ids(sparse, baseline, "surface") == [1]
+    # Feasibility follows the optimized latency: a detected regression may
+    # have no CI completion or identification, and a schedule lacking those
+    # for more regressions than production would be judged on fewer.
+    covered = {"detect_hours": {"ids": [1, 2]}, "identify_hours": {"ids": [1, 2]}}
+    partial = {"detect_hours": {"ids": [1, 2]}, "identify_hours": {"ids": [1]}}
+    assert sim.is_feasible(partial, covered)
+    assert not sim.is_feasible(partial, covered, "identify")
+    assert sim.missed_ids(partial, covered, "identify") == [2]
     with pytest.raises(ValueError, match="capacity"):
-        sim.is_feasible(sparse, baseline, "identify")
+        sim.is_feasible(sparse, covered, "identify")
 
 
 def test_batches_run_only_the_labels_of_their_suite() -> None:
@@ -748,18 +697,18 @@ def test_batches_run_only_the_labels_of_their_suite() -> None:
     assert 2 not in result.detect_time
 
 
-def test_overlapping_alerts_share_their_backfills() -> None:
-    # Culprits 5 and 6 on L1, both caught by the batch on push 8 and alerted
-    # at once: the first alert backfills L1 on pushes 5 to 7, the second
-    # finds them requested and still gets its culprit identified from them.
+def test_overlapping_detections_share_their_backfills() -> None:
+    # Culprits 5 and 6 on L1, both caught by the batch on push 8 at once: the
+    # first detection backfills L1 on pushes 5 to 7, the second finds them
+    # requested and still gets its culprit identified from them.
     timeline = make_timeline(12, regressions=((1, 5, (L1,)), (2, 6, (L1,))))
     schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
     detections = sim.detect(schedule, timeline)
-    settings = sim.CiSettings(_capacity(4), build_minutes=99.0, alerting="detection")
+    settings = sim.CiSettings(_capacity(4), build_minutes=99.0)
     result = sim.simulate_ci(schedule, timeline, detections, settings)
     assert result.backfill_jobs == {1: 3}
     assert result.identify_time[1] is not None and result.identify_time[2] is not None
-    assert result.identify_time[2] >= result.surface_time[2]
+    assert result.identify_time[2] >= result.detect_time[2]
 
 
 def _replay_and_detect(strategy, timeline):

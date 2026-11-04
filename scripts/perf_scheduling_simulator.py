@@ -255,20 +255,19 @@ def format_table(rows: list[tuple[str, dict[str, Any], bool]]) -> str:
     capacity model (``--capacity``).
     """
     header = (
-        "| strategy | batches | jobs | regressions | detected | surfaced "
-        "| detect hours | surface hours | detect pushes | window pushes (mean) "
-        "| merged | ci detect hours | alert hours | identify hours | backfill jobs | feasible |"
+        "| strategy | batches | jobs | regressions | detected "
+        "| detect hours | detect pushes | window pushes (mean) "
+        "| merged | ci detect hours | identify hours | backfill jobs | feasible |"
     )
-    lines = [header, "|" + "---|" * 16]
+    lines = [header, "|" + "---|" * 13]
     for name, result, feasible in rows:
         lines.append(
             f"| {name} | {result['batches']} | {result['jobs']} | "
-            f"{result['regressions']} | {result['detected']} | {result['surfaced']} | "
-            f"{_stats(result['detect_hours'])} | {_stats(result['surface_hours'])} | "
+            f"{result['regressions']} | {result['detected']} | "
+            f"{_stats(result['detect_hours'])} | "
             f"{_stats(result['detect_pushes'])} | "
             f"{(result['window_pushes']['mean'] or 0):.1f} | {result['merged']} | "
             f"{_stats(result.get('detect_ci_hours'))} | "
-            f"{_stats(result.get('surface_ci_hours'))} | "
             f"{_stats(result.get('identify_hours'))} | "
             f"{result.get('backfill_jobs', '-')} | "
             f"{'yes' if feasible else 'NO'} |"
@@ -279,7 +278,7 @@ def format_table(rows: list[tuple[str, dict[str, Any], bool]]) -> str:
 def ci_settings(args: argparse.Namespace) -> sim.CiSettings | None:
     """The CI replay settings from ``--capacity`` and its companions, or None."""
     if not getattr(args, "capacity", None):
-        if args.latency in ("detect_ci", "surface_ci", "identify") or (
+        if args.latency in ("detect_ci", "identify") or (
             getattr(args, "cost", "jobs") == "total_jobs"
         ):
             raise SystemExit(
@@ -288,13 +287,11 @@ def ci_settings(args: argparse.Namespace) -> sim.CiSettings | None:
         return None
     model = sim.CapacityModel.load(args.capacity)
     logger.info(
-        "CI capacity model: %d pools, %d labels, build fallback %.0f min, backfill %s, alerting %s (%d retriggers)",
+        "CI capacity model: %d pools, %d labels, build fallback %.0f min, backfill %s",
         len(model.pools),
         len(model.labels),
         args.build_minutes,
         args.backfill,
-        args.alerting,
-        args.confirm_retriggers,
     )
     return sim.CiSettings(
         model,
@@ -303,8 +300,6 @@ def ci_settings(args: argparse.Namespace) -> sim.CiSettings | None:
         args.sheriff_delay_minutes,
         args.capacity_scale,
         record_waits=args.op == "validate-capacity",
-        alerting=args.alerting,
-        confirm_retriggers=args.confirm_retriggers,
         backfill_builds=args.backfill_builds,
     )
 
@@ -451,8 +446,6 @@ def cmd_optimize(args: argparse.Namespace) -> None:
                     "backfill": args.backfill,
                     "sheriff_delay_minutes": args.sheriff_delay_minutes,
                     "capacity_scale": args.capacity_scale,
-                    "alerting": args.alerting,
-                    "confirm_retriggers": args.confirm_retriggers,
                     "backfill_builds": args.backfill_builds,
                 }
                 if ci
@@ -639,9 +632,8 @@ def cmd_validate_capacity(args: argparse.Namespace) -> None:
         f"of labels with no pool dropped, {metrics['backfill_jobs']} backfill jobs for "
         f"{metrics['regressions']} regressions.\n"
         f"Detect hours at push time {metrics['detect_hours']['mean']:.2f}, at run completion "
-        f"{metrics['detect_ci_hours']['mean']:.2f}; alert ({args.alerting}) at {metrics['surface_ci_hours']['mean']:.2f} h "
-        f"over {metrics['surfaced_ci']} alerted; identify hours {metrics['identify_hours']['mean']:.2f} "
-        f"over {metrics['identified']} identified; {metrics['confirm_jobs']} confirming runs.\n"
+        f"{metrics['detect_ci_hours']['mean']:.2f}; identify hours {metrics['identify_hours']['mean']:.2f} "
+        f"over {metrics['identified']} identified.\n"
     )
     print(
         "| pool | workers (window end) | scale | eligible min | build share | listed now | observed autoland wait p50/p90 min | simulated wait p50/p90 min (batches) | simulated p50/p90 (backfills) | scheduled runs | utilization by our runs | background busy (mean) |"
@@ -729,18 +721,6 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
         help="With --capacity: share of each pool's workers effectively serving, to match the observed queue waits (validate-capacity). Default: %(default)s.",
     )
     parser.add_argument(
-        "--alerting",
-        choices=["fore_window", "retrigger", "detection"],
-        default="fore_window",
-        help="With --capacity: when the alert that starts the sheriff's backfills is raised. fore_window (default): once 12 runs after the culprit have completed, as Perfherder does today. retrigger: once the first data point is confirmed by --confirm-retriggers more runs of the detecting test on the same push, every suspicion assumed right. detection: at the first data point, an upper bound.",
-    )
-    parser.add_argument(
-        "--confirm-retriggers",
-        type=int,
-        default=12,
-        help="With --alerting retrigger: runs of the detecting test on the detecting push that confirm a suspicion. Default: %(default)s.",
-    )
-    parser.add_argument(
         "--backfill-builds",
         choices=["measured", "always"],
         default="measured",
@@ -750,7 +730,7 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
         "--sheriff-delay-minutes",
         type=float,
         default=0.0,
-        help="With --capacity: minutes between the catching run completing and the backfills being triggered. Default: %(default)s.",
+        help="With --capacity: minutes between the catching run completing and the sheriff triggering the backfills; identification is never earlier. Default: %(default)s.",
     )
     parser.add_argument(
         "--since",
@@ -772,17 +752,9 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--latency",
-        choices=[
-            "detect",
-            "surface",
-            "detect_pushes",
-            "window_pushes",
-            "detect_ci",
-            "surface_ci",
-            "identify",
-        ],
+        choices=["detect", "detect_pushes", "window_pushes", "detect_ci", "identify"],
         default="detect",
-        help="Latency to optimize: hours until the first run after the culprit (default), which a schedule controls; hours until Perfherder would alert, which mostly restates sparsity; pushes from the culprit to the detecting run, which quiet hours do not inflate; pushes from the previous run to the detecting one, what a sheriff bisects; or, with --capacity, hours until the catching run completes (detect_ci), until the alert is raised (surface_ci) or until the backfills pin the culprit (identify). All are always reported. The feasibility constraint follows it: a strategy must have the latency for every regression production has it for, since later events can be missing where earlier ones exist.",
+        help="Latency to optimize: hours until the first run after the culprit (default), which a schedule controls; pushes from the culprit to the detecting run, which quiet hours do not inflate; pushes from the previous run to the detecting one, what a sheriff bisects; or, with --capacity, hours until the catching run completes (detect_ci) or until the backfills pin the culprit (identify). All are always reported. The feasibility constraint follows it: a strategy must have the latency for every regression production has it for, since later events can be missing where earlier ones exist.",
     )
     parser.add_argument(
         "--bootstrap",

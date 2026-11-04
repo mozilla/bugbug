@@ -12,8 +12,8 @@ month, each label's pool and typical run time, and the hourly occupancy of
 the pools by everything that is not autoland perf work, which the schedule
 replaces. ``simulate_ci`` pushes a schedule's runs through one FIFO queue per
 pool, eligible a build time after the push, then the sheriff's backfills
-once a regression's alert is raised, and returns when each regression was
-detected, alerted on and identified. A regression with several regressed
+once a regression is detected, and returns when each regression was
+detected and identified. A regression with several regressed
 labels is caught by whichever label's run completes first, which need not be
 the one scheduled first: labels queue on different pools.
 """
@@ -383,13 +383,6 @@ class CiSettings:
     capacity_scale: float = 1.0
     # Keep every run's queue wait, for validation; off for optimization.
     record_waits: bool = False
-    # When the alert that starts the sheriff's backfills is raised:
-    # ``fore_window`` once FORE_WINDOW runs after the culprit have completed,
-    # as Perfherder does today; ``retrigger`` once the first data point has
-    # been confirmed by ``confirm_retriggers`` more runs of the detecting
-    # label on the detecting push; ``detection`` at the first data point.
-    alerting: str = "fore_window"
-    confirm_retriggers: int = 12
     # Whether a backfill on a push the schedule ran nothing on finds a build:
     # ``measured`` draws it from the pool's build share, ``always`` builds.
     backfill_builds: str = "measured"
@@ -401,23 +394,19 @@ class CiResult:
 
     ``detect_time`` is the first completion among the regressed labels' runs
     on their detecting pushes, or the median completion of the detecting
-    batch when the regression names no label. ``surface_time`` is when the
-    alert was raised under the settings' alerting mode, which is when the
-    sheriff is put to work. ``identify_time`` is when both the culprit push
-    and the push before it had data for one regressed label, and no earlier
-    than the sheriff acting on the alert, the sheriff delay after it; ``None``
-    when nothing produced that data. ``backfill_jobs`` counts the runs
-    those backfills took and ``confirm_jobs`` the confirming retriggers, per
-    regression. ``waits`` holds the queue wait in minutes of every scheduled
-    run, per pool, and ``utilization`` the share of the window each pool was
-    busy.
+    batch when the regression names no label; the sheriff's backfills start
+    the sheriff delay after it. ``identify_time`` is when both the culprit
+    push and the push before it had data for one regressed label, and no
+    earlier than the sheriff turning to the detection; ``None`` when nothing
+    produced that data. ``backfill_jobs`` counts the runs those backfills
+    took, per regression. ``waits`` holds the queue wait in minutes of every
+    scheduled run, per pool, and ``utilization`` the share of the window each
+    pool was busy.
     """
 
     detect_time: dict[int, datetime]
-    surface_time: dict[int, datetime]
     identify_time: dict[int, datetime | None]
     backfill_jobs: dict[int, int]
-    confirm_jobs: dict[int, int]
     waits: dict[str, list[float]]
     backfill_waits: dict[str, list[float]]
     utilization: dict[str, float]
@@ -426,15 +415,14 @@ class CiResult:
 
 
 _ARRIVAL, _TICK, _COMPLETION = 0, 1, 2
-_SCHEDULED, _BACKFILL, _CONFIRM = 0, 1, 2
+_SCHEDULED, _BACKFILL = 0, 1
 
 
 @dataclass(frozen=True, order=True, slots=True)
 class Run:
     """One run of a label through its pool, ordered by when it may start.
 
-    ``kind`` is a scheduled run, a backfill or a confirming retrigger, and
-    ``ref`` the regression a confirming run belongs to.
+    ``kind`` is a scheduled run or a backfill.
     """
 
     eligible: datetime
@@ -443,7 +431,6 @@ class Run:
     index: int
     label: str
     kind: int = _SCHEDULED
-    ref: int | None = None
 
 
 class _Event(NamedTuple):
@@ -461,7 +448,7 @@ def simulate_ci(
     detections: list[Detection],
     settings: CiSettings,
 ) -> CiResult:
-    """Replay the schedule's runs, the alerts and the backfills they trigger through the pools."""
+    """Replay the schedule's runs, and the backfills their detections trigger, through the pools."""
     model = settings.model
     build = timedelta(minutes=settings.build_minutes)
     offsets = {
@@ -474,30 +461,18 @@ def simulate_ci(
     scale = settings.capacity_scale
     pushes = timeline.pushes
 
-    # Completion times are kept only where a detection, an alert or an
-    # identification needs them: a dense schedule has millions of runs.
-    # Every label of a regression is waited for; the first to complete
-    # detects it, and the first to reach its alert raises it.
+    # Completion times are kept only where a detection or an identification
+    # needs them: a dense schedule has millions of runs. Every label of a
+    # regression is waited for; the first to complete detects it.
     on_detect: dict[tuple[int, str | None], list[Detection]] = collections.defaultdict(
-        list
-    )
-    on_surface: dict[tuple[int, str | None], list[Detection]] = collections.defaultdict(
         list
     )
     needed: set[tuple[int, str]] = set()
     median_needed: set[int] = set()
     for detection in detections:
         for candidate in detection.candidates():
-            if candidate.detected_index is None:
-                continue
-            on_detect[(candidate.detected_index, candidate.label)].append(candidate)
-            if (
-                settings.alerting == "fore_window"
-                and candidate.surfaced_index is not None
-            ):
-                on_surface[(candidate.surfaced_index, candidate.label)].append(
-                    candidate
-                )
+            if candidate.detected_index is not None:
+                on_detect[(candidate.detected_index, candidate.label)].append(candidate)
         if detection.detected_index is None:
             continue
         culprit = detection.regression.push_index
@@ -506,7 +481,7 @@ def simulate_ci(
             needed.add((culprit, label))
             if previous >= 0:
                 needed.add((previous, label))
-    for index, waited_label in list(on_detect) + list(on_surface):
+    for index, waited_label in on_detect:
         if waited_label is None:
             median_needed.add(index)
         else:
@@ -567,13 +542,8 @@ def simulate_ci(
 
     done: dict[tuple[int, str], datetime] = {}
     detect_time: dict[int, datetime] = {}
-    surface_time: dict[int, datetime] = {}
-    # The candidate whose run completed first, by regression.
-    caught: dict[int, Detection] = {}
     requested: set[tuple[int, str]] = set()
     backfill_jobs: dict[int, int] = collections.Counter()
-    confirm_jobs: dict[int, int] = collections.Counter()
-    confirm_left: dict[int, int] = {}
     waits: dict[str, list[float]] = {pool: [] for pool in model.pools}
     backfill_waits: dict[str, list[float]] = {pool: [] for pool in model.pools}
     busy_seconds: dict[str, float] = {pool: 0.0 for pool in model.pools}
@@ -620,8 +590,8 @@ def simulate_ci(
         A push the schedule ran nothing on only has a shippable build when
         other tests on it needed one, drawn from the pool's measured share;
         otherwise the backfill builds first and waits the pool's eligible time.
-        A run another alert already requested is not requested again; its
-        result serves both.
+        A run an earlier detection already requested is not requested again;
+        its result serves both.
         """
         summary_id = detection.regression.summary_id
         if settings.backfill == "none" or not detection.regression.labels:
@@ -667,61 +637,21 @@ def simulate_ci(
                     Run(eligible, pool, minutes, index, label, _BACKFILL),
                 )
 
-    def alert(detection: Detection, time: datetime) -> None:
-        summary_id = detection.regression.summary_id
-        if summary_id in surface_time:
-            return
-        surface_time[summary_id] = time
-        backfill(detection, time)
-
     def detected(detection: Detection, time: datetime) -> None:
         summary_id = detection.regression.summary_id
         if summary_id in detect_time:
             return
         detect_time[summary_id] = time
-        caught[summary_id] = detection
-        if settings.alerting == "detection":
-            alert(detection, time)
-        elif settings.alerting == "retrigger":
-            label = detection.label
-            pool = model.pool_of(label) if label is not None else None
-            if label is None or pool is None or pool not in model.pools:
-                alert(detection, time)
-                return
-            assert detection.detected_index is not None
-            confirm_left[summary_id] = settings.confirm_retriggers
-            confirm_jobs[summary_id] = settings.confirm_retriggers
-            minutes = model.minutes_of(label, pool)
-            for _ in range(settings.confirm_retriggers):
-                push_event(
-                    time,
-                    _ARRIVAL,
-                    Run(
-                        time,
-                        pool,
-                        minutes,
-                        detection.detected_index,
-                        label,
-                        _CONFIRM,
-                        summary_id,
-                    ),
-                )
-            if settings.confirm_retriggers == 0:
-                alert(detection, time)
+        backfill(detection, time)
 
     def completed_scheduled(index: int, label: str, now: datetime) -> None:
-        key = (index, label)
-        for detection in on_detect.pop(key, ()):
+        for detection in on_detect.pop((index, label), ()):
             detected(detection, now)
-        for detection in on_surface.pop(key, ()):
-            alert(detection, now)
         if index in median_needed:
             batch_done[index] += 1
             if batch_done[index] == math.ceil(batch_size[index] / 2):
                 for detection in on_detect.pop((index, None), ()):
                     detected(detection, now)
-                for detection in on_surface.pop((index, None), ()):
-                    alert(detection, now)
 
     stream = arrivals()
     pending = next(stream, None)
@@ -741,19 +671,10 @@ def simulate_ci(
                 assert run is not None
                 running[run.pool] -= 1
                 key = (run.index, run.label)
-                if (
-                    run.kind != _CONFIRM
-                    and key in needed
-                    and (key not in done or now < done[key])
-                ):
+                if key in needed and (key not in done or now < done[key]):
                     done[key] = now
                 if run.kind == _SCHEDULED:
                     completed_scheduled(run.index, run.label, now)
-                elif run.kind == _CONFIRM:
-                    assert run.ref is not None
-                    confirm_left[run.ref] -= 1
-                    if confirm_left[run.ref] == 0:
-                        alert(caught[run.ref], now)
                 dispatch(run.pool, now)
         else:
             assert pending is not None
@@ -765,10 +686,8 @@ def simulate_ci(
     for detection in detections:
         summary_id = detection.regression.summary_id
         if summary_id in detect_time:
-            identify_time[summary_id] = (
-                _identify(detection, pushes, done, surface_time[summary_id] + sheriff)
-                if summary_id in surface_time
-                else None
+            identify_time[summary_id] = _identify(
+                detection, pushes, done, detect_time[summary_id] + sheriff
             )
 
     span = (
@@ -785,10 +704,8 @@ def simulate_ci(
         utilization[pool] = busy_seconds[pool] / max(span * workers, 1.0)
     return CiResult(
         detect_time,
-        surface_time,
         identify_time,
         dict(backfill_jobs),
-        dict(confirm_jobs),
         waits,
         backfill_waits,
         utilization,
@@ -865,8 +782,8 @@ def _identify(
 ) -> datetime | None:
     """When the culprit and the push before it both had data for one regressed label.
 
-    Never before ``acting``, when the sheriff turns to the alert: data the
-    schedule happened to produce earlier identifies nothing until then.
+    Never before ``acting``, when the sheriff turns to the detection: data
+    the schedule happened to produce earlier identifies nothing until then.
     """
     regression = detection.regression
     if not regression.labels:

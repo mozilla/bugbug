@@ -24,7 +24,6 @@ from bugbug.perf.simulation.capacity import (
     simulate_ci,
 )
 from bugbug.perf.simulation.detection import (
-    FORE_WINDOW,
     Detection,
     Schedule,
     detect,
@@ -87,7 +86,6 @@ __all__ = [
     "LabelRuntime",
     "PoolCapacity",
     "FAMILIES",
-    "FORE_WINDOW",
     "FULL_SUITE_MIN_LABELS",
     "PRESETS",
     "RISK_FAMILIES",

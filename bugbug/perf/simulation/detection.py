@@ -7,9 +7,7 @@
 
 A run of a test on a push catches every regression of that test since the
 previous run, so a regression is detected by the first push at or after its
-culprit where the strategy runs one of its labels. Perfherder only raises the
-alert once ``fore_window`` values follow the change, so the alert surfaces at
-the ``fore_window``-th run of that label counted from the detecting one.
+culprit where the strategy runs one of its labels.
 """
 
 import bisect
@@ -20,9 +18,6 @@ from bugbug.perf.simulation.strategies import ALL, Decision, Strategy
 from bugbug.perf.simulation.timeline import Regression, Timeline
 
 logger = logging.getLogger(__name__)
-
-# Perfherder's default fore window: values needed after a change to alert.
-FORE_WINDOW = 12
 
 
 @dataclass
@@ -117,7 +112,6 @@ class Detection:
     label: str | None
     previous_index: int | None
     detected_index: int | None
-    surfaced_index: int | None
     alternatives: tuple["Detection", ...] = ()
 
     def candidates(self) -> tuple["Detection", ...]:
@@ -131,9 +125,6 @@ class Detection:
 
     def detect_hours(self, timeline: Timeline) -> float | None:
         return self.hours(timeline, self.detected_index)
-
-    def surface_hours(self, timeline: Timeline) -> float | None:
-        return self.hours(timeline, self.surfaced_index)
 
     @property
     def detect_pushes(self) -> int | None:
@@ -151,15 +142,12 @@ class Detection:
         return self.detected_index - self.previous_index
 
 
-def candidates(
-    schedule: Schedule, regression: Regression, fore_window: int = FORE_WINDOW
-) -> list[Detection]:
+def candidates(schedule: Schedule, regression: Regression) -> list[Detection]:
     """One detection per regressed label, in label order, or one with no label.
 
-    Each is where that label's runs catch and surface the regression:
-    detected by the first run at or after the culprit, surfaced by the
-    ``fore_window``-th run counted from it, with the run before as the
-    previous one. Either index is ``None`` when no such run exists.
+    Each is where that label's runs catch the regression: the first run at
+    or after the culprit, with the run before as the previous one. The
+    detecting index is ``None`` when no such run exists.
     """
     labels = sorted(regression.labels) if regression.labels else [None]
     found = []
@@ -168,25 +156,21 @@ def candidates(
         position = bisect.bisect_left(runs, regression.push_index)
         detected = runs[position] if position < len(runs) else None
         previous = runs[position - 1] if position > 0 else None
-        surfaced_position = position + fore_window - 1
-        surfaced = runs[surfaced_position] if surfaced_position < len(runs) else None
-        found.append(Detection(regression, label, previous, detected, surfaced))
+        found.append(Detection(regression, label, previous, detected))
     return found
 
 
-def detect(
-    schedule: Schedule, timeline: Timeline, fore_window: int = FORE_WINDOW
-) -> list[Detection]:
-    """Find the detecting and surfacing push of every regression of the timeline.
+def detect(schedule: Schedule, timeline: Timeline) -> list[Detection]:
+    """Find the detecting push of every regression of the timeline.
 
     A regression with several regressed labels is caught by whichever runs
     first, the others kept as its ``alternatives``. Detection uses the whole
-    timeline, so a regression near its end may be detected but not yet
-    surfaced, or not detected at all.
+    timeline, so a regression near its end may not be detected at all when
+    no later run exists.
     """
     detections = []
     for regression in timeline.regressions:
-        found = candidates(schedule, regression, fore_window)
+        found = candidates(schedule, regression)
         best = min(
             found,
             key=lambda d: (d.detected_index is None, d.detected_index or 0),

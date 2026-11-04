@@ -18,25 +18,20 @@ from bugbug.perf.simulation.strategies import ALL
 from bugbug.perf.simulation.timeline import Timeline
 
 Latency = Literal[
-    "surface",
     "detect",
     "detect_pushes",
     "window_pushes",
     "detect_ci",
-    "surface_ci",
     "identify",
 ]
-# Metric key of each latency and the unit it is counted in. The last three
-# need the CI capacity model: detection at the completion of the catching run,
-# the alert under the replay's alerting mode, and identification once the
-# sheriff's backfills pin the culprit.
+# Metric key of each latency and the unit it is counted in. The last two
+# need the CI capacity model: detection at the completion of the catching run
+# and identification once the sheriff's backfills pin the culprit.
 LATENCY_KEYS: dict[str, tuple[str, str]] = {
     "detect": ("detect_hours", "hours"),
-    "surface": ("surface_hours", "hours"),
     "detect_pushes": ("detect_pushes", "pushes"),
     "window_pushes": ("window_pushes", "pushes"),
     "detect_ci": ("detect_ci_hours", "hours"),
-    "surface_ci": ("surface_ci_hours", "hours"),
     "identify": ("identify_hours", "hours"),
 }
 Cost = Literal["batches", "jobs", "total_jobs"]
@@ -84,14 +79,12 @@ def evaluate(
     Cost counts the batches and jobs the schedule ran in the window. Detection
     covers the regressions whose culprit landed in the window, wherever they
     were caught: ``detect_hours`` is the time to the first run after the
-    culprit and ``surface_hours`` the time until Perfherder would alert, over
-    the regressions where that run exists in the timeline. With a CI replay
-    ``ci``, ``detect_ci_hours`` runs to the completion of the catching run,
-    ``surface_ci_hours`` to the alert under the replay's alerting mode and
-    ``identify_hours`` to the sheriff's backfills pinning the culprit;
-    ``backfill_jobs`` and ``confirm_jobs`` count those backfills and the
-    confirming retriggers, and ``total_jobs`` adds both to the schedule's
-    own jobs. Each latency summary carries the ``ids`` of the regressions
+    culprit, over the regressions where that run exists in the timeline. With
+    a CI replay ``ci``, ``detect_ci_hours`` runs to the completion of the
+    catching run and ``identify_hours`` to the sheriff's backfills pinning
+    the culprit; ``backfill_jobs`` counts those backfills and ``total_jobs``
+    adds them to the schedule's own jobs. Each latency summary carries the
+    ``ids`` of the regressions
     it is taken over, since a later event can be missing where an earlier
     one exists.
     """
@@ -105,12 +98,8 @@ def evaluate(
 
     selected = [d for d in detections if window.contains(d.regression.time)]
     detected = [d for d in selected if d.detected_index is not None]
-    surfaced = [d for d in detected if d.surfaced_index is not None]
     detect_hours = {
         d.regression.summary_id: d.detect_hours(timeline) or 0.0 for d in detected
-    }
-    surface_hours = {
-        d.regression.summary_id: d.surface_hours(timeline) or 0.0 for d in surfaced
     }
     detect_pushes = {
         d.regression.summary_id: float(d.detect_pushes or 0) for d in detected
@@ -120,7 +109,6 @@ def evaluate(
     }
     latencies = {
         "detect_hours": detect_hours,
-        "surface_hours": surface_hours,
         "detect_pushes": detect_pushes,
         "window_pushes": window_pushes,
     }
@@ -140,7 +128,6 @@ def evaluate(
         "hours_between_batches": _summary(gaps_hours),
         "regressions": len(selected),
         "detected": len(detected),
-        "surfaced": len(surfaced),
         "detected_ids": sorted(d.regression.summary_id for d in detected),
         "missed_ids": sorted(
             d.regression.summary_id for d in selected if d.detected_index is None
@@ -159,29 +146,16 @@ def evaluate(
             }
 
         detect_ci = hours_until(ci.detect_time)
-        surface_ci = hours_until(ci.surface_time)
         identify = hours_until(ci.identify_time)
         backfills = sum(
             ci.backfill_jobs.get(d.regression.summary_id, 0) for d in selected
         )
-        confirms = sum(
-            ci.confirm_jobs.get(d.regression.summary_id, 0) for d in selected
-        )
         result["detect_ci_hours"] = _latency(detect_ci)
-        result["surface_ci_hours"] = _latency(surface_ci)
-        result["surfaced_ci"] = len(surface_ci)
         result["identify_hours"] = _latency(identify)
         result["identified"] = len(identify)
         result["backfill_jobs"] = backfills
-        result["confirm_jobs"] = confirms
-        result["total_jobs"] = jobs + backfills + confirms
-        latencies.update(
-            {
-                "detect_ci_hours": detect_ci,
-                "surface_ci_hours": surface_ci,
-                "identify_hours": identify,
-            }
-        )
+        result["total_jobs"] = jobs + backfills
+        latencies.update({"detect_ci_hours": detect_ci, "identify_hours": identify})
     if bootstrap_samples:
         for key, values in latencies.items():
             result[key]["mean_ci95"] = bootstrap_mean(
@@ -195,10 +169,11 @@ def missed_ids(
 ) -> list[int]:
     """Regressions the baseline has the latency for and the schedule does not.
 
-    Detection alone is not enough: a regression caught near the end of the
-    pushes may not have surfaced or been identified yet, and a schedule that
-    lacks such later events for more regressions than the baseline would be
-    summarized over fewer, earlier ones and look faster for it.
+    Detection alone is not enough: a regression caught in push order may have
+    no CI completion or identification, its label having no pool or the
+    backfills being off, and a schedule that lacks such later events for more
+    regressions than the baseline would be summarized over fewer, earlier
+    ones and look faster for it.
     """
     key = latency_key(latency)
     if key not in result or key not in baseline:
@@ -232,7 +207,7 @@ def objectives(
 ) -> tuple[float, float]:
     """The two values optuna minimizes: cost and a summary of the latency.
 
-    ``detect`` and ``surface`` are hours from the culprit push; ``detect_pushes``
+    ``detect`` is hours from the culprit push; ``detect_pushes``
     counts the pushes from the culprit to the detecting run and ``window_pushes``
     the pushes a sheriff bisects, from the previous run to the detecting one.
     """

@@ -100,35 +100,30 @@ that would show it. Two moments follow from it:
   it, `detect_pushes` the pushes in between, and `window_pushes` the pushes
   from the previous run of the label to it, which is what a sheriff has to
   bisect.
-- **surface**: Perfherder only raises an alert once `FORE_WINDOW` (12) values
-  follow the change, so the alert surfaces at the 12th run of the label
-  counted from the detecting one. `surface_hours` is the time to that push.
-  The delay is about eleven run intervals, so it grows with sparsity and
-  largely restates cost: while alerting waits for later batches, a sparser
-  schedule surfaces later by construction. It is always reported, since it
-  is what sheriffs see today, but `detect` is the default objective.
 
-Detection uses the whole timeline: a regression near its end may be detected
-but not yet surfaced, or not detected at all when no later run exists.
+Perfherder's alerting is not modeled: the first run after the culprit is
+taken to detect the regression, and the sheriff's work follows from there.
+Detection uses the whole timeline: a regression near its end is not detected
+at all when no later run exists.
 
 ### Metrics and constraint
 
 `evaluate` (`metrics.py`) measures a schedule on a `Window` of pushes: the
 batches and jobs run in it (a batch costs the size of the suite at that
 time), the pushes and hours between batches, and over the regressions whose
-culprit landed in it, how many were detected and surfaced and the mean,
-median, 90th percentile and maximum of both latencies, in hours and in
-pushes. `merged` counts regressions of one label caught by the same run,
+culprit landed in it, how many were detected and the mean, median, 90th
+percentile and maximum of the latency, in hours and in pushes. `merged`
+counts regressions of one label caught by the same run,
 which Perfherder reports as one alert. `--bootstrap N` adds a 95 percent
 interval of the mean latencies.
 
 `is_feasible` requires a strategy to have the latency being judged, the
 `--latency` objective, for every regression the production baseline has it
 for in the window. Catching everything is not enough: a regression caught
-near the end of the pushes may not have surfaced or been identified yet, and
-a sparser schedule lacks such later events for more regressions, so judging
-it on the ones it has would compare fewer, earlier regressions against
-production's. Each latency summary carries the ids of the regressions it is
+in push order may have no CI completion or identification, its label having
+no pool or the backfills being off, and a schedule lacking such later events
+for more regressions than production would be judged on fewer, earlier
+regressions. Each latency summary carries the ids of the regressions it is
 taken over. The baseline is the recorded schedule by
 default, since production's backstop decisions also depend on which decision
 task finished first and so are not fully reproducible from the rule;
@@ -170,22 +165,16 @@ time. A regression is detected at the first completion among its regressed
 labels' catching runs, or at the median completion of the detecting batch
 when the regression names no label. The label whose run is scheduled first
 need not complete first, since labels queue on different pools, so the
-replay waits for every label of the regression and the alert and backfills
-follow the one that completed.
+replay waits for every label of the regression and the backfills follow the
+one that completed.
 
-The alert that puts a sheriff to work comes later, and `--alerting` says
-when. `fore_window`, the default, is Perfherder today: the alert needs
-`FORE_WINDOW` (12) runs after the culprit, so it is raised when the 12th
-run completes. `retrigger` models a proposed change: the first data point
-is confirmed by `--confirm-retriggers` (12) more runs of the detecting test
-on the same push, and the alert is raised when they complete; every
-suspicion is assumed right, so the retriggers are only spent on real
-regressions. `detection` raises the alert at the first data point, an upper
-bound on how fast anyone could react. At the alert, with `--backfill all`,
-the regressed labels are submitted on every push between the previous run
-and the detecting one that has no data, is not DONTBUILD and that no earlier
-alert has already requested, whose results every alert shares, after
-`--sheriff-delay-minutes`. Autoland builds a push only when something
+The detection puts the sheriff to work: `--sheriff-delay-minutes` after it,
+with `--backfill all`, the regressed labels are submitted all at once on
+every push between the previous run and the detecting one that has no data,
+is not DONTBUILD and that no earlier detection has already requested, whose
+results every detection shares. The window is backfilled whole rather than
+bisected, which is what the pushes dataset shows sheriffs do; the runs then
+queue on their pools like any other. Autoland builds a push only when something
 scheduled on it needs the build. A backfill on a push the schedule ran
 nothing on therefore finds a build only if other tests on the push needed
 one, which the replay cannot see; `fetch-capacity` measures, per pool, the
@@ -197,15 +186,12 @@ the pool's eligible time; `--backfill-builds always` charges every such
 backfill the build, a pessimistic bound. The culprit
 counts as identified when the culprit push and the push before it both have
 data for one regressed label, and no earlier than the sheriff turns to the
-alert, `--sheriff-delay-minutes` after it: data a dense schedule produced
-before the alert identifies nothing until someone looks. The pushes dataset
-shows sheriffs do backfill nearly the whole window, so that is the default;
-`--backfill none` leaves them out.
+detection: data a dense schedule produced before it identifies nothing until
+someone looks. Backfilling is the default; `--backfill none` leaves it out.
 
 With `--capacity PATH` on `simulate` or `optimize`, `evaluate` adds
-`detect_ci_hours`, `surface_ci_hours`, `identify_hours`, `backfill_jobs`,
-`confirm_jobs` and `total_jobs` (the schedule's jobs plus backfills and
-retriggers), and `--latency detect_ci`, `--latency surface_ci`,
+`detect_ci_hours`, `identify_hours`, `backfill_jobs` and `total_jobs` (the
+schedule's jobs plus the backfills), and `--latency detect_ci`,
 `--latency identify` and `--cost total_jobs` optimize on them.
 
 The model is optimistic on its own: workers seen in a month include machines
@@ -236,8 +222,7 @@ optimize window with two objectives to minimize, cost (`jobs` by default,
 which charges a batch the size of the suite at the time and counts
 production's expanded runs too; `batches` counts full-suite runs only)
 and the latency, `detect` by default since it is what a schedule
-controls, `surface` with `--latency surface`, or counted in pushes rather
-than hours: `detect_pushes`, from the culprit to the detecting run, which
+controls, or counted in pushes rather than hours: `detect_pushes`, from the culprit to the detecting run, which
 quiet hours do not inflate, or `window_pushes`, from the previous run to the
 detecting one, what a sheriff bisects. It is summarized by `--statistic`:
 the `mean` over the window's regressions by default, or `median`, `p90` or
@@ -283,7 +268,7 @@ uv run --extra perf-simulation bugbug-perf-scheduling-simulator optimize \
   --optimize-until 2026-09-01 --trials 60 --output optimize.json --markdown optimize.md
 ```
 
-`simulate` prints one row per strategy with its cost, detection counts, both
+`simulate` prints one row per strategy with its cost, detection counts, the
 latencies as mean / median / p90 / max hours, the mean bisection window and
 whether it is feasible against production. `optimize` prints the baseline and,
 per family, the two picks with their eval results, plus any pruned trials.
@@ -365,11 +350,10 @@ agreement from the first time-triggered backstop on.
 - Cost is job counts. Machine time per worker pool is available through
   `task_costs.py` and could replace it.
 - The CI capacity model has one FIFO queue per pool with hourly background
-  occupancy, a median build time per pool, no retriggers for noise and no
-  sheriff reaction time; it reproduces median waits once fitted, not the
-  tails. Regressions whose alert named no task label cannot be backfilled or
-  retriggered, so they count as identified when the sheriff turns to their
-  alert.
-- Perfherder's alert threshold and the merging of nearby changes are not
-  modeled; surfacing assumes one value per run per signature and no
-  retriggers.
+  occupancy, a median build time per pool and no retriggers for noise; it
+  reproduces median waits once fitted, not the tails. Regressions whose
+  alert named no task label cannot be backfilled, so they count as
+  identified when the sheriff turns to their detection.
+- Perfherder's alerting is not modeled: neither its threshold, nor the data
+  points it waits for after a change, nor the merging of nearby changes. The
+  first run after the culprit detects the regression outright.
