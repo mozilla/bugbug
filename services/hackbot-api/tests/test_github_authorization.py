@@ -221,12 +221,10 @@ async def test_deadline_covers_token_mint_and_lookup_together(pem):
 
 
 async def test_bot_login_is_denied_without_a_lookup(pem):
-    fake = _FakeGitHub({"hackbot-mozilla[bot]": "admin"})
+    fake = _FakeGitHub({"hackbot[bot]": "admin"})
     authorizer, _ = _authorizer(pem, fake)
 
-    assert not await authorizer.is_authorized(
-        INSTALLATION_ID, "o", "r", "hackbot-mozilla[bot]"
-    )
+    assert not await authorizer.is_authorized(INSTALLATION_ID, "o", "r", "hackbot[bot]")
     assert fake.requests == []
 
 
@@ -325,7 +323,7 @@ async def test_cache_expires(pem):
 
 # --- bot filter ---
 
-BOT_LOGIN = "hackbot-mozilla[bot]"
+BOT_LOGIN = "hackbot"
 
 
 @pytest.mark.parametrize(
@@ -334,7 +332,8 @@ BOT_LOGIN = "hackbot-mozilla[bot]"
         {"login": "dependabot[bot]", "type": "Bot"},
         {"login": "some-app", "type": "Bot"},
         {"login": "renovate[bot]", "type": "User"},
-        {"login": "Hackbot-Mozilla[bot]", "type": "Bot"},
+        {"login": "Hackbot", "type": "User"},
+        {"login": "hackbot[bot]", "type": "Bot"},
         {"login": "Hackbot-Mozilla[BOT]"},
         {"login": "", "type": "User"},
         {"type": "User"},
@@ -356,7 +355,7 @@ def test_is_bot_sender_rejects_configured_bot_login_without_suffix():
     [
         {"login": "octocat", "type": "User"},
         {"login": "bot-builder", "type": "User"},
-        {"login": "hackbot-mozilla", "type": "User"},
+        {"login": "hackbot-fan", "type": "User"},
     ],
 )
 def test_is_bot_sender_accepts_users(sender):
@@ -368,8 +367,8 @@ def test_is_bot_sender_accepts_users(sender):
 
 def test_webhook_settings_defaults():
     webhook = GitHubWebhookSettings()
-    assert webhook.bot_login == "hackbot-mozilla[bot]"
-    assert webhook.mention_token == "@hackbot-mozilla"
+    assert webhook.bot_login == "hackbot"
+    assert webhook.mention_token == "@hackbot"
     assert webhook.allowed_roles == {"admin", "maintain", "write"}
 
 

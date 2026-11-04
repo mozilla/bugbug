@@ -97,10 +97,11 @@ class GitHubWebhookSettings(BaseModel):
     the endpoint that verifies deliveries (#7053).
     """
 
-    # The App's own bot account, so its comments never re-trigger a run.
-    bot_login: str = "hackbot-mozilla[bot]"
+    # Hackbot's own GitHub account, so its comments never re-trigger a run.
+    # Every ``*[bot]`` login, such as the App's, is ignored regardless.
+    bot_login: str = "hackbot"
     # The mention that triggers a run.
-    mention_token: str = "@hackbot-mozilla"
+    mention_token: str = "@hackbot"
     # Repository roles (the API's ``role_name``) allowed to trigger a run on
     # that repository. Anything else, including triage, read and custom roles,
     # is denied.
