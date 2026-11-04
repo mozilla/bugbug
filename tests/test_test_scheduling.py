@@ -6,6 +6,7 @@
 import contextlib
 import math
 from datetime import datetime
+from typing import Any
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
@@ -1577,3 +1578,207 @@ def test_get_suite_test_dirs(tmp_path) -> None:
         "gtest": ("xpcom/tests/gtest/",),
         "cppunittest": ("mfbt/tests/",),
     }
+
+
+def test_config_tokens() -> None:
+    # The platform family (windows) is a token too.
+    assert test_scheduling.config_tokens("test-windows11-64-25h2/debug-*-swr") == (
+        "test",
+        "windows11",
+        "25h2",
+        "debug",
+        "swr",
+        "windows",
+    )
+    assert test_scheduling.config_tokens(
+        "test-android-em-14-x86_64/opt-geckoview-*-nofis"
+    ) == ("test", "android", "em", "x86_64", "opt", "geckoview", "nofis")
+    assert test_scheduling.config_platform_token("test-macosx1500-aarch64/opt-*") == (
+        "macosx1500"
+    )
+    assert test_scheduling.config_platform_token("weird") == ""
+
+
+def test_config_platform_family() -> None:
+    assert test_scheduling.config_platform_family("test-macosx1500-aarch64/opt-*") == (
+        "macosx"
+    )
+    assert test_scheduling.config_platform_family("test-macosx1015-64-qr/opt-*") == (
+        "macosx"
+    )
+    assert (
+        test_scheduling.config_platform_family("test-linux2404-64/debug-*") == "linux"
+    )
+    assert test_scheduling.config_platform_family(
+        "test-android-em-14-x86_64/opt-geckoview-*"
+    ) == ("android")
+    assert test_scheduling.config_platform_family("test-windows11-64-25h2/opt-*") == (
+        "windows"
+    )
+
+
+def test_get_path_platform_hints() -> None:
+    assert test_scheduling.get_path_platform_hints(
+        [
+            "widget/cocoa/nsCocoaWindow.mm",
+            "mozglue/baseprofiler/core/shared-libraries-macos.cc",
+            "widget/windows/nsWindow.cpp",
+            "mobile/android/geckoview/build.gradle",
+            "dom/base/Document.cpp",
+        ]
+    ) == {"macosx": 2, "windows": 1, "android": 1}
+
+
+def test_get_config_select_regressions() -> None:
+    LINUX = "test-linux2404-64/opt-*"
+    WIN = "test-windows11-64-25h2/debug-*"
+    MAC = "test-macosx1500-aarch64/opt-*"
+    ANDROID = "test-android-em-14-x86_64/opt-geckoview-*"
+    G = Group("dom/base/test/mochitest.toml")
+
+    pushes: list[Any] = [
+        # The culprit: G failed on WIN, ran (and passed) on LINUX.
+        (["rev0"], "rev3", [(LINUX, G), (WIN, G)], [], [(WIN, G)]),
+        # A later push: G passed on MAC; it failed on ANDROID, but mozci attributed that failure to
+        # this push, so it isn't a pass for the culprit.
+        (["rev1"], None, [(MAC, G), (ANDROID, G)], [(ANDROID, G)], []),
+        # The test-verify config isn't a config; the chunk suffix of the group is dropped.
+        (
+            ["rev2"],
+            None,
+            [("test-linux2404-64/opt-*-test-verify", G), (LINUX, f"{G}:chunk1")],
+            [],
+            [],
+        ),
+        # The push with the fix: its runs are not counted.
+        (["rev3"], None, [("test-windows11-64-24h2/opt-*", G)], [], []),
+    ]
+
+    regressions, recent_configs = test_scheduling.get_config_select_regressions(
+        lambda: iter(pushes), recent_pushes=2
+    )
+
+    culprit, later = regressions
+    assert culprit == test_scheduling.ConfigSelectRegression(
+        0, (Revision("rev0"),), G, frozenset({WIN}), frozenset({WIN, LINUX, MAC})
+    )
+    # The later push's own regression (no fix in the data: only its own runs are known).
+    assert later == test_scheduling.ConfigSelectRegression(
+        1, (Revision("rev1"),), G, frozenset({ANDROID}), frozenset({ANDROID, MAC})
+    )
+    # The configs that ran in the last two pushes.
+    assert recent_configs == {LINUX, "test-windows11-64-24h2/opt-*"}
+
+
+def test_get_config_select_regressions_failure_after_later_pass() -> None:
+    LINUX = "test-linux2404-64/opt-*"
+    WIN = "test-windows11-64-25h2/debug-*"
+    MAC = "test-macosx1500-aarch64/opt-*"
+    G = Group("dom/base/test/mochitest.toml")
+
+    pushes: list[Any] = [
+        # The culprit: G failed on WIN.
+        (["rev0"], "rev4", [(WIN, G)], [], [(WIN, G)]),
+        # LINUX and MAC didn't run on the culprit. LINUX passed here...
+        (["rev1"], None, [(LINUX, G)], [], []),
+        # ... and failed here, attributed to this push: it passed with the culprit's changes. MAC's first
+        # run after the culprit failed, attributed to this push: it didn't verifiably pass.
+        (["rev2"], None, [(LINUX, G), (MAC, G)], [(LINUX, G), (MAC, G)], []),
+        # A later pass of MAC doesn't count, as its first run failed.
+        (["rev3"], None, [(MAC, G)], [], []),
+        # The push with the fix.
+        (["rev4"], None, [], [], []),
+    ]
+
+    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+
+    assert regressions[0] == test_scheduling.ConfigSelectRegression(
+        0, (Revision("rev0"),), G, frozenset({WIN}), frozenset({WIN, LINUX})
+    )
+
+
+def test_get_config_select_regressions_ignored_configs_only() -> None:
+    LINUX = "test-linux2404-64/opt-*"
+    VERIFY = "test-linux2404-64/opt-*-test-verify"
+    G = Group("dom/base/test/mochitest.toml")
+    G2 = Group("dom/base/test/browser.toml")
+
+    pushes: list[Any] = [
+        # G only failed on the test-verify config: it isn't a regression. G2 regressed.
+        (["rev0"], None, [(VERIFY, G), (LINUX, G2)], [], [(VERIFY, G), (LINUX, G2)]),
+        # Only test-verify failures.
+        (["rev1"], None, [(VERIFY, G)], [(VERIFY, G)], []),
+    ]
+
+    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+
+    assert regressions == [
+        test_scheduling.ConfigSelectRegression(
+            0, (Revision("rev0"),), G2, frozenset({LINUX}), frozenset({LINUX})
+        )
+    ]
+
+
+def test_get_config_select_regressions_window_is_capped(monkeypatch) -> None:
+    monkeypatch.setattr(test_scheduling, "CONFIG_SELECT_MAX_LATER", 2)
+    G = "dom/base/test/mochitest.toml"
+    A, B, C = "test-a/opt-*", "test-b/opt-*", "test-c/opt-*"
+
+    pushes: list[Any] = [
+        (["rev0"], "rev4", [(A, G)], [(A, G)], []),
+        (["rev1"], None, [(B, G)], [], []),
+        (["rev2"], None, [], [], []),
+        # More than CONFIG_SELECT_MAX_LATER pushes after the culprit.
+        (["rev3"], None, [(C, G)], [], []),
+        (["rev4"], None, [], [], []),
+    ]
+
+    (regression,), _ = test_scheduling.get_config_select_regressions(
+        lambda: iter(pushes)
+    )
+    assert regression.observed == frozenset({A, B})
+
+
+@pytest.mark.parametrize(
+    "config,dimensions",
+    [
+        (
+            "test-linux2404-64/debug-*-swr",
+            {
+                "family": "linux",
+                "platform": "linux2404-64",
+                "build": "debug",
+                "variant": "swr",
+            },
+        ),
+        (
+            "test-linux2404-64-tsan/opt-*",
+            {
+                "family": "linux",
+                "platform": "linux2404-64-tsan",
+                "build": "tsan",
+                "variant": "plain",
+            },
+        ),
+        (
+            "test-android-em-14-x86_64/debug-geckoview-*-nofis",
+            {
+                "family": "android",
+                "platform": "android-em-14-x86_64",
+                "build": "debug",
+                "variant": "nofis",
+            },
+        ),
+        (
+            "test-macosx1500-aarch64/opt-*-swr-a11y-checks",
+            {
+                "family": "macosx",
+                "platform": "macosx1500-aarch64",
+                "build": "opt",
+                "variant": "swr-a11y-checks",
+            },
+        ),
+    ],
+)
+def test_config_dimensions(config: str, dimensions: dict[str, str]) -> None:
+    assert test_scheduling.config_dimensions(config) == dimensions

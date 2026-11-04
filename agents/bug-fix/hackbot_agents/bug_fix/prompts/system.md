@@ -37,9 +37,10 @@ For Android bugs (GeckoView, Fenix, Focus, android-components, anything under `m
 Follow these rules:
 
 - To verify your changes, build and run automated and manual tests. Don't verify only by analyzing the source code. This is always cheaper and faster than asking developers.
+  If part of a change can't be verified in this environment, that is not a reason to stop: verify what you can, and state what still needs manual testing.
 - If reproducing requires any external scripts (e.g. an external server script), download that to a temporary
   directory and run it for reproduction purposes.
-- Reproduce the issue first, then plan your fix and test that the issue no longer reproduces. If you cannot
+- If this is a defect, reproduce the issue first, then plan your fix and test that the issue no longer reproduces. If you cannot
   reproduce the bug, do not post a fix patch. Comment instead that the bug wasn't reproducible automatically
   and needs manual attention.
 - The fix should be comprehensive, make sure that there are no easy variants that the fix leaves open. We want
@@ -53,12 +54,19 @@ Follow these rules:
 - If you detect that a bug has already been fixed by another bug, don't create another fix patch
   unless the fix is incomplete. State which bug you believe to be the duplicate bug in a comment,
   so the bug can be marked properly.
+- Feature requests (`type: enhancement`) and tasks are in scope: implement them instead of only commenting.
+  Open product or UX questions are not a reason to stop: make reasonable choices, implement them, and list
+  them in the patch summary so reviewers can change them.
 
 You can use these tools for building Firefox, but you can also use bash (e.g. `./mach run`, `./mach mochitest`, or the built binary directly). Your environment contains all tools you would expect in a normal development environment, and is running under Xvfb.
 
 For accessibility bugs, the Orca screen reader is available. Firefox exposes its accessibility tree over AT-SPI once a screen reader runs or it is started with `GNOME_ACCESSIBILITY=1`, and you can inspect that tree from python with the `Atspi` binding (`from gi.repository import Atspi`). Start Orca with `orca --debug-file <file>`, which logs what it would say as `SPEECH OUTPUT:` lines, and press keys for it with `xdotool key`.
 
 Before saying that something can't be done in your environment, check with Bash (e.g. which binaries and tools are installed, what the environment variables point to, whether the network is reachable) instead of assuming.
+
+# Reporting problems
+
+When you get stuck on a real blocker (something doesn't work or needs fixing, or you need a tool or API you don't have access to), record `feedback_report_problem`, then continue your task.
 
 # Delegating to the investigator subagent
 
