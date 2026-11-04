@@ -1,19 +1,29 @@
 # Performance Test Scheduling Simulation
 
-Autoland runs most performance tests only on backstop pushes, every 20 pushes
-or 4 hours. Bug 2055854 evaluates replacements through shadow schedulers in
-Firefox's task graph: fixed-interval batching, time-based batching, and
-risk-aware batching driven by bugbug's perf regression predictor. A shadow
-scheduler only shows what a strategy would have scheduled on the pushes since
-it landed, so comparing strategies that way takes months per parameter value.
+The simulator in `bugbug/perf/simulation/` replays autoland's performance
+testing over the history held by the
+[performance alerts data pipeline](perf-alerts.md): every autoland push,
+every confirmed regression pinned to its culprit push, the risk score of
+every commit and, from the fxci dataset, the worker pools the tests run on.
+A replay answers a counterfactual with the regressions that actually
+happened: had the tests been scheduled this way, or had CI looked like that,
+what would have run, how long would each regression have waited to be
+caught, what would the sheriff's backfills have cost and when would the
+culprit have been pinned.
 
-The simulator in `bugbug/perf/simulation/` replays the same strategies over
-the history held by the [performance alerts data pipeline](perf-alerts.md):
-every autoland push, every confirmed regression pinned to its culprit push,
-and the risk score of every commit. It measures what each strategy would have
-run and how long each regression would have waited, tunes strategy parameters
-with optuna on an older part of the history, and evaluates the result on a
-newer part. It is driven by `bugbug-perf-scheduling-simulator`, defined in
+Its first use is bug 2055854, which evaluates replacements for the backstop
+cadence that runs most performance tests every 20 pushes or 4 hours: the
+fixed-interval, time-based and risk-aware batching shadow schedulers in
+Firefox's task graph, the last driven by bugbug's perf regression predictor.
+A shadow scheduler only shows what a strategy would have scheduled on the
+pushes since it landed, so comparing strategies that way takes months per
+parameter value; the replay compares them over years of history in minutes,
+tunes their parameters with optuna on an older part of the history and
+judges the result on a newer part. The same machinery takes any strategy that
+decides per push which perf tasks to run, per-test selection included, and
+any change to the CI model, such as more workers on a pool, a faster build or
+a quicker sheriff; [Beyond batching](#beyond-batching) says how. It is driven
+by `bugbug-perf-scheduling-simulator`, defined in
 `scripts/perf_scheduling_simulator.py`.
 
 ## Model
@@ -49,7 +59,10 @@ come close to that count, so this picks out backstop pushes.
 `util/backstop.py` in Firefox, without the state machinery that the shadow
 schedulers need to hand decisions from one task to the next: the replay sees
 the whole history in order. A strategy `observe`s every push and `decide`s
-what to run on it: `ALL` for the whole suite, a set of labels, or nothing.
+what to run on it: `ALL` for the whole suite, a set of labels, or nothing. A
+set of labels is a partial run: it costs those jobs, catches the regressions
+of those labels only and goes through CI on their pools, which is how a
+selection strategy is expressed (see [Beyond batching](#beyond-batching)).
 
 | Family                          | A batch is due when                                                                                                                     |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -319,6 +332,98 @@ with open("risk_fixture.jsonl", "w") as out:
                 "model_version": "fixture-v0",
             }) + "\n")
 ```
+
+## Beyond batching
+
+Nothing in the replay is specific to batching. The timeline is the history
+of pushes, regressions, scores and suites; a strategy is any rule that
+decides per push what to run; detection, the metrics and the CI model judge
+the resulting schedule whatever produced it. Three kinds of questions fit
+without touching the measurement code.
+
+### A change to performance testing CI
+
+The CI model is a JSON file written by `fetch-capacity`, and `simulate` and
+`optimize` take whatever file `--capacity` names. Edit a copy to ask what a
+change would do, then rerun the same strategies against both files and
+compare `detect_ci_hours`, `identify_hours`, `total_jobs` and the
+utilization that `validate-capacity` prints:
+
+- more or fewer machines: `pools.<pool>.workers_by_month`, or `scale` to
+  shrink a pool by a share;
+- a faster or slower build: `pools.<pool>.eligible_minutes`, or
+  `--build-minutes` for pools without a measurement;
+- a test moved to another pool or made faster: its entry in `labels`,
+  `[pool, minutes]`;
+- other projects' load on a pool: its `background` series;
+- whether partial pushes carry a build: `pools.<pool>.build_share`, or
+  `--backfill-builds always` for the case where none does.
+
+The sheriff's side has its own knobs: `--sheriff-delay-minutes` for the time
+between a detection and the backfills, `--backfill none` for a world without
+them. A change to the suite itself, such as dropping or adding tests, is a
+strategy that returns the changed suite in place of `ALL`.
+
+### Selecting tests instead of batching them
+
+A strategy whose `decide` returns a set of labels runs only those on the
+push, and the replay credits it with exactly those: `Schedule.partial_runs`
+keeps them per label, `detect` catches a regression at the first run of one
+of its labels whether in a batch or a partial run, cost counts the labels
+run, and the CI replay queues them on their pools. The suite a push could
+choose from is `timeline.suite_at(index)`, the regressions' labels are the
+ground truth of what should have run, and a strategy may combine selection
+with a batch cadence by returning `ALL` when its batch rule fires. Selectors
+can be built on what the pipeline already holds: the tests a commit's files
+have regressed before, the test areas a commit's areas touch, or a per-test
+risk model's output stored like `perf_commit_risk.json`. The push-counted
+latencies, `detect_pushes` and `window_pushes`, are the fair objectives for a
+selector that runs something on nearly every push, since its windows are
+short by construction and hours would mostly reward quiet nights.
+
+### Another predictor, or another scoring of the same commits
+
+`--risk-scores PATH` takes a file shaped like `perf_commit_risk.json`, so a
+new model's scores are compared by running `optimize` once per file with the
+same windows, baseline and calibration mode, and reading the picks at
+production's cost and at production's latency side by side. The pipeline's
+`calibrate` command reports the precision and recall of the top 1, 2 and 5
+percent of scores for each model version it has, which says whether a model
+has the tail recall batching needs before any replay.
+
+### Adding to the framework
+
+- A strategy family is a `Strategy` subclass in `strategies.py` with a
+  `family` name, a `search_space` of parameter bounds, `reset`, `observe`
+  and `decide`, registered in `FAMILIES` and, when it needs scores, in
+  `RISK_FAMILIES`; `search_space_for` can derive bounds from the data and
+  `sweep` turns a one-parameter family into a grid. A family that mirrors
+  in-tree code should join the fixture replay of
+  `tests/test_perf_simulation.py`, which pins the reimplementation to it.
+- A metric is a key added by `evaluate` in `metrics.py`; a latency that can
+  be optimized is listed in `LATENCY_KEYS` and carries the `ids` of the
+  regressions it covers, so that `is_feasible` can hold a strategy to
+  production on it; a cost joins the `Cost` literal. What the CI replay
+  measures per regression is a field of `CiResult`.
+- A new input is a dataset read by `Timeline.from_records`, or an attribute
+  of `Push` or `Regression` the strategies can see.
+
+### Future work
+
+- Cost in machine time per worker pool, from `task_costs.py`, in place of job
+  counts, so that a strategy favouring cheap or expensive tests is judged on
+  what it spends.
+- Test selection families as above, with the baseline extended to model
+  bugbug's existing test selection on nearly every push, which no strategy
+  under evaluation yet replaces.
+- Noise: retriggers of a noisy test and the alerts they prevent or cause,
+  and Perfherder's alerting as an optional layer on top of detection when the
+  question is what a sheriff sees rather than what CI produced.
+- Capacity planning: sweep a pool's workers in the CI model to find the
+  size at which the identify latency stops improving, or the pool that
+  bounds it.
+- The tail of the queue waits, which bursts of other projects' work cause
+  and hourly background averages smooth out.
 
 ## Fidelity
 
