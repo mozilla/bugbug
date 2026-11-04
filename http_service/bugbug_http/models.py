@@ -474,11 +474,12 @@ def select_configs(
     groups: dict[str, float],
     modified_paths: list[str],
     very_likely_groups: Collection[str] = (),
+    used_configs: Collection[str] = (),
 ) -> dict[str, list[str]]:
     """The configs to run each group on (patterns over task labels, e.g. test-linux2404-64/opt-*).
 
     `groups` maps groups to their probability of regressing; `very_likely_groups` run on a config of
-    each OS family.
+    each OS family. `used_configs` are configs already selected for other groups of the push.
     """
     selected: dict[str, list[str]] = {}
     try:
@@ -495,6 +496,7 @@ def select_configs(
             modified_paths,
             None if platforms == build_platforms.ALL_PLATFORMS else platforms,
             very_likely_groups,
+            used_configs,
         )
     except Exception:
         LOGGER.exception("Failed to select configs, running groups on all of them")
@@ -842,8 +844,25 @@ def _analyze_patch(
         if commits
         else {}
     )
+    # The groups only selected at the "very_low" level (used on the taskgraph's expanded pushes) get
+    # their configs in a second pass, reusing the configs of the others, so that they don't change
+    # the configs selected for the others.
+    config_selection_threshold = min(
+        [
+            test_selection_threshold,
+            *(c for level, c in groups_thresholds.items() if level != "very_low"),
+        ]
+    )
     # Config selection weighs groups by their probability of regressing, not by their confidence.
     risks = testgroupselect_model.calibrated_probabilities(groups)
+    very_low_risks = {
+        group: risk
+        for group, risk in risks.items()
+        if groups[group] < config_selection_threshold
+    }
+    risks = {
+        group: risk for group, risk in risks.items() if group not in very_low_risks
+    }
     # The manifests including the modified tests, and the groups selected with at least the group
     # model's "very_high" confidence (their calibrated risk is much lower than their confidence), run
     # on a config of each OS family.
@@ -856,11 +875,22 @@ def _analyze_patch(
     for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
         risks[group] = 1.0
+        very_low_risks.pop(group, None)
         very_likely_groups.add(group)
     for group in backout_groups:
         groups[group] = 1.0
 
     config_groups = select_configs(risks, modified_paths, very_likely_groups)
+    if very_low_risks:
+        used_configs = {
+            config
+            for configs in config_groups.values()
+            for config in configs
+            if config != "*"
+        }
+        config_groups.update(
+            select_configs(very_low_risks, modified_paths, (), used_configs)
+        )
     # The recently failing manifests run on all configs, as the failures might be specific to
     # their configuration.
     for group in backout_groups:

@@ -369,6 +369,8 @@ class GroupCandidates(NamedTuple):
 class PushCandidates(NamedTuple):
     groups: Sequence[GroupCandidates]
     patch: PatchInfo = NO_PATCH_INFO
+    # Configs already selected for the push (e.g. for other groups), whose setup cost is paid.
+    used_configs: frozenset[str] = frozenset()
 
 
 def _plainest_cheapest(configs: Iterable[str]) -> str:
@@ -441,7 +443,7 @@ class ConfigSelector:
         """Select configs for the groups of each push (see select_configs)."""
         selected: list[list[list[str]]] = [[[] for _ in push.groups] for push in pushes]
         coverage = [[0.0 for _ in push.groups] for push in pushes]
-        used: list[set[str]] = [set() for _ in pushes]
+        used: list[set[str]] = [set(push.used_configs) for push in pushes]
         active = {
             (p, g) for p, push in enumerate(pushes) for g in range(len(push.groups))
         }
@@ -520,6 +522,7 @@ class ConfigSelector:
         patch_files: Collection[str] = (),
         allowed_families: Collection[str] | None = None,
         very_likely_groups: Collection[str] = (),
+        used_configs: Collection[str] = (),
     ) -> dict[str, list[str]]:
         """Select the configs to run the groups of a push on.
 
@@ -532,6 +535,9 @@ class ConfigSelector:
         `patch_files` are the files modified by the push. If `allowed_families` is given (the OS
         families building the modified files, see build_platforms), configs of other families are
         not candidates, unless a group has no candidate of the allowed families.
+
+        `used_configs` are configs already selected for other groups of the push (e.g. by a previous
+        call): their setup cost is considered paid.
 
         Groups without candidates are not in the result (callers should not restrict them).
         """
@@ -564,7 +570,9 @@ class ConfigSelector:
                 )
             )
 
-        selected = self._select([PushCandidates(groups, patch)], threshold)[0]
+        selected = self._select(
+            [PushCandidates(groups, patch, frozenset(used_configs))], threshold
+        )[0]
         return {g.group: sorted(configs) for g, configs in zip(groups, selected)}
 
     def _print_evaluation(
