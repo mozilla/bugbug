@@ -29,7 +29,7 @@ SHADOW_SCHEDULER_STATS_DB = "data/shadow_scheduler_stats.json"
 db.register(
     SHADOW_SCHEDULER_STATS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/shadow_scheduler_stats.json.zst",
-    4,
+    5,
 )
 
 # Maximum number of pushes being analyzed at the same time. Shadow scheduler
@@ -44,9 +44,41 @@ PUSH_MEMOIZED_ATTRIBUTES = (
 )
 
 
+def get_push_data_regressions(granularity: str, revs: set[str]) -> dict[str, set[Any]]:
+    """Return the possible and likely regressions of the given pushes, indexed by revision."""
+    push_data_db = (
+        test_scheduling.PUSH_DATA_GROUP_DB
+        if granularity == "group"
+        else test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
+    )
+    assert db.download(push_data_db)
+
+    regressions_by_rev = {}
+    for revisions, _, _, possible_regressions, likely_regressions in db.read(
+        push_data_db
+    ):
+        if revisions[0] not in revs:
+            continue
+
+        regressions_by_rev[revisions[0]] = get_regressions(
+            granularity, list(possible_regressions) + list(likely_regressions)
+        )
+
+    return regressions_by_rev
+
+
 def analyze_shadow_schedulers(
     push: mozci.push.Push,
+    group_candidates: set[str],
+    config_group_candidates: set[tuple[str, str]],
 ) -> dict[str, Any]:
+    """Analyze what the shadow schedulers would have scheduled on a push.
+
+    Storing everything the shadow schedulers scheduled is not feasible (a single
+    push can have hundreds of thousands of config/groups across all schedulers),
+    so we only store how many groups and config/groups were scheduled and which
+    of the given candidate regressions were scheduled.
+    """
     schedulers = []
 
     try:
@@ -76,10 +108,17 @@ def analyze_shadow_schedulers(
             }
             del tasks
 
+            groups = {group for config, group in config_groups}
+
             schedulers.append(
                 {
                     "name": name,
-                    "scheduled": list(config_groups),
+                    "num_groups": len(groups),
+                    "num_config_groups": len(config_groups),
+                    "scheduled_regression_groups": sorted(groups & group_candidates),
+                    "scheduled_regression_config_groups": sorted(
+                        config_groups & config_group_candidates
+                    ),
                 }
             )
     finally:
@@ -162,6 +201,27 @@ def go(months: int) -> None:
         push._parent = None
         push._child = None
 
+    revs = {push.rev for push in pushes}
+    group_regressions = get_push_data_regressions("group", revs)
+    config_group_regressions = get_push_data_regressions("config_group", revs)
+    del revs
+
+    # Pushes which are more recent than the most recent push with push data are
+    # left for the next run, when push data for them will be available.
+    last_with_push_data = max(
+        (
+            i
+            for i, push in enumerate(pushes)
+            if push.rev in group_regressions or push.rev in config_group_regressions
+        ),
+        default=-1,
+    )
+    logger.info(
+        "Skipping %d pushes which don't have push data yet",
+        len(pushes) - last_with_push_data - 1,
+    )
+    pushes = pushes[: last_with_push_data + 1]
+
     logger.info("%d left to analyze", len(pushes))
 
     def compress_and_upload() -> None:
@@ -179,7 +239,14 @@ def go(months: int) -> None:
         futures = bounded_executor_map(
             executor,
             analyze_shadow_schedulers,
-            ((push,) for push in pushes),
+            (
+                (
+                    push,
+                    group_regressions.get(push.rev, set()),
+                    config_group_regressions.get(push.rev, set()),
+                )
+                for push in pushes
+            ),
             MAX_IN_FLIGHT,
         )
 
@@ -228,23 +295,25 @@ def translate_group(group):
     return group
 
 
-def get_regressions(granularity, likely_regressions, possible_regressions):
+def get_regressions(granularity, regressions):
     if granularity == "group":
-        return set(translate_group(group) for group in likely_regressions)
+        return set(translate_group(group) for group in regressions)
     else:
-        return set(
-            (config, translate_group(group)) for config, group in likely_regressions
-        )
+        return set((config, translate_group(group)) for config, group in regressions)
 
 
-def get_scheduled(granularity, scheduler):
+def get_num_scheduled(granularity, scheduler):
+    return scheduler[f"num_{granularity}s"]
+
+
+def get_scheduled_regressions(granularity, scheduler):
     if granularity == "group":
-        return set(group for config, group in scheduler["scheduled"])
+        return set(scheduler["scheduled_regression_groups"])
     else:
-        return set(tuple(s) for s in scheduler["scheduled"])
+        return set(tuple(s) for s in scheduler["scheduled_regression_config_groups"])
 
 
-def plot_graphs(granularity: str) -> None:
+def get_likely_regressions_by_rev(granularity: str) -> dict[str, set[Any]]:
     push_data_db = (
         test_scheduling.PUSH_DATA_GROUP_DB
         if granularity == "group"
@@ -252,13 +321,14 @@ def plot_graphs(granularity: str) -> None:
     )
     assert db.download(push_data_db)
 
-    regressions_by_rev = {}
-    for revisions, _, _, possible_regressions, likely_regressions in db.read(
-        push_data_db
-    ):
-        regressions_by_rev[revisions[0]] = get_regressions(
-            granularity, likely_regressions, possible_regressions
-        )
+    return {
+        revisions[0]: get_regressions(granularity, likely_regressions)
+        for revisions, _, _, _, likely_regressions in db.read(push_data_db)
+    }
+
+
+def plot_graphs(granularity: str) -> None:
+    regressions_by_rev = get_likely_regressions_by_rev(granularity)
 
     scheduled_data = []
     caught_data = []
@@ -270,26 +340,28 @@ def plot_graphs(granularity: str) -> None:
         if scheduler_stat["id"] not in regressions_by_rev:
             continue
 
+        date = datetime.utcfromtimestamp(scheduler_stat["date"])
+
         obj: dict[str, Any] = {
-            "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
+            "date": date,
         }
 
         for scheduler in scheduler_stat["schedulers"]:
-            obj[scheduler["name"]] = len(get_scheduled(granularity, scheduler))
+            obj[scheduler["name"]] = get_num_scheduled(granularity, scheduler)
 
         scheduled_data.append(obj)
 
         regressions = regressions_by_rev[scheduler_stat["id"]]
 
         obj = {
-            "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
+            "date": date,
             "regressions": len(regressions),
         }
 
         for scheduler in scheduler_stat["schedulers"]:
-            scheduled = get_scheduled(granularity, scheduler)
-
-            obj[scheduler["name"]] = len(regressions & scheduled)
+            obj[scheduler["name"]] = len(
+                regressions & get_scheduled_regressions(granularity, scheduler)
+            )
 
         caught_data.append(obj)
 
@@ -340,20 +412,7 @@ def plot_graphs(granularity: str) -> None:
 def print_uncaught(
     granularity: str, scheduler1: str, scheduler2: str | None = None
 ) -> None:
-    push_data_db = (
-        test_scheduling.PUSH_DATA_GROUP_DB
-        if granularity == "group"
-        else test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
-    )
-    assert db.download(push_data_db)
-
-    regressions_by_rev = {}
-    for revisions, _, _, possible_regressions, likely_regressions in db.read(
-        push_data_db
-    ):
-        regressions_by_rev[revisions[0]] = get_regressions(
-            granularity, likely_regressions, possible_regressions
-        )
+    regressions_by_rev = get_likely_regressions_by_rev(granularity)
 
     for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
         if len(scheduler_stat["schedulers"]) == 0:
@@ -369,14 +428,11 @@ def print_uncaught(
         if len(regressions) == 0:
             continue
 
-        scheduled_by_scheduler = {}
-        caught_by_scheduler = {}
-
-        for scheduler in scheduler_stat["schedulers"]:
-            scheduled = get_scheduled(granularity, scheduler)
-
-            scheduled_by_scheduler[scheduler["name"]] = scheduled
-            caught_by_scheduler[scheduler["name"]] = regressions & scheduled
+        caught_by_scheduler = {
+            scheduler["name"]: regressions
+            & get_scheduled_regressions(granularity, scheduler)
+            for scheduler in scheduler_stat["schedulers"]
+        }
 
         if scheduler1 not in caught_by_scheduler:
             continue
@@ -406,9 +462,6 @@ def print_uncaught(
                     scheduler2,
                 )
             logger.info("Regressions: %s", regressions)
-            logger.info(
-                "Scheduled by %s: %s", scheduler1, scheduled_by_scheduler[scheduler1]
-            )
 
 
 def main() -> None:
