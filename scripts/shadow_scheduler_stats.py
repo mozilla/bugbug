@@ -120,14 +120,14 @@ def go(months: int) -> None:
 
 
 def plot_graph(df: DataFrame, title: str, file_path: str) -> None:
-    df.plot.bar()
+    ax = df.plot.bar(figsize=(20, 10))
+    ax.set_title(title)
+    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 
     plt.tight_layout()
 
     logger.info("Saving %s figure", file_path)
     plt.savefig(file_path)
-
-    plt.show()
 
     plt.close()
 
@@ -212,6 +212,10 @@ def plot_graphs(granularity: str) -> None:
             obj[scheduler["name"]] = len(regressions & scheduled)
 
         caught_data.append(obj)
+
+    if len(scheduled_data) == 0:
+        logger.warning("No data to plot at the %s level", granularity)
+        return
 
     scheduled_df = DataFrame(scheduled_data)
     scheduled_df.index = scheduled_df["date"]
@@ -298,14 +302,14 @@ def print_uncaught(
             continue
 
         if len(caught_by_scheduler[scheduler1]) == 0:
-            if scheduler2 is not None and scheduler2 not in caught_by_scheduler:
+            if scheduler2 is None or scheduler2 not in caught_by_scheduler:
                 logger.info(
                     "%s didn't catch any of the %d regressions on %s",
                     scheduler1,
                     len(regressions),
                     rev,
                 )
-            elif scheduler2 is not None and len(caught_by_scheduler[scheduler2]) == 0:
+            elif len(caught_by_scheduler[scheduler2]) == 0:
                 logger.info(
                     "%s and %s didn't catch any of the %d regressions on %s",
                     scheduler1,
