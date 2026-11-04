@@ -30,9 +30,11 @@ of the same Dockerfile:
   per-execution env overrides.
 - **`broker`** (when the agent needs credentialed reads) —
   `python -m hackbot_agents.<name>.broker`. Holds the API keys, fully configured at deploy
-  time, and is never touched by per-execution overrides.
+  time. The only per-execution override it gets is the API's own broker env
+  (`PHABRICATOR_EDGE_KEY`), merged over that config.
 
-The container name `agent` is what per-execution overrides target, so it must match.
+The container names `agent` and `broker` are what per-execution overrides target, so they
+must match.
 `task_count=1`, timeout from `JOB_EXECUTION_TIMEOUT_SECONDS` (default 8h). `hackbot.toml` is
 copied into the image's working directory, where the runtime discovers it.
 
