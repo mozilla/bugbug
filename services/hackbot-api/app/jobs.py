@@ -43,7 +43,9 @@ def _job_resource_name(job_name: str) -> str:
 _AGENT_CONTAINER_NAME = "agent"
 
 
-def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
+def _trigger_sync(
+    job_name: str, env_overrides: dict[str, str], timeout_seconds: int
+) -> str:
     # Each agent's Job manifest declares two containers: `agent` (no
     # tokens) and `broker` (holds tokens, fully configured at deploy
     # time). Per-execution env overrides target only the agent
@@ -56,7 +58,7 @@ def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
                 env=[run_v2.EnvVar(name=k, value=v) for k, v in env_overrides.items()],
             )
         ],
-        timeout={"seconds": settings.job_execution_timeout_seconds},
+        timeout={"seconds": timeout_seconds},
         task_count=1,
     )
     request = run_v2.RunJobRequest(
@@ -67,8 +69,14 @@ def _trigger_sync(job_name: str, env_overrides: dict[str, str]) -> str:
     return operation.metadata.name
 
 
-async def trigger_execution(job_name: str, env_overrides: dict[str, str]) -> str:
-    return await asyncio.to_thread(_trigger_sync, job_name, env_overrides)
+async def trigger_execution(
+    job_name: str,
+    env_overrides: dict[str, str],
+    timeout_seconds: int = settings.job_execution_timeout_seconds,
+) -> str:
+    return await asyncio.to_thread(
+        _trigger_sync, job_name, env_overrides, timeout_seconds
+    )
 
 
 def _execution_status_sync(execution_name: str) -> ExecutionStatus:
