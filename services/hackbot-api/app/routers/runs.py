@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from fnmatch import fnmatch
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -195,7 +196,7 @@ async def create_run(
             "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
             "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
-            **(await _parent_artifacts_env(parent)),
+            **(await _parent_artifacts_env(parent, agent)),
         }
         execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
     except Exception as exc:
@@ -214,13 +215,20 @@ async def create_run(
     return RunRef.model_validate(run)
 
 
-async def _parent_artifacts_env(parent: Run | None) -> dict[str, str]:
-    """Signed download URLs for the parent run's artifacts, for the runtime."""
+async def _parent_artifacts_env(parent: Run | None, agent: AgentSpec) -> dict[str, str]:
+    """Signed download URLs for the parent run's artifacts the agent receives."""
     if parent is None:
         return {}
+    names = [artifact["name"] for artifact in parent.artifacts or []]
+    if agent.parent_artifacts is not None:
+        names = [
+            name
+            for name in names
+            if any(fnmatch(name, pattern) for pattern in agent.parent_artifacts)
+        ]
     urls = await gcs.generate_artifact_download_urls(
         str(parent.run_id),
-        [artifact["name"] for artifact in parent.artifacts or []],
+        names,
         settings.job_execution_timeout_seconds,
     )
     return {"PARENT_ARTIFACTS": json.dumps(urls)}
