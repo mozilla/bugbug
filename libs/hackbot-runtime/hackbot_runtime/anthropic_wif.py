@@ -38,6 +38,7 @@ import google.auth.transport.requests
 import google.oauth2.id_token
 from google.auth.exceptions import GoogleAuthError
 
+from hackbot_runtime.config import AnthropicAuthSettings, AnthropicWifSettings
 from hackbot_runtime.providers import ProviderError
 
 log = logging.getLogger("hackbot_runtime.anthropic_wif")
@@ -63,7 +64,7 @@ _refresher: _TokenFileRefresher | None = None
 
 def is_enabled() -> bool:
     """True when the deploy provisioned a federation rule (WIF mode)."""
-    return bool(os.environ.get(RULE_ID_ENV))
+    return bool(AnthropicWifSettings().rule_id)
 
 
 def fetch_gcp_identity_token(audience: str = ANTHROPIC_AUDIENCE) -> str:
@@ -93,36 +94,29 @@ def fetch_gcp_identity_token(audience: str = ANTHROPIC_AUDIENCE) -> str:
 
 
 def _refresh_interval() -> float:
-    raw = os.environ.get(REFRESH_INTERVAL_ENV)
+    settings = AnthropicWifSettings()
+    raw = settings.refresh_interval
     if not raw:
-        return DEFAULT_REFRESH_INTERVAL
+        return AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL
     try:
         value = float(raw)
     except ValueError:
         log.warning(
             "%s=%r is not a number; falling back to %ss",
-            REFRESH_INTERVAL_ENV,
+            AnthropicWifSettings.REFRESH_INTERVAL_ENV,
             raw,
-            DEFAULT_REFRESH_INTERVAL,
+            AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL,
         )
-        return DEFAULT_REFRESH_INTERVAL
+        return AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL
     if value <= 0:
         log.warning(
             "%s=%s is not positive; falling back to %ss",
-            REFRESH_INTERVAL_ENV,
+            AnthropicWifSettings.REFRESH_INTERVAL_ENV,
             raw,
-            DEFAULT_REFRESH_INTERVAL,
+            AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL,
         )
-        return DEFAULT_REFRESH_INTERVAL
+        return AnthropicWifSettings.DEFAULT_REFRESH_INTERVAL
     return value
-
-
-def _default_token_path() -> Path:
-    """A private, process-owned path for the identity token file.
-
-    ``mkdtemp`` gives a 0700 directory so the bearer token isn't world-readable.
-    """
-    return Path(tempfile.mkdtemp(prefix="anthropic-wif-")) / "identity-token"
 
 
 class _TokenFileRefresher:
@@ -194,7 +188,8 @@ def configure() -> bool:
     if _refresher is not None:
         return True
 
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    auth_settings = AnthropicAuthSettings()
+    if auth_settings.api_key:
         log.error(
             "ANTHROPIC_API_KEY is set while Workload Identity Federation is "
             "configured; the API key takes precedence and shadows WIF. Unset it "
@@ -202,11 +197,12 @@ def configure() -> bool:
         )
         return False
 
-    token_file = Path(os.environ.get(TOKEN_FILE_ENV) or _default_token_path())
+    wif_settings = AnthropicWifSettings()
+    token_file = wif_settings.token_file
     interval = _refresh_interval()
     refresher = _TokenFileRefresher(token_file, interval)
     refresher.start()
-    os.environ[TOKEN_FILE_ENV] = str(token_file)
+    os.environ[AnthropicWifSettings.TOKEN_FILE_ENV] = str(token_file)
     _refresher = refresher
     log.info(
         "Anthropic auth: GCP Workload Identity Federation "
