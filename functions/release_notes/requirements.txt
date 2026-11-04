@@ -1,0 +1,3 @@
+bugbug==0.0.573
+Flask==2.2.5
+functions-framework==3.5.0
