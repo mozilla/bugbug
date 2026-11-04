@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 connector: Connector | None = None
 engine = None
-async_session_maker = None
+async_session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
 async def init_db():
@@ -60,6 +60,8 @@ async def close_db():
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    if async_session_maker is None:
+        raise RuntimeError("Database is not initialized")
     async with async_session_maker() as session:
         try:
             yield session

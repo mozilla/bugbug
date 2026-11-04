@@ -14,6 +14,7 @@ from app.enums import ReviewStatus
 from app.review_processor import (
     ReviewProcessingError,
     RevisionNotYetPublicError,
+    SupersededReviewError,
     process_review,
     submit_review_to_platform,
 )
@@ -137,6 +138,11 @@ async def process_review_request(
                 # the connection.
                 db.add(review_request)
 
+        except SupersededReviewError as e:
+            review_request.error = f"Superseded: {e}"
+            review_request.status = ReviewStatus.FAILED
+            await db.commit()
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
         except RevisionNotYetPublicError as e:
             logger.warning("Review request %s: %s", review_request_id, e)
             review_request.status = ReviewStatus.RETRY_PENDING
@@ -158,14 +164,22 @@ async def process_review_request(
         review_request.details = details
         await db.commit()
 
-    async for generated_comment, inline_comment_id in submit_review_to_platform(
-        review_request, comments
-    ):
-        # We need to commit after each comment is submitted to ensure that the
-        # platform_comment_id is saved to the database, which allows the
-        # submission process to be safely retried in case of failures.
-        generated_comment.platform_comment_id = inline_comment_id
+    try:
+        async for generated_comment, inline_comment_id in submit_review_to_platform(
+            review_request, comments
+        ):
+            generated_comment.platform_comment_id = inline_comment_id
+            await db.commit()
+    except SupersededReviewError as e:
+        review_request.error = f"Superseded: {e}"
+        review_request.status = ReviewStatus.FAILED
         await db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except ReviewProcessingError as e:
+        review_request.error = str(e)
+        review_request.status = ReviewStatus.FAILED
+        await db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     review_request.status = ReviewStatus.PUBLISHED
     await db.commit()

@@ -17,6 +17,7 @@ from langgraph.runtime import get_runtime
 from searchfox import AsyncSearchfoxClient, SearchfoxNetworkError, SearchfoxRequestError
 
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
+from bugbug.tools.core.code_context import CodeContext
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
 from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
@@ -49,6 +50,16 @@ Tests = Optional[Annotated[Literal["only", "exclude"], StripEnumQuotes]]
 @dataclass
 class CodeReviewContext:
     patch: Patch
+    source: CodeContext | None = None
+
+
+def _get_source() -> CodeContext | None:
+    try:
+        runtime = get_runtime(CodeReviewContext)
+        return getattr(runtime.context, "source", None) if runtime is not None else None
+    except RuntimeError:
+        # Tools can also be invoked directly, outside the review agent runtime.
+        return None
 
 
 @cache
@@ -96,6 +107,17 @@ async def expand_context(
     """
     runtime = get_runtime(CodeReviewContext)
     patch = runtime.context.patch
+
+    source = getattr(runtime.context, "source", None)
+    if source is not None:
+        try:
+            file_content = await source.read_file(file_path)
+        except (FileNotFoundError, httpx.HTTPError, ValueError) as e:
+            return _tool_error(f"could not retrieve {file_path}: {e}")
+        lines = file_content.splitlines()
+        start = max(1, start_line or 1)
+        end = min(len(lines), end_line if end_line is not None else len(lines))
+        return "\n".join(f"{i}| {lines[i - 1]}" for i in range(start, end + 1))
 
     warning = None
     try:
@@ -206,6 +228,21 @@ async def search_text(
     Returns:
         Matching lines as 'path:line: content' entries.
     """
+    source = _get_source()
+    if source is not None:
+        try:
+            return await source.search_text(
+                query,
+                path_filter=path_filter,
+                regexp=regexp,
+                case_sensitive=case_sensitive,
+                limit=limit,
+                context_lines=context_lines,
+                langs=langs,
+                tests=tests,
+            )
+        except (httpx.HTTPError, ValueError) as e:
+            return _tool_error(f"search failed: {e}")
     try:
         results = await _get_client().search(
             query=query,
@@ -373,7 +410,7 @@ async def search_identifier(
     """Search for an exact identifier across the codebase.
 
     Args:
-        identifier: Identifier to search for.
+        identifier: Identifier to search for (textual on providers without symbol indexing).
         path_filter: Optional path prefix, e.g. 'dom/media'.
         langs: Optional language filter. Multiple values are OR-ed.
         tests: 'only' to restrict to test files, 'exclude' to omit them.
@@ -382,6 +419,18 @@ async def search_identifier(
     Returns:
         Matching lines as 'path:line: content' entries.
     """
+    source = _get_source()
+    if source is not None:
+        try:
+            return await source.search_identifier(
+                identifier,
+                path_filter=path_filter,
+                langs=langs,
+                tests=tests,
+                limit=limit,
+            )
+        except (httpx.HTTPError, ValueError) as e:
+            return _tool_error(f"identifier search failed: {e}")
     try:
         results = await _get_client().search(
             id=identifier,
@@ -540,6 +589,20 @@ async def get_function_at_line(
             e,
         )
         return _tool_error(f"function lookup failed: {e}")
+
+
+def context_tools_for(source: CodeContext) -> list:
+    """Expose only the operations this context provider supports."""
+    candidates = {
+        "read_file": expand_context,
+        "text_search": search_text,
+        "identifier_search": search_identifier,
+    }
+    return [
+        tool
+        for capability, tool in candidates.items()
+        if capability in source.capabilities
+    ]
 
 
 SEARCHFOX_TOOLS = [

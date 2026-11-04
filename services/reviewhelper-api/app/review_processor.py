@@ -2,11 +2,13 @@ import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from functools import cache
-from typing import Collection, Iterable
+from typing import Collection
 
 from app.config import settings
 from app.database.models import GeneratedComment, ReviewRequest
 from app.enums import Platform
+from app.github import get_github_app
+from app.github_reviews import GitHubTarget, current_pr
 from bugbug.tools.core.exceptions import LargeDiffError, RecursionLimitError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
@@ -31,6 +33,31 @@ class RevisionNotYetPublicError(Exception):
 
     This is a transient error — Cloud Tasks should retry after backoff.
     """
+
+
+class SupersededReviewError(Exception):
+    """The requested GitHub snapshot is no longer eligible for publication."""
+
+
+def get_github_review_tool(patch):
+    from bugbug.tools.code_review import CodeReviewTool
+    from bugbug.tools.code_review.langchain_tools import context_tools_for
+    from bugbug.tools.core.platforms.github import GitHubCodeContext
+    from bugbug.tools.suggestion_filtering import SuggestionFilteringTool
+
+    source = GitHubCodeContext(patch)
+    return CodeReviewTool.create(
+        todo_enabled=settings.todo_enabled,
+        target_software=patch.repo,
+        context_tools=context_tools_for(source),
+        code_context=source,
+        review_comments_db=None,
+        skills=[],
+        use_static_examples=False,
+        suggestion_filterer=SuggestionFilteringTool.create(
+            target_software=patch.repo, suggestions_feedback_db=None
+        ),
+    )
 
 
 @cache
@@ -62,10 +89,37 @@ async def process_review(
         patch = PhabricatorPatch(
             revision_id=review_request.revision_id, diff_id=review_request.diff_id
         )
+    elif review_request.platform == Platform.GITHUB:
+        from bugbug.tools.core.platforms.github import (
+            GitHubPatch,
+            GitHubSnapshotChanged,
+        )
+
+        try:
+            target = GitHubTarget.from_request(review_request)
+        except ValueError as e:
+            raise ReviewProcessingError(str(e)) from e
+        if await current_pr(review_request) is None:
+            raise SupersededReviewError(
+                "PR changed, closed, became a draft, or is no longer enrolled"
+            )
+        try:
+            patch = await GitHubPatch.load(
+                await get_github_app().repo_client(target.repo),
+                target.repo,
+                target.number,
+                expected_sha=target.sha,
+            )
+        except GitHubSnapshotChanged as e:
+            raise SupersededReviewError(str(e)) from e
+        except ValueError as e:
+            raise ReviewProcessingError(str(e)) from e
     else:
         raise ValueError(f"Unsupported platform: {review_request.platform}")
 
-    if not patch.is_accessible() or not patch.is_public():
+    if review_request.platform == Platform.PHABRICATOR and (
+        not patch.is_accessible() or not patch.is_public()
+    ):
         age = datetime.now(UTC) - review_request.created_at
         if age < VISIBILITY_TIMEOUT:
             raise RevisionNotYetPublicError(
@@ -78,7 +132,11 @@ async def process_review(
             "the revision is private or has restricted visibility."
         )
 
-    tool = get_code_review_tool()
+    tool = (
+        get_github_review_tool(patch)
+        if review_request.platform == Platform.GITHUB
+        else get_code_review_tool()
+    )
 
     try:
         result = await tool.run(patch)
@@ -113,7 +171,7 @@ async def process_review(
 
 
 def submit_review_to_platform(
-    review_request: ReviewRequest, generated_comments: Iterable[GeneratedComment]
+    review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
 ) -> AsyncIterator[tuple[GeneratedComment, int]]:
     """Submit generated comments to the appropriate platform.
 
@@ -127,6 +185,8 @@ def submit_review_to_platform(
     """
     if review_request.platform == Platform.PHABRICATOR:
         return _submit_review_to_phabricator(review_request, generated_comments)
+    elif review_request.platform == Platform.GITHUB:
+        return _submit_review_to_github(review_request, generated_comments)
     else:
         raise ValueError(f"Unsupported platform: {review_request.platform}")
 
@@ -198,3 +258,70 @@ def create_main_review_comment(
         )
 
     return "\n".join(parts)
+
+
+async def _submit_review_to_github(
+    review_request: ReviewRequest,
+    generated_comments: Collection[GeneratedComment],
+) -> AsyncIterator[tuple[GeneratedComment, int]]:
+    """Publish one review; reconcile an uncertain write before attempting another."""
+    from bugbug.tools.core.platforms.github import GitHubSnapshotChanged
+    from bugbug.tools.core.platforms.github_review import (
+        GitHubReviewPublisher,
+        GitHubReviewRejected,
+    )
+
+    app = get_github_app()
+    try:
+        target = GitHubTarget.from_request(review_request)
+    except ValueError as e:
+        raise ReviewProcessingError(str(e)) from e
+    publisher = GitHubReviewPublisher(
+        await app.repo_client(target.repo), await app.bot_login()
+    )
+    comments = [
+        {
+            "path": comment.file_path,
+            "line": comment.line_start,
+            "side": "RIGHT",
+            "body": comment.content,
+        }
+        for comment in generated_comments
+        if comment.on_new and comment.line_start == comment.line_end
+    ]
+
+    async def is_current() -> bool:
+        return await current_pr(review_request) is not None
+
+    body = f"Reviewing `{target.sha[:12]}`.\n\n"
+    body += review_request.general_comment or "Automated review completed."
+    try:
+        published = await publisher.publish(
+            repo=target.repo,
+            number=target.number,
+            sha=target.sha,
+            marker=f"<!-- reviewhelper:{review_request.id} -->",
+            body=body,
+            comments=comments,
+            is_current=is_current,
+        )
+    except GitHubSnapshotChanged as e:
+        raise SupersededReviewError(str(e)) from e
+    except GitHubReviewRejected as e:
+        raise ReviewProcessingError(str(e)) from e
+    for comment in generated_comments:
+        if comment.platform_comment_id:
+            continue
+        match = next(
+            (
+                c
+                for c in published
+                if c["path"] == comment.file_path
+                and (c.get("line") or c.get("original_line")) == comment.line_start
+                and c["body"] == comment.content
+            ),
+            None,
+        )
+        if match is not None:
+            published.remove(match)
+            yield comment, match["id"]

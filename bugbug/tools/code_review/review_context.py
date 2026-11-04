@@ -15,6 +15,7 @@ import hashlib
 import json
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from logging import getLogger
 from typing import Literal
@@ -109,10 +110,8 @@ class ExternalContentItem(BaseModel):
 
 
 def _github_raw_url(repo: str, branch: str, path: str) -> str:
-    return (
-        f"https://raw.githubusercontent.com/{repo}/refs/heads/{branch}/"
-        f"{path.lstrip('/')}"
-    )
+    ref = branch if re.fullmatch(r"[0-9a-f]{40}", branch) else f"refs/heads/{branch}"
+    return f"https://raw.githubusercontent.com/{repo}/{ref}/{path.lstrip('/')}"
 
 
 def _normalise_repo(repo: str) -> str:
@@ -417,6 +416,7 @@ async def execute_actions(
     default_branch: str,
     allowed_repos: set[str],
     content_overrides: dict[str, str] | None = None,
+    fetch_file: Callable[[str, str, str], Awaitable[str]] | None = None,
 ) -> list[ExternalContentItem]:
     """Execute a list of actions and return loaded external content.
 
@@ -450,6 +450,17 @@ async def execute_actions(
             )
             if content_overrides and item.name in content_overrides:
                 body = content_overrides[item.name]
+            elif fetch_file is not None:
+                body = await fetch_file(
+                    action.repo or default_repo,
+                    action.branch
+                    or (
+                        default_branch
+                        if not action.repo or action.repo == default_repo
+                        else "main"
+                    ),
+                    action.path,
+                )
             else:
                 body = await item.load()
             results.append(
@@ -463,7 +474,7 @@ async def execute_actions(
                     trust_reason="github_repo_content",
                 )
             )
-        except ValueError, ExternalContentLoadError:
+        except ValueError, ExternalContentLoadError, FileNotFoundError, httpx.HTTPError:
             logger.error(
                 "Failed to load content for action %s", _action_to_dict(action)
             )
@@ -510,9 +521,20 @@ async def load_external_content_for_diff(
     across back-to-back reviews.
     """
     try:
-        config = await _fetch_review_context(
-            review_context_repo, review_context_branch, review_context_path
-        )
+        fetch_file = getattr(patch, "get_review_context_file", None)
+        if fetch_file is not None:
+            config = parse_review_context_toml(
+                await fetch_file(
+                    review_context_repo, review_context_branch, review_context_path
+                )
+            )
+        else:
+            config = await _fetch_review_context(
+                review_context_repo, review_context_branch, review_context_path
+            )
+    except FileNotFoundError:
+        # Repository configuration is optional.
+        return []
     except httpx.HTTPError:
         logger.error(
             "Could not fetch review context from %s@%s:%s",
@@ -546,6 +568,7 @@ async def load_external_content_for_diff(
         review_context_branch,
         set(config.policy.github.allowed_repos),
         content_overrides,
+        fetch_file=fetch_file,
     )
 
 

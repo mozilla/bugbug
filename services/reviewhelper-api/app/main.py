@@ -9,6 +9,8 @@ from app import __version__
 from app.config import settings
 from app.database.connection import close_db, init_db
 from app.routers import feedback_router, internal_router, request_router
+from app.routers.github import router as github_router
+from bugbug.tools.core.connection import close_http_client
 
 sentry_sdk.init(
     dsn=settings.sentry_dsn,
@@ -28,6 +30,7 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     await init_db()
     yield
+    await close_http_client()
     await close_db()
 
 
@@ -42,6 +45,7 @@ app = FastAPI(
 app.include_router(request_router)
 app.include_router(feedback_router)
 app.include_router(internal_router)
+app.include_router(github_router)
 
 
 @app.get("/health")
