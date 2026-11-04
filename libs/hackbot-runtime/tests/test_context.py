@@ -143,8 +143,9 @@ async def test_checkout_moves_the_base_the_diff_is_taken_against(tmp_path, monke
 
     assert hb.checkout("earlier") == "earliercommit"
     assert checked_out == ["earlier"]
-    # Both bases move: the diff and any try push are taken against the new one.
-    assert hb._source_base == hb._published_base == "earliercommit"
+    # Every base moves: the patch, the diff and any try push are taken against
+    # the new one.
+    assert hb._source_base == hb._published_base == hb._diff_base == "earliercommit"
 
 
 def test_checkout_needs_a_prepared_repo(tmp_path):
@@ -177,7 +178,7 @@ def _hb_with_source(tmp_path, monkeypatch):
     """
     cfg = HackbotConfig(source=SourceConfig(repo_url="https://example.com/r.git"))
     hb = _hb(tmp_path, cfg)
-    hb._source_base = hb._published_base = "basecommit"
+    hb._source_base = hb._published_base = hb._diff_base = "basecommit"
     # prepare_repo would normally clone and set this; publish_changes only reads
     # repo_path and passes it to the (mocked) changes helpers, so a bare path is
     # enough here.
@@ -295,7 +296,7 @@ def test_publish_changes_builds_try_push_when_action_recorded(tmp_path, monkeypa
 
 
 def test_try_push_uses_the_published_base_not_a_local_one(tmp_path, monkeypatch):
-    # A stacked-revision checkout seeds local commits and re-records the source
+    # A stacked-revision checkout seeds local commits and re-records the diff
     # base onto one of them (see revision.checkout_revision). Lando has to
     # resolve the base in its own clone, so it must still be given the commit
     # the checkout was fetched at — a local sha would look valid (40 hex chars)
@@ -318,7 +319,7 @@ def test_try_push_uses_the_published_base_not_a_local_one(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "hackbot_runtime.context.changes.base_commit", lambda repo: "localseededsha"
     )
-    hb.record_source_base()
+    hb.record_diff_base()
     hb.actions.record("try_server.push", {"tasks": ["t"], "title": None}, reasoning="r")
     hb.actions.record("phabricator.update_patch", {"revision_id": 1}, reasoning="r")
 
