@@ -375,6 +375,60 @@ def test_alerting_modes_and_backfill_builds() -> None:
     ] == pytest.approx(metrics["surface_ci_hours"]["mean"])
 
 
+def test_ci_detection_follows_the_first_label_to_complete() -> None:
+    # Culprit 5 regressed both labels. L2 sorts first, so push order detects
+    # through it, but its runs take five hours and L1's one; on three
+    # workers nothing queues, L1 completes first and the detection, the
+    # alert and the confirming retriggers follow it.
+    timeline = make_timeline(60, regressions=((1, 5, (L1, L2)),))
+    schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
+    detections = sim.detect(schedule, timeline)
+    assert detections[0].label == L2
+    assert [d.label for d in detections[0].alternatives] == [L1]
+    assert [d.label for d in detections[0].candidates()] == [L2, L1]
+    model = _capacity(3)
+    model.labels[L2] = sim.LabelRuntime("hw/p", 300.0)
+    batch = timeline.pushes[8].time + timedelta(minutes=99)
+
+    today = sim.CiSettings(model, build_minutes=99.0, backfill="none")
+    result = sim.simulate_ci(schedule, timeline, detections, today)
+    assert result.detect_time[1] == batch + timedelta(minutes=60)
+    assert result.surface_time[1] == timeline.pushes[52].time + timedelta(
+        minutes=99 + 60
+    )
+
+    confirm = sim.CiSettings(
+        model, build_minutes=99.0, alerting="retrigger", confirm_retriggers=1
+    )
+    result = sim.simulate_ci(schedule, timeline, detections, confirm)
+    assert result.detect_time[1] == batch + timedelta(minutes=60)
+    assert result.surface_time[1] == batch + timedelta(minutes=120)
+    assert result.confirm_jobs == {1: 1}
+
+
+def test_identification_waits_for_the_sheriff() -> None:
+    # Every push runs the suite, so the culprit and the push before it have
+    # data long before the alert; the sheriff still identifies the culprit
+    # only once turned to the alert, 30 minutes after it is raised. A
+    # regression naming no label is identified then too.
+    timeline = make_timeline(60, regressions=((1, 5, (L1,)), (2, 7, ())))
+    schedule = sim.replay(sim.FixedInterval(push_interval=1), timeline)
+    detections = sim.detect(schedule, timeline)
+    settings = sim.CiSettings(
+        _capacity(4), build_minutes=99.0, sheriff_delay_minutes=30.0
+    )
+    result = sim.simulate_ci(schedule, timeline, detections, settings)
+    assert result.detect_time[1] == timeline.pushes[5].time + timedelta(minutes=99 + 60)
+    assert result.surface_time[1] == timeline.pushes[16].time + timedelta(
+        minutes=99 + 60
+    )
+    assert result.backfill_jobs == {}
+    for summary_id in (1, 2):
+        assert result.identify_time[summary_id] == result.surface_time[
+            summary_id
+        ] + timedelta(minutes=30)
+
+
 def test_backfill_builds_follow_the_measured_share() -> None:
     timeline = make_timeline(60, regressions=((1, 5, (L1,)),))
     schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
@@ -435,6 +489,7 @@ def test_evaluate_with_ci_result_and_objectives() -> None:
     assert result["detect_ci_hours"]["mean"] == 4.5
     assert result["identify_hours"]["mean"] > result["detect_ci_hours"]["mean"]
     assert result["identified"] == 2
+    assert result["identify_hours"]["ids"] == result["detect_ci_hours"]["ids"] == [1, 2]
     assert result["backfill_jobs"] == 6 and result["total_jobs"] == result["jobs"] + 6
     assert "mean_ci95" in result["identify_hours"]
     assert (
@@ -533,6 +588,78 @@ def test_detect_and_metrics() -> None:
     schedule, detections = _replay_and_detect(sim.FixedInterval(50), timeline)
     sparse = sim.evaluate(timeline, schedule, detections, whole)
     assert not sim.is_feasible(sparse, baseline)
+
+    # Catching everything is not enough: here the baseline surfaces the
+    # regression at its 12th run after the culprit and the sparse schedule
+    # not before the pushes end, so the latter is feasible on detection only.
+    timeline = make_timeline(100, regressions=[(1, 5, [L1])])
+    whole = sim.Window(timeline.start, timeline.end + timedelta(seconds=1))
+    schedule, detections = _replay_and_detect(sim.FixedInterval(2), timeline)
+    baseline = sim.evaluate(timeline, schedule, detections, whole)
+    schedule, detections = _replay_and_detect(sim.FixedInterval(10), timeline)
+    sparse = sim.evaluate(timeline, schedule, detections, whole)
+    assert baseline["surface_hours"]["ids"] == [1]
+    assert sparse["detect_hours"]["ids"] == [1] and sparse["surface_hours"]["ids"] == []
+    assert sim.is_feasible(sparse, baseline)
+    assert not sim.is_feasible(sparse, baseline, "surface")
+    assert sim.missed_ids(sparse, baseline, "surface") == [1]
+    with pytest.raises(ValueError, match="capacity"):
+        sim.is_feasible(sparse, baseline, "identify")
+
+
+def test_batches_run_only_the_labels_of_their_suite() -> None:
+    # L2 leaves the suite at the full-suite push 12, so the batch on 16 runs
+    # L1 but not L2: it catches the L1 regression of push 13 and not the L2
+    # one, which nothing runs afterwards.
+    timeline = make_timeline(
+        20, full=(0, 12), regressions=[(1, 13, [L1]), (2, 13, [L2])]
+    )
+    timeline.pushes[12].ran_labels = SUITE | {L1}
+    schedule = sim.replay(sim.FixedInterval(4), timeline)
+    assert schedule.batch_indices == [0, 4, 8, 12, 16]
+    assert schedule.runs_of(L1) == [0, 4, 8, 12, 16]
+    assert schedule.runs_of(L2) == [0, 4, 8]
+    assert schedule.runs_of(None) == schedule.batch_indices
+    detections = sim.detect(schedule, timeline)
+    assert detections[0].detected_index == 16
+    assert detections[1].detected_index is None
+    # Partial runs of a label count whatever the suite holds, and a batch
+    # whose suite is unknown counts for every label.
+    suite = frozenset({L1})
+    by_hand = sim.Schedule([None] * 10, [0, 8], {L2: [4]}, [None, suite])
+    assert by_hand.runs_of(L1) == [0, 8] and by_hand.runs_of(L2) == [0, 4]
+
+    # Before the first full-suite push the suite is only borrowed from it, so
+    # the batches there are credited with the alerted L2 as well, in the CI
+    # replay too; from push 12 on the recorded suite rules.
+    timeline = make_timeline(
+        20, full=(12,), regressions=[(1, 1, [L2]), (2, 13, [L2]), (3, 13, [L1])]
+    )
+    timeline.pushes[12].ran_labels = SUITE | {L1}
+    assert timeline.known_suite_at(4) is None and timeline.suite_at(4) == SUITE | {L1}
+    assert timeline.known_suite_at(13) == SUITE | {L1}
+    schedule = sim.replay(sim.FixedInterval(4), timeline)
+    assert schedule.runs_of(L2) == [0, 4, 8]
+    detections = sim.detect(schedule, timeline)
+    assert [d.detected_index for d in detections] == [4, None, 16]
+    settings = sim.CiSettings(_capacity(2), build_minutes=99.0, backfill="none")
+    result = sim.simulate_ci(schedule, timeline, detections, settings)
+    assert result.detect_time[1] == timeline.pushes[4].time + timedelta(minutes=99 + 60)
+    assert 2 not in result.detect_time
+
+
+def test_overlapping_alerts_share_their_backfills() -> None:
+    # Culprits 5 and 6 on L1, both caught by the batch on push 8 and alerted
+    # at once: the first alert backfills L1 on pushes 5 to 7, the second
+    # finds them requested and still gets its culprit identified from them.
+    timeline = make_timeline(12, regressions=((1, 5, (L1,)), (2, 6, (L1,))))
+    schedule = sim.replay(sim.FixedInterval(push_interval=4), timeline)
+    detections = sim.detect(schedule, timeline)
+    settings = sim.CiSettings(_capacity(4), build_minutes=99.0, alerting="detection")
+    result = sim.simulate_ci(schedule, timeline, detections, settings)
+    assert result.backfill_jobs == {1: 3}
+    assert result.identify_time[1] is not None and result.identify_time[2] is not None
+    assert result.identify_time[2] >= result.surface_time[2]
 
 
 def _replay_and_detect(strategy, timeline):
@@ -753,6 +880,14 @@ def test_expanded_labels_are_derived_from_history() -> None:
             push.ran_labels = frozenset({L1})
     timeline.pushes[15].ran_labels = frozenset({L2})
     assert timeline.expanded_labels() == frozenset({L1})
+    # Pushes before the first full-suite push have no jobs left, Treeherder
+    # having dropped them, so they are not evidence that nothing ran there.
+    expired = make_timeline(60, pushlog_start=100, full=(40,))
+    expired.pushes[50].ran_labels = frozenset({L1})
+    assert expired.expanded_labels() == frozenset({L1})
+    assert make_timeline(20, pushlog_start=100, full=()).expanded_labels() == (
+        frozenset()
+    )
     no_ids = make_timeline(5)
     for push in no_ids.pushes:
         push.pushlog_id = None
@@ -843,6 +978,58 @@ def test_calibrate_timeline_fits_on_the_history_before_the_window(
     # The window itself holds no culprits, so fitting within it is refused.
     with pytest.raises(SystemExit, match="0 scored culprits between"):
         cli.calibrate_timeline(timeline, "fit", risks, "v1", window, fit_on="within")
+
+
+def test_load_timeline_needs_scores_only_before_the_horizon(monkeypatch) -> None:
+    from scripts import perf_scheduling_simulator as cli
+
+    # Thirty hourly pushes, the one regression's culprit at push 10, and the
+    # scorer has reached the first 25 pushes.
+    times = [START + timedelta(hours=i) for i in range(30)]
+    pushes = [
+        {
+            "push_id": 1000 + i,
+            "pushlog_id": 100 + i,
+            "time": times[i].isoformat(),
+            "commits": [{"revision": f"{i:040x}", "desc": "Bug 1 - x"}],
+            "perf_jobs": [],
+        }
+        for i in range(30)
+    ]
+    regressions = [
+        {
+            "summary_id": 1,
+            "outcome": "concluded",
+            "push_id": 1010,
+            "runnables": [{"label": L1}],
+        }
+    ]
+    risks = [
+        {
+            "node": f"{i:040x}",
+            "risk_score": 0.1,
+            "ignored_reason": None,
+            "model_version": "v1",
+        }
+        for i in range(25)
+    ]
+    monkeypatch.setattr(cli, "_ensure", lambda path: None)
+    monkeypatch.setattr(cli.datasets, "get_perf_pushes", lambda: iter(pushes))
+    monkeypatch.setattr(cli.datasets, "get_perf_regressions", lambda: iter(regressions))
+    monkeypatch.setattr(cli.datasets, "get_perf_commit_risk", lambda: iter(risks))
+
+    timeline, _, _ = cli.load_timeline(False, None, None)
+    assert len(timeline.pushes) == 30
+    # With scores the history ends at the first unscored push, which may
+    # follow the horizon: by default just after the last culprit push.
+    timeline, scores, version = cli.load_timeline(True, None, None)
+    assert len(timeline.pushes) == 25 and len(timeline.regressions) == 1
+    assert version == "v1" and scores is not None and len(scores) == 25
+    timeline, _, _ = cli.load_timeline(True, None, None, until=times[20])
+    assert len(timeline.pushes) == 25
+    # A horizon the scores do not reach is refused.
+    with pytest.raises(SystemExit, match="3 commits of pushes before"):
+        cli.load_timeline(True, None, None, until=times[28])
 
 
 def test_sweep_and_search_space_for() -> None:

@@ -7,8 +7,8 @@
 
 Each family gets one multi-objective study on the optimize window, minimizing
 cost and mean latency at once under the constraint that every regression the
-production baseline caught is caught too. The Pareto front is then evaluated
-on the eval window, which the tuning never saw.
+production baseline has the latency for, the strategy has it for too. The
+Pareto front is then evaluated on the eval window, which the tuning never saw.
 """
 
 import logging
@@ -22,7 +22,7 @@ from bugbug.perf.simulation.metrics import (
     Statistic,
     Window,
     evaluate,
-    is_feasible,
+    missed_ids,
     objectives,
 )
 from bugbug.perf.simulation.strategies import FAMILIES, Strategy
@@ -73,8 +73,9 @@ def optimize_family(
     A one-parameter family is swept over every value of ``sweep``: all the
     integers of an integer parameter, ``n_trials`` evenly or log-evenly spaced
     values of a real one. The others use NSGA-II with ``NSGA_POPULATION`` for
-    ``n_trials`` trials. Trials that miss a regression the baseline caught are
-    pruned, so they never reach the front; see ``pruned_trials``.
+    ``n_trials`` trials. Trials lacking the ``latency`` of a regression the
+    baseline has it for are pruned, so they never reach the front; see
+    ``pruned_trials``.
     ``fixed_params`` are passed to every strategy as they are, outside the
     search. The space used is kept in the study's ``search_space`` attribute.
     With ``ci``, trials whose plain job count exceeds ``max_cost_ratio`` times
@@ -100,7 +101,9 @@ def optimize_family(
                 raise optuna.TrialPruned()
         result = run(strategy, timeline, [window], ci=ci)[0]
         trial.set_user_attr("metrics", result)
-        if not is_feasible(result, baseline):
+        missed = missed_ids(result, baseline, latency)
+        if missed:
+            trial.set_user_attr("missed_ids", missed)
             raise optuna.TrialPruned()
         return objectives(result, cost, latency, statistic)
 
@@ -130,21 +133,21 @@ def optimize_family(
 
 
 def pruned_trials(study: Any) -> list[dict[str, Any]]:
-    """Pruned trials: what they missed, or ``"cost"`` when pruned as too expensive.
+    """Pruned trials: the regressions whose latency they lack, or ``"cost"``.
 
-    A batching family runs the whole suite on every batch, so it can only miss
-    a regression when no batch follows it before the pushes end: the strategy
-    went longer without a batch than the data can judge, which says nothing
-    about its correctness. For a selection family, a miss is a real gap. With
-    the CI model, trials over ``max_cost_ratio`` are pruned before the replay
-    and carry ``pruned_for`` set to ``cost``.
+    A batching family runs the whole suite on every batch, so it can only
+    lack a regression's latency when too few batches follow it before the
+    pushes end: the strategy went longer without a batch than the data can
+    judge, which says nothing about its correctness. For a selection family,
+    a miss is a real gap. With the CI model, trials over ``max_cost_ratio``
+    are pruned before the replay and carry ``pruned_for`` set to ``cost``.
     """
     import optuna
 
     return [
         {
             "params": trial.params,
-            "missed_ids": trial.user_attrs["metrics"]["missed_ids"],
+            "missed_ids": trial.user_attrs.get("missed_ids", []),
             "pruned_for": trial.user_attrs.get("pruned_for", "missed"),
         }
         for trial in study.trials

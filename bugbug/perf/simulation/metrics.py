@@ -10,7 +10,7 @@ import random
 import statistics
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 from bugbug.perf.simulation.capacity import CiResult
 from bugbug.perf.simulation.detection import Detection, Schedule
@@ -66,6 +66,11 @@ def _summary(values: list[float]) -> dict[str, float | None]:
     }
 
 
+def _latency(observed: dict[int, float]) -> dict[str, Any]:
+    """Summary of a latency over the regressions it exists for, with their ids."""
+    return {**_summary(list(observed.values())), "ids": sorted(observed)}
+
+
 def bootstrap_mean(
     values: list[float], samples: int = 1000, seed: int = 0
 ) -> tuple[float, float] | None:
@@ -99,7 +104,9 @@ def evaluate(
     ``identify_hours`` to the sheriff's backfills pinning the culprit;
     ``backfill_jobs`` and ``confirm_jobs`` count those backfills and the
     confirming retriggers, and ``total_jobs`` adds both to the schedule's
-    own jobs.
+    own jobs. Each latency summary carries the ``ids`` of the regressions
+    it is taken over, since a later event can be missing where an earlier
+    one exists.
     """
     indices = [push.index for push in timeline.pushes if window.contains(push.time)]
     batch_indices = [i for i in indices if schedule.decisions[i] == ALL]
@@ -112,10 +119,24 @@ def evaluate(
     selected = [d for d in detections if window.contains(d.regression.time)]
     detected = [d for d in selected if d.detected_index is not None]
     surfaced = [d for d in detected if d.surfaced_index is not None]
-    detect_hours = [d.detect_hours(timeline) or 0.0 for d in detected]
-    surface_hours = [d.surface_hours(timeline) or 0.0 for d in surfaced]
-    detect_pushes = [float(d.detect_pushes or 0) for d in detected]
-    window_pushes = [float(d.window_pushes or 0) for d in detected]
+    detect_hours = {
+        d.regression.summary_id: d.detect_hours(timeline) or 0.0 for d in detected
+    }
+    surface_hours = {
+        d.regression.summary_id: d.surface_hours(timeline) or 0.0 for d in surfaced
+    }
+    detect_pushes = {
+        d.regression.summary_id: float(d.detect_pushes or 0) for d in detected
+    }
+    window_pushes = {
+        d.regression.summary_id: float(d.window_pushes or 0) for d in detected
+    }
+    latencies = {
+        "detect_hours": detect_hours,
+        "surface_hours": surface_hours,
+        "detect_pushes": detect_pushes,
+        "window_pushes": window_pushes,
+    }
     caught_at: collections.Counter = collections.Counter(
         (d.detected_index, d.label) for d in detected
     )
@@ -137,71 +158,72 @@ def evaluate(
         "missed_ids": sorted(
             d.regression.summary_id for d in selected if d.detected_index is None
         ),
-        "detect_hours": _summary(detect_hours),
-        "surface_hours": _summary(surface_hours),
-        "detect_pushes": _summary(detect_pushes),
-        "window_pushes": _summary(window_pushes),
+        **{key: _latency(values) for key, values in latencies.items()},
         "merged": sum(count - 1 for count in caught_at.values() if count > 1),
     }
-    if bootstrap_samples:
-        result["detect_hours"]["mean_ci95"] = bootstrap_mean(
-            detect_hours, bootstrap_samples
-        )
-        result["surface_hours"]["mean_ci95"] = bootstrap_mean(
-            surface_hours, bootstrap_samples
-        )
-        result["detect_pushes"]["mean_ci95"] = bootstrap_mean(
-            detect_pushes, bootstrap_samples
-        )
-        result["window_pushes"]["mean_ci95"] = bootstrap_mean(
-            window_pushes, bootstrap_samples
-        )
     if ci is not None:
-        detect_ci = [
-            (
-                ci.detect_time[d.regression.summary_id] - d.regression.time
-            ).total_seconds()
-            / 3600
-            for d in detected
-            if d.regression.summary_id in ci.detect_time
-        ]
-        surface_ci = [
-            (when - d.regression.time).total_seconds() / 3600
-            for d in detected
-            if (when := ci.surface_time.get(d.regression.summary_id)) is not None
-        ]
-        identify = [
-            (when - d.regression.time).total_seconds() / 3600
-            for d in detected
-            if (when := ci.identify_time.get(d.regression.summary_id)) is not None
-        ]
+
+        def hours_until(times: Mapping[int, datetime | None]) -> dict[int, float]:
+            return {
+                d.regression.summary_id: (when - d.regression.time).total_seconds()
+                / 3600
+                for d in detected
+                if (when := times.get(d.regression.summary_id)) is not None
+            }
+
+        detect_ci = hours_until(ci.detect_time)
+        surface_ci = hours_until(ci.surface_time)
+        identify = hours_until(ci.identify_time)
         backfills = sum(
             ci.backfill_jobs.get(d.regression.summary_id, 0) for d in selected
         )
         confirms = sum(
             ci.confirm_jobs.get(d.regression.summary_id, 0) for d in selected
         )
-        result["detect_ci_hours"] = _summary(detect_ci)
-        result["surface_ci_hours"] = _summary(surface_ci)
+        result["detect_ci_hours"] = _latency(detect_ci)
+        result["surface_ci_hours"] = _latency(surface_ci)
         result["surfaced_ci"] = len(surface_ci)
-        result["identify_hours"] = _summary(identify)
+        result["identify_hours"] = _latency(identify)
         result["identified"] = len(identify)
         result["backfill_jobs"] = backfills
         result["confirm_jobs"] = confirms
         result["total_jobs"] = jobs + backfills + confirms
-        if bootstrap_samples:
-            for key, values in (
-                ("detect_ci_hours", detect_ci),
-                ("surface_ci_hours", surface_ci),
-                ("identify_hours", identify),
-            ):
-                result[key]["mean_ci95"] = bootstrap_mean(values, bootstrap_samples)
+        latencies.update(
+            {
+                "detect_ci_hours": detect_ci,
+                "surface_ci_hours": surface_ci,
+                "identify_hours": identify,
+            }
+        )
+    if bootstrap_samples:
+        for key, values in latencies.items():
+            result[key]["mean_ci95"] = bootstrap_mean(
+                list(values.values()), bootstrap_samples
+            )
     return result
 
 
-def is_feasible(result: dict[str, Any], baseline: dict[str, Any]) -> bool:
-    """Whether the schedule caught every regression the baseline caught in the window."""
-    return set(baseline["detected_ids"]) <= set(result["detected_ids"])
+def missed_ids(
+    result: dict[str, Any], baseline: dict[str, Any], latency: Latency = "detect"
+) -> list[int]:
+    """Regressions the baseline has the latency for and the schedule does not.
+
+    Detection alone is not enough: a regression caught near the end of the
+    pushes may not have surfaced or been identified yet, and a schedule that
+    lacks such later events for more regressions than the baseline would be
+    summarized over fewer, earlier ones and look faster for it.
+    """
+    key = latency_key(latency)
+    if key not in result or key not in baseline:
+        raise ValueError(f"{latency} needs the CI capacity model; pass --capacity")
+    return sorted(set(baseline[key]["ids"]) - set(result[key]["ids"]))
+
+
+def is_feasible(
+    result: dict[str, Any], baseline: dict[str, Any], latency: Latency = "detect"
+) -> bool:
+    """Whether the schedule has the latency for every regression the baseline has it for."""
+    return not missed_ids(result, baseline, latency)
 
 
 def latency_key(latency: str) -> str:

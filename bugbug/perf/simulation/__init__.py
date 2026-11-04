@@ -37,6 +37,7 @@ from bugbug.perf.simulation.metrics import (
     is_feasible,
     latency_key,
     latency_label,
+    missed_ids,
     objectives,
 )
 from bugbug.perf.simulation.optimize import (
@@ -124,6 +125,7 @@ __all__ = [
     "make_strategy",
     "make_windows",
     "matching_points",
+    "missed_ids",
     "objectives",
     "optimize_family",
     "pareto_points",

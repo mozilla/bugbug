@@ -123,6 +123,13 @@ class Timeline:
         ]
         return Timeline(pushes, self.regressions)
 
+    def truncate(self, index: int) -> "Timeline":
+        """A copy holding the pushes before ``index`` and the regressions among them."""
+        return Timeline(
+            self.pushes[:index],
+            [r for r in self.regressions if r.push_index < index],
+        )
+
     @property
     def has_pushlog_ids(self) -> bool:
         return all(push.pushlog_id is not None for push in self.pushes)
@@ -139,6 +146,16 @@ class Timeline:
         """The perf labels that existed, and so would run in a batch, at ``index``."""
         source = self._suite_source[index]
         return self.pushes[source].ran_labels if source >= 0 else frozenset()
+
+    def known_suite_at(self, index: int) -> frozenset[str] | None:
+        """The suite at ``index`` as a full-suite push at or before it recorded it.
+
+        ``None`` before the first full-suite push, where ``suite_at`` only
+        borrows that push's suite: Treeherder dropped the jobs of the pushes
+        there, so a label missing from the borrowed suite may well have run.
+        """
+        source = self._suite_source[index]
+        return self.pushes[source].ran_labels if 0 <= source <= index else None
 
     def hours(self, start_index: int, end_index: int) -> float:
         return (
@@ -159,15 +176,21 @@ class Timeline:
     ) -> frozenset[str]:
         """Labels production runs on every ``interval``-th push besides backstops.
 
-        Derived from history: the labels that ran on at least ``min_share`` of
-        the pushes whose pushlog id is a multiple of ``interval`` and that did
-        not carry the whole suite. Empty without pushlog ids.
+        Derived from the history with job coverage, from the first full-suite
+        push on: the labels that ran on at least ``min_share`` of the pushes
+        there whose pushlog id is a multiple of ``interval`` and that did not
+        carry the whole suite. Treeherder drops jobs after 120 days, so older
+        pushes show none and would count against every label. Empty without
+        pushlog ids or full-suite pushes.
         """
         if not self.has_pushlog_ids:
             return frozenset()
+        first = next((push.index for push in self.pushes if push.full_suite), None)
+        if first is None:
+            return frozenset()
         counts: collections.Counter = collections.Counter()
         candidates = 0
-        for push in self.pushes:
+        for push in self.pushes[first:]:
             if push.full_suite or push.dontbuild or push.pushlog_id % interval:  # type: ignore[operator]
                 continue
             candidates += 1

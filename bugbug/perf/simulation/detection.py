@@ -27,22 +27,41 @@ FORE_WINDOW = 12
 
 @dataclass
 class Schedule:
-    """What a strategy ran on each push of a timeline."""
+    """What a strategy ran on each push of a timeline.
+
+    ``batch_suites`` holds, by position in ``batch_indices``, the suite each
+    batch ran: the labels that existed at its push, or ``None`` where no
+    full-suite push at or before it recorded them.
+    """
 
     decisions: list[Decision]
     batch_indices: list[int]
     partial_runs: dict[str, list[int]]
+    batch_suites: list[frozenset[str] | None]
 
     def __post_init__(self) -> None:
         self._runs_cache: dict[str | None, list[int]] = {}
 
     def runs_of(self, label: str | None) -> list[int]:
-        """Indices of the pushes where ``label`` ran; ``None`` means any full batch."""
-        if label is None or label not in self.partial_runs:
+        """Indices of the pushes where ``label`` ran; ``None`` means any full batch.
+
+        A batch counts only when its suite held the label: a label added
+        later, or gone by then, did not run in it. A batch whose suite is
+        unknown counts for every label, since an alert on a label proves it
+        existed and the jobs that would show it have been dropped.
+        """
+        if label is None:
             return self.batch_indices
         cached = self._runs_cache.get(label)
         if cached is None:
-            cached = sorted(set(self.batch_indices) | set(self.partial_runs[label]))
+            cached = [
+                index
+                for index, suite in zip(self.batch_indices, self.batch_suites)
+                if suite is None or label in suite
+            ]
+            partial = self.partial_runs.get(label)
+            if partial:
+                cached = sorted(set(cached) | set(partial))
             self._runs_cache[label] = cached
         return cached
 
@@ -66,6 +85,7 @@ def replay(strategy: Strategy, timeline: Timeline) -> Schedule:
     decisions: list[Decision] = []
     batch_indices: list[int] = []
     partial_runs: dict[str, list[int]] = {}
+    batch_suites: list[frozenset[str] | None] = []
     for push in timeline.pushes:
         strategy.observe(push)
         if push.dontbuild:
@@ -77,21 +97,32 @@ def replay(strategy: Strategy, timeline: Timeline) -> Schedule:
         decisions.append(decision)
         if decision == ALL:
             batch_indices.append(push.index)
+            batch_suites.append(timeline.known_suite_at(push.index))
         elif decision is not None:
             for label in decision:
                 partial_runs.setdefault(label, []).append(push.index)
-    return Schedule(decisions, batch_indices, partial_runs)
+    return Schedule(decisions, batch_indices, partial_runs, batch_suites)
 
 
 @dataclass
 class Detection:
-    """When a schedule catches one regression."""
+    """When a schedule catches one regression, through the label that runs first.
+
+    ``alternatives`` are the same regression caught through each of its other
+    labels. The CI replay waits for all of them, since the label whose run is
+    scheduled first need not be the one whose run completes first.
+    """
 
     regression: Regression
     label: str | None
     previous_index: int | None
     detected_index: int | None
     surfaced_index: int | None
+    alternatives: tuple["Detection", ...] = ()
+
+    def candidates(self) -> tuple["Detection", ...]:
+        """This detection and its alternatives: one per label of the regression."""
+        return (self, *self.alternatives)
 
     def hours(self, timeline: Timeline, index: int | None) -> float | None:
         if index is None:
@@ -120,34 +151,46 @@ class Detection:
         return self.detected_index - self.previous_index
 
 
+def candidates(
+    schedule: Schedule, regression: Regression, fore_window: int = FORE_WINDOW
+) -> list[Detection]:
+    """One detection per regressed label, in label order, or one with no label.
+
+    Each is where that label's runs catch and surface the regression:
+    detected by the first run at or after the culprit, surfaced by the
+    ``fore_window``-th run counted from it, with the run before as the
+    previous one. Either index is ``None`` when no such run exists.
+    """
+    labels = sorted(regression.labels) if regression.labels else [None]
+    found = []
+    for label in labels:
+        runs = schedule.runs_of(label)
+        position = bisect.bisect_left(runs, regression.push_index)
+        detected = runs[position] if position < len(runs) else None
+        previous = runs[position - 1] if position > 0 else None
+        surfaced_position = position + fore_window - 1
+        surfaced = runs[surfaced_position] if surfaced_position < len(runs) else None
+        found.append(Detection(regression, label, previous, detected, surfaced))
+    return found
+
+
 def detect(
     schedule: Schedule, timeline: Timeline, fore_window: int = FORE_WINDOW
 ) -> list[Detection]:
     """Find the detecting and surfacing push of every regression of the timeline.
 
     A regression with several regressed labels is caught by whichever runs
-    first. Detection uses the whole timeline, so a regression near its end
-    may be detected but not yet surfaced, or not detected at all.
+    first, the others kept as its ``alternatives``. Detection uses the whole
+    timeline, so a regression near its end may be detected but not yet
+    surfaced, or not detected at all.
     """
     detections = []
     for regression in timeline.regressions:
-        best: Detection | None = None
-        labels = sorted(regression.labels) if regression.labels else [None]
-        for label in labels:
-            runs = schedule.runs_of(label)
-            position = bisect.bisect_left(runs, regression.push_index)
-            detected = runs[position] if position < len(runs) else None
-            if best is not None and (
-                detected is None
-                or (best.detected_index is not None and detected >= best.detected_index)
-            ):
-                continue
-            previous = runs[position - 1] if position > 0 else None
-            surfaced_position = position + fore_window - 1
-            surfaced = (
-                runs[surfaced_position] if surfaced_position < len(runs) else None
-            )
-            best = Detection(regression, label, previous, detected, surfaced)
-        assert best is not None
+        found = candidates(schedule, regression, fore_window)
+        best = min(
+            found,
+            key=lambda d: (d.detected_index is None, d.detected_index or 0),
+        )
+        best.alternatives = tuple(d for d in found if d is not best)
         detections.append(best)
     return detections

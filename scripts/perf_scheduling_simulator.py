@@ -50,6 +50,7 @@ def load_timeline(
     risk_scores: str | None,
     model_version: str | None,
     since: datetime | None = None,
+    until: datetime | None = None,
 ) -> tuple[sim.Timeline, dict[str, tuple[float | None, str | None]] | None, str | None]:
     """Build the timeline from the datasets, with risk scores when a strategy needs them.
 
@@ -57,6 +58,8 @@ def load_timeline(
     to use instead of the published dataset, such as a fixture. With ``since``
     the history starts there: earlier pushes are dropped, so stateful
     strategies cold-start at the first kept push, which the warm-up excludes.
+    With risk scores, every commit pushed before ``until`` has to be scored
+    and the history ends at the first unscored push; see ``scored_history``.
     Returns the timeline, the raw scores by node and their model version.
     """
     _ensure(datasets.PERF_PUSHES_DB)
@@ -81,14 +84,50 @@ def load_timeline(
         )
     timeline = sim.Timeline.from_records(pushes, datasets.get_perf_regressions(), risks)
     if need_risks:
-        unscored = timeline.unscored_commits()
-        if unscored:
-            raise SystemExit(
-                f"{len(unscored)} commits of the pushes have no risk score; the "
-                "risk strategies need every commit scored. Run the commit risk "
-                "scorer over the window first, or narrow --since/--until."
-            )
+        timeline = scored_history(timeline, until)
     return timeline, risks, version
+
+
+def scored_history(timeline: sim.Timeline, until: datetime | None) -> sim.Timeline:
+    """The timeline up to its first push with an unscored commit.
+
+    The pipeline scores commits two days behind the pushes it archives, so the
+    newest pushes carry no scores. Every commit pushed before the horizon,
+    ``until`` or the default end of the window, has to be scored; the scored
+    pushes after it are kept as the follow-up history that detections near
+    the horizon need.
+    """
+    horizon = until or sim.default_bounds(timeline)[1]
+    unscored = [
+        push
+        for push in timeline.pushes
+        if any(commit.scored and commit.risk is None for commit in push.commits)
+    ]
+    if not unscored:
+        return timeline
+    first = unscored[0]
+    if first.time < horizon:
+        commits = sum(
+            1
+            for push in unscored
+            if push.time < horizon
+            for commit in push.commits
+            if commit.scored and commit.risk is None
+        )
+        raise SystemExit(
+            f"{commits} commits of pushes before {horizon} have no risk score; the "
+            "risk strategies need every commit scored. Run the commit risk "
+            "scorer over the window first, or narrow --since/--until."
+        )
+    logger.warning(
+        "Dropping the %d pushes from %s on, whose commits have no risk score yet; "
+        "%d scored pushes after %s remain as follow-up history",
+        len(timeline.pushes) - first.index,
+        first.time,
+        sum(1 for push in timeline.pushes[: first.index] if push.time >= horizon),
+        horizon,
+    )
+    return timeline.truncate(first.index)
 
 
 def calibrate_timeline(
@@ -245,7 +284,7 @@ def format_table(rows: list[tuple[str, dict[str, Any], bool]]) -> str:
 def ci_settings(args: argparse.Namespace) -> sim.CiSettings | None:
     """The CI replay settings from ``--capacity`` and its companions, or None."""
     if not getattr(args, "capacity", None):
-        if args.latency in ("detect_ci", "identify") or (
+        if args.latency in ("detect_ci", "surface_ci", "identify") or (
             getattr(args, "cost", "jobs") == "total_jobs"
         ):
             raise SystemExit(
@@ -283,7 +322,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         if spec != "production"
     )
     timeline, risks, version = load_timeline(
-        need_risks, args.risk_scores, args.model_version, args.since
+        need_risks, args.risk_scores, args.model_version, args.since, args.until
     )
     since, until = sim.default_bounds(timeline)
     window = sim.Window(args.since or since, args.until or until)
@@ -310,7 +349,9 @@ def cmd_simulate(args: argparse.Namespace) -> None:
             continue
         strategy = resolve_strategy(spec, timeline, args.baseline)
         result = sim.run(strategy, timeline, [window], args.bootstrap, ci)[0]
-        rows.append((strategy.name, result, sim.is_feasible(result, baseline)))
+        rows.append(
+            (strategy.name, result, sim.is_feasible(result, baseline, args.latency))
+        )
 
     print(format_table(rows))
     if args.output:
@@ -369,7 +410,7 @@ def cmd_optimize(args: argparse.Namespace) -> None:
     families = args.family or TUNABLE_FAMILIES
     need_risks = any(family in sim.RISK_FAMILIES for family in families)
     timeline, risks, version = load_timeline(
-        need_risks, args.risk_scores, args.model_version, args.since
+        need_risks, args.risk_scores, args.model_version, args.since, args.until
     )
     optimize_window, eval_window = sim.make_windows(
         timeline, args.optimize_until, args.since, args.until, args.warmup_pushes
@@ -516,8 +557,8 @@ def cmd_optimize(args: argparse.Namespace) -> None:
                 sim.FAMILIES[family](**trial["params"]).name for trial in sparse
             )
             notes.append(
-                f"{family}: {len(sparse)} trials pruned as too sparse to catch "
-                f"regressions {missed} before the pushes end: {names}."
+                f"{family}: {len(sparse)} trials pruned as too sparse to reach the "
+                f"{label} of regressions {missed}, which production reaches: {names}."
             )
         if costly:
             notes.append(
@@ -729,7 +770,7 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
         "--until",
         type=parse_timestamp,
         metavar="DATE",
-        help="End of the history to evaluate. Default: just after the last regression's culprit push.",
+        help="End of the history to evaluate. Default: just after the last regression's culprit push. A risk family needs every commit pushed before it scored; the scored pushes after it are kept as follow-up history and the first unscored push ends it.",
     )
     parser.add_argument(
         "--warmup-pushes",
@@ -749,7 +790,7 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
             "identify",
         ],
         default="detect",
-        help="Latency to optimize: hours until the first run after the culprit (default), which a schedule controls; hours until Perfherder would alert, which mostly restates sparsity; pushes from the culprit to the detecting run, which quiet hours do not inflate; pushes from the previous run to the detecting one, what a sheriff bisects; or, with --capacity, hours until the catching run completes (detect_ci), until the alert is raised (surface_ci) or until the backfills pin the culprit (identify). All are always reported.",
+        help="Latency to optimize: hours until the first run after the culprit (default), which a schedule controls; hours until Perfherder would alert, which mostly restates sparsity; pushes from the culprit to the detecting run, which quiet hours do not inflate; pushes from the previous run to the detecting one, what a sheriff bisects; or, with --capacity, hours until the catching run completes (detect_ci), until the alert is raised (surface_ci) or until the backfills pin the culprit (identify). All are always reported. The feasibility constraint follows it: a strategy must have the latency for every regression production has it for, since later events can be missing where earlier ones exist.",
     )
     parser.add_argument(
         "--bootstrap",
