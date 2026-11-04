@@ -51,10 +51,7 @@ def score(
 
     Returns the counts of scored, ignored, missing and unscored commits.
     """
-    if not db.exists(datasets.PERF_PUSHES_DB) and not db.download(
-        datasets.PERF_PUSHES_DB
-    ):
-        raise RuntimeError(f"Failed to download {datasets.PERF_PUSHES_DB}")
+    datasets.ensure_dataset(datasets.PERF_PUSHES_DB)
     previous: list[dict] = []
     if datasets.load_previous_snapshot(datasets.PERF_COMMIT_RISK_DB):
         previous = list(datasets.get_perf_commit_risk())

@@ -6,11 +6,12 @@
 import json
 import math
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import pytest
 
+from bugbug.perf import extraction
 from bugbug.perf import simulation as sim
 from bugbug.perf.calibration import Calibration
 from bugbug.perf.simulation import strategies
@@ -202,6 +203,10 @@ def test_latency_in_pushes() -> None:
     low, high = result["detect_pushes"]["mean_ci95"]
     assert 2.0 <= low <= high <= 3.0
     assert result["window_pushes"]["mean_ci95"] == (4.0, 4.0)
+    assert sim.percentile([3.0, 1.0, 2.0, 4.0], 0.5) == 3.0
+    assert (
+        sim.percentile([3.0, 1.0, 2.0], 0.9) == 3.0 and sim.percentile([], 0.9) == 0.0
+    )
 
 
 def _capacity(workers: int, background: dict[int, float] | None = None):
@@ -251,6 +256,101 @@ def test_capacity_model_round_trip_and_fallbacks() -> None:
     assert (
         model.pool_of("test-android-hw-a55-14-0-aarch64-shippable/opt-raptor-x") is None
     )
+
+
+def test_capacity_queries_share_the_perf_task_filter() -> None:
+    since, until = date(2026, 9, 1), date(2026, 9, 3)
+    predicate = extraction.perf_task_filter()
+    assert "tags.project = 'autoland'" in predicate and "--" not in predicate
+    assert predicate in extraction.build_task_costs_query(since, until)
+    background = extraction.build_capacity_query(
+        "background", since, until, pools="'hw/p', 'hw/q'"
+    )
+    assert f"NOT {predicate}" in background and "IN ('hw/p', 'hw/q')" in background
+    assert 'submission_date >= "2026-09-01"' in background
+    assert 'submission_date < "2026-09-03"' in background
+    builds = extraction.build_capacity_query(
+        "builds",
+        since,
+        until,
+        build_labels="'build-linux64-shippable/opt'",
+        min_labels="300",
+    )
+    assert "< 300" in builds and "IN ('build-linux64-shippable/opt')" in builds
+    for name in ("labels", "pools", "workers", "eligible"):
+        query = extraction.build_capacity_query(name, since, until, pools="'hw/p'")
+        assert "{" not in query and "}" not in query
+
+
+def test_fetch_capacity_builds_the_model_from_the_queries() -> None:
+    pool = "releng-hardware/gecko-t-linux-talos-2404"
+
+    class Client:
+        queries: list[str] = []
+
+        def execute(self, data_source_id, sql):
+            self.queries.append(sql)
+            if "AS wait_p50" in sql:
+                return [
+                    {
+                        "pool": pool,
+                        "runs": 990,
+                        "wait_p50": 5.0,
+                        "wait_p90": 30.0,
+                        "run_p50": 20.0,
+                        "run_p90": 40.0,
+                    },
+                    {
+                        "pool": "hw/rare",
+                        "runs": 1,
+                        "wait_p50": 1.0,
+                        "wait_p90": 1.0,
+                        "run_p50": 1.0,
+                        "run_p90": 1.0,
+                    },
+                ]
+            if "AS p50_seconds" in sql:
+                return [
+                    {"label": L1, "pool": pool, "runs": 900, "p50_seconds": 1200},
+                    {"label": L1, "pool": "hw/rare", "runs": 1, "p50_seconds": 60},
+                    {"label": L2, "pool": pool, "runs": 90, "p50_seconds": None},
+                ]
+            if "AS workers" in sql:
+                return [{"pool": pool, "month": "2026-09", "workers": 12}]
+            if "AS busy" in sql:
+                return [{"pool": pool, "hour": 3600 * 1000, "busy": 2.5}]
+            if "AS eligible_p50" in sql:
+                return [{"pool": pool, "eligible_p50": 90.0}]
+            assert "AS with_build" in sql
+            return [
+                {
+                    "label": "build-linux64-shippable/opt",
+                    "with_build": 30,
+                    "pushes": 100,
+                }
+            ]
+
+    client = Client()
+    model = sim.fetch_capacity(
+        client,
+        63,
+        datetime(2026, 9, 1, tzinfo=UTC),
+        datetime(2026, 9, 30, tzinfo=UTC),
+        list_workers=False,
+    )
+    # Six queries, every one dated: the rare pool is below the share kept.
+    assert len(client.queries) == 6
+    assert all('submission_date < "2026-10-01"' in q for q in client.queries)
+    assert set(model.pools) == {pool}
+    capacity = model.pools[pool]
+    assert capacity.workers_by_month == {"2026-09": 12}
+    assert capacity.eligible_minutes == 90.0 and capacity.build_share == 0.3
+    assert capacity.observed_wait_minutes == {"p50": 5.0, "p90": 30.0}
+    assert capacity.runs_per_day == pytest.approx(990 / 29)
+    # L2 has no run time and is left to the pool's fallback.
+    assert model.labels == {L1: sim.LabelRuntime(pool, 20.0)}
+    assert model.background == {pool: {1000: 2.5}}
+    assert model.meta["autoland_perf_runs"] == 991 and model.meta["labels"] == 1
 
 
 def test_simulate_ci_queues_runs_and_backfills() -> None:
@@ -951,7 +1051,7 @@ def test_calibrate_timeline_fits_on_the_history_before_the_window(
         }
         for i, push in enumerate(timeline.pushes)
     ]
-    monkeypatch.setattr(cli, "_ensure", lambda path: None)
+    monkeypatch.setattr(cli.datasets, "ensure_dataset", lambda path: None)
     monkeypatch.setattr(cli.datasets, "get_perf_regressions", lambda: iter(regressions))
     monkeypatch.setattr(cli.push_status, "read_push_status", lambda: list(statuses))
     risks: dict[str, tuple[float | None, str | None]] = {
@@ -1013,7 +1113,7 @@ def test_load_timeline_needs_scores_only_before_the_horizon(monkeypatch) -> None
         }
         for i in range(25)
     ]
-    monkeypatch.setattr(cli, "_ensure", lambda path: None)
+    monkeypatch.setattr(cli.datasets, "ensure_dataset", lambda path: None)
     monkeypatch.setattr(cli.datasets, "get_perf_pushes", lambda: iter(pushes))
     monkeypatch.setattr(cli.datasets, "get_perf_regressions", lambda: iter(regressions))
     monkeypatch.setattr(cli.datasets, "get_perf_commit_risk", lambda: iter(risks))

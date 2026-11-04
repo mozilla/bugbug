@@ -101,6 +101,12 @@ db.register(
 )
 
 
+def ensure_dataset(path: str) -> None:
+    """Have ``path`` locally, downloading it from the Taskcluster index when absent."""
+    if not db.exists(path) and not db.download(path):
+        raise RuntimeError(f"Failed to download {path}")
+
+
 def load_previous_snapshot(path: str) -> bool:
     """Make the previous snapshot of an archive available locally.
 

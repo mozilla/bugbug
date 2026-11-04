@@ -6,7 +6,6 @@
 """Cost and detection metrics of a schedule over a window of the timeline."""
 
 import collections
-import random
 import statistics
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,6 +13,7 @@ from typing import Any, Literal, Mapping
 
 from bugbug.perf.simulation.capacity import CiResult
 from bugbug.perf.simulation.detection import Detection, Schedule
+from bugbug.perf.simulation.stats import bootstrap_mean, percentile
 from bugbug.perf.simulation.strategies import ALL
 from bugbug.perf.simulation.timeline import Timeline
 
@@ -61,7 +61,7 @@ def _summary(values: list[float]) -> dict[str, float | None]:
     return {
         "mean": statistics.fmean(ordered),
         "median": statistics.median(ordered),
-        "p90": ordered[min(len(ordered) - 1, int(0.9 * len(ordered)))],
+        "p90": percentile(ordered, 0.9),
         "max": ordered[-1],
     }
 
@@ -69,19 +69,6 @@ def _summary(values: list[float]) -> dict[str, float | None]:
 def _latency(observed: dict[int, float]) -> dict[str, Any]:
     """Summary of a latency over the regressions it exists for, with their ids."""
     return {**_summary(list(observed.values())), "ids": sorted(observed)}
-
-
-def bootstrap_mean(
-    values: list[float], samples: int = 1000, seed: int = 0
-) -> tuple[float, float] | None:
-    """95 percent percentile bootstrap interval of the mean, None below two values."""
-    if len(values) < 2:
-        return None
-    rng = random.Random(seed)
-    means = sorted(
-        statistics.fmean(rng.choices(values, k=len(values))) for _ in range(samples)
-    )
-    return means[int(0.025 * samples)], means[min(samples - 1, int(0.975 * samples))]
 
 
 def evaluate(

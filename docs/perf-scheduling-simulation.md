@@ -154,8 +154,9 @@ month, the observed queue waits and run times of autoland's perf runs, and
 the hourly occupancy of the pool by everything that is not autoland perf
 work, which a strategy replaces; per label, the pool it runs on and its
 median run time. `fetch-capacity` builds it from the fxci dataset in
-BigQuery through the STMO data source, over the span of the pushes to be
-replayed, keeping the pools that carry at least `--min-share` of autoland
+BigQuery through the STMO data source, with the `perf_capacity_*` templates
+of `bugbug/perf/sql` and the perf task predicate the cost query shares, over
+the span of the pushes to be replayed, keeping the pools that carry at least `--min-share` of autoland
 perf runs, and records the Taskcluster queue's current worker listing for
 reference. Labels the model has not seen take the pool their platform's
 other labels use and that pool's typical run time.

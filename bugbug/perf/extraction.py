@@ -53,12 +53,42 @@ def build_pushes_query(time_from: datetime, time_to: datetime) -> str:
     )
 
 
+def perf_task_filter() -> str:
+    """The predicate selecting the project's performance tasks in ``fxci.tasks``.
+
+    The ``perf_task_filter.sql`` fragment without its comments, shared by the
+    cost and capacity queries.
+    """
+    lines = load_sql_template("perf_task_filter").splitlines()
+    return "\n".join(
+        line for line in lines if not line.lstrip().startswith("--")
+    ).format(repository=REPOSITORY)
+
+
 def build_task_costs_query(date_from: date, date_to: date) -> str:
     """BigQuery SQL for perf tasks submitted in ``[date_from, date_to)``."""
     return load_sql_template("perf_task_costs").format(
+        date_from=date_from.isoformat(),
+        date_to=date_to.isoformat(),
+        perf_task_filter=perf_task_filter(),
+    )
+
+
+def build_capacity_query(
+    name: str, date_from: date, date_to: date, **values: str
+) -> str:
+    """BigQuery SQL of the ``perf_capacity_<name>`` template over ``[date_from, date_to)``.
+
+    ``values`` fill the template's own placeholders: the quoted list of
+    ``pools``, the quoted ``build_labels`` and the ``min_labels`` of a full
+    suite.
+    """
+    return load_sql_template(f"perf_capacity_{name}").format(
         repository=REPOSITORY,
         date_from=date_from.isoformat(),
         date_to=date_to.isoformat(),
+        perf_task_filter=perf_task_filter(),
+        **values,
     )
 
 

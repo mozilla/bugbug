@@ -21,7 +21,7 @@ described in [perf-scheduling-simulation.md](perf-scheduling-simulation.md).
 | `bugbug/perf/label_policy.py`        | every hand-maintained table that decides labels, and `POLICY_VERSION`                                                                           |
 | `bugbug/perf/task_labels.py`         | pure functions: label parsing, grouping hierarchy, exclusions                                                                                   |
 | `bugbug/perf/extraction.py`          | query builders and fetch/parse for Treeherder, `fxci` and Bugzilla                                                                              |
-| `bugbug/perf/sql/`                   | the SQL templates                                                                                                                               |
+| `bugbug/perf/sql/`                   | the SQL templates, sharing the `perf_task_filter.sql` predicate that selects perf tasks                                                         |
 | `bugbug/perf/datasets.py`            | dataset paths, registrations, readers and the archive loader                                                                                    |
 | `bugbug/perf/regression_labeling.py` | `PushIndex`, culprit pinning, labeled regression records                                                                                        |
 | `bugbug/perf/push_status.py`         | per-push label state and settled flag; the shared source of negatives                                                                           |
@@ -211,7 +211,9 @@ regressions against the commits of settled clean pushes; the other commits of
 culprit pushes, unpinned regressions and pending or rejected pushes are
 unknown and left out), fits an isotonic regression of the culprit rate on
 the raw score over equal-count bins of 50 commits, so that no step of the
-mapping rests on the one or two top-scoring commits, and writes it as
+mapping rests on the one or two top-scoring commits (the weighted fit and
+the interpolation of its breakpoints are `bugbug/model_calibration.py`'s,
+shared with test selection), and writes it as
 breakpoints to `data/perf_risk_calibration.json`, one record per model
 version with at least `--min-positives` (50) culprits. The mapping never
 reorders commits; it changes what a threshold means. The record

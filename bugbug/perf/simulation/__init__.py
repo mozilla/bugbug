@@ -32,7 +32,6 @@ from bugbug.perf.simulation.detection import (
 )
 from bugbug.perf.simulation.metrics import (
     Window,
-    bootstrap_mean,
     evaluate,
     is_feasible,
     latency_key,
@@ -49,6 +48,7 @@ from bugbug.perf.simulation.optimize import (
     run,
 )
 from bugbug.perf.simulation.splits import default_bounds, make_windows
+from bugbug.perf.simulation.stats import bootstrap_mean, percentile
 from bugbug.perf.simulation.strategies import (
     ALL,
     FAMILIES,
@@ -131,6 +131,7 @@ __all__ = [
     "pareto_points",
     "pruned_trials",
     "parse_strategy",
+    "percentile",
     "replay",
     "run",
     "simulate_ci",

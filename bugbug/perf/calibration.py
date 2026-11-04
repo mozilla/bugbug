@@ -16,7 +16,9 @@ threshold tuned on raw scores drifts as the score distribution moves.
 ``fit_calibration`` learns a monotone mapping from raw scores to observed
 culprit rates on labeled history, by isotonic regression over equal-count
 bins of commits so that no step rests on a handful of them, stored as
-breakpoints that ``Calibration.apply`` interpolates without scikit-learn. The
+breakpoints that ``Calibration.apply`` interpolates without the fitted
+estimator; the fit and the interpolation are ``bugbug.model_calibration``'s,
+shared with test selection. The
 pipeline's ``calibrate`` command builds one record per model version into
 ``perf_risk_calibration.json``; the HTTP service applies the published mapping
 before answering and the simulator fits its own on its optimize window.
@@ -31,6 +33,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
+from bugbug.model_calibration import fit_isotonic_breakpoints, interpolate_breakpoints
 from bugbug.perf.label_policy import POLICY_VERSION, POSITIVE_OUTCOMES
 from bugbug.perf.push_status import iter_clean_commits
 from bugbug.utils import parse_timestamp, utcnow
@@ -64,7 +67,7 @@ class Calibration:
     fitted_at: str | None = None
 
     def apply(self, score: float) -> float:
-        return float(np.interp(score, self.x, self.y))
+        return float(interpolate_breakpoints(score, self.x, self.y))
 
     def to_record(self) -> dict[str, Any]:
         return {
@@ -155,23 +158,15 @@ def fit_calibration(
     after pooling adjacent violators, so ``Calibration.apply`` reproduces its
     predictions; scores beyond the outermost bin means take the end values.
     """
-    from sklearn.isotonic import IsotonicRegression
-
     s = np.asarray(scores, dtype=float)
     y = np.asarray(labels, dtype=float)
     bins = np.array_split(np.argsort(s, kind="stable"), max(1, len(s) // bin_size))
-    isotonic = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
-    isotonic.fit(
+    x, rates = fit_isotonic_breakpoints(
         [s[b].mean() for b in bins],
         [y[b].mean() for b in bins],
-        sample_weight=[len(b) for b in bins],
+        [len(b) for b in bins],
     )
-    return Calibration(
-        model_version,
-        tuple(float(value) for value in isotonic.X_thresholds_),
-        tuple(float(value) for value in isotonic.y_thresholds_),
-        fitted_at,
-    )
+    return Calibration(model_version, tuple(x), tuple(rates), fitted_at)
 
 
 def reliability_metrics(

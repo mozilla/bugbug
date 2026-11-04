@@ -22,7 +22,7 @@ import statistics
 from datetime import datetime, timezone
 from typing import Any
 
-from bugbug import db, redash
+from bugbug import redash
 from bugbug.perf import datasets, extraction, push_status
 from bugbug.perf import simulation as sim
 from bugbug.perf.calibration import (
@@ -38,11 +38,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DEFAULT_TRIALS = 400
-
-
-def _ensure(path: str) -> None:
-    if not db.exists(path) and not db.download(path):
-        raise RuntimeError(f"Failed to download {path}")
 
 
 def load_timeline(
@@ -62,8 +57,8 @@ def load_timeline(
     and the history ends at the first unscored push; see ``scored_history``.
     Returns the timeline, the raw scores by node and their model version.
     """
-    _ensure(datasets.PERF_PUSHES_DB)
-    _ensure(datasets.PERF_REGRESSIONS_DB)
+    datasets.ensure_dataset(datasets.PERF_PUSHES_DB)
+    datasets.ensure_dataset(datasets.PERF_REGRESSIONS_DB)
     risks = None
     version = None
     if need_risks:
@@ -71,7 +66,7 @@ def load_timeline(
             with open(risk_scores, encoding="utf-8") as fh:
                 records: Any = [json.loads(line) for line in fh if line.strip()]
         else:
-            _ensure(datasets.PERF_COMMIT_RISK_DB)
+            datasets.ensure_dataset(datasets.PERF_COMMIT_RISK_DB)
             records = datasets.get_perf_commit_risk()
         risks, version = sim.load_risks(records, model_version)
         logger.info("Risk scores of %d commits from model %s", len(risks), version)
@@ -153,7 +148,7 @@ def calibrate_timeline(
         return timeline, None
     summary: dict[str, Any]
     if mode == "fit":
-        _ensure(datasets.PERF_PUSH_STATUS_DB)
+        datasets.ensure_dataset(datasets.PERF_PUSH_STATUS_DB)
         scores = {
             node: score for node, (score, _) in risks.items() if score is not None
         }
@@ -187,7 +182,7 @@ def calibrate_timeline(
         }
     else:
         if mode == "published":
-            _ensure(datasets.PERF_RISK_CALIBRATION_DB)
+            datasets.ensure_dataset(datasets.PERF_RISK_CALIBRATION_DB)
             records: Any = datasets.get_perf_risk_calibration()
         else:
             with open(mode, encoding="utf-8") as fh:
@@ -656,25 +651,15 @@ def cmd_validate_capacity(args: argparse.Namespace) -> None:
     for name, pool in sorted(
         ci.model.pools.items(), key=lambda kv: -kv[1].runs_per_day
     ):
-        waits = sorted(result.waits.get(name, []))
-        sim_p50 = waits[len(waits) // 2] if waits else float("nan")
-        sim_p90 = (
-            waits[min(len(waits) - 1, int(0.9 * len(waits)))] if waits else float("nan")
-        )
-        backfills = sorted(result.backfill_waits.get(name, []))
-        bf_p50 = backfills[len(backfills) // 2] if backfills else float("nan")
-        bf_p90 = (
-            backfills[min(len(backfills) - 1, int(0.9 * len(backfills)))]
-            if backfills
-            else float("nan")
-        )
+        waits = result.waits.get(name, [])
+        backfills = result.backfill_waits.get(name, [])
         busy = ci.model.background.get(name, {})
         print(
             f"| {name} | {pool.workers_at(end)} | {pool.scale:.2f} | "
             f"{pool.eligible_minutes if pool.eligible_minutes is None else round(pool.eligible_minutes)} | "
             f"{'-' if pool.build_share is None else f'{100 * pool.build_share:.0f}%'} | {pool.listed_workers} | "
             f"{pool.observed_wait_minutes.get('p50', 0):.0f} / {pool.observed_wait_minutes.get('p90', 0):.0f} | "
-            f"{sim_p50:.0f} / {sim_p90:.0f} | {bf_p50:.0f} / {bf_p90:.0f} | {len(waits)} | {100 * result.utilization[name]:.0f}% | "
+            f"{_quantiles(waits)} | {_quantiles(backfills)} | {len(waits)} | {100 * result.utilization[name]:.0f}% | "
             f"{(sum(busy.values()) / len(busy)) if busy else 0:.1f} |"
         )
     fractions = _recorded_backfill_fractions(timeline, window)
@@ -685,6 +670,13 @@ def cmd_validate_capacity(args: argparse.Namespace) -> None:
             f"around the culprit got the regressed label run; {sum(1 for f in fractions if f > 0)} "
             f"regressions had any."
         )
+
+
+def _quantiles(values: list[float]) -> str:
+    """Median and 90th percentile as ``p50 / p90``, ``-`` without values."""
+    if not values:
+        return "-"
+    return f"{sim.percentile(values, 0.5):.0f} / {sim.percentile(values, 0.9):.0f}"
 
 
 def _recorded_backfill_fractions(

@@ -30,9 +30,11 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Iterator, NamedTuple
 
+from bugbug.perf import extraction
 from bugbug.perf.simulation.detection import Detection, Schedule
+from bugbug.perf.simulation.stats import percentile
 from bugbug.perf.simulation.strategies import ALL
 from bugbug.perf.simulation.timeline import FULL_SUITE_MIN_LABELS, Timeline
 from bugbug.perf.task_labels import normalize_task_label
@@ -42,11 +44,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_BUILD_MINUTES = 99.0
 # Pushes a sheriff backfills when no earlier run of the label is known.
 MAX_BACKFILL_PUSHES = 20
-PERF_LABEL_SQL = (
-    '(tags.label LIKE "%-browsertime-%" OR tags.label LIKE "%-talos-%" '
-    'OR tags.label LIKE "%-awsy%" OR tags.label LIKE "%-raptor-%" '
-    'OR tags.label LIKE "perftest-%")'
-)
 TASKCLUSTER_ROOT = "https://firefox-ci-tc.services.mozilla.com/api"
 _PLATFORM_PREFIX = re.compile(r"^(test-[^/]+/[a-z0-9]+)")
 
@@ -221,10 +218,6 @@ class CapacityModel:
             return cls.from_dict(json.load(fh))
 
 
-def _quantile_sql(expr: str, q: int) -> str:
-    return f"APPROX_QUANTILES({expr}, 100)[OFFSET({q})]"
-
-
 def fetch_capacity(
     client: Any,
     data_source_id: int,
@@ -241,48 +234,18 @@ def fetch_capacity(
     the hourly occupancy of each pool by every run that is not autoland perf
     work; each pool's eligible time is the median from a push's decision task
     to its perf tests becoming pending, the build chain. The Taskcluster
-    queue's current worker listing is kept for reference.
+    queue's current worker listing is kept for reference. The queries are
+    the ``perf_capacity_*`` templates of ``bugbug.perf.sql``.
     """
-    d0, d1 = (
-        since.strftime("%Y-%m-%d"),
-        (until + timedelta(days=1)).strftime("%Y-%m-%d"),
-    )
-    dates = f'submission_date >= "{d0}" AND submission_date < "{d1}"'
-    autoland = f"""
-WITH perf_tasks AS (
-  SELECT task_id, submission_date, tags.label AS label, task_queue_id
-  FROM `moz-fx-data-shared-prod.fxci.tasks`
-  WHERE {dates} AND tags.project = 'autoland' AND {PERF_LABEL_SQL}
-),
-runs AS (
-  SELECT task_id, submission_date,
-    TIMESTAMP_DIFF(resolved, started, SECOND) AS seconds,
-    TIMESTAMP_DIFF(started, scheduled, SECOND) AS wait
-  FROM `moz-fx-data-shared-prod.fxci.task_runs`
-  WHERE {dates} AND started IS NOT NULL AND resolved IS NOT NULL
-)
-"""
-    label_rows = client.execute(
-        data_source_id,
-        autoland
-        + f"""
-SELECT t.label, t.task_queue_id AS pool, COUNT(*) AS runs,
-  {_quantile_sql("r.seconds", 50)} AS p50_seconds
-FROM perf_tasks t JOIN runs r USING (task_id, submission_date)
-GROUP BY 1, 2
-""",
-    )
-    pool_rows = client.execute(
-        data_source_id,
-        autoland
-        + f"""
-SELECT t.task_queue_id AS pool, COUNT(*) AS runs,
-  {_quantile_sql("r.wait", 50)} / 60 AS wait_p50, {_quantile_sql("r.wait", 90)} / 60 AS wait_p90,
-  {_quantile_sql("r.seconds", 50)} / 60 AS run_p50, {_quantile_sql("r.seconds", 90)} / 60 AS run_p90
-FROM perf_tasks t JOIN runs r USING (task_id, submission_date)
-GROUP BY 1
-""",
-    )
+    date_from, date_to = since.date(), (until + timedelta(days=1)).date()
+
+    def query(name: str, **values: str) -> list[dict[str, Any]]:
+        return client.execute(
+            data_source_id,
+            extraction.build_capacity_query(name, date_from, date_to, **values),
+        )
+
+    pool_rows = query("pools")
     total = sum(row["runs"] for row in pool_rows)
     days = max((until - since).total_seconds() / 86400, 1.0)
     pools: dict[str, PoolCapacity] = {}
@@ -308,7 +271,7 @@ GROUP BY 1
         collections.Counter
     )
     p50: dict[tuple[str, str], list[tuple[int, float]]] = collections.defaultdict(list)
-    for row in label_rows:
+    for row in query("labels"):
         if row["pool"] not in pools or row["p50_seconds"] is None:
             continue
         label = normalize_task_label(row["label"])
@@ -324,102 +287,25 @@ GROUP BY 1
         )
 
     pool_list = ", ".join(f"'{name}'" for name in pools)
-    joined = f"""
-FROM `moz-fx-data-shared-prod.fxci.task_runs` r
-JOIN `moz-fx-data-shared-prod.fxci.tasks` t USING (task_id, submission_date)
-WHERE r.{dates} AND t.task_queue_id IN ({pool_list})
-  AND r.started IS NOT NULL AND r.resolved IS NOT NULL
-"""
-    for row in client.execute(
-        data_source_id,
-        f"""
-SELECT t.task_queue_id AS pool, FORMAT_TIMESTAMP('%Y-%m', r.started) AS month,
-  COUNT(DISTINCT r.worker_id) AS workers
-{joined}
-GROUP BY 1, 2
-""",
-    ):
+    for row in query("workers", pools=pool_list):
         pools[row["pool"]].workers_by_month[row["month"]] = int(row["workers"])
 
     background: dict[str, dict[int, float]] = {name: {} for name in pools}
-    for row in client.execute(
-        data_source_id,
-        f"""
-WITH pool_runs AS (
-  SELECT t.task_queue_id AS pool, r.started, r.resolved
-  {joined}
-    AND NOT (t.tags.project = 'autoland' AND {PERF_LABEL_SQL})
-)
-SELECT pool, UNIX_SECONDS(hour) AS hour,
-  SUM(TIMESTAMP_DIFF(LEAST(resolved, TIMESTAMP_ADD(hour, INTERVAL 1 HOUR)),
-                     GREATEST(started, hour), SECOND)) / 3600 AS busy
-FROM pool_runs, UNNEST(GENERATE_TIMESTAMP_ARRAY(
-  TIMESTAMP_TRUNC(started, HOUR), TIMESTAMP_TRUNC(resolved, HOUR), INTERVAL 1 HOUR)) AS hour
-GROUP BY 1, 2
-""",
-    ):
+    for row in query("background", pools=pool_list):
         background[row["pool"]][int(row["hour"]) // 3600] = float(row["busy"])
 
-    for row in client.execute(
-        data_source_id,
-        f"""
-WITH decisions AS (
-  SELECT t.task_id AS group_id, r.started AS pushed
-  FROM `moz-fx-data-shared-prod.fxci.tasks` t
-  JOIN `moz-fx-data-shared-prod.fxci.task_runs` r USING (task_id, submission_date)
-  WHERE t.{dates} AND t.tags.project = 'autoland' AND t.tags.kind = 'decision-task'
-    AND r.run_id = 0 AND r.started IS NOT NULL
-),
-perf AS (
-  SELECT t.task_group_id, t.task_queue_id AS pool, r.scheduled
-  FROM `moz-fx-data-shared-prod.fxci.tasks` t
-  JOIN `moz-fx-data-shared-prod.fxci.task_runs` r USING (task_id, submission_date)
-  WHERE t.{dates} AND t.tags.project = 'autoland' AND {PERF_LABEL_SQL}
-    AND t.task_queue_id IN ({pool_list})
-    AND r.run_id = 0 AND r.reason_created = 'scheduled' AND r.scheduled IS NOT NULL
-)
-SELECT p.pool,
-  {_quantile_sql("TIMESTAMP_DIFF(p.scheduled, d.pushed, SECOND)", 50)} / 60 AS eligible_p50
-FROM perf p JOIN decisions d ON p.task_group_id = d.group_id
-GROUP BY 1
-""",
-    ):
+    for row in query("eligible", pools=pool_list):
         if row["eligible_p50"] is not None:
             pools[row["pool"]].eligible_minutes = float(row["eligible_p50"])
 
     labels_by_pool = {name: build_label_for_pool(name) for name in pools}
     wanted = sorted({label for label in labels_by_pool.values() if label})
     if wanted:
-        build_list = ", ".join(f"'{label}'" for label in wanted)
         shares = {}
-        for row in client.execute(
-            data_source_id,
-            f"""
-WITH decision_groups AS (
-  SELECT task_id AS group_id FROM `moz-fx-data-shared-prod.fxci.tasks`
-  WHERE {dates} AND tags.project = 'autoland' AND tags.kind = 'decision-task'
-),
-perf_counts AS (
-  SELECT task_group_id AS group_id, COUNT(*) AS perf_tasks
-  FROM `moz-fx-data-shared-prod.fxci.tasks`
-  WHERE {dates} AND tags.project = 'autoland' AND {PERF_LABEL_SQL}
-  GROUP BY 1
-),
-partial AS (
-  SELECT g.group_id FROM decision_groups g LEFT JOIN perf_counts p USING (group_id)
-  WHERE COALESCE(p.perf_tasks, 0) < {FULL_SUITE_MIN_LABELS}
-),
-builds AS (
-  SELECT DISTINCT task_group_id AS group_id, tags.label AS label
-  FROM `moz-fx-data-shared-prod.fxci.tasks`
-  WHERE {dates} AND tags.project = 'autoland' AND tags.kind = 'build'
-    AND tags.label IN ({build_list})
-)
-SELECT b.label, COUNT(DISTINCT b.group_id) AS with_build,
-  (SELECT COUNT(*) FROM partial) AS pushes
-FROM partial JOIN builds b USING (group_id)
-GROUP BY 1
-""",
+        for row in query(
+            "builds",
+            build_labels=", ".join(f"'{label}'" for label in wanted),
+            min_labels=str(FULL_SUITE_MIN_LABELS),
         ):
             if row["pushes"]:
                 shares[row["label"]] = row["with_build"] / row["pushes"]
@@ -543,6 +429,32 @@ _ARRIVAL, _TICK, _COMPLETION = 0, 1, 2
 _SCHEDULED, _BACKFILL, _CONFIRM = 0, 1, 2
 
 
+@dataclass(frozen=True, order=True, slots=True)
+class Run:
+    """One run of a label through its pool, ordered by when it may start.
+
+    ``kind`` is a scheduled run, a backfill or a confirming retrigger, and
+    ``ref`` the regression a confirming run belongs to.
+    """
+
+    eligible: datetime
+    pool: str
+    minutes: float
+    index: int
+    label: str
+    kind: int = _SCHEDULED
+    ref: int | None = None
+
+
+class _Event(NamedTuple):
+    """An arrival, an hourly tick of the pools' capacity, or a run completing."""
+
+    time: datetime
+    kind: int
+    sequence: int
+    run: Run | None
+
+
 def simulate_ci(
     schedule: Schedule,
     timeline: Timeline,
@@ -614,14 +526,14 @@ def simulate_ci(
     jobs = 0
     batch_size: dict[int, int] = {}
 
-    def arrivals():
+    def arrivals() -> Iterator[Run]:
         """The schedule's runs in eligible order.
 
         Pushes are in time order and eligible times differ by pool, so runs
-        are buffered until no later push can precede them.
+        are held back until no later push can precede them.
         """
         nonlocal unknown, jobs
-        buffer: list[tuple[datetime, str, float, int, str]] = []
+        held: list[Run] = []
         for push in pushes:
             decision = schedule.decisions[push.index]
             if decision is None:
@@ -629,29 +541,29 @@ def simulate_ci(
             labels = timeline.suite_at(push.index) if decision == ALL else decision
             if decision == ALL and push.index in unrecorded:
                 labels = labels | unrecorded[push.index]
-            runs = []
+            size = 0
             for label in labels:
                 pool = model.pool_of(label)
                 if pool is None or pool not in model.pools:
                     unknown += 1
                     continue
-                runs.append(
-                    (
+                size += 1
+                heapq.heappush(
+                    held,
+                    Run(
                         push.time + offsets[pool],
                         pool,
                         model.minutes_of(label, pool),
                         push.index,
                         label,
-                    )
+                    ),
                 )
-            batch_size[push.index] = len(runs)
-            jobs += len(runs)
-            buffer.extend(runs)
-            buffer.sort()
-            while buffer and buffer[0][0] <= push.time:
-                yield buffer.pop(0)
-        buffer.sort()
-        yield from buffer
+            batch_size[push.index] = size
+            jobs += size
+            while held and held[0].eligible <= push.time:
+                yield heapq.heappop(held)
+        while held:
+            yield heapq.heappop(held)
 
     done: dict[tuple[int, str], datetime] = {}
     detect_time: dict[int, datetime] = {}
@@ -665,19 +577,19 @@ def simulate_ci(
     waits: dict[str, list[float]] = {pool: [] for pool in model.pools}
     backfill_waits: dict[str, list[float]] = {pool: [] for pool in model.pools}
     busy_seconds: dict[str, float] = {pool: 0.0 for pool in model.pools}
-    queues: dict[str, collections.deque] = {
+    queues: dict[str, collections.deque[Run]] = {
         pool: collections.deque() for pool in model.pools
     }
     running: dict[str, int] = {pool: 0 for pool in model.pools}
     avail: dict[str, int] = {}
     batch_done: dict[int, int] = collections.Counter()
-    events: list[tuple[datetime, int, int, Any]] = []
+    events: list[_Event] = []
     sequence = 0
 
-    def push_event(time: datetime, kind: int, payload: Any) -> None:
+    def push_event(time: datetime, kind: int, run: Run | None = None) -> None:
         nonlocal sequence
         sequence += 1
-        heapq.heappush(events, (time, kind, sequence, payload))
+        heapq.heappush(events, _Event(time, kind, sequence, run))
 
     if pushes:
         tick = pushes[0].time.replace(minute=0, second=0, microsecond=0)
@@ -685,7 +597,7 @@ def simulate_ci(
             pushes[-1].time + max(offsets.values(), default=build) + timedelta(hours=48)
         )
         while tick <= last:
-            push_event(tick, _TICK, None)
+            push_event(tick, _TICK)
             tick += timedelta(hours=1)
         for pool in model.pools:
             avail[pool] = model.available(pool, pushes[0].time, scale)
@@ -693,18 +605,14 @@ def simulate_ci(
     def dispatch(pool: str, now: datetime) -> None:
         queue = queues[pool]
         while queue and running[pool] < avail[pool]:
-            eligible, minutes, index, label, kind, ref = queue.popleft()
+            run = queue.popleft()
             running[pool] += 1
-            busy_seconds[pool] += minutes * 60
+            busy_seconds[pool] += run.minutes * 60
             if settings.record_waits:
-                (waits if kind == _SCHEDULED else backfill_waits)[pool].append(
-                    (now - eligible).total_seconds() / 60
+                (waits if run.kind == _SCHEDULED else backfill_waits)[pool].append(
+                    (now - run.eligible).total_seconds() / 60
                 )
-            push_event(
-                now + timedelta(minutes=minutes),
-                _COMPLETION,
-                (pool, index, label, kind, ref),
-            )
+            push_event(now + timedelta(minutes=run.minutes), _COMPLETION, run)
 
     def backfill(detection: Detection, time: datetime) -> None:
         """Run the regressed labels on the window's pushes without data, from ``time``.
@@ -754,7 +662,9 @@ def simulate_ci(
                     else trigger + offsets[pool]
                 )
                 push_event(
-                    eligible, _ARRIVAL, (pool, minutes, index, label, _BACKFILL, None)
+                    eligible,
+                    _ARRIVAL,
+                    Run(eligible, pool, minutes, index, label, _BACKFILL),
                 )
 
     def alert(detection: Detection, time: datetime) -> None:
@@ -786,7 +696,8 @@ def simulate_ci(
                 push_event(
                     time,
                     _ARRIVAL,
-                    (
+                    Run(
+                        time,
                         pool,
                         minutes,
                         detection.detected_index,
@@ -815,38 +726,39 @@ def simulate_ci(
     stream = arrivals()
     pending = next(stream, None)
     while pending is not None or events:
-        if events and (pending is None or events[0][0] <= pending[0]):
-            now, kind, _, payload = heapq.heappop(events)
-            if kind == _TICK:
+        if events and (pending is None or events[0].time <= pending.eligible):
+            event = heapq.heappop(events)
+            now, run = event.time, event.run
+            if event.kind == _TICK:
                 for pool in model.pools:
                     avail[pool] = model.available(pool, now, scale)
                     dispatch(pool, now)
-            elif kind == _ARRIVAL:
-                pool, minutes, index, label, run_kind, ref = payload
-                queues[pool].append((now, minutes, index, label, run_kind, ref))
-                dispatch(pool, now)
+            elif event.kind == _ARRIVAL:
+                assert run is not None
+                queues[run.pool].append(run)
+                dispatch(run.pool, now)
             else:
-                pool, index, label, run_kind, ref = payload
-                running[pool] -= 1
-                key = (index, label)
+                assert run is not None
+                running[run.pool] -= 1
+                key = (run.index, run.label)
                 if (
-                    run_kind != _CONFIRM
+                    run.kind != _CONFIRM
                     and key in needed
                     and (key not in done or now < done[key])
                 ):
                     done[key] = now
-                if run_kind == _SCHEDULED:
-                    completed_scheduled(index, label, now)
-                elif run_kind == _CONFIRM:
-                    confirm_left[ref] -= 1
-                    if confirm_left[ref] == 0:
-                        alert(caught[ref], now)
-                dispatch(pool, now)
+                if run.kind == _SCHEDULED:
+                    completed_scheduled(run.index, run.label, now)
+                elif run.kind == _CONFIRM:
+                    assert run.ref is not None
+                    confirm_left[run.ref] -= 1
+                    if confirm_left[run.ref] == 0:
+                        alert(caught[run.ref], now)
+                dispatch(run.pool, now)
         else:
             assert pending is not None
-            eligible, pool, minutes, index, label = pending
-            queues[pool].append((eligible, minutes, index, label, _SCHEDULED, None))
-            dispatch(pool, eligible)
+            queues[pending.pool].append(pending)
+            dispatch(pending.pool, pending.eligible)
             pending = next(stream, None)
 
     identify_time: dict[int, datetime | None] = {}
@@ -891,11 +803,6 @@ def _previous_built(pushes: list, index: int) -> int:
     while previous >= 0 and pushes[previous].dontbuild:
         previous -= 1
     return previous
-
-
-def _percentile(values: list[float], q: float) -> float:
-    ordered = sorted(values)
-    return ordered[min(len(ordered) - 1, int(q * len(ordered)))] if ordered else 0.0
 
 
 def calibrate_scales(
@@ -990,4 +897,4 @@ def _wait_at(
 ) -> float:
     alone.pools[pool].scale = scale
     result = simulate_ci(schedule, timeline, detections, replace(settings, model=alone))
-    return _percentile(result.waits[pool] + result.backfill_waits[pool], quantile)
+    return percentile(result.waits[pool] + result.backfill_waits[pool], quantile)

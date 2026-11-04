@@ -58,12 +58,6 @@ DEFAULT_HOLDOUT_DAYS = 60
 DEFAULT_MIN_POSITIVES = 50
 
 
-def _download(path: str) -> None:
-    """Fetch a dataset from the Taskcluster index, failing loudly if it is missing."""
-    if not db.download(path):
-        raise RuntimeError(f"Failed to download {path}")
-
-
 class Retriever:
     """The pipeline commands, over autoland (``bugbug.perf.label_policy.REPOSITORY``)."""
 
@@ -278,8 +272,7 @@ class Retriever:
             datasets.PERF_PUSHES_DB,
             datasets.PERF_ALERT_BUGS_DB,
         ):
-            if not db.exists(path):
-                _download(path)
+            datasets.ensure_dataset(path)
 
         settle_before = self.get_settle_cutoff(settle_days, until)
         labeled_from = self.get_negatives_start(since)
@@ -332,12 +325,11 @@ class Retriever:
 
     def report_cost_coverage(self, push_index: regression_labeling.PushIndex) -> None:
         """Log how many recent perf runs match a cost record, so gaps are noticed early."""
-        if not db.exists(datasets.PERF_TASK_COSTS_DB):
-            try:
-                _download(datasets.PERF_TASK_COSTS_DB)
-            except Exception:
-                logger.warning("No perf task costs DB available, skipping coverage")
-                return
+        try:
+            datasets.ensure_dataset(datasets.PERF_TASK_COSTS_DB)
+        except Exception:
+            logger.warning("No perf task costs DB available, skipping coverage")
+            return
 
         # Recent pushes only, so memory stays bounded as the history grows.
         recent_after = utcnow() - timedelta(days=COST_COVERAGE_DAYS)
@@ -381,8 +373,7 @@ class Retriever:
         the pipeline's cache but not for a working checkout.
         """
         for path in (datasets.PERF_REGRESSIONS_DB, datasets.PERF_PUSH_STATUS_DB):
-            if not db.exists(path):
-                _download(path)
+            datasets.ensure_dataset(path)
 
         settle_before = self.get_settle_cutoff(settle_days, until)
         logger.info(
@@ -444,8 +435,7 @@ class Retriever:
             datasets.PERF_PUSH_STATUS_DB,
             datasets.PERF_COMMIT_RISK_DB,
         ):
-            if not db.exists(path):
-                _download(path)
+            datasets.ensure_dataset(path)
 
         settle_before = self.get_settle_cutoff(settle_days, until)
         logger.info(

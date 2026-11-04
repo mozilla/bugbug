@@ -34,6 +34,10 @@ from bugbug import (
     utils,
 )
 from bugbug.model import Model
+from bugbug.model_calibration import (
+    fit_isotonic_breakpoints,
+    interpolate_breakpoints,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -434,19 +438,14 @@ def fit_calibration(
     runnables well: the regression maps them to probabilities without changing their order. Returns the
     regression's breakpoints, to interpolate, or None if there are no failures.
     """
-    from sklearn.isotonic import IsotonicRegression
-
     points = [(i / 100, n, f) for i, (n, f) in enumerate(zip(totals, failures)) if n]
     if not any(f for _, _, f in points):
         return None
-
-    regression = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
-    regression.fit(
+    return fit_isotonic_breakpoints(
         [x for x, _, _ in points],
         [f / n for _, n, f in points],
-        sample_weight=[n for _, n, _ in points],
+        [n for _, n, _ in points],
     )
-    return list(regression.X_thresholds_), list(regression.y_thresholds_)
 
 
 def compute_confidence_thresholds(
@@ -838,7 +837,7 @@ class TestSelectModel(Model):
         if calibration is None:
             return dict(confidences)
         names = list(confidences)
-        probabilities = np.interp(
+        probabilities = interpolate_breakpoints(
             [confidences[name] for name in names], calibration[0], calibration[1]
         )
         return {name: float(p) for name, p in zip(names, probabilities)}
@@ -1036,7 +1035,7 @@ class TestSelectModel(Model):
                     f"{calibration_failures[b] / calibration_totals[b]:.4f}"
                     if calibration_totals[b]
                     else "-",
-                    np.interp(confidence, *self.calibration),
+                    interpolate_breakpoints(confidence, *self.calibration),
                 )
 
         confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]
