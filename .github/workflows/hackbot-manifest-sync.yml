@@ -1,0 +1,143 @@
+# Propose agents.json changes to mozilla/webservices-infra once an agent's
+# build has finished.
+#
+# Each agent's Cloud Build trigger (agent-<agent>, in moz-fx-hackbot-nonprod)
+# reports its build here as a check run. When one succeeds, this regenerates
+# agents.json from the default branch and, if an agent's shape changed, pins
+# the images that build pushed, so the infra apply that moves an environment
+# to the new shape also puts on the image built for it. Code-only builds find nothing to change.
+#
+# One PR, on one branch, rebuilt from infra main every run: images pinned by an
+# earlier run for another agent are carried over (--pending) while their shape
+# still matches. Runs are serialised so two never race on that branch.
+#
+# Needs, in this repo's settings:
+#   vars.HACKBOT_MANIFEST_SYNC_SA     the prod state's manifest_sync_service_account_email output
+#   vars.HACKBOT_INFRA_APP_ID         a GitHub App with contents and pull request write on webservices-infra
+#   secrets.HACKBOT_INFRA_APP_PRIVATE_KEY
+name: Hackbot manifest sync
+
+on:
+  check_run:
+    types: [completed]
+
+concurrency:
+  group: hackbot-manifest-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      github.event.check_run.app.slug == 'google-cloud-build' &&
+      github.event.check_run.conclusion == 'success' &&
+      startsWith(github.event.check_run.name, 'agent-') &&
+      endsWith(github.event.check_run.name, ' (moz-fx-hackbot-nonprod)')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      # The infra repository the PR goes to; this one is GITHUB_REPOSITORY.
+      INFRA_OWNER: mozilla
+      INFRA_NAME: webservices-infra
+      CHECK_NAME: ${{ github.event.check_run.name }}
+      BUILT_SHA: ${{ github.event.check_run.head_sha }}
+      REPOSITORY: us-docker.pkg.dev/moz-fx-hackbot-prod/hackbot-prod
+      MANIFEST: hackbot/tf/modules/resources/agents.json
+      BRANCH: hackbot/agents-manifest
+
+    steps:
+      # The default branch as it is now, not the built commit: a newer commit may have moved
+      # the shape again, and resolve-images then pins nothing.
+      - uses: actions/checkout@v4
+
+      - name: Agent
+        id: agent
+        run: |
+          name="${CHECK_NAME% (*}"
+          echo "agent=${name#agent-}" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Google Cloud Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.HACKBOT_MANIFEST_SYNC_SA }}
+
+      - name: Resolve the build's images
+        env:
+          AGENT: ${{ steps.agent.outputs.agent }}
+        run: |
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy resolve-images "$AGENT" \
+            --tag "$BUILT_SHA" --repository "$REPOSITORY" --output "$RUNNER_TEMP/images.json"
+
+      - name: Token for webservices-infra
+        id: github-app-auth
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.HACKBOT_INFRA_APP_ID }}
+          private-key: ${{ secrets.HACKBOT_INFRA_APP_PRIVATE_KEY }}
+          owner: ${{ env.INFRA_OWNER }}
+          repositories: ${{ env.INFRA_NAME }}
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.INFRA_OWNER }}/${{ env.INFRA_NAME }}
+          token: ${{ steps.github-app-auth.outputs.token }}
+          path: infra
+          fetch-depth: 0
+
+      - name: Generate agents.json
+        id: generate
+        run: |
+          pending=()
+          if git -C infra show "origin/$BRANCH:$MANIFEST" > "$RUNNER_TEMP/pending.json" 2>/dev/null; then
+            pending=(--pending "$RUNNER_TEMP/pending.json")
+          fi
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy manifest \
+            --previous "infra/$MANIFEST" "${pending[@]}" \
+            --images "$RUNNER_TEMP/images.json" \
+            --output "infra/$MANIFEST" 2> "$RUNNER_TEMP/changes.txt"
+          cat "$RUNNER_TEMP/changes.txt"
+          if git -C infra diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update the PR
+        if: steps.generate.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.github-app-auth.outputs.token }}
+          AGENT: ${{ steps.agent.outputs.agent }}
+        working-directory: infra
+        run: |
+          git config user.name "hackbot-manifest-sync[bot]"
+          git config user.email "hackbot-manifest-sync[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git commit -am "Sync Hackbot agents.json from $GITHUB_REPOSITORY"
+          git push --force origin "$BRANCH"
+          body=$(printf '%s\n\n```\n%s\n```\n\n%s\n' \
+            "Generated from $GITHUB_REPOSITORY@$GITHUB_SHA after the build of $AGENT at $BUILT_SHA." \
+            "$(grep -v '^ *unchanged ' "$RUNNER_TEMP/changes.txt")" \
+            "Apply one environment at a time: \`atlantis apply -d hackbot/tf/dev\`, check, then stage, then prod. An environment moving to a new shape also gets the images pinned for it.")
+          if gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$BRANCH" --body "$body"
+          else
+            gh pr create --head "$BRANCH" --base main \
+              --title "feat(hackbot): sync agents.json from $GITHUB_REPOSITORY" --body "$body"
+          fi
+
+      # The shape went back to what infra has (a revert): the open PR is moot.
+      - name: Close a stale PR
+        if: steps.generate.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ steps.github-app-auth.outputs.token }}
+        working-directory: infra
+        run: |
+          if gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            gh pr close "$BRANCH" --delete-branch \
+              --comment "agents.json generated from $GITHUB_REPOSITORY now matches main here."
+          fi
