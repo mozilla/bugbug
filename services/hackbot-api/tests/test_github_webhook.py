@@ -75,6 +75,11 @@ def test_signature_requires_sha256_prefix():
     assert verify_github_signature(body, f"sha1={sha1}", SECRET) is False
 
 
+def test_signature_non_ascii_is_rejected():
+    # compare_digest raises TypeError on non-ASCII str arguments.
+    assert verify_github_signature(b"body", "sha256=é", SECRET) is False
+
+
 def test_signature_unconfigured_secret():
     assert verify_github_signature(b"body", _sign(b"body", ""), "") is False
 
@@ -477,6 +482,19 @@ def _post(client, event: str, payload: dict, *, signature: str | None = None):
 
 def test_route_rejects_bad_signature(client, api):
     resp = _post(client, "issue_comment", _issue_comment(), signature="sha256=00")
+    assert resp.status_code == 401
+    assert api.calls == []
+
+
+def test_route_rejects_non_ascii_signature(client, api):
+    resp = client.post(
+        "/webhooks/github",
+        content=json.dumps(_issue_comment()).encode(),
+        headers={
+            "X-GitHub-Event": "issue_comment",
+            "X-Hub-Signature-256": "sha256=é".encode(),
+        },
+    )
     assert resp.status_code == 401
     assert api.calls == []
 

@@ -59,7 +59,9 @@ def verify_github_signature(
     if not secret or not signature or not signature.startswith("sha256="):
         return False
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(f"sha256={expected}", signature)
+    # Bytes, because compare_digest raises on non-ASCII strings, and a header
+    # like "sha256=é" must be a 401, not a 500.
+    return hmac.compare_digest(f"sha256={expected}".encode(), signature.encode())
 
 
 async def require_github_signature(
