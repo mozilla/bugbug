@@ -1,0 +1,12 @@
+# Use with compose.yml on an x86_64 Linux host with /dev/kvm.
+# Set KVM_GID to the numeric group owning /dev/kvm on the host.
+services:
+  autowebcompat-repro-agent:
+    platform: linux/amd64
+    build:
+      target: android-agent
+    devices:
+      - /dev/kvm:/dev/kvm
+    group_add:
+      - "${KVM_GID:?Set KVM_GID to the group ID owning /dev/kvm}"
+    init: true
