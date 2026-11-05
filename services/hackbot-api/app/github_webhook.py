@@ -14,6 +14,8 @@ from types import MappingProxyType
 from typing import Any
 from xml.sax.saxutils import escape, quoteattr
 
+from markdown_it import MarkdownIt
+
 from app.github import GitHubApp
 
 # The one action per event that carries a new comment. Edits and deletions are
@@ -33,13 +35,17 @@ PULL_REQUEST_READ_PERMISSIONS: Mapping[str, str] = MappingProxyType(
     {"pull_requests": "read"}
 )
 
-# GitHub abandons a delivery that isn't answered within 10 seconds. The
-# authorizer's lookup is bounded at 5; this one at 3, leaving the rest to
-# trigger the run and respond.
+# GitHub abandons a delivery that isn't answered within 10 seconds. Everything
+# after the signature check (authorizing the sender, looking up the PR head and
+# triggering the run) shares this budget, leaving margin to respond.
+DELIVERY_DEADLINE_SECONDS = 8.0
+# Within it, the authorizer's lookup is bounded at 5 seconds and this one at 3,
+# so neither alone can use up the time meant for triggering the run.
 HEAD_LOOKUP_TIMEOUT_SECONDS = 3.0
 
-_FENCES = ("```", "~~~")
-_CODE_SPAN = re.compile(r"`[^`\n]*`")
+# GitHub's Markdown is a CommonMark superset, and its extensions (tables,
+# strikethrough, autolinked URLs) don't change what is code or a quote.
+_MARKDOWN = MarkdownIt("commonmark")
 
 
 @dataclass(frozen=True)
@@ -50,8 +56,9 @@ class GitHubMention:
     owner: str
     repo: str
     pr_number: int
-    # The payload's ``sender``, for the authorizer to vet (bots included).
-    sender: Mapping[str, Any]
+    # The payload's ``sender``, for the authorizer to vet (bots included). A
+    # missing or null one is passed through and denied there.
+    sender: Mapping[str, Any] | None
     # The triggering comment, rendered as a service-generated XML element.
     comment: str
     # Identifies the comment or review across redeliveries.
@@ -65,32 +72,40 @@ class GitHubMention:
         return f"{self.owner}/{self.repo}"
 
     @property
-    def sender_login(self) -> str:
-        return self.sender["login"]
+    def sender_login(self) -> str | None:
+        """For logging: safe on a sender the authorizer will deny."""
+        return (self.sender or {}).get("login")
 
 
 def _visible_text(body: str) -> str:
-    """``body`` without quoted lines, fenced code blocks or inline code spans.
+    """The plain text of ``body``, as Markdown, outside code, quotes and links.
 
     GitHub doesn't notify a mention in code or a quote, so neither does Hackbot:
     a mention copied from an earlier comment, or ``@hackbot`` written as an
-    example, must not start a run.
+    example, must not start a run. Code blocks and raw HTML never reach here;
+    every other non-text token (inline code, a link, emphasis, a line break)
+    becomes a space, so text either side of it can't join into a handle.
     """
-    lines = []
-    fence = None
-    for line in body.splitlines():
-        stripped = line.lstrip()
-        if fence is not None:
-            if stripped.startswith(fence):
-                fence = None
-            continue
-        if stripped.startswith(_FENCES):
-            fence = stripped[:3]
-            continue
-        if stripped.startswith(">"):
-            continue
-        lines.append(_CODE_SPAN.sub("", line))
-    return "\n".join(lines)
+    parts = []
+    quote_depth = 0
+    for token in _MARKDOWN.parse(body):
+        if token.type == "blockquote_open":
+            quote_depth += 1
+        elif token.type == "blockquote_close":
+            quote_depth -= 1
+        elif token.type == "inline" and not quote_depth:
+            link_depth = 0
+            for child in token.children or ():
+                if child.type == "link_open":
+                    link_depth += 1
+                elif child.type == "link_close":
+                    link_depth -= 1
+                if child.type == "text" and not link_depth:
+                    parts.append(child.content)
+                else:
+                    parts.append(" ")
+            parts.append("\n")
+    return "".join(parts)
 
 
 def mentions(body: str | None, token: str) -> bool:
@@ -176,7 +191,7 @@ def detect_mention(
         owner=repository["owner"]["login"],
         repo=repository["name"],
         pr_number=pr_number,
-        sender=payload["sender"],
+        sender=payload.get("sender"),
         comment=_format_comment(body, attributes),
         dedupe_key=dedupe_key,
         head_sha=head_sha,

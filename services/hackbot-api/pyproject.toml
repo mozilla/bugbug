@@ -33,6 +33,7 @@ dependencies = [
     "lando-client",
     "phabricator-client",
     "testrail-client",
+    "markdown-it-py>=4.0.0",
 ]
 
 [project.optional-dependencies]

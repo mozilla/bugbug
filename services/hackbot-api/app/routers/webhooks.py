@@ -1,5 +1,6 @@
 """Inbound webhooks that trigger Hackbot runs."""
 
+import asyncio
 import logging
 from typing import Annotated
 
@@ -28,7 +29,12 @@ from app.config import settings
 from app.database.connection import get_db
 from app.github import GitHubApp
 from app.github_authorization import GitHubAuthorizer
-from app.github_webhook import detect_mention, resolve_head_sha
+from app.github_webhook import (
+    DELIVERY_DEADLINE_SECONDS,
+    GitHubMention,
+    detect_mention,
+    resolve_head_sha,
+)
 from app.hackbot_client import get_hackbot_client
 from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
@@ -288,6 +294,37 @@ async def github_webhook(
     if mention is None:
         return {"status": "ignored", "reason": "no actionable mention"}
 
+    try:
+        async with asyncio.timeout(DELIVERY_DEADLINE_SECONDS):
+            return await _trigger_github_mention(
+                mention, api_client, github_app, authorizer, x_github_delivery
+            )
+    except TimeoutError:
+        log.warning(
+            "Timed out handling GitHub delivery %s for %s#%s (%s)",
+            x_github_delivery,
+            mention.full_name,
+            mention.pr_number,
+            mention.dedupe_key,
+        )
+        # A 5xx marks the delivery failed in the App's settings, where it can
+        # be redelivered. If the deadline hit while the run was being created,
+        # it may exist already; the redelivery has the same comment ID, so it
+        # resolves to that run rather than starting a second.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Timed out handling the delivery",
+        ) from None
+
+
+async def _trigger_github_mention(
+    mention: GitHubMention,
+    api_client: HackbotClient,
+    github_app: GitHubApp,
+    authorizer: GitHubAuthorizer,
+    x_github_delivery: str | None,
+) -> dict:
+    """Authorize ``mention``, resolve its PR's head and trigger the run."""
     if not await authorizer.is_authorized(
         mention.installation_id, mention.owner, mention.repo, mention.sender
     ):
@@ -296,27 +333,13 @@ async def github_webhook(
             mention.full_name,
             mention.pr_number,
             x_github_delivery,
-            mention.sender.get("login"),
+            mention.sender_login,
         )
         return {"status": "ignored", "reason": "unauthorized user"}
 
     head_sha = mention.head_sha
     if head_sha is None:
-        try:
-            head_sha = await resolve_head_sha(github_app, mention)
-        except TimeoutError:
-            log.warning(
-                "Timed out looking up the head of %s#%s (delivery %s)",
-                mention.full_name,
-                mention.pr_number,
-                x_github_delivery,
-            )
-            # A 5xx marks the delivery failed in the App's settings, where it
-            # can be redelivered; no run was created, so no key is spent.
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Timed out looking up the pull request",
-            ) from None
+        head_sha = await resolve_head_sha(github_app, mention)
         if head_sha is None:
             return {"status": "ignored", "reason": "pull request is not open"}
 

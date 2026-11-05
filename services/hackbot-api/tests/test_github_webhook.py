@@ -95,6 +95,11 @@ def test_signature_unconfigured_secret():
         "@HackBot fix",
         "line one\n@hackbot, line two",
         "(@hackbot)",
+        "**@hackbot** fix",
+        "- @hackbot fix",
+        # A lazy paragraph continuation, not an indented code block.
+        "Please\n    @hackbot fix",
+        "`code` then @hackbot",
     ],
 )
 def test_mentions_matches(body):
@@ -116,6 +121,16 @@ def test_mentions_matches(body):
         "use `@hackbot fix` to ask",
         "```\n@hackbot fix\n```",
         "~~~text\n@hackbot fix\n~~~",
+        "- > @hackbot in a quoted list item",
+        "a ``@hackbot`` code span",
+        "a ``code with ` and @hackbot`` span",
+        "a `code span\n@hackbot over two lines` here",
+        "    @hackbot indented code",
+        "````\n```\n@hackbot inside a longer fence\n````",
+        "[@hackbot](https://example.com)",
+        # Removing the code must not join the halves into a handle.
+        "@hack`x`bot",
+        "@hack*bot*",
     ],
 )
 def test_mentions_ignores(body):
@@ -399,11 +414,15 @@ class _FakeHackbotClient:
     def __init__(self):
         self.calls = []
         self.dedupe_keys = []
+        self.delay = 0.0
 
     async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
         self.calls.append((agent_name, inputs))
         is_new = dedupe_key is None or dedupe_key not in self.dedupe_keys
         self.dedupe_keys.append(dedupe_key)
+        # After recording: like the real API, the run exists even if the caller
+        # stops waiting for the response.
+        await asyncio.sleep(self.delay)
         return TriggeredRun(
             run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
             agent=agent_name,
@@ -577,6 +596,23 @@ def test_route_ignores_bot_senders(client, api, head_lookups, sender):
     assert api.calls == []
 
 
+@pytest.mark.parametrize("missing", ["null", "absent"])
+def test_route_ignores_missing_sender(client, api, head_lookups, missing):
+    app.dependency_overrides[webhooks.get_github_authorizer] = lambda: GitHubAuthorizer(
+        object(), {"write"}, BOT_LOGIN
+    )
+    payload = _issue_comment()
+    if missing == "null":
+        payload["sender"] = None
+    else:
+        del payload["sender"]
+    resp = _post(client, "issue_comment", payload)
+    assert resp.status_code == 202
+    assert resp.json() == {"status": "ignored", "reason": "unauthorized user"}
+    assert head_lookups == []
+    assert api.calls == []
+
+
 def test_route_triggers_run_for_conversation_comment(
     client, api, github_app, head_lookups
 ):
@@ -651,6 +687,42 @@ def test_route_fails_delivery_when_head_lookup_times_out(client, api, monkeypatc
     resp = _post(client, "issue_comment", _issue_comment())
     assert resp.status_code == 503
     assert api.calls == []
+
+
+def test_route_deadline_covers_the_whole_delivery(client, api, monkeypatch):
+    # Each step is quick, but together they outlast the deadline.
+    monkeypatch.setattr(webhooks, "DELIVERY_DEADLINE_SECONDS", 0.1)
+
+    async def slow(github_app, mention):
+        await asyncio.sleep(0.06)
+        return HEAD_SHA
+
+    monkeypatch.setattr(webhooks, "resolve_head_sha", slow)
+    api.delay = 0.06
+    resp = _post(client, "issue_comment", _issue_comment())
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "Timed out handling the delivery"}
+
+
+def test_route_redelivery_after_trigger_timeout_reuses_the_run(
+    client, api, monkeypatch
+):
+    # The run was created, but its response came too late: the redelivery has
+    # the same dedupe key, so it resolves to that run instead of a second one.
+    monkeypatch.setattr(webhooks, "DELIVERY_DEADLINE_SECONDS", 0.05)
+    payload = _review_comment()
+    api.delay = 1.0
+    timed_out = _post(client, "pull_request_review_comment", payload)
+    api.delay = 0.0
+    redelivery = _post(client, "pull_request_review_comment", payload)
+
+    assert timed_out.status_code == 503
+    assert redelivery.json() == {
+        "status": "ignored",
+        "reason": "duplicate delivery",
+        "run_id": "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+    }
+    assert api.dedupe_keys == ["github-review-comment:2002"] * 2
 
 
 def test_route_dedupes_redelivery_but_not_a_new_comment(client, api):
