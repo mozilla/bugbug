@@ -44,20 +44,39 @@ if (!BROWSER_BIN) {
 const TARGET = "https://example.com/";
 
 async function probe() {
-  const browser = await puppeteer.launch({
-    browser: BROWSER,
-    executablePath: BROWSER_BIN,
-    headless: process.env.HEADLESS ? true : false,
-    ...(BROWSER === "chrome" ? { args: ["--no-sandbox"] } : {}),
-  });
+  // Android identifiers connect to real browsers on the emulator; desktop and
+  // mozregression continue to launch their supplied executable normally.
+  const android = /^(ws|http):/.test(BROWSER_BIN);
+  // A hung device browser should fail fast rather than after the 180s default.
+  const connect = { defaultViewport: null, protocolTimeout: 30_000 };
+  const browser = android
+    ? await puppeteer.connect(
+        BROWSER === "firefox"
+          ? {
+              ...connect,
+              browserWSEndpoint: BROWSER_BIN,
+              protocol: "webDriverBiDi",
+            }
+          : { ...connect, browserURL: BROWSER_BIN }
+      )
+    : await puppeteer.launch({
+        browser: BROWSER,
+        executablePath: BROWSER_BIN,
+        headless: process.env.HEADLESS ? true : false,
+        ...(BROWSER === "chrome" ? { args: ["--no-sandbox"] } : {}),
+      });
+  let page;
   try {
-    const page = await browser.newPage();
+    page = await browser.newPage();
     await page.goto(TARGET, { waitUntil: "networkidle0" });
     return await page.evaluate(() => ({}));
   } catch (error) {
     return { error: String(error?.message ?? error) };
   } finally {
-    await browser.close();
+    if (android) {
+      await page?.close().catch(() => {});
+      await browser.disconnect();
+    } else await browser.close();
   }
 }
 
