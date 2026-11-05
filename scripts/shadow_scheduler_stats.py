@@ -6,6 +6,7 @@
 import argparse
 import concurrent.futures
 import logging
+import math
 import time
 import traceback
 from datetime import datetime
@@ -16,7 +17,7 @@ import mozci.errors
 import mozci.push
 from dateutil.relativedelta import relativedelta
 from mozci.task import get_configuration
-from pandas import DataFrame
+from pandas import DataFrame, DatetimeIndex, Series
 from tqdm import tqdm
 
 from bugbug import db, test_scheduling, utils
@@ -266,19 +267,6 @@ def go(months: int) -> None:
     flush()
 
 
-def plot_graph(df: DataFrame, title: str, file_path: str) -> None:
-    ax = df.plot.bar(figsize=(20, 10))
-    ax.set_title(title)
-    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-
-    plt.tight_layout()
-
-    logger.info("Saving %s figure", file_path)
-    plt.savefig(file_path)
-
-    plt.close()
-
-
 GROUP_TRANSLATIONS = {
     "testing/web-platform/tests": "",
     "testing/web-platform/mozilla/tests": "/_mozilla",
@@ -327,11 +315,31 @@ def get_likely_regressions_by_rev(granularity: str) -> dict[str, set[Any]]:
     }
 
 
-def plot_graphs(granularity: str) -> None:
+# Schedulers with this prefix only change how performance tests are scheduled,
+# so they schedule (almost) all test groups. They are reported separately, as
+# they would otherwise dwarf the test selection schedulers.
+PERF_SCHEDULER_PREFIX = "perf_"
+
+HIGHLIGHT_COLOR = "#2a78d6"
+CONTEXT_COLOR = "#c8c7c2"
+TEXT_COLOR = "#52514e"
+
+
+def is_perf_scheduler(name: str) -> bool:
+    return name.startswith(PERF_SCHEDULER_PREFIX)
+
+
+def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series]:
+    """Return, for each push, the number of scheduled and caught regressions by scheduler.
+
+    Values are NaN when a scheduler didn't run on a push.
+    """
     regressions_by_rev = get_likely_regressions_by_rev(granularity)
 
+    dates = []
     scheduled_data = []
     caught_data = []
+    num_regressions = []
 
     for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
         if len(scheduler_stat["schedulers"]) == 0:
@@ -340,73 +348,252 @@ def plot_graphs(granularity: str) -> None:
         if scheduler_stat["id"] not in regressions_by_rev:
             continue
 
-        date = datetime.utcfromtimestamp(scheduler_stat["date"])
-
-        obj: dict[str, Any] = {
-            "date": date,
-        }
-
-        for scheduler in scheduler_stat["schedulers"]:
-            obj[scheduler["name"]] = get_num_scheduled(granularity, scheduler)
-
-        scheduled_data.append(obj)
-
         regressions = regressions_by_rev[scheduler_stat["id"]]
 
-        obj = {
-            "date": date,
-            "regressions": len(regressions),
+        dates.append(datetime.utcfromtimestamp(scheduler_stat["date"]))
+        num_regressions.append(len(regressions))
+        scheduled_data.append(
+            {
+                scheduler["name"]: get_num_scheduled(granularity, scheduler)
+                for scheduler in scheduler_stat["schedulers"]
+            }
+        )
+        caught_data.append(
+            {
+                scheduler["name"]: len(
+                    regressions & get_scheduled_regressions(granularity, scheduler)
+                )
+                for scheduler in scheduler_stat["schedulers"]
+            }
+        )
+
+    index = DatetimeIndex(dates, name="date")
+    scheduled_df = DataFrame(scheduled_data, index=index).sort_index(axis=1)
+    caught_df = DataFrame(caught_data, index=index).sort_index(axis=1)
+    regressions = Series(num_regressions, index=index)
+
+    return scheduled_df, caught_df, regressions
+
+
+def compute_summary(
+    scheduled_df: DataFrame, caught_df: DataFrame, regressions: Series
+) -> DataFrame:
+    """Summarize the performance of each scheduler on the given pushes."""
+    ran = scheduled_df.notna()
+    regressing = ran.mul(regressions > 0, axis=0)
+    total_regressions = ran.mul(regressions, axis=0).sum()
+
+    summary = DataFrame(
+        {
+            "pushes": ran.sum(),
+            "avg scheduled": scheduled_df.mean(),
+            "median scheduled": scheduled_df.median(),
+            "pushes with regressions": regressing.sum(),
+            "% regressing pushes caught": (
+                (caught_df > 0)[regressing].sum() / regressing.sum() * 100
+            ),
+            "% regressions caught": caught_df.sum() / total_regressions * 100,
         }
+    )
+    summary.index.name = "scheduler"
 
-        for scheduler in scheduler_stat["schedulers"]:
-            obj[scheduler["name"]] = len(
-                regressions & get_scheduled_regressions(granularity, scheduler)
-            )
+    return summary.sort_values("avg scheduled")
 
-        caught_data.append(obj)
 
-    if len(scheduled_data) == 0:
-        logger.warning("No data to plot at the %s level", granularity)
+def format_summary(summary: DataFrame) -> str:
+    return summary.to_markdown(
+        floatfmt=("", ".0f", ".1f", ".0f", ".0f", ".1f", ".1f"), intfmt=","
+    )
+
+
+def write_summary_table(
+    granularity: str, summary: DataFrame, from_date: datetime, to_date: datetime
+) -> None:
+    perf = summary.index.map(is_perf_scheduler)
+
+    content = f"""# Shadow schedulers at the {granularity} level
+
+Pushes from {from_date:%Y-%m-%d} to {to_date:%Y-%m-%d}. Only likely regressions are considered.
+
+- **avg scheduled**: average number of {granularity}s scheduled per push;
+- **median scheduled**: median number of {granularity}s scheduled per push;
+- **% regressing pushes caught**: percentage of pushes with regressions where at least one of them was scheduled;
+- **% regressions caught**: percentage of all regressions which were scheduled.
+
+## Test selection schedulers
+
+{format_summary(summary[~perf])}
+"""
+
+    if perf.any():
+        content += f"""
+## Performance schedulers
+
+These only change the scheduling of performance tests, so they run (almost) all test {granularity}s.
+
+{format_summary(summary[perf])}
+"""
+
+    file_path = f"shadow_schedulers_{granularity}.md"
+    logger.info("Saving %s:\n%s", file_path, content)
+    with open(file_path, "w") as f:
+        f.write(content)
+
+
+def plot_tradeoff(granularity: str, summary: DataFrame, title: str) -> None:
+    """Plot scheduled vs caught, so that the cost/benefit of each scheduler is visible."""
+    max_x = summary["avg scheduled"].max()
+    y_max = min(100, math.ceil(summary["% regressions caught"].max() * 1.2 / 10) * 10)
+
+    # Schedulers with (almost) the same results would have overlapping points and
+    # labels, so merge them.
+    clusters: list[tuple[list[float], list[float], list[str]]] = []
+    for name, row in summary.iterrows():
+        x, y = row["avg scheduled"], row["% regressions caught"]
+        for xs, ys, names in clusters:
+            if abs(xs[0] - x) <= max_x * 0.01 and abs(ys[0] - y) <= y_max * 0.005:
+                xs.append(x)
+                ys.append(y)
+                names.append(str(name))
+                break
+        else:
+            clusters.append(([x], [y], [str(name)]))
+
+    points = sorted(
+        (sum(xs) / len(xs), sum(ys) / len(ys), names) for xs, ys, names in clusters
+    )
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Many schedulers have similar results, so labels are placed in a column on
+    # the right, spaced to avoid overlaps, and linked to their point.
+    line_height = y_max * 0.025
+    labels = []
+    previous_top = float("-inf")
+    for x, y, names in sorted(points, key=lambda point: point[1]):
+        height = line_height * len(names)
+        label_y = max(y, previous_top + height / 2)
+        previous_top = label_y + height / 2
+        labels.append((x, y, names, label_y))
+
+    # Shift labels down if they overflow the top of the axis.
+    overflow = max(0.0, previous_top - y_max)
+    label_x = max_x * 1.1
+
+    for x, y, names, label_y in labels:
+        ax.scatter(x, y, s=64, color=HIGHLIGHT_COLOR, edgecolors="white", linewidths=2)
+        ax.annotate(
+            "\n".join(names),
+            (x, y),
+            xytext=(label_x, label_y - overflow),
+            textcoords="data",
+            va="center",
+            fontsize=8,
+            color=TEXT_COLOR,
+            annotation_clip=False,
+            arrowprops={"arrowstyle": "-", "color": CONTEXT_COLOR, "linewidth": 0.8},
+        )
+
+    ax.set_title(title, loc="left")
+    ax.set_xlabel(f"Average number of scheduled {granularity}s per push")
+    ax.set_ylabel("% of regressions caught")
+    ax.set_xlim(0, max_x * 1.05)
+    ax.set_ylim(0, y_max)
+    ax.grid(color="#ebebe8")
+    ax.set_axisbelow(True)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+
+    plt.tight_layout()
+
+    file_path = f"shadow_schedulers_{granularity}_tradeoff.svg"
+    logger.info("Saving %s figure", file_path)
+    plt.savefig(file_path)
+    plt.close(fig)
+
+
+def plot_weekly_trend(
+    granularity: str, caught_df: DataFrame, regressions: Series
+) -> None:
+    """Plot, for each scheduler, the weekly percentage of regressions caught.
+
+    Each scheduler gets its own panel, with the other schedulers in the background
+    for context, as there are too many schedulers to tell them apart by color.
+    """
+    total_regressions = caught_df.notna().mul(regressions, axis=0)
+    weekly = (
+        caught_df.resample("W").sum(min_count=1)
+        / total_regressions.resample("W").sum().replace(0, float("nan"))
+        * 100
+    )
+
+    names = list(weekly.columns)
+    ncols = 4
+    nrows = math.ceil(len(names) / ncols)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(4 * ncols, 2.5 * nrows),
+        sharex=True,
+        sharey=True,
+        squeeze=False,
+    )
+
+    for ax, name in zip(axes.flat, names):
+        for other in names:
+            if other != name:
+                ax.plot(weekly.index, weekly[other], color=CONTEXT_COLOR, linewidth=1)
+        ax.plot(weekly.index, weekly[name], color=HIGHLIGHT_COLOR, linewidth=2)
+        ax.set_title(name, fontsize=9, loc="left")
+        ax.set_ylim(0, 100)
+        ax.grid(axis="y", color="#ebebe8")
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+        ax.tick_params(labelsize=8)
+
+    for ax in axes.flat[len(names) :]:
+        ax.set_visible(False)
+
+    fig.suptitle(
+        f"Weekly % of regressions caught at the {granularity} level", x=0.01, ha="left"
+    )
+    fig.autofmt_xdate()
+    plt.tight_layout()
+
+    file_path = f"shadow_schedulers_{granularity}_weekly.svg"
+    logger.info("Saving %s figure", file_path)
+    plt.savefig(file_path)
+    plt.close(fig)
+
+
+def report(granularity: str, weeks: int) -> None:
+    scheduled_df, caught_df, regressions = get_stats_dataframes(granularity)
+
+    if len(scheduled_df) == 0:
+        logger.warning("No data to report at the %s level", granularity)
         return
 
-    scheduled_df = DataFrame(scheduled_data)
-    scheduled_df.index = scheduled_df["date"]
-    del scheduled_df["date"]
+    to_date = scheduled_df.index.max()
+    from_date = to_date - relativedelta(weeks=weeks)
+    recent = scheduled_df.index > from_date
 
-    caught_df = DataFrame(caught_data)
-    caught_df.index = caught_df["date"]
-    del caught_df["date"]
+    summary = compute_summary(
+        scheduled_df[recent], caught_df[recent], regressions[recent]
+    )
+    summary = summary[summary["pushes"] > 0]
+    write_summary_table(granularity, summary, from_date, to_date)
 
-    df = scheduled_df.resample("W").mean()
+    test_selection = [name for name in summary.index if not is_perf_scheduler(name)]
 
-    plot_graph(
-        df,
-        f"Average number of scheduled {granularity}s",
-        f"average_{granularity}_scheduled.svg",
+    plot_tradeoff(
+        granularity,
+        summary.loc[test_selection],
+        f"Scheduled {granularity}s vs regressions caught "
+        f"({from_date:%Y-%m-%d} to {to_date:%Y-%m-%d})",
     )
 
-    df = (
-        caught_df[caught_df.regressions > 0]
-        .drop(columns=["regressions"])
-        .clip(0, 1)
-        .resample("W")
-        .mean()
-    )
-
-    plot_graph(
-        df,
-        "Percentage of regressing pushes where we caught at least one regression",
-        f"percentage_{granularity}_caught_at_least_one.svg",
-    )
-
-    plot_graph(
-        caught_df.drop(columns=["regressions"])
-        .div(caught_df.regressions, axis=0)
-        .resample("W")
-        .mean(),
-        "Percentage of regressions we caught",
-        f"percentage_{granularity}_caught.svg",
-    )
+    test_selection = [name for name in caught_df.columns if not is_perf_scheduler(name)]
+    plot_weekly_trend(granularity, caught_df[test_selection], regressions)
 
 
 def print_uncaught(
@@ -480,11 +667,17 @@ def main() -> None:
         type=str,
         help="Scheduler to compare to for uncaught regressions",
     )
+    parser.add_argument(
+        "--weeks",
+        type=int,
+        default=4,
+        help="How many weeks of pushes to summarize in the tables.",
+    )
     args = parser.parse_args()
 
     go(args.months)
-    plot_graphs("group")
-    plot_graphs("config_group")
+    report("group", args.weeks)
+    report("config_group", args.weeks)
     if args.scheduler1:
         print_uncaught("group", args.scheduler1, args.scheduler2)
 
