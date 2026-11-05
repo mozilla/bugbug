@@ -496,6 +496,7 @@ dependencies = [
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "pydantic" },
+    { name = "requests" },
 ]
 
 [package.optional-dependencies]
@@ -511,6 +512,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "requests", specifier = ">=2.32.0" },
 ]
 provides-extras = ["dev"]
 
