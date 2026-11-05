@@ -4,8 +4,16 @@ The MCP servers are npm packages pinned in ``package.json`` and installed into
 the image with ``npm ci`` (see the Dockerfile).
 """
 
+import json
+import sys
+from collections.abc import Sequence
 from pathlib import Path
 
+from autowebcompat_tools.android_browser import (
+    CHROME_DEVTOOLS_PORT,
+    FIREFOX_MARIONETTE_PORT,
+    AndroidBrowser,
+)
 from claude_agent_sdk.types import McpStdioServerConfig
 
 
@@ -101,3 +109,55 @@ def build_chrome_devtools_server(
         args += ["--chromeArg=--no-sandbox", "--chromeArg=--disable-setuid-sandbox"]
 
     return McpStdioServerConfig(command=resolve_bin("chrome-devtools-mcp"), args=args)
+
+
+def _build_android_server(
+    browser: AndroidBrowser,
+    extensions: Sequence[str],
+    bin_name: str,
+    args: list[str],
+) -> McpStdioServerConfig:
+    return McpStdioServerConfig(
+        command=sys.executable,
+        args=[
+            "-m",
+            "autowebcompat_tools.android_mcp_proxy",
+            str(browser),
+            json.dumps(list(extensions)),
+            resolve_bin(bin_name),
+            *args,
+        ],
+    )
+
+
+def build_android_firefox_devtools_server(
+    browser: AndroidBrowser,
+    *,
+    enable_privileged_context: bool = False,
+    extensions: Sequence[str] = (),
+) -> McpStdioServerConfig:
+    args = [
+        "--connect-existing",
+        "--marionette-port",
+        str(FIREFOX_MARIONETTE_PORT),
+        "--enable-script",
+    ]
+    if enable_privileged_context:
+        args.append("--enable-privileged-context")
+    return _build_android_server(browser, extensions, "firefox-devtools-mcp-moz", args)
+
+
+def build_android_chrome_devtools_server(
+    browser: AndroidBrowser,
+) -> McpStdioServerConfig:
+    return _build_android_server(
+        browser,
+        (),
+        "chrome-devtools-mcp",
+        [
+            "--browserUrl",
+            f"http://127.0.0.1:{CHROME_DEVTOOLS_PORT}",
+            "--usageStatistics=false",
+            "--performanceCrux=false",
+        ],
+    )

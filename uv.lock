@@ -495,6 +495,7 @@ source = { editable = "libs/autowebcompat-tools" }
 dependencies = [
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
     { name = "mozdownload" },
     { name = "pydantic" },
     { name = "requests" },
@@ -510,6 +511,7 @@ dev = [
 requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.2.165" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
     { name = "mozdownload" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
