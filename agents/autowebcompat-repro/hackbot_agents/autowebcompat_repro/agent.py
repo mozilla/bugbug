@@ -10,11 +10,14 @@ import os
 import subprocess
 import tempfile
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from autowebcompat_tools import android_emulator
+from autowebcompat_tools.android_browser import AndroidBrowser, AndroidEnvironment
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
 from autowebcompat_tools.result import ResultT
@@ -57,14 +60,30 @@ class AutowebcompatReproResult(BaseModel):
 class Task(BaseTask[ResultT]):
     result_server_name = RESULT_SERVER_NAME
 
+    def __init__(
+        self,
+        task_config: TaskConfig,
+        run_tracker: RunTracker,
+        firefox: Browser | None = None,
+    ):
+        super().__init__(task_config, run_tracker)
+        self.android = isinstance(firefox, AndroidBrowser)
+
     def system_prompt(self) -> str:
-        return (HERE / "prompts" / "system.md").read_text()
+        prompt = (HERE / "prompts" / "system.md").read_text()
+        if self.android:
+            prompt += (HERE / "prompts" / "android.md").read_text()
+        return prompt
 
 
 def run_confirmation_script(
-    script_path: Path, firefox: Browser, headless: bool
+    script_path: Path,
+    firefox: Browser,
+    headless: bool,
 ) -> ReproductionResult | None:
     script_timeout = 5 * 60
+    if isinstance(firefox, AndroidBrowser):
+        firefox.start(fresh=True)
     env = {**os.environ, "BROWSER": "firefox", "BROWSER_BIN": browser_bin(firefox)}
     if headless:
         env["HEADLESS"] = "1"
@@ -179,7 +198,7 @@ class BugReproduction(Task):
         screenshot_dir: Path,
         chrome: Browser,
     ):
-        super().__init__(task_config, run_tracker)
+        super().__init__(task_config, run_tracker, firefox)
         self.input_data = input_data
         self.firefox_bin = browser_bin(firefox)
         self.chrome_bin = browser_bin(chrome)
@@ -205,7 +224,7 @@ class BugReproduction(Task):
 
     def system_prompt(self) -> str:
         repro_reference = self.repro_dir / "repro_reference.mjs"
-        return (
+        prompt = (
             super()
             .system_prompt()
             .format(
@@ -259,6 +278,9 @@ class BugReproduction(Task):
 """
             )
         )
+        if self.android:
+            prompt += (HERE / "prompts" / "android_bug_reproduction.md").read_text()
+        return prompt
 
     def user_prompt(self) -> str:
         if isinstance(self.input_data, BugDataInput):
@@ -285,7 +307,7 @@ class StepsReproduction(Task):
         firefox: Browser,
         steps: str,
     ):
-        super().__init__(task_config, run_tracker)
+        super().__init__(task_config, run_tracker, firefox)
         self.steps = steps
         self.add_mcp_server(
             "firefox_devtools",
@@ -324,7 +346,7 @@ class ChromeMaskReproduction(Task):
         firefox: Browser,
         steps: str,
     ) -> None:
-        super().__init__(task_config, run_tracker)
+        super().__init__(task_config, run_tracker, firefox)
         self.steps = steps
         self.add_mcp_server(
             "firefox_devtools",
@@ -524,7 +546,7 @@ async def run_autowebcompat_repro(
     Returns a :class:`AutowebcompatReproResult` on success; raises
     :class:`AgentError` if the agent ends in an error.
     """
-    with Environment() as env:
+    with Environment() as env, ExitStack() as resources:
         if not default_config.headless:
             env.start_xvfb()
 
@@ -547,6 +569,22 @@ async def run_autowebcompat_repro(
             result.summary = "Issue was identified as iOS only"
             result.failure_reason = "unsupported_ios"
             return result
+
+        android_requested = "android" in test_plan_result.affects_platforms
+        android = android_requested and android_emulator.available()
+        if android:
+            logcat = Path(tempfile.mkdtemp(prefix="android-")) / "logcat.txt"
+
+            def publish_logcat() -> None:
+                if logcat.exists():
+                    publish_file("android-logcat.txt", logcat, "text/plain")
+
+            resources.callback(publish_logcat)
+            firefox_browser, chrome_browser = resources.enter_context(
+                AndroidEnvironment(logcat)
+            )
+        elif android_requested:
+            logger.warning("Android emulator is unavailable; using desktop browsers")
 
         async def next_repro_task(
             channel: FirefoxChannel,
@@ -574,7 +612,9 @@ async def run_autowebcompat_repro(
             else:
                 if initial_repro.script_path is not None:
                     script_result = run_confirmation_script(
-                        initial_repro.script_path, browser, default_config.headless
+                        initial_repro.script_path,
+                        browser,
+                        default_config.headless,
                     )
                     if script_result is not None:
                         repro_results.set_result(channel, extra, script_result)
@@ -610,9 +650,11 @@ async def run_autowebcompat_repro(
             result.failure_reason = "not_firefox_specific"
             return result
 
-        if not repro_results.reproduced and test_plan_result.affects_platforms == [
-            "android"
-        ]:
+        if (
+            not repro_results.reproduced
+            and not android
+            and test_plan_result.affects_platforms == ["android"]
+        ):
             result = repro_results.into_result()
             result.summary = "Issue was identified as Android only and didn't reproduce on desktop nightly"
             result.failure_reason = "unsupported_android"
@@ -625,7 +667,9 @@ async def run_autowebcompat_repro(
         ):
             await next_repro_task(FirefoxChannel.stable)
 
-        if repro_results.reproduced or "esr" in test_plan_result.affects_channels:
+        if not android and (
+            repro_results.reproduced or "esr" in test_plan_result.affects_channels
+        ):
             # If we have any result try ESR as a possible regression baseline,
             # otherwise try ESR if we think it's affected
             await next_repro_task(FirefoxChannel.esr)

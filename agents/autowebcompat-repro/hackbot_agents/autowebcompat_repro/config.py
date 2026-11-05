@@ -40,6 +40,7 @@ DEVTOOLS_TOOLS = [
     "mcp__firefox-devtools__set_viewport_size",
     "mcp__firefox-devtools__get_firefox_info",
     "mcp__firefox-devtools__get_firefox_output",
+    "mcp__firefox-devtools__restart_firefox",
 ]
 
 # Chrome DevTools MCP tools (chrome-devtools-mcp), exposed under the
