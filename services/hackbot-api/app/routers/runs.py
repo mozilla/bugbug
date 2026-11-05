@@ -102,7 +102,7 @@ async def create_run(
     agent_name: str,
     payload: dict,
     db: Annotated[AsyncSession, Depends(get_db)],
-    requested_via: Annotated[str, Depends(require_api_key)],
+    requested_via: Annotated[str | None, Depends(require_api_key)],
     on_behalf_of: Annotated[
         UserEmail,
         Header(
