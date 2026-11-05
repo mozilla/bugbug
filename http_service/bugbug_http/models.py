@@ -844,25 +844,8 @@ def _analyze_patch(
         if commits
         else {}
     )
-    # The groups only selected at the "very_low" level (used on the taskgraph's expanded pushes) get
-    # their configs in a second pass, reusing the configs of the others, so that they don't change
-    # the configs selected for the others.
-    config_selection_threshold = min(
-        [
-            test_selection_threshold,
-            *(c for level, c in groups_thresholds.items() if level != "very_low"),
-        ]
-    )
     # Config selection weighs groups by their probability of regressing, not by their confidence.
     risks = testgroupselect_model.calibrated_probabilities(groups)
-    very_low_risks = {
-        group: risk
-        for group, risk in risks.items()
-        if groups[group] < config_selection_threshold
-    }
-    risks = {
-        group: risk for group, risk in risks.items() if group not in very_low_risks
-    }
     # The manifests including the modified tests, and the groups selected with at least the group
     # model's "very_high" confidence (their calibrated risk is much lower than their confidence), run
     # on a config of each OS family.
@@ -875,13 +858,20 @@ def _analyze_patch(
     for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
         groups[group] = 1.0
         risks[group] = 1.0
-        very_low_risks.pop(group, None)
         very_likely_groups.add(group)
     for group in backout_groups:
         groups[group] = 1.0
 
-    config_groups = select_configs(risks, modified_paths, very_likely_groups)
-    if very_low_risks:
+    # The taskgraph runs the groups at or above a confidence level, so configs are selected one
+    # level at a time from the highest one: each level reuses the configs of the levels above, and
+    # doesn't depend on the groups below, which don't run with it.
+    levels = sorted(set(groups_thresholds.values()), reverse=True)
+    risks_by_level: dict[float, dict[str, float]] = defaultdict(dict)
+    for group, risk in risks.items():
+        level = next((t for t in levels if groups[group] >= t), 0.0)
+        risks_by_level[level][group] = risk
+    config_groups: dict[str, list[str]] = {}
+    for level in sorted(risks_by_level, reverse=True):
         used_configs = {
             config
             for configs in config_groups.values()
@@ -889,7 +879,12 @@ def _analyze_patch(
             if config != "*"
         }
         config_groups.update(
-            select_configs(very_low_risks, modified_paths, (), used_configs)
+            select_configs(
+                risks_by_level[level],
+                modified_paths,
+                very_likely_groups & risks_by_level[level].keys(),
+                used_configs,
+            )
         )
     # The recently failing manifests run on all configs, as the failures might be specific to
     # their configuration.
