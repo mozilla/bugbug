@@ -14,13 +14,11 @@ and `teams/<team>/rules/`. A run with no team uses `rules/` alone, in the bug's 
 component, and never vouches for unattended apply.
 """
 
-import ctypes
 import json
 import os
 import re
 import sys
 import tomllib
-from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 from typing import Annotated
@@ -77,6 +75,7 @@ from .hooks import (
     install_hooks,
 )
 from .investigations import INVESTIGATOR, Investigations, spawn_counter
+from .isolation import hidden_env, make_undumpable
 from .preflight import reporter_audience
 from .state import AUTOMATION_SUFFIXES, TriageState
 from .steps import Steps, call_counter, limit_hit_hook
@@ -1097,39 +1096,6 @@ async def _write_guard(input_data: dict, tool_use_id: str | None, context) -> di
     }
 
 
-# Runtime variables the CLI never needs. The CLI inherits the agent's environment, and
-# its Bash tool can print it, so these are blanked in the CLI's copy.
-HIDDEN_ENV = ("RESULTS_POLICY_URL", "RESULTS_POLICY_FIELDS")
-_SECRET_NAME = re.compile(
-    r"(?:^|_)(?:API_?KEY|KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|DSN)(?:_|$)"
-    r"|POLICY",
-    re.IGNORECASE,
-)
-# What the CLI reads to reach the model.
-_CLI_ENV_PREFIXES = ("ANTHROPIC_", "CLAUDE_")
-
-
-def hidden_env(environ: Mapping[str, str]) -> dict[str, str]:
-    """A blank value for each secret in ``environ`` the CLI does not need.
-
-    Best effort: it matches names, so a secret under another kind of name passes.
-    """
-    names = set(HIDDEN_ENV)
-    names.update(
-        name
-        for name in environ
-        if _SECRET_NAME.search(name) and not name.startswith(_CLI_ENV_PREFIXES)
-    )
-    return dict.fromkeys(sorted(names), "")
-
-
-PR_SET_DUMPABLE = 4
-
-
-def _libc():
-    return ctypes.CDLL(None, use_errno=True)
-
-
 # Without these the run cannot read the bug or record anything.
 REQUIRED_SERVERS = ("bugzilla", attachments.SERVER_NAME, ACTIONS_SERVER_NAME)
 
@@ -1144,21 +1110,6 @@ def failed_servers(msg: SystemMessage) -> list[str]:
         if s.get("name") in REQUIRED_SERVERS
         and s.get("status") not in ("connected", "pending")
     ]
-
-
-def make_undumpable() -> None:
-    """On Linux, stop other processes of this user from reading this process.
-
-    The blanked variables above are still in this process's own environment. The CLI and
-    its Bash run as the same user, so they could read ``/proc/<pid>/environ``. Once the
-    process is not dumpable, root owns those files. Elsewhere this does nothing.
-    """
-    if not sys.platform.startswith("linux"):
-        return
-    if _libc().prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0:
-        raise AgentError(
-            f"prctl(PR_SET_DUMPABLE, 0) failed: {os.strerror(ctypes.get_errno())}"
-        )
 
 
 def session_options(

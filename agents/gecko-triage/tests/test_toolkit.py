@@ -12,7 +12,6 @@ from conftest import full_prompt
 from hackbot_agents.gecko_triage.agent import (
     BASE_TOOLS,
     combined_options,
-    hidden_env,
     make_bug_investigator,
     make_duplicate_hunter,
     make_investigator,
@@ -28,6 +27,7 @@ from hackbot_agents.gecko_triage.closing import CloseVerdicts
 from hackbot_agents.gecko_triage.config import BUGZILLA_READ_TOOLS, TRIAGE_SCOPE
 from hackbot_agents.gecko_triage.dupes import SEARCH_CONCEPTS_TOOL
 from hackbot_agents.gecko_triage.investigations import Investigations
+from hackbot_agents.gecko_triage.isolation import hidden_env
 from hackbot_agents.gecko_triage.toolkit import (
     TOOLKIT_SKILLS,
     TOOLKIT_VERSION,

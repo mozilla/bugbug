@@ -511,40 +511,6 @@ async def test_a_run_on_the_triaged_bug_alone_reads_no_other_bug(
     assert calls in ([], [[]]) and result.decision == "analyzed"
 
 
-class FakeLibc:
-    def __init__(self, result=0):
-        self.calls, self.result = [], result
-
-    def prctl(self, *args):
-        self.calls.append(args)
-        return self.result
-
-
-def test_on_linux_the_agent_process_is_made_undumpable(monkeypatch):
-    # Other processes of the same user, the CLI's Bash included, then cannot read
-    # /proc/<pid>/environ of the agent and the results policy in it.
-    libc = FakeLibc()
-    monkeypatch.setattr(agent, "_libc", lambda: libc)
-    monkeypatch.setattr(agent.sys, "platform", "linux")
-    agent.make_undumpable()
-    assert libc.calls == [(agent.PR_SET_DUMPABLE, 0, 0, 0, 0)]
-
-
-def test_elsewhere_making_the_process_undumpable_does_nothing(monkeypatch):
-    libc = FakeLibc()
-    monkeypatch.setattr(agent, "_libc", lambda: libc)
-    monkeypatch.setattr(agent.sys, "platform", "darwin")
-    agent.make_undumpable()
-    assert libc.calls == []
-
-
-def test_a_failed_prctl_fails_the_run(monkeypatch):
-    monkeypatch.setattr(agent, "_libc", lambda: FakeLibc(result=-1))
-    monkeypatch.setattr(agent.sys, "platform", "linux")
-    with pytest.raises(AgentError):
-        agent.make_undumpable()
-
-
 async def test_the_process_is_undumpable_before_the_cli_starts(
     fake_client, tmp_path, new_state, monkeypatch
 ):
@@ -553,32 +519,6 @@ async def test_the_process_is_undumpable_before_the_cli_starts(
     monkeypatch.setattr(FakeClient, "script", lambda: order.append("cli"))
     await _run(tmp_path, new_state)
     assert order == ["undumpable", "cli"]
-
-
-@pytest.mark.parametrize(
-    "name",
-    [
-        "STRIPE_APIKEY",
-        "APIKEY",
-        "GOOGLE_APPLICATION_CREDENTIALS",
-        "AWS_CREDENTIAL",
-        "SENTRY_DSN",
-        "DB_PASSWD",
-        "my_api_key",
-        "Some_Secret",
-        "results_policy_extra",
-        "UPLOAD_POLICY",
-    ],
-)
-def test_every_kind_of_secret_name_is_hidden_from_the_cli(name):
-    assert agent.hidden_env({name: "s"})[name] == ""
-
-
-@pytest.mark.parametrize(
-    "name", ["KEYWORDS", "TOKENIZERS_PARALLELISM", "ANTHROPIC_API_KEY", "HOME"]
-)
-def test_other_names_reach_the_cli(name):
-    assert name not in agent.hidden_env({name: "s"})
 
 
 def test_every_subagent_has_a_turn_limit():
