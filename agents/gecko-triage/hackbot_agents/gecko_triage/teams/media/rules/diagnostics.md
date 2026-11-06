@@ -53,6 +53,13 @@ software fallback in WMF (`WMFVideoMFTManager.cpp`)? When all three are true, th
 "Analyzed" with two problems. One is the hardware failure. The other is that the
 capability API does not show runtime availability.
 
+## A hang in the RDD or GPU process
+
+A hang or a busy thread in the RDD or GPU process can come from the sandbox. Before you
+name a code fix, ask the reporter for the sandbox test of the in-tree page, and ask them
+to start Firefox normally again after the test. The GPU variable works only on Windows and
+macOS.
+
 ## Media logs
 
 A media log inline in a comment: read it for the signals of the in-tree page, and give

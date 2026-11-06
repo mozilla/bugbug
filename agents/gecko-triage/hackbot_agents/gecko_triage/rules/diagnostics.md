@@ -109,14 +109,6 @@ https://treeherder.mozilla.org/api/failuresbybug/?startday=YYYY-MM-DD&endday=YYY
 An empty list means that nobody classified a failure to this bug in that period. It does
 not show that the newest runs pass, so never write that they pass from an empty list.
 
-## A hang in the RDD or GPU process
-
-A hang or a busy thread in the RDD or GPU process can come from the sandbox. Before you
-name a code fix, ask the reporter for a test with the sandbox off. For the RDD process,
-they start Firefox with `MOZ_DISABLE_RDD_SANDBOX=1`, on Windows, Linux or macOS. For the
-GPU process, they use `MOZ_DISABLE_GPU_SANDBOX=1`, on Windows or macOS. Ask them to start
-Firefox normally again after the test.
-
 ## Required information
 
 | Bug type   | Required                                                          |

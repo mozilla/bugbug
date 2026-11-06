@@ -555,8 +555,11 @@ KEY_PHRASES = (
         "https://treeherder.mozilla.org/api/failuresbybug/?startday=YYYY-MM-DD"
         "&endday=YYYY-MM-DD&tree=all&bug=<id>",
     ),
-    ("diagnostics.md", "ask the reporter for a test with the sandbox off."),
-    ("diagnostics.md", "`MOZ_DISABLE_GPU_SANDBOX=1`, on Windows or macOS."),
+    (
+        "media/diagnostics.md",
+        "ask the reporter for the sandbox test of the in-tree page",
+    ),
+    ("media/diagnostics.md", "The GPU variable works only on Windows and macOS."),
     ("log_analyst", "Never use curl or WebFetch to fetch a log."),
     ("diagnostics.md", "never fetch a CI log yourself."),
     (

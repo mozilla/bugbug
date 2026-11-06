@@ -80,9 +80,9 @@ carries a new about:support, since prefs and state may have changed.
 ### Step 2b: analyze diagnostic artifacts, if present
 
 Follow `diagnostics.md`, sections "Profiles", "Logs", "Archives, memory reports,
-screenshots and videos", "Crash ids", "Test and CI failures" and "A hang in the RDD or
-GPU process", and the team's `diagnostics.md`. Attempt the analysis before step 5. The
-artifacts may already be sufficient.
+screenshots and videos", "Crash ids" and "Test and CI failures", and the team's
+`diagnostics.md`. Attempt the analysis before step 5. The artifacts may already be
+sufficient.
 
 **Artifact analysis is blocking.** If an artifact the conclusion depends on cannot be read
 because of our tooling, say so plainly in the comment and in the plan's `unread` list,
