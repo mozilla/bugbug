@@ -60,10 +60,10 @@ def _configure_sentry(entrypoint: Callable) -> None:
     sentry_sdk.set_tag("agent", resolve_agent_name(entrypoint))
 
 
-def _agent_version(entrypoint: Callable) -> str | None:
+def _agent_version(agent_name: str) -> str | None:
     """The version in the agent's pyproject.toml, or None when it isn't installed."""
     try:
-        return metadata.version(f"hackbot-agent-{resolve_agent_name(entrypoint)}")
+        return metadata.version(f"hackbot-agent-{agent_name}")
     except metadata.PackageNotFoundError:
         return None
 
@@ -140,8 +140,11 @@ def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | N
     the entry point's module), falling back to an empty config when there's none.
     """
     parsed = _resolve_config(entrypoint, config)
+    agent_name = resolve_agent_name(entrypoint)
     try:
-        return HackbotContext.from_config_obj(parsed)
+        return HackbotContext.from_config_obj(
+            parsed, agent_name=agent_name, agent_version=_agent_version(agent_name)
+        )
     except ValidationError as exc:
         log.error(
             "Failed to load HackbotContext from env; no summary can be written.\n%s",
@@ -156,9 +159,7 @@ def _publish_log(ctx: HackbotContext) -> None:
         ctx.publish_file(_AGENT_LOG_KEY, ctx.log_path, "text/plain; charset=utf-8")
 
 
-def _finish(
-    ctx: HackbotContext, outcome: object, agent_version: str | None = None
-) -> int:
+def _finish(ctx: HackbotContext, outcome: object) -> int:
     """Write summary.json from the agent's outcome and return the exit code.
 
     ``outcome`` is the agent's :class:`HackbotAgentResult` on success, or the
@@ -180,7 +181,7 @@ def _finish(
         log.error(msg)
         payload = _error_payload(ctx, msg)
         exit_code = 1
-    payload["agent_version"] = agent_version
+    payload["agent_version"] = ctx.agent_version
 
     try:
         _publish_log(ctx)
@@ -225,8 +226,7 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
         log.exception("Agent raised an exception")
         outcome = exc
 
-    agent_version = _agent_version(entrypoint)
-    raise SystemExit(_finish(ctx, outcome, agent_version))
+    raise SystemExit(_finish(ctx, outcome))
 
 
 def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
@@ -245,5 +245,4 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
         log.exception("Agent raised an exception")
         outcome = exc
 
-    agent_version = _agent_version(entrypoint)
-    raise SystemExit(_finish(ctx, outcome, agent_version))
+    raise SystemExit(_finish(ctx, outcome))
