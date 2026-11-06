@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass, field
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
 from mozci import data
-from mozci.task import is_no_groups_suite
+from mozci.task import is_verify
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +296,8 @@ def resolve_investigation(
     logger.info("Resolved task %s: project=%s rev=%s", task_id, project, hg_revision)
 
     label = tags.get("label") or ""
-    group_based = not is_no_groups_suite(label)
+    # Same check as mozci's TestTask.has_group_results.
+    group_based = tags.get("tests_grouped") == "1" or is_verify(label)
     groups = _failing_groups(task_id) if group_based else []
     logger.info(
         "Failing groups: %s",
