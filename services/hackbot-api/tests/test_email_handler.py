@@ -21,7 +21,10 @@ def _ctx(artifacts=None):
     from app.action_handlers import ApplyContext
 
     return ApplyContext(
-        run_id="run-1", agent="build-repair", download_artifact=download
+        run_id="run-1",
+        agent="build-repair",
+        download_artifact=download,
+        hackbot_client=object(),
     )
 
 
@@ -136,7 +139,9 @@ async def test_the_patch_is_read_once_for_both_uses():
 
     from app.action_handlers import ApplyContext
 
-    ctx = ApplyContext(run_id="r", agent="a", download_artifact=download)
+    ctx = ApplyContext(
+        run_id="r", agent="a", download_artifact=download, hackbot_client=object()
+    )
     await email_handler.SendEmailHandler().apply(
         _params(
             attach_patch=True,

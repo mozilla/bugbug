@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import Response
+from hackbot_client import HackbotClient
 from pydantic import BeforeValidator, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +20,7 @@ from app.auth import require_api_key
 from app.config import settings
 from app.database.connection import get_db
 from app.database.models import Run, RunAction
+from app.hackbot_client import get_hackbot_client
 from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
@@ -327,7 +329,9 @@ async def list_run_actions(
 
 @router.post("/runs/{run_id}/actions/apply")
 async def apply_run_actions(
-    run_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]
+    run_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    hackbot_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> list[RunActionDoc]:
     """Manually apply all of a run's pending actions (apply-all).
 
@@ -337,7 +341,7 @@ async def apply_run_actions(
     run = await db.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    await apply_all_pending(db, run)
+    await apply_all_pending(db, run, hackbot_client)
     return await _list_actions(db, run_id)
 
 

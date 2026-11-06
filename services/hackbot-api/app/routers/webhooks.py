@@ -19,6 +19,7 @@ from app.config import settings
 from app.database.connection import get_db
 from app.github import GitHubApp
 from app.github_authorization import GitHubAuthorizer
+from app.hackbot_client import get_hackbot_client
 from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     detect_mention_and_revision,
@@ -44,14 +45,6 @@ def get_slack_handler(request: Request) -> AsyncSlackRequestHandler:
         handler = build_request_handler()
         request.app.state.slack_handler = handler
     return handler
-
-
-def get_hackbot_client() -> HackbotClient:
-    """Dependency: a client for triggering runs over the public hackbot API."""
-    return HackbotClient(
-        base_url=settings.hackbot_api_url,
-        api_key=settings.external_api_key,
-    )
 
 
 @router.post("/slack")
